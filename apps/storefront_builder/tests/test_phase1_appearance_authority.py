@@ -44,7 +44,15 @@ from django.urls import reverse
 
 from apps.storefront_builder.layout_preset_registry import get_layout_preset
 from apps.storefront_builder.models import StorefrontPage, StorefrontSection
-from apps.storefront_builder.services import layout_service, preset_service, render_service
+from apps.storefront_builder.services import (
+    appearance_authority_service,
+    layout_service,
+    preset_service,
+    render_service,
+)
+from apps.storefront_builder.storefront_appearance.contracts import (
+    InvalidStoreAppearanceContract,
+)
 from apps.storefront_builder.storefront_appearance.families import (
     DEFAULT_STORE_APPEARANCE_MANIFEST,
 )
@@ -395,4 +403,202 @@ class LocalVariantPrecedenceTests(Phase1AppearanceAuthorityBase):
             "overlay",
             "explicit local Section variant (variant_explicit=True) must win "
             "over the inherited Store Global default (approved precedence)",
+        )
+
+
+
+# =====================================================================
+# TASK 2 — APPEARANCE AUTHORITY SERVICE (unit-level, no route/render wiring)
+# =====================================================================
+class AppearanceAuthorityServiceTests(Phase1AppearanceAuthorityBase):
+    """Directly exercise the canonical transformation primitives introduced in
+    Task 2. These are unit-level tests of
+    ``appearance_authority_service`` and must be GREEN after Task 2.
+
+    They do NOT go through legacy routes, R4, preset_service, or the renderer:
+    Task 2 only builds the transformation layer that later tasks will call.
+    """
+
+    # -- appearance patch preservation ------------------------------------
+    def test_apply_appearance_patch_preserves_typed_manifest(self):
+        self._persist_manifest(hero="hero.split.v1", card="card.luxury_dark.v1")
+        self.draft.refresh_from_db()
+        original_manifest = copy.deepcopy(
+            self.draft.appearance_config.get(STORE_APPEARANCE_CONFIG_KEY)
+        )
+        self.assertIsNotNone(original_manifest)
+
+        appearance_authority_service.apply_appearance_patch(
+            version=self.draft, patch={"font": "Tahoma"}
+        )
+
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.appearance_config.get("font"), "Tahoma")
+        self.assertEqual(
+            self.draft.appearance_config.get(STORE_APPEARANCE_CONFIG_KEY),
+            original_manifest,
+            "appearance patch must preserve the typed manifest key",
+        )
+
+    def test_apply_appearance_patch_preserves_unrelated_opaque_keys(self):
+        # Seed an opaque/provenance-like key alongside a managed key.
+        self._persist_manifest(hero="hero.split.v1")
+        self.draft.refresh_from_db()
+        config = dict(self.draft.appearance_config or {})
+        config["layout_preset_key"] = "dense_marketplace"  # managed key
+        config["__opaque_canonical_probe__"] = {"kept": True}  # unknown/opaque
+        self.draft.appearance_config = config
+        self.draft.save(update_fields=["appearance_config"])
+
+        appearance_authority_service.apply_appearance_patch(
+            version=self.draft, patch={"font": "Tahoma"}
+        )
+
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.appearance_config.get("font"), "Tahoma")
+        # Managed key that was not part of the patch is preserved.
+        self.assertEqual(
+            self.draft.appearance_config.get("layout_preset_key"),
+            "dense_marketplace",
+        )
+        # Unknown/opaque canonical key is preserved untouched.
+        self.assertEqual(
+            self.draft.appearance_config.get("__opaque_canonical_probe__"),
+            {"kept": True},
+        )
+        # And the typed manifest still survives.
+        self.assertEqual(
+            self.draft.appearance_config.get(STORE_APPEARANCE_CONFIG_KEY)[
+                "selections"
+            ]["hero"],
+            "hero.split.v1",
+        )
+
+    def test_apply_appearance_patch_rejects_invalid_managed_field(self):
+        self._persist_manifest(hero="hero.split.v1")
+        with self.assertRaises(Exception):
+            appearance_authority_service.apply_appearance_patch(
+                version=self.draft, patch={"font": "NotARealFont123"}
+            )
+        # No partial persistence of the bad value.
+        self.draft.refresh_from_db()
+        self.assertNotEqual(self.draft.appearance_config.get("font"), "NotARealFont123")
+
+    # -- header / footer / nav sync ---------------------------------------
+    def test_apply_header_variant_syncs_mirror_and_manifest(self):
+        self._persist_manifest(header="header.legacy_default.v1", hero="hero.split.v1")
+
+        appearance_authority_service.apply_header_variant(
+            version=self.draft, header_variant="dark_tech"
+        )
+
+        self.draft.refresh_from_db()
+        # Legacy mirror updated.
+        self.assertEqual(
+            self.draft.header_config.get("header_variant"), "dark_tech"
+        )
+        # Typed manifest selection updated to match.
+        selections = self._effective_selections()
+        self.assertEqual(selections.get("header"), "header.dark_tech.v1")
+        # Unrelated family preserved.
+        self.assertEqual(selections.get("hero"), "hero.split.v1")
+
+    def test_apply_footer_variant_syncs_mirror_and_manifest(self):
+        self._persist_manifest(footer="footer.legacy_default.v1", hero="hero.split.v1")
+
+        appearance_authority_service.apply_footer_variant(
+            version=self.draft, footer_variant="marketplace_dense"
+        )
+
+        self.draft.refresh_from_db()
+        self.assertEqual(
+            self.draft.footer_config.get("footer_variant"), "marketplace_dense"
+        )
+        selections = self._effective_selections()
+        self.assertEqual(selections.get("footer"), "footer.marketplace_dense.v1")
+        self.assertEqual(selections.get("hero"), "hero.split.v1")
+
+    def test_apply_footer_variant_mobile_nav_syncs_bottom_nav(self):
+        self._persist_manifest(
+            footer="footer.marketplace_dense.v1",
+            bottom_nav="bottom_nav.hidden.v1",
+            hero="hero.split.v1",
+        )
+
+        appearance_authority_service.apply_footer_variant(
+            version=self.draft, mobile_nav_variant="five_item"
+        )
+
+        self.draft.refresh_from_db()
+        self.assertEqual(
+            self.draft.footer_config.get("mobile_nav_variant"), "five_item"
+        )
+        selections = self._effective_selections()
+        self.assertEqual(selections.get("bottom_nav"), "bottom_nav.five_item.v1")
+        # Footer selector and unrelated family untouched.
+        self.assertEqual(selections.get("footer"), "footer.marketplace_dense.v1")
+        self.assertEqual(selections.get("hero"), "hero.split.v1")
+
+    def test_apply_header_variant_rejects_unknown_selector(self):
+        self._persist_manifest(header="header.legacy_default.v1", hero="hero.split.v1")
+
+        with self.assertRaises(Exception):
+            appearance_authority_service.apply_header_variant(
+                version=self.draft, header_variant="__definitely_not_a_variant__"
+            )
+        # Unrelated state not mutated.
+        self.draft.refresh_from_db()
+        self.assertEqual(self._effective_selections().get("hero"), "hero.split.v1")
+
+    # -- full manifest application ----------------------------------------
+    def test_apply_store_appearance_manifest_persists_validated_manifest(self):
+        raw = _manifest_with(
+            hero="hero.split.v1",
+            card="card.luxury_dark.v1",
+            footer="footer.marketplace_dense.v1",
+        )
+
+        appearance_authority_service.apply_store_appearance_manifest(
+            version=self.draft, manifest=raw
+        )
+
+        self.draft.refresh_from_db()
+        persisted = load_store_appearance_manifest(self.draft)
+        self.assertEqual(persisted.selections["hero"], "hero.split.v1")
+        self.assertEqual(persisted.selections["card"], "card.luxury_dark.v1")
+        self.assertEqual(persisted.selections["footer"], "footer.marketplace_dense.v1")
+        # Compatibility mirror synchronized by the persistence primitive.
+        self.assertEqual(
+            self.draft.footer_config.get("footer_variant"), "marketplace_dense"
+        )
+
+    def test_apply_store_appearance_manifest_rejects_invalid_manifest(self):
+        bad = _manifest_with(hero="hero.__nope__.v1")
+        with self.assertRaises(InvalidStoreAppearanceContract):
+            appearance_authority_service.apply_store_appearance_manifest(
+                version=self.draft, manifest=bad
+            )
+
+    # -- ready template appearance primitive (NOT wired to preset_service) -
+    def test_apply_ready_template_appearance_persists_declared_manifest(self):
+        preset = get_layout_preset("dense_marketplace")
+        declared = dict(preset.store_appearance["selections"])
+        # Seed conflicting selections; the primitive must overwrite them all.
+        self._persist_manifest(
+            hero="hero.split.v1",
+            card="card.luxury_dark.v1",
+            layout="layout.legacy_default.v1",
+        )
+
+        appearance_authority_service.apply_ready_template_appearance(
+            version=self.draft, preset=preset
+        )
+
+        self.draft.refresh_from_db()
+        persisted = load_store_appearance_manifest(self.draft)
+        self.assertEqual(dict(persisted.selections), declared)
+        # Ordinary appearance overlay from the preset is also applied.
+        self.assertEqual(
+            self.draft.appearance_config.get("font"),
+            preset.appearance["font"],
         )
