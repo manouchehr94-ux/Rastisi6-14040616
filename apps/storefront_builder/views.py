@@ -33,7 +33,13 @@ from .models import (
     StorefrontPage,
     StorefrontSection,
 )
-from .services import container_service, edit_history_service, layout_service, row_service
+from .services import (
+    appearance_authority_service,
+    container_service,
+    edit_history_service,
+    layout_service,
+    row_service,
+)
 from .services.layout_service import _clone_section_scoped_media
 from .services.render_service import (
     build_container_render_items,
@@ -2367,8 +2373,13 @@ def storefront_appearance_editor(request):
         except layout_service.AppearanceConfigValidationError as exc:
             messages.error(request, str(exc))
             return redirect("dashboard:storefront-builder-editor")
-        draft.appearance_config = config
-        draft.save(update_fields=["appearance_config", "updated_at"])
+        # Phase 1 (Task 3) — delegate the validated managed Appearance update to
+        # the canonical authority service instead of replacing appearance_config
+        # wholesale. This preserves the reserved store_appearance manifest and
+        # any other opaque/canonical keys that this legacy form never carries.
+        appearance_authority_service.apply_appearance_patch(
+            version=draft, patch=config
+        )
         messages.success(request, "تنظیمات ظاهر ذخیره شد")
         return redirect("dashboard:storefront-builder-editor")
 
@@ -2517,6 +2528,13 @@ def storefront_header_editor(request):
             })
         draft.header_config = config
         draft.save(update_fields=["header_config", "updated_at"])
+        # Phase 1 (Task 3) — after persisting the full validated Header config
+        # (toggles/announcement/content preserved as before), synchronize the
+        # typed Store Appearance manifest header selection with the chosen
+        # variant so the legacy selector mirror and the typed manifest agree.
+        appearance_authority_service.apply_header_variant(
+            version=draft, header_variant=config["header_variant"]
+        )
         messages.success(request, "تنظیمات هدر ذخیره شد")
         return redirect("dashboard:storefront-builder-editor")
 
@@ -2564,6 +2582,15 @@ def storefront_footer_editor(request):
             })
         draft.footer_config = config
         draft.save(update_fields=["footer_config", "updated_at"])
+        # Phase 1 (Task 3) — after persisting the full validated Footer config
+        # (footer options preserved; live FooterSettings ownership untouched),
+        # synchronize the typed Store Appearance manifest footer/bottom_nav
+        # selections with the chosen variants so mirror and manifest agree.
+        appearance_authority_service.apply_footer_variant(
+            version=draft,
+            footer_variant=config["footer_variant"],
+            mobile_nav_variant=config["mobile_nav_variant"],
+        )
         messages.success(request, "تنظیمات فوتر ذخیره شد")
         return redirect("dashboard:storefront-builder-editor")
 
