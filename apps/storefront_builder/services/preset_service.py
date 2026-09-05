@@ -27,7 +27,7 @@ from .. import global_region_registry, layout_preset_registry, section_registry
 from ..layout_preset_registry import LayoutPresetDefinition
 from ..models import StorefrontContainer, StorefrontLayoutVersion, StorefrontSection
 from ..variant_contract import build_template_provenance, validate_template_provenance
-from . import container_service, layout_service
+from . import appearance_authority_service, container_service, layout_service
 
 
 class InvalidPresetError(Exception):
@@ -416,22 +416,6 @@ def apply_preset(
         template_key=preset.key, template_version=preset.version,
     )
     update_fields = ["appearance_config", "template_provenance"]
-    if _record_baseline_snapshot:
-        # Acceptance Batch 2 (post-U11) — Issue 2: an immutable, normalized
-        # snapshot of the *exact* baseline just applied — independent of the
-        # registry's live ``LayoutPresetDefinition`` for this key, which could
-        # (bug or future edit) change its contents without bumping ``version``.
-        # See the model field's own docstring for the full motivating risk.
-        draft.template_baseline_snapshot = {
-            "template_key": preset.key,
-            "template_version": preset.version,
-            "default_palette_slug": preset.default_palette_slug,
-            "appearance": cleaned_appearance,
-            "header_config": cleaned_header,
-            "footer_config": cleaned_footer,
-            "pages": snapshot_pages,
-        }
-        update_fields.append("template_baseline_snapshot")
     if cleaned_header is not None:
         draft.header_config = cleaned_header
         update_fields.append("header_config")
@@ -439,6 +423,45 @@ def apply_preset(
         draft.footer_config = cleaned_footer
         update_fields.append("footer_config")
     draft.save(update_fields=update_fields)
+
+    # Phase 1 (Task 5, A02 closure) — persist the Ready Template's COMPLETE
+    # declared typed Store Appearance manifest through the canonical authority
+    # service. This runs inside apply_preset's own @transaction.atomic
+    # boundary (the authority service intentionally owns no transaction), so a
+    # later failure still rolls the whole apply back. It is persisted AFTER the
+    # ordinary appearance/header/footer writes above so its compatibility
+    # mirrors (header/footer/bottom_nav/motion) are the authoritative final
+    # selector state and cannot be left stale. Ready Templates always declare a
+    # complete manifest; non-Ready presets may omit it, so guard on presence.
+    if preset.store_appearance:
+        appearance_authority_service.apply_store_appearance_manifest(
+            version=draft, manifest=preset.store_appearance
+        )
+
+    if _record_baseline_snapshot:
+        # Acceptance Batch 2 (post-U11) — Issue 2: an immutable, normalized
+        # snapshot of the *exact* baseline just applied — independent of the
+        # registry's live ``LayoutPresetDefinition`` for this key, which could
+        # (bug or future edit) change its contents without bumping ``version``.
+        # See the model field's own docstring for the full motivating risk.
+        #
+        # Task 5 — the snapshot is built AFTER the complete typed manifest has
+        # been persisted above, so ``appearance``/``header_config``/
+        # ``footer_config`` capture the manifest-synced state (including the
+        # reserved ``store_appearance`` key and its mirrors). This keeps
+        # reset-to-baseline returning to the fully-applied recipe DNA rather
+        # than reintroducing A02 on reset, and keeps ``_draft_already_matches_preset``
+        # (which compares ``appearance_config`` to ``snapshot["appearance"]``) correct.
+        draft.template_baseline_snapshot = {
+            "template_key": preset.key,
+            "template_version": preset.version,
+            "default_palette_slug": preset.default_palette_slug,
+            "appearance": dict(draft.appearance_config or {}),
+            "header_config": dict(draft.header_config) if cleaned_header is not None else None,
+            "footer_config": dict(draft.footer_config) if cleaned_footer is not None else None,
+            "pages": snapshot_pages,
+        }
+        draft.save(update_fields=["template_baseline_snapshot"])
 
     for page, (rows, prepared_container_settings) in pages_to_replace.items():
         # Container/Cell is the new layout layer.  Deleting the page sections

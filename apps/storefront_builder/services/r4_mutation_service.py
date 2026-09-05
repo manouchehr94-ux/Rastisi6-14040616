@@ -416,20 +416,15 @@ def _apply_appearance_template(
     except preset_service.InvalidPresetError as exc:
         raise R4MutationError("invalid_appearance_template") from exc
 
-    # A6 predates A8's complete Ready-Template DNA. Synchronize the component
-    # families that existing Ready Templates already own today.
-    _sync_manifest_from_live_selectors(draft=draft)
-
-    # ``apply_preset`` captured its baseline before the typed manifest sync.
-    # Make the immutable baseline describe the exact final state of this one
-    # atomic mutation, so Reset/Undo cannot reintroduce stale selectors.
-    if draft.template_baseline_snapshot:
-        snapshot = dict(draft.template_baseline_snapshot)
-        snapshot["appearance"] = dict(draft.appearance_config or {})
-        snapshot["header_config"] = dict(draft.header_config or {})
-        snapshot["footer_config"] = dict(draft.footer_config or {})
-        draft.template_baseline_snapshot = snapshot
-        draft.save(update_fields=["template_baseline_snapshot"])
+    # Phase 1 (Task 5) — ``preset_service.apply_preset`` is now authoritative:
+    # it persists the Ready Template's COMPLETE declared typed manifest (all
+    # families, not only header/footer/bottom_nav/motion) and builds its
+    # ``template_baseline_snapshot`` from that manifest-synced state. The old
+    # partial four-family ``_sync_manifest_from_live_selectors`` and the
+    # post-apply baseline re-capture that this path used to perform are now
+    # redundant and have been removed. R4 still owns exact preset key/version
+    # validation (above), active-Draft locking, base revision, the transaction,
+    # rollback, history and the revision increment (in ``apply_mutation``).
 
 
 def _apply_appearance_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:

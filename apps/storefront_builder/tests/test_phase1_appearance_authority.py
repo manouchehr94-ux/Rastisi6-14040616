@@ -64,6 +64,7 @@ from apps.storefront_builder.storefront_appearance.persistence import (
 from apps.storefront_builder.storefront_appearance.validation import (
     manifest_to_primitive,
 )
+from apps.stores.models import Store
 
 from .test_views import StorefrontBuilderViewsTestCase
 
@@ -601,4 +602,221 @@ class AppearanceAuthorityServiceTests(Phase1AppearanceAuthorityBase):
         self.assertEqual(
             self.draft.appearance_config.get("font"),
             preset.appearance["font"],
+        )
+
+
+
+# =====================================================================
+# TASK 5 — READY TEMPLATE APPLY IS AUTHORITATIVE (declared=persisted=effective)
+# =====================================================================
+class ReadyTemplateApplyAuthorityTests(Phase1AppearanceAuthorityBase):
+    """Phase 1 (Task 5, A02 closure). apply_preset must persist the COMPLETE
+    declared typed manifest so declared == persisted == effective for every
+    family, independent of any conflicting starting Draft state, through both
+    the canonical preset service and the R4 template-apply entry.
+    """
+
+    REPRESENTATIVE_RECIPES = (
+        "dense_marketplace",
+        "premium_leather",
+        "dark_digital",
+        "warm_boutique",
+        "anniversary_mosaic",
+    )
+
+    def _seed_conflicting_manifest(self, version):
+        # Deliberately conflicting selections across multiple families.
+        raw = _manifest_with(
+            hero="hero.split.v1",
+            layout="layout.legacy_default.v1",
+            product_view="product_view.legacy_default.v1",
+            card="card.luxury_dark.v1",
+            badge="badge.none.v1",
+        )
+        persist_store_appearance_manifest(version, raw)
+        version.refresh_from_db()
+        return raw
+
+    def _effective_selections_for(self, version):
+        version.refresh_from_db()
+        state = render_service.resolve_store_appearance_render_state(version)
+        return dict(state.manifest.selections)
+
+    # -- Step 13: representative multi-recipe declared=persisted=effective --
+    def test_representative_recipes_declared_persisted_effective(self):
+        for key in self.REPRESENTATIVE_RECIPES:
+            with self.subTest(recipe=key):
+                # Fresh conflicting draft per recipe (published between applies
+                # to reset the draft cleanly is unnecessary; re-seed in place).
+                preset = get_layout_preset(key)
+                self.assertIsNotNone(preset, key)
+                declared = dict(preset.store_appearance["selections"])
+
+                self._seed_conflicting_manifest(self.draft)
+                preset_service.apply_preset(self.draft, preset)
+
+                self.draft.refresh_from_db()
+                persisted = dict(
+                    load_store_appearance_manifest(self.draft).selections
+                )
+                effective = self._effective_selections_for(self.draft)
+                self.assertEqual(persisted, declared, f"persisted != declared for {key}")
+                self.assertEqual(effective, declared, f"effective != declared for {key}")
+
+    # -- Step 9: conflicting starting state must not leak --
+    def test_conflicting_starting_state_does_not_leak(self):
+        preset = get_layout_preset("dense_marketplace")
+        declared = dict(preset.store_appearance["selections"])
+        self._seed_conflicting_manifest(self.draft)
+
+        preset_service.apply_preset(self.draft, preset)
+
+        self.draft.refresh_from_db()
+        persisted = dict(load_store_appearance_manifest(self.draft).selections)
+        # No prior family selection survives merely because Apply omitted it.
+        self.assertEqual(persisted, declared)
+        for family in ("hero", "layout", "product_view", "card", "badge"):
+            self.assertEqual(persisted[family], declared[family], family)
+
+    # -- Step 10: idempotence --
+    def test_apply_same_recipe_twice_is_idempotent(self):
+        preset = get_layout_preset("dark_digital")
+        declared = dict(preset.store_appearance["selections"])
+
+        self._seed_conflicting_manifest(self.draft)
+        preset_service.apply_preset(self.draft, preset)
+        self.draft.refresh_from_db()
+        first_persisted = dict(load_store_appearance_manifest(self.draft).selections)
+        first_effective = self._effective_selections_for(self.draft)
+
+        preset_service.apply_preset(self.draft, preset)
+        self.draft.refresh_from_db()
+        second_persisted = dict(load_store_appearance_manifest(self.draft).selections)
+        second_effective = self._effective_selections_for(self.draft)
+
+        self.assertEqual(first_persisted, declared)
+        self.assertEqual(second_persisted, first_persisted)
+        self.assertEqual(second_effective, first_effective)
+
+    # -- Step 8: legacy/canonical entry and R4 entry converge --
+    def test_legacy_and_r4_entry_paths_converge(self):
+        preset = get_layout_preset("dense_marketplace")
+        declared = dict(preset.store_appearance["selections"])
+
+        # A) canonical preset service entry on this store's draft.
+        self._seed_conflicting_manifest(self.draft)
+        preset_service.apply_preset(self.draft, preset)
+        self.draft.refresh_from_db()
+        legacy_persisted = dict(load_store_appearance_manifest(self.draft).selections)
+        legacy_effective = self._effective_selections_for(self.draft)
+
+        # B) R4 appearance.template.apply entry on a second, independent store.
+        r4_store = Store.objects.create(
+            name="r4-convergence-store",
+            slug="r4-convergence-store",
+            admin_subdomain="r4-convergence-store",
+        )
+        r4_layout = layout_service.get_or_create_layout(r4_store)
+        r4_layout.r4_editor_enabled = True
+        r4_layout.save(update_fields=["r4_editor_enabled"])
+        r4_draft = layout_service.get_or_create_draft(r4_store, user=self.staff)
+        self._seed_conflicting_manifest(r4_draft)
+        # Apply via the R4 mutation service dispatch (same path the endpoint uses).
+        from apps.storefront_builder.services import r4_mutation_service
+
+        r4_mutation_service._apply_appearance_template(
+            draft=r4_draft,
+            mutation={
+                "draft_id": r4_draft.pk,
+                "template_key": preset.key,
+                "template_version": preset.version,
+            },
+        )
+        r4_draft.refresh_from_db()
+        r4_persisted = dict(load_store_appearance_manifest(r4_draft).selections)
+        r4_effective = dict(
+            render_service.resolve_store_appearance_render_state(r4_draft).manifest.selections
+        )
+
+        # Appearance fidelity (not object identity): both entries converge to
+        # the declared recipe DNA.
+        self.assertEqual(legacy_persisted, declared)
+        self.assertEqual(r4_persisted, declared)
+        self.assertEqual(legacy_persisted, r4_persisted)
+        self.assertEqual(legacy_effective, r4_effective)
+
+    # -- Step 11: atomic rollback (authority multi-save inside apply's txn) --
+    def test_apply_preset_failure_rolls_back_manifest_and_config(self):
+        from unittest import mock
+
+        from apps.storefront_builder.services import container_service
+
+        preset = get_layout_preset("dense_marketplace")
+
+        # Establish a known, non-conflicting prior state and capture it.
+        self._seed_conflicting_manifest(self.draft)
+        self.draft.refresh_from_db()
+        before_appearance = copy.deepcopy(self.draft.appearance_config)
+        before_header = copy.deepcopy(self.draft.header_config)
+        before_footer = copy.deepcopy(self.draft.footer_config)
+        before_manifest = copy.deepcopy(
+            manifest_to_primitive(load_store_appearance_manifest(self.draft))
+        )
+        before_home_sections = list(
+            self.draft.get_page(StorefrontPage.PageType.HOME)
+            .sections.order_by("order", "id")
+            .values_list("section_key", flat=True)
+        )
+
+        # Force a failure AFTER the appearance/header/footer + manifest writes
+        # but during the composition-replacement phase, inside apply_preset's
+        # @transaction.atomic boundary.
+        with mock.patch.object(
+            container_service,
+            "rebuild_page_from_legacy_rows",
+            side_effect=RuntimeError("injected failure after writes"),
+        ):
+            with self.assertRaises(RuntimeError):
+                preset_service.apply_preset(self.draft, preset)
+
+        # Everything rolled back: no partial appearance/manifest/mirror survives.
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.appearance_config, before_appearance)
+        self.assertEqual(self.draft.header_config, before_header)
+        self.assertEqual(self.draft.footer_config, before_footer)
+        self.assertEqual(
+            manifest_to_primitive(load_store_appearance_manifest(self.draft)),
+            before_manifest,
+        )
+        after_home_sections = list(
+            self.draft.get_page(StorefrontPage.PageType.HOME)
+            .sections.order_by("order", "id")
+            .values_list("section_key", flat=True)
+        )
+        self.assertEqual(after_home_sections, before_home_sections)
+
+    # -- reset returns to the newly applied recipe (baseline snapshot proof) --
+    def test_reset_to_baseline_returns_to_applied_recipe_manifest(self):
+        preset = get_layout_preset("dense_marketplace")
+        declared = dict(preset.store_appearance["selections"])
+
+        preset_service.apply_preset(self.draft, preset)
+        self.draft.refresh_from_db()
+
+        # Drift the manifest away from the recipe via the canonical writer.
+        appearance_authority_service.apply_header_variant(
+            version=self.draft, header_variant="legacy_default"
+        )
+        self.draft.refresh_from_db()
+        self.assertNotEqual(
+            dict(load_store_appearance_manifest(self.draft).selections), declared
+        )
+
+        # Reset must return to the fully-applied recipe DNA (incl. store_appearance).
+        preset_service.reset_storefront_to_baseline(self.draft)
+        self.draft.refresh_from_db()
+        self.assertEqual(
+            dict(load_store_appearance_manifest(self.draft).selections),
+            declared,
+            "reset-to-baseline must restore the complete applied recipe manifest",
         )
