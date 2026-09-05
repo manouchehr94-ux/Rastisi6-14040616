@@ -20,6 +20,7 @@ from apps.storefront_builder import (
 )
 from apps.storefront_builder.models import StorefrontLayout, StorefrontLayoutVersion, StorefrontSection
 from apps.storefront_builder.services import (
+    appearance_authority_service,
     edit_history_service,
     layout_service,
     preset_service,
@@ -33,7 +34,6 @@ from apps.storefront_builder.storefront_appearance.families import COMPONENT_FAM
 from apps.storefront_builder.storefront_appearance.persistence import (
     component_key_for_registry_reference,
     load_store_appearance_manifest,
-    persist_store_appearance_manifest,
 )
 from apps.storefront_builder.storefront_appearance.registry import get_component
 from apps.storefront_builder.storefront_appearance.validation import (
@@ -327,7 +327,9 @@ def _persist_manifest_selection_updates(
         return
 
     try:
-        persist_store_appearance_manifest(draft, primitive)
+        appearance_authority_service.apply_store_appearance_manifest(
+            version=draft, manifest=primitive
+        )
     except InvalidStoreAppearanceContract as exc:
         raise R4MutationError("invalid_store_appearance_manifest") from exc
 
@@ -385,7 +387,9 @@ def _apply_appearance_manifest(
         return
 
     try:
-        persist_store_appearance_manifest(draft, primitive)
+        appearance_authority_service.apply_store_appearance_manifest(
+            version=draft, manifest=primitive
+        )
     except InvalidStoreAppearanceContract as exc:
         raise R4MutationError("invalid_store_appearance_manifest") from exc
 
@@ -466,12 +470,15 @@ def _apply_appearance_update(*, draft: StorefrontLayoutVersion, mutation: dict) 
     except layout_service.AppearanceConfigValidationError as exc:
         raise R4MutationError("invalid_appearance_config") from exc
 
-    draft.appearance_config = cleaned
-    # Persist the legacy appearance payload first. Manifest synchronization can
-    # be a semantic no-op (for example, boutique keeps the default motion),
+    # Phase 1 (Task 4) — delegate the final appearance_config transformation to
+    # the canonical authority service. This preserves the reserved
+    # store_appearance manifest and any other opaque canonical keys that the
+    # legacy managed validator would otherwise drop, while R4 keeps ownership of
+    # transaction/lock/base-revision/history/response. Manifest synchronization
+    # can be a semantic no-op (for example, boutique keeps the default motion),
     # but template-owned fields such as template_slug/font still changed and
     # must be visible to record_change(), which reloads the Draft from the DB.
-    draft.save(update_fields=["appearance_config"])
+    appearance_authority_service.apply_appearance_patch(version=draft, patch=cleaned)
     if "motion" in patch or new_template is not None:
         _sync_manifest_from_live_selectors(draft=draft)
 
@@ -492,8 +499,17 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
     except layout_service.HeaderConfigValidationError as exc:
         raise R4MutationError("invalid_header_config") from exc
 
+    # Persist the full validated header config first (toggles/announcement/
+    # content preserved), then delegate the typed manifest header selection
+    # synchronization to the canonical authority service.
     draft.header_config = cleaned
-    _sync_manifest_from_live_selectors(draft=draft)
+    draft.save(update_fields=["header_config"])
+    try:
+        appearance_authority_service.apply_header_variant(
+            version=draft, header_variant=cleaned["header_variant"]
+        )
+    except InvalidStoreAppearanceContract as exc:
+        raise R4MutationError("invalid_store_appearance_manifest") from exc
 
 
 def _apply_footer_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
@@ -512,8 +528,20 @@ def _apply_footer_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
     except layout_service.FooterConfigValidationError as exc:
         raise R4MutationError("invalid_footer_config") from exc
 
+    # Persist the full validated footer config first, then delegate the typed
+    # manifest footer/bottom_nav selection synchronization to the authority
+    # service. mobile_nav_variant is always present in the effective footer
+    # config, so both families are kept in sync.
     draft.footer_config = cleaned
-    _sync_manifest_from_live_selectors(draft=draft)
+    draft.save(update_fields=["footer_config"])
+    try:
+        appearance_authority_service.apply_footer_variant(
+            version=draft,
+            footer_variant=cleaned["footer_variant"],
+            mobile_nav_variant=cleaned["mobile_nav_variant"],
+        )
+    except InvalidStoreAppearanceContract as exc:
+        raise R4MutationError("invalid_store_appearance_manifest") from exc
 
 
 def _dispatch_mutation(*, store, draft: StorefrontLayoutVersion, mutation: dict) -> None:

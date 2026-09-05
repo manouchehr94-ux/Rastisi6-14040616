@@ -17,6 +17,7 @@ from apps.storefront_builder.storefront_appearance.families import (
 from apps.storefront_builder.storefront_appearance.persistence import (
     STORE_APPEARANCE_CONFIG_KEY,
     load_store_appearance_manifest,
+    persist_store_appearance_manifest,
 )
 from apps.storefront_builder.storefront_appearance.validation import (
     manifest_to_primitive,
@@ -552,3 +553,90 @@ class CanonicalManifestPristineDraftTests(R4StoreAppearanceMutationTestCase):
         )
 
         self.assertNotEqual(result.pk, self.draft.pk)
+
+
+
+class R4AppearanceAuthorityPreservationTests(R4StoreAppearanceMutationTestCase):
+    """Phase 1 (Task 4) — R4 appearance/global-region commands delegate their
+    state transformation to the canonical authority service, so the reserved
+    typed manifest and unrelated canonical keys survive an ordinary R4
+    appearance patch. R4 keeps ownership of lock/revision/history.
+    """
+
+    def _seed_manifest(self, **selections):
+        raw = copy.deepcopy(
+            manifest_to_primitive(DEFAULT_STORE_APPEARANCE_MANIFEST)
+        )
+        raw["selections"].update(selections)
+        persist_store_appearance_manifest(self.draft, raw)
+        self.draft.refresh_from_db()
+        return raw
+
+    def test_r4_appearance_patch_preserves_manifest_and_unrelated_keys(self):
+        # Seed a non-default typed manifest and an opaque canonical key.
+        self._seed_manifest(hero="hero.split.v1", card="card.luxury_dark.v1")
+        self.draft.refresh_from_db()
+        old_manifest = copy.deepcopy(
+            self.draft.appearance_config[STORE_APPEARANCE_CONFIG_KEY]
+        )
+        config = dict(self.draft.appearance_config)
+        config["__opaque_canonical_probe__"] = {"kept": True}
+        self.draft.appearance_config = config
+        self.draft.save(update_fields=["appearance_config"])
+        starting_revision = self.draft.edit_revision
+
+        # An ordinary R4 appearance patch that does not change motion/template
+        # (so manifest sync is not triggered) — the typed manifest must survive.
+        response = self._post_mutation({
+            "type": "appearance.update",
+            "patch": {"font": "Tahoma"},
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.appearance_config.get("font"), "Tahoma")
+        self.assertEqual(
+            self.draft.appearance_config.get(STORE_APPEARANCE_CONFIG_KEY),
+            old_manifest,
+            "R4 ordinary appearance patch must preserve the typed manifest",
+        )
+        self.assertEqual(
+            self.draft.appearance_config.get("__opaque_canonical_probe__"),
+            {"kept": True},
+            "R4 ordinary appearance patch must preserve unrelated opaque keys",
+        )
+        # R4 still owns revision monotonicity.
+        self.assertEqual(
+            response.json()["new_revision"], starting_revision + 1
+        )
+
+    def test_r4_header_update_keeps_manifest_and_unrelated_families(self):
+        self._seed_manifest(
+            header="header.legacy_default.v1",
+            hero="hero.split.v1",
+            card="card.luxury_dark.v1",
+        )
+        response = self._post_mutation({
+            "type": "header.update",
+            "patch": {"header_variant": "dark_tech"},
+        })
+        self.assertEqual(response.status_code, 200)
+        after = self._manifest()["selections"]
+        self.assertEqual(after["header"], "header.dark_tech.v1")
+        # Unrelated families preserved.
+        self.assertEqual(after["hero"], "hero.split.v1")
+        self.assertEqual(after["card"], "card.luxury_dark.v1")
+
+    def test_r4_footer_update_keeps_manifest_and_unrelated_families(self):
+        self._seed_manifest(
+            footer="footer.legacy_default.v1",
+            hero="hero.split.v1",
+        )
+        response = self._post_mutation({
+            "type": "footer.update",
+            "patch": {"footer_variant": "premium_columns"},
+        })
+        self.assertEqual(response.status_code, 200)
+        after = self._manifest()["selections"]
+        self.assertEqual(after["footer"], "footer.premium_columns.v1")
+        self.assertEqual(after["hero"], "hero.split.v1")
