@@ -756,9 +756,24 @@ def _build_items_from_sections(
                 effective_card_settings = dict(effective_settings.get("card") or {})
                 effective_card_settings.update(presentation_overlay)
                 effective_settings["card"] = effective_card_settings
-        if appearance_variant is not None:
+        # Phase 1 (Task 6) — approved precedence: an EXPLICIT local Section
+        # variant (stamped ``appearance_overrides.variant_explicit=True`` by a
+        # genuine merchant variant edit) is the strongest normal override and
+        # wins over the inherited Store-level family default. Historical rows
+        # WITHOUT the marker keep the current inherited/global overlay behavior,
+        # so existing stores do not visually flip. The Store manifest selection
+        # itself is unchanged; only whether it overlays the local value differs.
+        _local_overrides = effective_settings.get("appearance_overrides") or {}
+        _variant_explicit = bool(_local_overrides.get("variant_explicit"))
+        # When the local variant is explicit, the manifest variant no longer
+        # overlays the section for this render (neither the settings mirror nor
+        # the resolved ``active_variant`` below), so the saved local variant wins.
+        effective_appearance_variant = (
+            None if _variant_explicit else appearance_variant
+        )
+        if effective_appearance_variant is not None:
             variant_setting_key = definition.variant_setting_key or "variant"
-            effective_settings[variant_setting_key] = appearance_variant.key
+            effective_settings[variant_setting_key] = effective_appearance_variant.key
             # Context builders consistently read ``section.settings``. A
             # shallow model copy preserves PK/FK identity for Store-scoped
             # queries while keeping this overlay strictly in-memory.
@@ -823,7 +838,7 @@ def _build_items_from_sections(
         # persisted value fails safely to ``default_variant`` here (never
         # raises, never rewrites the stored Section) — see
         # ``variant_contract.resolve_active_variant``'s own contract.
-        active_variant = appearance_variant or resolve_active_variant(
+        active_variant = effective_appearance_variant or resolve_active_variant(
             definition, effective_settings
         )
         items.append({

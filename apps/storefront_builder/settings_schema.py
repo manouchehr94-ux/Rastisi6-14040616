@@ -368,4 +368,54 @@ def clean_section_schema_patch(definition, raw_patch: dict, current_settings: di
         raise SettingsSchemaError("Section is not schema-enabled")
 
     merged = clean_schema_patch(definition.settings_schema, raw_patch, current_settings)
-    return definition.validate_settings(merged)
+    validated = definition.validate_settings(merged)
+    # Phase 1 (Task 6) — stamp the internal explicit-local-variant marker only
+    # when this patch genuinely targets the section's registered variant key.
+    # Applied AFTER validation (the marker is intentionally outside the
+    # client-writable ``appearance_overrides`` contract), so a client can never
+    # set it directly and a non-variant patch never sets it. Any caller that
+    # routes section-settings edits through this bridge (the R4 mutation
+    # service today) inherits the behavior without owning the rule.
+    return mark_explicit_variant_override(
+        settings=validated,
+        variant_setting_key=getattr(definition, "variant_setting_key", None),
+        patch=raw_patch,
+    )
+
+
+#: Phase 1 (Task 6) — the internal explicit-local-variant marker key. It lives
+#: inside the existing ``appearance_overrides`` block but is deliberately NOT a
+#: member of the client-writable ``appearance_overrides`` contract
+#: (``validate_appearance_overrides`` still rejects it as an unknown key). The
+#: trusted server-side settings paths stamp it AFTER validation, so a client
+#: can never manufacture explicit-local intent by supplying it directly.
+VARIANT_EXPLICIT_OVERRIDE_KEY = "variant_explicit"
+
+
+def mark_explicit_variant_override(
+    *,
+    settings: dict,
+    variant_setting_key: str | None,
+    patch: dict,
+) -> dict:
+    """Return ``settings`` with the internal explicit-local-variant marker set
+    IFF ``patch`` genuinely targets the section's registered
+    ``variant_setting_key``.
+
+    Phase 1 (Task 6): a title/source/typography/content-only patch (one that
+    does not include the variant key) is returned unchanged, so a historical
+    section keeps its current inherited/global behavior until the merchant
+    actually changes its local variant. Never mutates the inputs. Must be
+    called on ALREADY-VALIDATED settings (it does not re-run schema validation,
+    and the marker is intentionally outside the client-writable contract).
+    """
+    if not variant_setting_key or variant_setting_key not in patch:
+        return settings
+
+    from copy import deepcopy
+
+    updated = deepcopy(settings)
+    overrides = dict(updated.get("appearance_overrides") or {})
+    overrides[VARIANT_EXPLICIT_OVERRIDE_KEY] = True
+    updated["appearance_overrides"] = overrides
+    return updated

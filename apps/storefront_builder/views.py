@@ -19,6 +19,7 @@ from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
 from apps.stores.resolution import resolve_store_for_service
 
 from . import global_region_registry, section_registry
+from .settings_schema import mark_explicit_variant_override
 from .models import (
     APPEARANCE_CONFIG_DEFAULTS,
     FOOTER_CONFIG_DEFAULTS,
@@ -920,6 +921,24 @@ def storefront_section_settings(request, pk):
             _validate_universal_selection_ownership(request, section.section_key, cleaned)
             if definition.supports_capability("background"):
                 _validate_background_asset_ownership(request, cleaned.get("background"))
+            # Phase 1 (Task 6) — stamp the internal explicit-local-variant
+            # marker only on a GENUINE local variant change. This legacy form
+            # always submits the variant control (e.g. hero_style) on every
+            # POST, so presence in the payload is not intent; compare the
+            # cleaned value against the previously stored value and mark only
+            # when it actually changed. This keeps historical unmarked sections
+            # inheriting the Store default until the merchant truly switches.
+            variant_key = getattr(definition, "variant_setting_key", None)
+            if (
+                variant_key
+                and variant_key in cleaned
+                and cleaned.get(variant_key) != (section.settings or {}).get(variant_key)
+            ):
+                cleaned = mark_explicit_variant_override(
+                    settings=cleaned,
+                    variant_setting_key=variant_key,
+                    patch={variant_key: cleaned[variant_key]},
+                )
             section.settings = cleaned
             section.save(update_fields=["settings", "updated_at"])
             messages.success(request, "تنظیمات ذخیره شد")

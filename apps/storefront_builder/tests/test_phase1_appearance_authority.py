@@ -820,3 +820,142 @@ class ReadyTemplateApplyAuthorityTests(Phase1AppearanceAuthorityBase):
             declared,
             "reset-to-baseline must restore the complete applied recipe manifest",
         )
+
+
+
+# =====================================================================
+# TASK 6 — EXPLICIT LOCAL VARIANT MARKER STAMPING (R4 + legacy paths)
+# =====================================================================
+class ExplicitLocalVariantMarkerTests(Phase1AppearanceAuthorityBase):
+    """Phase 1 (Task 6). The internal ``appearance_overrides.variant_explicit``
+    marker is stamped by the trusted server-side settings paths ONLY on a
+    genuine local variant change — never by a client supplying it directly,
+    never by a non-variant edit, and (legacy) never merely because the variant
+    control is present on every POST.
+    """
+
+    def setUp(self):
+        super().setUp()
+        import json as _json
+
+        self._json = _json
+        self.layout = layout_service.get_or_create_layout(self.store)
+        self.layout.r4_editor_enabled = True
+        self.layout.save(update_fields=["r4_editor_enabled"])
+        # A schema-enabled section with a registered variant key (hero_style).
+        self.home.sections.all().delete()
+        self.hero = StorefrontSection.objects.create(
+            page=self.home,
+            section_key="hero_banner",
+            order=0,
+            settings={"hero_style": "overlay"},
+        )
+
+    def _post_r4(self, mutation):
+        self.draft.refresh_from_db()
+        return self.client.post(
+            reverse("dashboard:storefront-builder-r4-mutation"),
+            data=self._json.dumps(
+                {"base_revision": self.draft.edit_revision, "mutation": mutation}
+            ),
+            content_type="application/json",
+        )
+
+    def _section_overrides(self):
+        self.hero.refresh_from_db()
+        return (self.hero.settings or {}).get("appearance_overrides") or {}
+
+    # -- R4 path -----------------------------------------------------------
+    def test_r4_variant_patch_marks_local_override_explicit(self):
+        resp = self._post_r4({
+            "type": "section.update_settings",
+            "section_id": self.hero.pk,
+            "patch": {"hero_style": "split"},
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.hero.refresh_from_db()
+        self.assertEqual(self.hero.settings.get("hero_style"), "split")
+        self.assertTrue(self._section_overrides().get("variant_explicit"))
+
+    def test_r4_non_variant_patch_does_not_mark(self):
+        resp = self._post_r4({
+            "type": "section.update_settings",
+            "section_id": self.hero.pk,
+            "patch": {"autoplay": True},
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn("variant_explicit", self._section_overrides())
+
+    def test_r4_invalid_variant_patch_persists_no_marker(self):
+        resp = self._post_r4({
+            "type": "section.update_settings",
+            "section_id": self.hero.pk,
+            "patch": {"hero_style": "__not_a_real_variant__"},
+        })
+        # Invalid enum value is rejected by the section validator; nothing
+        # persists (no marker, original value intact).
+        self.assertEqual(resp.status_code, 400)
+        self.hero.refresh_from_db()
+        self.assertEqual(self.hero.settings.get("hero_style"), "overlay")
+        self.assertNotIn("variant_explicit", self._section_overrides())
+
+    def test_r4_client_cannot_manufacture_marker_via_appearance_overrides(self):
+        # A client cannot set the internal marker directly: appearance_overrides
+        # only accepts the typed `typography` contract, so an attempt either is
+        # rejected or is stripped — never yielding variant_explicit=True without
+        # a genuine variant change.
+        resp = self._post_r4({
+            "type": "section.update_settings",
+            "section_id": self.hero.pk,
+            "patch": {"appearance_overrides": {"variant_explicit": True}},
+        })
+        # Whatever the outcome (reject or accept-and-strip), the marker must not
+        # be present, because no variant change occurred.
+        self.assertNotIn("variant_explicit", self._section_overrides())
+
+    # -- legacy section-settings path -------------------------------------
+    def _post_legacy_hero(self, **overrides):
+        data = {
+            "hero_style": overrides.get("hero_style", "overlay"),
+            "autoplay": "on" if overrides.get("autoplay") else "",
+            "interval_ms": overrides.get("interval_ms", ""),
+            "text_position": overrides.get("text_position", "end"),
+        }
+        return self.client.post(
+            reverse("dashboard:storefront-builder-section-settings", args=[self.hero.pk]),
+            data,
+        )
+
+    def test_legacy_genuine_variant_change_marks_explicit(self):
+        resp = self._post_legacy_hero(hero_style="split")
+        self.assertEqual(resp.status_code, 302)
+        self.hero.refresh_from_db()
+        self.assertEqual(self.hero.settings.get("hero_style"), "split")
+        self.assertTrue(self._section_overrides().get("variant_explicit"))
+
+    def test_legacy_content_only_edit_does_not_mark(self):
+        # Re-submit the SAME variant value (the form always includes it) while
+        # changing only an unrelated control — historical marker state must not
+        # transition to explicit.
+        resp = self._post_legacy_hero(hero_style="overlay", autoplay=True)
+        self.assertEqual(resp.status_code, 302)
+        self.assertNotIn("variant_explicit", self._section_overrides())
+
+    # -- render precedence end-to-end (marker set via real R4 edit) --------
+    def test_marker_set_via_r4_makes_local_variant_win_at_render(self):
+        # Genuine local variant change stamps the marker.
+        self._post_r4({
+            "type": "section.update_settings",
+            "section_id": self.hero.pk,
+            "patch": {"hero_style": "overlay"},
+        })
+        self.assertTrue(self._section_overrides().get("variant_explicit"))
+        # A conflicting non-default Store manifest hero selection.
+        self._persist_manifest(hero="hero.split.v1")
+        items = self._home_render_items()
+        self.assertTrue(items)
+        self.assertEqual(
+            items[0]["active_variant"].key,
+            "overlay",
+            "explicit local variant must win over inherited Store default at render",
+        )
