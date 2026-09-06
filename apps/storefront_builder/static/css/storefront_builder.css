@@ -4467,3 +4467,27 @@ a.sfb-v3-component-item,
   .gmn-spacer--minimal_icons{height:calc(82px + env(safe-area-inset-bottom,0px))}
   .gmn-spacer--five_item{height:calc(78px + env(safe-area-inset-bottom,0px))}
 }
+
+
+
+/* ===== brand carousel/grid (shared with home.css — V06/A06) =====
+   These Brand-tile/logo/carousel rules previously lived ONLY in the
+   Home-only home.css. The four non-Home public envelopes (product_list /
+   product_detail / collection_detail / cart) load storefront_builder.css
+   but NOT home.css, so a brand_carousel placed on any of them lacked all
+   brand tile/logo sizing. Values mirror home.css's EFFECTIVE (cascade-
+   resolved) appearance: home.css defines an early block AND a later
+   "dense" block of identical specificity, and the dense block wins on
+   Home per source order. On the public HOME envelope both home.css and
+   this sheet load and this sheet loads AFTER home.css, so these rules
+   must reproduce Home's per-property effective value (dense where both
+   set it, first-block value where only it sets it) — that way overriding
+   home.css on Home is a NO-OP (Home pixel-identical), while non-Home
+   envelopes get the same correct presentation. Scoped to ``.brand-*``
+   markup only (no global spill); the template's inline layout fallback
+   is preserved. */
+.brand-tile{display:flex;align-items:center;justify-content:center;min-height:72px;padding:10px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.brand-tile img{max-height:48px;max-width:100%;object-fit:contain}
+.brand-tile-name{font-size:11px;font-weight:600;color:#444}
+.brand-carousel{display:flex;gap:9px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+.brand-carousel .brand-tile{flex:0 0 150px;scroll-snap-align:start}

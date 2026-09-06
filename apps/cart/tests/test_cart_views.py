@@ -302,3 +302,114 @@ class CartItemUpdateUsesComposedCartSectionsTests(TestCase):
         # cart_summary باید در حالتِ خالی چیزی رندر نکند (مسئولیتِ حالتِ
         # خالی فقط با cart_items است).
         self.assertNotContains(response, "خلاصه سفارش")
+
+
+
+class CartHtmxFragmentCarriesUniversalContextTests(TestCase):
+    """V05/A04 — the real Cart HTMX fragment (``_render_cart_container``,
+    used by both ``cart:item-update`` and ``cart:item-remove``) must go
+    through the SAME universal storefront context the full ``cart_detail``
+    page uses, so container layout + appearance version are honoured after
+    an HTMX action — not the old partial that ignored them.
+
+    A brand_carousel section is placed in a PUBLISHED cart page; after a real
+    POST the response context must carry ``use_container_layout`` /
+    ``render_containers`` (ABSENT before the fix), retain the Brand placement
+    (source/order/settings), render the brand tile + slug link in the
+    fragment, preserve the OOB ``id="cart-count"``, and leave quantities /
+    totals unchanged by the presentation change.
+    """
+
+    HOST = "cart-brand-fragment.example.com"
+
+    def setUp(self):
+        from django.test import Client, override_settings
+        from django.utils import timezone
+
+        from apps.catalog.models import Brand
+        from apps.storefront_builder.models import StorefrontSection
+        from apps.storefront_builder.services import layout_service as svc
+        from apps.stores.models import StoreDomain
+
+        self._override = override_settings(ALLOWED_HOSTS=[self.HOST, "testserver"])
+        self._override.enable()
+        self.addCleanup(self._override.disable)
+
+        self.store = Store.objects.get(slug="akhlaghi")
+        StoreDomain.objects.create(
+            store=self.store, hostname=self.HOST, is_primary=True,
+            verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=timezone.now(),
+        )
+        vendor = Vendor.objects.create(store=self.store, name="فروشگاه برند سبد", slug="shop-cart-brand")
+        category = Category.objects.create(store=self.store, name="دیجیتال برند سبد", slug="digital-cart-brand")
+        self.product = Product.objects.create(
+            store=self.store, vendor=vendor, category=category, name="کالای برند سبد", slug="sample-cart-brand",
+            sku="SKU-CARTBRAND1", price=Decimal("150000"), stock=5,
+        )
+        self.brand = Brand.objects.create(
+            store=self.store, name="برند سبد قابل مشاهده", slug="cart-visible-brand", is_active=True,
+        )
+
+        draft = svc.get_or_create_draft(self.store)
+        cart_page = draft.get_page("cart")
+        cart_page.sections.all().delete()
+        StorefrontSection.objects.create(page=cart_page, section_key="cart_items", order=0)
+        # Brand section placed in the published cart page — must survive the HTMX action.
+        StorefrontSection.objects.create(
+            page=cart_page, section_key="brand_carousel", order=1,
+            settings={"title": "برندهای سبد", "display_mode": "grid", "brand_ids": [], "show_view_all": False},
+        )
+        svc.publish(self.store)
+
+        self.client = Client(HTTP_HOST=self.HOST)
+        self.client.post(reverse("cart:add", args=[self.product.slug]), {"quantity": 2})
+        self.item = CartItem.objects.get(product=self.product)
+
+    def test_update_fragment_context_carries_universal_layout_keys(self):
+        response = self.client.post(reverse("cart:item-update", args=[self.item.id]), {"quantity": 3})
+        self.assertEqual(response.status_code, 200)
+        # These keys are produced ONLY by build_universal_storefront_context.
+        self.assertIn("use_container_layout", response.context)
+        self.assertIn("render_containers", response.context)
+        # storefront_page identifies the resolved published cart page.
+        self.assertIsNotNone(response.context["storefront_page"])
+        self.assertEqual(response.context["storefront_page"].page_type, "cart")
+
+    def test_remove_fragment_context_carries_universal_layout_keys(self):
+        response = self.client.post(reverse("cart:item-remove", args=[self.item.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("use_container_layout", response.context)
+        self.assertIn("render_containers", response.context)
+
+    def test_fragment_retains_brand_placement_source_order_and_settings(self):
+        response = self.client.post(reverse("cart:item-update", args=[self.item.id]), {"quantity": 3})
+        keys = [i["section"].section_key for i in response.context["render_items"]]
+        self.assertIn("brand_carousel", keys)
+        # Merchant-configured order preserved: cart_items (0) before brand_carousel (1).
+        self.assertLess(keys.index("cart_items"), keys.index("brand_carousel"))
+        brand_item = next(i for i in response.context["render_items"] if i["section"].section_key == "brand_carousel")
+        self.assertEqual(brand_item["context"]["brand_carousel_settings"]["title"], "برندهای سبد")
+        self.assertEqual(brand_item["context"]["brand_carousel_settings"]["display_mode"], "grid")
+
+    def test_fragment_renders_brand_tile_and_slug_link(self):
+        response = self.client.post(reverse("cart:item-update", args=[self.item.id]), {"quantity": 3})
+        body = response.content.decode()
+        self.assertIn("برندهای سبد", body)
+        self.assertIn("برند سبد قابل مشاهده", body)
+        self.assertIn("?brand=cart-visible-brand", body)
+        self.assertIn('class="brand-tile', body)
+
+    def test_fragment_preserves_oob_cart_count(self):
+        response = self.client.post(reverse("cart:item-update", args=[self.item.id]), {"quantity": 3})
+        self.assertContains(response, 'id="cart-count"')
+        self.assertContains(response, "hx-swap-oob")
+
+    def test_fragment_does_not_change_quantities_or_totals(self):
+        before = self.client.get(reverse("cart:detail")).context["totals"]["items_total"]
+        response = self.client.post(reverse("cart:item-update", args=[self.item.id]), {"quantity": 3})
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.quantity, 3)
+        # items_total scales with the (legitimately-changed) quantity — the
+        # presentation change must not corrupt the totals computation.
+        self.assertEqual(response.context["totals"]["items_total"], Decimal("450000"))
+        self.assertEqual(before, Decimal("300000"))

@@ -1,0 +1,1724 @@
+{
+  "started_at": "2026-09-06T14:40:22.624Z",
+  "viewports": [
+    "desktop",
+    "mobile",
+    "tablet"
+  ],
+  "envelopes": [
+    {
+      "envelope": "home",
+      "viewport": "desktop",
+      "url": "http://127.0.0.1:8765/",
+      "status": 200
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "desktop",
+      "url": "http://127.0.0.1:8765/products/t12-product-1/",
+      "status": 200
+    },
+    {
+      "envelope": "listing",
+      "viewport": "desktop",
+      "url": "http://127.0.0.1:8765/products/",
+      "status": 200
+    },
+    {
+      "envelope": "collection",
+      "viewport": "desktop",
+      "url": "http://127.0.0.1:8765/collections/p3-collection-1/",
+      "status": 200
+    },
+    {
+      "envelope": "cart",
+      "viewport": "desktop",
+      "url": "http://127.0.0.1:8765/cart/",
+      "status": 200
+    },
+    {
+      "envelope": "home",
+      "viewport": "mobile",
+      "url": "http://127.0.0.1:8765/",
+      "status": 200
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "mobile",
+      "url": "http://127.0.0.1:8765/products/t12-product-1/",
+      "status": 200
+    },
+    {
+      "envelope": "listing",
+      "viewport": "mobile",
+      "url": "http://127.0.0.1:8765/products/",
+      "status": 200
+    },
+    {
+      "envelope": "collection",
+      "viewport": "mobile",
+      "url": "http://127.0.0.1:8765/collections/p3-collection-1/",
+      "status": 200
+    },
+    {
+      "envelope": "cart",
+      "viewport": "mobile",
+      "url": "http://127.0.0.1:8765/cart/",
+      "status": 200
+    },
+    {
+      "envelope": "home",
+      "viewport": "tablet",
+      "url": "http://127.0.0.1:8765/",
+      "status": 200
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "tablet",
+      "url": "http://127.0.0.1:8765/products/t12-product-1/",
+      "status": 200
+    },
+    {
+      "envelope": "listing",
+      "viewport": "tablet",
+      "url": "http://127.0.0.1:8765/products/",
+      "status": 200
+    },
+    {
+      "envelope": "collection",
+      "viewport": "tablet",
+      "url": "http://127.0.0.1:8765/collections/p3-collection-1/",
+      "status": 200
+    },
+    {
+      "envelope": "cart",
+      "viewport": "tablet",
+      "url": "http://127.0.0.1:8765/cart/",
+      "status": 200
+    }
+  ],
+  "variant_checks": [
+    {
+      "envelope": "home",
+      "viewport": "desktop",
+      "variant": "grid",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "home",
+      "viewport": "desktop",
+      "variant": "carousel",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "home",
+      "viewport": "desktop",
+      "variant": "beauty_tabs",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 36,
+        "computedMaxHeight": "36px"
+      }
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "desktop",
+      "variant": "grid",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "desktop",
+      "variant": "carousel",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "desktop",
+      "variant": "beauty_tabs",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "listing",
+      "viewport": "desktop",
+      "variant": "grid",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "listing",
+      "viewport": "desktop",
+      "variant": "carousel",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "listing",
+      "viewport": "desktop",
+      "variant": "beauty_tabs",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "collection",
+      "viewport": "desktop",
+      "variant": "grid",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "collection",
+      "viewport": "desktop",
+      "variant": "carousel",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "collection",
+      "viewport": "desktop",
+      "variant": "beauty_tabs",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "cart",
+      "viewport": "desktop",
+      "variant": "grid",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "cart",
+      "viewport": "desktop",
+      "variant": "carousel",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "cart",
+      "viewport": "desktop",
+      "variant": "beauty_tabs",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "home",
+      "viewport": "mobile",
+      "variant": "grid",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "home",
+      "viewport": "mobile",
+      "variant": "carousel",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "home",
+      "viewport": "mobile",
+      "variant": "beauty_tabs",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 36,
+        "computedMaxHeight": "36px"
+      }
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "mobile",
+      "variant": "grid",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "mobile",
+      "variant": "carousel",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "mobile",
+      "variant": "beauty_tabs",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 24,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "listing",
+      "viewport": "mobile",
+      "variant": "grid",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "listing",
+      "viewport": "mobile",
+      "variant": "carousel",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "listing",
+      "viewport": "mobile",
+      "variant": "beauty_tabs",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 24,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "collection",
+      "viewport": "mobile",
+      "variant": "grid",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "collection",
+      "viewport": "mobile",
+      "variant": "carousel",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "collection",
+      "viewport": "mobile",
+      "variant": "beauty_tabs",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 24,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "cart",
+      "viewport": "mobile",
+      "variant": "grid",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "cart",
+      "viewport": "mobile",
+      "variant": "carousel",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "cart",
+      "viewport": "mobile",
+      "variant": "beauty_tabs",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 24,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "home",
+      "viewport": "tablet",
+      "variant": "grid",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "home",
+      "viewport": "tablet",
+      "variant": "carousel",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "home",
+      "viewport": "tablet",
+      "variant": "beauty_tabs",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 36,
+        "computedMaxHeight": "36px"
+      }
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "tablet",
+      "variant": "grid",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "tablet",
+      "variant": "carousel",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "tablet",
+      "variant": "beauty_tabs",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "listing",
+      "viewport": "tablet",
+      "variant": "grid",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "listing",
+      "viewport": "tablet",
+      "variant": "carousel",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "listing",
+      "viewport": "tablet",
+      "variant": "beauty_tabs",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "collection",
+      "viewport": "tablet",
+      "variant": "grid",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "collection",
+      "viewport": "tablet",
+      "variant": "carousel",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "collection",
+      "viewport": "tablet",
+      "variant": "beauty_tabs",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "cart",
+      "viewport": "tablet",
+      "variant": "grid",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "cart",
+      "viewport": "tablet",
+      "variant": "carousel",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    },
+    {
+      "envelope": "cart",
+      "viewport": "tablet",
+      "variant": "beauty_tabs",
+      "tile_count": 5,
+      "slug_order": [
+        "t12-brand-1",
+        "t12-brand-2",
+        "t12-brand-3",
+        "t12-brand-4",
+        "t12-brand-5"
+      ],
+      "decoded_imgs": 4,
+      "name_fallbacks": 1,
+      "bounded_img_sample": {
+        "heightPx": 48,
+        "computedMaxHeight": "48px"
+      }
+    }
+  ],
+  "asset_envelope": [
+    {
+      "envelope": "home",
+      "viewport": "desktop",
+      "sb_css": 1,
+      "home_css": 1,
+      "htmx": 1,
+      "alpine": 1,
+      "styleHrefs": [
+        "/static/css/tokens.css",
+        "/static/css/base.css",
+        "/static/css/layout.css",
+        "/static/css/product_card.css",
+        "/static/css/home.css",
+        "/static/css/storefront_builder.css",
+        "/static/css/theme_palette.css"
+      ],
+      "scriptSrcs": [
+        "/static/js/htmx.min.js",
+        "/static/js/alpine.min.js"
+      ],
+      "scrollWidth": 1440,
+      "clientWidth": 1440
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "desktop",
+      "sb_css": 1,
+      "home_css": 0,
+      "htmx": 1,
+      "alpine": 1,
+      "styleHrefs": [
+        "/static/css/tokens.css",
+        "/static/css/base.css",
+        "/static/css/layout.css",
+        "/static/css/product_card.css",
+        "/static/css/product_detail.css",
+        "/static/css/storefront_builder.css",
+        "/static/css/theme_palette.css"
+      ],
+      "scriptSrcs": [
+        "/static/js/htmx.min.js",
+        "/static/js/alpine.min.js"
+      ],
+      "scrollWidth": 1440,
+      "clientWidth": 1440
+    },
+    {
+      "envelope": "listing",
+      "viewport": "desktop",
+      "sb_css": 1,
+      "home_css": 0,
+      "htmx": 1,
+      "alpine": 1,
+      "styleHrefs": [
+        "/static/css/tokens.css",
+        "/static/css/base.css",
+        "/static/css/layout.css",
+        "/static/css/product_card.css",
+        "/static/css/product_list.css",
+        "/static/css/storefront_builder.css",
+        "/static/css/theme_palette.css"
+      ],
+      "scriptSrcs": [
+        "/static/js/htmx.min.js",
+        "/static/js/alpine.min.js"
+      ],
+      "scrollWidth": 1440,
+      "clientWidth": 1440
+    },
+    {
+      "envelope": "collection",
+      "viewport": "desktop",
+      "sb_css": 1,
+      "home_css": 0,
+      "htmx": 1,
+      "alpine": 1,
+      "styleHrefs": [
+        "/static/css/tokens.css",
+        "/static/css/base.css",
+        "/static/css/layout.css",
+        "/static/css/product_card.css",
+        "/static/css/product_list.css",
+        "/static/css/storefront_builder.css",
+        "/static/css/theme_palette.css"
+      ],
+      "scriptSrcs": [
+        "/static/js/htmx.min.js",
+        "/static/js/alpine.min.js"
+      ],
+      "scrollWidth": 1440,
+      "clientWidth": 1440
+    },
+    {
+      "envelope": "cart",
+      "viewport": "desktop",
+      "sb_css": 1,
+      "home_css": 0,
+      "htmx": 1,
+      "alpine": 1,
+      "styleHrefs": [
+        "/static/css/tokens.css",
+        "/static/css/base.css",
+        "/static/css/layout.css",
+        "/static/css/cart.css",
+        "/static/css/storefront_builder.css",
+        "/static/css/theme_palette.css"
+      ],
+      "scriptSrcs": [
+        "/static/js/htmx.min.js",
+        "/static/js/alpine.min.js"
+      ],
+      "scrollWidth": 1440,
+      "clientWidth": 1440
+    },
+    {
+      "envelope": "home",
+      "viewport": "mobile",
+      "sb_css": 1,
+      "home_css": 1,
+      "htmx": 1,
+      "alpine": 1,
+      "styleHrefs": [
+        "/static/css/tokens.css",
+        "/static/css/base.css",
+        "/static/css/layout.css",
+        "/static/css/product_card.css",
+        "/static/css/home.css",
+        "/static/css/storefront_builder.css",
+        "/static/css/theme_palette.css"
+      ],
+      "scriptSrcs": [
+        "/static/js/htmx.min.js",
+        "/static/js/alpine.min.js"
+      ],
+      "scrollWidth": 390,
+      "clientWidth": 390
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "mobile",
+      "sb_css": 1,
+      "home_css": 0,
+      "htmx": 1,
+      "alpine": 1,
+      "styleHrefs": [
+        "/static/css/tokens.css",
+        "/static/css/base.css",
+        "/static/css/layout.css",
+        "/static/css/product_card.css",
+        "/static/css/product_detail.css",
+        "/static/css/storefront_builder.css",
+        "/static/css/theme_palette.css"
+      ],
+      "scriptSrcs": [
+        "/static/js/htmx.min.js",
+        "/static/js/alpine.min.js"
+      ],
+      "scrollWidth": 390,
+      "clientWidth": 390
+    },
+    {
+      "envelope": "listing",
+      "viewport": "mobile",
+      "sb_css": 1,
+      "home_css": 0,
+      "htmx": 1,
+      "alpine": 1,
+      "styleHrefs": [
+        "/static/css/tokens.css",
+        "/static/css/base.css",
+        "/static/css/layout.css",
+        "/static/css/product_card.css",
+        "/static/css/product_list.css",
+        "/static/css/storefront_builder.css",
+        "/static/css/theme_palette.css"
+      ],
+      "scriptSrcs": [
+        "/static/js/htmx.min.js",
+        "/static/js/alpine.min.js"
+      ],
+      "scrollWidth": 390,
+      "clientWidth": 390
+    },
+    {
+      "envelope": "collection",
+      "viewport": "mobile",
+      "sb_css": 1,
+      "home_css": 0,
+      "htmx": 1,
+      "alpine": 1,
+      "styleHrefs": [
+        "/static/css/tokens.css",
+        "/static/css/base.css",
+        "/static/css/layout.css",
+        "/static/css/product_card.css",
+        "/static/css/product_list.css",
+        "/static/css/storefront_builder.css",
+        "/static/css/theme_palette.css"
+      ],
+      "scriptSrcs": [
+        "/static/js/htmx.min.js",
+        "/static/js/alpine.min.js"
+      ],
+      "scrollWidth": 390,
+      "clientWidth": 390
+    },
+    {
+      "envelope": "cart",
+      "viewport": "mobile",
+      "sb_css": 1,
+      "home_css": 0,
+      "htmx": 1,
+      "alpine": 1,
+      "styleHrefs": [
+        "/static/css/tokens.css",
+        "/static/css/base.css",
+        "/static/css/layout.css",
+        "/static/css/cart.css",
+        "/static/css/storefront_builder.css",
+        "/static/css/theme_palette.css"
+      ],
+      "scriptSrcs": [
+        "/static/js/htmx.min.js",
+        "/static/js/alpine.min.js"
+      ],
+      "scrollWidth": 390,
+      "clientWidth": 390
+    },
+    {
+      "envelope": "home",
+      "viewport": "tablet",
+      "sb_css": 1,
+      "home_css": 1,
+      "htmx": 1,
+      "alpine": 1,
+      "styleHrefs": [
+        "/static/css/tokens.css",
+        "/static/css/base.css",
+        "/static/css/layout.css",
+        "/static/css/product_card.css",
+        "/static/css/home.css",
+        "/static/css/storefront_builder.css",
+        "/static/css/theme_palette.css"
+      ],
+      "scriptSrcs": [
+        "/static/js/htmx.min.js",
+        "/static/js/alpine.min.js"
+      ],
+      "scrollWidth": 768,
+      "clientWidth": 768
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "tablet",
+      "sb_css": 1,
+      "home_css": 0,
+      "htmx": 1,
+      "alpine": 1,
+      "styleHrefs": [
+        "/static/css/tokens.css",
+        "/static/css/base.css",
+        "/static/css/layout.css",
+        "/static/css/product_card.css",
+        "/static/css/product_detail.css",
+        "/static/css/storefront_builder.css",
+        "/static/css/theme_palette.css"
+      ],
+      "scriptSrcs": [
+        "/static/js/htmx.min.js",
+        "/static/js/alpine.min.js"
+      ],
+      "scrollWidth": 768,
+      "clientWidth": 768
+    },
+    {
+      "envelope": "listing",
+      "viewport": "tablet",
+      "sb_css": 1,
+      "home_css": 0,
+      "htmx": 1,
+      "alpine": 1,
+      "styleHrefs": [
+        "/static/css/tokens.css",
+        "/static/css/base.css",
+        "/static/css/layout.css",
+        "/static/css/product_card.css",
+        "/static/css/product_list.css",
+        "/static/css/storefront_builder.css",
+        "/static/css/theme_palette.css"
+      ],
+      "scriptSrcs": [
+        "/static/js/htmx.min.js",
+        "/static/js/alpine.min.js"
+      ],
+      "scrollWidth": 768,
+      "clientWidth": 768
+    },
+    {
+      "envelope": "collection",
+      "viewport": "tablet",
+      "sb_css": 1,
+      "home_css": 0,
+      "htmx": 1,
+      "alpine": 1,
+      "styleHrefs": [
+        "/static/css/tokens.css",
+        "/static/css/base.css",
+        "/static/css/layout.css",
+        "/static/css/product_card.css",
+        "/static/css/product_list.css",
+        "/static/css/storefront_builder.css",
+        "/static/css/theme_palette.css"
+      ],
+      "scriptSrcs": [
+        "/static/js/htmx.min.js",
+        "/static/js/alpine.min.js"
+      ],
+      "scrollWidth": 768,
+      "clientWidth": 768
+    },
+    {
+      "envelope": "cart",
+      "viewport": "tablet",
+      "sb_css": 1,
+      "home_css": 0,
+      "htmx": 1,
+      "alpine": 1,
+      "styleHrefs": [
+        "/static/css/tokens.css",
+        "/static/css/base.css",
+        "/static/css/layout.css",
+        "/static/css/cart.css",
+        "/static/css/storefront_builder.css",
+        "/static/css/theme_palette.css"
+      ],
+      "scriptSrcs": [
+        "/static/js/htmx.min.js",
+        "/static/js/alpine.min.js"
+      ],
+      "scrollWidth": 768,
+      "clientWidth": 768
+    }
+  ],
+  "v02_anchor": [
+    {
+      "envelope": "home",
+      "viewport": "desktop",
+      "variant": "grid",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "home",
+      "viewport": "desktop",
+      "variant": "carousel",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "home",
+      "viewport": "desktop",
+      "variant": "beauty_tabs",
+      "present": false
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "desktop",
+      "variant": "grid",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "desktop",
+      "variant": "carousel",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "desktop",
+      "variant": "beauty_tabs",
+      "present": false
+    },
+    {
+      "envelope": "listing",
+      "viewport": "desktop",
+      "variant": "grid",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "listing",
+      "viewport": "desktop",
+      "variant": "carousel",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "listing",
+      "viewport": "desktop",
+      "variant": "beauty_tabs",
+      "present": false
+    },
+    {
+      "envelope": "collection",
+      "viewport": "desktop",
+      "variant": "grid",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "collection",
+      "viewport": "desktop",
+      "variant": "carousel",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "collection",
+      "viewport": "desktop",
+      "variant": "beauty_tabs",
+      "present": false
+    },
+    {
+      "envelope": "cart",
+      "viewport": "desktop",
+      "variant": "grid",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "cart",
+      "viewport": "desktop",
+      "variant": "carousel",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "cart",
+      "viewport": "desktop",
+      "variant": "beauty_tabs",
+      "present": false
+    },
+    {
+      "envelope": "home",
+      "viewport": "mobile",
+      "variant": "grid",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "home",
+      "viewport": "mobile",
+      "variant": "carousel",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "home",
+      "viewport": "mobile",
+      "variant": "beauty_tabs",
+      "present": false
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "mobile",
+      "variant": "grid",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "mobile",
+      "variant": "carousel",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "mobile",
+      "variant": "beauty_tabs",
+      "present": false
+    },
+    {
+      "envelope": "listing",
+      "viewport": "mobile",
+      "variant": "grid",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "listing",
+      "viewport": "mobile",
+      "variant": "carousel",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "listing",
+      "viewport": "mobile",
+      "variant": "beauty_tabs",
+      "present": false
+    },
+    {
+      "envelope": "collection",
+      "viewport": "mobile",
+      "variant": "grid",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "collection",
+      "viewport": "mobile",
+      "variant": "carousel",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "collection",
+      "viewport": "mobile",
+      "variant": "beauty_tabs",
+      "present": false
+    },
+    {
+      "envelope": "cart",
+      "viewport": "mobile",
+      "variant": "grid",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "cart",
+      "viewport": "mobile",
+      "variant": "carousel",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "cart",
+      "viewport": "mobile",
+      "variant": "beauty_tabs",
+      "present": false
+    },
+    {
+      "envelope": "home",
+      "viewport": "tablet",
+      "variant": "grid",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "home",
+      "viewport": "tablet",
+      "variant": "carousel",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "home",
+      "viewport": "tablet",
+      "variant": "beauty_tabs",
+      "present": false
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "tablet",
+      "variant": "grid",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "tablet",
+      "variant": "carousel",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "product_detail",
+      "viewport": "tablet",
+      "variant": "beauty_tabs",
+      "present": false
+    },
+    {
+      "envelope": "listing",
+      "viewport": "tablet",
+      "variant": "grid",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "listing",
+      "viewport": "tablet",
+      "variant": "carousel",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "listing",
+      "viewport": "tablet",
+      "variant": "beauty_tabs",
+      "present": false
+    },
+    {
+      "envelope": "collection",
+      "viewport": "tablet",
+      "variant": "grid",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "collection",
+      "viewport": "tablet",
+      "variant": "carousel",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "collection",
+      "viewport": "tablet",
+      "variant": "beauty_tabs",
+      "present": false
+    },
+    {
+      "envelope": "cart",
+      "viewport": "tablet",
+      "variant": "grid",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "cart",
+      "viewport": "tablet",
+      "variant": "carousel",
+      "present": true,
+      "href": "/collections/p3-collection-1/"
+    },
+    {
+      "envelope": "cart",
+      "viewport": "tablet",
+      "variant": "beauty_tabs",
+      "present": false
+    }
+  ],
+  "wrapper_projection": [
+    {
+      "section_id": "34",
+      "replacements": 3,
+      "hrefs_before": [
+        "/products/?brand=t12-brand-2",
+        "/products/?brand=t12-brand-1"
+      ],
+      "hrefs_after": [
+        "/products/?brand=t12-brand-2",
+        "/products/?brand=t12-brand-1"
+      ],
+      "asset_count_before": 10,
+      "asset_count_after": 10,
+      "hrefs_identical": true,
+      "assets_stable": true
+    }
+  ],
+  "cart_htmx": [
+    {
+      "viewport": "desktop",
+      "item_id": "1",
+      "inc_url": "/cart/items/1/update/",
+      "remove_url": "/cart/items/1/remove/",
+      "badge_before": "۲",
+      "badge_after_update": "۳",
+      "badge_after_remove": "۰",
+      "qty_after_update": "۳",
+      "brand_tiles_before": 15,
+      "brand_tiles_after_update": 15,
+      "brand_hrefs_stable": true,
+      "item_count_after_remove": 0
+    },
+    {
+      "viewport": "mobile",
+      "item_id": "2",
+      "inc_url": "/cart/items/2/update/",
+      "remove_url": "/cart/items/2/remove/",
+      "badge_before": "۲",
+      "badge_after_update": "۳",
+      "badge_after_remove": "۰",
+      "qty_after_update": "۳",
+      "brand_tiles_before": 15,
+      "brand_tiles_after_update": 15,
+      "brand_hrefs_stable": true,
+      "item_count_after_remove": 0
+    },
+    {
+      "viewport": "tablet",
+      "item_id": "3",
+      "inc_url": "/cart/items/3/update/",
+      "remove_url": "/cart/items/3/remove/",
+      "badge_before": "۲",
+      "badge_after_update": "۳",
+      "badge_after_remove": "۰",
+      "qty_after_update": "۳",
+      "brand_tiles_before": 15,
+      "brand_tiles_after_update": 15,
+      "brand_hrefs_stable": true,
+      "item_count_after_remove": 0
+    }
+  ],
+  "screenshots": [
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/desktop/home-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/desktop/home-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/desktop/home-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/desktop/product_detail-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/desktop/product_detail-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/desktop/product_detail-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/desktop/listing-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/desktop/listing-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/desktop/listing-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/desktop/collection-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/desktop/collection-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/desktop/collection-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/desktop/cart-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/desktop/cart-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/desktop/cart-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/mobile/home-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/mobile/home-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/mobile/home-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/mobile/product_detail-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/mobile/product_detail-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/mobile/product_detail-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/mobile/listing-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/mobile/listing-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/mobile/listing-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/mobile/collection-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/mobile/collection-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/mobile/collection-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/mobile/cart-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/mobile/cart-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/mobile/cart-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/tablet/home-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/tablet/home-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/tablet/home-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/tablet/product_detail-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/tablet/product_detail-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/tablet/product_detail-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/tablet/listing-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/tablet/listing-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/tablet/listing-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/tablet/collection-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/tablet/collection-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/tablet/collection-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/tablet/cart-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/tablet/cart-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/tablet/cart-public.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/wrapper_projection/preview-after-3x-replacement.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/desktop/before.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/desktop/update.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/desktop/remove.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/mobile/before.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/mobile/update.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/mobile/remove.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/tablet/before.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/tablet/update.png",
+    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/tablet/remove.png"
+  ],
+  "errors": [],
+  "finished_at": "2026-09-06T14:40:56.854Z"
+}

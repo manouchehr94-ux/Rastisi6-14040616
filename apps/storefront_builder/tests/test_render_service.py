@@ -1318,3 +1318,121 @@ class BuildDefaultRenderItemsTests(TestCase):
         cart_items_item = next(i for i in items if i["section"].section_key == "cart_items")
         self.assertEqual(cart_items_item["context"]["cart"], "SENTINEL")
         self.assertEqual(cart_items_item["context"]["item_count"], 4)
+
+
+
+class BrandCarouselViewAllAnchorTests(TestCase):
+    """V02 — the "مشاهده همه" (view-all) anchor contract across the three
+    Brand display variants and the destination resolution rules:
+
+      * grid / carousel with a RESOLVED destination  -> anchor present.
+      * beauty_tabs, even with a resolved destination  -> anchor ABSENT
+        (suppressed in the template's beauty_tabs branch).
+      * grid / carousel with no / "none" / invalid destination -> anchor
+        ABSENT (never a dead button).
+
+    Drives the real ``_brand_carousel_context`` (view_all_url resolution)
+    AND the real ``brand_carousel.html`` template (anchor rendering), so
+    both the context decision and the presentation decision are proven.
+    """
+
+    def setUp(self):
+        from apps.catalog.models import Brand
+
+        cache.clear()
+        self.store = _akhlaghi()
+        self.draft = svc.get_or_create_draft(self.store)
+        self.draft.sections.all().delete()
+        Brand.objects.create(store=self.store, name="برند V02", slug="v02-brand", is_active=True)
+
+    def _context(self, *, display_mode, show_view_all, destination):
+        from apps.storefront_builder.services.render_service import _brand_carousel_context
+
+        section = StorefrontSection.objects.create(
+            version=self.draft, section_key="brand_carousel", order=0,
+            settings={
+                "display_mode": display_mode,
+                "show_view_all": show_view_all,
+                "brand_ids": [],
+                "destination": destination,
+            },
+        )
+        return _brand_carousel_context(self.store, section)
+
+    def _html(self, ctx, *, display_mode):
+        from django.template.loader import render_to_string
+
+        settings = {**ctx["brand_carousel_settings"], "display_mode": display_mode}
+        return render_to_string(
+            "storefront_builder/sections/brand_carousel.html",
+            {
+                "brands": ctx["brands"],
+                "brand_carousel_settings": settings,
+                "view_all_url": ctx["view_all_url"],
+            },
+        )
+
+    # -- resolved destination (search -> product-list url) -------------------
+    _SEARCH_DEST = {"destination_type": "search"}
+
+    def test_grid_with_resolved_destination_shows_anchor(self):
+        ctx = self._context(display_mode="grid", show_view_all=True, destination=self._SEARCH_DEST)
+        self.assertIsNotNone(ctx["view_all_url"])
+        html = self._html(ctx, display_mode="grid")
+        self.assertIn('class="more"', html)
+        self.assertIn("مشاهده همه", html)
+
+    def test_carousel_with_resolved_destination_shows_anchor(self):
+        ctx = self._context(display_mode="carousel", show_view_all=True, destination=self._SEARCH_DEST)
+        self.assertIsNotNone(ctx["view_all_url"])
+        html = self._html(ctx, display_mode="carousel")
+        self.assertIn('class="more"', html)
+        self.assertIn("مشاهده همه", html)
+
+    def test_beauty_tabs_suppresses_anchor_even_with_resolved_destination(self):
+        ctx = self._context(display_mode="beauty_tabs", show_view_all=True, destination=self._SEARCH_DEST)
+        # The context still resolves a real url...
+        self.assertIsNotNone(ctx["view_all_url"])
+        # ...but the beauty_tabs template branch never renders the anchor.
+        html = self._html(ctx, display_mode="beauty_tabs")
+        self.assertNotIn('class="more"', html)
+        self.assertNotIn("مشاهده همه", html)
+
+    # -- no / none / invalid destination -> no anchor ------------------------
+    def test_grid_with_none_destination_has_no_anchor(self):
+        ctx = self._context(
+            display_mode="grid", show_view_all=True, destination={"destination_type": "none"},
+        )
+        self.assertIsNone(ctx["view_all_url"])
+        html = self._html(ctx, display_mode="grid")
+        self.assertNotIn('class="more"', html)
+
+    def test_carousel_with_missing_destination_has_no_anchor(self):
+        ctx = self._context(display_mode="carousel", show_view_all=True, destination={})
+        self.assertIsNone(ctx["view_all_url"])
+        html = self._html(ctx, display_mode="carousel")
+        self.assertNotIn('class="more"', html)
+
+    def test_grid_with_invalid_destination_reference_has_no_anchor(self):
+        """A destination pointing at a non-existent (or other-store) resource
+        resolves to url=None — never a dead anchor."""
+        ctx = self._context(
+            display_mode="grid", show_view_all=True,
+            destination={"destination_type": "brand", "destination_id": 99999999},
+        )
+        self.assertIsNone(ctx["view_all_url"])
+        html = self._html(ctx, display_mode="grid")
+        self.assertNotIn('class="more"', html)
+
+    def test_show_view_all_false_never_resolves_url_even_with_destination(self):
+        ctx = self._context(display_mode="grid", show_view_all=False, destination=self._SEARCH_DEST)
+        self.assertIsNone(ctx["view_all_url"])
+        html = self._html(ctx, display_mode="grid")
+        self.assertNotIn('class="more"', html)
+
+    def test_resolved_anchor_href_points_at_the_resolved_destination(self):
+        from django.urls import reverse
+
+        ctx = self._context(display_mode="grid", show_view_all=True, destination=self._SEARCH_DEST)
+        html = self._html(ctx, display_mode="grid")
+        self.assertIn(f'href="{reverse("catalog:product-list")}"', html)

@@ -22,6 +22,7 @@ from django.test import Client
 
 from apps.catalog.models import Brand, Category, Product, Vendor
 from apps.storefront_builder import section_registry
+from apps.storefront_builder.section_registry import BRAND_CAROUSEL_DISPLAY_MODES
 from apps.storefront_builder.models import StorefrontEditHistoryEntry
 from apps.storefront_builder.services import container_service, layout_service
 from apps.stores.models import Store, StoreMembership
@@ -162,7 +163,7 @@ class Command(BaseCommand):
         runtime_manifest_path = None
         browser_exit = 1
         try:
-            fixture = self._prepare_r4_sandbox(store, user)
+            fixture = self._prepare_r4_sandbox(store, user, phase3=options["phase3"])
 
             if options["simulate_failure_after_backup"]:
                 raise CommandError(
@@ -182,6 +183,7 @@ class Command(BaseCommand):
                 headed=options["headed"],
                 browser_channel=options["browser_channel"],
                 phase3=options["phase3"],
+                phase3_fixture=fixture.get("phase3") if options["phase3"] else None,
             )
             fd, runtime_manifest_path = tempfile.mkstemp(prefix="rastisi-r4-qa-", suffix=".json")
             os.close(fd)
@@ -306,7 +308,7 @@ class Command(BaseCommand):
         shutil.copy2(backup, target)
 
     # -- R4-specific deterministic fixture -----------------------------------
-    def _prepare_r4_sandbox(self, store: Store, user) -> dict:
+    def _prepare_r4_sandbox(self, store: Store, user, *, phase3: bool = False) -> dict:
         layout = layout_service.get_or_create_layout(store)
         layout.r4_editor_enabled = True
         # Deterministic baseline: Publish must be a real, observable state
@@ -363,13 +365,177 @@ class Command(BaseCommand):
         for i in range(1, 6):
             Brand.objects.get_or_create(store=store, slug=f"t12-brand-{i}", defaults=dict(name=f"برند تی۱۲ شماره {i}"))
 
-        return {
+        fixture = {
             "hero_section_id": hero.pk,
             "brand_carousel_section_id": brand_carousel.pk,
             "draft_revision": draft.edit_revision,
         }
 
-    def _build_manifest(self, *, store, port, session_cookie, report_dir, headed, browser_channel, phase3=False):
+        # Task 3 "Brand gate" — heavier, phase3-only additions. Guarded so the
+        # default (R3) run's Draft and fixture are byte-for-byte unchanged: on
+        # a non-phase3 run this branch never executes.
+        if phase3:
+            fixture["phase3"] = self._prepare_phase3_brand_gate(store, user, draft)
+
+        return fixture
+
+    # -- Phase 3 (Task 3 "Brand gate") fixture --------------------------------
+    def _prepare_phase3_brand_gate(self, store: Store, user, draft) -> dict:
+        """Place a Draft ``brand_carousel`` on the five envelope pages the
+        Brand browser-certification exercises (E1 home, E2 product_detail,
+        E3 listing, E4 collection detail, E5 cart), give brands real logos
+        (plus one deliberate no-logo brand for the name-fallback path), and
+        stand up one active MerchantCollection host so ``/collections/…/``
+        resolves. Returns the discovered ids the runner threads through the
+        manifest. NEVER runs on the default R3 path."""
+        from io import BytesIO
+
+        from django.core.files.base import ContentFile
+
+        from apps.catalog.models import MerchantCollection, MerchantCollectionItem, Product
+        from apps.storefront_builder.models import StorefrontPage, StorefrontSection
+
+        # A specific, ordered set of five brands the certification selects
+        # (manual mode preserves this exact order). Four get a real PIL logo;
+        # the fifth is left logo-less on purpose so the public name-fallback
+        # (`span.brand-tile-name`) has a real subject to assert on.
+        brand_slugs = [f"t12-brand-{i}" for i in range(1, 6)]
+        brands = {b.slug: b for b in Brand.objects.filter(store=store, slug__in=brand_slugs)}
+        selected = [brands[s] for s in brand_slugs if s in brands]
+        ordered_slugs = [b.slug for b in selected]
+        no_logo_brand = selected[-1]
+
+        def _png_logo(color):
+            try:
+                from PIL import Image  # noqa: WPS433 (local import; test-only dep)
+            except Exception:  # pragma: no cover — PIL is a project dependency
+                return None
+            buf = BytesIO()
+            Image.new("RGB", (96, 48), color).save(buf, format="PNG")
+            return buf.getvalue()
+
+        logo_palette = ["#c0392b", "#2980b9", "#27ae60", "#8e44ad"]
+        for idx, brand in enumerate(selected[:-1]):
+            if brand.logo:  # already has one from an earlier run — leave it
+                continue
+            payload = _png_logo(logo_palette[idx % len(logo_palette)])
+            if payload is not None:
+                brand.logo.save(f"{brand.slug}.png", ContentFile(payload), save=True)
+        # Guarantee the fallback brand truly has no logo (idempotent reruns).
+        if no_logo_brand.logo:
+            no_logo_brand.logo.delete(save=True)
+
+        brand_ids = [b.pk for b in selected]
+
+        # One active collection host so /collections/p3-collection-1/ resolves,
+        # with a couple of members (the storefront-visible catalog products the
+        # base fixture already created).
+        member_products = list(
+            Product.objects.filter(store=store, slug__in=["t12-product-1", "t12-product-2"]).order_by("slug")
+        )
+        collection, _ = MerchantCollection.objects.get_or_create(
+            store=store, slug="p3-collection-1",
+            defaults=dict(name="کالکشن پی۳ شماره ۱", is_active=True),
+        )
+        if not collection.is_active:
+            collection.is_active = True
+            collection.save(update_fields=["is_active"])
+        for order, product in enumerate(member_products):
+            MerchantCollectionItem.objects.get_or_create(
+                collection=collection, product=product, defaults=dict(order=order),
+            )
+
+        product_slug = "t12-product-1"
+        # The base fixture creates products with the default stock=0, which
+        # would make the real add-to-cart raise UnavailableStockError. Give
+        # the cart-flow product real stock so the E5 cart HTMX (add/update/
+        # remove) exercises the genuine happy path.
+        Product.objects.filter(store=store, slug=product_slug).update(stock=25)
+
+        # A resolvable View-all destination (V02) for the grid/carousel
+        # variants — points at the collection host above, so
+        # resolve_destination_setting yields /collections/p3-collection-1/.
+        destination = {
+            "destination_type": "collection",
+            "destination_id": collection.pk,
+            "destination_external_url": "",
+            "open_in_new_tab": False,
+        }
+
+        def _brand_settings(display_mode: str, page_type: str) -> dict:
+            # grid/carousel carry a resolvable View-all destination (V02);
+            # beauty_tabs stores show_view_all=True too (to prove the template
+            # SUPPRESSES the anchor for beauty_tabs regardless of the flag),
+            # but the template renders no `a.more` for it.
+            return {
+                "title": f"برندهای {page_type} {display_mode}",
+                "display_mode": display_mode,
+                "show_view_all": True,
+                "brand_ids": list(brand_ids),
+                "destination": dict(destination),
+            }
+
+        def place_variant(page, display_mode: str, page_type: str) -> int:
+            order = page.sections.count()
+            section = StorefrontSection.objects.create(
+                page=page,
+                section_key="brand_carousel",
+                order=order,
+                settings=_brand_settings(display_mode, page_type),
+            )
+            container = container_service.create_empty_container(page, "single")
+            cell = container.cells.order_by("order", "id").first()
+            container_service.place_section(cell, section)
+            return section.pk
+
+        variants = list(BRAND_CAROUSEL_DISPLAY_MODES)  # ("grid","carousel","beauty_tabs")
+
+        def place_all_variants(page_type: str) -> dict:
+            """Place one brand_carousel per variant on the page so a single
+            published GET renders all three variants side by side (no
+            re-publish loop needed to certify each variant)."""
+            page = draft.get_page(page_type)
+            ids = {}
+            for display_mode in variants:
+                ids[display_mode] = place_variant(page, display_mode, page_type)
+            return ids
+
+        # E1 home already carries the BASE fixture's own brand_carousel, which
+        # scenarios 06/07 deliberately mutate (manual Picker reorder to a
+        # 2-brand selection). We do NOT reuse it — instead we add three FRESH
+        # phase3 brand_carousels (one per variant) on home too, each with the
+        # full ordered five-brand selection, so the Brand-gate assertions are
+        # never disturbed by (and never disturb) scenarios 06/07. The phase3
+        # sections are told apart from the base one at assertion time by their
+        # full five-brand tile count.
+        envelopes = {
+            "home": place_all_variants(StorefrontPage.PageType.HOME),
+            "product_detail": place_all_variants(StorefrontPage.PageType.PRODUCT_DETAIL),
+            "listing": place_all_variants(StorefrontPage.PageType.LISTING),
+            "collection": place_all_variants(StorefrontPage.PageType.COLLECTION),
+            "cart": place_all_variants(StorefrontPage.PageType.CART),
+        }
+
+        return {
+            # brand_carousel section ids (in the DRAFT) per envelope page type,
+            # keyed by variant display_mode: {envelope: {variant: section_pk}}
+            "brand_section_ids": envelopes,
+            # public route inputs the runner needs to reach each envelope
+            "product_slug": product_slug,
+            "collection_slug": collection.slug,
+            # the ordered, selected brand ids + slugs + the deliberate no-logo
+            # brand, so the runner can assert count/EXACT order and name-fallback
+            "brand_ids": list(brand_ids),
+            "brand_slugs": list(ordered_slugs),
+            "no_logo_brand_id": no_logo_brand.pk,
+            "no_logo_brand_name": no_logo_brand.name,
+            # the resolved View-all target (V02) grid/carousel must render
+            "view_all_url_path": f"/collections/{collection.slug}/",
+            # the three variant values the certification cycles per envelope
+            "variants": list(BRAND_CAROUSEL_DISPLAY_MODES),
+        }
+
+    def _build_manifest(self, *, store, port, session_cookie, report_dir, headed, browser_channel, phase3=False, phase3_fixture=None):
         origin = f"http://127.0.0.1:{port}"
         same_site = str(settings.SESSION_COOKIE_SAMESITE or "Lax").capitalize()
         if same_site not in {"Lax", "Strict", "None"}:
@@ -382,6 +548,12 @@ class Command(BaseCommand):
             "headed": bool(headed),
             "browser_channel": browser_channel,
             "phase3": bool(phase3),
+            # Phase 3 (Task 3 "Brand gate") — the runner reads fixture ids
+            # (per-page brand section ids, product slug, collection slug,
+            # brand id lists) from the MANIFEST, not fixture.json. Only
+            # populated on a --phase3 run; None (absent-shaped) otherwise, so
+            # the default R3 manifest is byte-identical to before.
+            "phase3_fixture": phase3_fixture,
             "session": {
                 "name": settings.SESSION_COOKIE_NAME,
                 "value": session_cookie,

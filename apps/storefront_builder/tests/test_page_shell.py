@@ -371,3 +371,175 @@ class SharedPageShellTests(TestCase):
             "/admin-portal/login/", HTTP_HOST=self.store.admin_subdomain + "." + settings.RASTISI_ADMIN_DOMAIN_SUFFIX,
         )
         self.assertNotIn("ساخته شده توسط راستی سی", response.content.decode())
+
+
+
+@override_settings(ALLOWED_HOSTS=[PUBLIC_HOST, "testserver"])
+class BrandSixPagePresenceAndAssetEnvelopeTests(TestCase):
+    """A06 — brand_carousel is certified on the six page types (home,
+    product_detail, listing, search, collection, cart). A single PUBLISHED
+    version carries a brand_carousel on every one; each public route must:
+
+      * dispatch to the correct page type and render the brand section
+        (title + brand name + brand slug link) in the HTML,
+      * render through the shared page shell (render_rows partial present),
+      * load the shared Builder stylesheet exactly once and the shared
+        HTMX + Alpine runtimes exactly once each (no duplicate/omitted
+        asset envelope).
+
+    Companion boundary (E6): the collection_index route (/collections/)
+    renders its own hardcoded collection grid — it does NOT render pilot
+    render_items and does NOT load storefront_builder.css — so the pilot
+    placed on the COLLECTION page appears on /collections/<slug>/ but NOT
+    on /collections/. Listing and Search share the product-list route and
+    must present the SAME asset envelope (E3 equivalence proven for BOTH).
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.store = _akhlaghi()
+        StoreDomain.objects.create(
+            store=self.store, hostname=PUBLIC_HOST, is_primary=True,
+            verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=timezone.now(),
+        )
+        self.public_client = Client(HTTP_HOST=PUBLIC_HOST)
+
+        from apps.catalog.models import Brand
+        from apps.storefront_builder.models import StorefrontSection
+
+        vendor = Vendor.objects.create(store=self.store, name="فروشنده برند شش‌صفحه", slug="vendor-brand6")
+        category = Category.objects.create(store=self.store, name="دسته برند شش‌صفحه", slug="cat-brand6", is_active=True)
+        self.product = Product.objects.create(
+            store=self.store, vendor=vendor, category=category, name="کالای برند شش‌صفحه", slug="product-brand6",
+            sku="BRAND-SIX-1", price=Decimal("20000"), stock=5, status=Product.Status.ACTIVE,
+        )
+        self.collection = collection_service.create_collection(self.store, name="کالکشن برند شش‌صفحه")
+        collection_service.add_product(self.collection, self.product)
+        self.brand = Brand.objects.create(
+            store=self.store, name="برند شش‌صفحه قابل مشاهده", slug="six-page-brand", is_active=True,
+        )
+
+        draft = svc.get_or_create_draft(self.store)
+        self._brand_settings = {
+            "title": "برندهای شش‌صفحه", "display_mode": "grid",
+            "brand_ids": [], "show_view_all": False,
+        }
+        for page_type in ("home", "product_detail", "listing", "search", "collection", "cart"):
+            page = draft.get_page(page_type)
+            StorefrontSection.objects.create(
+                page=page, section_key="brand_carousel", order=900, settings=dict(self._brand_settings),
+            )
+        svc.publish(self.store)
+
+        self.routes = {
+            "home": reverse("catalog:home"),
+            "product_detail": reverse("catalog:product-detail", args=[self.product.slug]),
+            "listing": reverse("catalog:product-list"),
+            "search": reverse("catalog:product-list") + "?q=کالای",
+            "collection": reverse("catalog:collection-detail", args=[self.collection.slug]),
+            "cart": reverse("cart:detail"),
+        }
+
+    def _get(self, url):
+        resp = self.public_client.get(url)
+        self.assertEqual(resp.status_code, 200, f"{url} returned {resp.status_code}")
+        return resp
+
+    # -- 1. Brand present on each of the six -------------------------------
+    def test_brand_section_present_on_each_of_the_six_page_types(self):
+        for name, url in self.routes.items():
+            body = self._get(url).content.decode()
+            self.assertIn("برندهای شش‌صفحه", body, f"brand section title missing on {name} ({url})")
+            self.assertIn("برند شش‌صفحه قابل مشاهده", body, f"brand name missing on {name} ({url})")
+            self.assertIn("?brand=six-page-brand", body, f"brand slug link missing on {name} ({url})")
+            self.assertIn('class="brand-tile', body, f"brand tile markup missing on {name} ({url})")
+
+    # -- 2. Correct page dispatch (context page type) ----------------------
+    def test_each_route_dispatches_to_its_own_page_type(self):
+        expected = {
+            "home": "home", "product_detail": "product_detail", "listing": "listing",
+            "search": "search", "collection": "collection", "cart": "cart",
+        }
+        for name, url in self.routes.items():
+            resp = self._get(url)
+            self.assertEqual(
+                resp.context["storefront_page"].page_type, expected[name],
+                f"{name} dispatched to the wrong page type",
+            )
+
+    # -- 3. Shared shell (render_rows partial) -----------------------------
+    def test_each_page_renders_through_the_shared_render_rows_partial(self):
+        for name, url in self.routes.items():
+            resp = self._get(url)
+            template_names = [t.name for t in resp.templates if t.name]
+            self.assertIn(
+                "storefront_builder/partials/render_rows.html", template_names,
+                f"{name} did not render through the shared render_rows partial",
+            )
+            self.assertIn(
+                "storefront_builder/partials/page_shell_header.html", template_names,
+                f"{name} missing shared header shell partial",
+            )
+            self.assertIn(
+                "storefront_builder/partials/page_shell_footer.html", template_names,
+                f"{name} missing shared footer shell partial",
+            )
+
+    # -- 4. Ordered / de-duplicated asset envelope -------------------------
+    def test_each_page_loads_builder_css_and_shared_runtimes_exactly_once(self):
+        for name, url in self.routes.items():
+            body = self._get(url).content.decode()
+            self.assertEqual(
+                body.count("css/storefront_builder.css"), 1,
+                f"{name}: storefront_builder.css not loaded exactly once",
+            )
+            self.assertEqual(body.count("js/htmx.min.js"), 1, f"{name}: htmx not loaded exactly once")
+            self.assertEqual(body.count("js/alpine.min.js"), 1, f"{name}: alpine not loaded exactly once")
+
+    def test_builder_css_precedes_shared_runtimes_in_document_order(self):
+        """Ordered envelope: the Builder stylesheet (in <head>) must appear
+        before the deferred HTMX/Alpine runtimes in document order."""
+        for name, url in self.routes.items():
+            body = self._get(url).content.decode()
+            css_at = body.index("css/storefront_builder.css")
+            htmx_at = body.index("js/htmx.min.js")
+            alpine_at = body.index("js/alpine.min.js")
+            self.assertLess(css_at, htmx_at, f"{name}: Builder CSS must precede HTMX")
+            self.assertLess(css_at, alpine_at, f"{name}: Builder CSS must precede Alpine")
+
+    # -- 5. Listing / Search E3 asset-envelope equivalence (BOTH) ----------
+    def test_listing_and_search_present_identical_asset_envelope(self):
+        listing = self._get(self.routes["listing"]).content.decode()
+        search = self._get(self.routes["search"]).content.decode()
+        for asset in ("css/storefront_builder.css", "js/htmx.min.js", "js/alpine.min.js"):
+            self.assertEqual(
+                listing.count(asset), search.count(asset),
+                f"listing/search diverge on {asset} count (E3 equivalence broken)",
+            )
+            self.assertEqual(listing.count(asset), 1, f"{asset} not exactly once on listing")
+
+    # -- 6. E6 boundary: collection_index is not a pilot render surface ----
+    def test_collection_index_does_not_render_pilot_brand_or_builder_css(self):
+        """The pilot on the COLLECTION page renders on collection_detail but
+        NOT on collection_index (/collections/) — that route renders its own
+        hardcoded grid, ignores render_items, and does not load the Builder
+        stylesheet. Proves the pilot boundary is real, not accidentally
+        universal."""
+        body = self._get(reverse("catalog:collection-index")).content.decode()
+        self.assertNotIn("برندهای شش‌صفحه", body, "brand pilot leaked onto collection_index")
+        self.assertNotIn('class="brand-tile', body, "brand tile leaked onto collection_index")
+        self.assertNotIn("css/storefront_builder.css", body, "collection_index must not load Builder CSS")
+        # But the SAME page-type pilot IS on collection_detail (contrast).
+        detail = self._get(self.routes["collection"]).content.decode()
+        self.assertIn("برندهای شش‌صفحه", detail)
+
+    def test_collection_index_and_detail_share_one_collection_page(self):
+        """collection_index and collection_detail both resolve PageType.COLLECTION
+        — a single shared StorefrontPage, not two. The brand pilot was placed
+        once on the COLLECTION page yet is available to collection_detail."""
+        from apps.storefront_builder.models import StorefrontPage
+        from apps.storefront_builder.services import page_resolution_service
+
+        published = page_resolution_service.get_published_layout(self.store).published_version
+        collection_pages = published.pages.filter(page_type=StorefrontPage.PageType.COLLECTION)
+        self.assertEqual(collection_pages.count(), 1)

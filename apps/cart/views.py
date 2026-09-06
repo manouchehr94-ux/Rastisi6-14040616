@@ -45,19 +45,31 @@ def _render_cart_container(request, cart):
     همان دو section پیش‌فرض را بدونِ ردیفِ واقعی در دیتابیس می‌سازد،
     دقیقاً همان الگویِ ``storefront_context_service.build_universal_storefront_context``."""
     from apps.storefront_builder.models import StorefrontPage
-    from apps.storefront_builder.services import page_resolution_service, render_service
+    from apps.storefront_builder.services.storefront_context_service import (
+        build_universal_storefront_context,
+    )
     from apps.stores.resolution import resolve_store_for_storefront
 
     context = _cart_context(request, cart)
     store = resolve_store_for_storefront(request)
-    resolved = page_resolution_service.resolve_published_page(store, StorefrontPage.PageType.CART)
-    if resolved.is_resolved:
-        render_items = render_service.build_page_render_items(resolved.page, store, page_context=context)
-    else:
-        render_items = render_service.build_default_render_items(StorefrontPage.PageType.CART, store, page_context=context)
-    # Phase 2: نگاه کنید به توضیحِ کلیدِ «rows» در storefront_context_service.py.
-    rows = render_service.group_items_into_rows(render_items)
-    return render(request, "cart/partials/cart_sections_body.html", {**context, "render_items": render_items, "rows": rows})
+    # V05/A04: عبور از همان کانتکستِ سراسری که صفحه‌ی کاملِ ``cart_detail``
+    # می‌سازد — نه رندرِ دستیِ فقط render_items/rows که layoutِ container و
+    # نسخه‌ی ظاهر را نادیده می‌گرفت. build_universal_storefront_context علاوه
+    # بر render_items/rows، کلیدهایِ ``render_containers``/``use_container_layout``
+    # را می‌سازد و ``request.storefront_appearance_version`` را ست می‌کند، پس
+    # فرگمنتِ htmx دقیقاً همان چیدمان/ظاهرِ صفحه‌ی کامل را دارد. ``page_context``
+    # همان دیکشنریِ ``_cart_context`` است تا section‌های سبد به همان
+    # cart/totals/item_count برسند؛ چون سپس با ``.update`` روی همان context
+    # نوشته می‌شود (universal بُرنده است، دقیقاً الگویِ ``cart_detail``)،
+    # کلیدهایِ سبد حفظ می‌شوند. تمپلیت همان ``cart_sections_body.html`` است،
+    # پس includeِ POST-gatedِ شمارنده‌هایِ OOB (cart-count/...) هم دست‌نخورده
+    # باقی می‌ماند.
+    context.update(
+        build_universal_storefront_context(
+            request, store, StorefrontPage.PageType.CART, page_context=context,
+        )
+    )
+    return render(request, "cart/partials/cart_sections_body.html", context)
 
 
 def cart_detail(request):

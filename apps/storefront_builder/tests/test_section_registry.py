@@ -1979,3 +1979,34 @@ class CatalogProductWallSettingsTests(TestCase):
             section_registry_module.default_catalog_product_wall_settings(),
             self._validate({}),
         )
+
+
+
+class BrandCarouselPageTypeMembershipTests(TestCase):
+    """A06 — brand_carousel must be allowed on EXACTLY the six page types
+    it is certified for: home, product_detail, listing, search, collection,
+    cart. Registry-level equality (not a loose superset check) so a future
+    accidental narrowing/widening is caught."""
+
+    def test_brand_carousel_allowed_on_exactly_the_six_page_types(self):
+        definition = get_definition("brand_carousel")
+        self.assertEqual(
+            set(definition.page_types),
+            {
+                PAGE_TYPE_HOME, PAGE_TYPE_PRODUCT_DETAIL, PAGE_TYPE_LISTING,
+                PAGE_TYPE_SEARCH, PAGE_TYPE_COLLECTION, PAGE_TYPE_CART,
+            },
+        )
+        # equivalently, it spans the full ALL_PAGE_TYPES set (six).
+        self.assertEqual(set(definition.page_types), set(ALL_PAGE_TYPES))
+        self.assertEqual(len(definition.page_types), 6)
+
+    def test_is_section_allowed_on_page_true_for_each_of_the_six(self):
+        for page_type in (
+            PAGE_TYPE_HOME, PAGE_TYPE_PRODUCT_DETAIL, PAGE_TYPE_LISTING,
+            PAGE_TYPE_SEARCH, PAGE_TYPE_COLLECTION, PAGE_TYPE_CART,
+        ):
+            self.assertTrue(
+                is_section_allowed_on_page("brand_carousel", page_type),
+                f"brand_carousel should be allowed on {page_type}",
+            )

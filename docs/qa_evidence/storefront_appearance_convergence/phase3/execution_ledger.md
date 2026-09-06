@@ -104,3 +104,66 @@ Baseline gate: PASS. Cleared to begin Task 1.
 - Reviewer sandbox note: reviewer reported a bs4-missing limitation in ITS sandbox; controller-authoritative run (bs4 installed per requirements.txt) confirms test_views has only the 2 known fullscreen failures — reviewer limitation does not apply to the authoritative env.
 - fix rounds: 0
 - commit: 43cdd20c554cfb0ef0753164b4f7cb369bef99f5  "fix: preserve brand variant intent and supported controls" (amended)
+
+
+### Task 3: START
+- BASE SHA: 59dbbdd3fec5e9a99b6689d5d6868df3d4046bd7 (Task2 final = 43cdd20; ledger-sha-record = 59dbbdd)
+- worktree: clean
+- brief: Brand end-to-end renderer/asset/media proof = BRAND GATE. Six-page registry/dispatch/presence/asset/shell assertions for brand_carousel; V02 six cases in renderer+browser; real Cart HTMX fragment (V05/A04 pilot) via _render_cart_container presentation adapter (build_universal_storefront_context); wrapper projection proof; Draft/Published isolation + stable_id; scoped CSS fix if RED; browser matrix E1-E5 @ 1440/390/768.
+- Allowed prod: render_service.py (_brand_carousel_context + item projection only), templates sections/brand_carousel.html, partials/responsive_section_wrapper.html (Brand only), static/css/storefront_builder.css (Brand-scoped only), preview.html; catalog templates home_visual/product_list/product_detail/collection_detail + cart_detail (load existing Builder styles if missing only); apps/cart/views.py _render_cart_container (presentation assembly only). QA command/runner from Task1.
+
+
+- RULING (env, Task 3): Test-DB migration is very slow in this sandbox (individual SQLite migrations 12-36s; full migrate ~10min). Adopt `--keepdb` for controller test runs to reuse the migrated test DB. REASON: Section 24 says do not stop for long test runtime; --keepdb is a standard Django facility that does not alter test semantics (same migrations, same schema, tests still create/rollback their own rows in transactions). RISK IF WRONG: a stale test DB could mask a migration change — mitigated because Task 8 runs the fresh baseline (RunA/B/C) and `makemigrations --check` WITHOUT keepdb assumptions, and no migration is created in Phase 3. The keepdb DB is disposable and separate from the app db.sqlite3.
+- RULING (Task 3 doc-nuance): The inventory/plan stated collection_index (E6) does NOT call build_universal_storefront_context. In THIS codebase it DOES (apps/catalog/views.py:590, PageType.COLLECTION). However the REAL A06 boundary still holds and was asserted: collection_index.html does not include render_rows.html and does not load storefront_builder.css, so NO pilot renders on /collections/ and E6 remains a non-pilot companion. Implementer correctly asserted the true boundary and did NOT assert the false premise. REASON: the certification-relevant fact (no pilot placement/assets on E6) is preserved; only the mechanism description in the inventory was imprecise. RISK IF WRONG: none for certification — E6 still hosts no pilot; the six pilot envelopes are unaffected.
+
+
+## Task 3 — Brand gate browser certification (phase3 harness extension)
+
+Authored REAL Brand browser-certification scenarios into the EXISTING R4 QA
+harness (no second harness/runner). Files changed (harness only):
+
+- `tools/storefront_builder_r4_qa/run.mjs` — replaced the placeholder
+  `phase3ResponsiveCapture` with `phase3BrandGate()`, gated behind
+  `if (manifest.phase3)`. Sub-groups:
+  - `phase3PublicMatrix` — E1 home / E2 product_detail / E3 listing /
+    E4 collection / E5 cart, × 3 viewports (1440×900, 390×844, 768×1024),
+    × 3 variants (grid/carousel/beauty_tabs): brand-tile count/order,
+    logo `<img>` decode (`complete && naturalWidth>0`) or `.brand-tile-name`
+    fallback, asset envelope A06 (storefront_builder.css/htmx/alpine each
+    exactly once, no duplicate asset URLs, no home.css off-home, bounded
+    `.brand-tile img` height, `documentElement.scrollWidth <= vp.width+1`),
+    and V02 view-all anchor truth (grid/carousel resolve to the collection
+    destination; beauty_tabs has none).
+  - `phase3WrapperProjection` — Preview iframe: discover brand
+    `data-section-id`, `fetch()` Preview HTML, DOMParser-extract the matching
+    wrapper, replace live wrapper 3×; assert brand hrefs identical and
+    stylesheet/script count unchanged (no script execution from markup).
+  - `phase3CartHtmx` — add product, read real `hx-post` URLs + item id from
+    the DOM, POST quantity update + item removal, assert Brand section
+    survives the swap, `#cart-count` OOB badge updates, totals/qty correct.
+  - Metrics recorded to `result.phase3_brand` and `metrics.json`.
+- `apps/storefront_builder/management/commands/qa_storefront_builder_r4.py` —
+  `_prepare_r4_sandbox(..., phase3=False)`; new `_prepare_phase3_brand_gate`
+  (guarded, phase3-only) places one brand_carousel per variant on all five
+  envelope pages with the same ordered five brands (four PIL logos + one
+  deliberate no-logo), a `p3-collection-1` MerchantCollection host + members,
+  cart product stock, and a collection View-all destination. Fixture ids are
+  threaded into the manifest via `_build_manifest(phase3_fixture=...)`.
+
+Result (`--phase3` run): **Passed: 16  Failed: 0**; DB restore
+`match=true` (pre==post SHA-256). Default (non-phase3) run behavior and
+scenarios 01–13 unchanged (all additions are phase3-gated).
+
+
+### Task 3: COMPLETE (BRAND GATE PASS)
+- implementer: fresh general-task-execution (code/test) + fresh general-task-execution (browser harness authoring) + bounded fix subagent (CSS review fix)
+- Production changed: apps/cart/views.py (_render_cart_container V05/A04 adapter), storefront_builder.css (Brand-scoped rules mirroring Home's EFFECTIVE cascade). Harness: run.mjs (phase3BrandGate) + qa command (_prepare_phase3_brand_gate). Tests: test_cart_views, test_g23, test_render_service, test_section_registry, test_page_shell, test_phase2_universal_renderer, test_stable_section_identity, test_g22.
+- RED→GREEN: cart context keys absent→present (real HTMX fragment); CSS brand selectors absent→present (dense/effective values).
+- tests (controller-run --keepdb): cart suite 68 OK; six-page/shell 52 OK; main 139 OK (+1 pre-existing skip); test_g23 20 OK. No new failures.
+- browser (controller-run, authoritative, TWICE incl. post-fix): 16/16 PASS incl phase3-brand-gate. 45 variant checks (E1-E5 × 3 viewports × 3 variants), 15 asset envelopes, 45 V02 anchor records, 3 cart HTMX flows, 1 wrapper projection. A06: non-home home_css=0/sb_css=1; brand-tile img 48px on Home AND non-home (Home UNCHANGED). No doc overflow. 0 console/page/request errors. DB restore SHA match=true.
+- review: independent semantic_reviewer round 1 → FAIL (1 CRITICAL: shared CSS overrode Home's dense block changing Home 48px→40px; 1 IMPORTANT: test ratified 40px; 1 MINOR: doc claim). Fix round 1: shared CSS rewritten to Home's effective dense values (48px etc.) → override on Home is a no-op; test asserts 48px + Home-unchanged guard. Scoped re-review → APPROVED, 0 CRITICAL, 0 IMPORTANT.
+  - MINOR (resolved): doc claim corrected in task3_brand_gate.md.
+- fix rounds: 1 (CRITICAL+IMPORTANT resolved within cap)
+- A04 pilot (Brand portion) V05: cart fragment container projection + preview wrapper projection PROVEN. A06 pilot (Brand): all six envelopes proven (E1-E5 + E3 listing/search equiv; E6 companion). Global A04/A06 remain deferred.
+- commit: (recorded on next task)
+- RULING (Task 3, R3 evidence PNGs): the harness overwrites pre-existing R3 phase1 screenshots (docs/qa_evidence/storefront_builder/r4/phase1/*.png) on each run; these belong to a prior phase's evidence. Controller restored them (git checkout) so Phase 3 does not touch them. Transient runtime logs (runserver/browser/RECOVERY) excluded from committed evidence.

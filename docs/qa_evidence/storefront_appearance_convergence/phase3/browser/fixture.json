@@ -1,0 +1,58 @@
+{
+  "hero_section_id": 15,
+  "brand_carousel_section_id": 16,
+  "draft_revision": 0,
+  "phase3": {
+    "brand_section_ids": {
+      "home": {
+        "grid": 17,
+        "carousel": 18,
+        "beauty_tabs": 19
+      },
+      "product_detail": {
+        "grid": 20,
+        "carousel": 21,
+        "beauty_tabs": 22
+      },
+      "listing": {
+        "grid": 23,
+        "carousel": 24,
+        "beauty_tabs": 25
+      },
+      "collection": {
+        "grid": 26,
+        "carousel": 27,
+        "beauty_tabs": 28
+      },
+      "cart": {
+        "grid": 29,
+        "carousel": 30,
+        "beauty_tabs": 31
+      }
+    },
+    "product_slug": "t12-product-1",
+    "collection_slug": "p3-collection-1",
+    "brand_ids": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "brand_slugs": [
+      "t12-brand-1",
+      "t12-brand-2",
+      "t12-brand-3",
+      "t12-brand-4",
+      "t12-brand-5"
+    ],
+    "no_logo_brand_id": 5,
+    "no_logo_brand_name": "برند تی۱۲ شماره 5",
+    "view_all_url_path": "/collections/p3-collection-1/",
+    "variants": [
+      "grid",
+      "carousel",
+      "beauty_tabs"
+    ]
+  }
+}

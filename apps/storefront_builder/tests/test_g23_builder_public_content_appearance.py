@@ -335,3 +335,159 @@ class DefectCSectionBackgroundTests(_GoldenBase):
             other_sec.refresh_from_db()
             self.assertEqual((other_sec.settings or {}).get("background"), other_before,
                              "changing store A background mutated store B")
+
+
+
+# =====================================================================
+# V06 / A06 — Brand tile CSS must live in the shared Builder stylesheet,
+# not only in the Home-only home.css. The four non-Home public envelopes
+# (product_list / product_detail / collection_detail / cart) load
+# storefront_builder.css but NOT home.css, so a brand_carousel placed on
+# any of them lacked all brand tile/logo sizing rules.
+# =====================================================================
+class BrandTileCssIsInSharedBuilderStylesheetTests(TestCase):
+    """The Brand-tile presentation rules must be present in the shared
+    ``storefront_builder.css`` (loaded by every V2 envelope), mirroring the
+    Home-only ``home.css`` values, so a brand_carousel on a non-Home page is
+    styled identically. Reads the real stylesheet source (not a computed
+    style) — a static-asset contract, exactly like the base.html attribution
+    source test in test_page_shell.py.
+    """
+
+    def _builder_css(self):
+        from pathlib import Path
+
+        from django.contrib.staticfiles import finders
+
+        path = finders.find("css/storefront_builder.css")
+        self.assertIsNotNone(path, "storefront_builder.css must be resolvable via staticfiles")
+        return Path(path).read_text(encoding="utf-8")
+
+    def _home_css(self):
+        from pathlib import Path
+
+        from django.contrib.staticfiles import finders
+
+        path = finders.find("css/home.css")
+        self.assertIsNotNone(path, "home.css must be resolvable via staticfiles")
+        return Path(path).read_text(encoding="utf-8")
+
+    def test_brand_tile_selectors_present_in_shared_builder_stylesheet(self):
+        css = self._builder_css()
+        # The five Brand-scoped selectors that previously lived ONLY in home.css.
+        self.assertIn(".brand-tile", css, "brand tile base rule missing from storefront_builder.css")
+        self.assertIn(".brand-tile img", css, "brand logo sizing rule missing from storefront_builder.css")
+        self.assertIn(".brand-tile-name", css, "brand name-fallback rule missing from storefront_builder.css")
+        self.assertIn(".brand-carousel", css, "brand carousel container rule missing from storefront_builder.css")
+        self.assertIn(".brand-carousel .brand-tile", css, "brand carousel tile rule missing from storefront_builder.css")
+
+    def test_brand_logo_max_height_matches_home_css(self):
+        """The logo cap must mirror Home's EFFECTIVE (cascade-resolved) value so
+        Home is unchanged and non-Home is fixed to the SAME sizing.
+
+        home.css defines TWO .brand-tile img blocks of identical specificity: an
+        early block (`max-height:40px`) and a later "dense" block
+        (`max-height:48px`). On Home the dense block wins by source order, so the
+        effective logo cap is 48px. Since storefront_builder.css loads AFTER
+        home.css on the Home envelope, the shared sheet must carry 48px (the
+        dense/effective value) — carrying 40px would OVERRIDE and shrink Home's
+        logos, a regression. So we assert the effective value, not the first."""
+        css = self._builder_css()
+        # Effective Home value (dense block wins): `.brand-tile img{max-height:48px}`
+        self.assertIn("max-height:48px", css)
+        self.assertIn("object-fit:contain", css)
+        # And it must NOT carry the stale first-block value that would change Home.
+        self.assertNotIn("max-height:40px", css)
+
+    def test_brand_shared_rules_are_noop_over_home_effective_cascade(self):
+        """Home-unchanged guard. The shared sheet loads AFTER home.css on the
+        Home envelope, so for every property both home.css blocks set, the shared
+        value must equal Home's EFFECTIVE (dense-block, later-wins) value — making
+        the override a NO-OP so Home stays pixel-identical. Verify the logo cap:
+        the shared sheet mirrors home.css's DENSE block (48px), which is the value
+        that actually governs Home."""
+        css = self._builder_css()
+        home = self._home_css()
+        # home.css DENSE block (the one that wins on Home) sets 48px.
+        self.assertIn(".brand-tile img{max-height:48px}", home)
+        # The shared sheet must mirror that governing value, so overriding = no-op.
+        self.assertIn("max-height:48px", css)
+        # Effective dense values for the other both-set properties must also match.
+        self.assertIn("min-height:72px", css)   # dense-only
+        self.assertIn("border-radius:6px", css)  # dense wins over 12px
+        self.assertIn("background:#fff", css)    # dense wins over var(--card)
+        self.assertIn("gap:9px", css)            # dense wins over 14px
+        self.assertIn("flex:0 0 150px", css)     # dense wins over 140px
+
+    def test_home_css_brand_rules_are_not_deleted(self):
+        """Regression guard: adding rules to the shared sheet must NOT remove
+        the original Home-only rules (Home must stay byte-identical)."""
+        home = self._home_css()
+        self.assertIn(".brand-tile", home)
+        self.assertIn(".brand-carousel", home)
+        self.assertIn(".brand-tile img{max-height:40px", home)
+
+    def test_brand_selectors_are_scoped_no_global_spill(self):
+        """Every Brand rule added to the shared sheet must be anchored on a
+        ``.brand-`` selector — no bare element/global selector spill."""
+        css = self._builder_css()
+        # Isolate the brand block we add (delimited by a stable marker comment).
+        marker = "brand carousel/grid (shared with home.css"
+        self.assertIn(marker, css, "expected a delimited, commented Brand block in storefront_builder.css")
+        block = css.split(marker, 1)[1]
+        # Take lines until the next top-level comment banner or EOF.
+        lines = []
+        for line in block.splitlines()[1:]:
+            if line.strip().startswith("/* ===="):
+                break
+            lines.append(line)
+        rule_lines = [ln.strip() for ln in lines if ln.strip() and "{" in ln]
+        for rule in rule_lines:
+            selector = rule.split("{", 1)[0].strip()
+            self.assertIn("brand-", selector, f"non-brand-scoped selector leaked into Brand CSS block: {selector!r}")
+
+
+
+# =====================================================================
+# A06 — Brand presence + shared Builder stylesheet on a NON-Home public
+# route. The four non-Home V2 envelopes load storefront_builder.css (not
+# home.css); a brand_carousel placed on a non-Home page must render AND
+# that page must serve storefront_builder.css so the (V06/A06) brand tile
+# rules actually apply.
+# =====================================================================
+class BrandOnNonHomePublicRouteTests(_GoldenBase):
+    def _first_product(self):
+        from apps.catalog.models import Product
+
+        return Product.objects.filter(store=self.store, status=Product.Status.ACTIVE).first()
+
+    def test_brand_section_on_product_detail_renders_and_serves_builder_css(self):
+        from apps.catalog.models import Brand
+
+        product = self._first_product()
+        self.assertIsNotNone(product, "golden store must have at least one active product")
+        brand = Brand.objects.filter(store=self.store, is_active=True).first()
+        self.assertIsNotNone(brand)
+
+        draft = layout_service.get_or_create_draft(self.store)
+        pdp_page = draft.get_page("product_detail")
+        StorefrontSection.objects.create(
+            page=pdp_page, section_key="brand_carousel", order=500,
+            settings={"title": "برندهای صفحه محصول", "display_mode": "grid",
+                      "brand_ids": [], "show_view_all": False},
+        )
+        layout_service.publish(self.store)
+
+        resp = self.client.get(
+            reverse("catalog:product-detail", args=[product.slug]), HTTP_HOST=self.host,
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode("utf-8")
+        # Brand section present on this non-Home public page.
+        self.assertIn("برندهای صفحه محصول", body)
+        self.assertIn("brand-tile", body)
+        self.assertIn(f"?brand={brand.slug}", body)
+        # And the page serves the shared Builder stylesheet (where the brand
+        # tile CSS now lives) — NOT the Home-only home.css.
+        self.assertIn("css/storefront_builder.css", body)
+        self.assertNotIn("css/home.css", body)

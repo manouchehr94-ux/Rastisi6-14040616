@@ -326,3 +326,73 @@ class SharedRendererCssLoadedEverywhereTests(TestCase):
     def test_cart_loads_shared_css(self):
         resp = self.client.get(reverse("cart:detail"), HTTP_HOST=HOST)
         self.assertContains(resp, "storefront_builder.css")
+
+
+
+@override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
+class BrandDraftPublishedIsolationTests(TestCase):
+    """Owner decision 11 (Draft/Published) applied to Brand: all three Brand
+    display variants (grid/carousel/beauty_tabs) render on the public page
+    from the SAME live brands once published; a Draft-only title edit made
+    AFTER publish never leaks onto the Public page, and never reorders the
+    published source. The public page reflects the PUBLISHED snapshot only.
+    """
+
+    def setUp(self):
+        from apps.catalog.models import Brand
+
+        cache.clear()
+        self.store = _akhlaghi()
+        _verified_domain(self.store, HOST)
+        # Two live, active brands shared by every variant.
+        self.brand_a = Brand.objects.create(store=self.store, name="برند زنده الف", slug="live-brand-a", is_active=True)
+        self.brand_b = Brand.objects.create(store=self.store, name="برند زنده ب", slug="live-brand-b", is_active=True)
+
+    def _publish_three_variants(self):
+        draft = svc.get_or_create_draft(self.store)
+        page = draft.home_page()
+        page.sections.all().delete()
+        for i, mode in enumerate(("grid", "carousel", "beauty_tabs")):
+            StorefrontSection.objects.create(
+                version=draft, section_key="brand_carousel", order=i,
+                settings={"title": f"برند {mode}", "display_mode": mode, "brand_ids": [], "show_view_all": False},
+            )
+        svc.publish(self.store)
+        return draft
+
+    def test_all_three_variants_render_from_the_same_live_brands(self):
+        self._publish_three_variants()
+        html = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST).content.decode()
+        # Each variant title present.
+        self.assertIn("برند grid", html)
+        self.assertIn("برند carousel", html)
+        self.assertIn("برند beauty_tabs", html)
+        # The same two live brands appear (each variant lists them).
+        self.assertIn("?brand=live-brand-a", html)
+        self.assertIn("?brand=live-brand-b", html)
+        # grid + carousel render the "more"-capable header; beauty_tabs uses
+        # its own title block — all three still list the brand tiles.
+        self.assertEqual(html.count("?brand=live-brand-a"), 3)
+
+    def test_draft_only_title_edit_after_publish_does_not_change_public(self):
+        self._publish_three_variants()
+        public_before = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST).content.decode()
+        self.assertIn("برند grid", public_before)
+
+        # Draft-only edit: rename the grid variant's title in a NEW draft.
+        draft2 = svc.get_or_create_draft(self.store)
+        grid_section = draft2.home_page().sections.filter(section_key="brand_carousel").order_by("order").first()
+        grid_section.settings = {**grid_section.settings, "title": "عنوان فقط پیش‌نویس"}
+        grid_section.save(update_fields=["settings"])
+
+        # Public page is unchanged (still the published snapshot).
+        public_after = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST).content.decode()
+        self.assertNotIn("عنوان فقط پیش‌نویس", public_after)
+        self.assertIn("برند grid", public_after)
+
+    def test_published_source_order_is_preserved(self):
+        self._publish_three_variants()
+        html = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST).content.decode()
+        # Source order grid(0) -> carousel(1) -> beauty_tabs(2) preserved.
+        self.assertLess(html.index("برند grid"), html.index("برند carousel"))
+        self.assertLess(html.index("برند carousel"), html.index("برند beauty_tabs"))

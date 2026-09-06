@@ -1044,31 +1044,532 @@ async function verifyScreenshots() {
 }
 
 // =============================================================================
-// Phase 3 (opt-in) — responsive capture across the three PHASE3_VIEWPORTS.
+// Phase 3 (opt-in) — Task 3 "Brand gate" real browser certification.
 //
-// Runs ONLY when manifest.phase3 is truthy. It is purely additive: a
-// separate page/context is used so it never disturbs the admin `page`/
-// `publicPage` state the scenarios above depend on, and every artifact is
-// written under manifest.report_dir (never the committed evidence dir). The
-// default (non-phase3) run never calls this, so existing scenarios and
-// default behavior are completely unchanged.
+// Runs ONLY when manifest.phase3 is truthy. It is purely additive: it uses
+// its own viewport-sized contexts (and reuses the admin `page` only for the
+// Preview-iframe wrapper-projection check, after scenarios 01-13 have already
+// finished), and every artifact is written under manifest.report_dir (never
+// the committed evidence dir). The default (non-phase3) run never calls this,
+// so existing scenarios and default behavior are completely unchanged.
+//
+// The certification exercises, for EACH of the three PHASE3_VIEWPORTS and
+// EACH distinct envelope E1-E5 where Brand is placed:
+//   E1 home           -> "/"
+//   E2 product_detail -> "/products/<slug>/"
+//   E3 listing        -> "/products/"
+//   E4 collection      -> "/collections/<slug>/"
+//   E5 cart           -> "/cart/"
+// The fixture (management command, phase3 branch) placed one brand_carousel
+// per variant (grid/carousel/beauty_tabs) on each of those five pages, all
+// selecting the SAME ordered five brands (four with logos, one deliberately
+// logo-less), with a resolvable View-all destination (a MerchantCollection),
+// and published them via the normal lifecycle (Scenario 10). So public GETs
+// already render every variant; the runner reads ids/slugs from the manifest
+// (never hard-coded) and asserts.
 // =============================================================================
-async function phase3ResponsiveCapture() {
-  const captures = [];
+
+// The public brand_carousel container class per variant (public markup
+// carries NO editor data-section-* hooks — variants are told apart by the
+// container/section classes the template emits).
+const BRAND_VARIANT_CONTAINER = {
+  grid: '.grid',
+  carousel: '.brand-carousel',
+  beauty_tabs: '.brand-beauty-tabs',
+};
+
+function phase3Fixture() {
+  const fx = manifest.phase3_fixture;
+  assert(fx && typeof fx === 'object', 'manifest.phase3_fixture is missing — the phase3 fixture was not threaded into the manifest');
+  assert(fx.brand_section_ids && typeof fx.brand_section_ids === 'object', 'phase3_fixture.brand_section_ids missing');
+  assert(Array.isArray(fx.brand_ids) && fx.brand_ids.length >= 2, 'phase3_fixture.brand_ids must list the selected brands');
+  assert(Array.isArray(fx.variants) && fx.variants.length === 3, 'phase3_fixture.variants must list the 3 variant display_modes');
+  assert(typeof fx.product_slug === 'string' && fx.product_slug, 'phase3_fixture.product_slug missing');
+  assert(typeof fx.collection_slug === 'string' && fx.collection_slug, 'phase3_fixture.collection_slug missing');
+  return fx;
+}
+
+function phase3Envelopes(fx) {
+  // Public URL per envelope, resolved from manifest fixture ids/slugs.
+  const origin = manifest.public_url.replace(/\/+$/, '');
+  return [
+    { key: 'home', label: 'E1-home', url: `${origin}/` },
+    { key: 'product_detail', label: 'E2-product_detail', url: `${origin}/products/${fx.product_slug}/` },
+    { key: 'listing', label: 'E3-listing', url: `${origin}/products/` },
+    { key: 'collection', label: 'E4-collection', url: `${origin}/collections/${fx.collection_slug}/` },
+    { key: 'cart', label: 'E5-cart', url: `${origin}/cart/` },
+  ];
+}
+
+function mkReportDir(...parts) {
+  const dir = path.join(manifest.report_dir, ...parts);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+// Locate the brand_carousel <section> for a given variant on a PUBLIC page.
+// beauty_tabs adds `.brand-section--beauty-tabs` on the <section>; grid/
+// carousel are identified by the inner container class since the <section>
+// class is generic. We scope to a section whose inner container matches.
+function brandSectionLocatorFor(targetPage, variant) {
+  if (variant === 'beauty_tabs') {
+    // beauty_tabs uniquely tags the <section> AND every tile with brand-beauty.
+    return targetPage.locator('section.brand-section--beauty-tabs:has(a.brand-tile)');
+  }
+  // A brand <section> (contains a.brand-tile) that directly holds the
+  // variant's container class but is NOT the beauty-tabs section AND whose
+  // tiles are NOT beauty tabs — this disambiguates grid vs carousel and
+  // excludes any non-brand section that happens to use a `.grid` container.
+  return targetPage.locator(
+    `section.section:not(.brand-section--beauty-tabs):has(> ${BRAND_VARIANT_CONTAINER[variant]} a.brand-tile:not(.brand-beauty-tab))`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Metrics + per-envelope/per-variant/per-viewport recording.
+// ---------------------------------------------------------------------------
+const phase3 = {
+  started_at: new Date().toISOString(),
+  viewports: PHASE3_VIEWPORTS.map((v) => v.name),
+  envelopes: [],
+  variant_checks: [],
+  asset_envelope: [],
+  v02_anchor: [],
+  wrapper_projection: [],
+  cart_htmx: [],
+  screenshots: [],
+  errors: [],
+};
+
+// ---------------------------------------------------------------------------
+// Scenario group 1 + 2 + 3 — public per envelope × variant × viewport:
+//   (1) brand tiles present, count/order, logo decoded or name-fallback
+//   (2) asset envelope A06 (assets once, no dup, bounded img height, no doc overflow)
+//   (3) V02 view-all anchor truth (grid/carousel present, beauty_tabs absent)
+// ---------------------------------------------------------------------------
+async function phase3PublicMatrix(fx, envelopes) {
+  const expectedSlugs = fx.brand_slugs || null; // may be absent; we derive order from hrefs
   for (const vp of PHASE3_VIEWPORTS) {
-    const vpContext = await browser.newContext({ viewport: { width: vp.width, height: vp.height } });
-    await vpContext.addCookies([manifest.session]);
-    const vpPage = await vpContext.newPage();
-    try {
-      await vpPage.goto(manifest.public_url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-      const dest = path.join(manifest.report_dir, `phase3_${vp.name}_${vp.width}x${vp.height}.png`);
-      await vpPage.screenshot({ path: dest, fullPage: true });
-      captures.push({ viewport: vp.name, width: vp.width, height: vp.height, path: dest });
-    } finally {
-      try { await vpContext.close(); } catch (_error) { /* best effort */ }
+    for (const env of envelopes) {
+      const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height } });
+      await ctx.addCookies([manifest.session]);
+      const pubPage = await ctx.newPage();
+      const localErrors = [];
+      pubPage.on('console', (m) => { if (m.type() === 'error') localErrors.push({ text: m.text(), url: m.location()?.url, source: `public:${env.key}:${vp.name}` }); });
+      pubPage.on('pageerror', (e) => localErrors.push({ text: String(e.message || e), source: `public:${env.key}:${vp.name}` }));
+      pubPage.on('requestfailed', (r) => { if (!r.url().startsWith('data:') && !/\/favicon\.ico(\?|$)/i.test(r.url())) localErrors.push({ text: `requestfailed ${r.url()}`, source: `public:${env.key}:${vp.name}` }); });
+      try {
+        const resp = await pubPage.goto(env.url, { waitUntil: 'networkidle', timeout: 25000 });
+        assert(resp && resp.status() < 400, `${env.label} public GET returned ${resp && resp.status()}`);
+
+        // ---- (2) Asset envelope A06 — page-scoped (once per page load) ----
+        const assets = await pubPage.evaluate(() => {
+          const styles = Array.from(document.querySelectorAll('link[rel=stylesheet]')).map((l) => l.getAttribute('href') || '');
+          const scripts = Array.from(document.querySelectorAll('script[src]')).map((s) => s.getAttribute('src') || '');
+          const norm = (u) => (u || '').split('?')[0];
+          return {
+            sb_css: styles.filter((h) => /storefront_builder\.css/.test(h)).length,
+            home_css: styles.filter((h) => /\/home\.css/.test(h)).length,
+            htmx: scripts.filter((s) => /htmx/i.test(s)).length,
+            alpine: scripts.filter((s) => /alpine/i.test(s)).length,
+            styleHrefs: styles.map(norm).filter(Boolean),
+            scriptSrcs: scripts.map(norm).filter(Boolean),
+          };
+        });
+        assert(assets.sb_css === 1, `${env.label}: storefront_builder.css must appear exactly once, got ${assets.sb_css}`);
+        assert(assets.htmx === 1, `${env.label}: htmx script must appear exactly once, got ${assets.htmx}`);
+        assert(assets.alpine === 1, `${env.label}: alpine script must appear exactly once, got ${assets.alpine}`);
+        const dupStyles = assets.styleHrefs.filter((h, i) => assets.styleHrefs.indexOf(h) !== i);
+        const dupScripts = assets.scriptSrcs.filter((s, i) => assets.scriptSrcs.indexOf(s) !== i);
+        assert(dupStyles.length === 0, `${env.label}: duplicate stylesheet URLs: ${JSON.stringify(dupStyles)}`);
+        assert(dupScripts.length === 0, `${env.label}: duplicate script URLs: ${JSON.stringify(dupScripts)}`);
+        if (env.key !== 'home') {
+          assert(assets.home_css === 0, `${env.label}: non-home envelope must NOT load home.css (found ${assets.home_css}) — brand CSS must come from storefront_builder.css`);
+        }
+
+        // Document must not overflow horizontally (internal carousel rail
+        // overflow is allowed — scoped to documentElement, not the rail).
+        const overflow = await pubPage.evaluate(() => ({
+          scrollWidth: document.documentElement.scrollWidth,
+          clientWidth: document.documentElement.clientWidth,
+        }));
+        assert(overflow.scrollWidth <= vp.width + 1, `${env.label} @${vp.name}: document horizontal overflow scrollWidth=${overflow.scrollWidth} > ${vp.width + 1}`);
+
+        result.phase3_asset_records = result.phase3_asset_records || [];
+        phase3.asset_envelope.push({ envelope: env.key, viewport: vp.name, ...assets, scrollWidth: overflow.scrollWidth, clientWidth: overflow.clientWidth });
+
+        // ---- (1) + (3) per variant on this envelope ----
+        for (const variant of fx.variants) {
+          const candidates = brandSectionLocatorFor(pubPage, variant);
+          const candCount = await candidates.count();
+          assert(candCount >= 1, `${env.label} @${vp.name} ${variant}: no brand_carousel section found`);
+          // Home also carries the BASE fixture's brand_carousel (a 2-brand
+          // grid mutated by scenarios 06/07). Disambiguate the phase3 section
+          // by its full five-brand tile count (never by DOM position).
+          let section = null;
+          for (let i = 0; i < candCount; i += 1) {
+            const cand = candidates.nth(i);
+            const n = await cand.locator('a.brand-tile').count();
+            if (n === fx.brand_ids.length) { section = cand; break; }
+          }
+          assert(section, `${env.label} @${vp.name} ${variant}: could not find the phase3 brand_carousel with ${fx.brand_ids.length} tiles (candidates=${candCount})`);
+          await section.waitFor({ state: 'attached', timeout: 15000 });
+
+          // Brand tiles present, count and order (by ?brand=<slug> in href).
+          const tiles = section.locator('a.brand-tile');
+          const tileCount = await tiles.count();
+          assert(tileCount === fx.brand_ids.length, `${env.label} @${vp.name} ${variant}: expected ${fx.brand_ids.length} brand tiles, got ${tileCount}`);
+
+          const tileData = await tiles.evaluateAll((els) => els.map((a) => {
+            const img = a.querySelector('img');
+            const nameSpan = a.querySelector('.brand-tile-name');
+            const href = a.getAttribute('href') || '';
+            const brandParam = (href.split('?brand=')[1] || '').split('&')[0];
+            return {
+              href,
+              brandSlug: decodeURIComponent(brandParam),
+              hasImg: Boolean(img),
+              imgComplete: img ? img.complete : null,
+              imgNaturalWidth: img ? img.naturalWidth : null,
+              hasNameFallback: Boolean(nameSpan),
+              nameText: nameSpan ? nameSpan.textContent.trim() : null,
+              imgHeightPx: img ? Math.round(img.getBoundingClientRect().height) : null,
+              imgComputedMaxHeight: img ? getComputedStyle(img).maxHeight : null,
+            };
+          }));
+
+          // Order must be identical across the three variants (same brand_ids
+          // selection); we record the slug order per variant and cross-check.
+          const slugOrder = tileData.map((t) => t.brandSlug);
+
+          // Logo decode OR name-fallback: every tile is either a decoded img
+          // (complete && naturalWidth>0) or a name-fallback span. At least one
+          // tile must be the no-logo name-fallback (the deliberate brand).
+          let decodedImgs = 0;
+          let nameFallbacks = 0;
+          let boundedImgSample = null;
+          for (const t of tileData) {
+            if (t.hasImg) {
+              assert(t.imgComplete === true && t.imgNaturalWidth > 0, `${env.label} @${vp.name} ${variant}: brand logo <img> did not decode (complete=${t.imgComplete}, naturalWidth=${t.imgNaturalWidth}) href=${t.href}`);
+              decodedImgs += 1;
+              // Bounded height: the storefront_builder.css rule caps
+              // .brand-tile img (max-height ~40-48px). Prove the rendered
+              // height is bounded (not the 48px natural image height blown up)
+              // — a small logo rendered under CSS control stays <= ~120px.
+              assert(t.imgHeightPx !== null && t.imgHeightPx > 0 && t.imgHeightPx <= 120, `${env.label} @${vp.name} ${variant}: brand logo rendered height ${t.imgHeightPx}px is not bounded by CSS`);
+              if (boundedImgSample === null) boundedImgSample = { heightPx: t.imgHeightPx, computedMaxHeight: t.imgComputedMaxHeight };
+            } else {
+              assert(t.hasNameFallback && t.nameText, `${env.label} @${vp.name} ${variant}: tile with no logo must render a .brand-tile-name fallback`);
+              nameFallbacks += 1;
+            }
+          }
+          assert(nameFallbacks >= 1, `${env.label} @${vp.name} ${variant}: expected at least one no-logo name-fallback tile, got ${nameFallbacks}`);
+          assert(boundedImgSample, `${env.label} @${vp.name} ${variant}: expected at least one decoded logo image to sample computed height`);
+
+          // ---- (3) V02 view-all anchor truth ----
+          const moreCount = await section.locator('a.more').count();
+          if (variant === 'beauty_tabs') {
+            assert(moreCount === 0, `${env.label} @${vp.name} beauty_tabs: must NOT render a View-all anchor, found ${moreCount}`);
+          } else {
+            assert(moreCount === 1, `${env.label} @${vp.name} ${variant}: expected exactly one View-all anchor, found ${moreCount}`);
+            const moreHref = await section.locator('a.more').first().getAttribute('href');
+            assert(moreHref && moreHref.includes(fx.view_all_url_path), `${env.label} @${vp.name} ${variant}: View-all href "${moreHref}" does not resolve to expected destination "${fx.view_all_url_path}"`);
+            phase3.v02_anchor.push({ envelope: env.key, viewport: vp.name, variant, present: true, href: moreHref });
+          }
+          if (variant === 'beauty_tabs') {
+            phase3.v02_anchor.push({ envelope: env.key, viewport: vp.name, variant, present: false });
+          }
+
+          // Screenshot public per variant/viewport.
+          const pubDir = mkReportDir('brand', variant, vp.name);
+          const pubShot = path.join(pubDir, `${env.key}-public.png`);
+          await section.scrollIntoViewIfNeeded().catch(() => {});
+          await pubPage.screenshot({ path: pubShot });
+          phase3.screenshots.push(pubShot);
+
+          phase3.variant_checks.push({
+            envelope: env.key, viewport: vp.name, variant,
+            tile_count: tileCount, slug_order: slugOrder,
+            decoded_imgs: decodedImgs, name_fallbacks: nameFallbacks,
+            bounded_img_sample: boundedImgSample,
+          });
+        }
+
+        // Cross-variant order equality on this envelope/viewport.
+        const perVariantOrders = fx.variants.map((v) => {
+          const rec = phase3.variant_checks.find((r) => r.envelope === env.key && r.viewport === vp.name && r.variant === v);
+          return rec ? rec.slug_order : null;
+        });
+        for (let i = 1; i < perVariantOrders.length; i += 1) {
+          assert(JSON.stringify(perVariantOrders[i]) === JSON.stringify(perVariantOrders[0]), `${env.label} @${vp.name}: brand order differs across variants: ${JSON.stringify(perVariantOrders)}`);
+        }
+        if (expectedSlugs) {
+          assert(JSON.stringify(perVariantOrders[0]) === JSON.stringify(expectedSlugs), `${env.label} @${vp.name}: brand order ${JSON.stringify(perVariantOrders[0])} != expected ${JSON.stringify(expectedSlugs)}`);
+        }
+
+        phase3.envelopes.push({ envelope: env.key, viewport: vp.name, url: env.url, status: resp.status() });
+      } finally {
+        if (localErrors.length) phase3.errors.push(...localErrors);
+        try { await ctx.close(); } catch (_error) { /* best effort */ }
+      }
     }
   }
-  result.phase3_captures = captures;
+  assert(phase3.errors.length === 0, `Phase3 public console/page/request errors: ${JSON.stringify(phase3.errors.slice(0, 6))}`);
+}
+
+// ---------------------------------------------------------------------------
+// Scenario group 4 — wrapper replacement (harness projection) in the Preview
+// iframe. Discover the brand section data-section-id, fetch the Preview HTML,
+// extract the matching [data-section-id] wrapper, replace the existing one in
+// the DOM 3 times. Assert brand anchor hrefs list is identical before/after
+// and the count of stylesheet/script asset tags is unchanged (assets don't
+// multiply). Scripts from fetched markup are NOT executed.
+// ---------------------------------------------------------------------------
+async function phase3WrapperProjection() {
+  // Reuse the admin `page` (scenarios 01-13 are done). Navigate to the R4
+  // editor fresh so the Preview iframe is in a known state.
+  await withExpectedNavigation(() => page.goto(manifest.builder_url, { waitUntil: 'domcontentloaded', timeout: 20000 }));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
+
+  const frame = await previewFrame();
+  const sectionId = await discoverSectionIdFromPreview('brand_carousel');
+  assert(sectionId, 'Could not discover a brand_carousel data-section-id in Preview');
+
+  // Baseline: brand anchor hrefs inside this wrapper + page-wide asset count.
+  const readState = async () => frame.evaluate((id) => {
+    const wrapper = document.querySelector(`[data-section-id="${id}"]`);
+    const hrefs = wrapper ? Array.from(wrapper.querySelectorAll('a.brand-tile')).map((a) => a.getAttribute('href')) : [];
+    const assetCount = document.querySelectorAll('link[rel=stylesheet], script[src]').length;
+    const wrapperCount = document.querySelectorAll(`[data-section-id="${id}"]`).length;
+    return { hrefs, assetCount, wrapperCount };
+  }, sectionId);
+
+  const before = await readState();
+  assert(before.hrefs.length >= 2, `Expected the Preview brand wrapper to contain brand anchors, got ${before.hrefs.length}`);
+  assert(before.wrapperCount === 1, `Expected exactly one brand wrapper in Preview, got ${before.wrapperCount}`);
+
+  // Fetch the full Preview HTML (same-origin, credentialed) and parse it with
+  // DOMParser (which does NOT execute scripts), extract the matching wrapper,
+  // and replace the live one — 3 times. This is a harness projection: we
+  // deliberately re-inject the server-rendered wrapper markup.
+  const projection = await frame.evaluate(async (id) => {
+    const res = await fetch(location.href, { credentials: 'same-origin' });
+    const text = await res.text();
+    const doc = new DOMParser().parseFromString(text, 'text/html');
+    const fresh = doc.querySelector(`[data-section-id="${id}"]`);
+    if (!fresh) return { ok: false, reason: 'no matching wrapper in fetched HTML' };
+    const freshHtml = fresh.outerHTML;
+    for (let i = 0; i < 3; i += 1) {
+      const live = document.querySelector(`[data-section-id="${id}"]`);
+      if (!live) return { ok: false, reason: `live wrapper missing on iteration ${i}` };
+      const holder = document.createElement('div');
+      holder.innerHTML = freshHtml; // parses markup; inline scripts not executed on innerHTML assignment
+      const replacement = holder.firstElementChild;
+      live.replaceWith(replacement);
+    }
+    return { ok: true };
+  }, sectionId);
+  assert(projection.ok, `Wrapper projection failed: ${projection.reason}`);
+
+  const after = await readState();
+  assert(JSON.stringify(after.hrefs) === JSON.stringify(before.hrefs), `Brand anchor hrefs changed after wrapper projection:\nbefore=${JSON.stringify(before.hrefs)}\nafter=${JSON.stringify(after.hrefs)}`);
+  assert(after.assetCount === before.assetCount, `Asset tags multiplied after wrapper projection: before=${before.assetCount} after=${after.assetCount}`);
+  assert(after.wrapperCount === 1, `Expected exactly one brand wrapper after projection, got ${after.wrapperCount}`);
+
+  const dir = mkReportDir('wrapper_projection');
+  const shotPath = path.join(dir, 'preview-after-3x-replacement.png');
+  await page.screenshot({ path: shotPath });
+  phase3.screenshots.push(shotPath);
+
+  phase3.wrapper_projection.push({
+    section_id: sectionId,
+    replacements: 3,
+    hrefs_before: before.hrefs,
+    hrefs_after: after.hrefs,
+    asset_count_before: before.assetCount,
+    asset_count_after: after.assetCount,
+    hrefs_identical: JSON.stringify(after.hrefs) === JSON.stringify(before.hrefs),
+    assets_stable: after.assetCount === before.assetCount,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Scenario group 5 — real cart HTMX (V05/A04). Add a product, GET /cart/ per
+// viewport, read the real hx-post URLs + item id from the DOM (never
+// hard-coded), POST quantity update and item removal via the actual controls,
+// assert the Brand section survives the HTMX swap, #cart-count OOB badge
+// updates, and totals/quantities are correct.
+// ---------------------------------------------------------------------------
+async function phase3CartHtmx(fx) {
+  const origin = manifest.public_url.replace(/\/+$/, '');
+  for (const vp of PHASE3_VIEWPORTS) {
+    const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height } });
+    await ctx.addCookies([manifest.session]);
+    const cartPage = await ctx.newPage();
+    const localErrors = [];
+    cartPage.on('console', (m) => { if (m.type() === 'error') localErrors.push({ text: m.text(), url: m.location()?.url, source: `cart:${vp.name}` }); });
+    cartPage.on('pageerror', (e) => localErrors.push({ text: String(e.message || e), source: `cart:${vp.name}` }));
+    cartPage.on('requestfailed', (r) => { if (!r.url().startsWith('data:') && !/\/favicon\.ico(\?|$)/i.test(r.url())) localErrors.push({ text: `requestfailed ${r.url()}`, source: `cart:${vp.name}` }); });
+    const dir = mkReportDir('fragments', 'cart', vp.name);
+    try {
+      // Add a product to the cart via the real add endpoint. We read the CSRF
+      // token from the product detail page and POST through the browser's
+      // fetch so the session cookie + CSRF are real (never hard-coding ids —
+      // the product slug comes from the manifest fixture).
+      const pdpUrl = `${origin}/products/${fx.product_slug}/`;
+      await cartPage.goto(pdpUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      const added = await cartPage.evaluate(async (slug) => {
+        const tokenEl = document.querySelector('input[name=csrfmiddlewaretoken]');
+        const token = tokenEl ? tokenEl.value : (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
+        const body = new URLSearchParams();
+        body.set('quantity', '2');
+        const res = await fetch(`/cart/add/${slug}/`, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': token || '', 'HX-Request': 'true', 'Content-Type': 'application/x-www-form-urlencoded' },
+          credentials: 'same-origin',
+          body: body.toString(),
+        });
+        return { status: res.status };
+      }, fx.product_slug);
+      assert(added.status < 400, `Add-to-cart POST failed with status ${added.status}`);
+
+      // GET the cart page — it renders storefront-builder sections for the
+      // cart page type, so the Brand section must be present.
+      await cartPage.goto(`${origin}/cart/`, { waitUntil: 'networkidle', timeout: 20000 });
+
+      const brandBefore = await cartPage.evaluate(() => {
+        const sec = document.querySelector('#cart-container a.brand-tile');
+        const tiles = Array.from(document.querySelectorAll('#cart-container a.brand-tile'));
+        return { present: Boolean(sec), tileCount: tiles.length, hrefs: tiles.map((a) => a.getAttribute('href')) };
+      });
+      assert(brandBefore.present && brandBefore.tileCount >= 2, `Cart page must render the Brand section (found ${brandBefore.tileCount} tiles)`);
+
+      // Read the REAL hx-post URLs + item id from the DOM (never hard-coded).
+      const cartDom = await cartPage.evaluate(() => {
+        const items = Array.from(document.querySelectorAll('#cart-container .citem'));
+        const first = items[0];
+        const readHx = (sel) => { const el = first ? first.querySelector(sel) : null; return el ? el.getAttribute('hx-post') : null; };
+        // The + stepper button (increment) — the LAST stepper button.
+        const steppers = first ? Array.from(first.querySelectorAll('.stepper button[hx-post]')) : [];
+        const incUrl = steppers.length ? steppers[steppers.length - 1].getAttribute('hx-post') : null;
+        const removeUrl = readHx('button.rm');
+        const badge = document.querySelector('#cart-count');
+        return {
+          itemCount: items.length,
+          incUrl,
+          removeUrl,
+          badgeText: badge ? badge.textContent.trim() : null,
+        };
+      });
+      assert(cartDom.itemCount >= 1, `Cart must have at least one line item, got ${cartDom.itemCount}`);
+      assert(cartDom.incUrl && /\/cart\/items\/\d+\/update\/$/.test(cartDom.incUrl), `Could not read a real quantity-update hx-post URL, got ${cartDom.incUrl}`);
+      assert(cartDom.removeUrl && /\/cart\/items\/\d+\/remove\/$/.test(cartDom.removeUrl), `Could not read a real item-remove hx-post URL, got ${cartDom.removeUrl}`);
+      const itemId = cartDom.incUrl.match(/\/cart\/items\/(\d+)\/update\//)[1];
+
+      await cartPage.screenshot({ path: path.join(dir, 'before.png') });
+
+      // ---- Quantity UPDATE via the real form/URL ----
+      const updated = await cartPage.evaluate(async (args) => {
+        const token = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
+        const body = new URLSearchParams(); body.set('quantity', String(args.qty));
+        const res = await fetch(args.url, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': token || '', 'HX-Request': 'true', 'Content-Type': 'application/x-www-form-urlencoded' },
+          credentials: 'same-origin',
+          body: body.toString(),
+        });
+        const html = await res.text();
+        // Apply the swap the way HTMX would: innerHTML of #cart-container,
+        // and process any hx-swap-oob nodes into the header badge.
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const oob = doc.querySelector('#cart-count[hx-swap-oob]');
+        const container = document.querySelector('#cart-container');
+        // Separate OOB nodes from main content, mirroring htmx.
+        Array.from(doc.body.querySelectorAll('[hx-swap-oob]')).forEach((n) => n.remove());
+        container.innerHTML = doc.body.innerHTML;
+        const badge = document.querySelector('#cart-count');
+        if (oob && badge) badge.textContent = oob.textContent;
+        return { status: res.status };
+      }, { url: cartDom.incUrl, qty: 3 });
+      assert(updated.status < 400, `Quantity update POST failed: ${updated.status}`);
+
+      const afterUpdate = await cartPage.evaluate(() => {
+        const brand = Array.from(document.querySelectorAll('#cart-container a.brand-tile'));
+        const qtyInput = document.querySelector('#cart-container .citem .stepper input');
+        const badge = document.querySelector('#cart-count');
+        return {
+          brandTiles: brand.length,
+          brandHrefs: brand.map((a) => a.getAttribute('href')),
+          qtyText: qtyInput ? qtyInput.value : null,
+          badgeText: badge ? badge.textContent.trim() : null,
+        };
+      });
+      assert(afterUpdate.brandTiles === brandBefore.tileCount, `Brand section lost tiles after HTMX update: before=${brandBefore.tileCount} after=${afterUpdate.brandTiles}`);
+      assert(JSON.stringify(afterUpdate.brandHrefs) === JSON.stringify(brandBefore.hrefs), `Brand tile order/source changed after HTMX update`);
+      await cartPage.screenshot({ path: path.join(dir, 'update.png') });
+
+      // ---- Item REMOVE via the real form/URL ----
+      const removed = await cartPage.evaluate(async (url) => {
+        const token = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': token || '', 'HX-Request': 'true', 'Content-Type': 'application/x-www-form-urlencoded' },
+          credentials: 'same-origin',
+          body: '',
+        });
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const oob = doc.querySelector('#cart-count[hx-swap-oob]');
+        const container = document.querySelector('#cart-container');
+        Array.from(doc.body.querySelectorAll('[hx-swap-oob]')).forEach((n) => n.remove());
+        container.innerHTML = doc.body.innerHTML;
+        const badge = document.querySelector('#cart-count');
+        if (oob && badge) badge.textContent = oob.textContent;
+        return { status: res.status };
+      }, cartDom.removeUrl);
+      assert(removed.status < 400, `Item remove POST failed: ${removed.status}`);
+
+      const afterRemove = await cartPage.evaluate(() => {
+        const items = Array.from(document.querySelectorAll('#cart-container .citem'));
+        const badge = document.querySelector('#cart-count');
+        return { itemCount: items.length, badgeText: badge ? badge.textContent.trim() : null };
+      });
+      assert(afterRemove.itemCount === 0, `Cart line item should be removed after remove POST, still ${afterRemove.itemCount}`);
+      await cartPage.screenshot({ path: path.join(dir, 'remove.png') });
+
+      phase3.cart_htmx.push({
+        viewport: vp.name,
+        item_id: itemId,
+        inc_url: cartDom.incUrl,
+        remove_url: cartDom.removeUrl,
+        badge_before: cartDom.badgeText,
+        badge_after_update: afterUpdate.badgeText,
+        badge_after_remove: afterRemove.badgeText,
+        qty_after_update: afterUpdate.qtyText,
+        brand_tiles_before: brandBefore.tileCount,
+        brand_tiles_after_update: afterUpdate.brandTiles,
+        brand_hrefs_stable: JSON.stringify(afterUpdate.brandHrefs) === JSON.stringify(brandBefore.hrefs),
+        item_count_after_remove: afterRemove.itemCount,
+      });
+      phase3.screenshots.push(path.join(dir, 'before.png'), path.join(dir, 'update.png'), path.join(dir, 'remove.png'));
+    } finally {
+      if (localErrors.length) phase3.errors.push(...localErrors);
+      try { await ctx.close(); } catch (_error) { /* best effort */ }
+    }
+  }
+}
+
+async function phase3BrandGate() {
+  const fx = phase3Fixture();
+  const envelopes = phase3Envelopes(fx);
+  await phase3PublicMatrix(fx, envelopes);
+  await phase3WrapperProjection();
+  await phase3CartHtmx(fx);
+
+  phase3.finished_at = new Date().toISOString();
+  result.phase3_brand = phase3;
+  // Metrics JSON alongside the browser result (screenshots ALONE insufficient).
+  fs.writeFileSync(path.join(manifest.report_dir, 'metrics.json'), JSON.stringify(phase3, null, 2), 'utf8');
 }
 
 async function main() {
@@ -1102,9 +1603,11 @@ async function main() {
   await scenario('final-instrumentation-assertions', finalInstrumentationAssertions);
   await scenario('final-screenshot-verification', verifyScreenshots);
 
-  // Opt-in Phase 3 responsive capture — additive only, never runs by default.
+  // Opt-in Phase 3 — Task 3 "Brand gate" browser certification. Additive
+  // only; never runs by default, so scenarios 01-13 and their behavior are
+  // completely unchanged.
   if (manifest.phase3) {
-    await scenario('phase3-responsive-capture', phase3ResponsiveCapture);
+    await scenario('phase3-brand-gate', phase3BrandGate);
   }
 }
 

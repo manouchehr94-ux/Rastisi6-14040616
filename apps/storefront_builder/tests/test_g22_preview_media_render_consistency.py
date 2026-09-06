@@ -468,3 +468,68 @@ class BrandCarouselWrapperConsistencyTests(_RenderMediaTestBase):
         # But the actual section body (title + brand link) still renders.
         self.assertIn("بدون پیش‌نمایش", html)
         self.assertIn("?brand=p3-wrapper-brand", html)
+
+    def test_wrapper_hidden_mobile_and_image_background_match_full_preview(self):
+        """Wrapper isolation (Brand end-to-end gate): a brand_carousel item
+        with a hidden-on-mobile responsive flag AND an image background must
+        surface the SAME wrapper data attributes / inline background URL /
+        resource anchors whether rendered as a standalone wrapper include or
+        inside the full Builder Preview response — the wrapper is the single
+        shared surface, so the two must not diverge."""
+        asset = MediaAsset.objects.create(store=self.store, image=_img("brand-bg.png"))
+        settings = {
+            "title": "برند پس‌زمینه‌دار",
+            "display_mode": "grid",
+            "show_view_all": False,
+            "brand_ids": [],
+            "responsive": {"hide_on_mobile": True},
+            "background": {"mode": "image", "media_asset_id": asset.pk},
+        }
+        item = self._brand_carousel_item(settings)
+
+        # The render pipeline resolves the store-scoped background URL onto
+        # the item context (never a raw settings URL).
+        self.assertEqual(item["context"]["background_media_url"], asset.image.url)
+
+        # 1. Standalone shared-wrapper render (is_preview=True).
+        wrapper_html = render_to_string(
+            "storefront_builder/partials/responsive_section_wrapper.html",
+            {"item": item, "is_preview": True},
+        )
+        # Wrapper data attributes.
+        self.assertIn("data-hide-mobile", wrapper_html)
+        self.assertNotIn("data-hide-desktop", wrapper_html)
+        self.assertNotIn("data-hide-tablet", wrapper_html)
+        self.assertIn('data-bg-mode="image"', wrapper_html)
+        self.assertIn(f'data-section-id="{item["section"].pk}"', wrapper_html)
+        self.assertIn('data-section-key="brand_carousel"', wrapper_html)
+        # Inline background URL + resource anchors + title.
+        self.assertIn(f"background-image:url('{asset.image.url}')", wrapper_html)
+        self.assertIn("?brand=p3-wrapper-brand", wrapper_html)
+        self.assertIn("برند پس‌زمینه‌دار", wrapper_html)
+
+        # 2. Full Builder Preview response — place the same section in a
+        #    container cell so the preview renders its body, then assert the
+        #    SAME attributes/URL/anchors appear (no divergence between the
+        #    isolated wrapper and the full preview surface).
+        from apps.storefront_builder.services import container_service
+
+        draft = svc.get_or_create_draft(self.store)
+        page = draft.get_page("home")
+        page.containers.all().delete()
+        draft_section = draft.sections.get(pk=item["section"].pk)
+        container = container_service.create_empty_container(page, "single")
+        container_service.place_section(container.cells.get(), draft_section)
+
+        resp = self.client.get(
+            reverse("dashboard:storefront-builder-preview"), {"page": "home"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        preview_html = resp.content.decode("utf-8")
+        self.assertIn("data-hide-mobile", preview_html)
+        self.assertIn('data-bg-mode="image"', preview_html)
+        self.assertIn(f'data-section-id="{draft_section.pk}"', preview_html)
+        self.assertIn(f"background-image:url('{asset.image.url}')", preview_html)
+        self.assertIn("?brand=p3-wrapper-brand", preview_html)
+        self.assertIn("برند پس‌زمینه‌دار", preview_html)
+        self.assertNotIn("has no file associated with it", preview_html)

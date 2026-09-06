@@ -147,3 +147,57 @@ class StableIdUniquenessConstraintTests(TestCase):
             StorefrontSection.objects.create(
                 version=d1, section_key="newest_products", order=1, stable_id=section.stable_id,
             )
+
+
+
+class BrandStableIdentityAcrossPublishTests(TestCase):
+    """Brand end-to-end gate — a placed brand_carousel keeps its stable
+    logical identity (``stable_id``) across the Published -> Draft clone,
+    while the PK legitimately changes (a new row is a new physical clone).
+    Comparing ``stable_id`` (NOT PK) is the correct identity check for the
+    same logical Brand section across versions."""
+
+    def setUp(self):
+        cache.clear()
+
+    def test_brand_section_stable_id_survives_publish_to_draft_clone(self):
+        store = _akhlaghi()
+        d1 = svc.get_or_create_draft(store)
+        d1.sections.all().delete()
+        section = StorefrontSection.objects.create(
+            version=d1, section_key="brand_carousel", order=0,
+            settings={"title": "برند پایدار", "display_mode": "grid", "brand_ids": [], "show_view_all": False},
+        )
+        original_stable_id = section.stable_id
+        self.assertTrue(original_stable_id)
+
+        svc.publish(store)
+        d2 = svc.get_or_create_draft(store)
+
+        cloned = d2.sections.get(section_key="brand_carousel")
+        # Identity is the stable_id — NOT the PK, which is a fresh clone row.
+        self.assertEqual(cloned.stable_id, original_stable_id)
+        self.assertNotEqual(cloned.pk, section.pk)
+        # Settings survive the clone alongside the identity.
+        self.assertEqual(cloned.settings.get("title"), "برند پایدار")
+
+    def test_two_brand_sections_keep_distinct_stable_ids_across_clone(self):
+        store = _akhlaghi()
+        d1 = svc.get_or_create_draft(store)
+        d1.sections.all().delete()
+        grid = StorefrontSection.objects.create(
+            version=d1, section_key="brand_carousel", order=0,
+            settings={"display_mode": "grid", "brand_ids": [], "show_view_all": False},
+        )
+        carousel = StorefrontSection.objects.create(
+            version=d1, section_key="brand_carousel", order=1,
+            settings={"display_mode": "carousel", "brand_ids": [], "show_view_all": False},
+        )
+        self.assertNotEqual(grid.stable_id, carousel.stable_id)
+
+        svc.publish(store)
+        d2 = svc.get_or_create_draft(store)
+        clones = {s.settings.get("display_mode"): s for s in d2.sections.filter(section_key="brand_carousel")}
+        self.assertEqual(clones["grid"].stable_id, grid.stable_id)
+        self.assertEqual(clones["carousel"].stable_id, carousel.stable_id)
+        self.assertNotEqual(clones["grid"].stable_id, clones["carousel"].stable_id)
