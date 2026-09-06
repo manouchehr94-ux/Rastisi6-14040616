@@ -2260,6 +2260,14 @@ def storefront_page_reset(request):
         messages.success(request, "صفحه به قالب بازنشانی شد")
     except preset_service.BaselineResetError as exc:
         messages.error(request, str(exc))
+    # L06 (structure-lock matrix) — a locked section on the page makes this
+    # destructive full-page reset refuse via ``LockedSectionsPresentError``,
+    # which subclasses ``InvalidPresetError`` (NOT ``BaselineResetError``);
+    # catch it here too so the refusal is a clean Persian message + no-op
+    # (the ``@transaction.atomic`` service already rolled back any checkpoint),
+    # exactly like ``storefront_reset_to_baseline`` and the apply-preset view.
+    except preset_service.InvalidPresetError as exc:
+        messages.error(request, str(exc))
     return redirect("dashboard:storefront-builder-editor")
 
 

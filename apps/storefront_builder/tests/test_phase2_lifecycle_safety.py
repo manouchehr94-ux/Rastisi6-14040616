@@ -1208,3 +1208,747 @@ class LegacyLifecycleAppearanceManifestRoundTripTests(StorefrontBuilderViewsTest
         layout = svc.get_or_create_layout(self.store)
         layout.refresh_from_db()
         self.assertNotEqual(layout.draft_version_id, draft_pk)
+
+
+
+# ---------------------------------------------------------------------------
+# Task 5 — Structure-lock operation-matrix convergence (L06) + lifecycle-safe
+# template/reset revision coherence (L04)
+# ---------------------------------------------------------------------------
+#
+# AUTHORITATIVE structure-lock operation matrix (spec §11). "structure-lock
+# protects STRUCTURAL operations ONLY" — it is NOT an appearance/content lock.
+# These tests prove the matrix is COMPLETE and CONSISTENT across BOTH the R4
+# structure path (``section_structure_service`` behind the R4 mutation route)
+# AND the legacy views, for both ``Section.is_locked`` and
+# ``Container.is_locked``:
+#
+#   Operation                              | locked: allowed? | proven on
+#   ---------------------------------------|------------------|-----------
+#   Section move / reorder                 | NO               | R4 + legacy
+#   Section remove                         | NO               | R4 + legacy
+#   Block move / remove (within cell)      | NO               | legacy
+#   Container settings/layout/move/remove  | NO (locked ctr)  | legacy
+#   Cell add-section / clear               | NO (locked ctr)  | legacy
+#   Template apply / baseline reset (page  | NO               | preset_service
+#       with a locked section)             |                  | + apply view
+#   Section settings edit (content/appear) | YES              | R4 + legacy
+#   Toggle active / collapse / lock-toggle | YES              | legacy
+#   Section duplicate (new logical section)| YES              | R4 + legacy
+#
+# The R4 path surfaces a refused structural op as a 400 JSON body
+# ``{"ok": false, "code": "<section_locked|container_locked|target_locked|...>"}``
+# (see ``r4_views.storefront_r4_mutation`` mapping ``SectionStructureError.code``
+# via ``R4MutationError``); the legacy views surface it as a Persian
+# ``messages.error`` + the section/container-state partial (no mutation). Both
+# must leave the Draft byte-for-byte unchanged: no structural mutation, no
+# ``edit_revision`` advance, no history entry.
+
+import json
+
+from apps.storefront_builder.models import (
+    StorefrontCell,
+    StorefrontEditHistoryEntry as _T5HistoryEntry,
+)
+from apps.storefront_builder.services import (
+    container_service as _t5_container_service,
+    section_structure_service as _t5_sss,
+)
+
+
+class _StructureLockMatrixMixin(StorefrontBuilderViewsTestCase):
+    """Shared fixture for the structure-lock matrix: an active Draft with the
+    R4 gate ON so the R4 mutation route is reachable, plus helpers to build
+    real page-level sections placed in real Container/Cell composition (the
+    exact runtime shape ``ensure_page_containers`` produces)."""
+
+    def setUp(self):
+        super().setUp()
+        self.layout = svc.get_or_create_layout(self.store)
+        self.layout.r4_editor_enabled = True
+        self.layout.save(update_fields=["r4_editor_enabled"])
+        self.draft = svc.get_or_create_draft(self.store, user=self.staff)
+        self.home = self.draft.get_page(StorefrontPage.PageType.HOME)
+        # Start from a clean Home so section counts/orders are deterministic.
+        self.home.containers.all().delete()
+        self.home.sections.all().delete()
+
+    def _add_section(self, section_key="rich_text", *, order=0, settings=None, is_locked=False):
+        section = StorefrontSection.objects.create(
+            page=self.home, section_key=section_key, order=order,
+            settings=settings if settings is not None else {"body_html": "<p>x</p>"},
+            is_locked=is_locked,
+        )
+        return section
+
+    def _place_each_section_in_own_container(self):
+        """Mirror the real runtime placement: every page-level Section ends up
+        as the sole Block of its own single-column Container/Cell."""
+        _t5_container_service.ensure_page_containers(self.home)
+
+    def _cell_of(self, section):
+        """Resolve a Section's placement Cell the same way the production code
+        does: prefer the new multi-block FK, fall back to the legacy
+        ``StorefrontCell.section`` OneToOne that ``ensure_page_containers``
+        writes."""
+        section.refresh_from_db()
+        if section.cell_id is not None:
+            return section.cell
+        return StorefrontCell.objects.filter(section=section).select_related("container").first()
+
+    def _post_r4(self, payload):
+        return self.client.post(
+            reverse("dashboard:storefront-builder-r4-mutation"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+    def _r4_mutate(self, mutation):
+        self.draft.refresh_from_db()
+        return self._post_r4({
+            "base_revision": self.draft.edit_revision,
+            "mutation": mutation,
+        })
+
+    def _history_count(self):
+        return _T5HistoryEntry.objects.filter(draft_version=self.draft).count()
+
+    def _revision(self):
+        self.draft.refresh_from_db()
+        return self.draft.edit_revision
+
+
+# ---------------------------------------------------------------------------
+# L06 — NEGATIVE tests: every "NO" cell, R4 structure path
+# ---------------------------------------------------------------------------
+
+
+class R4StructureLockNegativeTests(_StructureLockMatrixMixin):
+    """R4 structure path (``section_structure_service`` behind the R4 mutation
+    route): every structural "NO" cell must be refused with the stable
+    ``SectionStructureError.code`` and mutate nothing (no revision advance, no
+    history entry)."""
+
+    def _assert_r4_refused(self, mutation, expected_code):
+        revision_before = self._revision()
+        history_before = self._history_count()
+        resp = self._r4_mutate(mutation)
+        self.assertEqual(resp.status_code, 400, f"{mutation['type']} must be refused")
+        body = resp.json()
+        self.assertIs(body["ok"], False)
+        self.assertEqual(body["code"], expected_code)
+        # Nothing moved: revision + history are unchanged (atomic refusal).
+        self.assertEqual(self._revision(), revision_before)
+        self.assertEqual(self._history_count(), history_before)
+
+    def test_r4_section_remove_on_locked_section_is_refused(self):
+        locked = self._add_section(order=0, is_locked=True)
+        self._place_each_section_in_own_container()
+        self._assert_r4_refused(
+            {"type": "section.remove", "section_id": locked.pk}, "section_locked",
+        )
+        self.assertTrue(StorefrontSection.objects.filter(pk=locked.pk).exists())
+
+    def test_r4_section_move_on_locked_source_section_is_refused(self):
+        locked = self._add_section(order=0, is_locked=True)
+        self._add_section(section_key="rich_text", order=1)
+        self._place_each_section_in_own_container()
+        order_before = locked.order
+        self._assert_r4_refused(
+            {"type": "section.move", "section_id": locked.pk, "direction": "down"},
+            "section_locked",
+        )
+        locked.refresh_from_db()
+        self.assertEqual(locked.order, order_before)
+
+    def test_r4_section_move_toward_locked_target_is_refused(self):
+        mover = self._add_section(order=0)
+        locked_target = self._add_section(order=1, is_locked=True)
+        self._place_each_section_in_own_container()
+        order_before = mover.order
+        self._assert_r4_refused(
+            {"type": "section.move", "section_id": mover.pk, "direction": "down"},
+            "target_locked",
+        )
+        mover.refresh_from_db()
+        self.assertEqual(mover.order, order_before)
+
+    def test_r4_section_move_out_of_locked_container_is_refused(self):
+        # A section whose CONTAINER is locked cannot be reordered even if the
+        # section itself is unlocked — container-level structural lock.
+        mover = self._add_section(order=0)
+        self._add_section(order=1)
+        self._place_each_section_in_own_container()
+        # Lock the mover's own container.
+        container = self._cell_of(mover).container
+        container.is_locked = True
+        container.save(update_fields=["is_locked"])
+        order_before = mover.order
+        self._assert_r4_refused(
+            {"type": "section.move", "section_id": mover.pk, "direction": "down"},
+            "container_locked",
+        )
+        mover.refresh_from_db()
+        self.assertEqual(mover.order, order_before)
+
+
+# ---------------------------------------------------------------------------
+# L06 — POSITIVE tests: lock is structure-only (R4 path)
+# ---------------------------------------------------------------------------
+
+
+class R4StructureLockPositiveTests(_StructureLockMatrixMixin):
+    """A locked section must still accept content/appearance settings edits and
+    duplication through the R4 path — the lock is structural only."""
+
+    def test_r4_settings_edit_on_locked_section_succeeds(self):
+        locked = self._add_section(
+            section_key="hero_banner", order=0,
+            settings=None, is_locked=True,
+        )
+        # hero_banner carries a real schema; give it its defaults first.
+        from apps.storefront_builder import section_registry
+        locked.settings = section_registry.get_definition("hero_banner").default_settings()
+        locked.save(update_fields=["settings"])
+        self._place_each_section_in_own_container()
+
+        revision_before = self._revision()
+        resp = self._r4_mutate({
+            "type": "section.update_settings",
+            "section_id": locked.pk,
+            "patch": {"autoplay": False},
+        })
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertIs(resp.json()["ok"], True)
+        locked.refresh_from_db()
+        self.assertIs(locked.settings["autoplay"], False)
+        self.assertTrue(locked.is_locked)  # still locked — edit did not unlock
+        self.assertEqual(self._revision(), revision_before + 1)
+
+    def test_r4_duplicate_of_locked_section_succeeds_and_creates_new_section(self):
+        locked = self._add_section(order=0, is_locked=True)
+        self._place_each_section_in_own_container()
+        count_before = self.home.sections.count()
+
+        revision_before = self._revision()
+        resp = self._r4_mutate({"type": "section.duplicate", "section_id": locked.pk})
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertIs(resp.json()["ok"], True)
+        # A NEW logical section was created; the source stays locked/intact.
+        self.assertEqual(self.home.sections.count(), count_before + 1)
+        locked.refresh_from_db()
+        self.assertTrue(locked.is_locked)
+        self.assertEqual(self._revision(), revision_before + 1)
+        # The duplicate is a distinct section (fresh stable_id) and is NOT
+        # itself locked — a duplicate is a brand-new logical section.
+        duplicate = self.home.sections.exclude(pk=locked.pk).get()
+        self.assertNotEqual(duplicate.stable_id, locked.stable_id)
+        self.assertFalse(duplicate.is_locked)
+
+
+# ---------------------------------------------------------------------------
+# L06 — NEGATIVE tests: every "NO" cell, legacy views (Section + Container)
+# ---------------------------------------------------------------------------
+
+
+class LegacySectionStructureLockNegativeTests(_StructureLockMatrixMixin):
+    """Legacy per-section structural routes must refuse a locked section and
+    mutate nothing: remove, move (up/down), reorder. Each refusal returns the
+    list partial (200) with no structural change and no revision/history
+    advance."""
+
+    def _assert_legacy_refused_no_advance(self, do_request, *, expect_status=200):
+        revision_before = self._revision()
+        history_before = self._history_count()
+        resp = do_request()
+        self.assertEqual(resp.status_code, expect_status)
+        self.assertEqual(self._revision(), revision_before)
+        self.assertEqual(self._history_count(), history_before)
+        return resp
+
+    def test_legacy_section_remove_on_locked_section_is_refused(self):
+        locked = self._add_section(order=0, is_locked=True)
+        self._add_section(order=1)
+        self._place_each_section_in_own_container()
+
+        self._assert_legacy_refused_no_advance(lambda: self.client.post(
+            reverse("dashboard:storefront-builder-section-remove", args=[locked.pk])))
+        self.assertTrue(StorefrontSection.objects.filter(pk=locked.pk).exists())
+
+    def test_legacy_section_move_on_locked_section_is_refused(self):
+        locked = self._add_section(order=0, is_locked=True)
+        self._add_section(order=1)
+        self._place_each_section_in_own_container()
+        order_before = locked.order
+
+        self._assert_legacy_refused_no_advance(lambda: self.client.post(
+            reverse("dashboard:storefront-builder-section-move", args=[locked.pk]),
+            {"direction": "down"}))
+        locked.refresh_from_db()
+        self.assertEqual(locked.order, order_before)
+
+    def test_legacy_section_move_toward_locked_neighbor_is_refused(self):
+        mover = self._add_section(order=0)
+        locked_neighbor = self._add_section(order=1, is_locked=True)
+        self._place_each_section_in_own_container()
+        order_before = mover.order
+
+        self._assert_legacy_refused_no_advance(lambda: self.client.post(
+            reverse("dashboard:storefront-builder-section-move", args=[mover.pk]),
+            {"direction": "down"}))
+        mover.refresh_from_db()
+        self.assertEqual(mover.order, order_before)
+
+    def test_legacy_section_reorder_cannot_move_locked_section(self):
+        locked = self._add_section(order=0, is_locked=True)
+        other = self._add_section(order=1)
+        self._place_each_section_in_own_container()
+
+        # Attempt to reorder so the locked section changes position.
+        self._assert_legacy_refused_no_advance(lambda: self.client.post(
+            reverse("dashboard:storefront-builder-section-reorder"),
+            {"section_ids": [str(other.pk), str(locked.pk)]}))
+        locked.refresh_from_db()
+        self.assertEqual(locked.order, 0)
+
+    def test_legacy_block_move_on_locked_section_is_refused(self):
+        locked = self._add_section(order=0, is_locked=True)
+        self._add_section(order=1)
+        self._place_each_section_in_own_container()
+        target_cell_id = self._cell_of(locked).pk
+
+        self._assert_legacy_refused_no_advance(lambda: self.client.post(
+            reverse("dashboard:storefront-builder-block-move", args=[locked.pk]),
+            {"target_cell_id": str(target_cell_id), "at_index": "0"}))
+        locked.refresh_from_db()
+        self.assertTrue(locked.is_locked)
+
+    def test_legacy_block_remove_on_locked_section_is_refused(self):
+        locked = self._add_section(order=0, is_locked=True)
+        self._place_each_section_in_own_container()
+
+        self._assert_legacy_refused_no_advance(lambda: self.client.post(
+            reverse("dashboard:storefront-builder-block-remove", args=[locked.pk])))
+        self.assertTrue(StorefrontSection.objects.filter(pk=locked.pk).exists())
+
+
+class LegacyContainerStructureLockNegativeTests(_StructureLockMatrixMixin):
+    """Legacy container routes must refuse a LOCKED container (settings /
+    layout / move / remove) and mutate nothing. Cell add-section and cell
+    clear must likewise refuse when the cell's container is locked."""
+
+    def _locked_container_with_cell(self):
+        section = self._add_section(order=0)
+        self._place_each_section_in_own_container()
+        cell = self._cell_of(section)
+        container = cell.container
+        container.is_locked = True
+        container.save(update_fields=["is_locked"])
+        return container, cell
+
+    def _assert_no_advance(self, do_request):
+        revision_before = self._revision()
+        history_before = self._history_count()
+        resp = do_request()
+        self.assertEqual(self._revision(), revision_before)
+        self.assertEqual(self._history_count(), history_before)
+        return resp
+
+    def test_legacy_container_settings_on_locked_container_is_refused(self):
+        container, _cell = self._locked_container_with_cell()
+        settings_before = dict(container.settings or {})
+        self._assert_no_advance(lambda: self.client.post(
+            reverse("dashboard:storefront-builder-container-settings", args=[container.pk]),
+            {"gap": "40", "mobile_mode": "stack", "vertical_align": "center"}))
+        container.refresh_from_db()
+        self.assertEqual(dict(container.settings or {}), settings_before)
+
+    def test_legacy_container_layout_on_locked_container_is_refused(self):
+        container, _cell = self._locked_container_with_cell()
+        layout_before = container.layout_key
+        self._assert_no_advance(lambda: self.client.post(
+            reverse("dashboard:storefront-builder-container-layout", args=[container.pk]),
+            {"layout_key": "half"}))
+        container.refresh_from_db()
+        self.assertEqual(container.layout_key, layout_before)
+
+    def test_legacy_container_move_on_locked_container_is_refused(self):
+        container, _cell = self._locked_container_with_cell()
+        # Add a second container so a move is theoretically possible.
+        self._add_section(order=1)
+        self._place_each_section_in_own_container()
+        order_before = container.order
+        self._assert_no_advance(lambda: self.client.post(
+            reverse("dashboard:storefront-builder-container-move", args=[container.pk]),
+            {"direction": "down"}))
+        container.refresh_from_db()
+        self.assertEqual(container.order, order_before)
+
+    def test_legacy_container_remove_on_locked_container_is_refused(self):
+        container, _cell = self._locked_container_with_cell()
+        self._assert_no_advance(lambda: self.client.post(
+            reverse("dashboard:storefront-builder-container-remove", args=[container.pk])))
+        self.assertTrue(StorefrontContainer.objects.filter(pk=container.pk).exists())
+
+    def test_legacy_cell_add_section_into_locked_container_is_refused(self):
+        container, cell = self._locked_container_with_cell()
+        count_before = self.home.sections.count()
+        self._assert_no_advance(lambda: self.client.post(
+            reverse("dashboard:storefront-builder-cell-add-section"),
+            {"section_key": "rich_text", "cell_id": str(cell.pk), "page": "home"}))
+        self.assertEqual(self.home.sections.count(), count_before)
+
+    def test_legacy_cell_clear_on_locked_container_is_refused(self):
+        container, cell = self._locked_container_with_cell()
+        self._assert_no_advance(lambda: self.client.post(
+            reverse("dashboard:storefront-builder-cell-clear", args=[cell.pk])))
+        # The block is still placed in the cell.
+        self.assertTrue(_t5_container_service.get_cell_blocks(cell))
+
+
+# ---------------------------------------------------------------------------
+# L06 — POSITIVE tests: lock is structure-only (legacy views)
+# ---------------------------------------------------------------------------
+
+
+class LegacyStructureLockPositiveTests(_StructureLockMatrixMixin):
+    """A LOCKED section must still accept the "YES" (allowed) operations
+    through the legacy views — settings edit (content/appearance), toggle
+    active, collapse, lock-toggle, and duplicate — because structure-lock is
+    NOT a content/appearance lock and never blocks the lock toggle itself."""
+
+    def _post_settings(self, section, body_html):
+        return self.client.post(
+            reverse("dashboard:storefront-builder-section-settings", args=[section.pk]),
+            {"body_html": body_html, "show_on_desktop": "on",
+             "show_on_tablet": "on", "show_on_mobile": "on"})
+
+    def test_settings_edit_on_locked_section_succeeds(self):
+        locked = self._add_section(order=0, settings={"body_html": "<p>قبل</p>"}, is_locked=True)
+        self._place_each_section_in_own_container()
+
+        resp = self._post_settings(locked, "<p>بعد</p>")
+        self.assertEqual(resp.status_code, 302)
+        locked.refresh_from_db()
+        self.assertEqual(locked.settings["body_html"], "<p>بعد</p>")
+        self.assertTrue(locked.is_locked)  # content edit never unlocks
+
+    def test_toggle_active_on_locked_section_succeeds(self):
+        locked = self._add_section(order=0, is_locked=True)
+        active_before = locked.is_active
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-section-toggle", args=[locked.pk]))
+        self.assertEqual(resp.status_code, 200)
+        locked.refresh_from_db()
+        self.assertEqual(locked.is_active, not active_before)
+        self.assertTrue(locked.is_locked)
+
+    def test_collapse_toggle_on_locked_section_succeeds(self):
+        locked = self._add_section(order=0, is_locked=True)
+        collapsed_before = locked.collapsed_in_editor
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-section-collapse", args=[locked.pk]))
+        self.assertEqual(resp.status_code, 200)
+        locked.refresh_from_db()
+        self.assertEqual(locked.collapsed_in_editor, not collapsed_before)
+        self.assertTrue(locked.is_locked)
+
+    def test_lock_toggle_on_locked_section_unlocks_it(self):
+        # The lock toggle itself must never be blocked by the lock.
+        locked = self._add_section(order=0, is_locked=True)
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-section-lock", args=[locked.pk]))
+        self.assertEqual(resp.status_code, 200)
+        locked.refresh_from_db()
+        self.assertFalse(locked.is_locked)
+
+    def test_duplicate_of_locked_section_succeeds_and_creates_new_section(self):
+        locked = self._add_section(order=0, is_locked=True)
+        self._place_each_section_in_own_container()
+        count_before = self.home.sections.count()
+
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-section-duplicate", args=[locked.pk]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(self.home.sections.count(), count_before + 1)
+        locked.refresh_from_db()
+        self.assertTrue(locked.is_locked)
+        duplicate = self.home.sections.exclude(pk=locked.pk).order_by("-order").first()
+        self.assertNotEqual(duplicate.stable_id, locked.stable_id)
+        self.assertFalse(duplicate.is_locked)
+
+
+
+# ---------------------------------------------------------------------------
+# L06 — Template apply / baseline reset over a page with a locked section
+# ---------------------------------------------------------------------------
+#
+# The apply_preset service + apply-preset view lock refusal is already proven
+# by ``test_preset_service.LockedSectionsBlockPresetApplyTests``. These tests
+# extend the same "NO" cell to the RESET side of the matrix — the
+# snapshot-driven ``apply_baseline_snapshot`` and ``reset_page_to_baseline``
+# paths (used by every reset-to-Ready-Template-baseline route) must ALSO refuse
+# a page carrying a locked section and mutate nothing.
+
+from apps.storefront_builder import layout_preset_registry as _t5_lpr
+from apps.storefront_builder.services import preset_service as _t5_preset_service
+
+
+class BaselineResetLockRefusalTests(_StructureLockMatrixMixin):
+    """``apply_baseline_snapshot`` / ``reset_page_to_baseline`` must raise
+    ``LockedSectionsPresentError`` when the target page has a locked section,
+    exactly like ``apply_preset`` does — the reset paths are just as
+    structurally destructive (they delete + rebuild the page's sections)."""
+
+    def _first_ready_template(self):
+        return next(iter(_t5_lpr.list_ready_templates()))
+
+    def _apply_ready_template(self):
+        preset = self._first_ready_template()
+        _t5_preset_service.apply_preset(self.draft, preset)
+        self.draft.refresh_from_db()
+        return preset
+
+    def test_apply_baseline_snapshot_refuses_locked_page_and_mutates_nothing(self):
+        preset = self._apply_ready_template()
+        snapshot = self.draft.template_baseline_snapshot
+        self.assertTrue(snapshot)
+
+        # Lock one of the Home sections the snapshot would otherwise replace.
+        home = self.draft.get_page(StorefrontPage.PageType.HOME)
+        first = home.sections.order_by("order").first()
+        first.is_locked = True
+        first.save(update_fields=["is_locked"])
+        section_keys_before = list(
+            home.sections.order_by("order").values_list("section_key", flat=True))
+
+        with self.assertRaises(_t5_preset_service.LockedSectionsPresentError):
+            _t5_preset_service.apply_baseline_snapshot(self.draft, snapshot)
+
+        # Nothing on the page changed — the locked section (and every sibling)
+        # is intact.
+        home.refresh_from_db()
+        self.assertTrue(StorefrontSection.objects.filter(pk=first.pk, is_locked=True).exists())
+        self.assertEqual(
+            list(home.sections.order_by("order").values_list("section_key", flat=True)),
+            section_keys_before,
+        )
+
+    def test_reset_page_to_baseline_refuses_locked_page_and_mutates_nothing(self):
+        self._apply_ready_template()
+        home = self.draft.get_page(StorefrontPage.PageType.HOME)
+        first = home.sections.order_by("order").first()
+        first.is_locked = True
+        first.save(update_fields=["is_locked"])
+        section_keys_before = list(
+            home.sections.order_by("order").values_list("section_key", flat=True))
+
+        with self.assertRaises(_t5_preset_service.LockedSectionsPresentError):
+            _t5_preset_service.reset_page_to_baseline(self.draft, StorefrontPage.PageType.HOME)
+
+        home.refresh_from_db()
+        self.assertTrue(StorefrontSection.objects.filter(pk=first.pk, is_locked=True).exists())
+        self.assertEqual(
+            list(home.sections.order_by("order").values_list("section_key", flat=True)),
+            section_keys_before,
+        )
+
+    def test_reset_page_view_shows_lock_message_and_leaves_page_intact(self):
+        self._apply_ready_template()
+        home = self.draft.get_page(StorefrontPage.PageType.HOME)
+        first = home.sections.order_by("order").first()
+        first.is_locked = True
+        first.save(update_fields=["is_locked"])
+        keys_before = list(home.sections.order_by("order").values_list("section_key", flat=True))
+
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-page-reset"), {"page": "home"})
+        self.assertEqual(resp.status_code, 302)
+        home.refresh_from_db()
+        self.assertTrue(StorefrontSection.objects.filter(pk=first.pk, is_locked=True).exists())
+        self.assertEqual(
+            list(home.sections.order_by("order").values_list("section_key", flat=True)),
+            keys_before,
+        )
+
+
+# ---------------------------------------------------------------------------
+# L04 — legacy template-apply + reset lifecycle: atomic, revision-coherent
+# (advance on REAL change, advance NOTHING on a no-op), refuse locked pages.
+# ---------------------------------------------------------------------------
+#
+# Apply/reset semantics are UNCHANGED (replacement/reset). The only invariant
+# proven here is the Task-3 ``record_change`` revision-coherence contract
+# reaching these endpoints:
+#
+#   * In-place granular resets (section-field / appearance-field / header /
+#     footer reset) mutate the SAME active Draft, so they route through the
+#     ``@_record_edit_history`` decorator's ``record_change`` — advancing
+#     ``edit_revision`` by exactly 1 on a real change and by nothing on a
+#     semantic no-op (resetting a field already at its baseline value).
+#   * Checkpoint-based apply/whole-storefront reset preserve the previous
+#     Draft as a recoverable ARCHIVED checkpoint and rebuild on a fresh Draft;
+#     the Published version is never touched and the operation is atomic.
+
+
+class LegacyInPlaceResetRevisionCoherenceTests(_StructureLockMatrixMixin):
+    """In-place granular resets are revision-coherent through the shared
+    Task-3 ``record_change`` contract: a real reset advances ``edit_revision``
+    by exactly 1 (and appends exactly one history entry); a no-op reset (field
+    already equal to baseline) advances nothing and records nothing."""
+
+    def _apply_ready_template(self):
+        preset = next(iter(_t5_lpr.list_ready_templates()))
+        _t5_preset_service.apply_preset(self.draft, preset)
+        self.draft.refresh_from_db()
+        return preset
+
+    def _baseline_home_section(self):
+        home = self.draft.get_page(StorefrontPage.PageType.HOME)
+        return home.sections.order_by("order").first()
+
+    def test_section_field_reset_real_change_advances_revision_by_one(self):
+        self._apply_ready_template()
+        section = self._baseline_home_section()
+        # Find a scalar baseline field and mutate it away from baseline first.
+        snapshot = self.draft.template_baseline_snapshot
+        entry = next(
+            e for e in snapshot["pages"]["home"]
+            if e["slot_key"] == section.template_slot_key
+        )
+        baseline_settings = entry["settings"]
+        field = next(iter(baseline_settings))  # some key that exists in baseline
+        # Mutate the section's field to a value guaranteed different.
+        section.settings = {**(section.settings or {}), field: "__t5_diverged__"}
+        section.save(update_fields=["settings"])
+
+        revision_before = self._revision()
+        history_before = self._history_count()
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-section-field-reset", args=[section.pk]),
+            {"field": field})
+        self.assertEqual(resp.status_code, 302)
+
+        section.refresh_from_db()
+        self.assertEqual(section.settings[field], baseline_settings[field])
+        self.assertEqual(self._revision(), revision_before + 1)
+        self.assertEqual(self._history_count(), history_before + 1)
+
+    def test_section_field_reset_noop_advances_nothing(self):
+        self._apply_ready_template()
+        section = self._baseline_home_section()
+        snapshot = self.draft.template_baseline_snapshot
+        entry = next(
+            e for e in snapshot["pages"]["home"]
+            if e["slot_key"] == section.template_slot_key
+        )
+        field = next(iter(entry["settings"]))
+        # The section is already exactly at baseline for this field (just
+        # applied) — resetting it is a semantic no-op.
+        revision_before = self._revision()
+        history_before = self._history_count()
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-section-field-reset", args=[section.pk]),
+            {"field": field})
+        self.assertEqual(resp.status_code, 302)
+
+        self.assertEqual(self._revision(), revision_before)
+        self.assertEqual(self._history_count(), history_before)
+
+    def test_appearance_field_reset_real_change_advances_revision_by_one(self):
+        self._apply_ready_template()
+        snapshot = self.draft.template_baseline_snapshot
+        baseline_appearance = snapshot["appearance"]
+        # ``font`` is a scalar appearance field present in every baseline.
+        field = "font"
+        self.assertIn(field, baseline_appearance)
+        # Diverge the current appearance from baseline for this field, using
+        # a value that is guaranteed to be in the allowed FONT_CHOICES list.
+        from apps.storefront_builder import appearance_registry
+        current = dict(self.draft.effective_appearance_config())
+        diverged = next(
+            f for f in appearance_registry.FONT_CHOICES if f != baseline_appearance[field]
+        )
+        current[field] = diverged
+        cleaned = svc.validate_appearance_config(current)
+        self.draft.appearance_config = cleaned
+        self.draft.save(update_fields=["appearance_config"])
+
+        revision_before = self._revision()
+        history_before = self._history_count()
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-appearance-field-reset"), {"field": field})
+        self.assertEqual(resp.status_code, 302)
+
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.effective_appearance_config()[field], baseline_appearance[field])
+        self.assertEqual(self._revision(), revision_before + 1)
+        self.assertEqual(self._history_count(), history_before + 1)
+
+    def test_appearance_field_reset_noop_advances_nothing(self):
+        self._apply_ready_template()
+        # Just applied — appearance already equals baseline; reset is a no-op.
+        revision_before = self._revision()
+        history_before = self._history_count()
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-appearance-field-reset"), {"field": "font"})
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(self._revision(), revision_before)
+        self.assertEqual(self._history_count(), history_before)
+
+
+class LegacyCheckpointApplyLifecycleTests(_StructureLockMatrixMixin):
+    """The legacy apply-preset endpoint is atomic and lifecycle-correct: it
+    routes a would-replace apply through the shared
+    ``apply_preset_with_checkpoint``, preserving the prior Draft as a
+    recoverable ARCHIVED checkpoint on a fresh Draft — never touching a
+    Published version, never auto-publishing. Apply/reset MEANING is
+    unchanged (full replacement)."""
+
+    def test_apply_preset_view_over_existing_content_is_atomic_and_checkpoints(self):
+        # Seed real content so the apply is a "would replace" that must
+        # checkpoint the current Draft first.
+        self._add_section(section_key="rich_text", order=0, settings={"body_html": "<p>دستی</p>"})
+        self._place_each_section_in_own_container()
+        old_draft_pk = self.draft.pk
+        versions_before = set(self.layout.versions.values_list("pk", flat=True))
+
+        preset = next(iter(_t5_lpr.list_ready_templates()))
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-apply-preset"),
+            {"preset_key": preset.key, "confirm_preset_apply": "1"})
+        self.assertEqual(resp.status_code, 302)
+
+        # A NEW active Draft now carries the applied template; the previous
+        # Draft is preserved as a recoverable ARCHIVED checkpoint (never
+        # deleted, never published).
+        self.layout.refresh_from_db()
+        new_draft = self.layout.draft_version
+        self.assertIsNotNone(new_draft)
+        self.assertNotEqual(new_draft.pk, old_draft_pk)
+        old_draft = StorefrontLayoutVersion.objects.get(pk=old_draft_pk)
+        self.assertEqual(old_draft.status, StorefrontLayoutVersion.Status.ARCHIVED)
+        new_draft.refresh_from_db()
+        self.assertEqual(
+            new_draft.template_provenance.get("template", {}).get("key"), preset.key)
+        # No version was destroyed; the set only grew.
+        versions_after = set(self.layout.versions.values_list("pk", flat=True))
+        self.assertTrue(versions_before <= versions_after)
+
+    def test_apply_preset_view_refuses_locked_page_and_leaves_it_intact(self):
+        # A locked section on a covered page blocks the apply entirely (the
+        # apply-preset "NO" cell at the HTTP boundary).
+        locked = self._add_section(section_key="rich_text", order=0, is_locked=True)
+        self._place_each_section_in_own_container()
+
+        preset = next(iter(_t5_lpr.list_ready_templates()))
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-apply-preset"),
+            {"preset_key": preset.key, "confirm_preset_apply": "1"})
+        self.assertEqual(resp.status_code, 302)
+        # The locked section survived; the apply was refused.
+        self.assertTrue(StorefrontSection.objects.filter(pk=locked.pk, is_locked=True).exists())
+        self.layout.refresh_from_db()
+        # Active Draft still points at the original Draft (no checkpoint/new
+        # Draft was created for a refused apply).
+        self.assertEqual(self.layout.draft_version_id, self.draft.pk)
