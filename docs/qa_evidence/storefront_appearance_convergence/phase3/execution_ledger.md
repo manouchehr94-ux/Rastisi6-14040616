@@ -103,4 +103,4 @@ Baseline gate: PASS. Cleared to begin Task 1.
   - MINOR-2 (DEFERRED): `_brand_section` test helper duplicated across two test classes. REASON: cosmetic. RISK: none.
 - Reviewer sandbox note: reviewer reported a bs4-missing limitation in ITS sandbox; controller-authoritative run (bs4 installed per requirements.txt) confirms test_views has only the 2 known fullscreen failures — reviewer limitation does not apply to the authoritative env.
 - fix rounds: 0
-- commit: 2a1e45bb1b78b71b2495b0b01c8ce771a1787166  "fix: preserve brand variant intent and supported controls"
+- commit: 43cdd20c554cfb0ef0753164b4f7cb369bef99f5  "fix: preserve brand variant intent and supported controls" (amended)
