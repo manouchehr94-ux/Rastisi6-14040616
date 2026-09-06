@@ -619,18 +619,20 @@ def apply_mutation(*, store, actor, base_revision: int, mutation: dict) -> int:
 
     _dispatch_mutation(store=store, draft=draft, mutation=mutation)
 
-    changed = edit_history_service.record_change(
+    # L01 convergence (Phase 2 Task 3): the single edit_revision advance now
+    # lives inside edit_history_service.record_change — it advances the
+    # Draft-wide token atomically, exactly once, iff a real change is
+    # recorded, and updates this locked ``draft`` instance in place. R4 must
+    # NOT re-increment here or the token would advance by 2. A semantic
+    # no-op returns False and advances nothing (no revision churn, no fake
+    # history entry). Undo/Redo (apply_history_command) never route through
+    # record_change and keep their own separate single increment.
+    edit_history_service.record_change(
         draft=draft,
         actor=actor,
         action_label=_history_label(mutation),
         before_state=before_state,
     )
-    if not changed:
-        # Valid semantic no-op: no revision churn and no fake history entry.
-        return draft.edit_revision
-
-    draft.edit_revision += 1
-    draft.save(update_fields=["edit_revision"])
     return draft.edit_revision
 
 
@@ -647,6 +649,25 @@ def apply_history_command(*, store, actor, base_revision: int, command: str) -> 
         raise R4MutationError("unknown_history_command")
 
     draft = _lock_active_draft(store=store, base_revision=base_revision)
+    return _run_history_command(draft=draft, command=command)
+
+
+def _run_history_command(*, draft: StorefrontLayoutVersion, command: str) -> dict:
+    """The ONE Undo/Redo execution contract, shared by every entry point.
+
+    Deliberately NEVER calls ``edit_history_service.record_change``: routing
+    Undo/Redo through the normal history path would make Undo itself a new
+    undoable edit and corrupt history semantics (Section 13). A *successful*
+    Undo/Redo owns the single revision-monotonicity guarantee —
+    ``edit_revision`` always moves forward by exactly 1, even though the
+    restored *content* may be older; a no-op (nothing to undo/redo) advances
+    nothing. The caller MUST already hold the draft lock inside a
+    ``@transaction.atomic`` block (via ``_lock_active_draft`` for the R4 path,
+    or the store's layout lock for the legacy path). This keeps legacy
+    ``storefront_undo``/``storefront_redo`` and R4 ``apply_history_command``
+    revision-coherent through a single boundary."""
+    if command not in ("undo", "redo"):
+        raise R4MutationError("unknown_history_command")
 
     entry = edit_history_service.undo(draft) if command == "undo" else edit_history_service.redo(draft)
 
@@ -672,6 +693,35 @@ def apply_history_command(*, store, actor, base_revision: int, command: str) -> 
         "can_redo": history["can_redo"],
         "action_label": entry.action_label,
     }
+
+
+@transaction.atomic
+def apply_history_command_current(*, store, command: str) -> dict:
+    """Legacy-path Undo/Redo — same execution contract as the R4
+    ``apply_history_command`` but WITHOUT a client-supplied optimistic
+    ``base_revision`` (legacy form-POST callers do not carry one). It locks
+    the store's active Draft against its OWN current revision (a lock that can
+    never spuriously reject), then runs the SAME shared ``_run_history_command``
+    so a successful legacy undo/redo advances ``edit_revision`` by exactly 1
+    and never appends a new undoable history entry. This gives L03 the same
+    revision-monotonic, atomic guarantee the R4 path already had, through the
+    single shared boundary — no duplicated lifecycle logic."""
+    if command not in ("undo", "redo"):
+        raise R4MutationError("unknown_history_command")
+
+    layout = StorefrontLayout.objects.select_for_update().get(store=store)
+    if layout.draft_version_id is None:
+        raise R4MutationError("no_active_draft")
+    try:
+        draft = StorefrontLayoutVersion.objects.select_for_update().get(
+            pk=layout.draft_version_id,
+            layout=layout,
+            status=StorefrontLayoutVersion.Status.DRAFT,
+        )
+    except StorefrontLayoutVersion.DoesNotExist:
+        raise R4MutationError("no_active_draft") from None
+
+    return _run_history_command(draft=draft, command=command)
 
 
 @transaction.atomic

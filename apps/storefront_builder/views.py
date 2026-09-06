@@ -39,6 +39,7 @@ from .services import (
     container_service,
     edit_history_service,
     layout_service,
+    r4_mutation_service,
     row_service,
 )
 from .services.layout_service import _clone_section_scoped_media
@@ -1902,23 +1903,36 @@ def storefront_edit_history_state(request):
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
 def storefront_undo(request):
-    store = _resolve_store(request)
-    draft = layout_service.get_or_create_draft(store, user=request.user)
-    entry = edit_history_service.undo(draft)
-    payload = edit_history_service.history_state(draft)
-    payload.update({"ok": entry is not None, "action_label": entry.action_label if entry else ""})
-    return JsonResponse(payload)
+    return _legacy_history_command(request, "undo")
 
 
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
 def storefront_redo(request):
+    return _legacy_history_command(request, "redo")
+
+
+def _legacy_history_command(request, command: str) -> JsonResponse:
+    """L03 — legacy Undo/Redo delegated to the SAME shared history-command
+    contract R4 uses (``r4_mutation_service._run_history_command`` via
+    ``apply_history_command_current``): atomic, and revision-monotonic — a
+    successful undo/redo advances the Draft-wide ``edit_revision`` by exactly
+    1 (so undo/redo through EITHER entry point is revision-coherent), while
+    still NEVER appending a new undoable history entry. ``get_or_create_draft``
+    first guarantees an active Draft exists so the shared contract has a locked
+    target; a Draft with no recorded history is a controlled no-op (ok=False),
+    exactly as before. The JSON payload shape (history_state + ok +
+    action_label) is unchanged."""
     store = _resolve_store(request)
     draft = layout_service.get_or_create_draft(store, user=request.user)
-    entry = edit_history_service.redo(draft)
+    result = r4_mutation_service.apply_history_command_current(store=store, command=command)
+    draft.refresh_from_db()
     payload = edit_history_service.history_state(draft)
-    payload.update({"ok": entry is not None, "action_label": entry.action_label if entry else ""})
+    payload.update({
+        "ok": result["changed"],
+        "action_label": result["action_label"] or "",
+    })
     return JsonResponse(payload)
 
 
@@ -1926,15 +1940,58 @@ def storefront_redo(request):
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
 def storefront_publish(request):
+    """L02 — legacy publish reaches the SAME lifecycle guarantee as R4
+    ``publish_draft`` by delegating to the shared ``layout_service.publish``
+    contract (already atomic: archives the previous Published, clears the
+    draft history + pointer, swaps pointers). Publish semantics are unchanged.
+
+    Optimistic-concurrency: when the request carries a valid ``base_revision``
+    (the same Draft-wide ``edit_revision`` token the R4 client sends), the
+    publish is routed through the shared, stale-aware
+    ``r4_mutation_service.publish_draft`` so a Draft that advanced under the
+    client is rejected coherently and mutates nothing. When no revision is
+    supplied (the plain legacy form POST), publish is still fully atomic and
+    lifecycle-correct via the same underlying ``layout_service.publish``."""
     store = _resolve_store(request)
+    base_revision = _optional_base_revision(request)
     try:
-        layout_service.publish(store, user=request.user)
+        if base_revision is not None:
+            r4_mutation_service.publish_draft(
+                store=store, actor=request.user, base_revision=base_revision,
+            )
+        else:
+            layout_service.publish(store, user=request.user)
         messages.success(request, "چیدمان جدید منتشر شد")
+    except r4_mutation_service.R4StaleRevision:
+        # The Draft advanced under the publisher — reject coherently and
+        # mutate nothing (mirrors the R4 409 stale_revision path).
+        messages.error(
+            request,
+            "پیش‌نویس از زمان بازکردن این صفحه تغییر کرده — صفحه را تازه کنید و دوباره منتشر کنید",
+        )
     except layout_service.NoDraftToPublishError:
+        messages.error(request, "پیش‌نویسی برای انتشار وجود ندارد")
+    except r4_mutation_service.R4MutationError:
         messages.error(request, "پیش‌نویسی برای انتشار وجود ندارد")
     except Exception:
         messages.error(request, "محدودیت تعداد انتشار — کمی بعد دوباره تلاش کنید")
     return redirect("dashboard:storefront-builder-editor")
+
+
+def _optional_base_revision(request):
+    """Parse an optional ``base_revision`` optimistic-concurrency token from a
+    legacy form POST. Absent/blank → ``None`` (no stale check, plain publish);
+    a non-negative integer enables the shared stale-aware publish path. Any
+    malformed value is treated as absent rather than raising — the legacy form
+    has no field for it today, so this is a purely forward-compatible hook that
+    never regresses the existing no-revision flow."""
+    raw = request.POST.get("base_revision")
+    if raw is None:
+        return None
+    raw = raw.strip()
+    if raw == "" or not raw.isdigit():
+        return None
+    return int(raw)
 
 
 def _preset_would_replace_content(draft, preset) -> bool:
@@ -2202,6 +2259,14 @@ def storefront_page_reset(request):
         preset_service.reset_page_with_checkpoint(store, page_type, user=request.user)
         messages.success(request, "صفحه به قالب بازنشانی شد")
     except preset_service.BaselineResetError as exc:
+        messages.error(request, str(exc))
+    # L06 (structure-lock matrix) — a locked section on the page makes this
+    # destructive full-page reset refuse via ``LockedSectionsPresentError``,
+    # which subclasses ``InvalidPresetError`` (NOT ``BaselineResetError``);
+    # catch it here too so the refusal is a clean Persian message + no-op
+    # (the ``@transaction.atomic`` service already rolled back any checkpoint),
+    # exactly like ``storefront_reset_to_baseline`` and the apply-preset view.
+    except preset_service.InvalidPresetError as exc:
         messages.error(request, str(exc))
     return redirect("dashboard:storefront-builder-editor")
 
