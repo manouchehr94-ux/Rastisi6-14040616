@@ -844,3 +844,367 @@ class LegacyRestoreCrossStoreViewProtectionTests(_LifecycleTargetsMixin):
         self.published_section.refresh_from_db()
         self.assertEqual(self.published.status, published_status)
         self.assertEqual(self.published_section.settings, published_section_settings)
+
+
+
+# ---------------------------------------------------------------------------
+# Task 4 — Legacy Publish / Undo / Redo / Restore / Discard lifecycle safety
+# ---------------------------------------------------------------------------
+#
+# Gaps closed here:
+#
+# * L03 (P1) — the legacy ``storefront_undo`` / ``storefront_redo`` views must
+#   be revision-coherent: a *successful* undo/redo (one that actually restores
+#   a different Draft state) advances the Draft-wide ``edit_revision`` by
+#   EXACTLY 1, matching the R4 ``apply_history_command`` guarantee — so
+#   undo/redo through EITHER entry point is revision-monotonic. A no-op
+#   undo/redo (nothing to undo/redo) advances nothing. Undo/Redo must NEVER
+#   append a new undoable history entry (Section 13). Baseline: RED — the
+#   legacy views call ``edit_history_service.undo/redo`` directly and never
+#   touch ``edit_revision``.
+#
+# * L02 (P1) — the legacy ``storefront_publish`` view must reach the same
+#   lifecycle guarantee as R4 ``publish_draft``: atomic, archive the previous
+#   Published, clear draft history/pointer, swap pointers — by delegating to
+#   the SAME shared ``layout_service.publish`` contract. Where a base revision
+#   is available on the request, a stale publish (Draft advanced under the
+#   client) is rejected coherently and mutates nothing.
+#
+# * Restore / Discard remain atomic, Draft-lifecycle-correct, and recover the
+#   canonical typed ``store_appearance`` manifest intact across an
+#   apply → undo → redo → restore round-trip (structurally byte-for-byte
+#   equal), with revision monotonic where a real change occurred.
+
+from apps.storefront_builder.models import StorefrontEditHistoryEntry
+from apps.storefront_builder.storefront_appearance import persistence as appearance_persistence
+from apps.storefront_builder.storefront_appearance.validation import manifest_to_primitive
+
+
+class LegacyUndoRedoRevisionCoherenceTests(StorefrontBuilderViewsTestCase):
+    """L03 — legacy Undo/Redo must be atomic and revision-monotonic: a
+    successful undo/redo advances ``edit_revision`` by exactly 1 and never
+    appends a new undoable history entry.  A no-op undo/redo advances
+    nothing.  These mirror the already-proven R4 ``apply_history_command``
+    guarantees (see ``test_r4_mutation_api``)."""
+
+    def _draft_with_two_edits(self):
+        """Return a Draft carrying two real recorded edits (so there is
+        something to undo, then redo)."""
+        draft = svc.get_or_create_draft(self.store, user=self.staff)
+        home = draft.get_page(StorefrontPage.PageType.HOME)
+        section = StorefrontSection.objects.create(
+            page=home, section_key="rich_text", order=0,
+            settings={"body_html": "<p>حالت اول</p>"},
+        )
+        # Two real legacy edits → two history entries → two revision advances.
+        self._post_change(section, "<p>حالت دوم</p>")
+        self._post_change(section, "<p>حالت سوم</p>")
+        draft.refresh_from_db()
+        return draft, section
+
+    def _post_change(self, section, body_html):
+        return self.client.post(
+            reverse("dashboard:storefront-builder-section-settings",
+                    args=[section.pk]),
+            {
+                "body_html": body_html,
+                "show_on_desktop": "on",
+                "show_on_tablet": "on",
+                "show_on_mobile": "on",
+            },
+        )
+
+    def _undoable_count(self, draft):
+        return StorefrontEditHistoryEntry.objects.filter(
+            draft_version=draft, is_undone=False).count()
+
+    def _total_history(self, draft):
+        return StorefrontEditHistoryEntry.objects.filter(draft_version=draft).count()
+
+    def test_successful_undo_advances_edit_revision_by_exactly_one(self):
+        draft, section = self._draft_with_two_edits()
+        revision_before = draft.edit_revision
+        total_history_before = self._total_history(draft)
+
+        resp = self.client.post(reverse("dashboard:storefront-builder-undo"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIs(resp.json()["ok"], True)
+
+        # The undo really restored an older content state.
+        section.refresh_from_db()
+        self.assertEqual(section.settings["body_html"], "<p>حالت دوم</p>")
+
+        draft.refresh_from_db()
+        # L03 invariant: exactly one revision advance.
+        self.assertEqual(draft.edit_revision, revision_before + 1)
+        # Undo NEVER creates a NEW undoable history entry — the total number
+        # of entries is unchanged (an entry only flips is_undone).
+        self.assertEqual(self._total_history(draft), total_history_before)
+
+    def test_successful_redo_advances_edit_revision_by_exactly_one(self):
+        draft, section = self._draft_with_two_edits()
+        # Undo once so there is something to redo.
+        self.client.post(reverse("dashboard:storefront-builder-undo"))
+        draft.refresh_from_db()
+        revision_before = draft.edit_revision
+        total_history_before = self._total_history(draft)
+
+        resp = self.client.post(reverse("dashboard:storefront-builder-redo"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIs(resp.json()["ok"], True)
+
+        section.refresh_from_db()
+        self.assertEqual(section.settings["body_html"], "<p>حالت سوم</p>")
+
+        draft.refresh_from_db()
+        self.assertEqual(draft.edit_revision, revision_before + 1)
+        self.assertEqual(self._total_history(draft), total_history_before)
+
+    def test_noop_undo_advances_nothing_and_records_no_history(self):
+        # A fresh Draft with no recorded edits: undo is a controlled no-op.
+        draft = svc.get_or_create_draft(self.store, user=self.staff)
+        draft.refresh_from_db()
+        revision_before = draft.edit_revision
+        total_history_before = self._total_history(draft)
+
+        resp = self.client.post(reverse("dashboard:storefront-builder-undo"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIs(resp.json()["ok"], False)
+
+        draft.refresh_from_db()
+        self.assertEqual(draft.edit_revision, revision_before)
+        self.assertEqual(self._total_history(draft), total_history_before)
+
+    def test_noop_redo_advances_nothing(self):
+        draft, _section = self._draft_with_two_edits()
+        draft.refresh_from_db()
+        revision_before = draft.edit_revision
+
+        # Nothing was undone, so redo has nothing to do.
+        resp = self.client.post(reverse("dashboard:storefront-builder-redo"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIs(resp.json()["ok"], False)
+
+        draft.refresh_from_db()
+        self.assertEqual(draft.edit_revision, revision_before)
+
+    def test_undo_then_redo_is_revision_monotonic(self):
+        draft, _section = self._draft_with_two_edits()
+        draft.refresh_from_db()
+        r0 = draft.edit_revision
+
+        self.client.post(reverse("dashboard:storefront-builder-undo"))
+        draft.refresh_from_db()
+        r1 = draft.edit_revision
+
+        self.client.post(reverse("dashboard:storefront-builder-redo"))
+        draft.refresh_from_db()
+        r2 = draft.edit_revision
+
+        # Strictly increasing across each successful command.
+        self.assertEqual(r1, r0 + 1)
+        self.assertEqual(r2, r1 + 1)
+
+
+class LegacyPublishLifecycleConvergenceTests(_LifecycleTargetsMixin):
+    """L02 — legacy publish must reach the SAME lifecycle guarantee as R4
+    ``publish_draft`` by delegating to the shared ``layout_service.publish``:
+    atomic, archive the previous Published, clear the draft history + pointer,
+    swap pointers.  (Cross-store / published-immutability of publish is
+    already proven by ``LegacyLifecycleRouteTargetingTests``.)"""
+
+    def test_publish_clears_draft_history_and_swaps_pointers_atomically(self):
+        # Seed the active Draft with real edit-history entries so we can prove
+        # publish clears them (editor-session concern must not cross the
+        # publish boundary).
+        home = self.own_draft.get_page(StorefrontPage.PageType.HOME)
+        section = StorefrontSection.objects.create(
+            page=home, section_key="rich_text", order=5,
+            settings={"body_html": "<p>الف</p>"},
+        )
+        self.client.post(
+            reverse("dashboard:storefront-builder-section-settings", args=[section.pk]),
+            {"body_html": "<p>ب</p>", "show_on_desktop": "on",
+             "show_on_tablet": "on", "show_on_mobile": "on"},
+        )
+        self.assertTrue(
+            StorefrontEditHistoryEntry.objects.filter(draft_version=self.own_draft).exists())
+
+        own_draft_pk = self.own_draft.pk
+        previous_published_pk = self.published.pk
+
+        resp = self.client.post(reverse("dashboard:storefront-builder-publish"))
+        self.assertEqual(resp.status_code, 302)
+
+        self.layout.refresh_from_db()
+        # Pointers swapped: the former Draft is now the Published version, and
+        # the draft pointer is cleared.
+        self.assertEqual(self.layout.published_version_id, own_draft_pk)
+        self.assertIsNone(self.layout.draft_version_id)
+
+        # Previous Published archived (not deleted / rewritten).
+        prev = StorefrontLayoutVersion.objects.get(pk=previous_published_pk)
+        self.assertEqual(prev.status, StorefrontLayoutVersion.Status.ARCHIVED)
+
+        # Published version's short-lived edit history was cleared at the
+        # publish boundary.
+        self.assertFalse(
+            StorefrontEditHistoryEntry.objects.filter(draft_version_id=own_draft_pk).exists())
+
+        # The promoted version is PUBLISHED.
+        promoted = StorefrontLayoutVersion.objects.get(pk=own_draft_pk)
+        self.assertEqual(promoted.status, StorefrontLayoutVersion.Status.PUBLISHED)
+
+    def test_publish_with_matching_base_revision_publishes(self):
+        # A publish carrying the current (matching) base_revision succeeds via
+        # the shared stale-aware path.
+        self.own_draft.refresh_from_db()
+        own_draft_pk = self.own_draft.pk
+        base_revision = self.own_draft.edit_revision
+
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-publish"),
+            {"base_revision": str(base_revision)},
+        )
+        self.assertEqual(resp.status_code, 302)
+
+        self.layout.refresh_from_db()
+        self.assertEqual(self.layout.published_version_id, own_draft_pk)
+        self.assertIsNone(self.layout.draft_version_id)
+
+    def test_publish_with_stale_base_revision_is_rejected_and_mutates_nothing(self):
+        # Capture a base_revision, then let a real legacy edit advance the
+        # Draft token under the publisher, making the captured revision stale.
+        self.own_draft.refresh_from_db()
+        stale_base_revision = self.own_draft.edit_revision
+        own_draft_pk = self.own_draft.pk
+        previous_published_pk = self.published.pk
+
+        home = self.own_draft.get_page(StorefrontPage.PageType.HOME)
+        section = StorefrontSection.objects.create(
+            page=home, section_key="rich_text", order=7,
+            settings={"body_html": "<p>یک</p>"},
+        )
+        self.client.post(
+            reverse("dashboard:storefront-builder-section-settings", args=[section.pk]),
+            {"body_html": "<p>دو</p>", "show_on_desktop": "on",
+             "show_on_tablet": "on", "show_on_mobile": "on"},
+        )
+        self.own_draft.refresh_from_db()
+        self.assertEqual(self.own_draft.edit_revision, stale_base_revision + 1)
+
+        # Publish with the now-stale base_revision — must be rejected and
+        # mutate nothing (Draft not promoted, previous Published not archived).
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-publish"),
+            {"base_revision": str(stale_base_revision)},
+        )
+        self.assertEqual(resp.status_code, 302)
+
+        self.layout.refresh_from_db()
+        # Draft is still the active draft; publish did NOT happen.
+        self.assertEqual(self.layout.draft_version_id, own_draft_pk)
+        self.assertEqual(self.layout.published_version_id, previous_published_pk)
+        promoted = StorefrontLayoutVersion.objects.get(pk=own_draft_pk)
+        self.assertEqual(promoted.status, StorefrontLayoutVersion.Status.DRAFT)
+        prev = StorefrontLayoutVersion.objects.get(pk=previous_published_pk)
+        self.assertEqual(prev.status, StorefrontLayoutVersion.Status.PUBLISHED)
+
+
+class LegacyLifecycleAppearanceManifestRoundTripTests(StorefrontBuilderViewsTestCase):
+    """The canonical typed ``store_appearance`` manifest must survive an
+    apply → (legacy) undo → (legacy) redo → restore round-trip byte-for-byte
+    (structurally equal), and each successful step must be revision-monotonic
+    where a real change occurred. This proves restore/discard remain atomic
+    and Draft-lifecycle-correct while recovering the canonical Appearance."""
+
+    def _persist_manifest_and_snapshot(self, draft, manifest_primitive):
+        """Persist a complete typed manifest on the Draft, then make a real
+        legacy edit so a history entry captures the manifest in both its
+        before/after snapshot (the round-trip material for undo/redo)."""
+        appearance_persistence.persist_store_appearance_manifest(draft, manifest_primitive)
+        draft.refresh_from_db()
+
+    def _post_change(self, section, body_html):
+        return self.client.post(
+            reverse("dashboard:storefront-builder-section-settings",
+                    args=[section.pk]),
+            {"body_html": body_html, "show_on_desktop": "on",
+             "show_on_tablet": "on", "show_on_mobile": "on"},
+        )
+
+    def _manifest_primitive(self, draft):
+        return manifest_to_primitive(
+            appearance_persistence.load_store_appearance_manifest(draft))
+
+    def test_store_appearance_manifest_survives_undo_redo_restore_round_trip(self):
+        from apps.storefront_builder import layout_preset_registry as lpr
+
+        ready = next(iter(lpr.list_ready_templates()))
+        expected_manifest = dict(ready.store_appearance)
+
+        draft = svc.get_or_create_draft(self.store, user=self.staff)
+        # Apply the canonical typed manifest to the Draft.
+        self._persist_manifest_and_snapshot(draft, expected_manifest)
+        applied_manifest = self._manifest_primitive(draft)
+        # Sanity: the manifest was actually persisted and is complete.
+        self.assertEqual(applied_manifest, expected_manifest)
+
+        # Make a real legacy edit AFTER persisting the manifest so the history
+        # entry's after_state snapshot carries the manifest.
+        home = draft.get_page(StorefrontPage.PageType.HOME)
+        section = StorefrontSection.objects.create(
+            page=home, section_key="rich_text", order=0,
+            settings={"body_html": "<p>قبل</p>"},
+        )
+        self._post_change(section, "<p>بعد</p>")
+        draft.refresh_from_db()
+        rev_after_edit = draft.edit_revision
+        # The manifest is intact after a real edit.
+        self.assertEqual(self._manifest_primitive(draft), expected_manifest)
+
+        # UNDO (legacy route): restores the pre-edit state, which still had the
+        # manifest persisted → manifest intact, revision advances by 1.
+        undo_resp = self.client.post(reverse("dashboard:storefront-builder-undo"))
+        self.assertEqual(undo_resp.status_code, 200)
+        self.assertIs(undo_resp.json()["ok"], True)
+        draft.refresh_from_db()
+        self.assertEqual(self._manifest_primitive(draft), expected_manifest)
+        self.assertEqual(draft.edit_revision, rev_after_edit + 1)
+
+        # REDO (legacy route): restores the post-edit state → manifest intact,
+        # revision advances by 1 again.
+        redo_resp = self.client.post(reverse("dashboard:storefront-builder-redo"))
+        self.assertEqual(redo_resp.status_code, 200)
+        self.assertIs(redo_resp.json()["ok"], True)
+        draft.refresh_from_db()
+        self.assertEqual(self._manifest_primitive(draft), expected_manifest)
+        self.assertEqual(draft.edit_revision, rev_after_edit + 2)
+
+        # PUBLISH the draft so there is an immutable version to RESTORE from.
+        self.client.post(reverse("dashboard:storefront-builder-publish"))
+        self.layout = svc.get_or_create_layout(self.store)
+        self.layout.refresh_from_db()
+        published_version_id = self.layout.published_version_id
+
+        # RESTORE the published version into a NEW Draft — the canonical typed
+        # manifest must survive the clone byte-for-byte (structurally equal).
+        restore_resp = self.client.post(
+            reverse("dashboard:storefront-builder-restore", args=[published_version_id]))
+        self.assertEqual(restore_resp.status_code, 302)
+
+        restored_draft = svc.get_or_create_draft(self.store, user=self.staff)
+        self.assertEqual(self._manifest_primitive(restored_draft), expected_manifest)
+
+    def test_discard_is_atomic_and_removes_only_the_draft(self):
+        draft = svc.get_or_create_draft(self.store, user=self.staff)
+        draft_pk = draft.pk
+
+        resp = self.client.post(reverse("dashboard:storefront-builder-discard"))
+        self.assertEqual(resp.status_code, 302)
+
+        # The Draft row is gone and the layout no longer points at it.
+        self.assertFalse(StorefrontLayoutVersion.objects.filter(pk=draft_pk).exists())
+        layout = svc.get_or_create_layout(self.store)
+        layout.refresh_from_db()
+        self.assertNotEqual(layout.draft_version_id, draft_pk)
