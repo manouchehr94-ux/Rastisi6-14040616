@@ -19,6 +19,7 @@ from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
 from apps.stores.resolution import resolve_store_for_service
 
 from . import global_region_registry, section_registry
+from .settings_schema import mark_explicit_variant_override
 from .models import (
     APPEARANCE_CONFIG_DEFAULTS,
     FOOTER_CONFIG_DEFAULTS,
@@ -33,7 +34,13 @@ from .models import (
     StorefrontPage,
     StorefrontSection,
 )
-from .services import container_service, edit_history_service, layout_service, row_service
+from .services import (
+    appearance_authority_service,
+    container_service,
+    edit_history_service,
+    layout_service,
+    row_service,
+)
 from .services.layout_service import _clone_section_scoped_media
 from .services.render_service import (
     build_container_render_items,
@@ -914,6 +921,24 @@ def storefront_section_settings(request, pk):
             _validate_universal_selection_ownership(request, section.section_key, cleaned)
             if definition.supports_capability("background"):
                 _validate_background_asset_ownership(request, cleaned.get("background"))
+            # Phase 1 (Task 6) — stamp the internal explicit-local-variant
+            # marker only on a GENUINE local variant change. This legacy form
+            # always submits the variant control (e.g. hero_style) on every
+            # POST, so presence in the payload is not intent; compare the
+            # cleaned value against the previously stored value and mark only
+            # when it actually changed. This keeps historical unmarked sections
+            # inheriting the Store default until the merchant truly switches.
+            variant_key = getattr(definition, "variant_setting_key", None)
+            if (
+                variant_key
+                and variant_key in cleaned
+                and cleaned.get(variant_key) != (section.settings or {}).get(variant_key)
+            ):
+                cleaned = mark_explicit_variant_override(
+                    settings=cleaned,
+                    variant_setting_key=variant_key,
+                    patch={variant_key: cleaned[variant_key]},
+                )
             section.settings = cleaned
             section.save(update_fields=["settings", "updated_at"])
             messages.success(request, "تنظیمات ذخیره شد")
@@ -2367,8 +2392,13 @@ def storefront_appearance_editor(request):
         except layout_service.AppearanceConfigValidationError as exc:
             messages.error(request, str(exc))
             return redirect("dashboard:storefront-builder-editor")
-        draft.appearance_config = config
-        draft.save(update_fields=["appearance_config", "updated_at"])
+        # Phase 1 (Task 3) — delegate the validated managed Appearance update to
+        # the canonical authority service instead of replacing appearance_config
+        # wholesale. This preserves the reserved store_appearance manifest and
+        # any other opaque/canonical keys that this legacy form never carries.
+        appearance_authority_service.apply_appearance_patch(
+            version=draft, patch=config
+        )
         messages.success(request, "تنظیمات ظاهر ذخیره شد")
         return redirect("dashboard:storefront-builder-editor")
 
@@ -2517,6 +2547,13 @@ def storefront_header_editor(request):
             })
         draft.header_config = config
         draft.save(update_fields=["header_config", "updated_at"])
+        # Phase 1 (Task 3) — after persisting the full validated Header config
+        # (toggles/announcement/content preserved as before), synchronize the
+        # typed Store Appearance manifest header selection with the chosen
+        # variant so the legacy selector mirror and the typed manifest agree.
+        appearance_authority_service.apply_header_variant(
+            version=draft, header_variant=config["header_variant"]
+        )
         messages.success(request, "تنظیمات هدر ذخیره شد")
         return redirect("dashboard:storefront-builder-editor")
 
@@ -2564,6 +2601,15 @@ def storefront_footer_editor(request):
             })
         draft.footer_config = config
         draft.save(update_fields=["footer_config", "updated_at"])
+        # Phase 1 (Task 3) — after persisting the full validated Footer config
+        # (footer options preserved; live FooterSettings ownership untouched),
+        # synchronize the typed Store Appearance manifest footer/bottom_nav
+        # selections with the chosen variants so mirror and manifest agree.
+        appearance_authority_service.apply_footer_variant(
+            version=draft,
+            footer_variant=config["footer_variant"],
+            mobile_nav_variant=config["mobile_nav_variant"],
+        )
         messages.success(request, "تنظیمات فوتر ذخیره شد")
         return redirect("dashboard:storefront-builder-editor")
 

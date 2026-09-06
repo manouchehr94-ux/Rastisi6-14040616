@@ -160,3 +160,37 @@ class ReadyTemplateContractTests(SimpleTestCase):
                 manifest.update(payload)
                 with self.assertRaises(lpr.InvalidLayoutPresetError):
                     lpr.register_layout_preset(self._ready(manifest=manifest))
+
+
+
+class AllReadyTemplatesDeclareCompleteManifestTests(SimpleTestCase):
+    """Phase 1 (Task 5, Step 12) — every latest Ready Template declares a
+    COMPLETE, valid typed manifest covering the canonical family set. This is a
+    declaration-completeness contract only (no DB, no renderer); it does not
+    certify browser output.
+    """
+
+    def test_all_latest_ready_templates_declare_valid_complete_manifest(self):
+        from apps.storefront_builder.storefront_appearance.families import (
+            COMPONENT_FAMILIES,
+        )
+        from apps.storefront_builder.storefront_appearance.validation import (
+            validate_store_appearance_manifest,
+        )
+
+        required_families = set(COMPONENT_FAMILIES)
+        ready_templates = lpr.list_ready_templates()
+        self.assertTrue(ready_templates, "there must be at least one Ready Template")
+
+        for preset in ready_templates:
+            identity = f"{preset.key}/{preset.version}"
+            with self.subTest(preset=identity):
+                self.assertIsNotNone(preset.store_appearance, identity)
+                # Validates as a complete StoreAppearanceManifest (require_complete
+                # defaults to True) — raises InvalidStoreAppearanceContract otherwise.
+                validated = validate_store_appearance_manifest(preset.store_appearance)
+                self.assertEqual(
+                    set(validated.manifest.selections),
+                    required_families,
+                    identity,
+                )
