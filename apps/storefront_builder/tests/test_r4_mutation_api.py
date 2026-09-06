@@ -451,3 +451,252 @@ class StableSettingsErrorCodeTests(R4MutationApiTestCase):
         self.draft.refresh_from_db()
         self.assertEqual(self.draft.edit_revision, starting_revision)
         self.assertEqual(self._history_count(), before_count)
+
+
+
+# ------------------------------------------------------------------------
+# Phase 3 — Brand carousel V01 (marker preservation) + V02 (View-all
+# capability truth) at the R4 mutation/inspector boundary.
+# ------------------------------------------------------------------------
+
+
+class BrandCarouselV01V02MutationTests(R4MutationApiTestCase):
+    def setUp(self):
+        super().setUp()
+        # A valid own-store destination that always resolves to a non-None
+        # URL with no DB row required ("search" -> catalog:product-list).
+        self.valid_destination = {"destination_type": "search"}
+        self.none_destination = {"destination_type": "none"}
+        # An invalid destination: a brand id that does not exist for this
+        # store resolves to url=None.
+        self.invalid_destination = {"destination_type": "brand", "destination_id": 999999}
+
+    def _brand_section(self, *, display_mode="grid", show_view_all=False, destination=None):
+        settings = {
+            "title": "", "display_mode": display_mode,
+            "show_view_all": show_view_all, "brand_ids": [],
+        }
+        if destination is not None:
+            settings["destination"] = destination
+        return StorefrontSection.objects.create(
+            version=self.draft, section_key="brand_carousel", order=1, settings=settings,
+        )
+
+    def _update(self, section, patch):
+        return self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": section.pk,
+                "patch": patch,
+            },
+        })
+
+    def _assert_unchanged(self, section, before_settings, before_revision, before_history):
+        section.refresh_from_db()
+        self.assertEqual(section.settings, before_settings)
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.edit_revision, before_revision)
+        self.assertEqual(self._history_count(), before_history)
+
+    # -- V01 marker preservation through R4 -------------------------------
+
+    def test_v01_variant_marker_survives_r4_title_patch(self):
+        section = self._brand_section(display_mode="grid")
+        # a genuine variant switch stamps the trusted marker.
+        r1 = self._update(section, {"display_mode": "carousel"})
+        self.assertEqual(r1.status_code, 200)
+        section.refresh_from_db()
+        self.draft.refresh_from_db()  # pick up the advanced revision
+        self.assertTrue(section.settings["appearance_overrides"]["variant_explicit"])
+        # a later non-variant title patch preserves it.
+        r2 = self._update(section, {"title": "بعد از تغییر"})
+        self.assertEqual(r2.status_code, 200)
+        section.refresh_from_db()
+        self.assertTrue(section.settings["appearance_overrides"]["variant_explicit"])
+        self.assertEqual(section.settings["display_mode"], "carousel")
+
+    def test_v01_noop_title_patch_still_records_exactly_one_history_entry(self):
+        # A no-op (re-posting the same title) is still a valid mutation; the
+        # key invariant is that it does NOT invent an explicit marker on a
+        # historically-unmarked row.
+        section = self._brand_section(display_mode="grid")
+        before_history = self._history_count()
+        r = self._update(section, {"title": ""})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self._history_count(), before_history + 1)
+        section.refresh_from_db()
+        self.assertNotIn("appearance_overrides", section.settings)
+
+    def test_v01_client_cannot_inject_marker_via_r4_patch(self):
+        section = self._brand_section(display_mode="grid")
+        before = dict(section.settings)
+        before_revision = self.draft.edit_revision
+        before_history = self._history_count()
+        # appearance_overrides is not schema-declared for brand_carousel; a
+        # raw patch trying to smuggle the marker is rejected as invalid.
+        r = self._update(section, {"appearance_overrides": {"variant_explicit": True}})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["code"], "invalid_settings")
+        self._assert_unchanged(section, before, before_revision, before_history)
+
+    # -- V02 (a) grid/carousel + valid destination: enable succeeds --------
+
+    def test_v02a_grid_valid_destination_enable_succeeds(self):
+        section = self._brand_section(display_mode="grid", destination=self.valid_destination)
+        r = self._update(section, {"show_view_all": True})
+        self.assertEqual(r.status_code, 200)
+        section.refresh_from_db()
+        self.assertTrue(section.settings["show_view_all"])
+
+    def test_v02a_carousel_valid_destination_enable_succeeds(self):
+        section = self._brand_section(display_mode="carousel", destination=self.valid_destination)
+        r = self._update(section, {"show_view_all": True})
+        self.assertEqual(r.status_code, 200)
+        section.refresh_from_db()
+        self.assertTrue(section.settings["show_view_all"])
+
+    # -- V02 (b) grid/carousel + absent/none/invalid destination: reject ---
+
+    def test_v02b_grid_absent_destination_enable_rejected_atomic(self):
+        section = self._brand_section(display_mode="grid", destination=None)
+        before = dict(section.settings)
+        before_revision = self.draft.edit_revision
+        before_history = self._history_count()
+        r = self._update(section, {"show_view_all": True})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["code"], "view_all_unsupported")
+        self._assert_unchanged(section, before, before_revision, before_history)
+
+    def test_v02b_grid_none_destination_enable_rejected_atomic(self):
+        section = self._brand_section(display_mode="grid", destination=self.none_destination)
+        before = dict(section.settings)
+        before_revision = self.draft.edit_revision
+        before_history = self._history_count()
+        r = self._update(section, {"show_view_all": True})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["code"], "view_all_unsupported")
+        self._assert_unchanged(section, before, before_revision, before_history)
+
+    def test_v02b_grid_invalid_destination_enable_rejected_atomic(self):
+        section = self._brand_section(display_mode="grid", destination=self.invalid_destination)
+        before = dict(section.settings)
+        before_revision = self.draft.edit_revision
+        before_history = self._history_count()
+        r = self._update(section, {"show_view_all": True})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["code"], "view_all_unsupported")
+        self._assert_unchanged(section, before, before_revision, before_history)
+
+    def test_v02b_carousel_invalid_destination_enable_rejected_atomic(self):
+        section = self._brand_section(display_mode="carousel", destination=self.invalid_destination)
+        before = dict(section.settings)
+        before_revision = self.draft.edit_revision
+        before_history = self._history_count()
+        r = self._update(section, {"show_view_all": True})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["code"], "view_all_unsupported")
+        self._assert_unchanged(section, before, before_revision, before_history)
+
+    # -- V02 (c) beauty_tabs + valid destination: explicit enable rejected -
+
+    def test_v02c_beauty_tabs_valid_destination_enable_rejected_atomic(self):
+        section = self._brand_section(display_mode="beauty_tabs", destination=self.valid_destination)
+        before = dict(section.settings)
+        before_revision = self.draft.edit_revision
+        before_history = self._history_count()
+        r = self._update(section, {"show_view_all": True})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["code"], "view_all_unsupported")
+        self._assert_unchanged(section, before, before_revision, before_history)
+
+    # -- V02 (d) supporting -> beauty_tabs variant-only switch: preserve ---
+
+    def test_v02d_variant_only_switch_to_beauty_tabs_preserves_dormant_and_not_rejected(self):
+        # Stored show_view_all=True on a supporting variant with a valid
+        # destination. A variant-only switch (patch does NOT set
+        # show_view_all) to beauty_tabs must NOT be rejected and must PRESERVE
+        # the dormant stored show_view_all + destination.
+        section = self._brand_section(
+            display_mode="carousel", show_view_all=True, destination=self.valid_destination,
+        )
+        r = self._update(section, {"display_mode": "beauty_tabs"})
+        self.assertEqual(r.status_code, 200)
+        section.refresh_from_db()
+        self.assertEqual(section.settings["display_mode"], "beauty_tabs")
+        self.assertTrue(section.settings["show_view_all"])  # dormant, preserved
+        self.assertEqual(section.settings["destination"]["destination_type"], "search")
+
+    # -- V02 (e) beauty_tabs -> supporting variant: effective restored ----
+
+    def test_v02e_switch_back_to_supporting_restores_effective_anchor(self):
+        section = self._brand_section(
+            display_mode="beauty_tabs", show_view_all=True, destination=self.valid_destination,
+        )
+        # variant-only switch back to grid — not an explicit enable, so not
+        # rejected; the preserved show_view_all now becomes effective again.
+        r = self._update(section, {"display_mode": "grid"})
+        self.assertEqual(r.status_code, 200)
+        section.refresh_from_db()
+        self.assertEqual(section.settings["display_mode"], "grid")
+        self.assertTrue(section.settings["show_view_all"])
+        # and the rendered context now emits a resolved anchor.
+        from apps.storefront_builder.services.render_service import _brand_carousel_context
+        ctx = _brand_carousel_context(self.store, section)
+        self.assertIsNotNone(ctx["view_all_url"])
+
+    # -- V02 (f) spoofed capability / malformed / foreign never grants -----
+
+    def test_v02f_spoofed_capability_payload_is_rejected_as_unknown_key(self):
+        section = self._brand_section(display_mode="beauty_tabs", destination=self.valid_destination)
+        before = dict(section.settings)
+        before_revision = self.draft.edit_revision
+        before_history = self._history_count()
+        # A client cannot smuggle a fake capability/resolved-url flag: only
+        # schema-declared keys are accepted.
+        r = self._update(section, {"show_view_all": True, "view_all_supported": True})
+        self.assertEqual(r.status_code, 400)
+        # unknown key is caught in schema cleaning before the enable preflight.
+        self.assertEqual(r.json()["code"], "invalid_settings")
+        self._assert_unchanged(section, before, before_revision, before_history)
+
+    def test_v02f_foreign_brand_destination_never_grants_capability(self):
+        # A brand owned by ANOTHER store must resolve to url=None, so an
+        # explicit enable is rejected.
+        from apps.catalog.models import Brand
+        other_store = Store.objects.create(
+            name="فروشگاه بیگانه", slug="v02-foreign", admin_subdomain="v02-foreign",
+            status=Store.Status.ACTIVE,
+        )
+        foreign_brand = Brand.objects.create(
+            store=other_store, name="برند بیگانه", slug="foreign-brand", is_active=True,
+        )
+        section = self._brand_section(
+            display_mode="grid",
+            destination={"destination_type": "brand", "destination_id": foreign_brand.pk},
+        )
+        before = dict(section.settings)
+        before_revision = self.draft.edit_revision
+        before_history = self._history_count()
+        r = self._update(section, {"show_view_all": True})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["code"], "view_all_unsupported")
+        self._assert_unchanged(section, before, before_revision, before_history)
+
+    def test_v02f_malformed_external_url_never_grants_capability(self):
+        # An EXTERNAL destination with an empty/blank URL resolves to None.
+        section = self._brand_section(
+            display_mode="grid",
+            destination={"destination_type": "external", "destination_external_url": "   "},
+        )
+        before = dict(section.settings)
+        before_revision = self.draft.edit_revision
+        before_history = self._history_count()
+        r = self._update(section, {"show_view_all": True})
+        self.assertEqual(r.status_code, 400)
+        # A blank EXTERNAL url fails closed: it either fails destination shape
+        # validation (invalid_settings) or the enable preflight
+        # (view_all_unsupported). Either way capability is NEVER granted and
+        # the mutation is atomic — the specific code is not the invariant.
+        self.assertIn(r.json()["code"], {"invalid_settings", "view_all_unsupported"})
+        self._assert_unchanged(section, before, before_revision, before_history)

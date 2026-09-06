@@ -1,5 +1,6 @@
 from django.test import SimpleTestCase
 
+from apps.storefront_builder import resource_source as resource_source_module
 from apps.storefront_builder import section_registry
 from apps.storefront_builder.section_registry import SectionDefinition, get_definition
 from apps.storefront_builder.settings_schema import (
@@ -522,3 +523,66 @@ class Phase3BrandPreservationTests(SimpleTestCase):
         renamed = clean_section_schema_patch(definition, {'title': 'Phase3'}, selected)
         self.assertTrue(renamed.get('appearance_overrides', {}).get('variant_explicit'))
         self.assertEqual(renamed['display_mode'], 'carousel')
+
+    def test_variant_intent_survives_variant_then_title_then_source_sequence(self):
+        # V01 regression: the marker must survive a WHOLE chain of unrelated
+        # non-variant edits, not just a single title patch.
+        definition = get_definition('brand_carousel')
+        selected = clean_section_schema_patch(
+            definition, {'display_mode': 'carousel'}, definition.default_settings())
+        renamed = clean_section_schema_patch(definition, {'title': 'Phase3'}, selected)
+        # a subsequent source edit (a genuine non-variant patch) still keeps it.
+        sourced = clean_section_schema_patch(
+            definition,
+            {'source': resource_source_module.serialize_resource_source(
+                resource_source_module.ResourceSource(kind='brand', mode='auto', auto_rule='all_active'))},
+            renamed,
+        )
+        self.assertTrue(sourced.get('appearance_overrides', {}).get('variant_explicit'))
+        self.assertEqual(sourced['display_mode'], 'carousel')
+
+    def test_historically_unmarked_row_stays_unmarked_after_title_patch(self):
+        # V01: a section that never had an explicit marker must NOT gain one
+        # from an ordinary non-variant edit (no marker invented where none
+        # existed).
+        definition = get_definition('brand_carousel')
+        current = definition.validate_settings(definition.default_settings())
+        self.assertNotIn('appearance_overrides', current)
+        renamed = clean_section_schema_patch(definition, {'title': 'x'}, current)
+        self.assertIsNone(renamed.get('appearance_overrides', {}).get('variant_explicit'))
+
+    def test_client_cannot_inject_variant_explicit_via_raw_payload(self):
+        # V01: appearance_overrides is NOT schema-declared for brand_carousel,
+        # so a raw patch trying to smuggle the trusted marker is rejected as
+        # an unknown key — the client can never manufacture explicit intent.
+        definition = get_definition('brand_carousel')
+        current = definition.validate_settings(definition.default_settings())
+        with self.assertRaises(SettingsSchemaError):
+            clean_section_schema_patch(
+                definition,
+                {'appearance_overrides': {'variant_explicit': True}},
+                current,
+            )
+
+    def test_direct_validate_settings_preserves_trusted_marker(self):
+        # V01: the validator-level fix (used by BOTH the R4 bridge and the
+        # legacy validate_settings path) carries a trusted, already-present
+        # marker through unchanged.
+        definition = get_definition('brand_carousel')
+        seeded = {
+            'title': '', 'display_mode': 'carousel', 'show_view_all': False,
+            'brand_ids': [], 'appearance_overrides': {'variant_explicit': True},
+        }
+        validated = definition.validate_settings(seeded)
+        self.assertTrue(validated.get('appearance_overrides', {}).get('variant_explicit'))
+
+    def test_direct_validate_settings_never_forges_marker_from_non_bool(self):
+        # V01: only a genuine boolean True is trusted — a truthy-but-non-True
+        # value is not carried, so no marker is forged from junk input.
+        definition = get_definition('brand_carousel')
+        seeded = {
+            'title': '', 'display_mode': 'carousel', 'show_view_all': False,
+            'brand_ids': [], 'appearance_overrides': {'variant_explicit': 'yes'},
+        }
+        validated = definition.validate_settings(seeded)
+        self.assertIsNone(validated.get('appearance_overrides', {}).get('variant_explicit'))

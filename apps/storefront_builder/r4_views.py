@@ -13,7 +13,7 @@ from apps.dashboard.decorators import permission_required, staff_required
 from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
 from apps.stores.resolution import resolve_store_for_service
 
-from . import appearance_registry, global_region_registry, resource_source, section_registry
+from . import appearance_registry, global_region_registry, resource_source, section_registry, variant_contract
 from .models import StorefrontLayoutVersion, StorefrontPage, StorefrontSection
 from .services import (
     container_service,
@@ -300,6 +300,26 @@ def storefront_r4_mutation(request):
     return JsonResponse({"ok": True, "new_revision": new_revision, "mutation_type": mutation_type})
 
 
+#: Phase 3 (V02) — mirror of r4_mutation_service._BRAND_VIEW_ALL_SUPPORTING_VARIANTS
+#: for the read-only inspector filtering path (grid/carousel emit the anchor,
+#: beauty_tabs never does).
+_BRAND_VIEW_ALL_SUPPORTING_VARIANTS = frozenset({"grid", "carousel"})
+
+
+def _brand_view_all_control_offered(store, definition, current_settings: dict) -> bool:
+    """True IFF the brand_carousel "مشاهده همه" control should be shown for
+    the CURRENT persisted state: a supporting active variant AND a trusted
+    stored destination that resolves to a non-None URL for this store. Pure
+    read — never mutates ``current_settings``."""
+    active = variant_contract.resolve_active_variant(definition, current_settings)
+    if active is None or active.key not in _BRAND_VIEW_ALL_SUPPORTING_VARIANTS:
+        return False
+    destination = (current_settings or {}).get("destination") or {}
+    from apps.content.services import resolve_destination_setting
+
+    return resolve_destination_setting(store, destination).get("url") is not None
+
+
 @require_GET
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
@@ -341,6 +361,21 @@ def storefront_r4_section_inspector(request, pk):
     basic_fields = tuple(field for field in schema.fields if field.group == "basic")
     advanced_fields = tuple(field for field in schema.fields if field.group == "advanced")
     current_settings = section.settings or {}
+
+    # Phase 3 (V02) — the brand_carousel "مشاهده همه" (``show_view_all``)
+    # control is only offered when the active variant/destination could
+    # actually render an actionable anchor: a supporting variant (grid/
+    # carousel, never beauty_tabs) AND a trusted destination that resolves to
+    # a non-None URL for this store. This is READ-ONLY field filtering — a
+    # dormant stored ``show_view_all``/``destination`` is left untouched in
+    # settings; we only hide the control so the merchant is not shown a toggle
+    # that cannot take effect. The DB-backed resolution stays at this
+    # store-scoped boundary, never inside the schema.
+    if section.section_key == "brand_carousel" and not _brand_view_all_control_offered(
+        store, definition, current_settings
+    ):
+        basic_fields = tuple(f for f in basic_fields if f.key != "show_view_all")
+        advanced_fields = tuple(f for f in advanced_fields if f.key != "show_view_all")
     field_values = {
         field.key: current_settings.get(field.key, field.default)
         for field in schema.fields

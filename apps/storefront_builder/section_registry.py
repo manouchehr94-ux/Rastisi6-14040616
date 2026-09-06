@@ -21,7 +21,12 @@ import dataclasses
 from typing import Callable
 
 from . import resource_source as resource_source_module
-from .settings_schema import SettingsField, SettingsSchema, validate_appearance_overrides
+from .settings_schema import (
+    VARIANT_EXPLICIT_OVERRIDE_KEY,
+    SettingsField,
+    SettingsSchema,
+    validate_appearance_overrides,
+)
 from .variant_contract import VariantDefinition, validate_variant_selection, validate_variants
 
 #: شش نوعِ صفحه — دقیقاً همان رشته‌های ``StorefrontPage.PageType.values``
@@ -1196,6 +1201,13 @@ def _with_spacing(section_key: str, validate_fn, default_fn):
 #: pattern as ``DESTINATION_AWARE_SECTION_KEYS``/``MOTION_AWARE_SECTION_KEYS``.
 APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS = frozenset({
     "hero_banner",
+    # Phase 3 (V01) — brand_carousel joins the allowlist so its validator
+    # stops silently dropping the ``appearance_overrides`` block. The block
+    # it needs to carry is the internal explicit-local-variant marker
+    # (``variant_explicit``), NOT the client-writable typography contract —
+    # see ``_with_appearance_overrides`` for how the trusted marker is
+    # preserved without ever being accepted from raw client payload.
+    "brand_carousel",
 })
 
 
@@ -1224,10 +1236,35 @@ def _with_appearance_overrides(section_key: str, validate_fn, default_fn):
         appearance_overrides_raw = raw.get("appearance_overrides")
         base_raw = {k: v for k, v in raw.items() if k != "appearance_overrides"}
         cleaned = validate_fn(base_raw)
+        # Phase 3 (V01) — carry through an already-present, TRUSTED
+        # explicit-local-variant marker. ``variant_explicit`` is NOT part of
+        # the client-writable ``appearance_overrides`` typography contract
+        # (``validate_appearance_overrides`` still rejects it as unknown), so
+        # it is extracted here BEFORE that validator runs and re-attached only
+        # when the INPUT settings already carried a ``True`` boolean for it.
+        # This preserves the marker across an ordinary non-variant edit (a
+        # merged dict already holding the trusted persisted marker) on BOTH
+        # the R4 schema-patch bridge and the legacy validate_settings path,
+        # while never letting a client manufacture the marker: a non-boolean
+        # or ``False``/absent value is simply not carried, and a historically
+        # unmarked section stays unmarked.
+        preserved_marker = False
+        if isinstance(appearance_overrides_raw, dict):
+            existing = appearance_overrides_raw.get(VARIANT_EXPLICIT_OVERRIDE_KEY)
+            preserved_marker = existing is True
         if appearance_overrides_raw is not None:
-            cleaned_overrides = validate_appearance_overrides(appearance_overrides_raw)
+            cleaned_overrides = validate_appearance_overrides(
+                {k: v for k, v in appearance_overrides_raw.items()
+                 if k != VARIANT_EXPLICIT_OVERRIDE_KEY}
+                if isinstance(appearance_overrides_raw, dict)
+                else appearance_overrides_raw
+            )
             if cleaned_overrides:
                 cleaned["appearance_overrides"] = cleaned_overrides
+        if preserved_marker:
+            overrides = dict(cleaned.get("appearance_overrides") or {})
+            overrides[VARIANT_EXPLICIT_OVERRIDE_KEY] = True
+            cleaned["appearance_overrides"] = overrides
         return cleaned
 
     # default_fn is intentionally NOT wrapped: the default Hero settings

@@ -71,3 +71,36 @@ Baseline gate: PASS. Cleared to begin Task 1.
 - worktree: clean (verified)
 - brief: Brand RED characterization + existing QA harness setup. Test-only. Allowed files (tests/harness only): B/tests/test_r4_settings_schema.py, B/tests/test_render_service.py, B/tests/test_g22_preview_media_render_consistency.py, B/tests/test_qa_harness_contract.py, B/management/commands/qa_storefront_builder_r4.py, tools/storefront_builder_r4_qa/run.mjs. NO production files.
 - Expected end: characterization GREEN, only V01 desired RED remains (test-only RED may be committed in this task).
+
+
+### Task 1: COMPLETE
+- implementer: fresh general-task-execution subagent (test/harness-only)
+- RED: V01 `test_variant_intent_survives_title_patch` fails at assertTrue line 523 `AssertionError: None is not true` (marker dropped after title-only patch). Intended, correct reason. This is the single planned RED crossing the task boundary; MUST close in Task 2.
+- GREEN: characterization tests (brand order/foreign+inactive omission across 3 modes, sibling isolation, invalid-mode fallback, real 2nd-store tenant fixture) + wrapper/media consistency all GREEN (not forced).
+- tests (controller-run): focused suite Ran 148; FAILED(failures=1 [V01], skipped=1 [pre-existing QuickLinks]). node --check run.mjs OK. git diff --check clean.
+- browser: harness prepared (--phase3 arg + 3 viewports + /usr/local/bin/chrome fallback). No cert claimed in Task1.
+- review: independent semantic_reviewer → APPROVED. SPEC COMPLIANCE PASS, CODE/TEST QUALITY PASS. 0 CRITICAL, 0 IMPORTANT, 0 MINOR.
+- fix rounds: 0
+- commit: 597872c2edd2bd19c3d59b16812300aa64dd7a15  "test: characterize phase3 brand contracts and browser prerequisites"
+- minor deferrals: none
+- rulings: none new (env rulings already recorded above)
+
+
+### Task 2: START
+- BASE SHA: 597872c2edd2bd19c3d59b16812300aa64dd7a15
+- worktree: clean
+- brief: Brand canonical preservation (V01 close) + View-all capability truth (V02). Production task. Preserve trusted variant_explicit marker across brand_carousel non-variant edits; never from client payload. Declare Brand variant-specific supported settings; grid/carousel support show_view_all only when trusted current destination validates + resolves non-none; beauty_tabs never. Filter inspector; reject unsupported enable atomically (no settings/revision/history change); preserve dormant show_view_all/destination across switches.
+
+
+### Task 2: COMPLETE
+- implementer: fresh general-task-execution subagent (production, TDD RED→GREEN)
+- RED→GREEN: V01 Task-1 test FAIL→ok (marker survives title patch). V02 (b)(c)(d) RED-first then GREEN; (a)(e)(f) verified. Every rejected mutation asserts settings+edit_revision+history unchanged.
+- tests (controller-run): Phase3BrandPreservationTests Ran 6 OK; test_r4_mutation_api+test_render_service Ran 118 OK(skip=1); test_r4_settings_schema+test_r4_inspector+test_phase1_appearance_authority+test_shared_capabilities Ran 157 OK; test_views Ran 215 FAILED(1 fail+1 error = only known baseline #2/#3). No new failures.
+- V01: CLOSED. V02: enforced (capability = supporting variant AND trusted resolved destination; atomic rejection; dormant preservation; read-only inspector filtering).
+- browser: deferred to Task 3/7 per plan.
+- review: independent semantic_reviewer → SPEC COMPLIANCE PASS, CODE/TEST QUALITY PASS. 0 CRITICAL, 0 IMPORTANT. 2 MINOR (cosmetic).
+  - MINOR-1 (DEFERRED): `_BRAND_VIEW_ALL_SUPPORTING_VARIANTS` constant duplicated in r4_mutation_service.py and r4_views.py (documented mirrors). REASON: both explicitly commented as mirrors, correct today; hoisting is a non-scoped refactor. RISK IF WRONG: future drift between mutation and inspector allowlists — low; covered by V02 inspector+mutation tests that would catch divergence. FUTURE TARGET: optional Task 6 shared-hardening if both pilots motivate it.
+  - MINOR-2 (DEFERRED): `_brand_section` test helper duplicated across two test classes. REASON: cosmetic. RISK: none.
+- Reviewer sandbox note: reviewer reported a bs4-missing limitation in ITS sandbox; controller-authoritative run (bs4 installed per requirements.txt) confirms test_views has only the 2 known fullscreen failures — reviewer limitation does not apply to the authoritative env.
+- fix rounds: 0
+- commit: 2a1e45bb1b78b71b2495b0b01c8ce771a1787166  "fix: preserve brand variant intent and supported controls"

@@ -340,11 +340,22 @@ window.RastiSiR4 = {
       var value = fieldType === 'boolean' ? control.checked : control.value;
       var patch = {};
       patch[key] = value;
-      R4.enqueueMutation({
+      var sectionId = R4.selected;
+      var isVariantChange = key === 'display_mode';
+      var promise = R4.enqueueMutation({
         type: 'section.update_settings',
-        section_id: R4.selected,
+        section_id: sectionId,
         patch: patch,
       });
+      // Phase 3 (V02) — re-open the Inspector after a successful variant
+      // change so server-authoritative control visibility (e.g. brand_carousel
+      // "مشاهده همه", offered only for grid/carousel) reflects the new state;
+      // dormant stored values stay untouched (read-side refresh only).
+      if (isVariantChange) {
+        promise.then(function (result) {
+          if (result && result.ok) R4.openSection(sectionId);
+        });
+      }
     });
 
     // appearance_override: one compound patch per change, built from the

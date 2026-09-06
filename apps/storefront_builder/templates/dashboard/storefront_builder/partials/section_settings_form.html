@@ -430,12 +430,22 @@
         <option value="beauty_tabs" {% if section.settings.display_mode == "beauty_tabs" %}selected{% endif %}>ردیف برندهای فروشگاهی</option>
       </select>
     </div>
+    {# Phase 3 (V02) — the "مشاهده همه" toggle is only offered for variants #}
+    {# that actually render the anchor (grid/carousel), never beauty_tabs. #}
+    {# When hidden, a hidden marker input tells the server the checkbox was #}
+    {# not part of this form so a DORMANT stored value is preserved rather  #}
+    {# than silently reset to False (destination authoring stays intact).   #}
+    {% if section.settings.display_mode == "beauty_tabs" %}
+    <input type="hidden" name="show_view_all_field_present" value="0">
+    {% else %}
+    <input type="hidden" name="show_view_all_field_present" value="1">
     <div class="form-group">
       <label style="display:flex;align-items:center;gap:6px;font-weight:normal">
         <input type="checkbox" name="show_view_all" {% if section.settings.show_view_all %}checked{% endif %}>
         نمایش لینک «مشاهده همه» (نیازمندِ انتخابِ مقصد در پایین)
       </label>
     </div>
+    {% endif %}
     {% include "dashboard/storefront_builder/partials/universal_selection_picker.html" %}
 
     {% include "dashboard/storefront_builder/partials/section_destination_fields.html" %}

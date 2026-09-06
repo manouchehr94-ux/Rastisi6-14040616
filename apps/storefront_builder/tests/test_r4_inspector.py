@@ -507,3 +507,54 @@ class ResourceSourceWidgetTests(R4MutationApiTestCase):
         self.assertNotIn("<input", source_chunk)
         self.assertNotIn("<select", source_chunk)
         self.assertNotIn("<textarea", source_chunk)
+
+
+
+class BrandCarouselV02InspectorFilteringTests(R4MutationApiTestCase):
+    """Phase 3 (V02) — the "مشاهده همه" (show_view_all) control is only
+    offered when the active variant/destination can render an actionable
+    anchor. Read-only filtering; dormant stored values are never mutated."""
+
+    def _brand_section(self, *, display_mode="grid", show_view_all=False, destination=None):
+        settings = {
+            "title": "", "display_mode": display_mode,
+            "show_view_all": show_view_all, "brand_ids": [],
+        }
+        if destination is not None:
+            settings["destination"] = destination
+        return StorefrontSection.objects.create(
+            version=self.draft, section_key="brand_carousel", order=1, settings=settings,
+        )
+
+    def test_grid_with_valid_destination_offers_control(self):
+        section = self._brand_section(
+            display_mode="grid", destination={"destination_type": "search"},
+        )
+        response = self.client.get(_inspector_url(section.pk))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-r4-field-key="show_view_all"')
+
+    def test_beauty_tabs_hides_control(self):
+        section = self._brand_section(
+            display_mode="beauty_tabs", destination={"destination_type": "search"},
+        )
+        response = self.client.get(_inspector_url(section.pk))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'data-r4-field-key="show_view_all"')
+
+    def test_grid_without_resolving_destination_hides_control(self):
+        section = self._brand_section(display_mode="grid", destination={"destination_type": "none"})
+        response = self.client.get(_inspector_url(section.pk))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'data-r4-field-key="show_view_all"')
+
+    def test_hiding_control_does_not_mutate_stored_settings(self):
+        section = self._brand_section(
+            display_mode="beauty_tabs", show_view_all=True,
+            destination={"destination_type": "search"},
+        )
+        before = dict(section.settings)
+        self.client.get(_inspector_url(section.pk))
+        section.refresh_from_db()
+        self.assertEqual(section.settings, before)
+        self.assertTrue(section.settings["show_view_all"])  # dormant, intact

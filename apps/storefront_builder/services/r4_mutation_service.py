@@ -182,8 +182,57 @@ def _apply_section_update_settings(*, store, draft: StorefrontLayoutVersion, mut
         if projected_source is not None:
             _validate_resource_source_ownership(store=store, source=projected_source)
 
+    # Phase 3 (V02) — Brand "View-all" capability truth. A merchant may only
+    # turn the "مشاهده همه" anchor ON when the RESULTING rendered state can
+    # actually present an actionable link: the resulting variant must support
+    # it (grid/carousel — beauty_tabs never does) AND the trusted current+
+    # resulting destination must resolve to a non-None URL for THIS store.
+    # Rejected atomically here — BEFORE section.settings is assigned/saved —
+    # so no settings/revision/history change survives, exactly like the
+    # source-ownership preflight above. The DB-backed destination resolution
+    # deliberately lives at this store-scoped boundary, never in the pure,
+    # DB-free schema cleaner. A variant-only switch (which does NOT itself
+    # set show_view_all=True in the raw patch) is never rejected — a dormant
+    # stored value is preserved untouched, only hidden at render/inspect time.
+    if section.section_key == "brand_carousel":
+        _validate_brand_view_all_enable(store=store, patch=patch, cleaned=cleaned)
+
     section.settings = cleaned
     section.save(update_fields=["settings"])
+
+
+#: Phase 3 (V02) — the brand_carousel variants (``display_mode``) whose
+#: rendered output actually emits the "مشاهده همه" anchor. ``beauty_tabs`` is
+#: deliberately excluded: its presentation has no View-all affordance (see
+#: ``render_service._brand_carousel_context`` and the brand_carousel
+#: template). An explicit allowlist, not a denylist.
+_BRAND_VIEW_ALL_SUPPORTING_VARIANTS = frozenset({"grid", "carousel"})
+
+
+def _brand_view_all_is_actionable(*, store, cleaned: dict) -> bool:
+    """True IFF the RESULTING brand_carousel state could render an actionable
+    View-all anchor: a supporting variant AND a trusted destination that
+    resolves to a non-None URL for this store. Pure read — never mutates
+    ``cleaned`` and never touches revision/history."""
+    variant = cleaned.get("display_mode")
+    if variant not in _BRAND_VIEW_ALL_SUPPORTING_VARIANTS:
+        return False
+    destination = cleaned.get("destination") or {}
+    from apps.content.services import resolve_destination_setting
+
+    return resolve_destination_setting(store, destination).get("url") is not None
+
+
+def _validate_brand_view_all_enable(*, store, patch: dict, cleaned: dict) -> None:
+    """Reject an EXPLICIT View-all enable that the resulting variant/
+    destination cannot support. "Explicit enable" == the raw ``patch`` itself
+    sets ``show_view_all`` truthy; a variant-only switch that merely carries a
+    previously-stored ``show_view_all=True`` forward is NOT an explicit enable
+    and is never rejected here (its dormant value is preserved, just hidden)."""
+    if not (isinstance(patch, dict) and bool(patch.get("show_view_all"))):
+        return
+    if not _brand_view_all_is_actionable(store=store, cleaned=cleaned):
+        raise R4MutationError("view_all_unsupported")
 
 
 def _apply_section_add(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:

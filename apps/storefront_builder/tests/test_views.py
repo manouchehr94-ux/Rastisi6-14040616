@@ -841,6 +841,51 @@ class CategoryGridBrandCarouselSettingsFormTests(StorefrontBuilderViewsTestCase)
         self.assertTrue(section.settings["show_view_all"])
         self.assertEqual(section.settings["destination"]["destination_type"], "none")
 
+    def test_legacy_title_edit_preserves_trusted_variant_explicit_marker(self):
+        # V01: a trusted explicit-local-variant marker (e.g. stamped by a
+        # prior R4 variant switch to carousel) must SURVIVE a later legacy
+        # title-only form save — the legacy path validate_settings goes
+        # through the same appearance-override-aware validator fix.
+        section = StorefrontSection.objects.create(
+            version=self.draft, section_key="brand_carousel", order=1,
+            settings={
+                "title": "قبلی", "display_mode": "carousel", "show_view_all": False,
+                "brand_ids": [], "appearance_overrides": {"variant_explicit": True},
+            },
+        )
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-section-settings", args=[section.pk]),
+            {"title": "جدید", "display_mode": "carousel", "brand_ids": [],
+             "show_view_all_field_present": "1", "destination_type": "none"},
+        )
+        self.assertEqual(resp.status_code, 302)
+        section.refresh_from_db()
+        self.assertTrue(section.settings.get("appearance_overrides", {}).get("variant_explicit"))
+        self.assertEqual(section.settings["display_mode"], "carousel")
+        self.assertEqual(section.settings["title"], "جدید")
+
+    def test_legacy_variant_only_switch_to_beauty_tabs_preserves_dormant_show_view_all(self):
+        # V02: switching a supporting variant to beauty_tabs via the legacy
+        # form must NOT wipe a dormant stored show_view_all — the checkbox is
+        # hidden for beauty_tabs (marker field_present=0), and the stored
+        # value is preserved rather than reset to False.
+        section = StorefrontSection.objects.create(
+            version=self.draft, section_key="brand_carousel", order=1,
+            settings={"title": "", "display_mode": "carousel", "show_view_all": True,
+                      "brand_ids": []},
+        )
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-section-settings", args=[section.pk]),
+            # the hidden control is not submitted; the template emits
+            # show_view_all_field_present=0 for beauty_tabs.
+            {"title": "", "display_mode": "beauty_tabs", "brand_ids": [],
+             "show_view_all_field_present": "0", "destination_type": "none"},
+        )
+        self.assertEqual(resp.status_code, 302)
+        section.refresh_from_db()
+        self.assertEqual(section.settings["display_mode"], "beauty_tabs")
+        self.assertTrue(section.settings["show_view_all"])  # dormant, preserved
+
 
 class ResponsiveSettingsFormTests(StorefrontBuilderViewsTestCase):
     def setUp(self):

@@ -847,10 +847,22 @@ def storefront_section_settings(request, pk):
                 "item_limit": request.POST.get("item_limit", 12),
             }
         elif section.section_key == "brand_carousel":
+            # Phase 3 (V02) — the "مشاهده همه" checkbox is only rendered for
+            # variants that can show the anchor (grid/carousel). When the form
+            # hides it (beauty_tabs), the browser submits nothing for an
+            # unchecked box, which would silently reset the flag to False and
+            # WIPE a dormant stored value. The template emits an explicit
+            # ``show_view_all_field_present`` marker so we can tell "merchant
+            # unchecked it" (present + off) apart from "the control was hidden"
+            # (absent) and preserve the stored value in the latter case.
+            if request.POST.get("show_view_all_field_present") == "0":
+                show_view_all = bool((section.settings or {}).get("show_view_all", False))
+            else:
+                show_view_all = request.POST.get("show_view_all") == "on"
             raw = {
                 "title": request.POST.get("title", ""),
                 "display_mode": request.POST.get("display_mode", ""),
-                "show_view_all": request.POST.get("show_view_all") == "on",
+                "show_view_all": show_view_all,
                 "brand_ids": request.POST.getlist("brand_ids"),
             }
         elif section.section_key == "collection_tiles":
@@ -917,6 +929,18 @@ def storefront_section_settings(request, pk):
             raw["card"] = _extract_card_raw(request)
         if definition.supports_capability("layout_width"):
             raw["layout"] = _extract_layout_raw(request)
+        # Phase 3 (V01) — the legacy Brand form builds ``raw`` fresh from named
+        # POST fields, so a trusted persisted ``appearance_overrides`` block
+        # (which carries the internal explicit-local-variant marker) would be
+        # lost on an ordinary non-variant edit. Carry the stored block forward
+        # so the appearance-override-aware validator can preserve the trusted
+        # marker — exactly like ``spacing`` above. The marker is NOT read from
+        # the client (this form never authors ``appearance_overrides``); it is
+        # copied only from the section's own persisted settings.
+        if section.section_key == "brand_carousel":
+            stored_overrides = (section.settings or {}).get("appearance_overrides")
+            if stored_overrides:
+                raw["appearance_overrides"] = stored_overrides
         try:
             cleaned = definition.validate_settings(raw)
             _validate_universal_selection_ownership(request, section.section_key, cleaned)
