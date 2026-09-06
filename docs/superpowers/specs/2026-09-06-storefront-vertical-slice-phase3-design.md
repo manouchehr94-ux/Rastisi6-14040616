@@ -24,7 +24,7 @@ Preparation modifies exactly this spec, its matching plan, Phase3 baseline.md an
 
 `apps/storefront_builder/section_registry.py` defines `brand_carousel`, variants grid/carousel/beauty_tabs on display_mode, one template `storefront_builder/sections/brand_carousel.html`. `_brand_carousel_context` in services/render_service.py loads active store Brands once per instance, preserving manual brand_ids order (max24) or auto sort_order/name. No variant queries business data independently. No corresponding Brand entry in the typed component registry was found; the section family name is not a new alias.
 
-BRAND_CAROUSEL_SCHEMA exposes title/source/display_mode/show_view_all; source projects via ResourceSource to brand_ids. Shared wrapper supports responsive visibility/background/spacing/motion. Columns are persisted but not visually supported; local typography is not schema-enabled. V01 is a reproduced internal variant-intent preservation gap; V02 is beauty_tabs ignoring exposed View-all. Full inventory answers A–G in `vertical_slice_inventory.md` are part of this spec's evidence.
+BRAND_CAROUSEL_SCHEMA exposes title/source/display_mode/show_view_all; source projects via ResourceSource to brand_ids. Shared wrapper supports responsive visibility/background/spacing/motion. Columns are persisted but not visually supported; local typography is not schema-enabled. V01 is a reproduced internal variant-intent preservation gap; V02 is exposed View-all ignoring both variant support and its trusted resolved-destination dependency. Full inventory answers A–G in `vertical_slice_inventory.md` are part of this spec's evidence.
 
 ## 5. Collection current state
 
@@ -58,6 +58,8 @@ PARTIAL for the pilot contract: family data/settings are shared; actual Cart fra
 
 ## 10. A06 conclusion
 
+The real registry allows both pilots on exactly home, product_detail, listing, collection, search and cart. The inventory maps all six to routes/templates/CSS/JS: five distinct pilot envelopes E1 Home, E2 Product detail, E3 Listing/Search, E4 Collection detail, E5 Cart. E6 Collection index is a direct-listing companion with no pilot rendering. Tasks3/5 must assert every allowed type's actual pilot shell/assets; Task7 supplies browser proof per distinct envelope, with browser deduplication permitted only for proven identical CSS AND runtime. For each envelope require component CSS, shared JS exactly once, computed layout, resolved media, no Home-only dependency, no duplicate assets after replacement, no document horizontal overflow and applicable Preview/Public semantics. Use the smallest existing canonical Builder stylesheet/loading mechanism; no blanket home.css imports. Task8 checks matrix completeness before accepting pilot-only closure.
+
 OPEN. Preview loads Home CSS, while Public Collection detail loads product_list CSS; registered Brand/tiles can appear there. Inner fragments establish neither envelope. Brand inline flex/grid provides only partial resilience; it does not establish typography/media/variant styling. Fix only proven pilot asset dependencies, using existing page templates/CSS. Never make unrelated global selectors the vehicle for pilot fixes. Browser computed styles, network status and repeated replacement provide closure evidence.
 
 ## 11. Family canonical data/resource contracts
@@ -76,7 +78,9 @@ Initially promise only supported wrapper background/spacing/responsive behavior 
 
 ## 13. SettingsSchema/capability contract
 
-Builder must not promise an unsupported control. Use existing SectionDefinition/VariantDefinition metadata and existing Inspector; no parallel capability registry. Brand grid/carousel support View-all with a valid destination; beauty_tabs does not. Hide unsupported controls while retaining compatible stored values for switching back. Reject explicit writes to an unsupported control under the resulting active variant, without rejecting unrelated edits because dormant stored values exist. A variant switch with no View-all patch is valid and preserves the dormant value.
+Builder must not promise an unsupported control. Use existing SectionDefinition/VariantDefinition metadata and existing Inspector; no parallel capability registry. Brand View-all is actionable only when BOTH the resulting active variant supports it (grid/carousel) AND the trusted current destination validates and resolves to a non-none valid URL for the current store. Grid/carousel without such a destination and beauty_tabs with any destination must not present an actionable control; explicit enable requests fail before settings/revision/history change. Do not trust a client capability flag, resolved href or unsupported destination patch. Reuse existing destination validation and store-scoped resolution; resolution alone does not validate external URLs.
+
+Preserve compatible stored show_view_all and destination on a variant-only switch to beauty_tabs and on unrelated edits. Switching back to grid/carousel recovers their effect when the destination remains valid. Brand R4 has no destination editor through its current SettingsSchema: preserve legacy/template authoring, and do not add a broad R4 destination editor or second destination system. An existing canonical generic control may be reused only if its current existence and unchanged authority are evidenced; this plan requires no new destination authoring. Task2 proves valid grid, invalid/absent destination, beauty_tabs, both switch directions and spoofing rejection; Task3 verifies visible controls and rendered anchors together.
 
 Brand columns remain hidden because columns_visual is absent. Collection tiles remain fixed-layout unless a separately evidenced bounded change is required; no fabricated column support. Collection page products retain existing columns_visual/card capability. R4 Collection tiles schema exposes title/source/tile_style. Generic capability expansion to other families is forbidden. Malformed source IDs and unknown R4 fields fail before mutation; persisted invalid variant safely resolves to default.
 
@@ -102,7 +106,7 @@ Verify1440x900 desktop,390x844 mobile and768x1024 tablet. Common hide flags and 
 
 Reuse qa_storefront_builder_r4.py and tools/storefront_builder_r4_qa/run.mjs, sharing existing playwright-core dependency and backup/restore/auth pattern. Extend these files only, with deterministic Collection fixture and viewport/matrix support. Application DB currently lacks stores_store and dependencies are absent; plan Task1 supplies a bounded local QA bootstrap before browser evidence. No browser evidence is claimed in preparation.
 
-Exact future commands, fixtures, URLs, screenshots and assertions are in inventory and plan. Run real variant changes, source/order preservation, publication isolation, wrapper replacement, media and responsive checks for both families. Record computed styles and network/console outcomes, not screenshots alone. No second harness.
+Exact future commands, fixtures, URLs, screenshots and assertions are in inventory and plan. Run real variant changes, source/order preservation, publication isolation, wrapper replacement, media and responsive checks for both families. Record computed styles and network/console outcomes, not screenshots alone. No second harness. The inventory's six-page registry matrix is binding: automated asset/shell coverage for every page type and each pilot, browser proof for every distinct E1–E5 pilot envelope. Listing/Search may share one browser smoke only after ordered asset/runtime equivalence assertions for both types. Collection detail is distinct from Listing because their inline runtime differs. Include E6 Collection-index companion shell proof without claiming pilot placement there. Verify View-all inspector truth and resolved anchor truth for the full V02 matrix.
 
 ## 19. Tenant/security
 
@@ -123,7 +127,7 @@ The complete evidence/risk/invariant/test/browser/defer register is in inventory
 |Gap|Severity|Owner|Task/defer|
 |---|---|---|---|
 |V01 local variant intent preservation|P1|Brand/shared|1,2,4,6|
-|V02 unsupported View-all control|P2|Brand|2,3|
+|V02 View-all variant AND trusted destination dependency; dormant roundtrip|P2|Brand|2,3|
 |V03 typed Collection source/schema/picker/ownership|P1|Collection|4,5|
 |V04 count/query semantic distinction|P2|Collection|4,5; count meaning change separately deferred|
 |V05 Cart fragment context and isolated wrapper proof A04|P1|shared|1,3,5,6,7|
@@ -148,6 +152,8 @@ Task0 is preparation. Tasks1–8 record exact commands/counts/RED failures/GREEN
 ## 25. Phase-3 exit gate
 
 Both families must separately pass selection/order/domain ownership, typed source/schema, capability truth, variant preservation, canonical mutation/lifecycle/identity, Preview/Public, wrapper/fragment, assets/JS/media, desktop/mobile/tablet and tenant checks. Brand gate precedes Collection generalization. Collection detail/index integration remains valid without non-Home R4 redesign. Shared conclusions must cite evidence from both families.
+
+V02 exit requires the six explicit Task2 cases and browser control/anchor proof: valid grid destination succeeds; invalid/absent destination and beauty_tabs enable requests reject without state/revision/history changes; roundtrip preserves and recovers compatible values; spoofing never grants capability. A06 may be CLOSED FOR THE TWO PHASE-3 PILOT FAMILIES only when every declared allowed Public pilot envelope has direct distinct-envelope browser proof or an automated per-page assertion linked to proof of an identical shared envelope. Any unproven allowed pilot envelope leaves A06 PARTIAL/OPEN and prevents full family certification PASS. Global/all-family A06 is never certified by Phase3.
 
 Final gate requires fresh focused baseline matrix plus added tests, check/migration check, exact pre-existing failures only, zero CRITICAL/unresolved IMPORTANT findings, scoped browser screenshots+metrics, no forbidden files/behavior, documented rollback and deferred original A04. Preparation completion is not Phase3 implementation certification.
 
