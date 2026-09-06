@@ -258,3 +258,135 @@ class GenuinelyUnreferencedAssetTests(TestCase):
     def test_asset_with_no_references_is_not_reachable(self):
         asset = MediaAsset.objects.create(store=self.store, image=_img("orphan.png"))
         self.assertFalse(asset.is_referenced())
+
+
+
+class CrossStoreIsolationReachabilityTests(TestCase):
+    """L07 — the extended reachability check MUST stay tenant-scoped: an
+    asset owned by store A must NOT be reported referenced merely because
+    store B's section JSON / recovery snapshot happens to carry the same
+    integer id. This proves the fix does not full-table-scan across stores
+    and cannot be tricked into preserving/deleting the wrong tenant's asset.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.store = _akhlaghi()
+        self.other = Store.objects.create(
+            name="فروشگاه دیگر (ایزوله‌سازی رسانه)",
+            slug="phase2-reach-other-store",
+            admin_subdomain="phase2-reach-other-store",
+        )
+
+    def test_other_store_json_background_does_not_reference_this_asset(self):
+        """An asset in store A, with NO reference in store A, is unreferenced
+        even though store B has a section background JSON carrying the same
+        id value."""
+        asset = MediaAsset.objects.create(store=self.store, image=_img("iso-a.png"))
+
+        # Store B: a draft section whose background JSON reuses asset.pk.
+        other_draft = svc.get_or_create_draft(self.other, user=None)
+        other_home = other_draft.get_page(StorefrontPage.PageType.HOME)
+        StorefrontSection.objects.create(
+            page=other_home,
+            section_key="hero_banner",
+            order=0,
+            settings={
+                "background": {"mode": "image", "media_asset_id": asset.pk},
+            },
+        )
+
+        # Cross-tenant JSON must NOT make store A's asset referenced.
+        self.assertFalse(asset.is_referenced())
+
+    def test_other_store_recovery_snapshot_does_not_reference_this_asset(self):
+        """Same isolation for recovery snapshots — store B's edit-history and
+        baseline snapshot referencing the id must not reach store A's asset."""
+        asset = MediaAsset.objects.create(store=self.store, image=_img("iso-b.png"))
+
+        other_draft = svc.get_or_create_draft(self.other, user=None)
+        StorefrontEditHistoryEntry.objects.create(
+            draft_version=other_draft,
+            actor=None,
+            sequence=1,
+            action_label="ویرایش تنظیمات بخش",
+            before_state={"pages": {}, "containers": {}},
+            after_state={
+                "pages": {
+                    "home": [
+                        {
+                            "section_key": "hero_banner",
+                            "media": {"hero_slides": [{"desktop_asset_id": asset.pk}]},
+                        }
+                    ],
+                },
+            },
+        )
+        other_draft.template_baseline_snapshot = {
+            "pages": {
+                "home": [
+                    {
+                        "section_key": "hero_banner",
+                        "settings": {
+                            "background": {"mode": "image", "media_asset_id": asset.pk},
+                        },
+                    }
+                ],
+            },
+        }
+        other_draft.save(update_fields=["template_baseline_snapshot", "updated_at"])
+
+        self.assertFalse(asset.is_referenced())
+
+    def test_same_store_snapshot_still_references_after_isolation_setup(self):
+        """Control: within the OWN store the snapshot reference IS seen — so
+        the isolation above is genuine tenant scoping, not a check that never
+        matches snapshots."""
+        asset = MediaAsset.objects.create(store=self.store, image=_img("iso-c.png"))
+        own_draft = svc.get_or_create_draft(self.store, user=None)
+        StorefrontSection.objects.filter(page__version=own_draft).delete()
+        own_draft.template_baseline_snapshot = {
+            "pages": {
+                "home": [
+                    {
+                        "section_key": "hero_banner",
+                        "settings": {
+                            "background": {"mode": "image", "media_asset_id": asset.pk},
+                        },
+                    }
+                ],
+            },
+        }
+        own_draft.save(update_fields=["template_baseline_snapshot", "updated_at"])
+
+        self.assertTrue(asset.is_referenced())
+
+
+class UnrelatedIntegerDoesNotOverReachTests(TestCase):
+    """L07 — the id-key matcher must not match an unrelated integer that
+    merely equals the asset id under a NON-media key (e.g. ``order`` or a
+    destination id). This guards against the fix over-reaching into "every
+    asset is referenced"."""
+
+    def setUp(self):
+        cache.clear()
+        self.store = _akhlaghi()
+
+    def test_matching_integer_under_unrelated_key_does_not_reference(self):
+        asset = MediaAsset.objects.create(store=self.store, image=_img("unrelated.png"))
+        draft = svc.get_or_create_draft(self.store, user=None)
+        StorefrontSection.objects.filter(page__version=draft).delete()
+        home = draft.get_page(StorefrontPage.PageType.HOME)
+        # The asset id appears ONLY under unrelated keys (order / a
+        # destination product id) — never under a media-id key.
+        StorefrontSection.objects.create(
+            page=home,
+            section_key="hero_banner",
+            order=asset.pk,
+            settings={
+                "order": asset.pk,
+                "destination": {"destination_product_id": asset.pk},
+                "background": {"mode": "theme", "media_asset_id": None},
+            },
+        )
+        self.assertFalse(asset.is_referenced())

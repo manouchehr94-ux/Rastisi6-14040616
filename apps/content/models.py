@@ -422,14 +422,32 @@ class MediaAsset(TimeStampedModel):
         این تنها راهِ امنِ بررسیِ «آیا حذفِ فیزیکیِ این فایل امن است؟» است —
         هرگز فرض نکنید یک asset بدون‌ارجاع است صرفاً چون یک Placementِ
         خاص حذف شده؛ ممکن است Placementِ دیگری (نسخه‌ی دیگر) هنوز به همین
-        ردیف اشاره کند."""
-        return (
+        ردیف اشاره کند.
+
+        L07 / A05 — علاوه بر پنج رابطه‌یِ مستقیمِ FKِ Placement (Hero/Banner
+        دسکتاپ+موبایل/Story)، این بررسی حالا دو کلاسِ ارجاعِ زنده‌یِ دیگر را
+        هم می‌بیند (نگاه کنید به ``apps.content.media_reachability``):
+          * کلاس #۲ — پس‌زمینه‌یِ JSON:
+            ``StorefrontSection.settings["background"]["media_asset_id"]``.
+          * کلاس #۴ — عکسِ بازیابی: idِ asset ذخیره‌شده در
+            ``StorefrontEditHistoryEntry.before_state``/``after_state`` یا
+            ``StorefrontLayoutVersion.template_baseline_snapshot``.
+        هر دو اسکن **tenant-scoped** (فقط فروشگاهِ خودِ asset) و
+        **fail-closed** (خطا/ابهام → «ارجاع‌شده») هستند. ابتدا FK (ارزان،
+        رفتارِ موجود) بررسی می‌شود و در صورتِ True کوتاه‌مدار می‌شود؛ فقط
+        وقتی هیچ FKای نبود اسکنِ گران‌ترِ JSON/عکس اجرا می‌شود."""
+        if (
             self.hero_placements.exists()
             or self.banner_desktop_placements.exists()
             or self.banner_mobile_placements.exists()
             or self.hero_mobile_placements.exists()
             or self.story_placements.exists()
-        )
+        ):
+            return True
+
+        from .media_reachability import is_reachable_via_json_or_snapshots
+
+        return is_reachable_via_json_or_snapshots(self)
 
 
 class HeroSlide(TimeStampedModel, DestinationMixin):
