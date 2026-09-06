@@ -700,3 +700,78 @@ class BrandCarouselV01V02MutationTests(R4MutationApiTestCase):
         # the mutation is atomic — the specific code is not the invariant.
         self.assertIn(r.json()["code"], {"invalid_settings", "view_all_unsupported"})
         self._assert_unchanged(section, before, before_revision, before_history)
+
+
+
+# ------------------------------------------------------------------------
+# Task 4 (V03) — collection_tiles negative discipline at the R4 mutation
+# boundary (schema-enabled, atomic reject leaves settings/revision/history
+# untouched — same discipline as brand_carousel).
+# ------------------------------------------------------------------------
+
+
+class CollectionTilesNegativeMutationTests(R4MutationApiTestCase):
+    def setUp(self):
+        super().setUp()
+        self.collection_section = StorefrontSection.objects.create(
+            version=self.draft, section_key="collection_tiles", order=3,
+            settings={"title": "", "collection_ids": [], "tile_style": "grid"},
+        )
+
+    def _update(self, section, patch):
+        return self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": section.pk,
+                "patch": patch,
+            },
+        })
+
+    def _assert_unchanged(self, section, before_settings, before_revision, before_history):
+        section.refresh_from_db()
+        self.assertEqual(section.settings, before_settings)
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.edit_revision, before_revision)
+        self.assertEqual(self._history_count(), before_history)
+
+    def test_unknown_field_rejected_atomically(self):
+        section = self.collection_section
+        before = dict(section.settings)
+        before_revision = self.draft.edit_revision
+        before_history = self._history_count()
+        r = self._update(section, {"totally_unknown_key": "x"})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["code"], "invalid_settings")
+        self._assert_unchanged(section, before, before_revision, before_history)
+
+    def test_spoofed_variant_marker_rejected_as_unknown_key(self):
+        # appearance_overrides is not schema-declared for collection_tiles; a
+        # raw patch trying to smuggle the marker is rejected as invalid.
+        section = self.collection_section
+        before = dict(section.settings)
+        before_revision = self.draft.edit_revision
+        before_history = self._history_count()
+        r = self._update(section, {"appearance_overrides": {"variant_explicit": True}})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["code"], "invalid_settings")
+        self._assert_unchanged(section, before, before_revision, before_history)
+
+    def test_gate_disabled_returns_404(self):
+        self.layout.r4_editor_enabled = False
+        self.layout.save(update_fields=["r4_editor_enabled"])
+        r = self._update(self.collection_section, {"title": "x"})
+        self.assertEqual(r.status_code, 404)
+
+    def test_anonymous_actor_denied(self):
+        self.client.logout()
+        r = self._update(self.collection_section, {"title": "x"})
+        self.assertNotEqual(r.status_code, 200)
+
+    def test_valid_tile_style_variant_switch_succeeds(self):
+        section = self.collection_section
+        starting_revision = self.draft.edit_revision
+        r = self._update(section, {"tile_style": "carousel"})
+        self.assertEqual(r.status_code, 200)
+        section.refresh_from_db()
+        self.assertEqual(section.settings["tile_style"], "carousel")

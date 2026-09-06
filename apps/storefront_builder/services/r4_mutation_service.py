@@ -125,8 +125,23 @@ def _validate_resource_source_ownership(*, store, source: "resource_source.Resou
         # auto_rule == "all_active" references no specific resource id.
         return
 
-    # category/collection kinds are not exposed by the Task 10 UI and carry
-    # no ownership rule yet — defensively a no-op rather than a false reject.
+    if source.kind == "collection":
+        # R4 Task 4 (V03) — collection_tiles is now schema-enabled with a
+        # typed ``source``, so a client could POST foreign collection_ids
+        # straight to this endpoint. Every manual id must belong to THIS
+        # Store; auto_rule == "all_active" references no specific id.
+        if source.mode == "manual":
+            if not source.manual_ids:
+                return
+            owned_count = MerchantCollection.objects.filter(
+                store=store, pk__in=source.manual_ids,
+            ).count()
+            if owned_count != len(set(source.manual_ids)):
+                raise R4MutationError("invalid_resource_ownership")
+        return
+
+    # category kind is not exposed by the Task 10 UI and carries no ownership
+    # rule yet — defensively a no-op rather than a false reject.
 
 
 def _apply_section_update_settings(*, store, draft: StorefrontLayoutVersion, mutation: dict) -> None:

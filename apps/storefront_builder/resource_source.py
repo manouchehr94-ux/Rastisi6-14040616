@@ -313,6 +313,26 @@ def brand_resource_source_to_legacy_patch(source: ResourceSource) -> dict:
     raise ResourceSourceError(f"unsupported brand auto_rule {source.auto_rule!r}")
 
 
+# ----------------------------------------------- Collection compatibility
+
+def collection_resource_source_from_settings(settings: Mapping) -> ResourceSource:
+    settings = settings or {}
+    collection_ids = settings.get("collection_ids") or []
+    if collection_ids:
+        return ResourceSource(kind="collection", mode="manual", manual_ids=tuple(collection_ids))
+    return ResourceSource(kind="collection", mode="auto", auto_rule="all_active")
+
+
+def collection_resource_source_to_legacy_patch(source: ResourceSource) -> dict:
+    if source.kind != "collection":
+        raise ResourceSourceError(f"expected kind='collection', got {source.kind!r}")
+    if source.mode == "manual":
+        return {"collection_ids": list(source.manual_ids)}
+    if source.auto_rule == "all_active":
+        return {"collection_ids": []}
+    raise ResourceSourceError(f"unsupported collection auto_rule {source.auto_rule!r}")
+
+
 # --------------------------------------------- generic Section adapter router
 #
 # A fixed allowlist, no dynamic import/getattr, no database — reusable by
@@ -328,6 +348,11 @@ _SECTION_ADAPTERS: dict[str, dict] = {
         "kind": "brand",
         "from_settings": brand_resource_source_from_settings,
         "to_legacy_patch": brand_resource_source_to_legacy_patch,
+    },
+    "collection_tiles": {
+        "kind": "collection",
+        "from_settings": collection_resource_source_from_settings,
+        "to_legacy_patch": collection_resource_source_to_legacy_patch,
     },
 }
 

@@ -343,6 +343,69 @@ class BrandLegacyCompatibilityTests(SimpleTestCase):
         self.assertEqual(source.manual_ids, (7, 3, 9))
 
 
+class CollectionLegacyCompatibilityTests(SimpleTestCase):
+    def test_empty_ids_means_auto_all_active(self):
+        typed = rs.collection_resource_source_from_settings({"collection_ids": []})
+        self.assertEqual(typed, rs.ResourceSource(kind="collection", mode="auto", auto_rule="all_active"))
+        patch = rs.collection_resource_source_to_legacy_patch(typed)
+        self.assertEqual(patch, {"collection_ids": []})
+        self.assertNotIn("source", patch)
+
+    def test_missing_key_means_auto_all_active(self):
+        typed = rs.collection_resource_source_from_settings({})
+        self.assertEqual(typed, rs.ResourceSource(kind="collection", mode="auto", auto_rule="all_active"))
+
+    def test_manual_ids_preserve_order(self):
+        typed = rs.collection_resource_source_from_settings({"collection_ids": [7, 3]})
+        self.assertEqual(typed, rs.ResourceSource(kind="collection", mode="manual", manual_ids=(7, 3)))
+        patch = rs.collection_resource_source_to_legacy_patch(typed)
+        self.assertEqual(patch, {"collection_ids": [7, 3]})
+        self.assertNotIn("source", patch)
+
+    def test_dedup_without_reorder(self):
+        source = rs.ResourceSource(kind="collection", mode="manual", manual_ids=(7, 3, 7, 9))
+        self.assertEqual(source.manual_ids, (7, 3, 9))
+
+    def test_wrong_kind_to_legacy_patch_rejected(self):
+        brand_source = rs.ResourceSource(kind="brand", mode="auto", auto_rule="all_active")
+        with self.assertRaises(rs.ResourceSourceError):
+            rs.collection_resource_source_to_legacy_patch(brand_source)
+
+    def test_max_twelve_manual_ids_cap(self):
+        # Cap is 12 (same as the existing typed validator); the 13th trips it.
+        ok = rs.collection_resource_source_from_settings({"collection_ids": list(range(1, 13))})
+        self.assertEqual(len(ok.manual_ids), 12)
+        with self.assertRaises(rs.ResourceSourceError):
+            rs.collection_resource_source_from_settings({"collection_ids": list(range(1, 14))})
+
+    def test_nonpositive_manual_id_rejected(self):
+        with self.assertRaises(rs.ResourceSourceError):
+            rs.collection_resource_source_from_settings({"collection_ids": [0]})
+        with self.assertRaises(rs.ResourceSourceError):
+            rs.collection_resource_source_from_settings({"collection_ids": [-3]})
+
+
+class CollectionTilesRouterTests(SimpleTestCase):
+    def test_collection_tiles_router_roundtrip_manual(self):
+        source = rs.resource_source_from_section_settings("collection_tiles", {"collection_ids": [7, 3]})
+        self.assertEqual(source.kind, "collection")
+        self.assertEqual(source.manual_ids, (7, 3))
+        patch = rs.resource_source_to_legacy_patch("collection_tiles", source)
+        self.assertEqual(patch, {"collection_ids": [7, 3]})
+        self.assertNotIn("source", patch)
+
+    def test_collection_tiles_router_auto_all_active(self):
+        source = rs.resource_source_from_section_settings("collection_tiles", {"collection_ids": []})
+        self.assertEqual(source, rs.ResourceSource(kind="collection", mode="auto", auto_rule="all_active"))
+        patch = rs.resource_source_to_legacy_patch("collection_tiles", source)
+        self.assertEqual(patch, {"collection_ids": []})
+
+    def test_collection_tiles_incompatible_kind_rejected(self):
+        brand_source = rs.ResourceSource(kind="brand", mode="auto", auto_rule="all_active")
+        with self.assertRaises(rs.ResourceSourceError):
+            rs.resource_source_to_legacy_patch("collection_tiles", brand_source)
+
+
 class GenericSectionAdapterTests(SimpleTestCase):
     def test_product_section_router(self):
         typed = rs.resource_source_from_section_settings(
@@ -423,6 +486,27 @@ class SchemaBridgeTests(TestCase):
         self.assertNotIn("source", cleaned)
 
 
+    def test_collection_definition_has_settings_schema_with_exactly_one_source_field(self):
+        definition = section_registry.get_definition("collection_tiles")
+        self.assertIsNotNone(definition.settings_schema)
+        source_fields = [f for f in definition.settings_schema.fields if f.field_type == "resource_source"]
+        self.assertEqual(len(source_fields), 1)
+        self.assertEqual(source_fields[0].key, "source")
+
+    def test_collection_source_patch_cleans_to_legacy_keys_only(self):
+        definition = section_registry.get_definition("collection_tiles")
+        current = definition.default_settings()
+        patch = {
+            "source": {
+                "kind": "collection", "mode": "manual", "auto_rule": None,
+                "auto_parameters": {}, "manual_ids": [7, 3],
+            },
+        }
+        cleaned = clean_section_schema_patch(definition, patch, current)
+        self.assertEqual(cleaned["collection_ids"], [7, 3])
+        self.assertNotIn("source", cleaned)
+
+
 class WrapperPreservationTests(TestCase):
     def test_product_source_patch_preserves_other_wrapper_blocks(self):
         definition = section_registry.get_definition("product_section")
@@ -457,6 +541,22 @@ class WrapperPreservationTests(TestCase):
         self.assertEqual(cleaned["brand_ids"], [])
 
 
+    def test_collection_source_patch_preserves_tile_style_variant_marker(self):
+        # tile_style is collection_tiles' variant marker — a source-only patch
+        # must carry the dormant/stored variant forward untouched.
+        definition = section_registry.get_definition("collection_tiles")
+        current = {**definition.default_settings(), "tile_style": "carousel", "title": "کالکشن‌ها"}
+        patch = {"source": {
+            "kind": "collection", "mode": "auto", "auto_rule": "all_active",
+            "auto_parameters": {}, "manual_ids": [],
+        }}
+        cleaned = clean_section_schema_patch(definition, patch, current)
+        self.assertEqual(cleaned["tile_style"], "carousel")
+        self.assertEqual(cleaned["title"], "کالکشن‌ها")
+        self.assertEqual(cleaned["collection_ids"], [])
+        self.assertNotIn("source", cleaned)
+
+
 class WrapperWithoutSourceKeyPreservesLegacyBehaviorTests(TestCase):
     def test_product_validate_without_source_key_behaves_as_before(self):
         definition = section_registry.get_definition("product_section")
@@ -472,6 +572,14 @@ class WrapperWithoutSourceKeyPreservesLegacyBehaviorTests(TestCase):
         self.assertEqual(result["brand_ids"], [5, 6])
         self.assertNotIn("source", result)
 
+    def test_collection_validate_without_source_key_behaves_as_before(self):
+        definition = section_registry.get_definition("collection_tiles")
+        raw = {"collection_ids": [5, 6], "tile_style": "carousel", "title": "x"}
+        result = definition.validate_settings(raw)
+        self.assertEqual(result["collection_ids"], [5, 6])
+        self.assertEqual(result["tile_style"], "carousel")
+        self.assertNotIn("source", result)
+
 
 class DefaultSettingsShapeTests(TestCase):
     def test_product_default_settings_has_no_source_key(self):
@@ -480,6 +588,10 @@ class DefaultSettingsShapeTests(TestCase):
 
     def test_brand_default_settings_has_no_source_key(self):
         definition = section_registry.get_definition("brand_carousel")
+        self.assertNotIn("source", definition.default_settings())
+
+    def test_collection_default_settings_has_no_source_key(self):
+        definition = section_registry.get_definition("collection_tiles")
         self.assertNotIn("source", definition.default_settings())
 
 
@@ -498,4 +610,11 @@ class R3CompatibilityTests(SimpleTestCase):
             {"brand_ids": [7, 3, 9], "display_mode": "grid"},
         )
         self.assertEqual(result["brand_ids"], [7, 3, 9])
+        self.assertNotIn("source", result)
+
+    def test_legacy_collection_validator_unaffected_by_schema(self):
+        result = section_registry._validate_collection_tiles_settings(
+            {"collection_ids": [7, 3, 9], "tile_style": "grid"},
+        )
+        self.assertEqual(result["collection_ids"], [7, 3, 9])
         self.assertNotIn("source", result)

@@ -7,7 +7,7 @@ from django.middleware.csrf import get_token
 from django.shortcuts import render
 from django.views.decorators.http import require_GET, require_POST
 
-from apps.catalog.models import Brand
+from apps.catalog.models import Brand, MerchantCollection
 from apps.catalog.services.collection_service import searchable_products
 from apps.dashboard.decorators import permission_required, staff_required
 from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
@@ -75,7 +75,7 @@ _RESOURCE_SOURCE_AUTO_RULE_LABELS_FA = {
 #: and Collection remain valid ResourceSource kinds (Task 9) but Task 10's
 #: Picker UI is Product/Brand only — anything else is a controlled 400, not
 #: a new picker lifecycle.
-_PICKER_UI_KINDS = ("product", "brand")
+_PICKER_UI_KINDS = ("product", "brand", "collection")
 _PICKER_SEARCH_RESULT_LIMIT = 20
 
 #: Task 10 Phase 1's directly-interactive auto rules per kind — the only
@@ -87,6 +87,15 @@ _PICKER_PRODUCT_AUTO_RULES = tuple(
     for rule in ("newest", "discounted", "best_sellers", "most_viewed")
 )
 _PICKER_BRAND_AUTO_RULES = (("all_active", _RESOURCE_SOURCE_AUTO_RULE_LABELS_FA["all_active"]),)
+_PICKER_COLLECTION_AUTO_RULES = (("all_active", _RESOURCE_SOURCE_AUTO_RULE_LABELS_FA["all_active"]),)
+
+#: One explicit per-kind map for the Picker's directly-settable auto rules —
+#: no per-kind ternary chain in the view.
+_PICKER_AUTO_RULES_BY_KIND = {
+    "product": _PICKER_PRODUCT_AUTO_RULES,
+    "brand": _PICKER_BRAND_AUTO_RULES,
+    "collection": _PICKER_COLLECTION_AUTO_RULES,
+}
 
 
 def _search_products(store, query):
@@ -103,17 +112,34 @@ def _search_brands(store, query):
     return list(qs.order_by("sort_order", "name", "id")[:_PICKER_SEARCH_RESULT_LIMIT])
 
 
+def _search_collections(store, query):
+    # Store-scoped + active-only, ordered by name (MerchantCollection has no
+    # name_en — only ``name``). Fail-closed to the same active/own-store set
+    # the public storefront and legacy ownership check use.
+    qs = MerchantCollection.objects.filter(store=store, is_active=True)
+    if query:
+        qs = qs.filter(name__icontains=query)
+    return list(qs.order_by("name", "id")[:_PICKER_SEARCH_RESULT_LIMIT])
+
+
 #: One explicit, server-owned map — no getattr/dynamic import/eval on
-#: user-supplied ``kind``, no separate Product/Brand picker lifecycle.
+#: user-supplied ``kind``, no separate Product/Brand/Collection picker
+#: lifecycle.
 _RESOURCE_SEARCHERS = {
     "product": _search_products,
     "brand": _search_brands,
+    "collection": _search_collections,
 }
 
 
 def _serialize_picker_item(kind, obj):
     if kind == "product":
         return {"id": obj.pk, "label": obj.name, "sublabel": obj.sku}
+    # Collection is dispatched EXPLICITLY before the brand fall-through:
+    # MerchantCollection has no ``name_en`` attribute, so it must never reach
+    # the brand branch below.
+    if kind == "collection":
+        return {"id": obj.pk, "label": obj.name, "sublabel": obj.slug}
     return {"id": obj.pk, "label": obj.name, "sublabel": obj.name_en}
 
 
@@ -143,6 +169,13 @@ def _resolve_selected_items(store, kind, ordered_ids):
         return []
     if kind == "product":
         found = {obj.pk: obj for obj in searchable_products(store).filter(pk__in=ordered_ids)}
+    elif kind == "collection":
+        # all_active + same-store + fail-closed: an inactive or foreign id
+        # simply fails to resolve here (never a second query to tell apart).
+        found = {
+            obj.pk: obj
+            for obj in MerchantCollection.objects.filter(store=store, is_active=True, pk__in=ordered_ids)
+        }
     else:
         found = {obj.pk: obj for obj in Brand.objects.filter(store=store, pk__in=ordered_ids)}
     return [found[value] for value in ordered_ids if value in found]
@@ -488,7 +521,7 @@ def storefront_r4_resource_picker(request):
             "max_items": max_items,
             "results": results,
             "selected_items": selected_items,
-            "auto_rules": _PICKER_PRODUCT_AUTO_RULES if kind == "product" else _PICKER_BRAND_AUTO_RULES,
+            "auto_rules": _PICKER_AUTO_RULES_BY_KIND[kind],
         },
     )
 

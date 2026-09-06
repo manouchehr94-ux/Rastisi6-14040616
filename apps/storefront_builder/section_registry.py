@@ -766,7 +766,7 @@ def default_destination_settings() -> dict:
 #: destination/responsive/motion/card/layout/background/spacing/...) so
 #: every outer wrapper's own key-stripping still runs on a dict that
 #: already carries only legacy-shaped keys.
-_RESOURCE_SOURCE_AWARE_SECTION_KEYS = frozenset({"product_section", "brand_carousel"})
+_RESOURCE_SOURCE_AWARE_SECTION_KEYS = frozenset({"product_section", "brand_carousel", "collection_tiles"})
 
 
 def _with_resource_source(section_key: str, validate_fn, default_fn):
@@ -786,6 +786,7 @@ def _with_resource_source(section_key: str, validate_fn, default_fn):
     error_cls = {
         "product_section": ProductSectionSettingsError,
         "brand_carousel": BrandCarouselSettingsError,
+        "collection_tiles": CollectionTilesSettingsError,
     }[section_key]
 
     def wrapped_validate(raw: dict) -> dict:
@@ -1791,6 +1792,29 @@ def default_collection_tiles_settings() -> dict:
     return {"title": "", "collection_ids": [], "tile_style": "grid"}
 
 
+#: R4 Task 4 (V03) — the declarative Inspector-facing schema for "کارت‌های
+#: کالکشن". Exactly analogous to BRAND_CAROUSEL_SCHEMA: ``collection_ids`` is
+#: NOT schema-registered directly — it is a compatibility persistence detail
+#: hidden behind the typed ``source`` field (see ``_with_resource_source``
+#: below). No new Collection auto rules. ``tile_style`` is the variant marker.
+COLLECTION_TILES_SCHEMA = SettingsSchema(fields=(
+    SettingsField("title", "عنوان بخش", "text", "basic", default="", max_length=_MAX_SECTION_TITLE_LENGTH),
+    SettingsField(
+        "source", "منبع کالکشن‌ها", "resource_source", "basic",
+        default=resource_source_module.serialize_resource_source(
+            resource_source_module.ResourceSource(kind="collection", mode="auto", auto_rule="all_active"),
+        ),
+    ),
+    SettingsField(
+        "tile_style", "نوع نمایش", "choice", "basic", default="grid",
+        choices=(
+            ("grid", "گرید"),
+            ("carousel", "کاروسل"),
+        ),
+    ),
+))
+
+
 class QuickLinksSettingsError(ValueError):
     """شکلِ خامِ تنظیماتِ «دسترسی سریع» نامعتبر است."""
 
@@ -2285,6 +2309,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
             VariantDefinition(key="carousel", label_fa="کاروسل"),
         ),
         default_variant="grid", variant_setting_key="tile_style",
+        settings_schema=COLLECTION_TILES_SCHEMA,
     ),
     "quick_links": SectionDefinition(
         key="quick_links", label_fa="دسترسی سریع", icon="compass",

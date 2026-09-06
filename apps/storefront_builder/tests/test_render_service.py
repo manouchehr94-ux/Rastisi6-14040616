@@ -841,6 +841,88 @@ class CollectionTilesRenderTests(TestCase):
         item = self._items_for(draft, store)[0]
         self.assertEqual(item["context"]["collection_tiles"][0]["item_count"], 3)
 
+    def test_item_count_is_total_membership_not_visible_products(self):
+        # Task 4 (V03) count-semantics characterization: item_count = TOTAL
+        # membership (Count("items")), including a member whose product is
+        # NOT storefront-visible. The visible domain list (collection_visible_items)
+        # would be strictly smaller.
+        from decimal import Decimal
+
+        from apps.catalog.models import (
+            Category, MerchantCollection, MerchantCollectionItem, Product, Vendor,
+        )
+        from apps.catalog.services.collection_service import collection_visible_items
+
+        store = _akhlaghi()
+        vendor = Vendor.objects.create(store=store, name="فروشنده ct-total", slug="v-ct-total")
+        category = Category.objects.create(store=store, name="دسته ct-total", slug="ct-total-cat", is_active=True)
+        collection = MerchantCollection.objects.create(
+            store=store, name="کالکشن عضویت", slug="ct-total", is_active=True,
+        )
+        active_product = Product.objects.create(
+            store=store, vendor=vendor, category=category, name="کالای فعال", slug="ct-total-active",
+            sku="SKU-CT-ACTIVE", price=Decimal("10000"), status=Product.Status.ACTIVE,
+        )
+        inactive_product = Product.objects.create(
+            store=store, vendor=vendor, category=category, name="کالای غیرفعال", slug="ct-total-inactive",
+            sku="SKU-CT-INACTIVE", price=Decimal("10000"), status=Product.Status.INACTIVE,
+        )
+        MerchantCollectionItem.objects.create(collection=collection, product=active_product, order=0)
+        MerchantCollectionItem.objects.create(collection=collection, product=inactive_product, order=1)
+
+        draft = svc.get_or_create_draft(store)
+        StorefrontSection.objects.create(
+            version=draft, section_key="collection_tiles", order=900,
+            settings={"title": "", "collection_ids": [collection.pk]},
+        )
+        item = self._items_for(draft, store)[0]
+        # Total membership = 2 (both members), regardless of product visibility.
+        self.assertEqual(item["context"]["collection_tiles"][0]["item_count"], 2)
+        # The visible domain list is strictly smaller (1) — the count is NOT
+        # the visible-product count.
+        visible = list(collection_visible_items(collection, store))
+        self.assertEqual(len(visible), 1)
+        self.assertEqual(visible[0].product_id, active_product.pk)
+
+    def test_manual_order_is_preserved_and_differs_from_name_index_ordering(self):
+        from apps.catalog.models import MerchantCollection
+
+        store = _akhlaghi()
+        # Names deliberately sort A < B < C by name, but we request C, A, B.
+        coll_a = MerchantCollection.objects.create(store=store, name="AAA", slug="ct-order-a", is_active=True)
+        coll_b = MerchantCollection.objects.create(store=store, name="BBB", slug="ct-order-b", is_active=True)
+        coll_c = MerchantCollection.objects.create(store=store, name="CCC", slug="ct-order-c", is_active=True)
+        draft = svc.get_or_create_draft(store)
+        StorefrontSection.objects.create(
+            version=draft, section_key="collection_tiles", order=900,
+            settings={"title": "", "collection_ids": [coll_c.pk, coll_a.pk, coll_b.pk]},
+        )
+        item = self._items_for(draft, store)[0]
+        names = [row["collection"].name for row in item["context"]["collection_tiles"]]
+        self.assertEqual(names, ["CCC", "AAA", "BBB"])
+        # Manual order is NOT the name-alphabetical index ordering.
+        self.assertNotEqual(names, sorted(names))
+
+    def test_auto_ordering_is_newest_first_not_name_ordering(self):
+        from apps.catalog.models import MerchantCollection
+
+        store = _akhlaghi()
+        # Create in an order such that newest-first (-created_at) differs from
+        # name-alphabetical. Names ascending Z,Y,X as they are created.
+        first = MerchantCollection.objects.create(store=store, name="ZZZ", slug="ct-newest-z", is_active=True)
+        second = MerchantCollection.objects.create(store=store, name="YYY", slug="ct-newest-y", is_active=True)
+        third = MerchantCollection.objects.create(store=store, name="XXX", slug="ct-newest-x", is_active=True)
+        draft = svc.get_or_create_draft(store)
+        StorefrontSection.objects.create(version=draft, section_key="collection_tiles", order=900)
+        item = self._items_for(draft, store)[0]
+        names = [row["collection"].name for row in item["context"]["collection_tiles"]]
+        # Newest-first == reverse creation order (third, second, first).
+        self.assertEqual(names, ["XXX", "YYY", "ZZZ"])
+        # This happens to also equal name-sorted here (X<Y<Z), so prove the
+        # ordering is by created_at, not name, by pk sequence too.
+        pks = [row["collection"].pk for row in item["context"]["collection_tiles"]]
+        self.assertEqual(pks, [third.pk, second.pk, first.pk])
+
 
 class QuickLinksRenderTests(TestCase):
     def setUp(self):

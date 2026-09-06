@@ -167,3 +167,25 @@ scenarios 01–13 unchanged (all additions are phase3-gated).
 - A04 pilot (Brand portion) V05: cart fragment container projection + preview wrapper projection PROVEN. A06 pilot (Brand): all six envelopes proven (E1-E5 + E3 listing/search equiv; E6 companion). Global A04/A06 remain deferred.
 - commit: (recorded on next task)
 - RULING (Task 3, R3 evidence PNGs): the harness overwrites pre-existing R3 phase1 screenshots (docs/qa_evidence/storefront_builder/r4/phase1/*.png) on each run; these belong to a prior phase's evidence. Controller restored them (git checkout) so Phase 3 does not touch them. Transient runtime logs (runserver/browser/RECOVERY) excluded from committed evidence.
+
+
+[Task 3 commit SHA: 4b0e092c7dc779d55e9cd41179469e449d0566c7 "fix: prove brand rendering across preview public and wrapper replacement"]
+
+### Task 4: START
+- BASE SHA: 4b0e092c7dc779d55e9cd41179469e449d0566c7
+- worktree: clean; Brand gate PASS (precondition met)
+- brief: Collection characterization + canonical adapter convergence (V03). Extend ResourceSource router to collection_tiles (collection_resource_source_from_settings/to_legacy_patch adapters mapping kind=collection manual→collection_ids, auto all_active→[]). Add tile SettingsSchema (title/source/tile_style). Collection ownership check (MerchantCollection.objects.filter(store=store,pk__in=manual_ids)) rejecting foreign/missing before save (no settings/revision/history change). Collection picker search/selected by .name. Preserve total-membership-count meaning (Count items) vs visible-products; manual order + auto newest-first. Pilot variant-marker bridge. NO domain business behavior change, no new persisted source field, no migration.
+
+
+### Task 4: COMPLETE
+- implementer: fresh general-task-execution (production, TDD RED→GREEN)
+- Production: resource_source.py (collection adapters + _SECTION_ADAPTERS), section_registry.py (COLLECTION_TILES_SCHEMA + settings_schema + _RESOURCE_SOURCE_AWARE + error class), r4_mutation_service.py (collection ownership branch), r4_views.py (collection picker searcher/serializer/resolve/auto_rules). render_service/settings_schema/views/resource_picker.html/r4_editor.js unchanged (already generic).
+- RED→GREEN: adapter unsupported→roundtrip; R4 mutation section_not_schema_enabled→200; inspector 404→resolves; ownership reject (foreign/missing → 400, settings/revision/history unchanged).
+- Semantics: total-membership Count("items") preserved (item_count=2 vs visible=1); manual + auto newest-first ordering preserved; collection dispatched explicitly (no name_en fallthrough); Brand not broken.
+- tests (controller-run --keepdb): 358 OK (1 pre-existing skip). makemigrations --check clean. diff --check clean.
+- review: independent semantic_reviewer → SPEC COMPLIANCE PASS, CODE/TEST QUALITY PASS. 0 CRITICAL, 0 IMPORTANT. 2 MINOR (cosmetic).
+  - MINOR-1 (DEFERRED): dangling category comment after the collection branch in r4_mutation_service.py. REASON: cosmetic; correct behavior. RISK: none.
+  - MINOR-2 (DEFERRED): CollectionTilesNegativeMutationTests helper duplication in test_r4_mutation_api.py (actual ownership tests live in test_r4_resource_picker.py). REASON: organizational; no coverage gap. RISK: none.
+- fix rounds: 0
+- atomic schema+ownership: CONFIRMED (reviewer traced mutation path — no schema exposure without ownership check).
+- commit: (recorded on next task)
