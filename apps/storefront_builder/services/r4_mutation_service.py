@@ -619,18 +619,20 @@ def apply_mutation(*, store, actor, base_revision: int, mutation: dict) -> int:
 
     _dispatch_mutation(store=store, draft=draft, mutation=mutation)
 
-    changed = edit_history_service.record_change(
+    # L01 convergence (Phase 2 Task 3): the single edit_revision advance now
+    # lives inside edit_history_service.record_change — it advances the
+    # Draft-wide token atomically, exactly once, iff a real change is
+    # recorded, and updates this locked ``draft`` instance in place. R4 must
+    # NOT re-increment here or the token would advance by 2. A semantic
+    # no-op returns False and advances nothing (no revision churn, no fake
+    # history entry). Undo/Redo (apply_history_command) never route through
+    # record_change and keep their own separate single increment.
+    edit_history_service.record_change(
         draft=draft,
         actor=actor,
         action_label=_history_label(mutation),
         before_state=before_state,
     )
-    if not changed:
-        # Valid semantic no-op: no revision churn and no fake history entry.
-        return draft.edit_revision
-
-    draft.edit_revision += 1
-    draft.save(update_fields=["edit_revision"])
     return draft.edit_revision
 
 

@@ -176,14 +176,21 @@ class LegacyMutationAdvancesEditRevisionTests(StorefrontBuilderViewsTestCase):
         # advances the Draft-wide revision token.
         self.assertEqual(draft.edit_revision, starting_revision + 1)
 
-    def test_baseline_legacy_mutation_does_not_advance_edit_revision(self):
-        """OBSERVED BASELINE (GREEN today, documents the L01 defect): a real
-        legacy setting change records edit history but leaves ``edit_revision``
-        completely unchanged. This test is intentionally an *anti-invariant*
-        witness and is expected to flip / be removed once L01 is fixed in
-        Task 3."""
+    def test_legacy_real_mutation_records_exactly_one_history_entry_and_one_revision(self):
+        """POST-FIX (L01 fixed in Task 3): the former anti-invariant witness
+        ``test_baseline_legacy_mutation_does_not_advance_edit_revision`` is now
+        obsolete — it asserted the defect (no revision advance). It is
+        replaced here by the correct post-fix invariant: a real legacy
+        setting change both records exactly one history entry AND advances
+        ``edit_revision`` by exactly 1, and the two stay coherent (revision
+        advances iff a history entry is appended).
+        """
+        from apps.storefront_builder.models import StorefrontEditHistoryEntry
+
         draft, section = self._draft_with_rich_text_section()
         starting_revision = draft.edit_revision
+        history_before = StorefrontEditHistoryEntry.objects.filter(
+            draft_version=draft).count()
 
         response = self._post_change(section, "<p>متن دیگر</p>")
         self.assertEqual(response.status_code, 302)
@@ -192,8 +199,131 @@ class LegacyMutationAdvancesEditRevisionTests(StorefrontBuilderViewsTestCase):
         self.assertEqual(section.settings["body_html"], "<p>متن دیگر</p>")
 
         draft.refresh_from_db()
-        # Baseline reality: no revision advance on legacy mutation.
-        self.assertEqual(draft.edit_revision, starting_revision)
+        history_after = StorefrontEditHistoryEntry.objects.filter(
+            draft_version=draft).count()
+        # Post-fix reality: exactly one history entry AND exactly one
+        # revision advance — coherent, never drifting apart.
+        self.assertEqual(history_after, history_before + 1)
+        self.assertEqual(draft.edit_revision, starting_revision + 1)
+
+    def test_legacy_noop_mutation_advances_nothing_and_records_no_history(self):
+        """A legacy POST that changes NOTHING (submits the identical settings
+        already on the section) is a semantic no-op: it must NOT advance
+        ``edit_revision`` and must NOT append a history entry. This is the
+        coherence twin of the real-mutation invariant above.
+        """
+        from apps.storefront_builder.models import StorefrontEditHistoryEntry
+
+        draft, section = self._draft_with_rich_text_section()
+        # Persist a first real edit so the section has a known, stable state.
+        self._post_change(section, "<p>وضعیت پایدار</p>")
+        draft.refresh_from_db()
+        section.refresh_from_db()
+        revision_after_real_edit = draft.edit_revision
+        history_after_real_edit = StorefrontEditHistoryEntry.objects.filter(
+            draft_version=draft).count()
+
+        # Re-submit the IDENTICAL body — no state change at all.
+        response = self._post_change(section, "<p>وضعیت پایدار</p>")
+        self.assertEqual(response.status_code, 302)
+
+        section.refresh_from_db()
+        self.assertEqual(section.settings["body_html"], "<p>وضعیت پایدار</p>")
+
+        draft.refresh_from_db()
+        history_after_noop = StorefrontEditHistoryEntry.objects.filter(
+            draft_version=draft).count()
+        # No-op: neither the token nor the history moved.
+        self.assertEqual(draft.edit_revision, revision_after_real_edit)
+        self.assertEqual(history_after_noop, history_after_real_edit)
+
+
+class LegacyEditMakesConcurrentR4BaseRevisionStaleTests(StorefrontBuilderViewsTestCase):
+    """L01 cross-path convergence: because ``edit_revision`` is now a single
+    Draft-wide token advanced by legacy mutations too, a legacy edit performed
+    *after* an R4 client captured its ``base_revision`` makes that R4 client's
+    revision stale — the subsequent R4 mutation is rejected (409
+    ``stale_revision``) and mutates nothing. This is the concrete last-writer
+    protection L01 was missing at baseline (legacy edits used to be invisible
+    to R4's optimistic-concurrency check).
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.layout = svc.get_or_create_layout(self.store)
+        self.layout.r4_editor_enabled = True
+        self.layout.save(update_fields=["r4_editor_enabled"])
+        self.draft = svc.get_or_create_draft(self.store, user=self.staff)
+        home = self.draft.get_page(StorefrontPage.PageType.HOME)
+        self.section = StorefrontSection.objects.create(
+            page=home, section_key="hero_banner", order=0,
+        )
+
+    def _post_r4(self, payload):
+        import json
+
+        return self.client.post(
+            reverse("dashboard:storefront-builder-r4-mutation"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+    def _legacy_section_edit(self, section, body_html):
+        return self.client.post(
+            reverse("dashboard:storefront-builder-section-settings",
+                    args=[section.pk]),
+            {
+                "body_html": body_html,
+                "show_on_desktop": "on",
+                "show_on_tablet": "on",
+                "show_on_mobile": "on",
+            },
+        )
+
+    def test_legacy_edit_makes_prior_r4_base_revision_stale(self):
+        # An R4 client observes the current revision as its base_revision.
+        self.draft.refresh_from_db()
+        r4_base_revision = self.draft.edit_revision
+
+        # Meanwhile a legacy edit lands on a rich_text section of the SAME
+        # Draft, advancing the Draft-wide token under the R4 client.
+        home = self.draft.get_page(StorefrontPage.PageType.HOME)
+        rich_text = StorefrontSection.objects.create(
+            page=home, section_key="rich_text", order=1,
+            settings={"body_html": "<p>اولیه</p>"},
+        )
+        legacy_response = self._legacy_section_edit(
+            rich_text, "<p>تغییر مسیر قدیمی هم‌زمان</p>")
+        self.assertEqual(legacy_response.status_code, 302)
+
+        self.draft.refresh_from_db()
+        # The legacy edit advanced the token, so the R4 client's captured
+        # base_revision is now stale.
+        self.assertEqual(self.draft.edit_revision, r4_base_revision + 1)
+
+        original_hero_settings = dict(self.section.settings)
+
+        # The R4 client now replays with its now-stale base_revision.
+        stale_r4 = self._post_r4({
+            "base_revision": r4_base_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": self.section.pk,
+                "patch": {"autoplay": False},
+            },
+        })
+
+        self.assertEqual(stale_r4.status_code, 409)
+        body = stale_r4.json()
+        self.assertIs(body["ok"], False)
+        self.assertEqual(body["code"], "stale_revision")
+        self.assertEqual(body["current_revision"], r4_base_revision + 1)
+
+        # The stale R4 mutation changed nothing.
+        self.section.refresh_from_db()
+        self.assertEqual(self.section.settings, original_hero_settings)
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.edit_revision, r4_base_revision + 1)
 
 
 

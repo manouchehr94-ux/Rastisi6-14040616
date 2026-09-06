@@ -301,7 +301,25 @@ def history_state(draft: StorefrontLayoutVersion) -> dict:
 
 @transaction.atomic
 def record_change(*, draft: StorefrontLayoutVersion, actor, action_label: str, before_state: dict) -> bool:
-    """Append one successful mutation; invalid/no-op submissions add nothing."""
+    """Append one successful mutation; invalid/no-op submissions add nothing.
+
+    L01 convergence (Phase 2 Task 3): ``edit_revision`` is the single
+    Draft-wide monotonic optimistic-concurrency token for ALL
+    Appearance/Builder-owned mutations. This is the one place a real
+    change is detected (before/after snapshot compare), so it is the one
+    place the token advances — atomically, exactly once, and *iff* a
+    history entry is appended. Advancing here (rather than only in the R4
+    path) makes BOTH the legacy ``@_record_edit_history`` decorator and the
+    R4 ``apply_mutation`` path revision-coherent through a single boundary:
+    a legacy edit now makes a concurrent R4 client's ``base_revision``
+    stale, and history + revision can never drift apart. A semantic no-op
+    (``before_state == after_state``) advances nothing and records nothing.
+
+    R4 ``apply_mutation`` therefore MUST NOT re-increment after calling this
+    (that would advance by 2). R4 ``apply_history_command`` (Undo/Redo)
+    deliberately never calls ``record_change`` and owns its own single
+    increment — that path is unaffected by the advance added here.
+    """
     locked_draft = StorefrontLayoutVersion.objects.select_for_update().get(pk=draft.pk)
     after_state = snapshot_draft(locked_draft)
     if before_state == after_state:
@@ -325,6 +343,15 @@ def record_change(*, draft: StorefrontLayoutVersion, actor, action_label: str, b
     )
     if ids_to_keep:
         qs.exclude(pk__in=ids_to_keep).delete()
+
+    # Advance the Draft-wide revision token in the same atomic block as the
+    # history append, so revision monotonicity and history stay coherent for
+    # every caller. Mutate the caller's instance too so it observes the new
+    # value without a manual refresh.
+    locked_draft.edit_revision = models.F("edit_revision") + 1
+    locked_draft.save(update_fields=["edit_revision"])
+    locked_draft.refresh_from_db(fields=["edit_revision"])
+    draft.edit_revision = locked_draft.edit_revision
     return True
 
 
