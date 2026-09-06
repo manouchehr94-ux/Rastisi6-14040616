@@ -73,6 +73,15 @@ class Command(BaseCommand):
         )
         parser.add_argument("--report-dir", default="")
         parser.add_argument(
+            "--phase3",
+            action="store_true",
+            help=(
+                "Opt-in Phase 3 responsive capture: the runner iterates the "
+                "three Phase 3 viewports and captures to the report dir. "
+                "Off by default — existing scenarios/behavior are unchanged."
+            ),
+        )
+        parser.add_argument(
             "--simulate-failure-after-backup",
             action="store_true",
             help=(
@@ -172,6 +181,7 @@ class Command(BaseCommand):
                 report_dir=report_dir,
                 headed=options["headed"],
                 browser_channel=options["browser_channel"],
+                phase3=options["phase3"],
             )
             fd, runtime_manifest_path = tempfile.mkstemp(prefix="rastisi-r4-qa-", suffix=".json")
             os.close(fd)
@@ -359,7 +369,7 @@ class Command(BaseCommand):
             "draft_revision": draft.edit_revision,
         }
 
-    def _build_manifest(self, *, store, port, session_cookie, report_dir, headed, browser_channel):
+    def _build_manifest(self, *, store, port, session_cookie, report_dir, headed, browser_channel, phase3=False):
         origin = f"http://127.0.0.1:{port}"
         same_site = str(settings.SESSION_COOKIE_SAMESITE or "Lax").capitalize()
         if same_site not in {"Lax", "Strict", "None"}:
@@ -371,6 +381,7 @@ class Command(BaseCommand):
             "report_dir": str(report_dir),
             "headed": bool(headed),
             "browser_channel": browser_channel,
+            "phase3": bool(phase3),
             "session": {
                 "name": settings.SESSION_COOKIE_NAME,
                 "value": session_cookie,

@@ -1,7 +1,7 @@
 from django.test import SimpleTestCase
 
 from apps.storefront_builder import section_registry
-from apps.storefront_builder.section_registry import SectionDefinition
+from apps.storefront_builder.section_registry import SectionDefinition, get_definition
 from apps.storefront_builder.settings_schema import (
     SettingsField,
     SettingsSchema,
@@ -503,3 +503,22 @@ class CleanSectionSchemaPatchBridgeTests(SimpleTestCase):
         current = hero.validate_settings(hero.default_settings())
         with self.assertRaises(SettingsSchemaError):
             clean_section_schema_patch(hero, {"not_a_real_field": "x"}, current)
+
+
+# ------------------------------------------------------------------------
+# Phase 3 — V01 desired-invariant (RED): once a merchant has explicitly
+# chosen a local variant (display_mode) for a brand_carousel, a later
+# non-variant patch (e.g. a title rename) must PRESERVE that explicit
+# intent. Today the marker is dropped by the section's own validator (only
+# hero_banner is appearance-override-aware), so this is the planned RED.
+# ------------------------------------------------------------------------
+
+
+class Phase3BrandPreservationTests(SimpleTestCase):
+    def test_variant_intent_survives_title_patch(self):
+        definition = get_definition('brand_carousel')
+        selected = clean_section_schema_patch(
+            definition, {'display_mode': 'carousel'}, definition.default_settings())
+        renamed = clean_section_schema_patch(definition, {'title': 'Phase3'}, selected)
+        self.assertTrue(renamed.get('appearance_overrides', {}).get('variant_explicit'))
+        self.assertEqual(renamed['display_mode'], 'carousel')

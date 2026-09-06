@@ -40,6 +40,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const EVIDENCE_DIR = path.join(REPO_ROOT, 'docs', 'qa_evidence', 'storefront_builder', 'r4', 'phase1');
 
+// Phase 3 (opt-in via manifest.phase3) — the three responsive viewports the
+// Phase 3 responsive capture iterates: desktop 1440x900, mobile 390x844,
+// tablet 768x1024. Off by default; the default (non-phase3) run never touches
+// these and its behavior/scenarios are unchanged.
+const PHASE3_VIEWPORTS = [
+  { name: 'desktop', width: 1440, height: 900 },
+  { name: 'mobile', width: 390, height: 844 },
+  { name: 'tablet', width: 768, height: 1024 },
+];
+
 const REQUIRED_SCREENSHOTS = [
   '01_r4_initial.png',
   '02_hero_basic.png',
@@ -170,6 +180,7 @@ async function launchSystemBrowser() {
   const candidates = [
     process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
     '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+    '/usr/local/bin/chrome',
     '/usr/bin/google-chrome',
     '/usr/bin/chromium',
     '/usr/bin/chromium-browser',
@@ -1032,6 +1043,34 @@ async function verifyScreenshots() {
   }
 }
 
+// =============================================================================
+// Phase 3 (opt-in) — responsive capture across the three PHASE3_VIEWPORTS.
+//
+// Runs ONLY when manifest.phase3 is truthy. It is purely additive: a
+// separate page/context is used so it never disturbs the admin `page`/
+// `publicPage` state the scenarios above depend on, and every artifact is
+// written under manifest.report_dir (never the committed evidence dir). The
+// default (non-phase3) run never calls this, so existing scenarios and
+// default behavior are completely unchanged.
+// =============================================================================
+async function phase3ResponsiveCapture() {
+  const captures = [];
+  for (const vp of PHASE3_VIEWPORTS) {
+    const vpContext = await browser.newContext({ viewport: { width: vp.width, height: vp.height } });
+    await vpContext.addCookies([manifest.session]);
+    const vpPage = await vpContext.newPage();
+    try {
+      await vpPage.goto(manifest.public_url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      const dest = path.join(manifest.report_dir, `phase3_${vp.name}_${vp.width}x${vp.height}.png`);
+      await vpPage.screenshot({ path: dest, fullPage: true });
+      captures.push({ viewport: vp.name, width: vp.width, height: vp.height, path: dest });
+    } finally {
+      try { await vpContext.close(); } catch (_error) { /* best effort */ }
+    }
+  }
+  result.phase3_captures = captures;
+}
+
 async function main() {
   deleteStaleScreenshots();
 
@@ -1062,6 +1101,11 @@ async function main() {
   await scenario('13-public-must-remain-unchanged', scenario13PublicUnchanged);
   await scenario('final-instrumentation-assertions', finalInstrumentationAssertions);
   await scenario('final-screenshot-verification', verifyScreenshots);
+
+  // Opt-in Phase 3 responsive capture — additive only, never runs by default.
+  if (manifest.phase3) {
+    await scenario('phase3-responsive-capture', phase3ResponsiveCapture);
+  }
 }
 
 try {

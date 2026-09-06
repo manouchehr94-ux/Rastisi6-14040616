@@ -379,3 +379,92 @@ class MissingMediaSafeBehaviorTests(_RenderMediaTestBase):
         self.assertIn(desktop_asset.image.url, html)
         self.assertNotIn("<source", html)
         self.assertNotIn('src=""', html)
+
+
+
+class BrandCarouselWrapperConsistencyTests(_RenderMediaTestBase):
+    """Phase 3 characterization — the responsive_section_wrapper is the single
+    shared wrapper both Builder Preview and the public storefront include. This
+    locks in the CURRENT (correct) baseline: for a brand_carousel item built by
+    the real ``build_page_render_items`` pipeline, rendering the wrapper with
+    ``is_preview=True`` preserves the item's identity (section key/id), its
+    title/brand resource links, its background styling, and its responsive
+    hide flags — consistent with the persisted section settings. GREEN as-is.
+    """
+
+    def _brand_carousel_item(self, settings):
+        from apps.catalog.models import Brand
+
+        Brand.objects.create(
+            store=self.store, name="برند رپر", slug="p3-wrapper-brand", is_active=True,
+        )
+        draft = svc.get_or_create_draft(self.store)
+        draft.sections.filter(section_key="brand_carousel").delete()
+        StorefrontSection.objects.create(
+            version=draft, section_key="brand_carousel", order=900, settings=settings,
+        )
+        page = draft.get_page("home")
+        items = build_page_render_items(page, self.store)
+        return next(i for i in items if i["section"].section_key == "brand_carousel")
+
+    def test_wrapper_preserves_identity_title_links_and_flags(self):
+        settings = {
+            "title": "برندهای فاز سه",
+            "display_mode": "grid",
+            "show_view_all": False,
+            "brand_ids": [],
+            # responsive hide flag that the shared wrapper must surface
+            "responsive": {"hide_on_mobile": True},
+            # a solid background color the wrapper renders inline
+            "background": {"mode": "color", "color": "#123456"},
+        }
+        item = self._brand_carousel_item(settings)
+
+        html = render_to_string(
+            "storefront_builder/partials/responsive_section_wrapper.html",
+            {"item": item, "is_preview": True},
+        )
+
+        # Identity: the wrapper stamps preview-only section metadata.
+        self.assertIn('data-section-key="brand_carousel"', html)
+        self.assertIn(f'data-section-id="{item["section"].pk}"', html)
+
+        # Title from the section settings survives into the rendered body.
+        self.assertIn("برندهای فاز سه", html)
+
+        # Resource link: the one active brand's product-list link is present.
+        self.assertIn("?brand=p3-wrapper-brand", html)
+        self.assertIn("برند رپر", html)
+
+        # Background styling is applied inline, consistent with settings.
+        self.assertIn("background-color:#123456", html)
+
+        # Responsive hide flag is surfaced as a data attribute.
+        self.assertIn("data-hide-mobile", html)
+        # Flags NOT set must be absent (no over-hiding).
+        self.assertNotIn("data-hide-desktop", html)
+        self.assertNotIn("data-hide-tablet", html)
+
+        # No crash string from the media resolution contract.
+        self.assertNotIn("has no file associated with it", html)
+
+    def test_wrapper_public_variant_omits_preview_only_identity_hooks(self):
+        settings = {
+            "title": "بدون پیش‌نمایش",
+            "display_mode": "grid",
+            "show_view_all": False,
+            "brand_ids": [],
+        }
+        item = self._brand_carousel_item(settings)
+
+        html = render_to_string(
+            "storefront_builder/partials/responsive_section_wrapper.html",
+            {"item": item, "is_preview": False},
+        )
+
+        # Baseline: public (non-preview) render never leaks the DB id / edit hooks.
+        self.assertNotIn("data-section-id", html)
+        self.assertNotIn("data-section-key", html)
+        # But the actual section body (title + brand link) still renders.
+        self.assertIn("بدون پیش‌نمایش", html)
+        self.assertIn("?brand=p3-wrapper-brand", html)

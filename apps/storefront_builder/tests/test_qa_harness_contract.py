@@ -48,3 +48,29 @@ class StorefrontBuilderQAHarnessContractTests(SimpleTestCase):
             "library:discard-draft-real-submit",
         ):
             self.assertIn(marker, source)
+
+    def test_r4_runner_and_command_support_phase3_viewports(self):
+        """Phase 3 harness additions are opt-in and additive: the R4 runner
+        references the three Phase 3 viewport dimensions and the ``phase3``
+        manifest field, and the R4 QA command wires a ``--phase3`` flag through
+        into the manifest. The default (non-phase3) behavior is unchanged."""
+        base = Path(settings.BASE_DIR)
+        runner = base / "tools" / "storefront_builder_r4_qa" / "run.mjs"
+        command = (
+            base / "apps" / "storefront_builder" / "management"
+            / "commands" / "qa_storefront_builder_r4.py"
+        )
+        self.assertTrue(runner.exists())
+        self.assertTrue(command.exists())
+
+        runner_source = runner.read_text(encoding="utf-8")
+        # The three Phase 3 viewport dimensions the runner iterates.
+        for dimension in ("1440", "900", "390", "844", "768", "1024"):
+            self.assertIn(dimension, runner_source)
+        # The runner keys its opt-in responsive capture off the manifest flag.
+        self.assertIn("manifest.phase3", runner_source)
+
+        command_source = command.read_text(encoding="utf-8")
+        # The command exposes the opt-in flag and threads it into the manifest.
+        self.assertIn("--phase3", command_source)
+        self.assertIn('"phase3"', command_source)

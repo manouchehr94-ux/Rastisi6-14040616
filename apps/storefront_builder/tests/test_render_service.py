@@ -695,6 +695,85 @@ class BrandCarouselRenderTests(TestCase):
         self.assertIsNotNone(item["context"]["view_all_url"])
         self.assertIn(category.slug, item["context"]["view_all_url"])
 
+    # --------------------------------------------------------------------
+    # Phase 3 characterization: these lock in the CURRENT (correct) resolved
+    # behavior of the brand_carousel context builder before any Phase 3
+    # variant-preservation change is made. They must be GREEN as-is.
+    # --------------------------------------------------------------------
+
+    def _brand_fixture(self):
+        """Own store with two active own brands, one inactive own brand, and a
+        SECOND explicit store carrying a foreign (cross-store) active brand."""
+        from apps.catalog.models import Brand
+
+        store = _akhlaghi()
+        own_a = Brand.objects.create(store=store, name="Own A", slug="p3-own-a", is_active=True)
+        own_b = Brand.objects.create(store=store, name="Own B", slug="p3-own-b", is_active=True)
+        Brand.objects.create(store=store, name="Own Inactive", slug="p3-own-inactive", is_active=False)
+        other_store = Store.objects.create(name="Phase3 Other Store", slug="p3-other-store")
+        foreign = Brand.objects.create(
+            store=other_store, name="Foreign", slug="p3-foreign", is_active=True,
+        )
+        return store, own_a, own_b, foreign
+
+    def test_manual_order_preserved_and_foreign_inactive_omitted_all_display_modes(self):
+        store, own_a, own_b, foreign = self._brand_fixture()
+        draft = svc.get_or_create_draft(store)
+        for display_mode in ("grid", "carousel", "beauty_tabs"):
+            with self.subTest(display_mode=display_mode):
+                cache.clear()
+                draft.sections.filter(section_key="brand_carousel").delete()
+                StorefrontSection.objects.create(
+                    version=draft, section_key="brand_carousel", order=900,
+                    settings={
+                        "title": "", "display_mode": display_mode, "show_view_all": False,
+                        # requested order intentionally interleaves a foreign brand
+                        "brand_ids": [own_b.pk, foreign.pk, own_a.pk],
+                    },
+                )
+                item = self._items_for(draft, store)[0]
+                self.assertEqual(item["context"]["brand_carousel_settings"]["display_mode"], display_mode)
+                self.assertEqual(
+                    [b.pk for b in item["context"]["brands"]],
+                    [own_b.pk, own_a.pk],
+                    msg=f"foreign+inactive must be omitted and manual order kept for {display_mode}",
+                )
+
+    def test_independent_sibling_sections_do_not_borrow_each_others_data(self):
+        store, own_a, own_b, _foreign = self._brand_fixture()
+        draft = svc.get_or_create_draft(store)
+        draft.sections.filter(section_key="brand_carousel").delete()
+        section_a = StorefrontSection.objects.create(
+            version=draft, section_key="brand_carousel", order=900,
+            settings={"title": "", "display_mode": "grid", "show_view_all": False, "brand_ids": [own_a.pk]},
+        )
+        section_b = StorefrontSection.objects.create(
+            version=draft, section_key="brand_carousel", order=901,
+            settings={"title": "", "display_mode": "carousel", "show_view_all": False, "brand_ids": [own_b.pk]},
+        )
+        items = self._items_for(draft, store)
+        pks_by_section = {
+            i["context"]["section"].pk: [b.pk for b in i["context"]["brands"]] for i in items
+        }
+        self.assertEqual(pks_by_section[section_a.pk], [own_a.pk])
+        self.assertEqual(pks_by_section[section_b.pk], [own_b.pk])
+
+    def test_unknown_persisted_display_mode_falls_back_safely(self):
+        store, own_a, own_b, _foreign = self._brand_fixture()
+        draft = svc.get_or_create_draft(store)
+        draft.sections.filter(section_key="brand_carousel").delete()
+        # A persisted (bypassing validation) invalid display_mode must still
+        # render without error — the context builder is defensive.
+        StorefrontSection.objects.create(
+            version=draft, section_key="brand_carousel", order=900,
+            settings={
+                "title": "", "display_mode": "not_a_real_mode", "show_view_all": False,
+                "brand_ids": [own_a.pk, own_b.pk],
+            },
+        )
+        item = self._items_for(draft, store)[0]
+        self.assertEqual([b.pk for b in item["context"]["brands"]], [own_a.pk, own_b.pk])
+
 
 class CollectionTilesRenderTests(TestCase):
     def setUp(self):
