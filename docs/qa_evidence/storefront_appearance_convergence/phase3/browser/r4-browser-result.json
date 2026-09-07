@@ -1,859 +1,801 @@
 {
-  "started_at": "2026-09-07T15:21:20.753Z",
-  "builder_url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/",
-  "public_url": "http://127.0.0.1:8772/",
+  "started_at": "2026-09-07T15:43:33.892Z",
+  "builder_url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/",
+  "public_url": "http://127.0.0.1:8775/",
   "scenarios": [
     {
       "name": "01-initial-r4",
       "status": "PASS",
-      "ms": 125
+      "ms": 130
     },
     {
       "name": "02-hero-basic-autosave",
       "status": "PASS",
-      "ms": 2005
+      "ms": 1945
     },
     {
       "name": "03-hero-advanced-typography-override",
       "status": "PASS",
-      "ms": 2879
+      "ms": 2901
     },
     {
       "name": "04-add-product-and-reorder",
       "status": "PASS",
-      "ms": 1438
+      "ms": 1383
     },
     {
       "name": "05-product-auto-and-persian-digit-limit",
       "status": "PASS",
-      "ms": 2736
+      "ms": 2816
     },
     {
       "name": "06-product-manual-picker",
       "status": "PASS",
-      "ms": 12889
+      "ms": 12972
     },
     {
       "name": "07-brand-same-picker",
       "status": "PASS",
-      "ms": 13151
+      "ms": 13146
     },
     {
       "name": "08-undo-redo",
       "status": "PASS",
-      "ms": 3249
+      "ms": 3246
     },
     {
       "name": "09-real-stale-conflict",
       "status": "PASS",
-      "ms": 2542
+      "ms": 2439
     },
     {
       "name": "10-publish",
       "status": "PASS",
-      "ms": 1714
+      "ms": 1589
     },
     {
       "name": "11-public-storefront-parity",
       "status": "PASS",
-      "ms": 297
+      "ms": 273
     },
     {
       "name": "12-new-draft-only-change",
       "status": "PASS",
-      "ms": 2519
+      "ms": 2494
     },
     {
       "name": "13-public-must-remain-unchanged",
       "status": "PASS",
-      "ms": 182
+      "ms": 212
     },
     {
       "name": "final-instrumentation-assertions",
       "status": "PASS",
-      "ms": 0
+      "ms": 1
     },
     {
       "name": "final-screenshot-verification",
       "status": "PASS",
-      "ms": 1
+      "ms": 0
     },
     {
       "name": "phase3-brand-gate",
-      "status": "FAIL",
-      "ms": 50022,
-      "error": "Error: Task 7 found 18 known RED finding(s) — see phase3.collection.known_red_findings in metrics.json: [{\"envelope\":\"product_detail\",\"viewport\":\"desktop\",\"variant\":\"carousel\",\"expected\":\"display flex AND overflowX auto|scroll\",\"actual\":\"display=\\\"block\\\" overflowX=\\\"visible\\\"\",\"note\":\"Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect.\"},{\"envelope\":\"listing\",\"viewport\":\"desktop\",\"variant\":\"carousel\",\"expected\":\"display flex AND overflowX auto|scroll\",\"actual\":\"display=\\\"block\\\" overflowX=\\\"visible\\\"\",\"note\":\"Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect.\"},{\"envelope\":\"search\",\"viewport\":\"desktop\",\"variant\":\"carousel\",\"expected\":\"display flex AND overflowX auto|scroll\",\"actual\":\"display=\\\"block\\\" overflowX=\\\"visible\\\"\",\"note\":\"Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect.\"}]\n    at assert (file:///home/user/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:136:25)\n    at phase3BrandGate (file:///home/user/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:2561:3)\n    at async scenario (file:///home/user/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:162:5)\n    at async main (file:///home/user/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:2602:5)\n    at async file:///home/user/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:2607:3"
+      "status": "PASS",
+      "ms": 50483
     }
   ],
   "mutation_posts": [
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/mutate/",
       "status": 409,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     }
   ],
   "history_posts": [
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/history/",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/history/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/history/",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/history/",
       "status": 200,
       "source": "admin"
     }
   ],
   "publish_posts": [
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/publish/",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/publish/",
       "status": 200,
       "source": "admin"
     }
   ],
   "http_error_responses": [
     {
-      "url": "http://127.0.0.1:8772/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794481654
+      "at": 1788795814855
     },
     {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794481683
+      "at": 1788795814897
     },
     {
-      "url": "http://127.0.0.1:8772/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794483610
+      "at": 1788795816782
     },
     {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794483686
+      "at": 1788795816841
     },
     {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794486233
+      "at": 1788795819333
     },
     {
-      "url": "http://127.0.0.1:8772/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794486234
+      "at": 1788795819382
     },
     {
-      "url": "http://127.0.0.1:8772/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794487895
+      "at": 1788795821020
     },
     {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794487933
+      "at": 1788795821102
     },
     {
-      "url": "http://127.0.0.1:8772/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794488523
+      "at": 1788795821681
     },
     {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794488547
+      "at": 1788795821682
     },
     {
-      "url": "http://127.0.0.1:8772/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794489401
+      "at": 1788795822550
     },
     {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794489431
+      "at": 1788795822581
     },
     {
-      "url": "http://127.0.0.1:8772/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794490730
+      "at": 1788795823993
     },
     {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794490797
+      "at": 1788795823995
     },
     {
-      "url": "http://127.0.0.1:8772/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794492717
+      "at": 1788795825909
     },
     {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794492729
+      "at": 1788795825933
     },
     {
-      "url": "http://127.0.0.1:8772/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794503642
+      "at": 1788795836901
     },
     {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794503705
+      "at": 1788795836967
     },
     {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794505840
+      "at": 1788795839149
     },
     {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794516833
+      "at": 1788795850101
     },
     {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794518656
+      "at": 1788795851990
     },
     {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794518709
+      "at": 1788795853400
     },
     {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
-      "status": 404,
-      "source": "admin",
-      "bucket": null,
-      "at": 1788794520106
-    },
-    {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/mutate/",
       "status": 409,
       "source": "admin",
       "bucket": "mutation_posts",
-      "at": 1788794521209
+      "at": 1788795854437
     },
     {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794522220
+      "at": 1788795855478
     },
     {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794522273
+      "at": 1788795857404
     },
     {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
-      "status": 404,
-      "source": "admin",
-      "bucket": null,
-      "at": 1788794524304
-    },
-    {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "public",
       "bucket": null,
-      "at": 1788794525097
+      "at": 1788795858142
     },
     {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794527089
+      "at": 1788795860118
     },
     {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
-      "status": 404,
-      "source": "admin",
-      "bucket": null,
-      "at": 1788794527141
-    },
-    {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "public",
       "bucket": null,
-      "at": 1788794527889
+      "at": 1788795860885
     },
     {
-      "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1788794546073
+      "at": 1788795878811
     }
   ],
   "console_errors": [
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794481655
+      "at": 1788795814855
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794481683
+      "at": 1788795814897
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794483610
+      "at": 1788795816782
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794483686
+      "at": 1788795816841
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794486233
+      "at": 1788795819333
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794486234
+      "at": 1788795819382
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794487895
+      "at": 1788795821020
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794487933
+      "at": 1788795821103
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794488523
+      "at": 1788795821681
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794488547
+      "at": 1788795821683
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794489401
+      "at": 1788795822550
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794489431
+      "at": 1788795822581
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794490730
+      "at": 1788795823995
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794490797
+      "at": 1788795823995
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794492717
+      "at": 1788795825909
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794492729
+      "at": 1788795825933
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794503642
+      "at": 1788795836901
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794503705
+      "at": 1788795836967
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794505840
+      "at": 1788795839149
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794516833
+      "at": 1788795850101
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794518656
+      "at": 1788795851990
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794518709
-    },
-    {
-      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
-      "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
-        "line": 0,
-        "column": 0,
-        "lineNumber": 0,
-        "columnNumber": 0
-      },
-      "source": "admin",
-      "at": 1788794520106
+      "at": 1788795853400
     },
     {
       "text": "Failed to load resource: the server responded with a status of 409 (Conflict)",
       "location": {
-        "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/mutate/",
+        "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/mutate/",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794521209
+      "at": 1788795854437
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794522220
+      "at": 1788795855478
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794522273
+      "at": 1788795857404
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
-        "line": 0,
-        "column": 0,
-        "lineNumber": 0,
-        "columnNumber": 0
-      },
-      "source": "admin",
-      "at": 1788794524304
-    },
-    {
-      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
-      "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "public",
-      "at": 1788794525097
+      "at": 1788795858142
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794527089
+      "at": 1788795860118
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
-        "line": 0,
-        "column": 0,
-        "lineNumber": 0,
-        "columnNumber": 0
-      },
-      "source": "admin",
-      "at": 1788794527141
-    },
-    {
-      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
-      "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "public",
-      "at": 1788794527889
+      "at": 1788795860886
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8772/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8775/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788794546073
+      "at": 1788795878811
     }
   ],
   "page_errors": [],
   "request_failures": [],
   "main_frame_navigations": [
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-07T15:21:21.164Z",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-07T15:43:34.330Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-07T15:21:23.379Z",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-07T15:43:36.581Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-07T15:21:25.986Z",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-07T15:43:39.115Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-07T15:21:30.545Z",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-07T15:43:43.769Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-07T15:21:43.470Z",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-07T15:43:56.686Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-07T15:21:56.616Z",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-07T15:44:09.882Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-07T15:21:58.486Z",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-07T15:44:11.774Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-07T15:21:59.910Z",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-07T15:44:13.181Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-07T15:22:02.058Z",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-07T15:44:15.267Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-07T15:22:04.094Z",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-07T15:44:17.225Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-07T15:22:06.910Z",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-07T15:44:19.925Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-07T15:22:25.879Z",
+      "url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-07T15:44:38.612Z",
       "expected": true
     }
   ],
@@ -870,8 +812,8 @@
     "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_builder/r4/phase1/10_draft_changed_public_unchanged.png"
   ],
   "summary": {
-    "passed": 15,
-    "failed": 1
+    "passed": 16,
+    "failed": 0
   },
   "public_parity": {
     "product_label_hits": [
@@ -887,7 +829,7 @@
     "unexpected_console_errors": 0,
     "expected_stale_409_console_events": 1,
     "expected_stale_409_http": 1,
-    "expected_stale_409_url": "http://127.0.0.1:8772/admin-portal/storefront-builder/r4/mutate/",
+    "expected_stale_409_url": "http://127.0.0.1:8775/admin-portal/storefront-builder/r4/mutate/",
     "unexpected_http_errors": 0,
     "unexpected_request_failures": 0,
     "page_errors": 0,
@@ -896,7 +838,7 @@
   },
   "phase3_asset_records": [],
   "phase3_brand": {
-    "started_at": "2026-09-07T15:21:20.753Z",
+    "started_at": "2026-09-07T15:43:33.893Z",
     "viewports": [
       "desktop",
       "mobile",
@@ -906,91 +848,91 @@
       {
         "envelope": "home",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8772/",
+        "url": "http://127.0.0.1:8775/",
         "status": 200
       },
       {
         "envelope": "product_detail",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8772/products/t12-product-1/",
+        "url": "http://127.0.0.1:8775/products/t12-product-1/",
         "status": 200
       },
       {
         "envelope": "listing",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8772/products/",
+        "url": "http://127.0.0.1:8775/products/",
         "status": 200
       },
       {
         "envelope": "collection",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8772/collections/p3-collection-1/",
+        "url": "http://127.0.0.1:8775/collections/p3-collection-1/",
         "status": 200
       },
       {
         "envelope": "cart",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8772/cart/",
+        "url": "http://127.0.0.1:8775/cart/",
         "status": 200
       },
       {
         "envelope": "home",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8772/",
+        "url": "http://127.0.0.1:8775/",
         "status": 200
       },
       {
         "envelope": "product_detail",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8772/products/t12-product-1/",
+        "url": "http://127.0.0.1:8775/products/t12-product-1/",
         "status": 200
       },
       {
         "envelope": "listing",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8772/products/",
+        "url": "http://127.0.0.1:8775/products/",
         "status": 200
       },
       {
         "envelope": "collection",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8772/collections/p3-collection-1/",
+        "url": "http://127.0.0.1:8775/collections/p3-collection-1/",
         "status": 200
       },
       {
         "envelope": "cart",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8772/cart/",
+        "url": "http://127.0.0.1:8775/cart/",
         "status": 200
       },
       {
         "envelope": "home",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8772/",
+        "url": "http://127.0.0.1:8775/",
         "status": 200
       },
       {
         "envelope": "product_detail",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8772/products/t12-product-1/",
+        "url": "http://127.0.0.1:8775/products/t12-product-1/",
         "status": 200
       },
       {
         "envelope": "listing",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8772/products/",
+        "url": "http://127.0.0.1:8775/products/",
         "status": 200
       },
       {
         "envelope": "collection",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8772/collections/p3-collection-1/",
+        "url": "http://127.0.0.1:8775/collections/p3-collection-1/",
         "status": 200
       },
       {
         "envelope": "cart",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8772/cart/",
+        "url": "http://127.0.0.1:8775/cart/",
         "status": 200
       }
     ],
@@ -2441,6 +2383,7 @@
           "/static/css/tokens.css",
           "/static/css/base.css",
           "/static/css/layout.css",
+          "/static/css/product_card.css",
           "/static/css/cart.css",
           "/static/css/storefront_builder.css",
           "/static/css/theme_palette.css"
@@ -2555,6 +2498,7 @@
           "/static/css/tokens.css",
           "/static/css/base.css",
           "/static/css/layout.css",
+          "/static/css/product_card.css",
           "/static/css/cart.css",
           "/static/css/storefront_builder.css",
           "/static/css/theme_palette.css"
@@ -2669,6 +2613,7 @@
           "/static/css/tokens.css",
           "/static/css/base.css",
           "/static/css/layout.css",
+          "/static/css/product_card.css",
           "/static/css/cart.css",
           "/static/css/storefront_builder.css",
           "/static/css/theme_palette.css"
@@ -3115,7 +3060,7 @@
     "errors": [],
     "broken_image": {
       "envelope": "search",
-      "url": "http://127.0.0.1:8772/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
+      "url": "http://127.0.0.1:8775/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
       "has_img_tag": true,
       "img_src": "/media/brand_logos/qa-broken-nonexistent.png",
       "img_complete": true,
@@ -3173,114 +3118,114 @@
       }
     },
     "collection": {
-      "started_at": "2026-09-07T15:21:20.753Z",
+      "started_at": "2026-09-07T15:43:33.893Z",
       "envelopes": [
         {
           "envelope": "home",
           "viewport": "desktop",
-          "url": "http://127.0.0.1:8772/",
+          "url": "http://127.0.0.1:8775/",
           "status": 200
         },
         {
           "envelope": "product_detail",
           "viewport": "desktop",
-          "url": "http://127.0.0.1:8772/products/t12-product-1/",
+          "url": "http://127.0.0.1:8775/products/t12-product-1/",
           "status": 200
         },
         {
           "envelope": "listing",
           "viewport": "desktop",
-          "url": "http://127.0.0.1:8772/products/",
+          "url": "http://127.0.0.1:8775/products/",
           "status": 200
         },
         {
           "envelope": "search",
           "viewport": "desktop",
-          "url": "http://127.0.0.1:8772/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
+          "url": "http://127.0.0.1:8775/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
           "status": 200
         },
         {
           "envelope": "collection",
           "viewport": "desktop",
-          "url": "http://127.0.0.1:8772/collections/p3-collection-2/",
+          "url": "http://127.0.0.1:8775/collections/p3-collection-2/",
           "status": 200
         },
         {
           "envelope": "cart",
           "viewport": "desktop",
-          "url": "http://127.0.0.1:8772/cart/",
+          "url": "http://127.0.0.1:8775/cart/",
           "status": 200
         },
         {
           "envelope": "home",
           "viewport": "mobile",
-          "url": "http://127.0.0.1:8772/",
+          "url": "http://127.0.0.1:8775/",
           "status": 200
         },
         {
           "envelope": "product_detail",
           "viewport": "mobile",
-          "url": "http://127.0.0.1:8772/products/t12-product-1/",
+          "url": "http://127.0.0.1:8775/products/t12-product-1/",
           "status": 200
         },
         {
           "envelope": "listing",
           "viewport": "mobile",
-          "url": "http://127.0.0.1:8772/products/",
+          "url": "http://127.0.0.1:8775/products/",
           "status": 200
         },
         {
           "envelope": "search",
           "viewport": "mobile",
-          "url": "http://127.0.0.1:8772/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
+          "url": "http://127.0.0.1:8775/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
           "status": 200
         },
         {
           "envelope": "collection",
           "viewport": "mobile",
-          "url": "http://127.0.0.1:8772/collections/p3-collection-2/",
+          "url": "http://127.0.0.1:8775/collections/p3-collection-2/",
           "status": 200
         },
         {
           "envelope": "cart",
           "viewport": "mobile",
-          "url": "http://127.0.0.1:8772/cart/",
+          "url": "http://127.0.0.1:8775/cart/",
           "status": 200
         },
         {
           "envelope": "home",
           "viewport": "tablet",
-          "url": "http://127.0.0.1:8772/",
+          "url": "http://127.0.0.1:8775/",
           "status": 200
         },
         {
           "envelope": "product_detail",
           "viewport": "tablet",
-          "url": "http://127.0.0.1:8772/products/t12-product-1/",
+          "url": "http://127.0.0.1:8775/products/t12-product-1/",
           "status": 200
         },
         {
           "envelope": "listing",
           "viewport": "tablet",
-          "url": "http://127.0.0.1:8772/products/",
+          "url": "http://127.0.0.1:8775/products/",
           "status": 200
         },
         {
           "envelope": "search",
           "viewport": "tablet",
-          "url": "http://127.0.0.1:8772/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
+          "url": "http://127.0.0.1:8775/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
           "status": 200
         },
         {
           "envelope": "collection",
           "viewport": "tablet",
-          "url": "http://127.0.0.1:8772/collections/p3-collection-2/",
+          "url": "http://127.0.0.1:8775/collections/p3-collection-2/",
           "status": 200
         },
         {
           "envelope": "cart",
           "viewport": "tablet",
-          "url": "http://127.0.0.1:8772/cart/",
+          "url": "http://127.0.0.1:8775/cart/",
           "status": 200
         }
       ],
@@ -3371,10 +3316,10 @@
           "decoded_imgs": 1,
           "glyph_fallbacks": 2,
           "computed_layout": {
-            "display": "block",
+            "display": "flex",
             "gridTemplateColumns": "none",
-            "gap": "normal",
-            "overflowX": "visible",
+            "gap": "16px",
+            "overflowX": "auto",
             "imgObjectFit": "cover",
             "dir": "rtl"
           },
@@ -3419,10 +3364,10 @@
           "decoded_imgs": 1,
           "glyph_fallbacks": 2,
           "computed_layout": {
-            "display": "block",
+            "display": "flex",
             "gridTemplateColumns": "none",
-            "gap": "normal",
-            "overflowX": "visible",
+            "gap": "16px",
+            "overflowX": "auto",
             "imgObjectFit": "cover",
             "dir": "rtl"
           },
@@ -3467,10 +3412,10 @@
           "decoded_imgs": 1,
           "glyph_fallbacks": 2,
           "computed_layout": {
-            "display": "block",
+            "display": "flex",
             "gridTemplateColumns": "none",
-            "gap": "normal",
-            "overflowX": "visible",
+            "gap": "16px",
+            "overflowX": "auto",
             "imgObjectFit": "cover",
             "dir": "rtl"
           },
@@ -3515,10 +3460,10 @@
           "decoded_imgs": 1,
           "glyph_fallbacks": 2,
           "computed_layout": {
-            "display": "block",
+            "display": "flex",
             "gridTemplateColumns": "none",
-            "gap": "normal",
-            "overflowX": "visible",
+            "gap": "16px",
+            "overflowX": "auto",
             "imgObjectFit": "cover",
             "dir": "rtl"
           },
@@ -3539,9 +3484,9 @@
           "decoded_imgs": 1,
           "glyph_fallbacks": 2,
           "computed_layout": {
-            "display": "block",
-            "gridTemplateColumns": "none",
-            "gap": "normal",
+            "display": "grid",
+            "gridTemplateColumns": "279px 279px 279px 279px",
+            "gap": "16px",
             "overflowX": "visible",
             "imgObjectFit": "cover",
             "dir": "rtl"
@@ -3563,10 +3508,10 @@
           "decoded_imgs": 1,
           "glyph_fallbacks": 2,
           "computed_layout": {
-            "display": "block",
+            "display": "flex",
             "gridTemplateColumns": "none",
-            "gap": "normal",
-            "overflowX": "visible",
+            "gap": "16px",
+            "overflowX": "auto",
             "imgObjectFit": "cover",
             "dir": "rtl"
           },
@@ -3662,14 +3607,17 @@
           "decoded_imgs": 1,
           "glyph_fallbacks": 2,
           "computed_layout": {
-            "display": "block",
+            "display": "flex",
             "gridTemplateColumns": "none",
-            "gap": "normal",
-            "overflowX": "visible",
+            "gap": "16px",
+            "overflowX": "auto",
             "imgObjectFit": "cover",
             "dir": "rtl"
           },
-          "native_scroll": null,
+          "native_scroll": {
+            "before": 0,
+            "after": -432
+          },
           "keyboard_focusable": true
         },
         {
@@ -3710,14 +3658,17 @@
           "decoded_imgs": 1,
           "glyph_fallbacks": 2,
           "computed_layout": {
-            "display": "block",
+            "display": "flex",
             "gridTemplateColumns": "none",
-            "gap": "normal",
-            "overflowX": "visible",
+            "gap": "16px",
+            "overflowX": "auto",
             "imgObjectFit": "cover",
             "dir": "rtl"
           },
-          "native_scroll": null,
+          "native_scroll": {
+            "before": 0,
+            "after": -432
+          },
           "keyboard_focusable": true
         },
         {
@@ -3758,14 +3709,17 @@
           "decoded_imgs": 1,
           "glyph_fallbacks": 2,
           "computed_layout": {
-            "display": "block",
+            "display": "flex",
             "gridTemplateColumns": "none",
-            "gap": "normal",
-            "overflowX": "visible",
+            "gap": "16px",
+            "overflowX": "auto",
             "imgObjectFit": "cover",
             "dir": "rtl"
           },
-          "native_scroll": null,
+          "native_scroll": {
+            "before": 0,
+            "after": -432
+          },
           "keyboard_focusable": true
         },
         {
@@ -3806,14 +3760,17 @@
           "decoded_imgs": 1,
           "glyph_fallbacks": 2,
           "computed_layout": {
-            "display": "block",
+            "display": "flex",
             "gridTemplateColumns": "none",
-            "gap": "normal",
-            "overflowX": "visible",
+            "gap": "16px",
+            "overflowX": "auto",
             "imgObjectFit": "cover",
             "dir": "rtl"
           },
-          "native_scroll": null,
+          "native_scroll": {
+            "before": 0,
+            "after": -432
+          },
           "keyboard_focusable": true
         },
         {
@@ -3830,9 +3787,9 @@
           "decoded_imgs": 1,
           "glyph_fallbacks": 2,
           "computed_layout": {
-            "display": "block",
-            "gridTemplateColumns": "none",
-            "gap": "normal",
+            "display": "grid",
+            "gridTemplateColumns": "160px 160px",
+            "gap": "16px",
             "overflowX": "visible",
             "imgObjectFit": "cover",
             "dir": "rtl"
@@ -3854,14 +3811,17 @@
           "decoded_imgs": 1,
           "glyph_fallbacks": 2,
           "computed_layout": {
-            "display": "block",
+            "display": "flex",
             "gridTemplateColumns": "none",
-            "gap": "normal",
-            "overflowX": "visible",
+            "gap": "16px",
+            "overflowX": "auto",
             "imgObjectFit": "cover",
             "dir": "rtl"
           },
-          "native_scroll": null,
+          "native_scroll": {
+            "before": 0,
+            "after": -432
+          },
           "keyboard_focusable": true
         },
         {
@@ -3953,14 +3913,17 @@
           "decoded_imgs": 1,
           "glyph_fallbacks": 2,
           "computed_layout": {
-            "display": "block",
+            "display": "flex",
             "gridTemplateColumns": "none",
-            "gap": "normal",
-            "overflowX": "visible",
+            "gap": "16px",
+            "overflowX": "auto",
             "imgObjectFit": "cover",
             "dir": "rtl"
           },
-          "native_scroll": null,
+          "native_scroll": {
+            "before": 0,
+            "after": -224
+          },
           "keyboard_focusable": true
         },
         {
@@ -4001,14 +3964,17 @@
           "decoded_imgs": 1,
           "glyph_fallbacks": 2,
           "computed_layout": {
-            "display": "block",
+            "display": "flex",
             "gridTemplateColumns": "none",
-            "gap": "normal",
-            "overflowX": "visible",
+            "gap": "16px",
+            "overflowX": "auto",
             "imgObjectFit": "cover",
             "dir": "rtl"
           },
-          "native_scroll": null,
+          "native_scroll": {
+            "before": 0,
+            "after": -224
+          },
           "keyboard_focusable": true
         },
         {
@@ -4049,14 +4015,17 @@
           "decoded_imgs": 1,
           "glyph_fallbacks": 2,
           "computed_layout": {
-            "display": "block",
+            "display": "flex",
             "gridTemplateColumns": "none",
-            "gap": "normal",
-            "overflowX": "visible",
+            "gap": "16px",
+            "overflowX": "auto",
             "imgObjectFit": "cover",
             "dir": "rtl"
           },
-          "native_scroll": null,
+          "native_scroll": {
+            "before": 0,
+            "after": -224
+          },
           "keyboard_focusable": true
         },
         {
@@ -4097,14 +4066,17 @@
           "decoded_imgs": 1,
           "glyph_fallbacks": 2,
           "computed_layout": {
-            "display": "block",
+            "display": "flex",
             "gridTemplateColumns": "none",
-            "gap": "normal",
-            "overflowX": "visible",
+            "gap": "16px",
+            "overflowX": "auto",
             "imgObjectFit": "cover",
             "dir": "rtl"
           },
-          "native_scroll": null,
+          "native_scroll": {
+            "before": 0,
+            "after": -224
+          },
           "keyboard_focusable": true
         },
         {
@@ -4121,9 +4093,9 @@
           "decoded_imgs": 1,
           "glyph_fallbacks": 2,
           "computed_layout": {
-            "display": "block",
-            "gridTemplateColumns": "none",
-            "gap": "normal",
+            "display": "grid",
+            "gridTemplateColumns": "224px 224px 224px",
+            "gap": "16px",
             "overflowX": "visible",
             "imgObjectFit": "cover",
             "dir": "rtl"
@@ -4145,14 +4117,17 @@
           "decoded_imgs": 1,
           "glyph_fallbacks": 2,
           "computed_layout": {
-            "display": "block",
+            "display": "flex",
             "gridTemplateColumns": "none",
-            "gap": "normal",
-            "overflowX": "visible",
+            "gap": "16px",
+            "overflowX": "auto",
             "imgObjectFit": "cover",
             "dir": "rtl"
           },
-          "native_scroll": null,
+          "native_scroll": {
+            "before": 0,
+            "after": -224
+          },
           "keyboard_focusable": true
         }
       ],
@@ -4278,6 +4253,7 @@
             "/static/css/tokens.css",
             "/static/css/base.css",
             "/static/css/layout.css",
+            "/static/css/product_card.css",
             "/static/css/cart.css",
             "/static/css/storefront_builder.css",
             "/static/css/theme_palette.css"
@@ -4409,6 +4385,7 @@
             "/static/css/tokens.css",
             "/static/css/base.css",
             "/static/css/layout.css",
+            "/static/css/product_card.css",
             "/static/css/cart.css",
             "/static/css/storefront_builder.css",
             "/static/css/theme_palette.css"
@@ -4540,6 +4517,7 @@
             "/static/css/tokens.css",
             "/static/css/base.css",
             "/static/css/layout.css",
+            "/static/css/product_card.css",
             "/static/css/cart.css",
             "/static/css/storefront_builder.css",
             "/static/css/theme_palette.css"
@@ -4562,7 +4540,7 @@
         }
       ],
       "page2": {
-        "url": "http://127.0.0.1:8772/collections/p3-collection-page2/?page=2",
+        "url": "http://127.0.0.1:8775/collections/p3-collection-page2/?page=2",
         "product_card_count": 1,
         "current_page_text": "۲",
         "full_envelope": true,
@@ -4902,162 +4880,17 @@
         }
       ],
       "index_companion": {
-        "url": "http://127.0.0.1:8772/collections/",
+        "url": "http://127.0.0.1:8775/collections/",
         "status": 200,
         "sb_css": 0,
         "product_list_css": 1,
         "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection-index/index-companion.png",
         "note": "E6 companion — no pilot placement; does not substitute for E4 Collection detail."
       },
-      "known_red_findings": [
-        {
-          "envelope": "product_detail",
-          "viewport": "desktop",
-          "variant": "carousel",
-          "expected": "display flex AND overflowX auto|scroll",
-          "actual": "display=\"block\" overflowX=\"visible\"",
-          "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
-        },
-        {
-          "envelope": "listing",
-          "viewport": "desktop",
-          "variant": "carousel",
-          "expected": "display flex AND overflowX auto|scroll",
-          "actual": "display=\"block\" overflowX=\"visible\"",
-          "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
-        },
-        {
-          "envelope": "search",
-          "viewport": "desktop",
-          "variant": "carousel",
-          "expected": "display flex AND overflowX auto|scroll",
-          "actual": "display=\"block\" overflowX=\"visible\"",
-          "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
-        },
-        {
-          "envelope": "collection",
-          "viewport": "desktop",
-          "variant": "carousel",
-          "expected": "display flex AND overflowX auto|scroll",
-          "actual": "display=\"block\" overflowX=\"visible\"",
-          "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
-        },
-        {
-          "envelope": "cart",
-          "viewport": "desktop",
-          "variant": "grid",
-          "expected": "display grid|flex AND >=2 resolved grid tracks",
-          "actual": "display=\"block\" gridTemplateColumns=\"none\"",
-          "note": "Collection grid container has no display:grid (or no resolved column tracks) on this envelope (base .grid rule lives in product_card.css, which this envelope does not load; no inline template fallback exists)."
-        },
-        {
-          "envelope": "cart",
-          "viewport": "desktop",
-          "variant": "carousel",
-          "expected": "display flex AND overflowX auto|scroll",
-          "actual": "display=\"block\" overflowX=\"visible\"",
-          "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
-        },
-        {
-          "envelope": "product_detail",
-          "viewport": "mobile",
-          "variant": "carousel",
-          "expected": "display flex AND overflowX auto|scroll",
-          "actual": "display=\"block\" overflowX=\"visible\"",
-          "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
-        },
-        {
-          "envelope": "listing",
-          "viewport": "mobile",
-          "variant": "carousel",
-          "expected": "display flex AND overflowX auto|scroll",
-          "actual": "display=\"block\" overflowX=\"visible\"",
-          "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
-        },
-        {
-          "envelope": "search",
-          "viewport": "mobile",
-          "variant": "carousel",
-          "expected": "display flex AND overflowX auto|scroll",
-          "actual": "display=\"block\" overflowX=\"visible\"",
-          "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
-        },
-        {
-          "envelope": "collection",
-          "viewport": "mobile",
-          "variant": "carousel",
-          "expected": "display flex AND overflowX auto|scroll",
-          "actual": "display=\"block\" overflowX=\"visible\"",
-          "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
-        },
-        {
-          "envelope": "cart",
-          "viewport": "mobile",
-          "variant": "grid",
-          "expected": "display grid|flex AND >=2 resolved grid tracks",
-          "actual": "display=\"block\" gridTemplateColumns=\"none\"",
-          "note": "Collection grid container has no display:grid (or no resolved column tracks) on this envelope (base .grid rule lives in product_card.css, which this envelope does not load; no inline template fallback exists)."
-        },
-        {
-          "envelope": "cart",
-          "viewport": "mobile",
-          "variant": "carousel",
-          "expected": "display flex AND overflowX auto|scroll",
-          "actual": "display=\"block\" overflowX=\"visible\"",
-          "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
-        },
-        {
-          "envelope": "product_detail",
-          "viewport": "tablet",
-          "variant": "carousel",
-          "expected": "display flex AND overflowX auto|scroll",
-          "actual": "display=\"block\" overflowX=\"visible\"",
-          "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
-        },
-        {
-          "envelope": "listing",
-          "viewport": "tablet",
-          "variant": "carousel",
-          "expected": "display flex AND overflowX auto|scroll",
-          "actual": "display=\"block\" overflowX=\"visible\"",
-          "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
-        },
-        {
-          "envelope": "search",
-          "viewport": "tablet",
-          "variant": "carousel",
-          "expected": "display flex AND overflowX auto|scroll",
-          "actual": "display=\"block\" overflowX=\"visible\"",
-          "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
-        },
-        {
-          "envelope": "collection",
-          "viewport": "tablet",
-          "variant": "carousel",
-          "expected": "display flex AND overflowX auto|scroll",
-          "actual": "display=\"block\" overflowX=\"visible\"",
-          "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
-        },
-        {
-          "envelope": "cart",
-          "viewport": "tablet",
-          "variant": "grid",
-          "expected": "display grid|flex AND >=2 resolved grid tracks",
-          "actual": "display=\"block\" gridTemplateColumns=\"none\"",
-          "note": "Collection grid container has no display:grid (or no resolved column tracks) on this envelope (base .grid rule lives in product_card.css, which this envelope does not load; no inline template fallback exists)."
-        },
-        {
-          "envelope": "cart",
-          "viewport": "tablet",
-          "variant": "carousel",
-          "expected": "display flex AND overflowX auto|scroll",
-          "actual": "display=\"block\" overflowX=\"visible\"",
-          "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
-        }
-      ],
-      "finished_at": "2026-09-07T15:22:54.057Z"
+      "known_red_findings": [],
+      "finished_at": "2026-09-07T15:45:07.270Z"
     },
-    "finished_at": "2026-09-07T15:22:57.933Z"
+    "finished_at": "2026-09-07T15:45:11.431Z"
   },
-  "finished_at": "2026-09-07T15:22:58.992Z"
+  "finished_at": "2026-09-07T15:45:11.432Z"
 }

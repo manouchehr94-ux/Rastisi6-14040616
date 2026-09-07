@@ -221,3 +221,32 @@ scenarios 01–13 unchanged (all additions are phase3-gated).
 - independent Architect review of review-ready snapshot 9f94fa8c5544720356e40e356d1ace6dcdd6775d: SPEC PASS; QUALITY PASS; 0 CRITICAL; 0 IMPORTANT; 0 MINOR.
 - scope: no migration, renderer, fragment engine, lifecycle/authority/domain redesign, Product redesign, legacy retirement or Phase 4.
 - Task 7: NOT STARTED.
+
+### Task 7: START (repository migration: manouchehr94-ux/Rastisi6-14040616)
+- BASE SHA: 973c1dc00bacb6f2f7d2604fa3880bb4d6250579 (Task 6 final/evidence checkpoint, carried forward into the new repository)
+- branch: feature/phase3-task7-task8 (new repo's designated Task 7/8 branch, replacing the old feature/storefront-vertical-slice-phase3)
+- environment: Claude Code Web sandbox (not the Product Owner's Windows workspace); Task 1's documented bounded local QA bootstrap re-run from an empty container (venv, migrate, akhlaghi store confirmed via seed migration, phase3_qa_owner user/membership, playwright-core installed).
+- scope: harness-only (existing qa_storefront_builder_r4.py + run.mjs), plus narrow test_qa_harness_contract.py additions. No production authorization.
+
+### Task 7: RED (harness pass)
+- commit: b3e69147e3681980233cd4c7beac1790e184189d "test: extend R4 QA harness for task7 matrix; surface collection tile CSS regression"
+- safety ref: backup/rastisi6-phase3-task7-red-20260907 == b3e69147e3681980233cd4c7beac1790e184189d (pushed)
+- harness additions: computed-layout/RTL/keyboard-focus/native-scroll assertions, combined dual-pilot Cart proof, E6 index-companion smoke, disposable broken-image fixtures (both families), Django-test-Client unauthorized-Preview negative.
+- finding: collection_tiles carousel has no display:flex/overflow-x:auto off Home (5 of 6 envelopes); grid has no display:grid on Cart only (Cart omits product_card.css). 18 known_red_findings, non-fatally recorded so full evidence still collected; overall scenario still FAILs (r4-browser-result.json: passed=15, failed=1).
+- two independent fresh-context reviews on the harness itself: round 1 found 1 IMPORTANT (computed-layout gate checked only one of two required conditions per variant) + 3 MINOR, fixed/accepted as documented in task7_browser_matrix.md; round 2 CRITICAL 0 / IMPORTANT 0.
+- disposition: STOP per protocol (production defect found, no fix authority in Task 7). Task 8 NOT started. Reported to Product Owner/Architect for a scoped repair decision.
+
+### Task 7: REPAIR (Architect-authorized, bounded Task 5 return)
+- authorization: one bounded repair round, restricted to apps/storefront_builder/static/css/storefront_builder.css (Collection-scoped) and, if confirmed, apps/cart/templates/cart/cart_detail.html (existing-stylesheet load only).
+- root cause confirmed by direct cascade inspection (not guessed): (1) home.css:143's `.tiles-carousel` base rule was never mirrored as a PARENT rule in storefront_builder.css — only the child `.pcard` rule was (Task 5's original gap); (2) product_card.css (source of `.grid`/`.g4`) is loaded by every public envelope's own template except cart_detail.html.
+- commit: 9fd27f8b089718fcaa338eec8aa1469814b71b79 "fix: restore collection tile layout across public envelopes"
+- fix: one new CSS rule on the existing `.collection-tiles-carousel.tiles-carousel` compound selector (never a bare `.tiles-carousel`, which unrelated non-pilot category_grid.html also uses); one existing-stylesheet `<link>` added to cart_detail.html in the same position/order every other template already uses. No new stylesheet, no duplicate, no global selector.
+- verification: RED re-confirmed (18 findings, identical scope) immediately before the fix; GREEN confirmed after (16/16 scenarios, 0 known_red_findings) against the real committed evidence path; Home computed values byte-identical before/after (no-op proof); required Python suites (Task 7: 91; Task 5 presentation: 186 incl. 1 pre-existing skip; Cart: 77) all green; check/makemigrations/diff clean.
+- two independent fresh-context reviews on the repair: round 1 found 1 CRITICAL (verification had targeted a scratchpad dir, not the real evidence path — evidence looked stale) + 2 IMPORTANT (10 unrelated R3 phase1 PNGs left modified in the diff; an unrelated non-pilot family's identical latent defect noted as correctly out of scope), all resolved; round 2 SPEC COMPLIANCE PASS, CODE/TEST QUALITY PASS, CRITICAL 0, IMPORTANT 0.
+
+### Task 7: COMPLETE (PASS)
+- final A06 result: Brand 45/45 unchanged; Collection 36/36 PASS (was 18/36 FAIL at the RED checkpoint). A06 CLOSED for both Phase-3 pilot families.
+- evidence commit: "test: certify pilot browser fragment assets and responsive behavior" (subject only — SHA is Git's own record, per this ledger's established convention; see git log on feature/phase3-task7-task8).
+- backup branch: backup/rastisi6-phase3-task7-final-20260907, verified == the evidence commit SHA.
+- production changed across all of Task 7 (RED + repair, cumulative): exactly two files — storefront_builder.css (Collection-scoped), cart_detail.html (existing-stylesheet load). No migration, renderer, schema, mutation, lifecycle, domain, commerce, or Brand-family change.
+- Task 8: READY.
