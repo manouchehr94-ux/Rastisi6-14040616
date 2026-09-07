@@ -1,4 +1,4 @@
-# Task 6 â€” shared contracts proven by Brand and Collection
+# Task 6 — shared contracts proven by Brand and Collection
 
 ## Authority and scope
 
@@ -7,7 +7,7 @@
 - Workspace: `D:\Projects\RastiSi5_Phase3_Codex`.
 - Branch: `feature/storefront-vertical-slice-phase3`; initial worktree clean.
 - Official Phase-2 baseline `e244619f395ebf0dbebc77d2033841e17f1cd099` verified ancestor.
-- Task 3 Brand and Task 5 Collection gates are closed and accepted; Tasks 1â€“5 are not reopened. Task 7 is not started.
+- Task 3 Brand and Task 5 Collection gates are closed and accepted; Tasks 1–5 are not reopened. Task 7 is not started.
 - Current Task-6 execution instruction controls scope and permits only the named backup push after verified, reviewed, clean commit.
 - Runtime: Python 3.12.10, Django 5.2.16, Windows PowerShell.
 
@@ -29,17 +29,17 @@ Reuse final `task3_brand_gate.md`, `task5_collection_gate.md`, and `browser/r4-b
 
 ## Review and scope audit
 
-Pending fresh independent review after controller verification. No commit or backup push until the gate passes.
+Independent Architect review completed against review-ready snapshot `9f94fa8c5544720356e40e356d1ace6dcdd6775d`: SPEC COMPLIANCE PASS; CODE / TEST QUALITY PASS; CRITICAL 0; IMPORTANT 0; MINOR 0.
 
 ## Historical RED and production correction
 
 Controller independently reproduced the sequence through `clean_section_schema_patch` for both families. `brand_carousel` preserves `appearance_overrides.variant_explicit=True` after variant, title, and source changes. `collection_tiles` sets the marker on the variant patch, then loses it on the title patch and still lacks it after the source patch. The stored `tile_style` and ordered `collection_ids` survive, so omitting the marker assertion would hide the binding preservation gap.
 
-The spec sections 12â€“14 require preserving server-derived explicit variant intent across compatible edits; Task 6 names common marker-preservation checks. Root cause: `collection_tiles` is absent from `APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS` in `section_registry.py`, unlike Brand. Production correction: YES. Root cause was Collection being absent from APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS. The bounded correction adds only collection_tiles to that existing allowlist. No renderer, lifecycle, authority, domain-service, CSS, fragment-engine or migration change was required.
+The spec sections 12–14 require preserving server-derived explicit variant intent across compatible edits; Task 6 names common marker-preservation checks. Root cause: `collection_tiles` is absent from `APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS` in `section_registry.py`, unlike Brand. Production correction: YES. The Architect ruled that the prior temporary "both pilots must be RED" execution restriction was narrower than the binding preservation contract. The bounded correction adds only `collection_tiles` to the existing trusted-marker preservation allowlist. No renderer, lifecycle, authority, domain-service, CSS, fragment-engine or migration change was required.
 
 ## New behavioral coverage
 
-- `Phase3SharedPilotPreservationTests`: 3 methods, each covers both pilots. Variant â†’ title â†’ ordered manual source retains variant, source, and explicit marker; unsupported new marker writes reject; compatible persisted background/spacing/responsive values survive, with dormant Brand View-all retained across beauty_tabs and Collection's distinct capabilities preserved.
+- `Phase3SharedPilotPreservationTests`: 3 methods, each covers both pilots. Variant → title → ordered manual source retains variant, source, and explicit marker; unsupported new marker writes reject; compatible persisted background/spacing/responsive values survive, with dormant Brand View-all retained across beauty_tabs and Collection's distinct capabilities preserved.
 - `SharedPilotRenderContractTests`: 2 methods, both pilots in each. Real render-service manual resource order and two independent same-family instances with different resources, titles, and variants.
 - `CombinedPilotCartFragmentContractTests`: 3 methods. One published Cart composition with Brand beauty_tabs and Collection carousel in distinct containers/cells; real update/remove versus full detail; stable section/container/cell identity, independent ordered resources/settings, no editor handles, quantity/totals/OOB counters, stock-error toast/removal semantics, and a separate never-published store's fallback.
 - Publish hygiene: one `setUpTestData` publish on a dedicated active test store. Only that test store's publish cache key is removed at setup/cleanup to prevent rolled-back primary-key cache residue; production limiter remains enabled and unchanged. No lifecycle code change.
@@ -69,13 +69,10 @@ python manage.py test apps.cart.tests.test_cart_views apps.cart.tests.test_cart_
 
 Command 2 includes all 3 new combined Cart methods; no rate-limit error. Existing commerce/security and universal renderer assertions pass unchanged.
 
-## Independent Architect review
+## Final Task-6 disposition
 
-- Review target: 9f94fa8c5544720356e40e356d1ace6dcdd6775d.
-- SPEC COMPLIANCE: PASS.
-- CODE / TEST QUALITY: PASS.
-- CRITICAL: 0.
-- IMPORTANT: 0.
-- MINOR: 0.
-- Production correction is bounded to section_registry.py: collection_tiles joins the existing trusted appearance-override preservation allowlist.
-- Browser: reused Task-3/Task-5 evidence because no renderer, CSS, wrapper or Cart presentation-context code changed. Full browser certification remains Task 7.
+- Implementation commit: `5db0ddf962874263f98e31ccd76fb68d9cd84d14` (`fix: harden shared pilot contract`).
+- Production files changed: `apps/storefront_builder/section_registry.py` only.
+- Browser: reused Task-3/Task-5 final evidence because no rendering/CSS/wrapper/Cart presentation-context production code changed.
+- Normal Phase-3 feature branch was not pushed; official convergence branch was not modified.
+- Task 7 was not started.
