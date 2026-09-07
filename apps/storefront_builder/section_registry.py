@@ -1209,6 +1209,9 @@ APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS = frozenset({
     # see ``_with_appearance_overrides`` for how the trusted marker is
     # preserved without ever being accepted from raw client payload.
     "brand_carousel",
+    # Phase 3 Task 6 -- Collection proves the same server-owned
+    # explicit-local-variant preservation contract for tile_style.
+    "collection_tiles",
 })
 
 

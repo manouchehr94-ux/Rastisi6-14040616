@@ -535,3 +535,331 @@ class CartHtmxFragmentCarriesCollectionContextTests(TestCase):
         # Collection presentation change must not corrupt the totals computation.
         self.assertEqual(response.context["totals"]["items_total"], Decimal("450000"))
         self.assertEqual(before, Decimal("300000"))
+
+
+class CombinedPilotCartFragmentContractTests(TestCase):
+    """Task 6 real update/remove proof with both pilot families published."""
+
+    HOST = "task6-combined-cart.example.com"
+    FALLBACK_HOST = "task6-fallback-cart.example.com"
+
+    @classmethod
+    def setUpTestData(cls):
+        from django.core.cache import cache
+        from django.utils import timezone
+
+        from apps.catalog.models import Brand, MerchantCollection
+        from apps.content.models import FooterSettings
+        from apps.core.models import ShopSettings
+        from apps.storefront_builder.models import StorefrontSection
+        from apps.storefront_builder.services import container_service
+        from apps.storefront_builder.services import layout_service as svc
+        from apps.stores.models import StoreDomain
+
+        cls.store = Store.objects.create(
+            name="Task 6 combined Cart",
+            slug="task6-combined-cart",
+            status=Store.Status.ACTIVE,
+        )
+        ShopSettings.provision_for(cls.store)
+        FooterSettings.provision_for(cls.store)
+        StoreDomain.objects.create(
+            store=cls.store,
+            hostname=cls.HOST,
+            is_primary=True,
+            verification_status=StoreDomain.VerificationStatus.VERIFIED,
+            verified_at=timezone.now(),
+        )
+        vendor = Vendor.objects.create(store=cls.store, name="Task 6 vendor", slug="task6-vendor")
+        category = Category.objects.create(store=cls.store, name="Task 6 category", slug="task6-category")
+        cls.product = Product.objects.create(
+            store=cls.store,
+            vendor=vendor,
+            category=category,
+            name="Task 6 cart product",
+            slug="task6-cart-product",
+            sku="TASK6-CART-PRODUCT",
+            price=Decimal("150000"),
+            stock=5,
+        )
+        cls.brands = (
+            Brand.objects.create(
+                store=cls.store, name="Task 6 Brand A", slug="task6-brand-a", is_active=True,
+            ),
+            Brand.objects.create(
+                store=cls.store, name="Task 6 Brand B", slug="task6-brand-b", is_active=True,
+            ),
+        )
+        cls.collections = (
+            MerchantCollection.objects.create(
+                store=cls.store,
+                name="Task 6 Collection A",
+                slug="task6-collection-a",
+                is_active=True,
+            ),
+            MerchantCollection.objects.create(
+                store=cls.store,
+                name="Task 6 Collection B",
+                slug="task6-collection-b",
+                is_active=True,
+            ),
+        )
+
+        draft = svc.get_or_create_draft(cls.store)
+        cart_page = draft.get_page("cart")
+        cart_page.containers.all().delete()
+        cart_page.sections.all().delete()
+        cart_items = StorefrontSection.objects.create(
+            page=cart_page, section_key="cart_items", order=0,
+        )
+        brand_section = StorefrontSection.objects.create(
+            page=cart_page,
+            section_key="brand_carousel",
+            order=1,
+            settings={
+                "title": "Task 6 cart brands",
+                "display_mode": "beauty_tabs",
+                "show_view_all": False,
+                "brand_ids": [cls.brands[1].pk, cls.brands[0].pk],
+            },
+        )
+        collection_section = StorefrontSection.objects.create(
+            page=cart_page,
+            section_key="collection_tiles",
+            order=2,
+            settings={
+                "title": "Task 6 cart collections",
+                "tile_style": "carousel",
+                "collection_ids": [cls.collections[1].pk, cls.collections[0].pk],
+            },
+        )
+        placements = (
+            (cart_items, 7),
+            (brand_section, 11),
+            (collection_section, 23),
+        )
+        cls.expected_identity = {}
+        for order, (section, gap) in enumerate(placements):
+            container = container_service.create_empty_container(
+                cart_page, "single", order=order, settings={"gap": gap},
+            )
+            cell = container.cells.get()
+            container_service.place_section(cell, section)
+            cls.expected_identity[section.section_key] = {
+                "container_stable_id": str(container.stable_id),
+                "cell_stable_id": str(cell.stable_id),
+                "section_stable_id": str(section.stable_id),
+                "container_gap": gap,
+            }
+
+        # The real limiter remains active. This class publishes exactly once
+        # and clears only the cache key owned by its unique test Store.
+        cls.publish_cache_key = f"ratelimit:storefront_layout.publish:{cls.store.pk}"
+        cache.delete(cls.publish_cache_key)
+        cls.addClassCleanup(cache.delete, cls.publish_cache_key)
+        svc.publish(cls.store)
+
+        cls.fallback_store = Store.objects.create(
+            name="Task 6 fallback Cart",
+            slug="task6-fallback-cart",
+            status=Store.Status.ACTIVE,
+        )
+        ShopSettings.provision_for(cls.fallback_store)
+        FooterSettings.provision_for(cls.fallback_store)
+        StoreDomain.objects.create(
+            store=cls.fallback_store,
+            hostname=cls.FALLBACK_HOST,
+            is_primary=True,
+            verification_status=StoreDomain.VerificationStatus.VERIFIED,
+            verified_at=timezone.now(),
+        )
+        fallback_vendor = Vendor.objects.create(
+            store=cls.fallback_store, name="Task 6 fallback vendor", slug="task6-fallback-vendor",
+        )
+        fallback_category = Category.objects.create(
+            store=cls.fallback_store,
+            name="Task 6 fallback category",
+            slug="task6-fallback-category",
+        )
+        cls.fallback_product = Product.objects.create(
+            store=cls.fallback_store,
+            vendor=fallback_vendor,
+            category=fallback_category,
+            name="Task 6 fallback product",
+            slug="task6-fallback-product",
+            sku="TASK6-FALLBACK-PRODUCT",
+            price=Decimal("100000"),
+            stock=5,
+        )
+
+    def setUp(self):
+        from django.test import Client, override_settings
+
+        self._hosts = override_settings(
+            ALLOWED_HOSTS=[self.HOST, self.FALLBACK_HOST, "testserver"],
+        )
+        self._hosts.enable()
+        self.addCleanup(self._hosts.disable)
+
+        self.client = Client(HTTP_HOST=self.HOST)
+        self.client.post(reverse("cart:add", args=[self.product.slug]), {"quantity": 2})
+        self.item = CartItem.objects.get(product=self.product)
+
+        self.fallback_client = Client(HTTP_HOST=self.FALLBACK_HOST)
+        self.fallback_client.post(
+            reverse("cart:add", args=[self.fallback_product.slug]), {"quantity": 2},
+        )
+        self.fallback_item = CartItem.objects.get(product=self.fallback_product)
+
+    @staticmethod
+    def _pilot_projection(response):
+        projection = {}
+        for composition in response.context["render_containers"]:
+            for cell_entry in composition["cells"]:
+                for item in cell_entry["items"]:
+                    section_key = item["section"].section_key
+                    if section_key not in {"brand_carousel", "collection_tiles"}:
+                        continue
+                    if section_key == "brand_carousel":
+                        resource_ids = [resource.pk for resource in item["context"]["brands"]]
+                    else:
+                        resource_ids = [
+                            row["collection"].pk for row in item["context"]["collection_tiles"]
+                        ]
+                    projection[section_key] = {
+                        "container_stable_id": str(composition["container"].stable_id),
+                        "cell_stable_id": str(cell_entry["cell"].stable_id),
+                        "section_stable_id": str(item["section"].stable_id),
+                        "container_gap": composition["settings"]["gap"],
+                        "settings": item["context"]["settings"],
+                        "resource_ids": resource_ids,
+                    }
+        return projection
+
+    def _assert_combined_layout(self, response):
+        self.assertEqual(response.status_code, 200)
+        self.assertIs(response.context["use_container_layout"], True)
+        keys = [item["section"].section_key for item in response.context["render_items"]]
+        self.assertEqual(keys, ["cart_items", "brand_carousel", "collection_tiles"])
+
+        projection = self._pilot_projection(response)
+        self.assertEqual(set(projection), {"brand_carousel", "collection_tiles"})
+        self.assertNotEqual(
+            projection["brand_carousel"]["container_stable_id"],
+            projection["collection_tiles"]["container_stable_id"],
+        )
+        self.assertNotEqual(
+            projection["brand_carousel"]["cell_stable_id"],
+            projection["collection_tiles"]["cell_stable_id"],
+        )
+        for section_key in ("brand_carousel", "collection_tiles"):
+            for identity_key, expected in self.expected_identity[section_key].items():
+                self.assertEqual(projection[section_key][identity_key], expected)
+
+        brand = projection["brand_carousel"]
+        self.assertEqual(brand["settings"]["title"], "Task 6 cart brands")
+        self.assertEqual(brand["settings"]["display_mode"], "beauty_tabs")
+        self.assertEqual(brand["resource_ids"], [self.brands[1].pk, self.brands[0].pk])
+        collection = projection["collection_tiles"]
+        self.assertEqual(collection["settings"]["title"], "Task 6 cart collections")
+        self.assertEqual(collection["settings"]["tile_style"], "carousel")
+        self.assertEqual(
+            collection["resource_ids"], [self.collections[1].pk, self.collections[0].pk],
+        )
+
+        body = response.content.decode()
+        for expected_text in (
+            "Task 6 cart brands",
+            "Task 6 Brand A",
+            "Task 6 Brand B",
+            "Task 6 cart collections",
+            "Task 6 Collection A",
+            "Task 6 Collection B",
+        ):
+            self.assertIn(expected_text, body)
+        for editor_hook in (
+            "sfb-rsec-drag-handle",
+            "sfb-rsec-toolbar",
+            "sfb-builder-container",
+            "data-section-id=",
+        ):
+            self.assertNotIn(editor_hook, body)
+        return projection
+
+    def test_real_update_and_remove_match_full_detail_without_commerce_drift(self):
+        update = self.client.post(
+            reverse("cart:item-update", args=[self.item.pk]), {"quantity": 3},
+        )
+        update_projection = self._assert_combined_layout(update)
+        detail_after_update = self.client.get(reverse("cart:detail"))
+        self.assertEqual(update_projection, self._pilot_projection(detail_after_update))
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.quantity, 3)
+        self.assertEqual(update.context["item_count"], 3)
+        self.assertEqual(update.context["totals"]["items_total"], Decimal("450000"))
+        self.assertNotIn("errors", update.context)
+        self.assertNotIn("HX-Trigger", update.headers)
+        self.assertContains(update, 'id="cart-count"')
+        self.assertContains(update, "hx-swap-oob")
+
+        remove = self.client.post(reverse("cart:item-remove", args=[self.item.pk]))
+        remove_projection = self._assert_combined_layout(remove)
+        detail_after_remove = self.client.get(reverse("cart:detail"))
+        self.assertEqual(remove_projection, self._pilot_projection(detail_after_remove))
+        self.assertFalse(CartItem.objects.filter(pk=self.item.pk).exists())
+        self.assertEqual(remove.context["item_count"], 0)
+        self.assertEqual(remove.context["totals"]["items_total"], 0)
+        self.assertNotIn("errors", remove.context)
+        self.assertNotIn("HX-Trigger", remove.headers)
+
+    def test_stock_error_keeps_combined_presentation_and_existing_error_contract(self):
+        self.product.stock = 0
+        self.product.save(update_fields=["stock"])
+
+        response = self.client.post(
+            reverse("cart:item-update", args=[self.item.pk]), {"quantity": 3},
+        )
+        response_projection = self._assert_combined_layout(response)
+        detail_after_error = self.client.get(reverse("cart:detail"))
+        self.assertEqual(response_projection, self._pilot_projection(detail_after_error))
+        self.assertFalse(CartItem.objects.filter(pk=self.item.pk).exists())
+        self.assertEqual(response.context["item_count"], 0)
+        self.assertEqual(response.context["totals"]["items_total"], 0)
+        trigger = json.loads(response.headers["HX-Trigger"])
+        self.assertEqual(trigger["toast"]["type"], "err")
+        self.assertIn("موجود نیست", trigger["toast"]["message"])
+
+    def test_absent_published_composition_uses_safe_fallback_for_update_and_remove(self):
+        update = self.fallback_client.post(
+            reverse("cart:item-update", args=[self.fallback_item.pk]), {"quantity": 3},
+        )
+        self.assertEqual(update.status_code, 200)
+        self.assertIs(update.context["use_container_layout"], False)
+        self.assertEqual(update.context["render_containers"], [])
+        self.assertIsNone(update.context["storefront_page"])
+        self.assertEqual(
+            [item["section"].section_key for item in update.context["render_items"]],
+            ["cart_items", "cart_summary"],
+        )
+        self.fallback_item.refresh_from_db()
+        self.assertEqual(self.fallback_item.quantity, 3)
+        self.assertEqual(update.context["item_count"], 3)
+        self.assertEqual(update.context["totals"]["items_total"], Decimal("300000"))
+        self.assertNotIn("errors", update.context)
+        self.assertNotIn("sfb-rsec-drag-handle", update.content.decode())
+        fallback_detail = self.fallback_client.get(reverse("cart:detail"))
+        self.assertEqual(
+            [item["section"].section_key for item in update.context["render_items"]],
+            [item["section"].section_key for item in fallback_detail.context["render_items"]],
+        )
+
+        remove = self.fallback_client.post(
+            reverse("cart:item-remove", args=[self.fallback_item.pk]),
+        )
+        self.assertEqual(remove.status_code, 200)
+        self.assertIs(remove.context["use_container_layout"], False)
+        self.assertEqual(remove.context["render_containers"], [])
+        self.assertFalse(CartItem.objects.filter(pk=self.fallback_item.pk).exists())
+        self.assertEqual(remove.context["item_count"], 0)
+        self.assertEqual(remove.context["totals"]["items_total"], 0)
+        self.assertNotIn("errors", remove.context)

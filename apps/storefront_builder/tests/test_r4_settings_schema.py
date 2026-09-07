@@ -586,3 +586,190 @@ class Phase3BrandPreservationTests(SimpleTestCase):
         }
         validated = definition.validate_settings(seeded)
         self.assertIsNone(validated.get('appearance_overrides', {}).get('variant_explicit'))
+
+
+class Phase3SharedPilotPreservationTests(SimpleTestCase):
+    """Task 6 proof that both pilots honor the shared edit-sequence contract."""
+
+    def test_variant_title_source_sequence_preserves_marker_variant_and_source_order(self):
+        # A regression in either pilot's validator wrapper would drop the
+        # trusted marker, reset the chosen variant, or reorder the manual
+        # resource selection during an unrelated title/source edit.
+        cases = (
+            {
+                "section_key": "brand_carousel",
+                "variant_key": "display_mode",
+                "variant": "carousel",
+                "resource_kind": "brand",
+                "legacy_ids_key": "brand_ids",
+                "manual_ids": (13, 7),
+            },
+            {
+                "section_key": "collection_tiles",
+                "variant_key": "tile_style",
+                "variant": "carousel",
+                "resource_kind": "collection",
+                "legacy_ids_key": "collection_ids",
+                "manual_ids": (23, 17),
+            },
+        )
+
+        for case in cases:
+            with self.subTest(section_key=case["section_key"]):
+                definition = get_definition(case["section_key"])
+                selected = clean_section_schema_patch(
+                    definition,
+                    {case["variant_key"]: case["variant"]},
+                    definition.default_settings(),
+                )
+                renamed = clean_section_schema_patch(
+                    definition,
+                    {"title": "Task 6 shared title"},
+                    selected,
+                )
+                sourced = clean_section_schema_patch(
+                    definition,
+                    {
+                        "source": resource_source_module.serialize_resource_source(
+                            resource_source_module.ResourceSource(
+                                kind=case["resource_kind"],
+                                mode="manual",
+                                manual_ids=case["manual_ids"],
+                            )
+                        )
+                    },
+                    renamed,
+                )
+
+                self.assertTrue(
+                    sourced.get("appearance_overrides", {}).get("variant_explicit")
+                )
+                self.assertEqual(sourced[case["variant_key"]], case["variant"])
+                self.assertEqual(sourced["title"], "Task 6 shared title")
+                self.assertEqual(
+                    sourced[case["legacy_ids_key"]], list(case["manual_ids"])
+                )
+                self.assertNotIn("source", sourced)
+
+    def test_unsupported_new_marker_write_is_rejected_for_both_pilots(self):
+        # Removing either schema's unknown-key guard would let a client forge
+        # the server-owned local-variant authority marker.
+        for section_key in ("brand_carousel", "collection_tiles"):
+            with self.subTest(section_key=section_key):
+                definition = get_definition(section_key)
+                with self.assertRaises(SettingsSchemaError):
+                    clean_section_schema_patch(
+                        definition,
+                        {"appearance_overrides": {"variant_explicit": True}},
+                        definition.default_settings(),
+                    )
+
+    def test_compatible_dormant_values_survive_non_owning_edits_for_both_pilots(self):
+        # Brand deliberately retains its inactive view-all destination and
+        # legacy responsive column values. Collection has no column contract;
+        # it retains only its supported visibility/background/spacing blocks.
+        cases = (
+            {
+                "section_key": "brand_carousel",
+                "variant_key": "display_mode",
+                "variant": "beauty_tabs",
+                "resource_kind": "brand",
+                "legacy_ids_key": "brand_ids",
+                "manual_ids": (31, 29),
+                "seed": {
+                    "show_view_all": True,
+                    "destination": {
+                        "destination_type": "external",
+                        "destination_id": None,
+                        "destination_external_url": "https://example.com/brands",
+                        "open_in_new_tab": True,
+                    },
+                    "responsive": {
+                        "hide_on_desktop": False,
+                        "hide_on_tablet": True,
+                        "hide_on_mobile": False,
+                        "desktop_columns": 3,
+                        "tablet_columns": 2,
+                        "mobile_columns": 1,
+                    },
+                },
+            },
+            {
+                "section_key": "collection_tiles",
+                "variant_key": "tile_style",
+                "variant": "carousel",
+                "resource_kind": "collection",
+                "legacy_ids_key": "collection_ids",
+                "manual_ids": (43, 41),
+                "seed": {
+                    "responsive": {
+                        "hide_on_desktop": False,
+                        "hide_on_tablet": False,
+                        "hide_on_mobile": True,
+                    },
+                },
+            },
+        )
+
+        for case in cases:
+            with self.subTest(section_key=case["section_key"]):
+                definition = get_definition(case["section_key"])
+                current = {
+                    **definition.default_settings(),
+                    **case["seed"],
+                    "background": {
+                        "mode": "color",
+                        "color": "#123456",
+                        "media_asset_id": None,
+                        "pattern_slug": "",
+                        "palette_role": "",
+                    },
+                    "spacing": {
+                        "vertical_spacing": "small",
+                        "advanced": {
+                            "padding_top": 12,
+                            "padding_bottom": None,
+                            "margin_top": None,
+                            "margin_bottom": 8,
+                        },
+                    },
+                }
+                current = definition.validate_settings(current)
+                varied = clean_section_schema_patch(
+                    definition,
+                    {case["variant_key"]: case["variant"]},
+                    current,
+                )
+                renamed = clean_section_schema_patch(
+                    definition, {"title": "Dormant values retained"}, varied,
+                )
+                sourced = clean_section_schema_patch(
+                    definition,
+                    {
+                        "source": resource_source_module.serialize_resource_source(
+                            resource_source_module.ResourceSource(
+                                kind=case["resource_kind"],
+                                mode="manual",
+                                manual_ids=case["manual_ids"],
+                            )
+                        )
+                    },
+                    renamed,
+                )
+
+                self.assertEqual(sourced[case["variant_key"]], case["variant"])
+                self.assertEqual(
+                    sourced[case["legacy_ids_key"]], list(case["manual_ids"])
+                )
+                self.assertEqual(sourced["background"]["color"], "#123456")
+                self.assertEqual(sourced["spacing"]["vertical_spacing"], "small")
+                self.assertEqual(sourced["spacing"]["advanced"]["padding_top"], 12)
+                self.assertEqual(sourced["spacing"]["advanced"]["margin_bottom"], 8)
+                self.assertEqual(sourced["responsive"], current["responsive"])
+
+                if case["section_key"] == "brand_carousel":
+                    self.assertIs(sourced["show_view_all"], True)
+                    self.assertEqual(sourced["destination"], current["destination"])
+                else:
+                    self.assertNotIn("show_view_all", sourced)
+                    self.assertNotIn("desktop_columns", sourced["responsive"])

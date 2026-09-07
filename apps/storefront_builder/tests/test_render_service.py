@@ -924,6 +924,126 @@ class CollectionTilesRenderTests(TestCase):
         self.assertEqual(pks, [third.pk, second.pk, first.pk])
 
 
+class SharedPilotRenderContractTests(TestCase):
+    """Task 6 bounded two-family checks over the real family adapters."""
+
+    def setUp(self):
+        cache.clear()
+
+    @staticmethod
+    def _resource_ids(item, section_key):
+        if section_key == "brand_carousel":
+            return [resource.pk for resource in item["context"]["brands"]]
+        return [row["collection"].pk for row in item["context"]["collection_tiles"]]
+
+    def test_manual_resource_selection_order_is_stable_for_both_pilots(self):
+        # Sorting either manual query by a model field would break the exact
+        # merchant-selected ID order asserted here.
+        from apps.catalog.models import Brand, MerchantCollection
+
+        cases = (
+            ("brand_carousel", Brand, "brand_ids", "display_mode"),
+            ("collection_tiles", MerchantCollection, "collection_ids", "tile_style"),
+        )
+        for section_key, model, ids_key, variant_key in cases:
+            with self.subTest(section_key=section_key):
+                store = Store.objects.create(
+                    name=f"Task 6 order {section_key}",
+                    slug=f"task6-order-{section_key.replace('_', '-')}",
+                )
+                resources = [
+                    model.objects.create(
+                        store=store,
+                        name=name,
+                        slug=f"task6-{section_key}-{suffix}",
+                        is_active=True,
+                    )
+                    for name, suffix in (("First", "first"), ("Second", "second"), ("Third", "third"))
+                ]
+                requested_ids = [resources[2].pk, resources[0].pk, resources[1].pk]
+                draft = svc.get_or_create_draft(store)
+                draft.sections.filter(section_key=section_key).delete()
+                section = StorefrontSection.objects.create(
+                    version=draft,
+                    section_key=section_key,
+                    order=900,
+                    settings={
+                        "title": "Ordered resources",
+                        variant_key: "carousel",
+                        ids_key: requested_ids,
+                    },
+                )
+
+                item = next(
+                    item for item in build_render_items(draft, store)
+                    if item["section"].pk == section.pk
+                )
+                self.assertEqual(self._resource_ids(item, section_key), requested_ids)
+
+    def test_two_same_family_instances_render_without_state_leakage_for_both_pilots(self):
+        # Reusing one section context or resource list for sibling instances
+        # would make one of these section-keyed projections borrow the other.
+        from apps.catalog.models import Brand, MerchantCollection
+
+        cases = (
+            ("brand_carousel", Brand, "brand_ids", "display_mode", ("grid", "carousel")),
+            ("collection_tiles", MerchantCollection, "collection_ids", "tile_style", ("grid", "carousel")),
+        )
+        for section_key, model, ids_key, variant_key, variants in cases:
+            with self.subTest(section_key=section_key):
+                store = Store.objects.create(
+                    name=f"Task 6 isolation {section_key}",
+                    slug=f"task6-isolation-{section_key.replace('_', '-')}",
+                )
+                resource_a = model.objects.create(
+                    store=store,
+                    name="Isolated A",
+                    slug=f"task6-{section_key}-isolated-a",
+                    is_active=True,
+                )
+                resource_b = model.objects.create(
+                    store=store,
+                    name="Isolated B",
+                    slug=f"task6-{section_key}-isolated-b",
+                    is_active=True,
+                )
+                draft = svc.get_or_create_draft(store)
+                draft.sections.filter(section_key=section_key).delete()
+                section_a = StorefrontSection.objects.create(
+                    version=draft,
+                    section_key=section_key,
+                    order=900,
+                    settings={
+                        "title": "Instance A",
+                        variant_key: variants[0],
+                        ids_key: [resource_a.pk],
+                    },
+                )
+                section_b = StorefrontSection.objects.create(
+                    version=draft,
+                    section_key=section_key,
+                    order=901,
+                    settings={
+                        "title": "Instance B",
+                        variant_key: variants[1],
+                        ids_key: [resource_b.pk],
+                    },
+                )
+
+                items = {
+                    item["section"].pk: item
+                    for item in build_render_items(draft, store)
+                    if item["section"].section_key == section_key
+                }
+                self.assertEqual(set(items), {section_a.pk, section_b.pk})
+                self.assertEqual(items[section_a.pk]["context"]["settings"]["title"], "Instance A")
+                self.assertEqual(items[section_b.pk]["context"]["settings"]["title"], "Instance B")
+                self.assertEqual(items[section_a.pk]["context"]["settings"][variant_key], variants[0])
+                self.assertEqual(items[section_b.pk]["context"]["settings"][variant_key], variants[1])
+                self.assertEqual(self._resource_ids(items[section_a.pk], section_key), [resource_a.pk])
+                self.assertEqual(self._resource_ids(items[section_b.pk], section_key), [resource_b.pk])
+
+
 class QuickLinksRenderTests(TestCase):
     def setUp(self):
         cache.clear()
