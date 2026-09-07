@@ -5,6 +5,14 @@
 {% block title %}سبد خرید | {{ SHOP_NAME }}{% endblock %}
 
 {% block extra_css %}
+{% comment %}
+Task 7 repair: every other public envelope (home_visual/product_list/
+product_detail/collection_detail) loads product_card.css via this same
+{% block extra_css %} mechanism before its own page CSS — Cart never did,
+so a collection_tiles ``grid`` (which sizes via ``.grid``/``.g4``, defined
+only in product_card.css) rendered as an unstyled block list here.
+{% endcomment %}
+<link rel="stylesheet" href="{% static 'css/product_card.css' %}">
 <link rel="stylesheet" href="{% static 'css/cart.css' %}">
 <link rel="stylesheet" href="{% static 'css/storefront_builder.css' %}">
 {% endblock %}

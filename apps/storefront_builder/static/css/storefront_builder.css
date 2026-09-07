@@ -4494,23 +4494,36 @@ a.sfb-v3-component-item,
 
 
 
-/* ===== collection tiles carousel (shared with home.css — Task 5) =====
+/* ===== collection tiles carousel (shared with home.css — Task 5, Task 7 repair) =====
    The collection-tiles ``carousel`` (tiles-carousel) variant sizes each
    ``.pcard`` tile via a flex-basis / scroll-snap rule that previously
    lived ONLY in the Home-only home.css. The non-Home public envelopes
    (product_list / product_detail / collection_detail / cart) load
    storefront_builder.css but NOT home.css, so a collection_tiles carousel
-   placed on any of them lacked its per-tile carousel sizing (the grid
-   variant is unaffected — ``.pcard``/``.grid``/``.g4`` live in the
-   shared product_card.css). home.css defines a SINGLE governing base
-   block for this selector (``flex:0 0 220px;scroll-snap-align:start``)
-   plus a ``@media(max-width:680px)`` responsive block (``flex-basis:180px``)
-   with NO later override, so those literal values ARE the effective
+   placed on any of them lacked its per-tile carousel sizing. home.css
+   defines a SINGLE governing base block for this selector
+   (``flex:0 0 220px;scroll-snap-align:start``) plus a
+   ``@media(max-width:680px)`` responsive block (``flex-basis:180px``) with
+   NO later override, so those literal values ARE the effective
    (cascade-resolved) values. Since storefront_builder.css loads AFTER
    home.css on the Home envelope, carrying these exact values makes the
    override a NO-OP (Home pixel-identical), while non-Home envelopes get
    the same correct carousel sizing. Scoped to ``.collection-tiles-carousel``
-   markup only (no global spill onto plain ``.pcard``). */
+   markup only (no global spill onto plain ``.pcard``).
+
+   Task 7 repair: Task 5's fix above mirrored only this CHILD ``.pcard``
+   rule — the PARENT container (the actual scroll rail: ``display:flex``,
+   ``overflow-x:auto``, the scroll-snap type) was never mirrored, and
+   home.css's ``.tiles-carousel`` base rule (its only definition) is
+   likewise not loaded off Home. The result: the carousel tile_style
+   rendered as a plain block list (no horizontal rail at all) on every
+   non-Home envelope. Mirrored below using the SAME
+   ``.collection-tiles-carousel.tiles-carousel`` compound selector — never
+   a bare ``.tiles-carousel`` override, which ``category_grid.html`` (an
+   unrelated, non-pilot family) also uses for its own carousel display
+   mode and must not be touched by this repair. Same effective values as
+   home.css's base rule, so the Home envelope is unaffected (no-op). */
+.collection-tiles-carousel.tiles-carousel{display:flex;gap:16px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:6px;-webkit-overflow-scrolling:touch}
 .collection-tiles-carousel.tiles-carousel .pcard{flex:0 0 220px;scroll-snap-align:start}
 @media(max-width:680px){
   .collection-tiles-carousel.tiles-carousel .pcard{flex-basis:180px}
