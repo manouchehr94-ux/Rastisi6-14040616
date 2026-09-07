@@ -250,3 +250,26 @@ scenarios 01–13 unchanged (all additions are phase3-gated).
 - backup branch: backup/rastisi6-phase3-task7-final-20260907, verified == the evidence commit SHA.
 - production changed across all of Task 7 (RED + repair, cumulative): exactly two files — storefront_builder.css (Collection-scoped), cart_detail.html (existing-stylesheet load). No migration, renderer, schema, mutation, lifecycle, domain, commerce, or Brand-family change.
 - Task 8: READY.
+
+### Task 8: START
+- BASE SHA: 578b3db5eb282e133949cf56ab13caca9be19e0a (Task 7 final certification)
+- worktree: clean; Task 7 fully PASS (precondition met)
+- brief: audit/regression/review/evidence only. No production or test-code authorization.
+
+### Task 8: COMPLETE (PASS)
+- baseline Run A: 734 tests, FAILED (failures=1, skipped=1) — known #1 (validator called twice) + known QuickLinks skip. Exact signature match to baseline.md.
+- baseline Run B: 121 tests, FAILED (failures=2, errors=1) — known #2 (fullscreen aria-pressed), #3 (fullscreen StopIteration), #4 (Persian gallery label). Exact signature match.
+- baseline Run C: 77 tests, OK.
+- combined: 932 executions, 927 pass, 3 fail, 1 error, 1 skip — same 4 known exceptions + 1 known skip as baseline.md, no new regression.
+- additional regression (test_r4_inspector + test_g23 + test_page_shell + full test_views): 331 tests, FAILED (failures=1, errors=1) — same known #2/#3 only, no new signature from the wider test_views run.
+- Django check: PASS. Migration check: PASS, no changes detected (zero migrations anywhere in the cumulative Phase-3 diff). git diff --check: PASS.
+- A06 final audit: Brand 45/45 + Collection 36/36 browser checks PASS (Task 7 final). A06 CLOSED for the two Phase-3 pilot families only.
+- V02 six-case exit: independently re-verified against real test methods (test_r4_mutation_api.py:463-711), all six cases (a-f) confirmed covered.
+- V01-V10: audited against actual current code (not ledger prose) — V01/V02/V03/V05/V06/V07/V08 CLOSED for the two pilots; V04 characterized not changed; V09/V10 correctly deferred to Phase 4/separate decision.
+- cumulative diff audit (e244619f..HEAD and c34a04e7..HEAD): zero migrations, zero files outside apps/{cart,catalog,storefront_builder}+tools+docs, exactly 12 production files touched total across all of Phase 3, render_service.py/layout_service.py/edit_history_service.py/appearance_authority_service.py all zero diff (no renderer/lifecycle/authority redesign), no second ResourceSource persistence owner, Cart commerce functions (add/update/remove/context) untouched outside the presentation-adapter hunk, tenant ownership checks symmetric between Brand and Collection, no Phase-4 scope entered, no legacy retirement.
+- fresh whole-branch review (independent, no prior context): SPEC COMPLIANCE PASS, CODE/TEST QUALITY PASS, ARCHITECTURE PASS, CRITICAL 0, IMPORTANT 0, MINOR 3 (all deferred with reason/risk, none blocking — see final_gate.md).
+- evidence: final_gate.md.
+- commit: "docs: close storefront vertical slice phase3" (subject only; SHA is Git's own record).
+- backup branch: backup/rastisi6-phase3-task8-final-20260907, verified == the closure commit SHA.
+- main verified unchanged at 973c1dc00bacb6f2f7d2604fa3880bb4d6250579.
+- FINAL RULING: Storefront vertical-slice Phase 3 CLOSED for Brand and Collection pilot families. Phase 4 NOT started; awaits separate Product Owner/Architect authorization.
