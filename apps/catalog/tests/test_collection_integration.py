@@ -145,3 +145,55 @@ class CollectionTypeContractTests(TestCase):
         store = _akhlaghi()
         collection = svc.create_collection(store, name="همیشه دستی")
         self.assertEqual(collection.collection_type, MerchantCollection.CollectionType.MANUAL)
+
+
+
+class CollectionDetailForeignHostPaginationTests(TestCase):
+    """Task 5 — a collection detail page (including ``?page=2``) is reachable
+    ANONYMOUSLY through a store's verified public custom domain (the existing
+    domain resolution fixture), served entirely by the domain-owned view: the
+    tenant is resolved from the host, the visible-membership list is
+    paginated, and page 2 carries the remaining members with no HTMX branch.
+    """
+
+    PUBLIC_HOST = "coll-foreign-public.example.com"
+
+    def setUp(self):
+        from django.test import override_settings
+        from apps.stores.models import StoreDomain
+
+        cache.clear()
+        self._override = override_settings(ALLOWED_HOSTS=[self.PUBLIC_HOST, "testserver"])
+        self._override.enable()
+        self.addCleanup(self._override.disable)
+
+        self.store = _akhlaghi()
+        StoreDomain.objects.create(
+            store=self.store, hostname=self.PUBLIC_HOST, is_primary=True,
+            verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=timezone.now(),
+        )
+        self.collection = svc.create_collection(self.store, name="کالکشنِ میزبانِ بیگانه")
+        for i in range(15):
+            svc.add_product(self.collection, _product(self.store, f"foreign-page-{i:02d}"))
+        # Anonymous client on the store's verified public host.
+        self.public_client = Client(HTTP_HOST=self.PUBLIC_HOST)
+
+    def test_anonymous_foreign_host_page2_renders_domain_membership(self):
+        url = reverse("catalog:collection-detail", args=[self.collection.slug])
+        resp = self.public_client.get(f"{url}?page=2")
+        self.assertEqual(resp.status_code, 200)
+        # Resolved via the host to the right tenant/collection.
+        self.assertEqual(resp.context["collection"], self.collection)
+        page_obj = resp.context["page_obj"]
+        self.assertEqual(page_obj.number, 2)
+        self.assertEqual(page_obj.paginator.num_pages, 2)
+        self.assertEqual(len(resp.context["products"]), 3)
+
+    def test_foreign_store_collection_slug_is_404_on_this_host(self):
+        other_store = Store.objects.create(
+            name="فروشگاهِ کاملاً دیگر", slug="coll-foreign-other", admin_subdomain="coll-foreign-other",
+        )
+        other_collection = svc.create_collection(other_store, name="کالکشنِ فروشگاهِ دیگر")
+        url = reverse("catalog:collection-detail", args=[other_collection.slug])
+        resp = self.public_client.get(url)
+        self.assertEqual(resp.status_code, 404)

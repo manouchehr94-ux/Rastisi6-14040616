@@ -189,3 +189,12 @@ scenarios 01–13 unchanged (all additions are phase3-gated).
 - fix rounds: 0
 - atomic schema+ownership: CONFIRMED (reviewer traced mutation path — no schema exposure without ownership check).
 - commit: (recorded on next task)
+
+
+[Task 4 commit SHA: d3e5c9967b55ea5db94cc25e65b68e5ab2151d25 "feat: converge collection tiles on typed source and r4 settings"]
+
+### Task 5: START
+- BASE SHA: d3e5c9967b55ea5db94cc25e65b68e5ab2151d25
+- worktree: clean; Task 4 GREEN, Brand gate unchanged (preconditions met)
+- brief: Collection end-to-end + page integration = COLLECTION GATE. Six-page registry/dispatch/presence/asset/shell for collection_tiles (like Task 3 Brand); both tile variants (grid/carousel) select/order; Draft/Published + stable_id; context-aware header/products get same collection/products/page_obj as domain view; /collections/<slug>/?page=2 domain membership + shared cards, no HX; E6 collection_index direct listing (no pilot render-items); real Cart HTMX for Collection tiles (presentation adapter from Task 3); scoped CSS if RED; browser matrix E1-E5 @ 3 viewports both tile variants. PRESERVE domain ownership, count meaning, pagination.
+- Allowed prod: render_service.py (Collection builders only), templates sections/collection_tiles.html/collection_header.html/collection_products.html, partials/responsive_section_wrapper.html (Collection ctx only), static/css/storefront_builder.css (Collection-scoped only), catalog collection_detail.html/collection_index.html (pilot assets only), preview.html; + Task5 additional: test_section_registry/test_page_shell/test_g23 + catalog home_visual/product_list/product_detail + cart_detail (load Builder styles if new omission demonstrated). Reuse Task3 canonical stylesheet mechanism. QA command/runner. Forbidden: domain business rules, ProductCardData/card redesign, new pagination/fragment route, non-Home R4 UI.

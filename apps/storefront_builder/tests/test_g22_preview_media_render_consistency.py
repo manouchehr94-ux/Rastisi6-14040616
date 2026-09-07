@@ -533,3 +533,157 @@ class BrandCarouselWrapperConsistencyTests(_RenderMediaTestBase):
         self.assertIn("?brand=p3-wrapper-brand", preview_html)
         self.assertIn("برند پس‌زمینه‌دار", preview_html)
         self.assertNotIn("has no file associated with it", preview_html)
+
+
+
+class CollectionTilesWrapperConsistencyTests(_RenderMediaTestBase):
+    """Task 5 (wrapper isolation, mirror of BrandCarouselWrapperConsistencyTests):
+    the ``responsive_section_wrapper`` is the single shared wrapper both
+    Builder Preview and the public storefront include. For a ``collection_tiles``
+    item built by the real ``build_page_render_items`` pipeline, rendering the
+    wrapper preserves the item's identity, its tile links / count / image /
+    title, and its responsive/background flags — consistent with the persisted
+    settings. Also proves the collection-page context-aware header/products
+    render from the SAME shared items under one page context.
+    """
+
+    def _collection_tiles_item(self, settings, *, with_image=False):
+        from decimal import Decimal
+
+        from apps.catalog.models import Category, MerchantCollection, MerchantCollectionItem, Product, Vendor
+
+        collection = MerchantCollection.objects.create(
+            store=self.store, name="کالکشنِ رپر", slug="p3-wrapper-collection", is_active=True,
+        )
+        if with_image:
+            collection.image = _img("collection-cover.png")
+            collection.save(update_fields=["image"])
+        # Two real members => item_count == 2 (TOTAL membership).
+        vendor = Vendor.objects.create(store=self.store, name="فروشنده رپر", slug="v-wrap-coll")
+        category = Category.objects.create(store=self.store, name="دسته رپر", slug="c-wrap-coll", is_active=True)
+        for i in range(2):
+            product = Product.objects.create(
+                store=self.store, vendor=vendor, category=category, name=f"کالای رپر {i}", slug=f"wrap-coll-p{i}",
+                sku=f"SKU-WRAPCOLL-{i}", price=Decimal("10000"), status=Product.Status.ACTIVE,
+            )
+            MerchantCollectionItem.objects.create(collection=collection, product=product, order=i)
+
+        draft = svc.get_or_create_draft(self.store)
+        draft.sections.filter(section_key="collection_tiles").delete()
+        StorefrontSection.objects.create(
+            version=draft, section_key="collection_tiles", order=900, settings=settings,
+        )
+        page = draft.get_page("home")
+        items = build_page_render_items(page, self.store)
+        return collection, next(i for i in items if i["section"].section_key == "collection_tiles")
+
+    def test_wrapper_preserves_tile_links_count_image_and_title(self):
+        settings = {
+            "title": "کالکشن‌های رپر",
+            "tile_style": "grid",
+            "collection_ids": [],
+            "responsive": {"hide_on_mobile": True},
+        }
+        collection, item = self._collection_tiles_item(settings, with_image=True)
+
+        html = render_to_string(
+            "storefront_builder/partials/responsive_section_wrapper.html",
+            {"item": item, "is_preview": True},
+        )
+        # Identity.
+        self.assertIn('data-section-key="collection_tiles"', html)
+        self.assertIn(f'data-section-id="{item["section"].pk}"', html)
+        # Title + tile link + collection name.
+        self.assertIn("کالکشن‌های رپر", html)
+        self.assertIn(f"/collections/{collection.slug}/", html)
+        self.assertIn("کالکشنِ رپر", html)
+        # Count reflects TOTAL membership (2 کالا).
+        self.assertIn("2 کالا", html)
+        # Image: the real cover renders (not the folder-glyph fallback).
+        self.assertIn(collection.image.url, html)
+        self.assertNotIn("🗂️", html)
+        # Responsive flag surfaced; others absent.
+        self.assertIn("data-hide-mobile", html)
+        self.assertNotIn("data-hide-desktop", html)
+        self.assertNotIn("has no file associated with it", html)
+
+    def test_wrapper_folder_glyph_fallback_when_no_image(self):
+        settings = {"title": "بدون تصویر", "tile_style": "grid", "collection_ids": []}
+        collection, item = self._collection_tiles_item(settings, with_image=False)
+        html = render_to_string(
+            "storefront_builder/partials/responsive_section_wrapper.html",
+            {"item": item, "is_preview": True},
+        )
+        self.assertIn("کالکشنِ رپر", html)
+        # No cover image => the folder-glyph fallback is shown.
+        self.assertIn("🗂️", html)
+
+    def test_wrapper_carousel_variant_container_class(self):
+        settings = {"title": "کاروسل رپر", "tile_style": "carousel", "collection_ids": []}
+        _collection, item = self._collection_tiles_item(settings)
+        html = render_to_string(
+            "storefront_builder/partials/responsive_section_wrapper.html",
+            {"item": item, "is_preview": True},
+        )
+        self.assertIn("tiles-carousel collection-tiles-carousel", html)
+
+    def test_collection_header_and_products_render_under_same_page_context(self):
+        """Wrapper isolation for the collection-page context-aware sections:
+        header + products + paginator all render from the SAME shared items
+        built with ONE ``page_context`` (the shape ``collection_detail``
+        produces), through the shared wrapper."""
+        from decimal import Decimal
+
+        from django.core.paginator import Paginator
+
+        from apps.catalog.models import Category, MerchantCollection, MerchantCollectionItem, Product, Vendor
+        from apps.catalog.services.collection_service import collection_visible_items
+
+        collection = MerchantCollection.objects.create(
+            store=self.store, name="کالکشنِ صفحه", slug="p3-wrapper-detail", is_active=True,
+            description="توضیحِ کالکشنِ رپر",
+        )
+        vendor = Vendor.objects.create(store=self.store, name="فروشنده صفحه", slug="v-wrap-detail")
+        category = Category.objects.create(store=self.store, name="دسته صفحه", slug="c-wrap-detail", is_active=True)
+        for i in range(15):
+            product = Product.objects.create(
+                store=self.store, vendor=vendor, category=category, name=f"کالای صفحه {i:02d}",
+                slug=f"wrap-detail-p{i:02d}", sku=f"SKU-WRAPDET-{i:02d}", price=Decimal("10000"),
+                status=Product.Status.ACTIVE,
+            )
+            MerchantCollectionItem.objects.create(collection=collection, product=product, order=i)
+
+        draft = svc.get_or_create_draft(self.store)
+        page = draft.get_page("collection")
+        page.sections.all().delete()
+        StorefrontSection.objects.create(page=page, section_key="collection_header", order=0)
+        StorefrontSection.objects.create(page=page, section_key="collection_products", order=1)
+
+        # collection_detail's exact page_context, on page 2.
+        items = collection_visible_items(collection, self.store)
+        paginator = Paginator(items, 12)
+        page_obj = paginator.get_page("2")
+        products = [it.product for it in page_obj.object_list]
+        page_context = {"collection": collection, "products": products, "page_obj": page_obj}
+
+        render_items = build_page_render_items(page, self.store, page_context=page_context)
+
+        header_item = next(i for i in render_items if i["section"].section_key == "collection_header")
+        products_item = next(i for i in render_items if i["section"].section_key == "collection_products")
+
+        header_html = render_to_string(
+            "storefront_builder/partials/responsive_section_wrapper.html",
+            {"item": header_item, "is_preview": True},
+        )
+        products_html = render_to_string(
+            "storefront_builder/partials/responsive_section_wrapper.html",
+            {"item": products_item, "is_preview": True},
+        )
+        # Header: name + description of the resolved current collection.
+        self.assertIn("کالکشنِ صفحه", header_html)
+        self.assertIn("توضیحِ کالکشنِ رپر", header_html)
+        # Products: a page-2 product present, a page-1 product absent, and a
+        # paginator (2 pages => "بعدی"/"قبلی" controls rendered).
+        self.assertIn("کالای صفحه 13", products_html)
+        self.assertNotIn("کالای صفحه 00", products_html)
+        self.assertIn("pagination", products_html)

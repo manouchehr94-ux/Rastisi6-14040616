@@ -516,7 +516,7 @@ class Command(BaseCommand):
             "cart": place_all_variants(StorefrontPage.PageType.CART),
         }
 
-        return {
+        gate = {
             # brand_carousel section ids (in the DRAFT) per envelope page type,
             # keyed by variant display_mode: {envelope: {variant: section_pk}}
             "brand_section_ids": envelopes,
@@ -533,6 +533,199 @@ class Command(BaseCommand):
             "view_all_url_path": f"/collections/{collection.slug}/",
             # the three variant values the certification cycles per envelope
             "variants": list(BRAND_CAROUSEL_DISPLAY_MODES),
+        }
+        # Task 5 "Collection gate" — additive, phase3-only. Placed alongside
+        # the Brand gate on the SAME Draft (both publish together in one GET),
+        # under a dedicated ``collection`` key so the Brand matrix inputs above
+        # are untouched. The runner reads ``phase3_fixture.collection`` only for
+        # the Collection matrix; the default R3 run never reaches this method.
+        gate["collection"] = self._prepare_phase3_collection_gate(store, user, draft)
+        return gate
+
+    def _prepare_phase3_collection_gate(self, store: Store, user, draft) -> dict:
+        """Task 5 — a deterministic Collection matrix on the SAME Draft the
+        Brand gate uses. Stands up:
+
+          * ``p3-collection-1`` (reused from the Brand gate) AND a second
+            ``p3-collection-2`` created deterministically LATER (a strictly
+            greater ``created_at``) so auto (newest-first) ordering is
+            provable and stable across reruns,
+          * one collection with >12 storefront-visible members (a real
+            ``?page=2``), created from dedicated collection products,
+          * one member whose product is INACTIVE (so ``item_count`` = TOTAL
+            membership is strictly greater than the visible-product count),
+          * one collection WITH a real cover image + one WITHOUT (folder-glyph
+            fallback),
+          * one ``collection_tiles`` per tile_style variant (grid + carousel)
+            on each of the six envelope pages.
+
+        Returns the ids/slugs the runner threads through the manifest. NEVER
+        runs on the default R3 path."""
+        from io import BytesIO
+
+        from django.core.files.base import ContentFile
+        from django.utils import timezone
+
+        from apps.catalog.models import (
+            Category, MerchantCollection, MerchantCollectionItem, Product, Vendor,
+        )
+        from apps.storefront_builder.models import StorefrontPage, StorefrontSection
+
+        def _png_cover(color):
+            try:
+                from PIL import Image  # noqa: WPS433 (local import; project dep)
+            except Exception:  # pragma: no cover — PIL is a project dependency
+                return None
+            buf = BytesIO()
+            Image.new("RGB", (320, 180), color).save(buf, format="PNG")
+            return buf.getvalue()
+
+        vendor, _ = Vendor.objects.get_or_create(
+            store=store, slug="p3-coll-vendor", defaults=dict(name="فروشنده کالکشن پی۳"),
+        )
+        category, _ = Category.objects.get_or_create(
+            store=store, slug="p3-coll-category", defaults=dict(name="دسته کالکشن پی۳", is_active=True),
+        )
+
+        # ---- Collection #1: reuse the Brand-gate host (p3-collection-1). ----
+        # It has a couple of real members already; give it a real cover image
+        # so the "image decoded" tile path has a subject.
+        c1 = MerchantCollection.objects.get(store=store, slug="p3-collection-1")
+        if not c1.image:
+            payload = _png_cover("#6d28d9")
+            if payload is not None:
+                c1.image.save(f"{c1.slug}.png", ContentFile(payload), save=True)
+
+        # ---- Collection #2: created LATER => deterministically newest. ----
+        # A no-image collection (folder-glyph fallback subject).
+        c2, created2 = MerchantCollection.objects.get_or_create(
+            store=store, slug="p3-collection-2",
+            defaults=dict(name="کالکشن پی۳ شماره ۲", is_active=True),
+        )
+        if c2.image:
+            c2.image.delete(save=False)
+        c2.is_active = True
+        c2.save(update_fields=["is_active", "image"])
+        # Force a strictly-greater created_at so newest-first ordering is
+        # deterministic regardless of DB timestamp resolution / rerun timing.
+        # ``created_at`` is auto_now_add, so a plain .save() ignores it — a
+        # bulk ``update()`` bypasses that and writes the exact value.
+        MerchantCollection.objects.filter(pk=c2.pk).update(
+            created_at=c1.created_at + timezone.timedelta(days=1),
+        )
+        c2.refresh_from_db(fields=["created_at"])
+        # A couple of members for c2 (reuse the base t12 products).
+        for order, slug in enumerate(["t12-product-3", "t12-product-4"]):
+            product = Product.objects.filter(store=store, slug=slug).first()
+            if product is not None:
+                MerchantCollectionItem.objects.get_or_create(
+                    collection=c2, product=product, defaults=dict(order=order),
+                )
+
+        # ---- Collection #3: >12 visible members + one INACTIVE member. ----
+        c_page2, _ = MerchantCollection.objects.get_or_create(
+            store=store, slug="p3-collection-page2",
+            defaults=dict(name="کالکشن پی۳ صفحه‌بندی", is_active=True),
+        )
+        c_page2.is_active = True
+        c_page2.save(update_fields=["is_active"])
+        # NOT newest: strictly-older created_at (bulk update bypasses auto_now_add).
+        MerchantCollection.objects.filter(pk=c_page2.pk).update(
+            created_at=c1.created_at - timezone.timedelta(days=1),
+        )
+        # 13 ACTIVE (visible) members => 2 pages at PRODUCTS_PER_PAGE=12.
+        for i in range(13):
+            product, _ = Product.objects.get_or_create(
+                store=store, slug=f"p3-coll-page2-p{i:02d}",
+                defaults=dict(
+                    vendor=vendor, category=category, name=f"کالای صفحه‌بندی پی۳ {i:02d}",
+                    sku=f"SKU-P3PAGE2-{i:02d}", price=Decimal("90000"), stock=10,
+                    status=Product.Status.ACTIVE,
+                ),
+            )
+            MerchantCollectionItem.objects.get_or_create(
+                collection=c_page2, product=product, defaults=dict(order=i),
+            )
+        # One INACTIVE member: counts toward item_count (TOTAL membership) but
+        # NOT toward the visible-product page listing.
+        inactive_product, _ = Product.objects.get_or_create(
+            store=store, slug="p3-coll-page2-inactive",
+            defaults=dict(
+                vendor=vendor, category=category, name="کالای غیرفعال پی۳",
+                sku="SKU-P3PAGE2-INACTIVE", price=Decimal("90000"), stock=10,
+                status=Product.Status.INACTIVE,
+            ),
+        )
+        MerchantCollectionItem.objects.get_or_create(
+            collection=c_page2, product=inactive_product, defaults=dict(order=99),
+        )
+
+        tile_variants = ["grid", "carousel"]
+
+        def _tiles_settings(tile_style: str, page_type: str) -> dict:
+            return {
+                "title": f"کالکشن‌های {page_type} {tile_style}",
+                "tile_style": tile_style,
+                # empty selection => auto (all active, newest-first): proves
+                # deterministic newest ordering (c2 first) on every envelope.
+                "collection_ids": [],
+            }
+
+        def place_tiles_variant(page, tile_style: str, page_type: str) -> int:
+            order = page.sections.count()
+            section = StorefrontSection.objects.create(
+                page=page,
+                section_key="collection_tiles",
+                order=order,
+                settings=_tiles_settings(tile_style, page_type),
+            )
+            container = container_service.create_empty_container(page, "single")
+            cell = container.cells.order_by("order", "id").first()
+            container_service.place_section(cell, section)
+            return section.pk
+
+        def place_all_tile_variants(page_type: str) -> dict:
+            page = draft.get_page(page_type)
+            return {ts: place_tiles_variant(page, ts, page_type) for ts in tile_variants}
+
+        envelopes = {
+            "home": place_all_tile_variants(StorefrontPage.PageType.HOME),
+            "product_detail": place_all_tile_variants(StorefrontPage.PageType.PRODUCT_DETAIL),
+            "listing": place_all_tile_variants(StorefrontPage.PageType.LISTING),
+            "search": place_all_tile_variants(StorefrontPage.PageType.SEARCH),
+            "collection": place_all_tile_variants(StorefrontPage.PageType.COLLECTION),
+            "cart": place_all_tile_variants(StorefrontPage.PageType.CART),
+        }
+
+        # Active-collection auto order is newest-first; c2 (created LATER) is
+        # the deterministic newest.
+        newest_slug = c2.slug
+
+        return {
+            # collection_tiles section ids (DRAFT) per envelope, keyed by
+            # tile_style: {envelope: {variant: section_pk}}
+            "tiles_section_ids": envelopes,
+            # collection slugs the runner asserts against
+            "collection_slugs": [c2.slug, c1.slug, c_page2.slug],
+            "newest_collection_slug": newest_slug,
+            # the >12-member collection for a real ?page=2 fetch
+            "page2_collection_slug": c_page2.slug,
+            # names for tile-text assertions
+            "collection_names": {
+                c1.slug: c1.name, c2.slug: c2.name, c_page2.slug: c_page2.name,
+            },
+            # which collection has a cover image vs the folder-glyph fallback
+            "image_collection_slug": c1.slug,
+            "no_image_collection_slug": c2.slug,
+            # item_count(TOTAL) vs visible-count evidence for the page2 host:
+            # 14 members total (13 active + 1 inactive), 13 visible.
+            "page2_total_members": 14,
+            "page2_visible_members": 13,
+            # a product slug on the six envelopes (product_detail route input);
+            # reuse the Brand gate's stocked cart-flow product.
+            "product_slug": "t12-product-1",
+            # tile_style variants the matrix cycles per envelope
+            "tile_variants": list(tile_variants),
         }
 
     def _build_manifest(self, *, store, port, session_cookie, report_dir, headed, browser_channel, phase3=False, phase3_fixture=None):

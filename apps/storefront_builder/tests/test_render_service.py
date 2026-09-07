@@ -1320,6 +1320,60 @@ class CollectionContextAwareSectionsTests(TestCase):
         self.assertNotIn("collection", item["context"])
         self.assertNotIn("products", item["context"])
 
+    def test_collection_products_context_matches_domain_view_objects(self):
+        """Task 5 — context-aware parity: when the collection page is built
+        with a ``page_context`` shaped exactly like ``collection_detail``'s
+        output (collection / products / page_obj), the ``collection_products``
+        builder must thread through the SAME objects the domain view produced
+        — never re-resolving from a stored id. Proven with the domain's own
+        query surface (Paginator + collection_visible_items), not fixtures."""
+        from decimal import Decimal
+
+        from django.core.paginator import Paginator
+
+        from apps.catalog.models import Category, Product, Vendor
+        from apps.catalog.services import collection_service
+        from apps.catalog.services.collection_service import collection_visible_items
+
+        collection = collection_service.create_collection(self.store, name="کالکشنِ برابری")
+        vendor = Vendor.objects.create(store=self.store, name="فروشنده برابری", slug="v-parity")
+        category = Category.objects.create(store=self.store, name="دسته برابری", slug="cat-parity", is_active=True)
+        product = Product.objects.create(
+            store=self.store, vendor=vendor, category=category, name="کالای برابری", slug="p-parity",
+            sku="SKU-PARITY-1", price=Decimal("10000"), status=Product.Status.ACTIVE,
+        )
+        collection_service.add_product(collection, product)
+
+        # Reproduce collection_detail's exact page_context construction.
+        items = collection_visible_items(collection, self.store)
+        paginator = Paginator(items, 12)  # PRODUCTS_PER_PAGE
+        page_obj = paginator.get_page("1")
+        products = [item.product for item in page_obj.object_list]
+
+        StorefrontSection.objects.create(page=self.page, section_key="collection_products", order=0)
+        render_items = build_page_render_items(
+            self.page, self.store,
+            page_context={"collection": collection, "products": products, "page_obj": page_obj},
+        )
+        body = next(x for x in render_items if x["section"].section_key == "collection_products")
+        # Same objects the domain view produces (never re-resolved from settings).
+        self.assertEqual(body["context"]["collection"], collection)
+        self.assertEqual(body["context"]["products"], products)
+        self.assertIs(body["context"]["page_obj"], page_obj)
+
+    def test_collection_header_context_matches_domain_view_collection(self):
+        """Task 5 — the ``collection_header`` builder threads through the SAME
+        collection object the domain view resolved for the current page."""
+        from apps.catalog.services import collection_service
+
+        collection = collection_service.create_collection(self.store, name="کالکشنِ هدرِ برابری")
+        StorefrontSection.objects.create(page=self.page, section_key="collection_header", order=0)
+        render_items = build_page_render_items(
+            self.page, self.store, page_context={"collection": collection},
+        )
+        head = next(x for x in render_items if x["section"].section_key == "collection_header")
+        self.assertIs(head["context"]["collection"], collection)
+
 
 class CartContextAwareSectionsTests(TestCase):
     """Phase 5: ``cart_items``/``cart_summary`` — سبد همیشه در page_context

@@ -491,3 +491,117 @@ class BrandOnNonHomePublicRouteTests(_GoldenBase):
         # tile CSS now lives) — NOT the Home-only home.css.
         self.assertIn("css/storefront_builder.css", body)
         self.assertNotIn("css/home.css", body)
+
+
+
+# =====================================================================
+# Task 5 (V06/A06 for Collection) — the collection-tiles CAROUSEL sizing
+# rule must live in the shared Builder stylesheet, not only in the
+# Home-only home.css. The four non-Home public envelopes (product_list /
+# product_detail / collection_detail / cart) load storefront_builder.css
+# but NOT home.css, so a collection_tiles section rendered in its
+# ``carousel`` (tiles-carousel) variant on any of them lacked its
+# per-tile flex-basis / scroll-snap sizing. (The grid variant is fine:
+# ``.pcard``/``.grid``/``.g4`` already live in product_card.css.)
+# =====================================================================
+class CollectionCarouselCssIsInSharedBuilderStylesheetTests(TestCase):
+    """The collection-tiles carousel tile-basis rules must be present in the
+    shared ``storefront_builder.css`` (loaded by every non-Home V2 envelope),
+    mirroring the Home-only ``home.css`` EFFECTIVE values, so a
+    collection_tiles carousel on a non-Home page is sized identically. Reads
+    the real stylesheet source (a static-asset contract), mirroring the Brand
+    ``BrandTileCssIsInSharedBuilderStylesheetTests`` above.
+    """
+
+    def _builder_css(self):
+        from pathlib import Path
+
+        from django.contrib.staticfiles import finders
+
+        path = finders.find("css/storefront_builder.css")
+        self.assertIsNotNone(path, "storefront_builder.css must be resolvable via staticfiles")
+        return Path(path).read_text(encoding="utf-8")
+
+    def _home_css(self):
+        from pathlib import Path
+
+        from django.contrib.staticfiles import finders
+
+        path = finders.find("css/home.css")
+        self.assertIsNotNone(path, "home.css must be resolvable via staticfiles")
+        return Path(path).read_text(encoding="utf-8")
+
+    def test_collection_carousel_selector_present_in_shared_builder_stylesheet(self):
+        css = self._builder_css()
+        # The carousel tile-basis selector that previously lived ONLY in home.css.
+        self.assertIn(
+            ".collection-tiles-carousel.tiles-carousel .pcard", css,
+            "collection carousel tile-basis rule missing from storefront_builder.css",
+        )
+
+    def test_collection_carousel_basis_matches_home_css_effective_value(self):
+        """The shared sheet must mirror Home's EFFECTIVE (cascade-resolved)
+        value so Home is unchanged and non-Home is fixed to the SAME sizing.
+
+        home.css defines exactly ONE base block for this selector
+        (`flex:0 0 220px;scroll-snap-align:start`) plus one responsive
+        (`@media(max-width:680px){...flex-basis:180px}`) block — there is NO
+        later overriding block of the same selector, so the effective values
+        are those literal ones. Since storefront_builder.css loads AFTER
+        home.css on the Home envelope, carrying these exact values makes the
+        override a NO-OP (Home pixel-identical)."""
+        css = self._builder_css()
+        self.assertIn("flex:0 0 220px", css)
+        self.assertIn("scroll-snap-align:start", css)
+        # The responsive (<=680px) basis must also be mirrored.
+        self.assertIn("flex-basis:180px", css)
+
+    def test_collection_carousel_shared_rule_is_noop_over_home_effective_cascade(self):
+        """Home-unchanged guard. The shared sheet loads AFTER home.css on the
+        Home envelope; for the carousel tile-basis selector the shared value
+        must equal Home's EFFECTIVE (there is a single governing block, so its
+        literal value) — making the override a NO-OP so Home stays
+        pixel-identical."""
+        css = self._builder_css()
+        home = self._home_css()
+        # home.css's governing block for this selector (the value that wins on Home).
+        self.assertIn(
+            ".collection-tiles-carousel.tiles-carousel .pcard{flex:0 0 220px;scroll-snap-align:start}",
+            home,
+        )
+        # The shared sheet must mirror that governing value, so overriding = no-op.
+        self.assertIn("flex:0 0 220px", css)
+        self.assertIn("scroll-snap-align:start", css)
+        # And the responsive value home.css sets under max-width:680px.
+        self.assertIn("flex-basis:180px", home)
+        self.assertIn("flex-basis:180px", css)
+
+    def test_home_css_collection_carousel_rule_is_not_deleted(self):
+        """Regression guard: adding rules to the shared sheet must NOT remove
+        the original Home-only rule (Home must stay byte-identical)."""
+        home = self._home_css()
+        self.assertIn(".collection-tiles-carousel.tiles-carousel .pcard{flex:0 0 220px", home)
+        self.assertIn("flex-basis:180px", home)
+
+    def test_collection_carousel_selectors_are_scoped_no_global_spill(self):
+        """Every Collection carousel rule added to the shared sheet must be
+        anchored on a ``.collection-tiles-carousel`` / ``.tiles-carousel``
+        selector — no bare element/global selector spill onto ``.pcard``
+        generally (the grid variant's ``.pcard`` sizing comes from
+        product_card.css and must stay untouched)."""
+        css = self._builder_css()
+        marker = "collection tiles carousel (shared with home.css"
+        self.assertIn(marker, css, "expected a delimited, commented Collection block in storefront_builder.css")
+        block = css.split(marker, 1)[1]
+        lines = []
+        for line in block.splitlines()[1:]:
+            if line.strip().startswith("/* ===="):
+                break
+            lines.append(line)
+        rule_lines = [ln.strip() for ln in lines if ln.strip() and "{" in ln and not ln.strip().startswith("@")]
+        for rule in rule_lines:
+            selector = rule.split("{", 1)[0].strip()
+            self.assertIn(
+                "collection-tiles-carousel", selector,
+                f"non-collection-scoped selector leaked into Collection CSS block: {selector!r}",
+            )

@@ -101,6 +101,17 @@ let context;
 let page;
 let publicPage;
 
+// The Preview endpoint the admin `page`'s #r4PreviewFrame child iframe GETs.
+// R4's editor JS reloads that iframe fire-and-forget after every mutation
+// (previewFrame.contentWindow.location.reload() in applyResourcePicker /
+// refreshStructureAndPreview, r4_editor.js). We track how many such preview
+// requests are in-flight on the admin `page` so settlePreviewFrame() can
+// wait DETERMINISTICALLY for them all to complete — leaving nothing for the
+// next main-frame navigation to abort — rather than relying on a networkidle
+// heuristic that can sample the network while a reload is still queued.
+const PREVIEW_URL_FRAGMENT = '/storefront-builder/preview/';
+let inFlightPreviewRequests = 0;
+
 // Scenario-crossing discovered state (never hardcoded — always read from
 // the manifest or the rendered UI).
 let heroSectionId = null;
@@ -296,12 +307,95 @@ async function closeInspectorIfOpen() {
 // main_frame_navigations without being marked here is, by construction, an
 // unexpected navigation and fails finalInstrumentationAssertions().
 async function withExpectedNavigation(actionFn, { count = 1 } = {}) {
+  // Settle BEFORE the navigation too: R4's editor JS reloads the preview
+  // iframe (previewFrame.contentWindow.location.reload(), r4_editor.js) after
+  // every successful mutation, so by the time a scenario finishes its
+  // save/apply and calls page.reload()/page.goto() here, a JS-triggered
+  // preview GET (…/preview/?page=home) can still be in-flight. The upcoming
+  // main-frame navigation would abort it (net::ERR_ABORTED). Waiting for the
+  // preview iframe's load to settle first means there is nothing left to
+  // abort. (Best-effort; scoped to the admin `page` only.)
+  await settlePreviewFrame();
   const before = result.main_frame_navigations.length;
   await actionFn();
   const gained = result.main_frame_navigations.length - before;
   assert(gained === count, `Expected exactly ${count} main-frame navigation(s) from this action, got ${gained}`);
   for (let i = before; i < result.main_frame_navigations.length; i += 1) {
     result.main_frame_navigations[i].expected = true;
+  }
+  // Every admin navigation/reload goes through this wrapper. Each such
+  // main-frame navigation re-mounts the R4 editor, whose #r4PreviewFrame
+  // child iframe then kicks off its own GET of the Preview endpoint
+  // (…/preview/?page=home). page.reload()/page.goto() above resolve on the
+  // MAIN frame's `domcontentloaded`, which fires BEFORE that child-iframe
+  // request has finished. If the very next scenario triggers another
+  // main-frame navigation while the preview iframe's request is still
+  // in-flight, Chromium tears down the old document and aborts that
+  // in-flight sub-frame request with net::ERR_ABORTED — a benign,
+  // harness-initiated superseded navigation, but a real dangling request
+  // all the same. Rather than allow-list the abort, we eliminate it at its
+  // source: after each admin navigation settles, wait for the preview
+  // iframe to reach its own committed/loaded state so NO preview request is
+  // left in-flight for the next navigation to abort. (Best-effort and
+  // scoped strictly to the admin `page`; the phase3 matrix runs in its own
+  // contexts and never touches this frame.)
+  await settlePreviewFrame();
+}
+
+// Wait for the admin `page`'s #r4PreviewFrame child iframe to finish its
+// in-flight Preview GET so a subsequent main-frame navigation has nothing
+// to abort. Best-effort: if the preview frame is not present/resolvable
+// (e.g. the page just navigated away entirely, or is closed), there is by
+// definition no in-flight preview request to settle, so we return quietly.
+async function settlePreviewFrame() {
+  try {
+    if (!page || page.isClosed()) return;
+    const locator = page.locator('#r4PreviewFrame');
+    if ((await locator.count()) === 0) return;
+    // The preview reload R4's editor JS performs after a mutation
+    // (previewFrame.contentWindow.location.reload() in applyResourcePicker /
+    // refreshStructureAndPreview) is fire-and-forget: it is triggered from a
+    // mutation-response .then() and is NOT awaited by the code that resolves
+    // the save-state text waitSaved() keys off. So at the instant this helper
+    // is first entered, that preview GET may not have STARTED yet (network
+    // momentarily idle) — checking networkidle once would return immediately
+    // and still leave the request to fire and then be aborted by the imminent
+    // main-frame navigation. A short bounded settle lets any such just-issued
+    // reload actually begin; then networkidle waits for it (and every other
+    // sub-frame request) to fully COMPLETE. Only then is there provably
+    // nothing in-flight for the next navigation to abort. Both steps are
+    // bounded and best-effort; neither can hide a real error (the
+    // request-failure gate still runs).
+    //
+    // Grace period: the reload R4's editor JS issues is fire-and-forget from
+    // a mutation-response .then(), so at the instant we enter this helper the
+    // preview GET may not have been dispatched yet. This bounded wait lets any
+    // such just-issued reload REGISTER on the `request` listener (bumping
+    // inFlightPreviewRequests) before we start polling for it to drain.
+    await page.waitForTimeout(400);
+
+    // Deterministic drain: poll until there is provably NO preview request
+    // in-flight on the admin `page`. inFlightPreviewRequests is incremented on
+    // every `request` whose URL hits the preview endpoint and decremented on
+    // its `requestfinished`/`requestfailed`, so reaching 0 means every preview
+    // GET has fully completed and nothing is left for the next main-frame
+    // navigation to abort. Bounded (~8s) so a genuinely stuck request can
+    // never hang the run — and if one somehow remained in-flight past the
+    // bound, the request-failure gate would still catch the resulting abort,
+    // so nothing is silently hidden.
+    const drainDeadline = Date.now() + 8000;
+    while (inFlightPreviewRequests > 0 && Date.now() < drainDeadline) {
+      await page.waitForTimeout(50);
+    }
+
+    // Belt-and-suspenders: also let the overall network reach idle so any
+    // non-preview sub-frame work the reload kicked off has settled too.
+    await page.waitForLoadState('networkidle', { timeout: 10000 });
+  } catch (_error) {
+    // Best effort only — never let settling the preview frame fail a
+    // scenario. If it genuinely could not settle in time, the existing
+    // request-failure gate still catches any resulting abort, so nothing is
+    // silently hidden.
   }
 }
 
@@ -953,9 +1047,24 @@ function attachNetworkInstrumentation(targetPage, { source } = {}) {
   });
   targetPage.on('requestfailed', (request) => {
     const url = request.url();
+    if (source === 'admin' && url.includes(PREVIEW_URL_FRAGMENT)) inFlightPreviewRequests -= 1;
     if (url.startsWith('data:')) return;
-    result.request_failures.push({ url, method: request.method(), error: request.failure()?.errorText || '', source });
+    result.request_failures.push({ url, method: request.method(), error: request.failure()?.errorText || '', source, at: Date.now() });
   });
+  // Preview child-iframe request-lifecycle tracking, scoped strictly to the
+  // admin `page` (source === 'admin'). This is installed here, alongside the
+  // requestfailed/response listeners, so it observes exactly the same request
+  // stream. settlePreviewFrame() polls inFlightPreviewRequests down to 0
+  // before any main-frame navigation, guaranteeing no preview GET is left
+  // in-flight to be aborted (net::ERR_ABORTED).
+  if (source === 'admin') {
+    targetPage.on('request', (request) => {
+      if (request.url().includes(PREVIEW_URL_FRAGMENT)) inFlightPreviewRequests += 1;
+    });
+    targetPage.on('requestfinished', (request) => {
+      if (request.url().includes(PREVIEW_URL_FRAGMENT)) inFlightPreviewRequests -= 1;
+    });
+  }
   targetPage.on('response', (response) => {
     const url = response.url();
     const status = response.status();
@@ -1139,6 +1248,17 @@ const phase3 = {
   cart_htmx: [],
   screenshots: [],
   errors: [],
+  // Task 5 "Collection gate" — additive Collection matrix metrics namespace.
+  collection: {
+    started_at: new Date().toISOString(),
+    envelopes: [],
+    variant_checks: [],
+    asset_envelope: [],
+    cart_htmx: [],
+    page2: null,
+    screenshots: [],
+    errors: [],
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -1559,12 +1679,364 @@ async function phase3CartHtmx(fx) {
   }
 }
 
+// =============================================================================
+// Phase 3 (opt-in) — Task 5 "Collection gate" real browser certification.
+//
+// Purely additive (same lifecycle/publish as the Brand gate — both sections
+// were placed on the SAME Draft and published together in Scenario 10). Reads
+// ids/slugs from manifest.phase3_fixture.collection (never hard-coded).
+//
+// Exercises, for EACH of the three PHASE3_VIEWPORTS and EACH envelope where a
+// collection_tiles was placed (home / product_detail / listing / search /
+// collection / cart), and for BOTH tile_style variants (grid / carousel):
+//   (1) collection tiles present (a.pcard[href*="/collections/"]), count/order
+//       (newest-first, deterministic newest collection FIRST),
+//   (2) each tile's cover image decoded OR the folder-glyph fallback shown,
+//   (3) asset envelope (storefront_builder.css / htmx / alpine once; no dup;
+//       no home.css on non-home; no document horizontal overflow),
+// plus a `/collections/<newest-slug>/?page=2` fetch asserting the domain
+// visible-membership + shared product cards + NO HTMX branch, and a real Cart
+// HTMX action with collection_tiles placed (tiles survive the swap; totals
+// unchanged). All metrics recorded to metrics.json.
+// =============================================================================
+
+// Public collection_tiles container class per variant.
+const COLLECTION_VARIANT_CONTAINER = {
+  grid: '.grid.g4',
+  carousel: '.collection-tiles-carousel.tiles-carousel',
+};
+
+function phase3CollectionFixture() {
+  const fx = manifest.phase3_fixture;
+  assert(fx && typeof fx === 'object', 'manifest.phase3_fixture is missing');
+  const c = fx.collection;
+  assert(c && typeof c === 'object', 'phase3_fixture.collection missing — the Collection gate fixture was not threaded into the manifest');
+  assert(c.tiles_section_ids && typeof c.tiles_section_ids === 'object', 'phase3_fixture.collection.tiles_section_ids missing');
+  assert(Array.isArray(c.tile_variants) && c.tile_variants.length === 2, 'phase3_fixture.collection.tile_variants must list the 2 tile_style variants');
+  assert(typeof c.newest_collection_slug === 'string' && c.newest_collection_slug, 'collection.newest_collection_slug missing');
+  assert(typeof c.page2_collection_slug === 'string' && c.page2_collection_slug, 'collection.page2_collection_slug missing');
+  assert(typeof c.product_slug === 'string' && c.product_slug, 'collection.product_slug missing');
+  return c;
+}
+
+function phase3CollectionEnvelopes(fx, c) {
+  const origin = manifest.public_url.replace(/\/+$/, '');
+  return [
+    { key: 'home', label: 'C-E1-home', url: `${origin}/` },
+    { key: 'product_detail', label: 'C-E2-product_detail', url: `${origin}/products/${c.product_slug}/` },
+    { key: 'listing', label: 'C-E3-listing', url: `${origin}/products/` },
+    { key: 'search', label: 'C-E4-search', url: `${origin}/products/?q=${encodeURIComponent('کالا')}` },
+    { key: 'collection', label: 'C-E5-collection', url: `${origin}/collections/${c.newest_collection_slug}/` },
+    { key: 'cart', label: 'C-E6-cart', url: `${origin}/cart/` },
+  ];
+}
+
+// Locate the collection_tiles <section> for a given tile_style variant on a
+// PUBLIC page. grid => a `.grid.g4` inner container; carousel => the
+// `.collection-tiles-carousel.tiles-carousel` container. Both hold
+// a.pcard[href*="/collections/"] (collection-detail links), which
+// distinguishes them from a product grid (whose pcards link to /products/).
+function collectionSectionLocatorFor(targetPage, variant) {
+  return targetPage.locator(
+    `section.section:has(> ${COLLECTION_VARIANT_CONTAINER[variant]} a.pcard[href*="/collections/"])`,
+  );
+}
+
+async function phase3CollectionPublicMatrix(c, envelopes) {
+  for (const vp of PHASE3_VIEWPORTS) {
+    for (const env of envelopes) {
+      const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height } });
+      await ctx.addCookies([manifest.session]);
+      const pubPage = await ctx.newPage();
+      const localErrors = [];
+      pubPage.on('console', (m) => { if (m.type() === 'error') localErrors.push({ text: m.text(), url: m.location()?.url, source: `coll-public:${env.key}:${vp.name}` }); });
+      pubPage.on('pageerror', (e) => localErrors.push({ text: String(e.message || e), source: `coll-public:${env.key}:${vp.name}` }));
+      pubPage.on('requestfailed', (r) => { if (!r.url().startsWith('data:') && !/\/favicon\.ico(\?|$)/i.test(r.url())) localErrors.push({ text: `requestfailed ${r.url()}`, source: `coll-public:${env.key}:${vp.name}` }); });
+      try {
+        const resp = await pubPage.goto(env.url, { waitUntil: 'networkidle', timeout: 25000 });
+        assert(resp && resp.status() < 400, `${env.label} public GET returned ${resp && resp.status()}`);
+
+        // ---- Asset envelope (once; no dup; no home.css off-home; no overflow) ----
+        const assets = await pubPage.evaluate(() => {
+          const styles = Array.from(document.querySelectorAll('link[rel=stylesheet]')).map((l) => l.getAttribute('href') || '');
+          const scripts = Array.from(document.querySelectorAll('script[src]')).map((s) => s.getAttribute('src') || '');
+          const norm = (u) => (u || '').split('?')[0];
+          return {
+            sb_css: styles.filter((h) => /storefront_builder\.css/.test(h)).length,
+            home_css: styles.filter((h) => /\/home\.css/.test(h)).length,
+            htmx: scripts.filter((s) => /htmx/i.test(s)).length,
+            alpine: scripts.filter((s) => /alpine/i.test(s)).length,
+            styleHrefs: styles.map(norm).filter(Boolean),
+            scriptSrcs: scripts.map(norm).filter(Boolean),
+          };
+        });
+        assert(assets.sb_css === 1, `${env.label}: storefront_builder.css must appear exactly once, got ${assets.sb_css}`);
+        assert(assets.htmx === 1, `${env.label}: htmx must appear exactly once, got ${assets.htmx}`);
+        assert(assets.alpine === 1, `${env.label}: alpine must appear exactly once, got ${assets.alpine}`);
+        const dupStyles = assets.styleHrefs.filter((h, i) => assets.styleHrefs.indexOf(h) !== i);
+        const dupScripts = assets.scriptSrcs.filter((s, i) => assets.scriptSrcs.indexOf(s) !== i);
+        assert(dupStyles.length === 0, `${env.label}: duplicate stylesheet URLs: ${JSON.stringify(dupStyles)}`);
+        assert(dupScripts.length === 0, `${env.label}: duplicate script URLs: ${JSON.stringify(dupScripts)}`);
+        if (env.key !== 'home') {
+          assert(assets.home_css === 0, `${env.label}: non-home envelope must NOT load home.css (found ${assets.home_css}) — collection carousel CSS must come from storefront_builder.css`);
+        }
+
+        const overflow = await pubPage.evaluate(() => ({
+          scrollWidth: document.documentElement.scrollWidth,
+          clientWidth: document.documentElement.clientWidth,
+        }));
+        assert(overflow.scrollWidth <= vp.width + 1, `${env.label} @${vp.name}: document horizontal overflow scrollWidth=${overflow.scrollWidth} > ${vp.width + 1}`);
+        phase3.collection.asset_envelope.push({ envelope: env.key, viewport: vp.name, ...assets, scrollWidth: overflow.scrollWidth });
+
+        // ---- per tile_style variant ----
+        for (const variant of c.tile_variants) {
+          const candidates = collectionSectionLocatorFor(pubPage, variant);
+          const candCount = await candidates.count();
+          assert(candCount >= 1, `${env.label} @${vp.name} ${variant}: no collection_tiles section found`);
+          const section = candidates.first();
+          await section.waitFor({ state: 'attached', timeout: 15000 });
+
+          const tiles = section.locator('a.pcard[href*="/collections/"]');
+          const tileCount = await tiles.count();
+          assert(tileCount >= 2, `${env.label} @${vp.name} ${variant}: expected >=2 collection tiles, got ${tileCount}`);
+
+          const tileData = await tiles.evaluateAll((els) => els.map((a) => {
+            const img = a.querySelector('.img img');
+            const glyph = a.querySelector('.img .emo');
+            const nameEl = a.querySelector('.name');
+            const rateEl = a.querySelector('.rate');
+            const href = a.getAttribute('href') || '';
+            const slugMatch = href.match(/\/collections\/([^/]+)\//);
+            return {
+              href,
+              slug: slugMatch ? decodeURIComponent(slugMatch[1]) : null,
+              hasImg: Boolean(img),
+              imgComplete: img ? img.complete : null,
+              imgNaturalWidth: img ? img.naturalWidth : null,
+              hasGlyph: Boolean(glyph),
+              name: nameEl ? nameEl.textContent.trim() : null,
+              rate: rateEl ? rateEl.textContent.trim() : null,
+            };
+          }));
+
+          // Order: auto (newest-first) => the deterministic-newest collection
+          // is the FIRST tile.
+          const slugOrder = tileData.map((t) => t.slug);
+          assert(slugOrder[0] === c.newest_collection_slug, `${env.label} @${vp.name} ${variant}: newest collection "${c.newest_collection_slug}" is not first, order=${JSON.stringify(slugOrder)}`);
+
+          // Every tile: cover image decoded OR folder-glyph fallback.
+          let decoded = 0;
+          let glyphs = 0;
+          for (const t of tileData) {
+            if (t.hasImg) {
+              assert(t.imgComplete === true && t.imgNaturalWidth > 0, `${env.label} @${vp.name} ${variant}: collection cover <img> did not decode (complete=${t.imgComplete}, naturalWidth=${t.imgNaturalWidth}) href=${t.href}`);
+              decoded += 1;
+            } else {
+              assert(t.hasGlyph, `${env.label} @${vp.name} ${variant}: no-image tile must render the folder-glyph fallback (href=${t.href})`);
+              glyphs += 1;
+            }
+          }
+          // Both an image tile AND a folder-glyph fallback tile exist in the
+          // auto listing (fixture guarantees one with a cover + one without).
+          assert(decoded >= 1, `${env.label} @${vp.name} ${variant}: expected >=1 decoded cover image, got ${decoded}`);
+          assert(glyphs >= 1, `${env.label} @${vp.name} ${variant}: expected >=1 folder-glyph fallback tile, got ${glyphs}`);
+
+          const shotDir = mkReportDir('collection', variant, vp.name);
+          const shotPath = path.join(shotDir, `${env.key}-public.png`);
+          await section.scrollIntoViewIfNeeded().catch(() => {});
+          await pubPage.screenshot({ path: shotPath });
+          phase3.collection.screenshots.push(shotPath);
+
+          phase3.collection.variant_checks.push({
+            envelope: env.key, viewport: vp.name, variant,
+            tile_count: tileCount, slug_order: slugOrder,
+            decoded_imgs: decoded, glyph_fallbacks: glyphs,
+          });
+        }
+        phase3.collection.envelopes.push({ envelope: env.key, viewport: vp.name, url: env.url, status: resp.status() });
+      } finally {
+        if (localErrors.length) phase3.collection.errors.push(...localErrors);
+        try { await ctx.close(); } catch (_error) { /* best effort */ }
+      }
+    }
+  }
+  assert(phase3.collection.errors.length === 0, `Collection public console/page/request errors: ${JSON.stringify(phase3.collection.errors.slice(0, 6))}`);
+}
+
+// `/collections/<newest-slug>/?page=2` — domain visible-membership + shared
+// product cards + NO HTMX fragment branch (a full storefront envelope).
+async function phase3CollectionPage2(c) {
+  const origin = manifest.public_url.replace(/\/+$/, '');
+  const url = `${origin}/collections/${c.page2_collection_slug}/?page=2`;
+  const ctx = await browser.newContext({ viewport: { width: PHASE3_VIEWPORTS[0].width, height: PHASE3_VIEWPORTS[0].height } });
+  await ctx.addCookies([manifest.session]);
+  const p = await ctx.newPage();
+  try {
+    // A normal (non-HX) GET is a full page; an HX-Request header must NOT turn
+    // it into a bare fragment (the collection detail view has no HX branch).
+    const resp = await p.goto(url, { waitUntil: 'networkidle', timeout: 25000 });
+    assert(resp && resp.status() < 400, `collection ?page=2 GET returned ${resp && resp.status()}`);
+
+    const domain = await p.evaluate(() => {
+      // Shared product card markup (catalog/partials/product_card.html) is
+      // <article class="pcard">…<a class="pcard-hitarea" href="/products/<slug>/">…
+      // — the `.pcard` itself is the <article>, NOT an <a>. The card's LINK
+      // (the "shared product card that links to a product") is
+      // a.pcard-hitarea[href*="/products/"]. (The collection-TILE selector
+      // a.pcard[href*="/collections/"] is a genuinely different element — a
+      // tile IS an <a class="pcard"> — and stays as-is elsewhere.)
+      const productCards = Array.from(document.querySelectorAll('a.pcard-hitarea[href*="/products/"]'));
+      const currentPage = document.querySelector('.pagination .current');
+      const sbCss = Array.from(document.querySelectorAll('link[rel=stylesheet]')).some((l) => /storefront_builder\.css/.test(l.getAttribute('href') || ''));
+      return {
+        productCardCount: productCards.length,
+        currentPageText: currentPage ? currentPage.textContent.trim() : null,
+        hasFullEnvelope: sbCss,
+      };
+    });
+    // Page 2 of a 13-visible-member collection holds the remaining member(s),
+    // rendered via the SHARED product card (links to /products/).
+    assert(domain.productCardCount >= 1, `collection ?page=2 must render shared product cards, got ${domain.productCardCount}`);
+    // Full storefront envelope (NOT a bare HTMX fragment).
+    assert(domain.hasFullEnvelope, 'collection ?page=2 must render the full storefront envelope (storefront_builder.css present) — no HTMX fragment branch');
+
+    // Confirm no HX branch: an explicit HX-Request header still returns the
+    // full page (same shell), not a partial.
+    const hx = await p.evaluate(async (u) => {
+      const res = await fetch(u, { headers: { 'HX-Request': 'true' }, credentials: 'same-origin' });
+      const text = await res.text();
+      return { status: res.status, hasHtml: /<html/i.test(text), hasSbCss: /storefront_builder\.css/.test(text) };
+    }, url);
+    assert(hx.status < 400, `collection ?page=2 HX GET returned ${hx.status}`);
+    assert(hx.hasHtml && hx.hasSbCss, 'collection ?page=2 under HX-Request must STILL be the full page (no fragment branch)');
+
+    const dir = mkReportDir('collection', 'page2');
+    const shotPath = path.join(dir, 'page2.png');
+    await p.screenshot({ path: shotPath });
+    phase3.collection.screenshots.push(shotPath);
+    phase3.collection.page2 = {
+      url,
+      product_card_count: domain.productCardCount,
+      current_page_text: domain.currentPageText,
+      full_envelope: domain.hasFullEnvelope,
+      hx_still_full_page: hx.hasHtml && hx.hasSbCss,
+    };
+  } finally {
+    try { await ctx.close(); } catch (_error) { /* best effort */ }
+  }
+}
+
+// Real Cart HTMX with collection_tiles placed on the published cart page: the
+// collection tiles must survive the swap and totals stay correct.
+async function phase3CollectionCartHtmx(c) {
+  const origin = manifest.public_url.replace(/\/+$/, '');
+  const vp = PHASE3_VIEWPORTS[0];
+  const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height } });
+  await ctx.addCookies([manifest.session]);
+  const cartPage = await ctx.newPage();
+  const localErrors = [];
+  cartPage.on('pageerror', (e) => localErrors.push({ text: String(e.message || e), source: `coll-cart:${vp.name}` }));
+  const dir = mkReportDir('collection', 'cart');
+  try {
+    const pdpUrl = `${origin}/products/${c.product_slug}/`;
+    await cartPage.goto(pdpUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    const added = await cartPage.evaluate(async (slug) => {
+      const tokenEl = document.querySelector('input[name=csrfmiddlewaretoken]');
+      const token = tokenEl ? tokenEl.value : (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
+      const body = new URLSearchParams(); body.set('quantity', '2');
+      const res = await fetch(`/cart/add/${slug}/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': token || '', 'HX-Request': 'true', 'Content-Type': 'application/x-www-form-urlencoded' },
+        credentials: 'same-origin',
+        body: body.toString(),
+      });
+      return { status: res.status };
+    }, c.product_slug);
+    assert(added.status < 400, `Collection cart add-to-cart failed with status ${added.status}`);
+
+    await cartPage.goto(`${origin}/cart/`, { waitUntil: 'networkidle', timeout: 20000 });
+    const collBefore = await cartPage.evaluate(() => {
+      const tiles = Array.from(document.querySelectorAll('#cart-container a.pcard[href*="/collections/"]'));
+      return { tileCount: tiles.length, hrefs: tiles.map((a) => a.getAttribute('href')) };
+    });
+    assert(collBefore.tileCount >= 2, `Cart page must render the collection_tiles section (found ${collBefore.tileCount} tiles)`);
+
+    const cartDom = await cartPage.evaluate(() => {
+      const items = Array.from(document.querySelectorAll('#cart-container .citem'));
+      const first = items[0];
+      const steppers = first ? Array.from(first.querySelectorAll('.stepper button[hx-post]')) : [];
+      const incUrl = steppers.length ? steppers[steppers.length - 1].getAttribute('hx-post') : null;
+      const removeBtn = first ? first.querySelector('button.rm') : null;
+      return { itemCount: items.length, incUrl, removeUrl: removeBtn ? removeBtn.getAttribute('hx-post') : null };
+    });
+    assert(cartDom.incUrl && /\/cart\/items\/\d+\/update\/$/.test(cartDom.incUrl), `Could not read a real quantity-update hx-post URL, got ${cartDom.incUrl}`);
+
+    await cartPage.screenshot({ path: path.join(dir, 'before.png') });
+
+    // Quantity update; collection tiles must survive the swap.
+    const updated = await cartPage.evaluate(async (args) => {
+      const token = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
+      const body = new URLSearchParams(); body.set('quantity', String(args.qty));
+      const res = await fetch(args.url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': token || '', 'HX-Request': 'true', 'Content-Type': 'application/x-www-form-urlencoded' },
+        credentials: 'same-origin',
+        body: body.toString(),
+      });
+      const html = await res.text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const oob = doc.querySelector('#cart-count[hx-swap-oob]');
+      const container = document.querySelector('#cart-container');
+      Array.from(doc.body.querySelectorAll('[hx-swap-oob]')).forEach((n) => n.remove());
+      container.innerHTML = doc.body.innerHTML;
+      const badge = document.querySelector('#cart-count');
+      if (oob && badge) badge.textContent = oob.textContent;
+      return { status: res.status };
+    }, { url: cartDom.incUrl, qty: 3 });
+    assert(updated.status < 400, `Collection cart quantity update failed: ${updated.status}`);
+
+    const afterUpdate = await cartPage.evaluate(() => {
+      const tiles = Array.from(document.querySelectorAll('#cart-container a.pcard[href*="/collections/"]'));
+      const qtyInput = document.querySelector('#cart-container .citem .stepper input');
+      return { tileCount: tiles.length, hrefs: tiles.map((a) => a.getAttribute('href')), qtyText: qtyInput ? qtyInput.value : null };
+    });
+    assert(afterUpdate.tileCount === collBefore.tileCount, `Collection tiles lost after HTMX update: before=${collBefore.tileCount} after=${afterUpdate.tileCount}`);
+    assert(JSON.stringify(afterUpdate.hrefs) === JSON.stringify(collBefore.hrefs), 'Collection tile order/source changed after HTMX update');
+    await cartPage.screenshot({ path: path.join(dir, 'update.png') });
+
+    phase3.collection.cart_htmx.push({
+      viewport: vp.name,
+      inc_url: cartDom.incUrl,
+      coll_tiles_before: collBefore.tileCount,
+      coll_tiles_after_update: afterUpdate.tileCount,
+      coll_hrefs_stable: JSON.stringify(afterUpdate.hrefs) === JSON.stringify(collBefore.hrefs),
+      qty_after_update: afterUpdate.qtyText,
+    });
+    phase3.collection.screenshots.push(path.join(dir, 'before.png'), path.join(dir, 'update.png'));
+  } finally {
+    if (localErrors.length) phase3.collection.errors.push(...localErrors);
+    try { await ctx.close(); } catch (_error) { /* best effort */ }
+  }
+}
+
+async function phase3CollectionGate() {
+  const c = phase3CollectionFixture();
+  const envelopes = phase3CollectionEnvelopes(manifest.phase3_fixture, c);
+  await phase3CollectionPublicMatrix(c, envelopes);
+  await phase3CollectionPage2(c);
+  await phase3CollectionCartHtmx(c);
+  phase3.collection.finished_at = new Date().toISOString();
+}
+
 async function phase3BrandGate() {
   const fx = phase3Fixture();
   const envelopes = phase3Envelopes(fx);
   await phase3PublicMatrix(fx, envelopes);
   await phase3WrapperProjection();
   await phase3CartHtmx(fx);
+
+  // Task 5 "Collection gate" — additive Collection matrix on the same run.
+  await phase3CollectionGate();
 
   phase3.finished_at = new Date().toISOString();
   result.phase3_brand = phase3;

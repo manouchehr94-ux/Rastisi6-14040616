@@ -137,6 +137,19 @@ class SectionRegistryTests(TestCase):
     def test_all_required_keys_registered(self):
         self.assertEqual(set(SECTION_REGISTRY.keys()), EXPECTED_KEYS)
 
+    def test_collection_section_keys_registered(self):
+        """Task 5 — the three Collection section types are registered: the
+        Home-placeable ``collection_tiles`` (lists collections) and the two
+        context-aware, collection-page-only types ``collection_header`` /
+        ``collection_products`` (render the resolved "current" collection).
+        Mirrors the Brand ``brand_carousel`` registry membership guard."""
+        for key in ("collection_tiles", "collection_header", "collection_products"):
+            self.assertIn(key, SECTION_REGISTRY, f"{key} must be registered")
+            self.assertTrue(is_valid_section_key(key))
+            definition = get_definition(key)
+            self.assertEqual(definition.key, key)
+            self.assertTrue(definition.template_name.startswith("storefront_builder/sections/"))
+
     def test_get_definition_valid(self):
         definition = get_definition("hero_banner")
         self.assertEqual(definition.key, "hero_banner")

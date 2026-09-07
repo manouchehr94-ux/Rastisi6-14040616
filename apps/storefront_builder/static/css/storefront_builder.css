@@ -4491,3 +4491,27 @@ a.sfb-v3-component-item,
 .brand-tile-name{font-size:11px;font-weight:600;color:#444}
 .brand-carousel{display:flex;gap:9px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px;-webkit-overflow-scrolling:touch}
 .brand-carousel .brand-tile{flex:0 0 150px;scroll-snap-align:start}
+
+
+
+/* ===== collection tiles carousel (shared with home.css — Task 5) =====
+   The collection-tiles ``carousel`` (tiles-carousel) variant sizes each
+   ``.pcard`` tile via a flex-basis / scroll-snap rule that previously
+   lived ONLY in the Home-only home.css. The non-Home public envelopes
+   (product_list / product_detail / collection_detail / cart) load
+   storefront_builder.css but NOT home.css, so a collection_tiles carousel
+   placed on any of them lacked its per-tile carousel sizing (the grid
+   variant is unaffected — ``.pcard``/``.grid``/``.g4`` live in the
+   shared product_card.css). home.css defines a SINGLE governing base
+   block for this selector (``flex:0 0 220px;scroll-snap-align:start``)
+   plus a ``@media(max-width:680px)`` responsive block (``flex-basis:180px``)
+   with NO later override, so those literal values ARE the effective
+   (cascade-resolved) values. Since storefront_builder.css loads AFTER
+   home.css on the Home envelope, carrying these exact values makes the
+   override a NO-OP (Home pixel-identical), while non-Home envelopes get
+   the same correct carousel sizing. Scoped to ``.collection-tiles-carousel``
+   markup only (no global spill onto plain ``.pcard``). */
+.collection-tiles-carousel.tiles-carousel .pcard{flex:0 0 220px;scroll-snap-align:start}
+@media(max-width:680px){
+  .collection-tiles-carousel.tiles-carousel .pcard{flex-basis:180px}
+}

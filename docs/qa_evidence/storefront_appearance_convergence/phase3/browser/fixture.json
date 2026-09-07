@@ -1,33 +1,33 @@
 {
-  "hero_section_id": 15,
-  "brand_carousel_section_id": 16,
+  "hero_section_id": 99,
+  "brand_carousel_section_id": 100,
   "draft_revision": 0,
   "phase3": {
     "brand_section_ids": {
       "home": {
-        "grid": 17,
-        "carousel": 18,
-        "beauty_tabs": 19
+        "grid": 101,
+        "carousel": 102,
+        "beauty_tabs": 103
       },
       "product_detail": {
-        "grid": 20,
-        "carousel": 21,
-        "beauty_tabs": 22
+        "grid": 104,
+        "carousel": 105,
+        "beauty_tabs": 106
       },
       "listing": {
-        "grid": 23,
-        "carousel": 24,
-        "beauty_tabs": 25
+        "grid": 107,
+        "carousel": 108,
+        "beauty_tabs": 109
       },
       "collection": {
-        "grid": 26,
-        "carousel": 27,
-        "beauty_tabs": 28
+        "grid": 110,
+        "carousel": 111,
+        "beauty_tabs": 112
       },
       "cart": {
-        "grid": 29,
-        "carousel": 30,
-        "beauty_tabs": 31
+        "grid": 113,
+        "carousel": 114,
+        "beauty_tabs": 115
       }
     },
     "product_slug": "t12-product-1",
@@ -53,6 +53,55 @@
       "grid",
       "carousel",
       "beauty_tabs"
-    ]
+    ],
+    "collection": {
+      "tiles_section_ids": {
+        "home": {
+          "grid": 116,
+          "carousel": 117
+        },
+        "product_detail": {
+          "grid": 118,
+          "carousel": 119
+        },
+        "listing": {
+          "grid": 120,
+          "carousel": 121
+        },
+        "search": {
+          "grid": 122,
+          "carousel": 123
+        },
+        "collection": {
+          "grid": 124,
+          "carousel": 125
+        },
+        "cart": {
+          "grid": 126,
+          "carousel": 127
+        }
+      },
+      "collection_slugs": [
+        "p3-collection-2",
+        "p3-collection-1",
+        "p3-collection-page2"
+      ],
+      "newest_collection_slug": "p3-collection-2",
+      "page2_collection_slug": "p3-collection-page2",
+      "collection_names": {
+        "p3-collection-1": "کالکشن پی۳ شماره ۱",
+        "p3-collection-2": "کالکشن پی۳ شماره ۲",
+        "p3-collection-page2": "کالکشن پی۳ صفحه‌بندی"
+      },
+      "image_collection_slug": "p3-collection-1",
+      "no_image_collection_slug": "p3-collection-2",
+      "page2_total_members": 14,
+      "page2_visible_members": 13,
+      "product_slug": "t12-product-1",
+      "tile_variants": [
+        "grid",
+        "carousel"
+      ]
+    }
   }
 }

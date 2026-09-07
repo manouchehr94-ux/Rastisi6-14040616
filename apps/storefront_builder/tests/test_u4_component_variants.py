@@ -155,6 +155,108 @@ class CollectionTilesVariantTests(TestCase):
         self.assertContains(resp, "tiles-carousel collection-tiles-carousel")
         self.assertContains(resp, "کالکشن کاروسل")
 
+    def test_title_and_source_edit_preserves_carousel_variant(self):
+        """Task 5 — editing a collection_tiles section's title AND its source
+        selection (``collection_ids``) must NOT change its structural variant:
+        a ``carousel`` section keeps its ``tiles-carousel`` container after a
+        real settings edit (variant/local intent preserved, only the local
+        content changes)."""
+        from apps.catalog.models import MerchantCollection
+
+        c1 = MerchantCollection.objects.create(store=self.store, name="کالکشن اول", slug="u4-ct-src1", is_active=True)
+        c2 = MerchantCollection.objects.create(store=self.store, name="کالکشن دوم", slug="u4-ct-src2", is_active=True)
+        draft = svc.get_or_create_draft(self.store)
+        draft.sections.filter(section_key="collection_tiles").delete()
+        section = StorefrontSection.objects.create(
+            version=draft, section_key="collection_tiles", order=900,
+            settings={"tile_style": "carousel", "title": "قبل", "collection_ids": [c1.pk]},
+        )
+        # A real settings edit: new title + new source selection, variant kept.
+        definition = get_definition("collection_tiles")
+        section.settings = definition.validate_settings(
+            {"tile_style": "carousel", "title": "بعد", "collection_ids": [c2.pk]},
+        )
+        section.save(update_fields=["settings"])
+        svc.publish(self.store)
+        _verified_domain(self.store, HOST)
+        with self.settings(ALLOWED_HOSTS=[HOST, "testserver"]):
+            resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
+        # Variant preserved (still carousel), local intent updated.
+        self.assertContains(resp, "tiles-carousel collection-tiles-carousel")
+        self.assertContains(resp, "بعد")
+        self.assertContains(resp, "کالکشن دوم")
+        self.assertNotContains(resp, "کالکشن اول")
+
+    def test_publish_restore_retains_selection_and_stable_id_not_pk(self):
+        """Task 5 — after publish, the section is CLONED into a new version:
+        its PK changes but its ``stable_id`` (the logical identity) is
+        preserved, and the merchant's source selection / variant survive the
+        clone. Mirrors ``layout_service``'s documented clone contract."""
+        from apps.catalog.models import MerchantCollection
+
+        c1 = MerchantCollection.objects.create(store=self.store, name="کالکشن الف", slug="u4-ct-sid1", is_active=True)
+        c2 = MerchantCollection.objects.create(store=self.store, name="کالکشن ب", slug="u4-ct-sid2", is_active=True)
+        draft = svc.get_or_create_draft(self.store)
+        draft.sections.filter(section_key="collection_tiles").delete()
+        draft_section = StorefrontSection.objects.create(
+            version=draft, section_key="collection_tiles", order=900,
+            settings={"tile_style": "carousel", "collection_ids": [c2.pk, c1.pk]},
+        )
+        published_stable_id = draft_section.stable_id
+
+        svc.publish(self.store)
+
+        from apps.storefront_builder.services import page_resolution_service
+
+        published = page_resolution_service.get_published_layout(self.store).published_version
+        pub_page = published.pages.get(page_type="home")
+        published_section = pub_page.sections.get(section_key="collection_tiles")
+        published_pk = published_section.pk
+        # stable_id is stable through publish.
+        self.assertEqual(published_section.stable_id, published_stable_id)
+        # The merchant's manual source selection + order + variant survive publish.
+        self.assertEqual(published_section.settings["collection_ids"], [c2.pk, c1.pk])
+        self.assertEqual(published_section.settings["tile_style"], "carousel")
+
+        # Restore/Draft-bootstrap CLONES published -> a fresh draft version:
+        # the cloned section is a NEW row (different PK) but the SAME logical
+        # section (stable_id preserved), and the selection/variant survive the
+        # clone — stable_id, NOT PK, is the cross-version identity.
+        new_draft = svc.get_or_create_draft(self.store)
+        cloned_section = new_draft.sections.get(section_key="collection_tiles")
+        self.assertEqual(cloned_section.stable_id, published_stable_id)
+        self.assertNotEqual(cloned_section.pk, published_pk)
+        self.assertEqual(cloned_section.settings["collection_ids"], [c2.pk, c1.pk])
+        self.assertEqual(cloned_section.settings["tile_style"], "carousel")
+
+    def test_draft_only_edit_leaves_published_public_unchanged(self):
+        """Task 5 — an edit made to the DRAFT (never published) must not leak
+        into the public storefront: the public route keeps serving the last
+        PUBLISHED collection_tiles content, not the unpublished draft edit."""
+        from apps.catalog.models import MerchantCollection
+
+        MerchantCollection.objects.create(store=self.store, name="کالکشن منتشرشده", slug="u4-ct-pub", is_active=True)
+        draft = svc.get_or_create_draft(self.store)
+        draft.sections.filter(section_key="collection_tiles").delete()
+        StorefrontSection.objects.create(
+            version=draft, section_key="collection_tiles", order=900,
+            settings={"tile_style": "grid", "title": "عنوان منتشرشده", "collection_ids": []},
+        )
+        svc.publish(self.store)
+        _verified_domain(self.store, HOST)
+
+        # Now make a DRAFT-only edit that is never published.
+        draft2 = svc.get_or_create_draft(self.store)
+        draft_section = draft2.sections.get(section_key="collection_tiles")
+        draft_section.settings = {**draft_section.settings, "title": "عنوان پیش‌نویسِ منتشرنشده"}
+        draft_section.save(update_fields=["settings"])
+
+        with self.settings(ALLOWED_HOSTS=[HOST, "testserver"]):
+            resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
+        # Public still serves the published title, NOT the unpublished draft edit.
+        self.assertContains(resp, "عنوان منتشرشده")
+        self.assertNotContains(resp, "عنوان پیش‌نویسِ منتشرنشده")
+
 
 class HeroBannerVariantTests(TestCase):
     def setUp(self):

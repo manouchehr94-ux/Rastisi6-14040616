@@ -1,87 +1,87 @@
 {
-  "started_at": "2026-09-06T14:40:22.624Z",
+  "started_at": "2026-09-06T17:47:18.134Z",
   "builder_url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
   "public_url": "http://127.0.0.1:8765/",
   "scenarios": [
     {
       "name": "01-initial-r4",
       "status": "PASS",
-      "ms": 191
+      "ms": 120
     },
     {
       "name": "02-hero-basic-autosave",
       "status": "PASS",
-      "ms": 847
+      "ms": 1716
     },
     {
       "name": "03-hero-advanced-typography-override",
       "status": "PASS",
-      "ms": 1524
+      "ms": 2504
     },
     {
       "name": "04-add-product-and-reorder",
       "status": "PASS",
-      "ms": 1010
+      "ms": 1146
     },
     {
       "name": "05-product-auto-and-persian-digit-limit",
       "status": "PASS",
-      "ms": 1206
+      "ms": 2115
     },
     {
       "name": "06-product-manual-picker",
       "status": "PASS",
-      "ms": 1508
+      "ms": 2487
     },
     {
       "name": "07-brand-same-picker",
       "status": "PASS",
-      "ms": 1776
+      "ms": 12563
     },
     {
       "name": "08-undo-redo",
       "status": "PASS",
-      "ms": 1305
+      "ms": 3103
     },
     {
       "name": "09-real-stale-conflict",
       "status": "PASS",
-      "ms": 1433
+      "ms": 2358
     },
     {
       "name": "10-publish",
       "status": "PASS",
-      "ms": 688
+      "ms": 1604
     },
     {
       "name": "11-public-storefront-parity",
       "status": "PASS",
-      "ms": 254
+      "ms": 270
     },
     {
       "name": "12-new-draft-only-change",
       "status": "PASS",
-      "ms": 1571
+      "ms": 2439
     },
     {
       "name": "13-public-must-remain-unchanged",
       "status": "PASS",
-      "ms": 212
+      "ms": 196
     },
     {
       "name": "final-instrumentation-assertions",
       "status": "PASS",
-      "ms": 1
+      "ms": 0
     },
     {
       "name": "final-screenshot-verification",
       "status": "PASS",
-      "ms": 0
+      "ms": 1
     },
     {
       "name": "phase3-brand-gate",
       "status": "PASS",
-      "ms": 19933
+      "ms": 40020
     }
   ],
   "mutation_posts": [
@@ -186,7 +186,7 @@
       "status": 409,
       "source": "admin",
       "bucket": "mutation_posts",
-      "at": 1788705633202
+      "at": 1788716865815
     }
   ],
   "console_errors": [
@@ -200,7 +200,7 @@
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1788705633203
+      "at": 1788716865815
     }
   ],
   "page_errors": [],
@@ -208,62 +208,62 @@
   "main_frame_navigations": [
     {
       "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-06T14:40:23.035Z",
+      "at": "2026-09-06T17:47:18.612Z",
       "expected": true
     },
     {
       "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-06T14:40:24.090Z",
+      "at": "2026-09-06T17:47:20.634Z",
       "expected": true
     },
     {
       "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-06T14:40:25.296Z",
+      "at": "2026-09-06T17:47:22.814Z",
       "expected": true
     },
     {
       "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-06T14:40:27.888Z",
+      "at": "2026-09-06T17:47:26.439Z",
       "expected": true
     },
     {
       "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-06T14:40:29.467Z",
+      "at": "2026-09-06T17:47:28.953Z",
       "expected": true
     },
     {
       "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-06T14:40:31.244Z",
+      "at": "2026-09-06T17:47:41.516Z",
       "expected": true
     },
     {
       "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-06T14:40:32.018Z",
+      "at": "2026-09-06T17:47:43.239Z",
       "expected": true
     },
     {
       "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-06T14:40:32.507Z",
+      "at": "2026-09-06T17:47:44.570Z",
       "expected": true
     },
     {
       "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-06T14:40:33.633Z",
+      "at": "2026-09-06T17:47:46.653Z",
       "expected": true
     },
     {
       "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-06T14:40:34.615Z",
+      "at": "2026-09-06T17:47:48.529Z",
       "expected": true
     },
     {
       "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-06T14:40:36.437Z",
+      "at": "2026-09-06T17:47:51.242Z",
       "expected": true
     },
     {
       "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-06T14:40:52.612Z",
+      "at": "2026-09-06T17:48:08.285Z",
       "expected": true
     }
   ],
@@ -306,7 +306,7 @@
   },
   "phase3_asset_records": [],
   "phase3_brand": {
-    "started_at": "2026-09-06T14:40:22.624Z",
+    "started_at": "2026-09-06T17:47:18.134Z",
     "viewports": [
       "desktop",
       "mobile",
@@ -1909,7 +1909,7 @@
     ],
     "wrapper_projection": [
       {
-        "section_id": "34",
+        "section_id": "130",
         "replacements": 3,
         "hrefs_before": [
           "/products/?brand=t12-brand-2",
@@ -1928,20 +1928,6 @@
     "cart_htmx": [
       {
         "viewport": "desktop",
-        "item_id": "1",
-        "inc_url": "/cart/items/1/update/",
-        "remove_url": "/cart/items/1/remove/",
-        "badge_before": "۲",
-        "badge_after_update": "۳",
-        "badge_after_remove": "۰",
-        "qty_after_update": "۳",
-        "brand_tiles_before": 15,
-        "brand_tiles_after_update": 15,
-        "brand_hrefs_stable": true,
-        "item_count_after_remove": 0
-      },
-      {
-        "viewport": "mobile",
         "item_id": "2",
         "inc_url": "/cart/items/2/update/",
         "remove_url": "/cart/items/2/remove/",
@@ -1955,10 +1941,24 @@
         "item_count_after_remove": 0
       },
       {
-        "viewport": "tablet",
+        "viewport": "mobile",
         "item_id": "3",
         "inc_url": "/cart/items/3/update/",
         "remove_url": "/cart/items/3/remove/",
+        "badge_before": "۲",
+        "badge_after_update": "۳",
+        "badge_after_remove": "۰",
+        "qty_after_update": "۳",
+        "brand_tiles_before": 15,
+        "brand_tiles_after_update": 15,
+        "brand_hrefs_stable": true,
+        "item_count_after_remove": 0
+      },
+      {
+        "viewport": "tablet",
+        "item_id": "4",
+        "inc_url": "/cart/items/4/update/",
+        "remove_url": "/cart/items/4/remove/",
         "badge_before": "۲",
         "badge_after_update": "۳",
         "badge_after_remove": "۰",
@@ -2027,7 +2027,1045 @@
       "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/tablet/remove.png"
     ],
     "errors": [],
-    "finished_at": "2026-09-06T14:40:56.854Z"
+    "collection": {
+      "started_at": "2026-09-06T17:47:18.134Z",
+      "envelopes": [
+        {
+          "envelope": "home",
+          "viewport": "desktop",
+          "url": "http://127.0.0.1:8765/",
+          "status": 200
+        },
+        {
+          "envelope": "product_detail",
+          "viewport": "desktop",
+          "url": "http://127.0.0.1:8765/products/t12-product-1/",
+          "status": 200
+        },
+        {
+          "envelope": "listing",
+          "viewport": "desktop",
+          "url": "http://127.0.0.1:8765/products/",
+          "status": 200
+        },
+        {
+          "envelope": "search",
+          "viewport": "desktop",
+          "url": "http://127.0.0.1:8765/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
+          "status": 200
+        },
+        {
+          "envelope": "collection",
+          "viewport": "desktop",
+          "url": "http://127.0.0.1:8765/collections/p3-collection-2/",
+          "status": 200
+        },
+        {
+          "envelope": "cart",
+          "viewport": "desktop",
+          "url": "http://127.0.0.1:8765/cart/",
+          "status": 200
+        },
+        {
+          "envelope": "home",
+          "viewport": "mobile",
+          "url": "http://127.0.0.1:8765/",
+          "status": 200
+        },
+        {
+          "envelope": "product_detail",
+          "viewport": "mobile",
+          "url": "http://127.0.0.1:8765/products/t12-product-1/",
+          "status": 200
+        },
+        {
+          "envelope": "listing",
+          "viewport": "mobile",
+          "url": "http://127.0.0.1:8765/products/",
+          "status": 200
+        },
+        {
+          "envelope": "search",
+          "viewport": "mobile",
+          "url": "http://127.0.0.1:8765/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
+          "status": 200
+        },
+        {
+          "envelope": "collection",
+          "viewport": "mobile",
+          "url": "http://127.0.0.1:8765/collections/p3-collection-2/",
+          "status": 200
+        },
+        {
+          "envelope": "cart",
+          "viewport": "mobile",
+          "url": "http://127.0.0.1:8765/cart/",
+          "status": 200
+        },
+        {
+          "envelope": "home",
+          "viewport": "tablet",
+          "url": "http://127.0.0.1:8765/",
+          "status": 200
+        },
+        {
+          "envelope": "product_detail",
+          "viewport": "tablet",
+          "url": "http://127.0.0.1:8765/products/t12-product-1/",
+          "status": 200
+        },
+        {
+          "envelope": "listing",
+          "viewport": "tablet",
+          "url": "http://127.0.0.1:8765/products/",
+          "status": 200
+        },
+        {
+          "envelope": "search",
+          "viewport": "tablet",
+          "url": "http://127.0.0.1:8765/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
+          "status": 200
+        },
+        {
+          "envelope": "collection",
+          "viewport": "tablet",
+          "url": "http://127.0.0.1:8765/collections/p3-collection-2/",
+          "status": 200
+        },
+        {
+          "envelope": "cart",
+          "viewport": "tablet",
+          "url": "http://127.0.0.1:8765/cart/",
+          "status": 200
+        }
+      ],
+      "variant_checks": [
+        {
+          "envelope": "home",
+          "viewport": "desktop",
+          "variant": "grid",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "home",
+          "viewport": "desktop",
+          "variant": "carousel",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "product_detail",
+          "viewport": "desktop",
+          "variant": "grid",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "product_detail",
+          "viewport": "desktop",
+          "variant": "carousel",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "listing",
+          "viewport": "desktop",
+          "variant": "grid",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "listing",
+          "viewport": "desktop",
+          "variant": "carousel",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "search",
+          "viewport": "desktop",
+          "variant": "grid",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "search",
+          "viewport": "desktop",
+          "variant": "carousel",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "collection",
+          "viewport": "desktop",
+          "variant": "grid",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "collection",
+          "viewport": "desktop",
+          "variant": "carousel",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "cart",
+          "viewport": "desktop",
+          "variant": "grid",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "cart",
+          "viewport": "desktop",
+          "variant": "carousel",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "home",
+          "viewport": "mobile",
+          "variant": "grid",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "home",
+          "viewport": "mobile",
+          "variant": "carousel",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "product_detail",
+          "viewport": "mobile",
+          "variant": "grid",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "product_detail",
+          "viewport": "mobile",
+          "variant": "carousel",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "listing",
+          "viewport": "mobile",
+          "variant": "grid",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "listing",
+          "viewport": "mobile",
+          "variant": "carousel",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "search",
+          "viewport": "mobile",
+          "variant": "grid",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "search",
+          "viewport": "mobile",
+          "variant": "carousel",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "collection",
+          "viewport": "mobile",
+          "variant": "grid",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "collection",
+          "viewport": "mobile",
+          "variant": "carousel",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "cart",
+          "viewport": "mobile",
+          "variant": "grid",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "cart",
+          "viewport": "mobile",
+          "variant": "carousel",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "home",
+          "viewport": "tablet",
+          "variant": "grid",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "home",
+          "viewport": "tablet",
+          "variant": "carousel",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "product_detail",
+          "viewport": "tablet",
+          "variant": "grid",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "product_detail",
+          "viewport": "tablet",
+          "variant": "carousel",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "listing",
+          "viewport": "tablet",
+          "variant": "grid",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "listing",
+          "viewport": "tablet",
+          "variant": "carousel",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "search",
+          "viewport": "tablet",
+          "variant": "grid",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "search",
+          "viewport": "tablet",
+          "variant": "carousel",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "collection",
+          "viewport": "tablet",
+          "variant": "grid",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "collection",
+          "viewport": "tablet",
+          "variant": "carousel",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "cart",
+          "viewport": "tablet",
+          "variant": "grid",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        },
+        {
+          "envelope": "cart",
+          "viewport": "tablet",
+          "variant": "carousel",
+          "tile_count": 3,
+          "slug_order": [
+            "p3-collection-2",
+            "p3-collection-1",
+            "p3-collection-page2"
+          ],
+          "decoded_imgs": 1,
+          "glyph_fallbacks": 2
+        }
+      ],
+      "asset_envelope": [
+        {
+          "envelope": "home",
+          "viewport": "desktop",
+          "sb_css": 1,
+          "home_css": 1,
+          "htmx": 1,
+          "alpine": 1,
+          "styleHrefs": [
+            "/static/css/tokens.css",
+            "/static/css/base.css",
+            "/static/css/layout.css",
+            "/static/css/product_card.css",
+            "/static/css/home.css",
+            "/static/css/storefront_builder.css",
+            "/static/css/theme_palette.css"
+          ],
+          "scriptSrcs": [
+            "/static/js/htmx.min.js",
+            "/static/js/alpine.min.js"
+          ],
+          "scrollWidth": 1440
+        },
+        {
+          "envelope": "product_detail",
+          "viewport": "desktop",
+          "sb_css": 1,
+          "home_css": 0,
+          "htmx": 1,
+          "alpine": 1,
+          "styleHrefs": [
+            "/static/css/tokens.css",
+            "/static/css/base.css",
+            "/static/css/layout.css",
+            "/static/css/product_card.css",
+            "/static/css/product_detail.css",
+            "/static/css/storefront_builder.css",
+            "/static/css/theme_palette.css"
+          ],
+          "scriptSrcs": [
+            "/static/js/htmx.min.js",
+            "/static/js/alpine.min.js"
+          ],
+          "scrollWidth": 1440
+        },
+        {
+          "envelope": "listing",
+          "viewport": "desktop",
+          "sb_css": 1,
+          "home_css": 0,
+          "htmx": 1,
+          "alpine": 1,
+          "styleHrefs": [
+            "/static/css/tokens.css",
+            "/static/css/base.css",
+            "/static/css/layout.css",
+            "/static/css/product_card.css",
+            "/static/css/product_list.css",
+            "/static/css/storefront_builder.css",
+            "/static/css/theme_palette.css"
+          ],
+          "scriptSrcs": [
+            "/static/js/htmx.min.js",
+            "/static/js/alpine.min.js"
+          ],
+          "scrollWidth": 1440
+        },
+        {
+          "envelope": "search",
+          "viewport": "desktop",
+          "sb_css": 1,
+          "home_css": 0,
+          "htmx": 1,
+          "alpine": 1,
+          "styleHrefs": [
+            "/static/css/tokens.css",
+            "/static/css/base.css",
+            "/static/css/layout.css",
+            "/static/css/product_card.css",
+            "/static/css/product_list.css",
+            "/static/css/storefront_builder.css",
+            "/static/css/theme_palette.css"
+          ],
+          "scriptSrcs": [
+            "/static/js/htmx.min.js",
+            "/static/js/alpine.min.js"
+          ],
+          "scrollWidth": 1440
+        },
+        {
+          "envelope": "collection",
+          "viewport": "desktop",
+          "sb_css": 1,
+          "home_css": 0,
+          "htmx": 1,
+          "alpine": 1,
+          "styleHrefs": [
+            "/static/css/tokens.css",
+            "/static/css/base.css",
+            "/static/css/layout.css",
+            "/static/css/product_card.css",
+            "/static/css/product_list.css",
+            "/static/css/storefront_builder.css",
+            "/static/css/theme_palette.css"
+          ],
+          "scriptSrcs": [
+            "/static/js/htmx.min.js",
+            "/static/js/alpine.min.js"
+          ],
+          "scrollWidth": 1440
+        },
+        {
+          "envelope": "cart",
+          "viewport": "desktop",
+          "sb_css": 1,
+          "home_css": 0,
+          "htmx": 1,
+          "alpine": 1,
+          "styleHrefs": [
+            "/static/css/tokens.css",
+            "/static/css/base.css",
+            "/static/css/layout.css",
+            "/static/css/cart.css",
+            "/static/css/storefront_builder.css",
+            "/static/css/theme_palette.css"
+          ],
+          "scriptSrcs": [
+            "/static/js/htmx.min.js",
+            "/static/js/alpine.min.js"
+          ],
+          "scrollWidth": 1440
+        },
+        {
+          "envelope": "home",
+          "viewport": "mobile",
+          "sb_css": 1,
+          "home_css": 1,
+          "htmx": 1,
+          "alpine": 1,
+          "styleHrefs": [
+            "/static/css/tokens.css",
+            "/static/css/base.css",
+            "/static/css/layout.css",
+            "/static/css/product_card.css",
+            "/static/css/home.css",
+            "/static/css/storefront_builder.css",
+            "/static/css/theme_palette.css"
+          ],
+          "scriptSrcs": [
+            "/static/js/htmx.min.js",
+            "/static/js/alpine.min.js"
+          ],
+          "scrollWidth": 390
+        },
+        {
+          "envelope": "product_detail",
+          "viewport": "mobile",
+          "sb_css": 1,
+          "home_css": 0,
+          "htmx": 1,
+          "alpine": 1,
+          "styleHrefs": [
+            "/static/css/tokens.css",
+            "/static/css/base.css",
+            "/static/css/layout.css",
+            "/static/css/product_card.css",
+            "/static/css/product_detail.css",
+            "/static/css/storefront_builder.css",
+            "/static/css/theme_palette.css"
+          ],
+          "scriptSrcs": [
+            "/static/js/htmx.min.js",
+            "/static/js/alpine.min.js"
+          ],
+          "scrollWidth": 390
+        },
+        {
+          "envelope": "listing",
+          "viewport": "mobile",
+          "sb_css": 1,
+          "home_css": 0,
+          "htmx": 1,
+          "alpine": 1,
+          "styleHrefs": [
+            "/static/css/tokens.css",
+            "/static/css/base.css",
+            "/static/css/layout.css",
+            "/static/css/product_card.css",
+            "/static/css/product_list.css",
+            "/static/css/storefront_builder.css",
+            "/static/css/theme_palette.css"
+          ],
+          "scriptSrcs": [
+            "/static/js/htmx.min.js",
+            "/static/js/alpine.min.js"
+          ],
+          "scrollWidth": 390
+        },
+        {
+          "envelope": "search",
+          "viewport": "mobile",
+          "sb_css": 1,
+          "home_css": 0,
+          "htmx": 1,
+          "alpine": 1,
+          "styleHrefs": [
+            "/static/css/tokens.css",
+            "/static/css/base.css",
+            "/static/css/layout.css",
+            "/static/css/product_card.css",
+            "/static/css/product_list.css",
+            "/static/css/storefront_builder.css",
+            "/static/css/theme_palette.css"
+          ],
+          "scriptSrcs": [
+            "/static/js/htmx.min.js",
+            "/static/js/alpine.min.js"
+          ],
+          "scrollWidth": 390
+        },
+        {
+          "envelope": "collection",
+          "viewport": "mobile",
+          "sb_css": 1,
+          "home_css": 0,
+          "htmx": 1,
+          "alpine": 1,
+          "styleHrefs": [
+            "/static/css/tokens.css",
+            "/static/css/base.css",
+            "/static/css/layout.css",
+            "/static/css/product_card.css",
+            "/static/css/product_list.css",
+            "/static/css/storefront_builder.css",
+            "/static/css/theme_palette.css"
+          ],
+          "scriptSrcs": [
+            "/static/js/htmx.min.js",
+            "/static/js/alpine.min.js"
+          ],
+          "scrollWidth": 390
+        },
+        {
+          "envelope": "cart",
+          "viewport": "mobile",
+          "sb_css": 1,
+          "home_css": 0,
+          "htmx": 1,
+          "alpine": 1,
+          "styleHrefs": [
+            "/static/css/tokens.css",
+            "/static/css/base.css",
+            "/static/css/layout.css",
+            "/static/css/cart.css",
+            "/static/css/storefront_builder.css",
+            "/static/css/theme_palette.css"
+          ],
+          "scriptSrcs": [
+            "/static/js/htmx.min.js",
+            "/static/js/alpine.min.js"
+          ],
+          "scrollWidth": 390
+        },
+        {
+          "envelope": "home",
+          "viewport": "tablet",
+          "sb_css": 1,
+          "home_css": 1,
+          "htmx": 1,
+          "alpine": 1,
+          "styleHrefs": [
+            "/static/css/tokens.css",
+            "/static/css/base.css",
+            "/static/css/layout.css",
+            "/static/css/product_card.css",
+            "/static/css/home.css",
+            "/static/css/storefront_builder.css",
+            "/static/css/theme_palette.css"
+          ],
+          "scriptSrcs": [
+            "/static/js/htmx.min.js",
+            "/static/js/alpine.min.js"
+          ],
+          "scrollWidth": 768
+        },
+        {
+          "envelope": "product_detail",
+          "viewport": "tablet",
+          "sb_css": 1,
+          "home_css": 0,
+          "htmx": 1,
+          "alpine": 1,
+          "styleHrefs": [
+            "/static/css/tokens.css",
+            "/static/css/base.css",
+            "/static/css/layout.css",
+            "/static/css/product_card.css",
+            "/static/css/product_detail.css",
+            "/static/css/storefront_builder.css",
+            "/static/css/theme_palette.css"
+          ],
+          "scriptSrcs": [
+            "/static/js/htmx.min.js",
+            "/static/js/alpine.min.js"
+          ],
+          "scrollWidth": 768
+        },
+        {
+          "envelope": "listing",
+          "viewport": "tablet",
+          "sb_css": 1,
+          "home_css": 0,
+          "htmx": 1,
+          "alpine": 1,
+          "styleHrefs": [
+            "/static/css/tokens.css",
+            "/static/css/base.css",
+            "/static/css/layout.css",
+            "/static/css/product_card.css",
+            "/static/css/product_list.css",
+            "/static/css/storefront_builder.css",
+            "/static/css/theme_palette.css"
+          ],
+          "scriptSrcs": [
+            "/static/js/htmx.min.js",
+            "/static/js/alpine.min.js"
+          ],
+          "scrollWidth": 768
+        },
+        {
+          "envelope": "search",
+          "viewport": "tablet",
+          "sb_css": 1,
+          "home_css": 0,
+          "htmx": 1,
+          "alpine": 1,
+          "styleHrefs": [
+            "/static/css/tokens.css",
+            "/static/css/base.css",
+            "/static/css/layout.css",
+            "/static/css/product_card.css",
+            "/static/css/product_list.css",
+            "/static/css/storefront_builder.css",
+            "/static/css/theme_palette.css"
+          ],
+          "scriptSrcs": [
+            "/static/js/htmx.min.js",
+            "/static/js/alpine.min.js"
+          ],
+          "scrollWidth": 768
+        },
+        {
+          "envelope": "collection",
+          "viewport": "tablet",
+          "sb_css": 1,
+          "home_css": 0,
+          "htmx": 1,
+          "alpine": 1,
+          "styleHrefs": [
+            "/static/css/tokens.css",
+            "/static/css/base.css",
+            "/static/css/layout.css",
+            "/static/css/product_card.css",
+            "/static/css/product_list.css",
+            "/static/css/storefront_builder.css",
+            "/static/css/theme_palette.css"
+          ],
+          "scriptSrcs": [
+            "/static/js/htmx.min.js",
+            "/static/js/alpine.min.js"
+          ],
+          "scrollWidth": 768
+        },
+        {
+          "envelope": "cart",
+          "viewport": "tablet",
+          "sb_css": 1,
+          "home_css": 0,
+          "htmx": 1,
+          "alpine": 1,
+          "styleHrefs": [
+            "/static/css/tokens.css",
+            "/static/css/base.css",
+            "/static/css/layout.css",
+            "/static/css/cart.css",
+            "/static/css/storefront_builder.css",
+            "/static/css/theme_palette.css"
+          ],
+          "scriptSrcs": [
+            "/static/js/htmx.min.js",
+            "/static/js/alpine.min.js"
+          ],
+          "scrollWidth": 768
+        }
+      ],
+      "cart_htmx": [
+        {
+          "viewport": "desktop",
+          "inc_url": "/cart/items/5/update/",
+          "coll_tiles_before": 6,
+          "coll_tiles_after_update": 6,
+          "coll_hrefs_stable": true,
+          "qty_after_update": "۳"
+        }
+      ],
+      "page2": {
+        "url": "http://127.0.0.1:8765/collections/p3-collection-page2/?page=2",
+        "product_card_count": 1,
+        "current_page_text": "۲",
+        "full_envelope": true,
+        "hx_still_full_page": true
+      },
+      "screenshots": [
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/desktop/home-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/desktop/home-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/desktop/product_detail-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/desktop/product_detail-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/desktop/listing-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/desktop/listing-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/desktop/search-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/desktop/search-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/desktop/collection-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/desktop/collection-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/desktop/cart-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/desktop/cart-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/mobile/home-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/mobile/home-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/mobile/product_detail-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/mobile/product_detail-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/mobile/listing-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/mobile/listing-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/mobile/search-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/mobile/search-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/mobile/collection-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/mobile/collection-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/mobile/cart-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/mobile/cart-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/tablet/home-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/tablet/home-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/tablet/product_detail-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/tablet/product_detail-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/tablet/listing-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/tablet/listing-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/tablet/search-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/tablet/search-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/tablet/collection-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/tablet/collection-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/tablet/cart-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/tablet/cart-public.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/page2/page2.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/cart/before.png",
+        "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/cart/update.png"
+      ],
+      "errors": [],
+      "finished_at": "2026-09-06T17:48:32.198Z"
+    },
+    "finished_at": "2026-09-06T17:48:32.198Z"
   },
-  "finished_at": "2026-09-06T14:40:56.855Z"
+  "finished_at": "2026-09-06T17:48:32.199Z"
 }

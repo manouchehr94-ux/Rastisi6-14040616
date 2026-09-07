@@ -413,3 +413,125 @@ class CartHtmxFragmentCarriesUniversalContextTests(TestCase):
         # presentation change must not corrupt the totals computation.
         self.assertEqual(response.context["totals"]["items_total"], Decimal("450000"))
         self.assertEqual(before, Decimal("300000"))
+
+
+
+class CartHtmxFragmentCarriesCollectionContextTests(TestCase):
+    """Task 5 (mirror of CartHtmxFragmentCarriesUniversalContextTests for
+    Collection): the real Cart HTMX fragment (``_render_cart_container``, used
+    by both ``cart:item-update`` and ``cart:item-remove``) must go through the
+    SAME universal storefront context the full ``cart_detail`` page uses, so a
+    ``collection_tiles`` section placed on a PUBLISHED cart page survives the
+    HTMX swap: its placement (source/order/settings) is retained, the
+    container-layout keys (``use_container_layout``/``render_containers``,
+    already provided by the Task-3 cart adapter) are present, the collection
+    tiles + detail link render in the fragment, the OOB cart count is
+    preserved, and quantities/totals are unchanged by the presentation change.
+
+    Per the Task-5 plan this should PASS as-is (the Task-3 cart adapter already
+    provides container projection) — it is a regression guard proving Collection
+    does not expose a new defect in the shared adapter.
+    """
+
+    HOST = "cart-collection-fragment.example.com"
+
+    def setUp(self):
+        from django.test import Client, override_settings
+        from django.utils import timezone
+
+        from apps.catalog.models import MerchantCollection
+        from apps.storefront_builder.models import StorefrontSection
+        from apps.storefront_builder.services import layout_service as svc
+        from apps.stores.models import StoreDomain
+
+        self._override = override_settings(ALLOWED_HOSTS=[self.HOST, "testserver"])
+        self._override.enable()
+        self.addCleanup(self._override.disable)
+
+        self.store = Store.objects.get(slug="akhlaghi")
+        StoreDomain.objects.create(
+            store=self.store, hostname=self.HOST, is_primary=True,
+            verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=timezone.now(),
+        )
+        vendor = Vendor.objects.create(store=self.store, name="فروشگاه کالکشن سبد", slug="shop-cart-coll")
+        category = Category.objects.create(store=self.store, name="دیجیتال کالکشن سبد", slug="digital-cart-coll")
+        self.product = Product.objects.create(
+            store=self.store, vendor=vendor, category=category, name="کالای کالکشن سبد", slug="sample-cart-coll",
+            sku="SKU-CARTCOLL1", price=Decimal("150000"), stock=5,
+        )
+        # The collection the tiles section advertises (a distinct subject from
+        # the cart line product).
+        self.collection = MerchantCollection.objects.create(
+            store=self.store, name="کالکشن سبد قابل مشاهده", slug="cart-visible-collection", is_active=True,
+        )
+
+        draft = svc.get_or_create_draft(self.store)
+        cart_page = draft.get_page("cart")
+        cart_page.sections.all().delete()
+        StorefrontSection.objects.create(page=cart_page, section_key="cart_items", order=0)
+        # Collection tiles placed in the published cart page — must survive the HTMX action.
+        StorefrontSection.objects.create(
+            page=cart_page, section_key="collection_tiles", order=1,
+            settings={"title": "کالکشن‌های سبد", "tile_style": "carousel", "collection_ids": []},
+        )
+        svc.publish(self.store)
+
+        self.client = Client(HTTP_HOST=self.HOST)
+        self.client.post(reverse("cart:add", args=[self.product.slug]), {"quantity": 2})
+        self.item = CartItem.objects.get(product=self.product)
+
+    def test_update_fragment_context_carries_universal_layout_keys(self):
+        response = self.client.post(reverse("cart:item-update", args=[self.item.id]), {"quantity": 3})
+        self.assertEqual(response.status_code, 200)
+        # Container-projection keys provided by the Task-3 cart adapter.
+        self.assertIn("use_container_layout", response.context)
+        self.assertIn("render_containers", response.context)
+        self.assertIsNotNone(response.context["storefront_page"])
+        self.assertEqual(response.context["storefront_page"].page_type, "cart")
+
+    def test_remove_fragment_context_carries_universal_layout_keys(self):
+        response = self.client.post(reverse("cart:item-remove", args=[self.item.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("use_container_layout", response.context)
+        self.assertIn("render_containers", response.context)
+
+    def test_fragment_retains_collection_placement_source_order_and_settings(self):
+        response = self.client.post(reverse("cart:item-update", args=[self.item.id]), {"quantity": 3})
+        keys = [i["section"].section_key for i in response.context["render_items"]]
+        self.assertIn("collection_tiles", keys)
+        # Merchant-configured order preserved: cart_items (0) before collection_tiles (1).
+        self.assertLess(keys.index("cart_items"), keys.index("collection_tiles"))
+        coll_item = next(
+            i for i in response.context["render_items"] if i["section"].section_key == "collection_tiles"
+        )
+        # Source/settings survive the swap (title + carousel variant preserved).
+        self.assertEqual(coll_item["section"].settings["title"], "کالکشن‌های سبد")
+        self.assertEqual(coll_item["section"].settings["tile_style"], "carousel")
+        # The auto-selected collection is present in the section context.
+        tile_names = [row["collection"].name for row in coll_item["context"]["collection_tiles"]]
+        self.assertIn("کالکشن سبد قابل مشاهده", tile_names)
+
+    def test_fragment_renders_collection_tile_and_detail_link(self):
+        response = self.client.post(reverse("cart:item-update", args=[self.item.id]), {"quantity": 3})
+        body = response.content.decode()
+        self.assertIn("کالکشن‌های سبد", body)
+        self.assertIn("کالکشن سبد قابل مشاهده", body)
+        self.assertIn(f"/collections/{self.collection.slug}/", body)
+        # The carousel container variant rendered (its CSS now lives in the
+        # shared builder stylesheet the cart envelope loads).
+        self.assertIn("tiles-carousel collection-tiles-carousel", body)
+
+    def test_fragment_preserves_oob_cart_count(self):
+        response = self.client.post(reverse("cart:item-update", args=[self.item.id]), {"quantity": 3})
+        self.assertContains(response, 'id="cart-count"')
+        self.assertContains(response, "hx-swap-oob")
+
+    def test_fragment_does_not_change_quantities_or_totals(self):
+        before = self.client.get(reverse("cart:detail")).context["totals"]["items_total"]
+        response = self.client.post(reverse("cart:item-update", args=[self.item.id]), {"quantity": 3})
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.quantity, 3)
+        # items_total scales with the (legitimately-changed) quantity — the
+        # Collection presentation change must not corrupt the totals computation.
+        self.assertEqual(response.context["totals"]["items_total"], Decimal("450000"))
+        self.assertEqual(before, Decimal("300000"))

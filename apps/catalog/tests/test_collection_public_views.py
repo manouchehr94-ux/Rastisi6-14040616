@@ -128,3 +128,118 @@ class CollectionDetailViewTests(TestCase):
             len(small_queries.captured_queries), len(large_queries.captured_queries),
             "تعداد کوئری با تعداد کالای کالکشن رشد کرده — احتمال N+1",
         )
+
+
+
+class CollectionDetailPaginationDomainTests(TestCase):
+    """Task 5 — ``/collections/<slug>/?page=2`` is served ENTIRELY by the
+    domain-owned ``collection_detail`` view: it paginates the domain's own
+    visible-membership list (``collection_visible_items`` + ``Paginator``),
+    renders the shared product card partial, and has NO HTMX fragment branch
+    (a normal full-page storefront render even when an HX header is present).
+    """
+
+    def setUp(self):
+        self.store = _akhlaghi()
+        self.collection = svc.create_collection(self.store, name="کالکشن صفحه‌بندی")
+        vendor = Vendor.objects.create(store=self.store, name="فروشنده صفحه‌بندی", slug="v-page2")
+        category = Category.objects.create(store=self.store, name="دسته صفحه‌بندی", slug="c-page2")
+        # 15 visible members => 2 pages at PRODUCTS_PER_PAGE=12 (12 + 3).
+        self.products = []
+        for i in range(15):
+            p = Product.objects.create(
+                store=self.store, vendor=vendor, category=category, name=f"کالای صفحه {i:02d}",
+                slug=f"page2-p-{i:02d}", sku=f"SKU-PAGE2-{i:02d}", price=Decimal("10000"),
+                status=Product.Status.ACTIVE,
+            )
+            svc.add_product(self.collection, p)
+            self.products.append(p)
+
+    def _url(self, page=None):
+        url = reverse("catalog:collection-detail", args=[self.collection.slug])
+        return f"{url}?page={page}" if page is not None else url
+
+    def test_page2_uses_domain_visible_membership_paginated(self):
+        resp = self.client.get(self._url(2))
+        self.assertEqual(resp.status_code, 200)
+        page_obj = resp.context["page_obj"]
+        self.assertEqual(page_obj.number, 2)
+        self.assertEqual(page_obj.paginator.num_pages, 2)
+        # Page 2 holds the remaining 3 members (manual order preserved).
+        self.assertEqual(len(resp.context["products"]), 3)
+        # The domain visible-membership list is what was paginated.
+        from apps.catalog.services.collection_service import collection_visible_items
+        visible = list(collection_visible_items(self.collection, self.store))
+        self.assertEqual(len(visible), 15)
+
+    def test_page2_renders_shared_product_card_partial(self):
+        resp = self.client.get(self._url(2))
+        template_names = [t.name for t in resp.templates if t.name]
+        self.assertIn("catalog/partials/product_card.html", template_names)
+        # A page-2 product is present; a page-1 product is not.
+        self.assertContains(resp, self.products[13].name)
+        self.assertNotContains(resp, self.products[0].name)
+
+    def test_page2_has_no_htmx_fragment_branch(self):
+        """No HX branch: an HX-Request header must NOT switch the view to a
+        partial fragment — it still renders the full storefront envelope
+        (shared shell + Builder CSS), unlike the cart's HTMX fragment path."""
+        resp = self.client.get(self._url(2), HTTP_HX_REQUEST="true")
+        self.assertEqual(resp.status_code, 200)
+        template_names = [t.name for t in resp.templates if t.name]
+        self.assertIn("catalog/collection_detail.html", template_names)
+        body = resp.content.decode()
+        # Full envelope, not a bare fragment.
+        self.assertIn("css/storefront_builder.css", body)
+
+    def test_out_of_range_page_clamps_gracefully(self):
+        """get_page clamps: page=999 returns the last page, never a 404/500."""
+        resp = self.client.get(self._url(999))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context["page_obj"].number, 2)
+
+    def test_page2_accessible_anonymously(self):
+        # No login/session required — public storefront read.
+        resp = self.client.get(self._url(2))
+        self.assertEqual(resp.status_code, 200)
+
+
+class CollectionIndexBoundaryTests(TestCase):
+    """Task 5 (E6) — the collection index (``/collections/``) is a SEPARATE
+    direct listing: it lists collections (no per-collection products) and
+    fabricates NO "current" collection (a Builder ``collection_header`` /
+    ``collection_products`` on the shared COLLECTION page must render nothing
+    there, because there is no resolved current collection)."""
+
+    def setUp(self):
+        self.store = _akhlaghi()
+
+    def test_index_lists_collections_without_a_current_collection(self):
+        c = svc.create_collection(self.store, name="کالکشنِ فهرست", description="توضیحِ فهرست")
+        resp = self.client.get(reverse("catalog:collection-index"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, c.name)
+        # No fabricated "current collection" object on the index view context.
+        self.assertIsNone(resp.context.get("collection"))
+        # The index carries a collections listing + its own paginator.
+        self.assertIn("collections", resp.context)
+        self.assertIn("page_obj", resp.context)
+
+    def test_index_does_not_load_builder_css_or_render_items(self):
+        svc.create_collection(self.store, name="کالکشنِ مرزی")
+        resp = self.client.get(reverse("catalog:collection-index"))
+        body = resp.content.decode()
+        self.assertNotIn("css/storefront_builder.css", body)
+        # It renders its own hardcoded grid template, not the shared render_rows.
+        template_names = [t.name for t in resp.templates if t.name]
+        self.assertIn("catalog/collection_index.html", template_names)
+        self.assertNotIn("storefront_builder/partials/render_rows.html", template_names)
+
+    def test_index_paginates_its_own_collection_listing(self):
+        # More collections than one page (PRODUCTS_PER_PAGE=12) => 2 pages.
+        for i in range(15):
+            svc.create_collection(self.store, name=f"کالکشنِ فهرستِ {i:02d}")
+        resp = self.client.get(reverse("catalog:collection-index") + "?page=2")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context["page_obj"].number, 2)
+        self.assertEqual(resp.context["page_obj"].paginator.num_pages, 2)
