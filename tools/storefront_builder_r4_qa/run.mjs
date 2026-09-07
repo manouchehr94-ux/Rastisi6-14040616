@@ -980,6 +980,18 @@ async function scenario13PublicUnchanged() {
 // Public at all. Correlated by the console message's own `location.url`
 // (never by scanning `text`, which does not carry the failing URL).
 const FAVICON_URL_PATTERN = /\/favicon\.ico(\?|$)/i;
+// Task 7's disposable broken-image fixtures (a Brand logo + a Collection
+// cover, each pointing at a filename that was never written to storage) are
+// the one OTHER intentional, spec-required exception to the zero-error
+// instrumentation gates below — "record browser network failure; do not
+// equate no-image with broken-image" — gated to the phase3-only opt-in run
+// so the default R3 harness's zero-error behavior is byte-for-byte
+// unchanged. The marker is unique to this fixture; nothing else can
+// produce a URL containing it.
+const BROKEN_IMAGE_URL_PATTERN = /qa-broken-nonexistent/i;
+function isExpectedBrokenImageNoise(url) {
+  return Boolean(manifest.phase3) && BROKEN_IMAGE_URL_PATTERN.test(url || '');
+}
 
 function isExpectedStaleConflictNoise(entry) {
   // Chromium's DevTools protocol unconditionally logs a console.error for
@@ -1098,13 +1110,13 @@ async function finalInstrumentationAssertions() {
   );
 
   const unexpectedConsoleErrors = result.console_errors.filter(
-    (e) => !isExpectedStaleConflictNoise(e) && !FAVICON_URL_PATTERN.test(e?.location?.url || ''),
+    (e) => !isExpectedStaleConflictNoise(e) && !FAVICON_URL_PATTERN.test(e?.location?.url || '') && !isExpectedBrokenImageNoise(e?.location?.url),
   );
   assert(unexpectedConsoleErrors.length === 0, `Unexpected console errors: ${JSON.stringify(unexpectedConsoleErrors.slice(0, 5))}`);
 
   assert(result.page_errors.length === 0, `Page errors: ${JSON.stringify(result.page_errors.slice(0, 5))}`);
 
-  const unexpectedRequestFailures = result.request_failures.filter((f) => !FAVICON_URL_PATTERN.test(f.url || ''));
+  const unexpectedRequestFailures = result.request_failures.filter((f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url));
   assert(unexpectedRequestFailures.length === 0, `Failed requests: ${JSON.stringify(unexpectedRequestFailures.slice(0, 5))}`);
 
   // Round-2 corrective Finding B — the full R4/Preview/Public HTTP-error
@@ -1119,7 +1131,7 @@ async function finalInstrumentationAssertions() {
     expectedStale409Responses.length === 1,
     `Expected exactly 1 HTTP-error-response record correlated to the one deliberate stale 409, got ${expectedStale409Responses.length}`,
   );
-  const unexpectedHttp = result.http_error_responses.filter((e) => !isExpectedStale409Response(e));
+  const unexpectedHttp = result.http_error_responses.filter((e) => !isExpectedStale409Response(e) && !isExpectedBrokenImageNoise(e.url));
   assert(unexpectedHttp.length === 0, `Unexpected HTTP errors: ${JSON.stringify(unexpectedHttp.slice(0, 5))}`);
 
   // Round-2 corrective Finding C — every main-frame navigation must have
@@ -1248,6 +1260,10 @@ const phase3 = {
   cart_htmx: [],
   screenshots: [],
   errors: [],
+  // Task 7 additions (top-level, Brand-scoped).
+  broken_image: null,
+  combined_cart_htmx: [],
+  tenant_negatives: null,
   // Task 5 "Collection gate" — additive Collection matrix metrics namespace.
   collection: {
     started_at: new Date().toISOString(),
@@ -1258,6 +1274,10 @@ const phase3 = {
     page2: null,
     screenshots: [],
     errors: [],
+    // Task 7 additions.
+    broken_image_records: [],
+    index_companion: null,
+    known_red_findings: [],
   },
 };
 
@@ -1275,9 +1295,18 @@ async function phase3PublicMatrix(fx, envelopes) {
       await ctx.addCookies([manifest.session]);
       const pubPage = await ctx.newPage();
       const localErrors = [];
-      pubPage.on('console', (m) => { if (m.type() === 'error') localErrors.push({ text: m.text(), url: m.location()?.url, source: `public:${env.key}:${vp.name}` }); });
+      pubPage.on('console', (m) => {
+        if (m.type() !== 'error') return;
+        const u = m.location()?.url || '';
+        if (isExpectedBrokenImageNoise(u)) return; // Task 7 disposable broken-image fixture — recorded separately
+        localErrors.push({ text: m.text(), url: u, source: `public:${env.key}:${vp.name}` });
+      });
       pubPage.on('pageerror', (e) => localErrors.push({ text: String(e.message || e), source: `public:${env.key}:${vp.name}` }));
-      pubPage.on('requestfailed', (r) => { if (!r.url().startsWith('data:') && !/\/favicon\.ico(\?|$)/i.test(r.url())) localErrors.push({ text: `requestfailed ${r.url()}`, source: `public:${env.key}:${vp.name}` }); });
+      pubPage.on('requestfailed', (r) => {
+        const u = r.url();
+        if (u.startsWith('data:') || /\/favicon\.ico(\?|$)/i.test(u) || isExpectedBrokenImageNoise(u)) return;
+        localErrors.push({ text: `requestfailed ${u}`, source: `public:${env.key}:${vp.name}` });
+      });
       try {
         const resp = await pubPage.goto(env.url, { waitUntil: 'networkidle', timeout: 25000 });
         assert(resp && resp.status() < 400, `${env.label} public GET returned ${resp && resp.status()}`);
@@ -1400,6 +1429,75 @@ async function phase3PublicMatrix(fx, envelopes) {
             phase3.v02_anchor.push({ envelope: env.key, viewport: vp.name, variant, present: false });
           }
 
+          // ---- Task 7: computed layout / RTL / keyboard focus / native scroll ----
+          const containerSel = BRAND_VARIANT_CONTAINER[variant];
+          const layout = await section.evaluate((sec, sel) => {
+            const container = sec.querySelector(sel) || sec;
+            const cs = getComputedStyle(container);
+            const img = sec.querySelector('a.brand-tile img');
+            return {
+              display: cs.display,
+              gridTemplateColumns: cs.gridTemplateColumns,
+              gap: cs.gap,
+              overflowX: cs.overflowX,
+              scrollWidth: container.scrollWidth,
+              clientWidth: container.clientWidth,
+              imgObjectFit: img ? getComputedStyle(img).objectFit : null,
+              dir: document.documentElement.dir,
+            };
+          }, containerSel);
+          assert(layout.dir === 'rtl', `${env.label} @${vp.name}: document must render RTL, got dir="${layout.dir}"`);
+          if (variant === 'grid') {
+            // Both halves required: `display` alone would still pass a
+            // `display:grid` container with no actual column tracks (a
+            // single-column collapse). gridTemplateColumns must resolve to
+            // more than one track.
+            assert(/grid|flex/.test(layout.display), `${env.label} @${vp.name} grid: expected a grid/flex container display, got "${layout.display}"`);
+            const trackCount = (layout.gridTemplateColumns || '').trim().split(/\s+/).filter((t) => t && t !== 'none').length;
+            assert(trackCount >= 2, `${env.label} @${vp.name} grid: expected >=2 resolved grid/flex tracks, gridTemplateColumns="${layout.gridTemplateColumns}"`);
+          } else {
+            // Both halves required: `overflowX` alone would still pass a
+            // `display:block` container that happens to compute
+            // overflow-x:auto but never actually lays tiles out horizontally.
+            assert(/flex/.test(layout.display), `${env.label} @${vp.name} ${variant}: expected a flex rail container display, got "${layout.display}"`);
+            assert(layout.overflowX === 'auto' || layout.overflowX === 'scroll', `${env.label} @${vp.name} ${variant}: expected native horizontal overflow (auto|scroll), got "${layout.overflowX}"`);
+          }
+          if (layout.imgObjectFit) {
+            assert(layout.imgObjectFit === 'contain', `${env.label} @${vp.name} ${variant}: brand logo objectFit expected "contain", got "${layout.imgObjectFit}"`);
+          }
+
+          // Native horizontal scroll proof — only meaningful when the rail
+          // actually overflows (carousel/beauty_tabs at this viewport width).
+          let nativeScroll = null;
+          if (variant !== 'grid' && layout.scrollWidth > layout.clientWidth) {
+            const scrolled = await section.evaluate((sec, sel) => {
+              const rail = sec.querySelector(sel);
+              const before = rail.scrollLeft;
+              // These rails use `scroll-snap-type: x mandatory` (home.css /
+              // storefront_builder.css), so an arbitrary small delta (e.g.
+              // +40px, not aligned to any tile's scroll-snap-align edge) is
+              // legitimately snapped straight back to the nearest snap point
+              // — usually 0 — which is native scroll-snap behavior, not a
+              // broken rail. Scroll all the way to the far end instead (a
+              // real, snap-aligned resting position at the last tile), tried
+              // in both the positive and RTL "negative scrollLeft" direction
+              // Chromium uses for RTL block content.
+              rail.scrollLeft = rail.scrollWidth;
+              let after = rail.scrollLeft;
+              if (after === before) {
+                rail.scrollLeft = -rail.scrollWidth;
+                after = rail.scrollLeft;
+              }
+              return { before, after };
+            }, containerSel);
+            assert(scrolled.after !== scrolled.before, `${env.label} @${vp.name} ${variant}: carousel rail did not respond to native scrollLeft (before=${scrolled.before} after=${scrolled.after})`);
+            nativeScroll = scrolled;
+          }
+
+          // Keyboard focus on the first interactive brand tile anchor.
+          const focusable = await tiles.first().evaluate((a) => { a.focus(); return document.activeElement === a; });
+          assert(focusable, `${env.label} @${vp.name} ${variant}: brand tile anchor did not receive keyboard focus`);
+
           // Screenshot public per variant/viewport.
           const pubDir = mkReportDir('brand', variant, vp.name);
           const pubShot = path.join(pubDir, `${env.key}-public.png`);
@@ -1412,6 +1510,9 @@ async function phase3PublicMatrix(fx, envelopes) {
             tile_count: tileCount, slug_order: slugOrder,
             decoded_imgs: decodedImgs, name_fallbacks: nameFallbacks,
             bounded_img_sample: boundedImgSample,
+            computed_layout: { display: layout.display, gridTemplateColumns: layout.gridTemplateColumns, gap: layout.gap, overflowX: layout.overflowX, imgObjectFit: layout.imgObjectFit, dir: layout.dir },
+            native_scroll: nativeScroll,
+            keyboard_focusable: focusable,
           });
         }
 
@@ -1527,9 +1628,18 @@ async function phase3CartHtmx(fx) {
     await ctx.addCookies([manifest.session]);
     const cartPage = await ctx.newPage();
     const localErrors = [];
-    cartPage.on('console', (m) => { if (m.type() === 'error') localErrors.push({ text: m.text(), url: m.location()?.url, source: `cart:${vp.name}` }); });
+    cartPage.on('console', (m) => {
+      if (m.type() !== 'error') return;
+      const u = m.location()?.url || '';
+      if (isExpectedBrokenImageNoise(u)) return; // Task 7 disposable broken-image fixture (auto-selected onto Cart too) — recorded separately
+      localErrors.push({ text: m.text(), url: u, source: `cart:${vp.name}` });
+    });
     cartPage.on('pageerror', (e) => localErrors.push({ text: String(e.message || e), source: `cart:${vp.name}` }));
-    cartPage.on('requestfailed', (r) => { if (!r.url().startsWith('data:') && !/\/favicon\.ico(\?|$)/i.test(r.url())) localErrors.push({ text: `requestfailed ${r.url()}`, source: `cart:${vp.name}` }); });
+    cartPage.on('requestfailed', (r) => {
+      const u = r.url();
+      if (u.startsWith('data:') || /\/favicon\.ico(\?|$)/i.test(u) || isExpectedBrokenImageNoise(u)) return;
+      localErrors.push({ text: `requestfailed ${u}`, source: `cart:${vp.name}` });
+    });
     const dir = mkReportDir('fragments', 'cart', vp.name);
     try {
       // Add a product to the cart via the real add endpoint. We read the CSRF
@@ -1716,6 +1826,7 @@ function phase3CollectionFixture() {
   assert(typeof c.newest_collection_slug === 'string' && c.newest_collection_slug, 'collection.newest_collection_slug missing');
   assert(typeof c.page2_collection_slug === 'string' && c.page2_collection_slug, 'collection.page2_collection_slug missing');
   assert(typeof c.product_slug === 'string' && c.product_slug, 'collection.product_slug missing');
+  assert(typeof c.broken_collection_slug === 'string' && c.broken_collection_slug, 'collection.broken_collection_slug missing (Task 7 disposable broken-image fixture)');
   return c;
 }
 
@@ -1749,9 +1860,22 @@ async function phase3CollectionPublicMatrix(c, envelopes) {
       await ctx.addCookies([manifest.session]);
       const pubPage = await ctx.newPage();
       const localErrors = [];
-      pubPage.on('console', (m) => { if (m.type() === 'error') localErrors.push({ text: m.text(), url: m.location()?.url, source: `coll-public:${env.key}:${vp.name}` }); });
+      pubPage.on('console', (m) => {
+        if (m.type() !== 'error') return;
+        const u = m.location()?.url || '';
+        if (isExpectedBrokenImageNoise(u)) return; // Task 7 disposable broken-image fixture — recorded separately
+        localErrors.push({ text: m.text(), url: u, source: `coll-public:${env.key}:${vp.name}` });
+      });
       pubPage.on('pageerror', (e) => localErrors.push({ text: String(e.message || e), source: `coll-public:${env.key}:${vp.name}` }));
-      pubPage.on('requestfailed', (r) => { if (!r.url().startsWith('data:') && !/\/favicon\.ico(\?|$)/i.test(r.url())) localErrors.push({ text: `requestfailed ${r.url()}`, source: `coll-public:${env.key}:${vp.name}` }); });
+      pubPage.on('requestfailed', (r) => {
+        const u = r.url();
+        if (u.startsWith('data:') || /\/favicon\.ico(\?|$)/i.test(u)) return;
+        // Task 7 disposable broken-image fixture: an intentionally-404ing
+        // collection cover — recorded separately (see the per-tile loop
+        // below), not counted against the zero-error assertion pool.
+        if (/qa-broken-nonexistent/i.test(u)) return;
+        localErrors.push({ text: `requestfailed ${u}`, source: `coll-public:${env.key}:${vp.name}` });
+      });
       try {
         const resp = await pubPage.goto(env.url, { waitUntil: 'networkidle', timeout: 25000 });
         assert(resp && resp.status() < 400, `${env.label} public GET returned ${resp && resp.status()}`);
@@ -1824,10 +1948,21 @@ async function phase3CollectionPublicMatrix(c, envelopes) {
           const slugOrder = tileData.map((t) => t.slug);
           assert(slugOrder[0] === c.newest_collection_slug, `${env.label} @${vp.name} ${variant}: newest collection "${c.newest_collection_slug}" is not first, order=${JSON.stringify(slugOrder)}`);
 
-          // Every tile: cover image decoded OR folder-glyph fallback.
+          // Every tile: cover image decoded OR folder-glyph fallback — except
+          // the Task 7 disposable broken-image collection, which is recorded
+          // separately below (per spec: "record browser network failure; do
+          // not equate no-image with broken-image").
           let decoded = 0;
           let glyphs = 0;
           for (const t of tileData) {
+            if (c.broken_collection_slug && t.slug === c.broken_collection_slug) {
+              phase3.collection.broken_image_records = phase3.collection.broken_image_records || [];
+              phase3.collection.broken_image_records.push({
+                envelope: env.key, viewport: vp.name, variant, href: t.href,
+                img_complete: t.imgComplete, img_natural_width: t.imgNaturalWidth,
+              });
+              continue;
+            }
             if (t.hasImg) {
               assert(t.imgComplete === true && t.imgNaturalWidth > 0, `${env.label} @${vp.name} ${variant}: collection cover <img> did not decode (complete=${t.imgComplete}, naturalWidth=${t.imgNaturalWidth}) href=${t.href}`);
               decoded += 1;
@@ -1841,6 +1976,111 @@ async function phase3CollectionPublicMatrix(c, envelopes) {
           assert(decoded >= 1, `${env.label} @${vp.name} ${variant}: expected >=1 decoded cover image, got ${decoded}`);
           assert(glyphs >= 1, `${env.label} @${vp.name} ${variant}: expected >=1 folder-glyph fallback tile, got ${glyphs}`);
 
+          // ---- Task 7: computed layout / RTL / keyboard focus / native scroll ----
+          const containerSel = COLLECTION_VARIANT_CONTAINER[variant];
+          const layout = await section.evaluate((sec, sel) => {
+            const container = sec.querySelector(sel) || sec;
+            const cs = getComputedStyle(container);
+            const img = sec.querySelector('a.pcard .img img');
+            return {
+              display: cs.display,
+              gridTemplateColumns: cs.gridTemplateColumns,
+              gap: cs.gap,
+              overflowX: cs.overflowX,
+              scrollWidth: container.scrollWidth,
+              clientWidth: container.clientWidth,
+              imgObjectFit: img ? getComputedStyle(img).objectFit : null,
+              dir: document.documentElement.dir,
+            };
+          }, containerSel);
+          assert(layout.dir === 'rtl', `${env.label} @${vp.name}: document must render RTL, got dir="${layout.dir}"`);
+          if (variant === 'grid') {
+            // Both halves checked (not `display` alone — a `display:grid`
+            // container with a single collapsed track would otherwise still
+            // pass): display must be grid/flex AND gridTemplateColumns must
+            // resolve to >=2 actual tracks.
+            const trackCount = (layout.gridTemplateColumns || '').trim().split(/\s+/).filter((t) => t && t !== 'none').length;
+            const displayOk = /grid|flex/.test(layout.display);
+            const tracksOk = trackCount >= 2;
+            if (!displayOk || !tracksOk) {
+              // KNOWN RED (Task 7 finding, NOT silently passed — see the
+              // end-of-gate assertion in phase3BrandGate(), which still fails
+              // the run): `.grid{display:grid;gap:16px}` lives in
+              // product_card.css, which the Cart envelope does NOT load (per
+              // the A06 asset table: cart.css + storefront_builder.css only,
+              // unlike the other five envelopes). collection_tiles.html has
+              // no inline display fallback (brand_carousel.html does).
+              // Recorded here (not thrown) so the rest of this run's evidence
+              // is still collected; the end-of-gate assertion in
+              // phase3BrandGate() still fails the overall scenario.
+              phase3.collection.known_red_findings.push({
+                envelope: env.key, viewport: vp.name, variant,
+                expected: 'display grid|flex AND >=2 resolved grid tracks', actual: `display="${layout.display}" gridTemplateColumns="${layout.gridTemplateColumns}"`,
+                note: 'Collection grid container has no display:grid (or no resolved column tracks) on this envelope (base .grid rule lives in product_card.css, which this envelope does not load; no inline template fallback exists).',
+              });
+            }
+          } else {
+            // Both halves checked (not `overflowX` alone — a `display:block`
+            // container that happens to compute overflow-x:auto would
+            // otherwise still pass while tiles stack vertically, never
+            // actually laid out as a horizontal rail): display must be flex
+            // AND overflowX must be auto/scroll.
+            const displayOk = /flex/.test(layout.display);
+            const overflowOk = layout.overflowX === 'auto' || layout.overflowX === 'scroll';
+            if (!displayOk || !overflowOk) {
+              // KNOWN RED (Task 7 finding, NOT silently passed — see the
+              // end-of-gate assertion below, which still fails the run):
+              // storefront_builder.css only mirrors `.collection-tiles-
+              // carousel.tiles-carousel .pcard{flex:0 0 220px}` (the Task 5
+              // "effective cascade" fix), never the PARENT container's
+              // `.tiles-carousel{display:flex;overflow-x:auto;...}` declaration
+              // — that base rule lives ONLY in home.css (line ~143), which is
+              // deliberately NOT loaded on non-Home envelopes. The
+              // collection_tiles.html template also carries no inline
+              // display/overflow fallback (unlike brand_carousel.html, which
+              // does). Recorded here (not thrown) so the rest of this run's
+              // evidence is still collected; the empty-array assertion at the
+              // end of phase3CollectionGate() still fails the overall scenario.
+              phase3.collection.known_red_findings.push({
+                envelope: env.key, viewport: vp.name, variant,
+                expected: 'display flex AND overflowX auto|scroll', actual: `display="${layout.display}" overflowX="${layout.overflowX}"`,
+                note: 'Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect.',
+              });
+            }
+          }
+          if (layout.imgObjectFit) {
+            assert(layout.imgObjectFit === 'cover', `${env.label} @${vp.name} ${variant}: collection cover image objectFit expected "cover", got "${layout.imgObjectFit}"`);
+          }
+
+          let nativeScroll = null;
+          if (variant !== 'grid' && layout.scrollWidth > layout.clientWidth) {
+            const scrolled = await section.evaluate((sec, sel) => {
+              const rail = sec.querySelector(sel);
+              const before = rail.scrollLeft;
+              // These rails use `scroll-snap-type: x mandatory` (home.css /
+              // storefront_builder.css), so an arbitrary small delta (e.g.
+              // +40px, not aligned to any tile's scroll-snap-align edge) is
+              // legitimately snapped straight back to the nearest snap point
+              // — usually 0 — which is native scroll-snap behavior, not a
+              // broken rail. Scroll all the way to the far end instead (a
+              // real, snap-aligned resting position at the last tile), tried
+              // in both the positive and RTL "negative scrollLeft" direction
+              // Chromium uses for RTL block content.
+              rail.scrollLeft = rail.scrollWidth;
+              let after = rail.scrollLeft;
+              if (after === before) {
+                rail.scrollLeft = -rail.scrollWidth;
+                after = rail.scrollLeft;
+              }
+              return { before, after };
+            }, containerSel);
+            assert(scrolled.after !== scrolled.before, `${env.label} @${vp.name} ${variant}: collection carousel rail did not respond to native scrollLeft (before=${scrolled.before} after=${scrolled.after})`);
+            nativeScroll = scrolled;
+          }
+
+          const focusable = await tiles.first().evaluate((a) => { a.focus(); return document.activeElement === a; });
+          assert(focusable, `${env.label} @${vp.name} ${variant}: collection tile anchor did not receive keyboard focus`);
+
           const shotDir = mkReportDir('collection', variant, vp.name);
           const shotPath = path.join(shotDir, `${env.key}-public.png`);
           await section.scrollIntoViewIfNeeded().catch(() => {});
@@ -1851,6 +2091,9 @@ async function phase3CollectionPublicMatrix(c, envelopes) {
             envelope: env.key, viewport: vp.name, variant,
             tile_count: tileCount, slug_order: slugOrder,
             decoded_imgs: decoded, glyph_fallbacks: glyphs,
+            computed_layout: { display: layout.display, gridTemplateColumns: layout.gridTemplateColumns, gap: layout.gap, overflowX: layout.overflowX, imgObjectFit: layout.imgObjectFit, dir: layout.dir },
+            native_scroll: nativeScroll,
+            keyboard_focusable: focusable,
           });
         }
         phase3.collection.envelopes.push({ envelope: env.key, viewport: vp.name, url: env.url, status: resp.status() });
@@ -2019,29 +2262,306 @@ async function phase3CollectionCartHtmx(c) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Task 7 — E6 Collection index companion browser smoke. `/collections/` is a
+// direct domain listing, NOT a pilot placement: it must carry NO
+// storefront_builder.css (no Builder render_items projected there). This is
+// browser-level confirmation of the boundary Task 5's Python tests already
+// characterize (test_page_shell E6 boundary) — companion evidence, and
+// explicitly NOT a substitute for E4 Collection detail.
+// ---------------------------------------------------------------------------
+async function phase3CollectionIndexCompanion() {
+  const origin = manifest.public_url.replace(/\/+$/, '');
+  const url = `${origin}/collections/`;
+  const ctx = await browser.newContext({ viewport: { width: PHASE3_VIEWPORTS[0].width, height: PHASE3_VIEWPORTS[0].height } });
+  await ctx.addCookies([manifest.session]);
+  const p = await ctx.newPage();
+  try {
+    const resp = await p.goto(url, { waitUntil: 'networkidle', timeout: 25000 });
+    assert(resp && resp.status() < 400, `Collection index companion GET returned ${resp && resp.status()}`);
+    const boundary = await p.evaluate(() => {
+      const styles = Array.from(document.querySelectorAll('link[rel=stylesheet]')).map((l) => l.getAttribute('href') || '');
+      return {
+        sb_css: styles.filter((h) => /storefront_builder\.css/.test(h)).length,
+        product_list_css: styles.filter((h) => /product_list\.css/.test(h)).length,
+      };
+    });
+    assert(boundary.sb_css === 0, `Collection index companion must NOT load storefront_builder.css (E6 is a direct listing, no pilot placement) — found ${boundary.sb_css}`);
+    const dir = mkReportDir('collection-index');
+    const shotPath = path.join(dir, 'index-companion.png');
+    await p.screenshot({ path: shotPath });
+    phase3.collection.index_companion = {
+      url, status: resp.status(), sb_css: boundary.sb_css, product_list_css: boundary.product_list_css,
+      screenshot: shotPath, note: 'E6 companion — no pilot placement; does not substitute for E4 Collection detail.',
+    };
+    phase3.collection.screenshots.push(shotPath);
+  } finally {
+    try { await ctx.close(); } catch (_error) { /* best effort */ }
+  }
+}
+
 async function phase3CollectionGate() {
   const c = phase3CollectionFixture();
   const envelopes = phase3CollectionEnvelopes(manifest.phase3_fixture, c);
   await phase3CollectionPublicMatrix(c, envelopes);
   await phase3CollectionPage2(c);
   await phase3CollectionCartHtmx(c);
+  await phase3CollectionIndexCompanion();
   phase3.collection.finished_at = new Date().toISOString();
+  // Deliberately NOT asserted here — a throw would abort phase3BrandGate()
+  // before it reaches the combined-cart proof or writes metrics.json. The
+  // gating assertion runs at the very end of phase3BrandGate(), inside a
+  // try/finally that writes metrics.json regardless of outcome, so a known
+  // RED finding still fails the overall scenario without losing evidence.
+}
+
+// ---------------------------------------------------------------------------
+// Task 7 — Brand broken-image disposable fixture. Isolated on the SEARCH
+// envelope (never visited by phase3PublicMatrix's five certified Brand
+// envelopes: home/product_detail/listing/collection/cart), this proves the
+// browser's DEFINED DEGRADED STATE for a logo <img> whose src resolves to a
+// file never written to storage — distinct from the no-logo
+// (`.brand-tile-name`) fallback already certified above. Recorded
+// separately; not asserted to succeed (no onerror fallback exists per the
+// inventory), and its request failure is excluded from the zero-error pools.
+// ---------------------------------------------------------------------------
+async function phase3BrandBrokenImage(fx) {
+  const origin = manifest.public_url.replace(/\/+$/, '');
+  const url = `${origin}/products/?q=${encodeURIComponent('کالا')}`;
+  const ctx = await browser.newContext({ viewport: { width: PHASE3_VIEWPORTS[0].width, height: PHASE3_VIEWPORTS[0].height } });
+  await ctx.addCookies([manifest.session]);
+  const p = await ctx.newPage();
+  const requestFailures = [];
+  p.on('requestfailed', (r) => requestFailures.push(r.url()));
+  try {
+    const resp = await p.goto(url, { waitUntil: 'networkidle', timeout: 25000 });
+    assert(resp && resp.status() < 400, `Brand broken-image search envelope GET returned ${resp && resp.status()}`);
+    const tiles = p.locator('a.brand-tile');
+    assert(await tiles.count() === 1, `Expected exactly one isolated broken-image brand tile on the search envelope, got ${await tiles.count()}`);
+    const state = await tiles.first().evaluate((a) => {
+      const img = a.querySelector('img');
+      return img ? { hasImg: true, complete: img.complete, naturalWidth: img.naturalWidth, src: img.getAttribute('src') } : { hasImg: false };
+    });
+    const brokenRequestFailed = requestFailures.some((u) => /qa-broken-nonexistent/i.test(u));
+    const dir = mkReportDir('brand', 'broken-image');
+    const shotPath = path.join(dir, 'search.png');
+    await p.screenshot({ path: shotPath });
+    phase3.screenshots.push(shotPath);
+    phase3.broken_image = {
+      envelope: 'search', url,
+      has_img_tag: state.hasImg, img_src: state.src ?? null,
+      img_complete: state.complete ?? null, img_natural_width: state.naturalWidth ?? null,
+      request_failed_observed: brokenRequestFailed,
+      note: 'Disposable QA fixture: logo FieldFile points at a file never written to storage. No onerror fallback exists (per inventory); recorded separately, distinct from the no-image (.brand-tile-name) fallback case, and excluded from the zero-error assertion pools.',
+    };
+  } finally {
+    try { await ctx.close(); } catch (_error) { /* best effort */ }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Task 7 — combined dual-pilot Cart proof. Brand (3 variants) and Collection
+// (2 tile variants) are ALREADY placed together on the same published Cart
+// page by the existing fixture (each in its own container/cell — every
+// `place_variant`/`place_tiles_variant` call creates its own single-cell
+// container), so this is a NEW verification pass over EXISTING data, not a
+// fixture change. This is the canonical evidence at the exact paths Task 7
+// names (`browser/fragments/cart/{viewport}/{before,update,remove}.png`),
+// run AFTER the individual Brand-only (phase3CartHtmx) and Collection-only
+// (phase3CollectionCartHtmx) flows, which remain unchanged and still pass.
+// ---------------------------------------------------------------------------
+async function phase3CombinedCartHtmx(fx, c) {
+  const origin = manifest.public_url.replace(/\/+$/, '');
+  for (const vp of PHASE3_VIEWPORTS) {
+    const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height } });
+    await ctx.addCookies([manifest.session]);
+    const cartPage = await ctx.newPage();
+    const localErrors = [];
+    cartPage.on('console', (m) => {
+      if (m.type() !== 'error') return;
+      const u = m.location()?.url || '';
+      if (isExpectedBrokenImageNoise(u)) return; // Task 7 disposable broken-image fixture (auto-selected onto Cart too) — recorded separately
+      localErrors.push({ text: m.text(), url: u, source: `combined-cart:${vp.name}` });
+    });
+    cartPage.on('pageerror', (e) => localErrors.push({ text: String(e.message || e), source: `combined-cart:${vp.name}` }));
+    cartPage.on('requestfailed', (r) => {
+      const u = r.url();
+      if (u.startsWith('data:') || /\/favicon\.ico(\?|$)/i.test(u) || isExpectedBrokenImageNoise(u)) return;
+      localErrors.push({ text: `requestfailed ${u}`, source: `combined-cart:${vp.name}` });
+    });
+    const dir = mkReportDir('fragments', 'cart', vp.name);
+    try {
+      const pdpUrl = `${origin}/products/${fx.product_slug}/`;
+      await cartPage.goto(pdpUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      const added = await cartPage.evaluate(async (slug) => {
+        const tokenEl = document.querySelector('input[name=csrfmiddlewaretoken]');
+        const token = tokenEl ? tokenEl.value : (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
+        const body = new URLSearchParams(); body.set('quantity', '1');
+        const res = await fetch(`/cart/add/${slug}/`, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': token || '', 'HX-Request': 'true', 'Content-Type': 'application/x-www-form-urlencoded' },
+          credentials: 'same-origin',
+          body: body.toString(),
+        });
+        return { status: res.status };
+      }, fx.product_slug);
+      assert(added.status < 400, `Combined cart add-to-cart failed with status ${added.status}`);
+
+      await cartPage.goto(`${origin}/cart/`, { waitUntil: 'networkidle', timeout: 20000 });
+      const readBoth = () => cartPage.evaluate(() => {
+        const brand = Array.from(document.querySelectorAll('#cart-container a.brand-tile'));
+        const coll = Array.from(document.querySelectorAll('#cart-container a.pcard[href*="/collections/"]'));
+        // Structural distinctness (no editor container/cell hooks on Public,
+        // by design): the Brand and Collection sections must be independent,
+        // non-nested sibling <section> ancestors — proving distinct
+        // placement without relying on any editor-only identity attribute.
+        const brandSections = new Set(brand.map((a) => a.closest('section.section')));
+        const collSections = new Set(coll.map((a) => a.closest('section.section')));
+        const overlap = [...brandSections].some((s) => collSections.has(s));
+        return {
+          brandCount: brand.length, collCount: coll.length,
+          brandHrefs: brand.map((a) => a.getAttribute('href')),
+          collHrefs: coll.map((a) => a.getAttribute('href')),
+          brandSectionCount: brandSections.size, collSectionCount: collSections.size,
+          sectionsOverlap: overlap,
+        };
+      });
+
+      const before = await readBoth();
+      assert(before.brandCount >= 2, `Combined cart: expected Brand tiles present, got ${before.brandCount}`);
+      assert(before.collCount >= 2, `Combined cart: expected Collection tiles present, got ${before.collCount}`);
+      assert(before.brandSectionCount >= 1 && before.collSectionCount >= 1, 'Combined cart: expected at least one Brand section and one Collection section');
+      assert(!before.sectionsOverlap, 'Combined cart: Brand and Collection tiles resolved to the SAME <section> — distinct container/cell placement violated');
+
+      const cartDom = await cartPage.evaluate(() => {
+        const items = Array.from(document.querySelectorAll('#cart-container .citem'));
+        const first = items[0];
+        const steppers = first ? Array.from(first.querySelectorAll('.stepper button[hx-post]')) : [];
+        const incUrl = steppers.length ? steppers[steppers.length - 1].getAttribute('hx-post') : null;
+        const removeBtn = first ? first.querySelector('button.rm') : null;
+        return { itemCount: items.length, incUrl, removeUrl: removeBtn ? removeBtn.getAttribute('hx-post') : null };
+      });
+      assert(cartDom.incUrl && /\/cart\/items\/\d+\/update\/$/.test(cartDom.incUrl), `Combined cart: could not read a real quantity-update hx-post URL, got ${cartDom.incUrl}`);
+      assert(cartDom.removeUrl && /\/cart\/items\/\d+\/remove\/$/.test(cartDom.removeUrl), `Combined cart: could not read a real item-remove hx-post URL, got ${cartDom.removeUrl}`);
+
+      await cartPage.screenshot({ path: path.join(dir, 'before.png') });
+
+      const applySwap = (html) => {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const oob = doc.querySelector('#cart-count[hx-swap-oob]');
+        const container = document.querySelector('#cart-container');
+        Array.from(doc.body.querySelectorAll('[hx-swap-oob]')).forEach((n) => n.remove());
+        container.innerHTML = doc.body.innerHTML;
+        const badge = document.querySelector('#cart-count');
+        if (oob && badge) badge.textContent = oob.textContent;
+      };
+
+      const updated = await cartPage.evaluate(async (args) => {
+        const token = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
+        const body = new URLSearchParams(); body.set('quantity', String(args.qty));
+        const res = await fetch(args.url, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': token || '', 'HX-Request': 'true', 'Content-Type': 'application/x-www-form-urlencoded' },
+          credentials: 'same-origin',
+          body: body.toString(),
+        });
+        return { status: res.status, html: await res.text() };
+      }, { url: cartDom.incUrl, qty: 2 });
+      assert(updated.status < 400, `Combined cart quantity update failed: ${updated.status}`);
+      await cartPage.evaluate(applySwap, updated.html);
+
+      const afterUpdate = await readBoth();
+      assert(afterUpdate.brandCount === before.brandCount, `Combined cart: Brand tiles lost after HTMX update (before=${before.brandCount} after=${afterUpdate.brandCount})`);
+      assert(afterUpdate.collCount === before.collCount, `Combined cart: Collection tiles lost after HTMX update (before=${before.collCount} after=${afterUpdate.collCount})`);
+      assert(JSON.stringify(afterUpdate.brandHrefs) === JSON.stringify(before.brandHrefs), 'Combined cart: Brand order/source changed after HTMX update');
+      assert(JSON.stringify(afterUpdate.collHrefs) === JSON.stringify(before.collHrefs), 'Combined cart: Collection order/source changed after HTMX update');
+      await cartPage.screenshot({ path: path.join(dir, 'update.png') });
+
+      const removed = await cartPage.evaluate(async (url) => {
+        const token = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': token || '', 'HX-Request': 'true', 'Content-Type': 'application/x-www-form-urlencoded' },
+          credentials: 'same-origin',
+          body: '',
+        });
+        return { status: res.status, html: await res.text() };
+      }, cartDom.removeUrl);
+      assert(removed.status < 400, `Combined cart item remove failed: ${removed.status}`);
+      await cartPage.evaluate(applySwap, removed.html);
+
+      const afterRemove = await cartPage.evaluate(() => {
+        const items = Array.from(document.querySelectorAll('#cart-container .citem'));
+        const brand = document.querySelectorAll('#cart-container a.brand-tile').length;
+        const coll = document.querySelectorAll('#cart-container a.pcard[href*="/collections/"]').length;
+        return { itemCount: items.length, brandCount: brand, collCount: coll };
+      });
+      assert(afterRemove.itemCount === 0, `Combined cart: line item should be removed, still ${afterRemove.itemCount}`);
+      assert(afterRemove.brandCount === before.brandCount, 'Combined cart: Brand sections must survive even an emptied cart');
+      assert(afterRemove.collCount === before.collCount, 'Combined cart: Collection sections must survive even an emptied cart');
+      await cartPage.screenshot({ path: path.join(dir, 'remove.png') });
+
+      phase3.combined_cart_htmx.push({
+        viewport: vp.name,
+        brand_tiles_before: before.brandCount, brand_tiles_after_update: afterUpdate.brandCount, brand_tiles_after_remove: afterRemove.brandCount,
+        collection_tiles_before: before.collCount, collection_tiles_after_update: afterUpdate.collCount, collection_tiles_after_remove: afterRemove.collCount,
+        distinct_sections: !before.sectionsOverlap,
+        brand_section_count: before.brandSectionCount, collection_section_count: before.collSectionCount,
+        item_count_after_remove: afterRemove.itemCount,
+      });
+      phase3.screenshots.push(path.join(dir, 'before.png'), path.join(dir, 'update.png'), path.join(dir, 'remove.png'));
+    } finally {
+      if (localErrors.length) phase3.errors.push(...localErrors);
+      assert(localErrors.length === 0, `Combined cart console/page/request errors @${vp.name}: ${JSON.stringify(localErrors.slice(0, 6))}`);
+      try { await ctx.close(); } catch (_error) { /* best effort */ }
+    }
+  }
 }
 
 async function phase3BrandGate() {
-  const fx = phase3Fixture();
-  const envelopes = phase3Envelopes(fx);
-  await phase3PublicMatrix(fx, envelopes);
-  await phase3WrapperProjection();
-  await phase3CartHtmx(fx);
+  try {
+    // The Python command writes tenant_negatives.json (the unauthenticated
+    // Preview negative, via Django's test Client) into the report dir before
+    // the browser even launches. Embed it into metrics.json too, rather than
+    // leaving this field permanently null — the file itself remains the
+    // authoritative copy.
+    const tenantNegativesPath = path.join(manifest.report_dir, 'tenant_negatives.json');
+    if (fs.existsSync(tenantNegativesPath)) {
+      try { phase3.tenant_negatives = JSON.parse(fs.readFileSync(tenantNegativesPath, 'utf8')); } catch (_error) { /* best effort */ }
+    }
 
-  // Task 5 "Collection gate" — additive Collection matrix on the same run.
-  await phase3CollectionGate();
+    const fx = phase3Fixture();
+    const envelopes = phase3Envelopes(fx);
+    await phase3PublicMatrix(fx, envelopes);
+    await phase3WrapperProjection();
+    await phase3CartHtmx(fx);
+    await phase3BrandBrokenImage(fx);
 
-  phase3.finished_at = new Date().toISOString();
-  result.phase3_brand = phase3;
-  // Metrics JSON alongside the browser result (screenshots ALONE insufficient).
-  fs.writeFileSync(path.join(manifest.report_dir, 'metrics.json'), JSON.stringify(phase3, null, 2), 'utf8');
+    // Task 5 "Collection gate" — additive Collection matrix on the same run.
+    await phase3CollectionGate();
+
+    // Task 7 — combined dual-pilot Cart proof, run last so it is the
+    // canonical evidence at the exact `browser/fragments/cart/{viewport}/*`
+    // paths Task 7 names.
+    await phase3CombinedCartHtmx(fx, phase3CollectionFixture());
+  } finally {
+    // Metrics JSON alongside the browser result (screenshots ALONE
+    // insufficient) — written even if a gating assertion below (or
+    // anything above) throws, so a FAILED run still leaves full evidence.
+    phase3.finished_at = new Date().toISOString();
+    result.phase3_brand = phase3;
+    fs.writeFileSync(path.join(manifest.report_dir, 'metrics.json'), JSON.stringify(phase3, null, 2), 'utf8');
+  }
+
+  // Gate the overall scenario on any known-red finding recorded above
+  // (non-fatally, so the try block could finish collecting every other
+  // envelope/viewport/screenshot first). A Task 7 harness finding, not
+  // production code, decides PASS/FAIL here — see phase3.collection.
+  // known_red_findings in metrics.json for the exact rows.
+  assert(
+    phase3.collection.known_red_findings.length === 0,
+    `Task 7 found ${phase3.collection.known_red_findings.length} known RED finding(s) — see phase3.collection.known_red_findings in metrics.json: ${JSON.stringify(phase3.collection.known_red_findings.slice(0, 3))}`,
+  );
 }
 
 async function main() {

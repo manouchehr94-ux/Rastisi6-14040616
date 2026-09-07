@@ -74,3 +74,39 @@ class StorefrontBuilderQAHarnessContractTests(SimpleTestCase):
         # The command exposes the opt-in flag and threads it into the manifest.
         self.assertIn("--phase3", command_source)
         self.assertIn('"phase3"', command_source)
+
+    def test_r4_runner_and_command_support_task7_matrix_additions(self):
+        """Task 7 harness additions are opt-in (phase3-only) and additive:
+        computed layout/RTL/keyboard-focus/native-scroll assertions, the
+        combined dual-pilot Cart proof, the E6 index companion smoke, the
+        disposable broken-image fixtures (Brand + Collection), and the
+        tenant/unauthorized Preview negative — without a second harness,
+        command, package or endpoint."""
+        base = Path(settings.BASE_DIR)
+        runner = base / "tools" / "storefront_builder_r4_qa" / "run.mjs"
+        command = (
+            base / "apps" / "storefront_builder" / "management"
+            / "commands" / "qa_storefront_builder_r4.py"
+        )
+        runner_source = runner.read_text(encoding="utf-8")
+        for marker in (
+            "phase3CombinedCartHtmx",
+            "phase3CollectionIndexCompanion",
+            "phase3BrandBrokenImage",
+            "qa-broken-nonexistent",
+            "document.documentElement.dir",
+            "scrollLeft",
+            "activeElement",
+            "gridTemplateColumns",
+            "objectFit",
+        ):
+            self.assertIn(marker, runner_source)
+
+        command_source = command.read_text(encoding="utf-8")
+        for marker in (
+            "_phase3_tenant_negatives",
+            "broken_image_brand_id",
+            "broken_collection_slug",
+            "tenant_negatives.json",
+        ):
+            self.assertIn(marker, command_source)

@@ -1,5 +1,5 @@
 {
-  "started_at": "2026-09-06T17:47:18.134Z",
+  "started_at": "2026-09-07T15:21:20.753Z",
   "viewports": [
     "desktop",
     "mobile",
@@ -9,91 +9,91 @@
     {
       "envelope": "home",
       "viewport": "desktop",
-      "url": "http://127.0.0.1:8765/",
+      "url": "http://127.0.0.1:8772/",
       "status": 200
     },
     {
       "envelope": "product_detail",
       "viewport": "desktop",
-      "url": "http://127.0.0.1:8765/products/t12-product-1/",
+      "url": "http://127.0.0.1:8772/products/t12-product-1/",
       "status": 200
     },
     {
       "envelope": "listing",
       "viewport": "desktop",
-      "url": "http://127.0.0.1:8765/products/",
+      "url": "http://127.0.0.1:8772/products/",
       "status": 200
     },
     {
       "envelope": "collection",
       "viewport": "desktop",
-      "url": "http://127.0.0.1:8765/collections/p3-collection-1/",
+      "url": "http://127.0.0.1:8772/collections/p3-collection-1/",
       "status": 200
     },
     {
       "envelope": "cart",
       "viewport": "desktop",
-      "url": "http://127.0.0.1:8765/cart/",
+      "url": "http://127.0.0.1:8772/cart/",
       "status": 200
     },
     {
       "envelope": "home",
       "viewport": "mobile",
-      "url": "http://127.0.0.1:8765/",
+      "url": "http://127.0.0.1:8772/",
       "status": 200
     },
     {
       "envelope": "product_detail",
       "viewport": "mobile",
-      "url": "http://127.0.0.1:8765/products/t12-product-1/",
+      "url": "http://127.0.0.1:8772/products/t12-product-1/",
       "status": 200
     },
     {
       "envelope": "listing",
       "viewport": "mobile",
-      "url": "http://127.0.0.1:8765/products/",
+      "url": "http://127.0.0.1:8772/products/",
       "status": 200
     },
     {
       "envelope": "collection",
       "viewport": "mobile",
-      "url": "http://127.0.0.1:8765/collections/p3-collection-1/",
+      "url": "http://127.0.0.1:8772/collections/p3-collection-1/",
       "status": 200
     },
     {
       "envelope": "cart",
       "viewport": "mobile",
-      "url": "http://127.0.0.1:8765/cart/",
+      "url": "http://127.0.0.1:8772/cart/",
       "status": 200
     },
     {
       "envelope": "home",
       "viewport": "tablet",
-      "url": "http://127.0.0.1:8765/",
+      "url": "http://127.0.0.1:8772/",
       "status": 200
     },
     {
       "envelope": "product_detail",
       "viewport": "tablet",
-      "url": "http://127.0.0.1:8765/products/t12-product-1/",
+      "url": "http://127.0.0.1:8772/products/t12-product-1/",
       "status": 200
     },
     {
       "envelope": "listing",
       "viewport": "tablet",
-      "url": "http://127.0.0.1:8765/products/",
+      "url": "http://127.0.0.1:8772/products/",
       "status": 200
     },
     {
       "envelope": "collection",
       "viewport": "tablet",
-      "url": "http://127.0.0.1:8765/collections/p3-collection-1/",
+      "url": "http://127.0.0.1:8772/collections/p3-collection-1/",
       "status": 200
     },
     {
       "envelope": "cart",
       "viewport": "tablet",
-      "url": "http://127.0.0.1:8765/cart/",
+      "url": "http://127.0.0.1:8772/cart/",
       "status": 200
     }
   ],
@@ -115,7 +115,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "grid",
+        "gridTemplateColumns": "133.25px 133.25px 133.25px 133.25px 133.25px 133.25px 133.25px 133.25px",
+        "gap": "14px",
+        "overflowX": "visible",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "home",
@@ -134,7 +144,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "14px",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "home",
@@ -153,7 +173,17 @@
       "bounded_img_sample": {
         "heightPx": 36,
         "computedMaxHeight": "36px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "normal",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "product_detail",
@@ -172,7 +202,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "grid",
+        "gridTemplateColumns": "133.25px 133.25px 133.25px 133.25px 133.25px 133.25px 133.25px 133.25px",
+        "gap": "14px",
+        "overflowX": "visible",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "product_detail",
@@ -191,7 +231,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "14px",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "product_detail",
@@ -210,7 +260,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "normal",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "listing",
@@ -229,7 +289,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "grid",
+        "gridTemplateColumns": "133.25px 133.25px 133.25px 133.25px 133.25px 133.25px 133.25px 133.25px",
+        "gap": "14px",
+        "overflowX": "visible",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "listing",
@@ -248,7 +318,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "14px",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "listing",
@@ -267,7 +347,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "normal",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "collection",
@@ -286,7 +376,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "grid",
+        "gridTemplateColumns": "133.25px 133.25px 133.25px 133.25px 133.25px 133.25px 133.25px 133.25px",
+        "gap": "14px",
+        "overflowX": "visible",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "collection",
@@ -305,7 +405,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "14px",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "collection",
@@ -324,7 +434,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "normal",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "cart",
@@ -343,7 +463,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "grid",
+        "gridTemplateColumns": "133.25px 133.25px 133.25px 133.25px 133.25px 133.25px 133.25px 133.25px",
+        "gap": "14px",
+        "overflowX": "visible",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "cart",
@@ -362,7 +492,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "14px",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "cart",
@@ -381,7 +521,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "normal",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "home",
@@ -400,7 +550,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "grid",
+        "gridTemplateColumns": "161px 161px",
+        "gap": "14px",
+        "overflowX": "visible",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "home",
@@ -419,7 +579,20 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "14px",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": {
+        "before": 0,
+        "after": -470
+      },
+      "keyboard_focusable": true
     },
     {
       "envelope": "home",
@@ -438,7 +611,20 @@
       "bounded_img_sample": {
         "heightPx": 36,
         "computedMaxHeight": "36px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "normal",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": {
+        "before": 0,
+        "after": -306
+      },
+      "keyboard_focusable": true
     },
     {
       "envelope": "product_detail",
@@ -457,7 +643,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "grid",
+        "gridTemplateColumns": "161px 161px",
+        "gap": "14px",
+        "overflowX": "visible",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "product_detail",
@@ -476,7 +672,20 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "14px",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": {
+        "before": 0,
+        "after": -470
+      },
+      "keyboard_focusable": true
     },
     {
       "envelope": "product_detail",
@@ -495,7 +704,17 @@
       "bounded_img_sample": {
         "heightPx": 24,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "normal",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "listing",
@@ -514,7 +733,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "grid",
+        "gridTemplateColumns": "161px 161px",
+        "gap": "14px",
+        "overflowX": "visible",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "listing",
@@ -533,7 +762,20 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "14px",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": {
+        "before": 0,
+        "after": -470
+      },
+      "keyboard_focusable": true
     },
     {
       "envelope": "listing",
@@ -552,7 +794,17 @@
       "bounded_img_sample": {
         "heightPx": 24,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "normal",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "collection",
@@ -571,7 +823,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "grid",
+        "gridTemplateColumns": "161px 161px",
+        "gap": "14px",
+        "overflowX": "visible",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "collection",
@@ -590,7 +852,20 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "14px",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": {
+        "before": 0,
+        "after": -470
+      },
+      "keyboard_focusable": true
     },
     {
       "envelope": "collection",
@@ -609,7 +884,17 @@
       "bounded_img_sample": {
         "heightPx": 24,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "normal",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "cart",
@@ -628,7 +913,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "grid",
+        "gridTemplateColumns": "161px 161px",
+        "gap": "14px",
+        "overflowX": "visible",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "cart",
@@ -647,7 +942,20 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "14px",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": {
+        "before": 0,
+        "after": -470
+      },
+      "keyboard_focusable": true
     },
     {
       "envelope": "cart",
@@ -666,7 +974,17 @@
       "bounded_img_sample": {
         "heightPx": 24,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "normal",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "home",
@@ -685,7 +1003,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "grid",
+        "gridTemplateColumns": "129.594px 129.594px 129.609px 129.594px 129.609px",
+        "gap": "14px",
+        "overflowX": "visible",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "home",
@@ -704,7 +1032,20 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "14px",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": {
+        "before": 0,
+        "after": -102
+      },
+      "keyboard_focusable": true
     },
     {
       "envelope": "home",
@@ -723,7 +1064,20 @@
       "bounded_img_sample": {
         "heightPx": 36,
         "computedMaxHeight": "36px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "normal",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": {
+        "before": 0,
+        "after": -48
+      },
+      "keyboard_focusable": true
     },
     {
       "envelope": "product_detail",
@@ -742,7 +1096,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "grid",
+        "gridTemplateColumns": "129.594px 129.594px 129.609px 129.594px 129.609px",
+        "gap": "14px",
+        "overflowX": "visible",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "product_detail",
@@ -761,7 +1125,20 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "14px",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": {
+        "before": 0,
+        "after": -102
+      },
+      "keyboard_focusable": true
     },
     {
       "envelope": "product_detail",
@@ -780,7 +1157,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "normal",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "listing",
@@ -799,7 +1186,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "grid",
+        "gridTemplateColumns": "129.594px 129.594px 129.609px 129.594px 129.609px",
+        "gap": "14px",
+        "overflowX": "visible",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "listing",
@@ -818,7 +1215,20 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "14px",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": {
+        "before": 0,
+        "after": -102
+      },
+      "keyboard_focusable": true
     },
     {
       "envelope": "listing",
@@ -837,7 +1247,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "normal",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "collection",
@@ -856,7 +1276,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "grid",
+        "gridTemplateColumns": "129.594px 129.594px 129.609px 129.594px 129.609px",
+        "gap": "14px",
+        "overflowX": "visible",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "collection",
@@ -875,7 +1305,20 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "14px",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": {
+        "before": 0,
+        "after": -102
+      },
+      "keyboard_focusable": true
     },
     {
       "envelope": "collection",
@@ -894,7 +1337,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "normal",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "cart",
@@ -913,7 +1366,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "grid",
+        "gridTemplateColumns": "129.594px 129.594px 129.609px 129.594px 129.609px",
+        "gap": "14px",
+        "overflowX": "visible",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     },
     {
       "envelope": "cart",
@@ -932,7 +1395,20 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "14px",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": {
+        "before": 0,
+        "after": -102
+      },
+      "keyboard_focusable": true
     },
     {
       "envelope": "cart",
@@ -951,7 +1427,17 @@
       "bounded_img_sample": {
         "heightPx": 48,
         "computedMaxHeight": "48px"
-      }
+      },
+      "computed_layout": {
+        "display": "flex",
+        "gridTemplateColumns": "none",
+        "gap": "normal",
+        "overflowX": "auto",
+        "imgObjectFit": "contain",
+        "dir": "rtl"
+      },
+      "native_scroll": null,
+      "keyboard_focusable": true
     }
   ],
   "asset_envelope": [
@@ -1602,7 +2088,7 @@
   ],
   "wrapper_projection": [
     {
-      "section_id": "130",
+      "section_id": "47",
       "replacements": 3,
       "hrefs_before": [
         "/products/?brand=t12-brand-2",
@@ -1621,6 +2107,20 @@
   "cart_htmx": [
     {
       "viewport": "desktop",
+      "item_id": "1",
+      "inc_url": "/cart/items/1/update/",
+      "remove_url": "/cart/items/1/remove/",
+      "badge_before": "۲",
+      "badge_after_update": "۳",
+      "badge_after_remove": "۰",
+      "qty_after_update": "۳",
+      "brand_tiles_before": 15,
+      "brand_tiles_after_update": 15,
+      "brand_hrefs_stable": true,
+      "item_count_after_remove": 0
+    },
+    {
+      "viewport": "mobile",
       "item_id": "2",
       "inc_url": "/cart/items/2/update/",
       "remove_url": "/cart/items/2/remove/",
@@ -1634,7 +2134,7 @@
       "item_count_after_remove": 0
     },
     {
-      "viewport": "mobile",
+      "viewport": "tablet",
       "item_id": "3",
       "inc_url": "/cart/items/3/update/",
       "remove_url": "/cart/items/3/remove/",
@@ -1646,189 +2146,244 @@
       "brand_tiles_after_update": 15,
       "brand_hrefs_stable": true,
       "item_count_after_remove": 0
-    },
-    {
-      "viewport": "tablet",
-      "item_id": "4",
-      "inc_url": "/cart/items/4/update/",
-      "remove_url": "/cart/items/4/remove/",
-      "badge_before": "۲",
-      "badge_after_update": "۳",
-      "badge_after_remove": "۰",
-      "qty_after_update": "۳",
-      "brand_tiles_before": 15,
-      "brand_tiles_after_update": 15,
-      "brand_hrefs_stable": true,
-      "item_count_after_remove": 0
     }
   ],
   "screenshots": [
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/desktop/home-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/desktop/home-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/desktop/home-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/desktop/product_detail-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/desktop/product_detail-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/desktop/product_detail-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/desktop/listing-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/desktop/listing-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/desktop/listing-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/desktop/collection-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/desktop/collection-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/desktop/collection-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/desktop/cart-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/desktop/cart-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/desktop/cart-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/mobile/home-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/mobile/home-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/mobile/home-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/mobile/product_detail-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/mobile/product_detail-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/mobile/product_detail-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/mobile/listing-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/mobile/listing-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/mobile/listing-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/mobile/collection-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/mobile/collection-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/mobile/collection-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/mobile/cart-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/mobile/cart-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/mobile/cart-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/tablet/home-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/tablet/home-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/tablet/home-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/tablet/product_detail-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/tablet/product_detail-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/tablet/product_detail-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/tablet/listing-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/tablet/listing-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/tablet/listing-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/tablet/collection-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/tablet/collection-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/tablet/collection-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/tablet/cart-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/tablet/cart-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/tablet/cart-public.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/wrapper_projection/preview-after-3x-replacement.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/desktop/before.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/desktop/update.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/desktop/remove.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/mobile/before.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/mobile/update.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/mobile/remove.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/tablet/before.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/tablet/update.png",
-    "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/tablet/remove.png"
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/desktop/home-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/desktop/home-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/desktop/home-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/desktop/product_detail-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/desktop/product_detail-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/desktop/product_detail-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/desktop/listing-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/desktop/listing-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/desktop/listing-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/desktop/collection-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/desktop/collection-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/desktop/collection-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/desktop/cart-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/desktop/cart-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/desktop/cart-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/mobile/home-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/mobile/home-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/mobile/home-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/mobile/product_detail-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/mobile/product_detail-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/mobile/product_detail-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/mobile/listing-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/mobile/listing-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/mobile/listing-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/mobile/collection-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/mobile/collection-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/mobile/collection-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/mobile/cart-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/mobile/cart-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/mobile/cart-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/tablet/home-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/tablet/home-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/tablet/home-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/tablet/product_detail-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/tablet/product_detail-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/tablet/product_detail-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/tablet/listing-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/tablet/listing-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/tablet/listing-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/tablet/collection-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/tablet/collection-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/tablet/collection-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/grid/tablet/cart-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/carousel/tablet/cart-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/beauty_tabs/tablet/cart-public.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/wrapper_projection/preview-after-3x-replacement.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/desktop/before.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/desktop/update.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/desktop/remove.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/mobile/before.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/mobile/update.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/mobile/remove.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/tablet/before.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/tablet/update.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/tablet/remove.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/brand/broken-image/search.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/desktop/before.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/desktop/update.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/desktop/remove.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/mobile/before.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/mobile/update.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/mobile/remove.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/tablet/before.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/tablet/update.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/fragments/cart/tablet/remove.png"
   ],
   "errors": [],
+  "broken_image": {
+    "envelope": "search",
+    "url": "http://127.0.0.1:8772/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
+    "has_img_tag": true,
+    "img_src": "/media/brand_logos/qa-broken-nonexistent.png",
+    "img_complete": true,
+    "img_natural_width": 0,
+    "request_failed_observed": false,
+    "note": "Disposable QA fixture: logo FieldFile points at a file never written to storage. No onerror fallback exists (per inventory); recorded separately, distinct from the no-image (.brand-tile-name) fallback case, and excluded from the zero-error assertion pools."
+  },
+  "combined_cart_htmx": [
+    {
+      "viewport": "desktop",
+      "brand_tiles_before": 15,
+      "brand_tiles_after_update": 15,
+      "brand_tiles_after_remove": 15,
+      "collection_tiles_before": 8,
+      "collection_tiles_after_update": 8,
+      "collection_tiles_after_remove": 8,
+      "distinct_sections": true,
+      "brand_section_count": 3,
+      "collection_section_count": 2,
+      "item_count_after_remove": 0
+    },
+    {
+      "viewport": "mobile",
+      "brand_tiles_before": 15,
+      "brand_tiles_after_update": 15,
+      "brand_tiles_after_remove": 15,
+      "collection_tiles_before": 8,
+      "collection_tiles_after_update": 8,
+      "collection_tiles_after_remove": 8,
+      "distinct_sections": true,
+      "brand_section_count": 3,
+      "collection_section_count": 2,
+      "item_count_after_remove": 0
+    },
+    {
+      "viewport": "tablet",
+      "brand_tiles_before": 15,
+      "brand_tiles_after_update": 15,
+      "brand_tiles_after_remove": 15,
+      "collection_tiles_before": 8,
+      "collection_tiles_after_update": 8,
+      "collection_tiles_after_remove": 8,
+      "distinct_sections": true,
+      "brand_section_count": 3,
+      "collection_section_count": 2,
+      "item_count_after_remove": 0
+    }
+  ],
+  "tenant_negatives": {
+    "anonymous_preview_get": {
+      "url": "/admin-portal/storefront-builder/preview/?page=home",
+      "status_code": 302,
+      "rejected": true,
+      "note": "Unauthenticated GET against the real Preview view/permission stack via Django's test Client (not the browser, not a skipped fixture) — expected 302 (redirect to login) or 403, never 200."
+    }
+  },
   "collection": {
-    "started_at": "2026-09-06T17:47:18.134Z",
+    "started_at": "2026-09-07T15:21:20.753Z",
     "envelopes": [
       {
         "envelope": "home",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8765/",
+        "url": "http://127.0.0.1:8772/",
         "status": 200
       },
       {
         "envelope": "product_detail",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8765/products/t12-product-1/",
+        "url": "http://127.0.0.1:8772/products/t12-product-1/",
         "status": 200
       },
       {
         "envelope": "listing",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8765/products/",
+        "url": "http://127.0.0.1:8772/products/",
         "status": 200
       },
       {
         "envelope": "search",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8765/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
+        "url": "http://127.0.0.1:8772/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
         "status": 200
       },
       {
         "envelope": "collection",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8765/collections/p3-collection-2/",
+        "url": "http://127.0.0.1:8772/collections/p3-collection-2/",
         "status": 200
       },
       {
         "envelope": "cart",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8765/cart/",
+        "url": "http://127.0.0.1:8772/cart/",
         "status": 200
       },
       {
         "envelope": "home",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8765/",
+        "url": "http://127.0.0.1:8772/",
         "status": 200
       },
       {
         "envelope": "product_detail",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8765/products/t12-product-1/",
+        "url": "http://127.0.0.1:8772/products/t12-product-1/",
         "status": 200
       },
       {
         "envelope": "listing",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8765/products/",
+        "url": "http://127.0.0.1:8772/products/",
         "status": 200
       },
       {
         "envelope": "search",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8765/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
+        "url": "http://127.0.0.1:8772/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
         "status": 200
       },
       {
         "envelope": "collection",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8765/collections/p3-collection-2/",
+        "url": "http://127.0.0.1:8772/collections/p3-collection-2/",
         "status": 200
       },
       {
         "envelope": "cart",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8765/cart/",
+        "url": "http://127.0.0.1:8772/cart/",
         "status": 200
       },
       {
         "envelope": "home",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8765/",
+        "url": "http://127.0.0.1:8772/",
         "status": 200
       },
       {
         "envelope": "product_detail",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8765/products/t12-product-1/",
+        "url": "http://127.0.0.1:8772/products/t12-product-1/",
         "status": 200
       },
       {
         "envelope": "listing",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8765/products/",
+        "url": "http://127.0.0.1:8772/products/",
         "status": 200
       },
       {
         "envelope": "search",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8765/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
+        "url": "http://127.0.0.1:8772/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
         "status": 200
       },
       {
         "envelope": "collection",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8765/collections/p3-collection-2/",
+        "url": "http://127.0.0.1:8772/collections/p3-collection-2/",
         "status": 200
       },
       {
         "envelope": "cart",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8765/cart/",
+        "url": "http://127.0.0.1:8772/cart/",
         "status": 200
       }
     ],
@@ -1837,469 +2392,871 @@
         "envelope": "home",
         "viewport": "desktop",
         "variant": "grid",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "grid",
+          "gridTemplateColumns": "279px 279px 279px 279px",
+          "gap": "16px",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "home",
         "viewport": "desktop",
         "variant": "carousel",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "flex",
+          "gridTemplateColumns": "none",
+          "gap": "16px",
+          "overflowX": "auto",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "product_detail",
         "viewport": "desktop",
         "variant": "grid",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "grid",
+          "gridTemplateColumns": "279px 279px 279px 279px",
+          "gap": "16px",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "product_detail",
         "viewport": "desktop",
         "variant": "carousel",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "block",
+          "gridTemplateColumns": "none",
+          "gap": "normal",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "listing",
         "viewport": "desktop",
         "variant": "grid",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "grid",
+          "gridTemplateColumns": "279px 279px 279px 279px",
+          "gap": "16px",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "listing",
         "viewport": "desktop",
         "variant": "carousel",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "block",
+          "gridTemplateColumns": "none",
+          "gap": "normal",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "search",
         "viewport": "desktop",
         "variant": "grid",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "grid",
+          "gridTemplateColumns": "279px 279px 279px 279px",
+          "gap": "16px",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "search",
         "viewport": "desktop",
         "variant": "carousel",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "block",
+          "gridTemplateColumns": "none",
+          "gap": "normal",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "collection",
         "viewport": "desktop",
         "variant": "grid",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "grid",
+          "gridTemplateColumns": "279px 279px 279px 279px",
+          "gap": "16px",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "collection",
         "viewport": "desktop",
         "variant": "carousel",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "block",
+          "gridTemplateColumns": "none",
+          "gap": "normal",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "cart",
         "viewport": "desktop",
         "variant": "grid",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "block",
+          "gridTemplateColumns": "none",
+          "gap": "normal",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "cart",
         "viewport": "desktop",
         "variant": "carousel",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "block",
+          "gridTemplateColumns": "none",
+          "gap": "normal",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "home",
         "viewport": "mobile",
         "variant": "grid",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "grid",
+          "gridTemplateColumns": "160px 160px",
+          "gap": "16px",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "home",
         "viewport": "mobile",
         "variant": "carousel",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "flex",
+          "gridTemplateColumns": "none",
+          "gap": "16px",
+          "overflowX": "auto",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": {
+          "before": 0,
+          "after": -432
+        },
+        "keyboard_focusable": true
       },
       {
         "envelope": "product_detail",
         "viewport": "mobile",
         "variant": "grid",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "grid",
+          "gridTemplateColumns": "160px 160px",
+          "gap": "16px",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "product_detail",
         "viewport": "mobile",
         "variant": "carousel",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "block",
+          "gridTemplateColumns": "none",
+          "gap": "normal",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "listing",
         "viewport": "mobile",
         "variant": "grid",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "grid",
+          "gridTemplateColumns": "160px 160px",
+          "gap": "16px",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "listing",
         "viewport": "mobile",
         "variant": "carousel",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "block",
+          "gridTemplateColumns": "none",
+          "gap": "normal",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "search",
         "viewport": "mobile",
         "variant": "grid",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "grid",
+          "gridTemplateColumns": "160px 160px",
+          "gap": "16px",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "search",
         "viewport": "mobile",
         "variant": "carousel",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "block",
+          "gridTemplateColumns": "none",
+          "gap": "normal",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "collection",
         "viewport": "mobile",
         "variant": "grid",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "grid",
+          "gridTemplateColumns": "160px 160px",
+          "gap": "16px",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "collection",
         "viewport": "mobile",
         "variant": "carousel",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "block",
+          "gridTemplateColumns": "none",
+          "gap": "normal",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "cart",
         "viewport": "mobile",
         "variant": "grid",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "block",
+          "gridTemplateColumns": "none",
+          "gap": "normal",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "cart",
         "viewport": "mobile",
         "variant": "carousel",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "block",
+          "gridTemplateColumns": "none",
+          "gap": "normal",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "home",
         "viewport": "tablet",
         "variant": "grid",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "grid",
+          "gridTemplateColumns": "224px 224px 224px",
+          "gap": "16px",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "home",
         "viewport": "tablet",
         "variant": "carousel",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "flex",
+          "gridTemplateColumns": "none",
+          "gap": "16px",
+          "overflowX": "auto",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": {
+          "before": 0,
+          "after": -224
+        },
+        "keyboard_focusable": true
       },
       {
         "envelope": "product_detail",
         "viewport": "tablet",
         "variant": "grid",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "grid",
+          "gridTemplateColumns": "224px 224px 224px",
+          "gap": "16px",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "product_detail",
         "viewport": "tablet",
         "variant": "carousel",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "block",
+          "gridTemplateColumns": "none",
+          "gap": "normal",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "listing",
         "viewport": "tablet",
         "variant": "grid",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "grid",
+          "gridTemplateColumns": "224px 224px 224px",
+          "gap": "16px",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "listing",
         "viewport": "tablet",
         "variant": "carousel",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "block",
+          "gridTemplateColumns": "none",
+          "gap": "normal",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "search",
         "viewport": "tablet",
         "variant": "grid",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "grid",
+          "gridTemplateColumns": "224px 224px 224px",
+          "gap": "16px",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "search",
         "viewport": "tablet",
         "variant": "carousel",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "block",
+          "gridTemplateColumns": "none",
+          "gap": "normal",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "collection",
         "viewport": "tablet",
         "variant": "grid",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "grid",
+          "gridTemplateColumns": "224px 224px 224px",
+          "gap": "16px",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "collection",
         "viewport": "tablet",
         "variant": "carousel",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "block",
+          "gridTemplateColumns": "none",
+          "gap": "normal",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "cart",
         "viewport": "tablet",
         "variant": "grid",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "block",
+          "gridTemplateColumns": "none",
+          "gap": "normal",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       },
       {
         "envelope": "cart",
         "viewport": "tablet",
         "variant": "carousel",
-        "tile_count": 3,
+        "tile_count": 4,
         "slug_order": [
           "p3-collection-2",
           "p3-collection-1",
-          "p3-collection-page2"
+          "p3-collection-page2",
+          "p3-collection-broken"
         ],
         "decoded_imgs": 1,
-        "glyph_fallbacks": 2
+        "glyph_fallbacks": 2,
+        "computed_layout": {
+          "display": "block",
+          "gridTemplateColumns": "none",
+          "gap": "normal",
+          "overflowX": "visible",
+          "imgObjectFit": "cover",
+          "dir": "rtl"
+        },
+        "native_scroll": null,
+        "keyboard_focusable": true
       }
     ],
     "asset_envelope": [
@@ -2700,63 +3657,508 @@
     "cart_htmx": [
       {
         "viewport": "desktop",
-        "inc_url": "/cart/items/5/update/",
-        "coll_tiles_before": 6,
-        "coll_tiles_after_update": 6,
+        "inc_url": "/cart/items/4/update/",
+        "coll_tiles_before": 8,
+        "coll_tiles_after_update": 8,
         "coll_hrefs_stable": true,
         "qty_after_update": "۳"
       }
     ],
     "page2": {
-      "url": "http://127.0.0.1:8765/collections/p3-collection-page2/?page=2",
+      "url": "http://127.0.0.1:8772/collections/p3-collection-page2/?page=2",
       "product_card_count": 1,
       "current_page_text": "۲",
       "full_envelope": true,
       "hx_still_full_page": true
     },
     "screenshots": [
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/desktop/home-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/desktop/home-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/desktop/product_detail-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/desktop/product_detail-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/desktop/listing-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/desktop/listing-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/desktop/search-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/desktop/search-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/desktop/collection-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/desktop/collection-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/desktop/cart-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/desktop/cart-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/mobile/home-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/mobile/home-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/mobile/product_detail-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/mobile/product_detail-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/mobile/listing-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/mobile/listing-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/mobile/search-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/mobile/search-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/mobile/collection-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/mobile/collection-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/mobile/cart-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/mobile/cart-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/tablet/home-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/tablet/home-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/tablet/product_detail-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/tablet/product_detail-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/tablet/listing-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/tablet/listing-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/tablet/search-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/tablet/search-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/tablet/collection-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/tablet/collection-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/tablet/cart-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/tablet/cart-public.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/page2/page2.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/cart/before.png",
-      "/projects/sandbox/rastisi5/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/cart/update.png"
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/desktop/home-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/desktop/home-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/desktop/product_detail-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/desktop/product_detail-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/desktop/listing-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/desktop/listing-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/desktop/search-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/desktop/search-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/desktop/collection-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/desktop/collection-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/desktop/cart-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/desktop/cart-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/mobile/home-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/mobile/home-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/mobile/product_detail-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/mobile/product_detail-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/mobile/listing-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/mobile/listing-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/mobile/search-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/mobile/search-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/mobile/collection-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/mobile/collection-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/mobile/cart-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/mobile/cart-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/tablet/home-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/tablet/home-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/tablet/product_detail-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/tablet/product_detail-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/tablet/listing-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/tablet/listing-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/tablet/search-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/tablet/search-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/tablet/collection-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/tablet/collection-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/grid/tablet/cart-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/carousel/tablet/cart-public.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/page2/page2.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/cart/before.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection/cart/update.png",
+      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection-index/index-companion.png"
     ],
     "errors": [],
-    "finished_at": "2026-09-06T17:48:32.198Z"
+    "broken_image_records": [
+      {
+        "envelope": "home",
+        "viewport": "desktop",
+        "variant": "grid",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "home",
+        "viewport": "desktop",
+        "variant": "carousel",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "product_detail",
+        "viewport": "desktop",
+        "variant": "grid",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "product_detail",
+        "viewport": "desktop",
+        "variant": "carousel",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "listing",
+        "viewport": "desktop",
+        "variant": "grid",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "listing",
+        "viewport": "desktop",
+        "variant": "carousel",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "search",
+        "viewport": "desktop",
+        "variant": "grid",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "search",
+        "viewport": "desktop",
+        "variant": "carousel",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "collection",
+        "viewport": "desktop",
+        "variant": "grid",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "collection",
+        "viewport": "desktop",
+        "variant": "carousel",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "cart",
+        "viewport": "desktop",
+        "variant": "grid",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "cart",
+        "viewport": "desktop",
+        "variant": "carousel",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "home",
+        "viewport": "mobile",
+        "variant": "grid",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "home",
+        "viewport": "mobile",
+        "variant": "carousel",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "product_detail",
+        "viewport": "mobile",
+        "variant": "grid",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "product_detail",
+        "viewport": "mobile",
+        "variant": "carousel",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "listing",
+        "viewport": "mobile",
+        "variant": "grid",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "listing",
+        "viewport": "mobile",
+        "variant": "carousel",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "search",
+        "viewport": "mobile",
+        "variant": "grid",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "search",
+        "viewport": "mobile",
+        "variant": "carousel",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "collection",
+        "viewport": "mobile",
+        "variant": "grid",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "collection",
+        "viewport": "mobile",
+        "variant": "carousel",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "cart",
+        "viewport": "mobile",
+        "variant": "grid",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "cart",
+        "viewport": "mobile",
+        "variant": "carousel",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "home",
+        "viewport": "tablet",
+        "variant": "grid",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "home",
+        "viewport": "tablet",
+        "variant": "carousel",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "product_detail",
+        "viewport": "tablet",
+        "variant": "grid",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "product_detail",
+        "viewport": "tablet",
+        "variant": "carousel",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "listing",
+        "viewport": "tablet",
+        "variant": "grid",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "listing",
+        "viewport": "tablet",
+        "variant": "carousel",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "search",
+        "viewport": "tablet",
+        "variant": "grid",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "search",
+        "viewport": "tablet",
+        "variant": "carousel",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "collection",
+        "viewport": "tablet",
+        "variant": "grid",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "collection",
+        "viewport": "tablet",
+        "variant": "carousel",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "cart",
+        "viewport": "tablet",
+        "variant": "grid",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      },
+      {
+        "envelope": "cart",
+        "viewport": "tablet",
+        "variant": "carousel",
+        "href": "/collections/p3-collection-broken/",
+        "img_complete": true,
+        "img_natural_width": 0
+      }
+    ],
+    "index_companion": {
+      "url": "http://127.0.0.1:8772/collections/",
+      "status": 200,
+      "sb_css": 0,
+      "product_list_css": 1,
+      "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase3/browser/collection-index/index-companion.png",
+      "note": "E6 companion — no pilot placement; does not substitute for E4 Collection detail."
+    },
+    "known_red_findings": [
+      {
+        "envelope": "product_detail",
+        "viewport": "desktop",
+        "variant": "carousel",
+        "expected": "display flex AND overflowX auto|scroll",
+        "actual": "display=\"block\" overflowX=\"visible\"",
+        "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
+      },
+      {
+        "envelope": "listing",
+        "viewport": "desktop",
+        "variant": "carousel",
+        "expected": "display flex AND overflowX auto|scroll",
+        "actual": "display=\"block\" overflowX=\"visible\"",
+        "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
+      },
+      {
+        "envelope": "search",
+        "viewport": "desktop",
+        "variant": "carousel",
+        "expected": "display flex AND overflowX auto|scroll",
+        "actual": "display=\"block\" overflowX=\"visible\"",
+        "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
+      },
+      {
+        "envelope": "collection",
+        "viewport": "desktop",
+        "variant": "carousel",
+        "expected": "display flex AND overflowX auto|scroll",
+        "actual": "display=\"block\" overflowX=\"visible\"",
+        "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
+      },
+      {
+        "envelope": "cart",
+        "viewport": "desktop",
+        "variant": "grid",
+        "expected": "display grid|flex AND >=2 resolved grid tracks",
+        "actual": "display=\"block\" gridTemplateColumns=\"none\"",
+        "note": "Collection grid container has no display:grid (or no resolved column tracks) on this envelope (base .grid rule lives in product_card.css, which this envelope does not load; no inline template fallback exists)."
+      },
+      {
+        "envelope": "cart",
+        "viewport": "desktop",
+        "variant": "carousel",
+        "expected": "display flex AND overflowX auto|scroll",
+        "actual": "display=\"block\" overflowX=\"visible\"",
+        "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
+      },
+      {
+        "envelope": "product_detail",
+        "viewport": "mobile",
+        "variant": "carousel",
+        "expected": "display flex AND overflowX auto|scroll",
+        "actual": "display=\"block\" overflowX=\"visible\"",
+        "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
+      },
+      {
+        "envelope": "listing",
+        "viewport": "mobile",
+        "variant": "carousel",
+        "expected": "display flex AND overflowX auto|scroll",
+        "actual": "display=\"block\" overflowX=\"visible\"",
+        "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
+      },
+      {
+        "envelope": "search",
+        "viewport": "mobile",
+        "variant": "carousel",
+        "expected": "display flex AND overflowX auto|scroll",
+        "actual": "display=\"block\" overflowX=\"visible\"",
+        "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
+      },
+      {
+        "envelope": "collection",
+        "viewport": "mobile",
+        "variant": "carousel",
+        "expected": "display flex AND overflowX auto|scroll",
+        "actual": "display=\"block\" overflowX=\"visible\"",
+        "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
+      },
+      {
+        "envelope": "cart",
+        "viewport": "mobile",
+        "variant": "grid",
+        "expected": "display grid|flex AND >=2 resolved grid tracks",
+        "actual": "display=\"block\" gridTemplateColumns=\"none\"",
+        "note": "Collection grid container has no display:grid (or no resolved column tracks) on this envelope (base .grid rule lives in product_card.css, which this envelope does not load; no inline template fallback exists)."
+      },
+      {
+        "envelope": "cart",
+        "viewport": "mobile",
+        "variant": "carousel",
+        "expected": "display flex AND overflowX auto|scroll",
+        "actual": "display=\"block\" overflowX=\"visible\"",
+        "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
+      },
+      {
+        "envelope": "product_detail",
+        "viewport": "tablet",
+        "variant": "carousel",
+        "expected": "display flex AND overflowX auto|scroll",
+        "actual": "display=\"block\" overflowX=\"visible\"",
+        "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
+      },
+      {
+        "envelope": "listing",
+        "viewport": "tablet",
+        "variant": "carousel",
+        "expected": "display flex AND overflowX auto|scroll",
+        "actual": "display=\"block\" overflowX=\"visible\"",
+        "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
+      },
+      {
+        "envelope": "search",
+        "viewport": "tablet",
+        "variant": "carousel",
+        "expected": "display flex AND overflowX auto|scroll",
+        "actual": "display=\"block\" overflowX=\"visible\"",
+        "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
+      },
+      {
+        "envelope": "collection",
+        "viewport": "tablet",
+        "variant": "carousel",
+        "expected": "display flex AND overflowX auto|scroll",
+        "actual": "display=\"block\" overflowX=\"visible\"",
+        "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
+      },
+      {
+        "envelope": "cart",
+        "viewport": "tablet",
+        "variant": "grid",
+        "expected": "display grid|flex AND >=2 resolved grid tracks",
+        "actual": "display=\"block\" gridTemplateColumns=\"none\"",
+        "note": "Collection grid container has no display:grid (or no resolved column tracks) on this envelope (base .grid rule lives in product_card.css, which this envelope does not load; no inline template fallback exists)."
+      },
+      {
+        "envelope": "cart",
+        "viewport": "tablet",
+        "variant": "carousel",
+        "expected": "display flex AND overflowX auto|scroll",
+        "actual": "display=\"block\" overflowX=\"visible\"",
+        "note": "Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect."
+      }
+    ],
+    "finished_at": "2026-09-07T15:22:54.057Z"
   },
-  "finished_at": "2026-09-06T17:48:32.198Z"
+  "finished_at": "2026-09-07T15:22:57.933Z"
 }

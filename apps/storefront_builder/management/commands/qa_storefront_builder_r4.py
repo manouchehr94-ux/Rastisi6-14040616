@@ -165,6 +165,13 @@ class Command(BaseCommand):
         try:
             fixture = self._prepare_r4_sandbox(store, user, phase3=options["phase3"])
 
+            if options["phase3"]:
+                tenant_negatives = self._phase3_tenant_negatives(store)
+                (report_dir / "tenant_negatives.json").write_text(
+                    json.dumps(tenant_negatives, ensure_ascii=False, indent=2), encoding="utf-8",
+                )
+                self.stdout.write(self.style.WARNING(f"Tenant/unauthorized negatives: {tenant_negatives}"))
+
             if options["simulate_failure_after_backup"]:
                 raise CommandError(
                     "Simulated failure after backup AND after sandbox prep "
@@ -285,6 +292,26 @@ class Command(BaseCommand):
         if cookie is None:
             raise CommandError("Could not build the QA session cookie.")
         return cookie.value
+
+    # -- Task 7 tenant/unauthorized negatives (Django test Client, not the
+    #    browser — a real unauthenticated request through the actual view/
+    #    permission stack, never a skipped fixture). ------------------------
+    def _phase3_tenant_negatives(self, store: Store) -> dict:
+        anon = Client(SERVER_NAME="127.0.0.1")
+        anon_resp = anon.get("/admin-portal/storefront-builder/preview/?page=home", follow=False)
+        anon_ok = anon_resp.status_code in (302, 403)
+        return {
+            "anonymous_preview_get": {
+                "url": "/admin-portal/storefront-builder/preview/?page=home",
+                "status_code": anon_resp.status_code,
+                "rejected": anon_ok,
+                "note": (
+                    "Unauthenticated GET against the real Preview view/permission "
+                    "stack via Django's test Client (not the browser, not a skipped "
+                    "fixture) — expected 302 (redirect to login) or 403, never 200."
+                ),
+            },
+        }
 
     # -- SQLite safety lifecycle (same technique as qa_storefront_builder.py) --
     def _sqlite_db_path(self) -> Path:
@@ -534,6 +561,40 @@ class Command(BaseCommand):
             # the three variant values the certification cycles per envelope
             "variants": list(BRAND_CAROUSEL_DISPLAY_MODES),
         }
+        # ---- Broken-image disposable fixture (Task 7). ----
+        # A Brand whose ``logo`` FieldFile points at a file that was never
+        # written to storage, isolated on the SEARCH page type — NOT one of
+        # Brand's five certified envelopes (home/product_detail/listing/
+        # collection/cart) above — so it can never interfere with the
+        # existing certified public matrix. Distinct from the no-logo brand's
+        # ``.brand-tile-name`` fallback (a supported path); this is the
+        # UNSUPPORTED broken-URL path the inventory records has no explicit
+        # fallback. Recorded separately, not asserted to succeed.
+        broken_brand, _ = Brand.objects.get_or_create(
+            store=store, slug="t12-brand-broken", defaults=dict(name="برند تصویر خراب"),
+        )
+        Brand.objects.filter(pk=broken_brand.pk).update(logo="brand_logos/qa-broken-nonexistent.png")
+        search_page = draft.get_page(StorefrontPage.PageType.SEARCH)
+        broken_section = StorefrontSection.objects.create(
+            page=search_page,
+            section_key="brand_carousel",
+            order=search_page.sections.count(),
+            settings={
+                "title": "تصویر خراب QA",
+                "display_mode": "grid",
+                "show_view_all": False,
+                "brand_ids": [broken_brand.pk],
+                "destination": {
+                    "destination_type": "none", "destination_id": None,
+                    "destination_external_url": "", "open_in_new_tab": False,
+                },
+            },
+        )
+        broken_container = container_service.create_empty_container(search_page, "single")
+        broken_cell = broken_container.cells.order_by("order", "id").first()
+        container_service.place_section(broken_cell, broken_section)
+        gate["broken_image_brand_id"] = broken_brand.pk
+
         # Task 5 "Collection gate" — additive, phase3-only. Placed alongside
         # the Brand gate on the SAME Draft (both publish together in one GET),
         # under a dedicated ``collection`` key so the Brand matrix inputs above
@@ -660,6 +721,30 @@ class Command(BaseCommand):
             collection=c_page2, product=inactive_product, defaults=dict(order=99),
         )
 
+        # ---- Broken-image disposable fixture (Task 7). ----
+        # An ACTIVE collection (manual/auto selection both filter on
+        # is_active, so an inactive fixture would simply be omitted and never
+        # exercise the degraded-image path) whose ``image`` FieldFile points
+        # at a file that was never written to storage. Because auto mode
+        # selects "all active", this collection is picked up by every
+        # existing auto collection_tiles section above — the runner records
+        # its degraded state separately (per spec: "record browser network
+        # failure; do not equate no-image with broken-image") and excludes it
+        # from the existing per-tile decode/glyph assertions and from the
+        # zero-error pools, rather than asserting it must decode. Its
+        # ``created_at`` is strictly earlier than every other fixture
+        # collection so it can never become the deterministic "newest" tile.
+        c_broken, _ = MerchantCollection.objects.get_or_create(
+            store=store, slug="p3-collection-broken",
+            defaults=dict(name="کالکشن تصویر خراب", is_active=True),
+        )
+        c_broken.is_active = True
+        c_broken.save(update_fields=["is_active"])
+        MerchantCollection.objects.filter(pk=c_broken.pk).update(
+            image="collection_images/qa-broken-nonexistent.png",
+            created_at=c1.created_at - timezone.timedelta(days=2),
+        )
+
         tile_variants = ["grid", "carousel"]
 
         def _tiles_settings(tile_style: str, page_type: str) -> dict:
@@ -717,6 +802,9 @@ class Command(BaseCommand):
             # which collection has a cover image vs the folder-glyph fallback
             "image_collection_slug": c1.slug,
             "no_image_collection_slug": c2.slug,
+            # Task 7 disposable broken-image fixture (recorded separately;
+            # excluded from decode/glyph assertions and zero-error pools).
+            "broken_collection_slug": c_broken.slug,
             # item_count(TOTAL) vs visible-count evidence for the page2 host:
             # 14 members total (13 active + 1 inactive), 13 visible.
             "page2_total_members": 14,
