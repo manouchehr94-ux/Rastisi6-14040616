@@ -529,9 +529,17 @@ class BannerNonHomeCssTests(TestCase):
         self.assertIn(".promo-grid--atelier-duo .promo-card{min-height:410px;border-radius:0}", css)
         self.assertIn(".promo-grid--atelier-duo .promo-card{min-height:320px}", css)
         self.assertIn(".promo-grid--atelier-duo .promo-card{min-height:250px}", css)
-        idx_900 = css.index("@media(max-width:900px)")
-        idx_680 = css.index("@media(max-width:680px)", idx_900)
-        self.assertLess(idx_900, idx_680)
+        # Review-caught CRITICAL: the original ordering check searched for
+        # the first "@media(max-width:900px)"/"@media(max-width:680px)"
+        # ANYWHERE in this ~4900-line file — matching unrelated,
+        # pre-existing blocks elsewhere, never Group B's own two blocks —
+        # so it would still pass even if Group B's own 900px/680px blocks
+        # were swapped, silently breaking the atelier-duo 3-tier cascade
+        # this check exists to protect. Anchored directly to the two
+        # Group-B-specific, uniquely-identifying declarations instead.
+        idx_320 = css.index(".promo-grid--atelier-duo .promo-card{min-height:320px}")
+        idx_250 = css.index(".promo-grid--atelier-duo .promo-card{min-height:250px}")
+        self.assertLess(idx_320, idx_250)
         # No unrelated classes from the same home.css "responsive" block
         # (.tiles/.orig — a different, unrelated section) pulled in.
         self.assertNotIn(".tiles{grid-template-columns", css)

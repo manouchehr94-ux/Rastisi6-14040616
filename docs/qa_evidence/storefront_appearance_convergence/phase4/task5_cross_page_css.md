@@ -419,8 +419,12 @@ them cannot pass silently, and corrected this doc's test count to 487.
 
 ### Verification (fix-up)
 
-- `test_phase4_task5_cross_page_css`: **12/12 pass** (one new assertion-only test; the
-  existing 2 Group-A3 tests now assert far more of the CSS file).
+- `test_phase4_task5_cross_page_css`: **12/12 pass**. This fix-up adds zero new test
+  methods — it only broadens the `assertIn` calls inside the existing
+  `test_storefront_builder_css_carries_the_merged_final_special_offer_rules` method. The
+  12 count itself was already correct before this fix-up (Hero 6 + Spotlight/Campaign-band
+  4 + Amazing-offers 2 = 12, present since commit `94e682c`) — a review caught that an
+  earlier draft of this note incorrectly attributed the count to a newly-added test.
 - Regression sweep: **487 tests, 0 failures, 1 known skip** (re-confirmed, matching the
   correction above).
 - `python manage.py check`: clean. `makemigrations --check --dry-run`: no changes.
