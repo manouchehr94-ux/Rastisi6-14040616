@@ -1282,14 +1282,33 @@ const phase3 = {
 };
 
 // ---------------------------------------------------------------------------
-// Scenario group 1 + 2 + 3 — public per envelope × variant × viewport:
-//   (1) brand tiles present, count/order, logo decoded or name-fallback
-//   (2) asset envelope A06 (assets once, no dup, bounded img height, no doc overflow)
-//   (3) V02 view-all anchor truth (grid/carousel present, beauty_tabs absent)
+// Task 4 — ONE shared parameterized helper for every registered family's
+// public per-envelope × variant × viewport browser matrix: asset envelope
+// (once, no dup, no home.css off-home), document horizontal overflow, RTL,
+// computed display/gridTemplateColumns/gap/overflowX, image objectFit,
+// native horizontal scroll, keyboard focus, and console/page/request error
+// collection. Brand and Collection (below) are the two families wired in
+// today; a Task 6 family supplies the same config shape rather than
+// duplicating this block again.
+//
+// Family-specific business logic — which tiles are "decoded" vs
+// "fallback", slug/order semantics, extra per-variant checks (Brand's V02
+// View-all anchor), and whether a layout mismatch throws immediately or is
+// recorded as a known-red finding for the gate to check at the end — stays
+// with the caller via the `classifyTiles` / `afterClassify` / `afterVariants`
+// / `onLayoutIssue` callbacks; only the generic assertion machinery lives
+// here.
 // ---------------------------------------------------------------------------
-async function phase3PublicMatrix(fx, envelopes) {
-  const expectedSlugs = fx.brand_slugs || null; // may be absent; we derive order from hrefs
-  for (const vp of PHASE3_VIEWPORTS) {
+async function phase3FamilyPublicMatrix(cfg) {
+  const {
+    errorSource, viewports, envelopes, variants, state, cssHomeOnlyNote,
+    selectSection, tileSelector, imgSelector, extractTileData,
+    tileCountFor, exactTileCount, classifyTiles, containerSelFor,
+    imgObjectFitExpected, onLayoutIssue, afterClassify, afterVariants,
+    screenshotFamily,
+  } = cfg;
+
+  for (const vp of viewports) {
     for (const env of envelopes) {
       const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height } });
       await ctx.addCookies([manifest.session]);
@@ -1299,19 +1318,19 @@ async function phase3PublicMatrix(fx, envelopes) {
         if (m.type() !== 'error') return;
         const u = m.location()?.url || '';
         if (isExpectedBrokenImageNoise(u)) return; // Task 7 disposable broken-image fixture — recorded separately
-        localErrors.push({ text: m.text(), url: u, source: `public:${env.key}:${vp.name}` });
+        localErrors.push({ text: m.text(), url: u, source: `${errorSource}:${env.key}:${vp.name}` });
       });
-      pubPage.on('pageerror', (e) => localErrors.push({ text: String(e.message || e), source: `public:${env.key}:${vp.name}` }));
+      pubPage.on('pageerror', (e) => localErrors.push({ text: String(e.message || e), source: `${errorSource}:${env.key}:${vp.name}` }));
       pubPage.on('requestfailed', (r) => {
         const u = r.url();
         if (u.startsWith('data:') || /\/favicon\.ico(\?|$)/i.test(u) || isExpectedBrokenImageNoise(u)) return;
-        localErrors.push({ text: `requestfailed ${u}`, source: `public:${env.key}:${vp.name}` });
+        localErrors.push({ text: `requestfailed ${u}`, source: `${errorSource}:${env.key}:${vp.name}` });
       });
       try {
         const resp = await pubPage.goto(env.url, { waitUntil: 'networkidle', timeout: 25000 });
         assert(resp && resp.status() < 400, `${env.label} public GET returned ${resp && resp.status()}`);
 
-        // ---- (2) Asset envelope A06 — page-scoped (once per page load) ----
+        // ---- Asset envelope A06 — page-scoped (once per page load) ----
         const assets = await pubPage.evaluate(() => {
           const styles = Array.from(document.querySelectorAll('link[rel=stylesheet]')).map((l) => l.getAttribute('href') || '');
           const scripts = Array.from(document.querySelectorAll('script[src]')).map((s) => s.getAttribute('src') || '');
@@ -1333,7 +1352,7 @@ async function phase3PublicMatrix(fx, envelopes) {
         assert(dupStyles.length === 0, `${env.label}: duplicate stylesheet URLs: ${JSON.stringify(dupStyles)}`);
         assert(dupScripts.length === 0, `${env.label}: duplicate script URLs: ${JSON.stringify(dupScripts)}`);
         if (env.key !== 'home') {
-          assert(assets.home_css === 0, `${env.label}: non-home envelope must NOT load home.css (found ${assets.home_css}) — brand CSS must come from storefront_builder.css`);
+          assert(assets.home_css === 0, `${env.label}: non-home envelope must NOT load home.css (found ${assets.home_css}) — ${cssHomeOnlyNote}`);
         }
 
         // Document must not overflow horizontally (internal carousel rail
@@ -1343,98 +1362,36 @@ async function phase3PublicMatrix(fx, envelopes) {
           clientWidth: document.documentElement.clientWidth,
         }));
         assert(overflow.scrollWidth <= vp.width + 1, `${env.label} @${vp.name}: document horizontal overflow scrollWidth=${overflow.scrollWidth} > ${vp.width + 1}`);
+        state.asset_envelope.push({ envelope: env.key, viewport: vp.name, ...assets, scrollWidth: overflow.scrollWidth, clientWidth: overflow.clientWidth });
 
-        result.phase3_asset_records = result.phase3_asset_records || [];
-        phase3.asset_envelope.push({ envelope: env.key, viewport: vp.name, ...assets, scrollWidth: overflow.scrollWidth, clientWidth: overflow.clientWidth });
-
-        // ---- (1) + (3) per variant on this envelope ----
-        for (const variant of fx.variants) {
-          const candidates = brandSectionLocatorFor(pubPage, variant);
-          const candCount = await candidates.count();
-          assert(candCount >= 1, `${env.label} @${vp.name} ${variant}: no brand_carousel section found`);
-          // Home also carries the BASE fixture's brand_carousel (a 2-brand
-          // grid mutated by scenarios 06/07). Disambiguate the phase3 section
-          // by its full five-brand tile count (never by DOM position).
-          let section = null;
-          for (let i = 0; i < candCount; i += 1) {
-            const cand = candidates.nth(i);
-            const n = await cand.locator('a.brand-tile').count();
-            if (n === fx.brand_ids.length) { section = cand; break; }
-          }
-          assert(section, `${env.label} @${vp.name} ${variant}: could not find the phase3 brand_carousel with ${fx.brand_ids.length} tiles (candidates=${candCount})`);
+        // ---- per variant on this envelope ----
+        const perVariantOrders = [];
+        for (const variant of variants) {
+          const section = await selectSection(pubPage, variant);
+          assert(section, `${env.label} @${vp.name} ${variant}: could not locate the expected section`);
           await section.waitFor({ state: 'attached', timeout: 15000 });
 
-          // Brand tiles present, count and order (by ?brand=<slug> in href).
-          const tiles = section.locator('a.brand-tile');
+          const tiles = section.locator(tileSelector);
           const tileCount = await tiles.count();
-          assert(tileCount === fx.brand_ids.length, `${env.label} @${vp.name} ${variant}: expected ${fx.brand_ids.length} brand tiles, got ${tileCount}`);
-
-          const tileData = await tiles.evaluateAll((els) => els.map((a) => {
-            const img = a.querySelector('img');
-            const nameSpan = a.querySelector('.brand-tile-name');
-            const href = a.getAttribute('href') || '';
-            const brandParam = (href.split('?brand=')[1] || '').split('&')[0];
-            return {
-              href,
-              brandSlug: decodeURIComponent(brandParam),
-              hasImg: Boolean(img),
-              imgComplete: img ? img.complete : null,
-              imgNaturalWidth: img ? img.naturalWidth : null,
-              hasNameFallback: Boolean(nameSpan),
-              nameText: nameSpan ? nameSpan.textContent.trim() : null,
-              imgHeightPx: img ? Math.round(img.getBoundingClientRect().height) : null,
-              imgComputedMaxHeight: img ? getComputedStyle(img).maxHeight : null,
-            };
-          }));
-
-          // Order must be identical across the three variants (same brand_ids
-          // selection); we record the slug order per variant and cross-check.
-          const slugOrder = tileData.map((t) => t.brandSlug);
-
-          // Logo decode OR name-fallback: every tile is either a decoded img
-          // (complete && naturalWidth>0) or a name-fallback span. At least one
-          // tile must be the no-logo name-fallback (the deliberate brand).
-          let decodedImgs = 0;
-          let nameFallbacks = 0;
-          let boundedImgSample = null;
-          for (const t of tileData) {
-            if (t.hasImg) {
-              assert(t.imgComplete === true && t.imgNaturalWidth > 0, `${env.label} @${vp.name} ${variant}: brand logo <img> did not decode (complete=${t.imgComplete}, naturalWidth=${t.imgNaturalWidth}) href=${t.href}`);
-              decodedImgs += 1;
-              // Bounded height: the storefront_builder.css rule caps
-              // .brand-tile img (max-height ~40-48px). Prove the rendered
-              // height is bounded (not the 48px natural image height blown up)
-              // — a small logo rendered under CSS control stays <= ~120px.
-              assert(t.imgHeightPx !== null && t.imgHeightPx > 0 && t.imgHeightPx <= 120, `${env.label} @${vp.name} ${variant}: brand logo rendered height ${t.imgHeightPx}px is not bounded by CSS`);
-              if (boundedImgSample === null) boundedImgSample = { heightPx: t.imgHeightPx, computedMaxHeight: t.imgComputedMaxHeight };
-            } else {
-              assert(t.hasNameFallback && t.nameText, `${env.label} @${vp.name} ${variant}: tile with no logo must render a .brand-tile-name fallback`);
-              nameFallbacks += 1;
-            }
-          }
-          assert(nameFallbacks >= 1, `${env.label} @${vp.name} ${variant}: expected at least one no-logo name-fallback tile, got ${nameFallbacks}`);
-          assert(boundedImgSample, `${env.label} @${vp.name} ${variant}: expected at least one decoded logo image to sample computed height`);
-
-          // ---- (3) V02 view-all anchor truth ----
-          const moreCount = await section.locator('a.more').count();
-          if (variant === 'beauty_tabs') {
-            assert(moreCount === 0, `${env.label} @${vp.name} beauty_tabs: must NOT render a View-all anchor, found ${moreCount}`);
+          const expectedCount = tileCountFor(variant);
+          if (exactTileCount) {
+            assert(tileCount === expectedCount, `${env.label} @${vp.name} ${variant}: expected ${expectedCount} tiles, got ${tileCount}`);
           } else {
-            assert(moreCount === 1, `${env.label} @${vp.name} ${variant}: expected exactly one View-all anchor, found ${moreCount}`);
-            const moreHref = await section.locator('a.more').first().getAttribute('href');
-            assert(moreHref && moreHref.includes(fx.view_all_url_path), `${env.label} @${vp.name} ${variant}: View-all href "${moreHref}" does not resolve to expected destination "${fx.view_all_url_path}"`);
-            phase3.v02_anchor.push({ envelope: env.key, viewport: vp.name, variant, present: true, href: moreHref });
+            assert(tileCount >= expectedCount, `${env.label} @${vp.name} ${variant}: expected >=${expectedCount} tiles, got ${tileCount}`);
           }
-          if (variant === 'beauty_tabs') {
-            phase3.v02_anchor.push({ envelope: env.key, viewport: vp.name, variant, present: false });
-          }
+
+          const tileData = await tiles.evaluateAll(extractTileData);
+          const classified = classifyTiles(tileData, { env, vp, variant });
+          perVariantOrders.push({ variant, slugOrder: classified.slugOrder });
+
+          if (afterClassify) await afterClassify(section, { env, vp, variant, tileData, classified });
 
           // ---- Task 7: computed layout / RTL / keyboard focus / native scroll ----
-          const containerSel = BRAND_VARIANT_CONTAINER[variant];
-          const layout = await section.evaluate((sec, sel) => {
+          const containerSel = containerSelFor(variant);
+          const layout = await section.evaluate((sec, { sel, imgSel }) => {
             const container = sec.querySelector(sel) || sec;
             const cs = getComputedStyle(container);
-            const img = sec.querySelector('a.brand-tile img');
+            const img = sec.querySelector(imgSel);
             return {
               display: cs.display,
               gridTemplateColumns: cs.gridTemplateColumns,
@@ -1445,25 +1402,39 @@ async function phase3PublicMatrix(fx, envelopes) {
               imgObjectFit: img ? getComputedStyle(img).objectFit : null,
               dir: document.documentElement.dir,
             };
-          }, containerSel);
+          }, { sel: containerSel, imgSel: imgSelector });
           assert(layout.dir === 'rtl', `${env.label} @${vp.name}: document must render RTL, got dir="${layout.dir}"`);
           if (variant === 'grid') {
             // Both halves required: `display` alone would still pass a
             // `display:grid` container with no actual column tracks (a
             // single-column collapse). gridTemplateColumns must resolve to
             // more than one track.
-            assert(/grid|flex/.test(layout.display), `${env.label} @${vp.name} grid: expected a grid/flex container display, got "${layout.display}"`);
             const trackCount = (layout.gridTemplateColumns || '').trim().split(/\s+/).filter((t) => t && t !== 'none').length;
-            assert(trackCount >= 2, `${env.label} @${vp.name} grid: expected >=2 resolved grid/flex tracks, gridTemplateColumns="${layout.gridTemplateColumns}"`);
+            const displayOk = /grid|flex/.test(layout.display);
+            const tracksOk = trackCount >= 2;
+            if (!displayOk || !tracksOk) {
+              onLayoutIssue({
+                envelope: env.key, viewport: vp.name, variant,
+                expected: 'display grid|flex AND >=2 resolved grid/flex tracks',
+                actual: `display="${layout.display}" gridTemplateColumns="${layout.gridTemplateColumns}"`,
+              });
+            }
           } else {
             // Both halves required: `overflowX` alone would still pass a
             // `display:block` container that happens to compute
             // overflow-x:auto but never actually lays tiles out horizontally.
-            assert(/flex/.test(layout.display), `${env.label} @${vp.name} ${variant}: expected a flex rail container display, got "${layout.display}"`);
-            assert(layout.overflowX === 'auto' || layout.overflowX === 'scroll', `${env.label} @${vp.name} ${variant}: expected native horizontal overflow (auto|scroll), got "${layout.overflowX}"`);
+            const displayOk = /flex/.test(layout.display);
+            const overflowOk = layout.overflowX === 'auto' || layout.overflowX === 'scroll';
+            if (!displayOk || !overflowOk) {
+              onLayoutIssue({
+                envelope: env.key, viewport: vp.name, variant,
+                expected: 'display flex AND overflowX auto|scroll',
+                actual: `display="${layout.display}" overflowX="${layout.overflowX}"`,
+              });
+            }
           }
           if (layout.imgObjectFit) {
-            assert(layout.imgObjectFit === 'contain', `${env.label} @${vp.name} ${variant}: brand logo objectFit expected "contain", got "${layout.imgObjectFit}"`);
+            assert(layout.imgObjectFit === imgObjectFitExpected, `${env.label} @${vp.name} ${variant}: tile image objectFit expected "${imgObjectFitExpected}", got "${layout.imgObjectFit}"`);
           }
 
           // Native horizontal scroll proof — only meaningful when the rail
@@ -1494,48 +1465,157 @@ async function phase3PublicMatrix(fx, envelopes) {
             nativeScroll = scrolled;
           }
 
-          // Keyboard focus on the first interactive brand tile anchor.
+          // Keyboard focus on the first interactive tile anchor.
           const focusable = await tiles.first().evaluate((a) => { a.focus(); return document.activeElement === a; });
-          assert(focusable, `${env.label} @${vp.name} ${variant}: brand tile anchor did not receive keyboard focus`);
+          assert(focusable, `${env.label} @${vp.name} ${variant}: tile anchor did not receive keyboard focus`);
 
           // Screenshot public per variant/viewport.
-          const pubDir = mkReportDir('brand', variant, vp.name);
+          const pubDir = mkReportDir(screenshotFamily, variant, vp.name);
           const pubShot = path.join(pubDir, `${env.key}-public.png`);
           await section.scrollIntoViewIfNeeded().catch(() => {});
           await pubPage.screenshot({ path: pubShot });
-          phase3.screenshots.push(pubShot);
+          state.screenshots.push(pubShot);
 
-          phase3.variant_checks.push({
+          state.variant_checks.push({
             envelope: env.key, viewport: vp.name, variant,
-            tile_count: tileCount, slug_order: slugOrder,
-            decoded_imgs: decodedImgs, name_fallbacks: nameFallbacks,
-            bounded_img_sample: boundedImgSample,
+            tile_count: tileCount, slug_order: classified.slugOrder,
+            decoded_imgs: classified.decodedCount,
+            ...classified.extraFields,
             computed_layout: { display: layout.display, gridTemplateColumns: layout.gridTemplateColumns, gap: layout.gap, overflowX: layout.overflowX, imgObjectFit: layout.imgObjectFit, dir: layout.dir },
             native_scroll: nativeScroll,
             keyboard_focusable: focusable,
           });
         }
 
-        // Cross-variant order equality on this envelope/viewport.
-        const perVariantOrders = fx.variants.map((v) => {
-          const rec = phase3.variant_checks.find((r) => r.envelope === env.key && r.viewport === vp.name && r.variant === v);
-          return rec ? rec.slug_order : null;
-        });
-        for (let i = 1; i < perVariantOrders.length; i += 1) {
-          assert(JSON.stringify(perVariantOrders[i]) === JSON.stringify(perVariantOrders[0]), `${env.label} @${vp.name}: brand order differs across variants: ${JSON.stringify(perVariantOrders)}`);
-        }
-        if (expectedSlugs) {
-          assert(JSON.stringify(perVariantOrders[0]) === JSON.stringify(expectedSlugs), `${env.label} @${vp.name}: brand order ${JSON.stringify(perVariantOrders[0])} != expected ${JSON.stringify(expectedSlugs)}`);
-        }
+        if (afterVariants) afterVariants(perVariantOrders, { env, vp });
 
-        phase3.envelopes.push({ envelope: env.key, viewport: vp.name, url: env.url, status: resp.status() });
+        state.envelopes.push({ envelope: env.key, viewport: vp.name, url: env.url, status: resp.status() });
       } finally {
-        if (localErrors.length) phase3.errors.push(...localErrors);
+        if (localErrors.length) state.errors.push(...localErrors);
         try { await ctx.close(); } catch (_error) { /* best effort */ }
       }
     }
   }
-  assert(phase3.errors.length === 0, `Phase3 public console/page/request errors: ${JSON.stringify(phase3.errors.slice(0, 6))}`);
+  assert(state.errors.length === 0, `${errorSource} console/page/request errors: ${JSON.stringify(state.errors.slice(0, 6))}`);
+}
+
+// ---------------------------------------------------------------------------
+// Scenario group 1 + 2 + 3 — public per envelope × variant × viewport:
+//   (1) brand tiles present, count/order, logo decoded or name-fallback
+//   (2) asset envelope A06 (assets once, no dup, bounded img height, no doc overflow)
+//   (3) V02 view-all anchor truth (grid/carousel present, beauty_tabs absent)
+// ---------------------------------------------------------------------------
+async function phase3PublicMatrix(fx, envelopes) {
+  const expectedSlugs = fx.brand_slugs || null; // may be absent; we derive order from hrefs
+
+  await phase3FamilyPublicMatrix({
+    errorSource: 'public',
+    viewports: PHASE3_VIEWPORTS,
+    envelopes,
+    variants: fx.variants,
+    state: phase3,
+    cssHomeOnlyNote: 'brand CSS must come from storefront_builder.css',
+    screenshotFamily: 'brand',
+    imgSelector: 'a.brand-tile img',
+    tileSelector: 'a.brand-tile',
+    tileCountFor: () => fx.brand_ids.length,
+    exactTileCount: true,
+    imgObjectFitExpected: 'contain',
+    containerSelFor: (variant) => BRAND_VARIANT_CONTAINER[variant],
+
+    // Home also carries the BASE fixture's brand_carousel (a 2-brand grid
+    // mutated by scenarios 06/07). Disambiguate the phase3 section by its
+    // full five-brand tile count (never by DOM position).
+    selectSection: async (pubPage, variant) => {
+      const candidates = brandSectionLocatorFor(pubPage, variant);
+      const candCount = await candidates.count();
+      assert(candCount >= 1, `no brand_carousel section found for variant ${variant}`);
+      for (let i = 0; i < candCount; i += 1) {
+        const cand = candidates.nth(i);
+        const n = await cand.locator('a.brand-tile').count();
+        if (n === fx.brand_ids.length) return cand;
+      }
+      return null;
+    },
+
+    extractTileData: (els) => els.map((a) => {
+      const img = a.querySelector('img');
+      const nameSpan = a.querySelector('.brand-tile-name');
+      const href = a.getAttribute('href') || '';
+      const brandParam = (href.split('?brand=')[1] || '').split('&')[0];
+      return {
+        href,
+        brandSlug: decodeURIComponent(brandParam),
+        hasImg: Boolean(img),
+        imgComplete: img ? img.complete : null,
+        imgNaturalWidth: img ? img.naturalWidth : null,
+        hasNameFallback: Boolean(nameSpan),
+        nameText: nameSpan ? nameSpan.textContent.trim() : null,
+        imgHeightPx: img ? Math.round(img.getBoundingClientRect().height) : null,
+        imgComputedMaxHeight: img ? getComputedStyle(img).maxHeight : null,
+      };
+    }),
+
+    // Logo decode OR name-fallback: every tile is either a decoded img
+    // (complete && naturalWidth>0) or a name-fallback span. At least one
+    // tile must be the no-logo name-fallback (the deliberate brand).
+    classifyTiles: (tileData, { env, vp, variant }) => {
+      const slugOrder = tileData.map((t) => t.brandSlug);
+      let decodedImgs = 0;
+      let nameFallbacks = 0;
+      let boundedImgSample = null;
+      for (const t of tileData) {
+        if (t.hasImg) {
+          assert(t.imgComplete === true && t.imgNaturalWidth > 0, `${env.label} @${vp.name} ${variant}: brand logo <img> did not decode (complete=${t.imgComplete}, naturalWidth=${t.imgNaturalWidth}) href=${t.href}`);
+          decodedImgs += 1;
+          // Bounded height: the storefront_builder.css rule caps
+          // .brand-tile img (max-height ~40-48px). Prove the rendered
+          // height is bounded (not the 48px natural image height blown up)
+          // — a small logo rendered under CSS control stays <= ~120px.
+          assert(t.imgHeightPx !== null && t.imgHeightPx > 0 && t.imgHeightPx <= 120, `${env.label} @${vp.name} ${variant}: brand logo rendered height ${t.imgHeightPx}px is not bounded by CSS`);
+          if (boundedImgSample === null) boundedImgSample = { heightPx: t.imgHeightPx, computedMaxHeight: t.imgComputedMaxHeight };
+        } else {
+          assert(t.hasNameFallback && t.nameText, `${env.label} @${vp.name} ${variant}: tile with no logo must render a .brand-tile-name fallback`);
+          nameFallbacks += 1;
+        }
+      }
+      assert(nameFallbacks >= 1, `${env.label} @${vp.name} ${variant}: expected at least one no-logo name-fallback tile, got ${nameFallbacks}`);
+      assert(boundedImgSample, `${env.label} @${vp.name} ${variant}: expected at least one decoded logo image to sample computed height`);
+      return { slugOrder, decodedCount: decodedImgs, extraFields: { name_fallbacks: nameFallbacks, bounded_img_sample: boundedImgSample } };
+    },
+
+    // ---- V02 view-all anchor truth ----
+    afterClassify: async (section, { env, vp, variant }) => {
+      const moreCount = await section.locator('a.more').count();
+      if (variant === 'beauty_tabs') {
+        assert(moreCount === 0, `${env.label} @${vp.name} beauty_tabs: must NOT render a View-all anchor, found ${moreCount}`);
+        phase3.v02_anchor.push({ envelope: env.key, viewport: vp.name, variant, present: false });
+      } else {
+        assert(moreCount === 1, `${env.label} @${vp.name} ${variant}: expected exactly one View-all anchor, found ${moreCount}`);
+        const moreHref = await section.locator('a.more').first().getAttribute('href');
+        assert(moreHref && moreHref.includes(fx.view_all_url_path), `${env.label} @${vp.name} ${variant}: View-all href "${moreHref}" does not resolve to expected destination "${fx.view_all_url_path}"`);
+        phase3.v02_anchor.push({ envelope: env.key, viewport: vp.name, variant, present: true, href: moreHref });
+      }
+    },
+
+    // Layout mismatch on Brand is a hard failure (never observed in
+    // practice; unlike Collection, no pre-existing CSS-cascade gap is
+    // documented for Brand, so nothing here should ever throw).
+    onLayoutIssue: (finding) => {
+      assert(false, `${finding.envelope}@${finding.viewport} ${finding.variant}: expected ${finding.expected}, got ${finding.actual}`);
+    },
+
+    // Cross-variant order equality on this envelope/viewport, plus the
+    // expected-slug-order check when the fixture supplies one.
+    afterVariants: (perVariantOrders, { env, vp }) => {
+      for (let i = 1; i < perVariantOrders.length; i += 1) {
+        assert(JSON.stringify(perVariantOrders[i].slugOrder) === JSON.stringify(perVariantOrders[0].slugOrder), `${env.label} @${vp.name}: brand order differs across variants: ${JSON.stringify(perVariantOrders.map((r) => r.slugOrder))}`);
+      }
+      if (expectedSlugs) {
+        assert(JSON.stringify(perVariantOrders[0].slugOrder) === JSON.stringify(expectedSlugs), `${env.label} @${vp.name}: brand order ${JSON.stringify(perVariantOrders[0].slugOrder)} != expected ${JSON.stringify(expectedSlugs)}`);
+      }
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1854,256 +1934,97 @@ function collectionSectionLocatorFor(targetPage, variant) {
 }
 
 async function phase3CollectionPublicMatrix(c, envelopes) {
-  for (const vp of PHASE3_VIEWPORTS) {
-    for (const env of envelopes) {
-      const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height } });
-      await ctx.addCookies([manifest.session]);
-      const pubPage = await ctx.newPage();
-      const localErrors = [];
-      pubPage.on('console', (m) => {
-        if (m.type() !== 'error') return;
-        const u = m.location()?.url || '';
-        if (isExpectedBrokenImageNoise(u)) return; // Task 7 disposable broken-image fixture — recorded separately
-        localErrors.push({ text: m.text(), url: u, source: `coll-public:${env.key}:${vp.name}` });
-      });
-      pubPage.on('pageerror', (e) => localErrors.push({ text: String(e.message || e), source: `coll-public:${env.key}:${vp.name}` }));
-      pubPage.on('requestfailed', (r) => {
-        const u = r.url();
-        if (u.startsWith('data:') || /\/favicon\.ico(\?|$)/i.test(u)) return;
-        // Task 7 disposable broken-image fixture: an intentionally-404ing
-        // collection cover — recorded separately (see the per-tile loop
-        // below), not counted against the zero-error assertion pool.
-        if (/qa-broken-nonexistent/i.test(u)) return;
-        localErrors.push({ text: `requestfailed ${u}`, source: `coll-public:${env.key}:${vp.name}` });
-      });
-      try {
-        const resp = await pubPage.goto(env.url, { waitUntil: 'networkidle', timeout: 25000 });
-        assert(resp && resp.status() < 400, `${env.label} public GET returned ${resp && resp.status()}`);
+  await phase3FamilyPublicMatrix({
+    errorSource: 'coll-public',
+    viewports: PHASE3_VIEWPORTS,
+    envelopes,
+    variants: c.tile_variants,
+    state: phase3.collection,
+    cssHomeOnlyNote: 'collection carousel CSS must come from storefront_builder.css',
+    screenshotFamily: 'collection',
+    imgSelector: 'a.pcard .img img',
+    tileSelector: 'a.pcard[href*="/collections/"]',
+    tileCountFor: () => 2,
+    exactTileCount: false,
+    imgObjectFitExpected: 'cover',
+    containerSelFor: (variant) => COLLECTION_VARIANT_CONTAINER[variant],
 
-        // ---- Asset envelope (once; no dup; no home.css off-home; no overflow) ----
-        const assets = await pubPage.evaluate(() => {
-          const styles = Array.from(document.querySelectorAll('link[rel=stylesheet]')).map((l) => l.getAttribute('href') || '');
-          const scripts = Array.from(document.querySelectorAll('script[src]')).map((s) => s.getAttribute('src') || '');
-          const norm = (u) => (u || '').split('?')[0];
-          return {
-            sb_css: styles.filter((h) => /storefront_builder\.css/.test(h)).length,
-            home_css: styles.filter((h) => /\/home\.css/.test(h)).length,
-            htmx: scripts.filter((s) => /htmx/i.test(s)).length,
-            alpine: scripts.filter((s) => /alpine/i.test(s)).length,
-            styleHrefs: styles.map(norm).filter(Boolean),
-            scriptSrcs: scripts.map(norm).filter(Boolean),
-          };
-        });
-        assert(assets.sb_css === 1, `${env.label}: storefront_builder.css must appear exactly once, got ${assets.sb_css}`);
-        assert(assets.htmx === 1, `${env.label}: htmx must appear exactly once, got ${assets.htmx}`);
-        assert(assets.alpine === 1, `${env.label}: alpine must appear exactly once, got ${assets.alpine}`);
-        const dupStyles = assets.styleHrefs.filter((h, i) => assets.styleHrefs.indexOf(h) !== i);
-        const dupScripts = assets.scriptSrcs.filter((s, i) => assets.scriptSrcs.indexOf(s) !== i);
-        assert(dupStyles.length === 0, `${env.label}: duplicate stylesheet URLs: ${JSON.stringify(dupStyles)}`);
-        assert(dupScripts.length === 0, `${env.label}: duplicate script URLs: ${JSON.stringify(dupScripts)}`);
-        if (env.key !== 'home') {
-          assert(assets.home_css === 0, `${env.label}: non-home envelope must NOT load home.css (found ${assets.home_css}) — collection carousel CSS must come from storefront_builder.css`);
-        }
+    selectSection: async (pubPage, variant) => {
+      const candidates = collectionSectionLocatorFor(pubPage, variant);
+      const candCount = await candidates.count();
+      assert(candCount >= 1, `no collection_tiles section found for variant ${variant}`);
+      return candidates.first();
+    },
 
-        const overflow = await pubPage.evaluate(() => ({
-          scrollWidth: document.documentElement.scrollWidth,
-          clientWidth: document.documentElement.clientWidth,
-        }));
-        assert(overflow.scrollWidth <= vp.width + 1, `${env.label} @${vp.name}: document horizontal overflow scrollWidth=${overflow.scrollWidth} > ${vp.width + 1}`);
-        phase3.collection.asset_envelope.push({ envelope: env.key, viewport: vp.name, ...assets, scrollWidth: overflow.scrollWidth });
+    extractTileData: (els) => els.map((a) => {
+      const img = a.querySelector('.img img');
+      const glyph = a.querySelector('.img .emo');
+      const nameEl = a.querySelector('.name');
+      const rateEl = a.querySelector('.rate');
+      const href = a.getAttribute('href') || '';
+      const slugMatch = href.match(/\/collections\/([^/]+)\//);
+      return {
+        href,
+        slug: slugMatch ? decodeURIComponent(slugMatch[1]) : null,
+        hasImg: Boolean(img),
+        imgComplete: img ? img.complete : null,
+        imgNaturalWidth: img ? img.naturalWidth : null,
+        hasGlyph: Boolean(glyph),
+        name: nameEl ? nameEl.textContent.trim() : null,
+        rate: rateEl ? rateEl.textContent.trim() : null,
+      };
+    }),
 
-        // ---- per tile_style variant ----
-        for (const variant of c.tile_variants) {
-          const candidates = collectionSectionLocatorFor(pubPage, variant);
-          const candCount = await candidates.count();
-          assert(candCount >= 1, `${env.label} @${vp.name} ${variant}: no collection_tiles section found`);
-          const section = candidates.first();
-          await section.waitFor({ state: 'attached', timeout: 15000 });
+    // Order: auto (newest-first) => the deterministic-newest collection is
+    // the FIRST tile. Every tile: cover image decoded OR folder-glyph
+    // fallback — except the Task 7 disposable broken-image collection,
+    // which is recorded separately (per spec: "record browser network
+    // failure; do not equate no-image with broken-image").
+    classifyTiles: (tileData, { env, vp, variant }) => {
+      const slugOrder = tileData.map((t) => t.slug);
+      assert(slugOrder[0] === c.newest_collection_slug, `${env.label} @${vp.name} ${variant}: newest collection "${c.newest_collection_slug}" is not first, order=${JSON.stringify(slugOrder)}`);
 
-          const tiles = section.locator('a.pcard[href*="/collections/"]');
-          const tileCount = await tiles.count();
-          assert(tileCount >= 2, `${env.label} @${vp.name} ${variant}: expected >=2 collection tiles, got ${tileCount}`);
-
-          const tileData = await tiles.evaluateAll((els) => els.map((a) => {
-            const img = a.querySelector('.img img');
-            const glyph = a.querySelector('.img .emo');
-            const nameEl = a.querySelector('.name');
-            const rateEl = a.querySelector('.rate');
-            const href = a.getAttribute('href') || '';
-            const slugMatch = href.match(/\/collections\/([^/]+)\//);
-            return {
-              href,
-              slug: slugMatch ? decodeURIComponent(slugMatch[1]) : null,
-              hasImg: Boolean(img),
-              imgComplete: img ? img.complete : null,
-              imgNaturalWidth: img ? img.naturalWidth : null,
-              hasGlyph: Boolean(glyph),
-              name: nameEl ? nameEl.textContent.trim() : null,
-              rate: rateEl ? rateEl.textContent.trim() : null,
-            };
-          }));
-
-          // Order: auto (newest-first) => the deterministic-newest collection
-          // is the FIRST tile.
-          const slugOrder = tileData.map((t) => t.slug);
-          assert(slugOrder[0] === c.newest_collection_slug, `${env.label} @${vp.name} ${variant}: newest collection "${c.newest_collection_slug}" is not first, order=${JSON.stringify(slugOrder)}`);
-
-          // Every tile: cover image decoded OR folder-glyph fallback — except
-          // the Task 7 disposable broken-image collection, which is recorded
-          // separately below (per spec: "record browser network failure; do
-          // not equate no-image with broken-image").
-          let decoded = 0;
-          let glyphs = 0;
-          for (const t of tileData) {
-            if (c.broken_collection_slug && t.slug === c.broken_collection_slug) {
-              phase3.collection.broken_image_records = phase3.collection.broken_image_records || [];
-              phase3.collection.broken_image_records.push({
-                envelope: env.key, viewport: vp.name, variant, href: t.href,
-                img_complete: t.imgComplete, img_natural_width: t.imgNaturalWidth,
-              });
-              continue;
-            }
-            if (t.hasImg) {
-              assert(t.imgComplete === true && t.imgNaturalWidth > 0, `${env.label} @${vp.name} ${variant}: collection cover <img> did not decode (complete=${t.imgComplete}, naturalWidth=${t.imgNaturalWidth}) href=${t.href}`);
-              decoded += 1;
-            } else {
-              assert(t.hasGlyph, `${env.label} @${vp.name} ${variant}: no-image tile must render the folder-glyph fallback (href=${t.href})`);
-              glyphs += 1;
-            }
-          }
-          // Both an image tile AND a folder-glyph fallback tile exist in the
-          // auto listing (fixture guarantees one with a cover + one without).
-          assert(decoded >= 1, `${env.label} @${vp.name} ${variant}: expected >=1 decoded cover image, got ${decoded}`);
-          assert(glyphs >= 1, `${env.label} @${vp.name} ${variant}: expected >=1 folder-glyph fallback tile, got ${glyphs}`);
-
-          // ---- Task 7: computed layout / RTL / keyboard focus / native scroll ----
-          const containerSel = COLLECTION_VARIANT_CONTAINER[variant];
-          const layout = await section.evaluate((sec, sel) => {
-            const container = sec.querySelector(sel) || sec;
-            const cs = getComputedStyle(container);
-            const img = sec.querySelector('a.pcard .img img');
-            return {
-              display: cs.display,
-              gridTemplateColumns: cs.gridTemplateColumns,
-              gap: cs.gap,
-              overflowX: cs.overflowX,
-              scrollWidth: container.scrollWidth,
-              clientWidth: container.clientWidth,
-              imgObjectFit: img ? getComputedStyle(img).objectFit : null,
-              dir: document.documentElement.dir,
-            };
-          }, containerSel);
-          assert(layout.dir === 'rtl', `${env.label} @${vp.name}: document must render RTL, got dir="${layout.dir}"`);
-          if (variant === 'grid') {
-            // Both halves checked (not `display` alone — a `display:grid`
-            // container with a single collapsed track would otherwise still
-            // pass): display must be grid/flex AND gridTemplateColumns must
-            // resolve to >=2 actual tracks.
-            const trackCount = (layout.gridTemplateColumns || '').trim().split(/\s+/).filter((t) => t && t !== 'none').length;
-            const displayOk = /grid|flex/.test(layout.display);
-            const tracksOk = trackCount >= 2;
-            if (!displayOk || !tracksOk) {
-              // KNOWN RED (Task 7 finding, NOT silently passed — see the
-              // end-of-gate assertion in phase3BrandGate(), which still fails
-              // the run): `.grid{display:grid;gap:16px}` lives in
-              // product_card.css, which the Cart envelope does NOT load (per
-              // the A06 asset table: cart.css + storefront_builder.css only,
-              // unlike the other five envelopes). collection_tiles.html has
-              // no inline display fallback (brand_carousel.html does).
-              // Recorded here (not thrown) so the rest of this run's evidence
-              // is still collected; the end-of-gate assertion in
-              // phase3BrandGate() still fails the overall scenario.
-              phase3.collection.known_red_findings.push({
-                envelope: env.key, viewport: vp.name, variant,
-                expected: 'display grid|flex AND >=2 resolved grid tracks', actual: `display="${layout.display}" gridTemplateColumns="${layout.gridTemplateColumns}"`,
-                note: 'Collection grid container has no display:grid (or no resolved column tracks) on this envelope (base .grid rule lives in product_card.css, which this envelope does not load; no inline template fallback exists).',
-              });
-            }
-          } else {
-            // Both halves checked (not `overflowX` alone — a `display:block`
-            // container that happens to compute overflow-x:auto would
-            // otherwise still pass while tiles stack vertically, never
-            // actually laid out as a horizontal rail): display must be flex
-            // AND overflowX must be auto/scroll.
-            const displayOk = /flex/.test(layout.display);
-            const overflowOk = layout.overflowX === 'auto' || layout.overflowX === 'scroll';
-            if (!displayOk || !overflowOk) {
-              // KNOWN RED (Task 7 finding, NOT silently passed — see the
-              // end-of-gate assertion below, which still fails the run):
-              // storefront_builder.css only mirrors `.collection-tiles-
-              // carousel.tiles-carousel .pcard{flex:0 0 220px}` (the Task 5
-              // "effective cascade" fix), never the PARENT container's
-              // `.tiles-carousel{display:flex;overflow-x:auto;...}` declaration
-              // — that base rule lives ONLY in home.css (line ~143), which is
-              // deliberately NOT loaded on non-Home envelopes. The
-              // collection_tiles.html template also carries no inline
-              // display/overflow fallback (unlike brand_carousel.html, which
-              // does). Recorded here (not thrown) so the rest of this run's
-              // evidence is still collected; the empty-array assertion at the
-              // end of phase3CollectionGate() still fails the overall scenario.
-              phase3.collection.known_red_findings.push({
-                envelope: env.key, viewport: vp.name, variant,
-                expected: 'display flex AND overflowX auto|scroll', actual: `display="${layout.display}" overflowX="${layout.overflowX}"`,
-                note: 'Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect.',
-              });
-            }
-          }
-          if (layout.imgObjectFit) {
-            assert(layout.imgObjectFit === 'cover', `${env.label} @${vp.name} ${variant}: collection cover image objectFit expected "cover", got "${layout.imgObjectFit}"`);
-          }
-
-          let nativeScroll = null;
-          if (variant !== 'grid' && layout.scrollWidth > layout.clientWidth) {
-            const scrolled = await section.evaluate((sec, sel) => {
-              const rail = sec.querySelector(sel);
-              const before = rail.scrollLeft;
-              // These rails use `scroll-snap-type: x mandatory` (home.css /
-              // storefront_builder.css), so an arbitrary small delta (e.g.
-              // +40px, not aligned to any tile's scroll-snap-align edge) is
-              // legitimately snapped straight back to the nearest snap point
-              // — usually 0 — which is native scroll-snap behavior, not a
-              // broken rail. Scroll all the way to the far end instead (a
-              // real, snap-aligned resting position at the last tile), tried
-              // in both the positive and RTL "negative scrollLeft" direction
-              // Chromium uses for RTL block content.
-              rail.scrollLeft = rail.scrollWidth;
-              let after = rail.scrollLeft;
-              if (after === before) {
-                rail.scrollLeft = -rail.scrollWidth;
-                after = rail.scrollLeft;
-              }
-              return { before, after };
-            }, containerSel);
-            assert(scrolled.after !== scrolled.before, `${env.label} @${vp.name} ${variant}: collection carousel rail did not respond to native scrollLeft (before=${scrolled.before} after=${scrolled.after})`);
-            nativeScroll = scrolled;
-          }
-
-          const focusable = await tiles.first().evaluate((a) => { a.focus(); return document.activeElement === a; });
-          assert(focusable, `${env.label} @${vp.name} ${variant}: collection tile anchor did not receive keyboard focus`);
-
-          const shotDir = mkReportDir('collection', variant, vp.name);
-          const shotPath = path.join(shotDir, `${env.key}-public.png`);
-          await section.scrollIntoViewIfNeeded().catch(() => {});
-          await pubPage.screenshot({ path: shotPath });
-          phase3.collection.screenshots.push(shotPath);
-
-          phase3.collection.variant_checks.push({
-            envelope: env.key, viewport: vp.name, variant,
-            tile_count: tileCount, slug_order: slugOrder,
-            decoded_imgs: decoded, glyph_fallbacks: glyphs,
-            computed_layout: { display: layout.display, gridTemplateColumns: layout.gridTemplateColumns, gap: layout.gap, overflowX: layout.overflowX, imgObjectFit: layout.imgObjectFit, dir: layout.dir },
-            native_scroll: nativeScroll,
-            keyboard_focusable: focusable,
+      let decoded = 0;
+      let glyphs = 0;
+      for (const t of tileData) {
+        if (c.broken_collection_slug && t.slug === c.broken_collection_slug) {
+          phase3.collection.broken_image_records = phase3.collection.broken_image_records || [];
+          phase3.collection.broken_image_records.push({
+            envelope: env.key, viewport: vp.name, variant, href: t.href,
+            img_complete: t.imgComplete, img_natural_width: t.imgNaturalWidth,
           });
+          continue;
         }
-        phase3.collection.envelopes.push({ envelope: env.key, viewport: vp.name, url: env.url, status: resp.status() });
-      } finally {
-        if (localErrors.length) phase3.collection.errors.push(...localErrors);
-        try { await ctx.close(); } catch (_error) { /* best effort */ }
+        if (t.hasImg) {
+          assert(t.imgComplete === true && t.imgNaturalWidth > 0, `${env.label} @${vp.name} ${variant}: collection cover <img> did not decode (complete=${t.imgComplete}, naturalWidth=${t.imgNaturalWidth}) href=${t.href}`);
+          decoded += 1;
+        } else {
+          assert(t.hasGlyph, `${env.label} @${vp.name} ${variant}: no-image tile must render the folder-glyph fallback (href=${t.href})`);
+          glyphs += 1;
+        }
       }
-    }
-  }
-  assert(phase3.collection.errors.length === 0, `Collection public console/page/request errors: ${JSON.stringify(phase3.collection.errors.slice(0, 6))}`);
+      // Both an image tile AND a folder-glyph fallback tile exist in the
+      // auto listing (fixture guarantees one with a cover + one without).
+      assert(decoded >= 1, `${env.label} @${vp.name} ${variant}: expected >=1 decoded cover image, got ${decoded}`);
+      assert(glyphs >= 1, `${env.label} @${vp.name} ${variant}: expected >=1 folder-glyph fallback tile, got ${glyphs}`);
+      return { slugOrder, decodedCount: decoded, extraFields: { glyph_fallbacks: glyphs } };
+    },
+
+    // Layout mismatch on Collection is a KNOWN RED finding (Task 7),
+    // recorded rather than thrown, so the rest of this run's evidence is
+    // still collected — the end-of-gate assertion in phase3BrandGate()
+    // still fails the overall scenario. See the two notes below for why
+    // each shape can legitimately diverge from Brand's on this envelope.
+    onLayoutIssue: (finding) => {
+      const isGrid = finding.variant === 'grid';
+      phase3.collection.known_red_findings.push({
+        ...finding,
+        note: isGrid
+          ? 'Collection grid container has no display:grid (or no resolved column tracks) on this envelope (base .grid rule lives in product_card.css, which this envelope does not load; no inline template fallback exists).'
+          : 'Collection carousel container has no display:flex/overflow-x:auto on this non-Home envelope (missing base .tiles-carousel rule in storefront_builder.css; home.css is not loaded here). Pre-existing Task 5 CSS-fix gap, not a Task 7 harness defect.',
+      });
+    },
+  });
 }
 
 // `/collections/<newest-slug>/?page=2` — domain visible-membership + shared
@@ -2518,6 +2439,37 @@ async function phase3CombinedCartHtmx(fx, c) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Task 4 — per-family gate registration. `manifest.phase3` (the ONE opt-in
+// flag threaded through the Python command) still gates whether ANY of this
+// runs at all; each entry below owns its own fixture-derived run() and
+// contributes its own known-red findings to the ONE combined gate assertion
+// at the end of phase3BrandGate(). A Task 6 family registers here — supplying
+// its own run()/knownRedFindings() — instead of piggybacking on the Brand/
+// Collection flag or hand-writing a parallel gate function.
+// ---------------------------------------------------------------------------
+const PHASE3_FAMILIES = [
+  {
+    key: 'brand',
+    run: async (fx) => {
+      const envelopes = phase3Envelopes(fx);
+      await phase3PublicMatrix(fx, envelopes);
+      await phase3WrapperProjection();
+      await phase3CartHtmx(fx);
+      await phase3BrandBrokenImage(fx);
+    },
+    // Brand's layout checks assert (throw) rather than record — see
+    // phase3PublicMatrix's onLayoutIssue — so there is nothing to gate here;
+    // kept for a uniform per-family shape as more families register.
+    knownRedFindings: () => [],
+  },
+  {
+    key: 'collection',
+    run: async () => { await phase3CollectionGate(); },
+    knownRedFindings: () => phase3.collection.known_red_findings,
+  },
+];
+
 async function phase3BrandGate() {
   try {
     // The Python command writes tenant_negatives.json (the unauthenticated
@@ -2531,18 +2483,14 @@ async function phase3BrandGate() {
     }
 
     const fx = phase3Fixture();
-    const envelopes = phase3Envelopes(fx);
-    await phase3PublicMatrix(fx, envelopes);
-    await phase3WrapperProjection();
-    await phase3CartHtmx(fx);
-    await phase3BrandBrokenImage(fx);
-
-    // Task 5 "Collection gate" — additive Collection matrix on the same run.
-    await phase3CollectionGate();
+    for (const family of PHASE3_FAMILIES) {
+      await family.run(fx);
+    }
 
     // Task 7 — combined dual-pilot Cart proof, run last so it is the
     // canonical evidence at the exact `browser/fragments/cart/{viewport}/*`
-    // paths Task 7 names.
+    // paths Task 7 names. Spans multiple families by design (proves they
+    // coexist on one Cart page), so it stays outside the per-family loop.
     await phase3CombinedCartHtmx(fx, phase3CollectionFixture());
   } finally {
     // Metrics JSON alongside the browser result (screenshots ALONE
@@ -2553,14 +2501,15 @@ async function phase3BrandGate() {
     fs.writeFileSync(path.join(manifest.report_dir, 'metrics.json'), JSON.stringify(phase3, null, 2), 'utf8');
   }
 
-  // Gate the overall scenario on any known-red finding recorded above
-  // (non-fatally, so the try block could finish collecting every other
-  // envelope/viewport/screenshot first). A Task 7 harness finding, not
-  // production code, decides PASS/FAIL here — see phase3.collection.
-  // known_red_findings in metrics.json for the exact rows.
+  // Gate the overall scenario on any known-red finding recorded by ANY
+  // registered family above (non-fatally, so the try block could finish
+  // collecting every other envelope/viewport/screenshot first). A Task 7
+  // harness finding, not production code, decides PASS/FAIL here — see
+  // phase3.collection.known_red_findings in metrics.json for the exact rows.
+  const knownRed = PHASE3_FAMILIES.flatMap((family) => family.knownRedFindings());
   assert(
-    phase3.collection.known_red_findings.length === 0,
-    `Task 7 found ${phase3.collection.known_red_findings.length} known RED finding(s) — see phase3.collection.known_red_findings in metrics.json: ${JSON.stringify(phase3.collection.known_red_findings.slice(0, 3))}`,
+    knownRed.length === 0,
+    `Task 7 found ${knownRed.length} known RED finding(s) across registered families — see metrics.json: ${JSON.stringify(knownRed.slice(0, 3))}`,
   );
 }
 

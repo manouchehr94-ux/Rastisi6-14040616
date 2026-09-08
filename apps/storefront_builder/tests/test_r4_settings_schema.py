@@ -443,6 +443,47 @@ class NoOtherSectionBecomesSchemaEnabledTests(SimpleTestCase):
         self.assertIsNone(faq.settings_schema)
 
 
+class SchemaEnablementRegistryGuardTests(SimpleTestCase):
+    """Phase 4 (Task 4) — backfills the R4-schema-enable guard across the
+    WHOLE registry, not just the two sampled families
+    (``NoOtherSectionBecomesSchemaEnabledTests`` above only ever checked
+    ``image_slider``/``faq``). As Task 6 gives each of the remaining MIGRATE
+    families its own R4 settings schema, this test fails immediately unless
+    that family's key is deliberately moved from ``EXPECTED_UNSCHEMATIZED``
+    into ``EXPECTED_SCHEMA_ENABLED`` in the SAME change — no family can
+    become schema-enabled (or silently regress to unschematized) without
+    this guard noticing."""
+
+    # The 5 families with an R4 settings schema today (Phase 3's two
+    # certified pilots — brand_carousel, collection_tiles — plus
+    # hero_banner, rich_text, product_section).
+    EXPECTED_SCHEMA_ENABLED = frozenset({
+        "hero_banner",
+        "brand_carousel",
+        "rich_text",
+        "product_section",
+        "collection_tiles",
+    })
+
+    def test_every_registered_section_key_matches_its_expected_schema_state(self):
+        definitions = section_registry.list_definitions()
+        registered_keys = {definition.key for definition in definitions}
+        # The guard set must itself track the registry — a typo'd or
+        # retired key here must fail loudly, not silently no-op.
+        self.assertTrue(self.EXPECTED_SCHEMA_ENABLED.issubset(registered_keys))
+
+        mismatches = []
+        for definition in definitions:
+            expected_enabled = definition.key in self.EXPECTED_SCHEMA_ENABLED
+            actually_enabled = definition.settings_schema is not None
+            if expected_enabled != actually_enabled:
+                mismatches.append((definition.key, expected_enabled, actually_enabled))
+        self.assertEqual(
+            mismatches, [],
+            f"schema-enablement drift (key, expected_enabled, actually_enabled): {mismatches}",
+        )
+
+
 class CleanSectionSchemaPatchBridgeTests(SimpleTestCase):
     def test_definition_without_schema_is_rejected(self):
         definition = SectionDefinition(
