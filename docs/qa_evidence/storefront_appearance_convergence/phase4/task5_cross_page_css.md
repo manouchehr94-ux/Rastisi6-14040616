@@ -792,3 +792,143 @@ process mandate.
 
 ## Group C1 — closed (0 unresolved CRITICAL / 0 unresolved IMPORTANT). Proceeding to
 Group C2 (`circular` mode).
+
+## Group C2 — `category_grid`'s `circular` display mode
+
+### Investigation
+
+Markup (`category_grid.html`, `circular` branch): `<section class="section
+category-circle-section">` → `<div class="tiles-circular">` → `<a class="tile-circle">` →
+`<span class="tile-circle-img">` (with a `<span class="tile-circle-wm">` icon fallback) →
+`<span class="tile-circle-label">`.
+
+Exhaustive whole-file grep of `home.css` for every one of these selectors (word-boundary
+checked against similarly-named unrelated classes like `.category-fashion-tile`,
+`.brand-tile`) found FOUR separate passes — the most cascade-scattered `category_grid`
+mode:
+
+1. Base pass (unconditioned + its own `@media(max-width:680px)` block).
+2. "Universal dense storefront modules" pass (unconditioned + its own separate
+   `@media(max-width:680px)` block).
+3. "V3 universal dense-marketplace fidelity pass" (unconditioned + its own
+   `@media(max-width:1000px)` block — no `@680px` block of its own for these selectors).
+4. "V4.2.2 readability calibration" (unconditioned, `.tile-circle-label` font-size only,
+   plus its own `@media(max-width:680px)` override).
+
+Merged-final desktop values were derived property-by-property in file order (last wins
+per property at equal specificity). This surfaced the plan's flagged "genuinely
+ambiguous" case precisely: passes 1 and 2 each have their OWN `@680px` override for
+`.tile-circle`/`.tile-circle-img` (width/flex-basis), but pass 3's UNCONDITIONED rule
+(which sets the `flex` shorthand and `width`) is textually AFTER both of those `@680px`
+blocks in the file, and pass 3's own `@1000px` override is textually after that again —
+and `@media(max-width:1000px)` matches every width `@media(max-width:680px)` also
+matches. Manual cascade tracing predicted passes 1/2's `@680px` overrides are therefore
+completely dead code for `.tile-circle`/`.tile-circle-img`, with only ONE real responsive
+transition (at 1000px) rather than two.
+
+### Ground-truth verification (before writing any fix)
+
+Rather than trust that manual trace, a standalone static HTML harness was built loading
+`home.css` alone (via a `file://` URL, no Django involved) with the exact circular-mode
+markup, and opened in a real browser (Playwright/Chromium) at 1440×900, 900×800, and
+390×844. Results confirmed the prediction exactly: `.tile-circle`'s `flexBasis` and
+`.tile-circle-img`'s `width`/`height` are IDENTICAL at 900px and 390px (110px / 92×92px
+respectively) — the passes 1/2 `@680px` rules never take effect at any viewport.
+`.tile-circle-label`'s font-size correctly showed the genuine two-tier behavior (11.8px
+desktop/900px, 11.5px at 390px), since its own last-writing pass (4) has a real,
+unshadowed `@680px` override.
+
+This ground-truth harness was also used to confirm every desktop merged value
+independently before writing the fix (not merely re-deriving them by reading the source
+a second time).
+
+Home itself does not currently exercise this markup at all on its real public route —
+confirmed by grep: `apps/catalog/templates/catalog/home.html` (the legacy hardcoded
+template `catalog:home` actually renders for this store) contains no reference to
+`tiles-circular`/`tile-circle` anywhere; that markup only exists in the newer,
+per-store-opt-in `category_grid.html` partial shared by both the "universal shell" Home
+variant (`home_visual.html`, not reachable for this store today) and every non-Home page.
+So `.tiles-circular`/`.tile-circle*` are, in a real sense, dead CSS on this store's actual
+live Home page today — which is exactly why the standalone-harness approach (testing
+home.css's own cascade directly, independent of which Django view happens to render it)
+was used for ground truth instead of trying to render real Home.
+
+`.category-circle-section`'s own margin (analogous to Group B's `.banner-section` and
+Group A3's `.amazing-offers-section`) is in scope and mirrored; its nested
+`.category-circle-section .sec-head{margin-bottom:6px}` override is NOT — consistent with
+every prior Task 5 group, `.section`/`.sec-head` themselves have no base CSS anywhere
+outside home.css today (confirmed by grep across every CSS file in the repo), a
+pre-existing gap wider than any single section family and out of this task's scope.
+
+### Browser RED
+
+With the CSS stashed, `CategoryGridCircularNonHomeCssTests.
+test_storefront_builder_css_carries_the_merged_final_circular_rules` failed on its first
+assertion (`.category-circle-section{margin:9px 0 7px}` not found), while the 3
+markup/Home-unaffected tests passed unaffected, as expected.
+
+*(Process note: the first attempt at appending this test class left a stray duplicated
+method body from an earlier failed multi-match edit, which caused a spurious
+`NoDraftToPublishError` — `svc.publish()` was accidentally being called twice in one test
+body. Caught immediately by running the new test in isolation before proceeding; fixed by
+removing the orphaned duplicate lines; re-verified with `ast.parse` and a clean class/method
+count before re-running RED.)*
+
+### Fix
+
+`apps/storefront_builder/static/css/storefront_builder.css` — one new block (see the
+Group C2 comment) with the merged-final desktop rules for
+`.category-circle-section`/`.tiles-circular`/`.tile-circle`/`.tile-circle:hover
+.tile-circle-img`/`.tile-circle-img`/`.tile-circle-img img`/`.tile-circle-wm`/
+`.tile-circle-label`, one `@media(max-width:1000px)` block (`.tiles-circular`/
+`.tile-circle`/`.tile-circle-img`), and one `@media(max-width:680px)` block
+(`.tile-circle-label` only) — deliberately omitting the two now-proven-dead `@680px`
+blocks from passes 1/2.
+
+### Browser GREEN (1440 / 768 / 390)
+
+Fresh fixture: 3 `Category` rows, one `category_grid` section with `display_mode:
+"circular"` and explicit `category_ids` on Cart.
+
+| Property | 1440×900 | 768×900 | 390×844 |
+|---|---|---|---|
+| `.tiles-circular` justify-content / gap / overflow-x | `space-around` / `28px` / `visible` | `flex-start` / `14px` / `auto` | `flex-start` / `14px` / `auto` |
+| `.tile-circle` flex-basis | `145px` | `110px` | `110px` |
+| `.tile-circle-img` width/height | `112px` | `92px` | `92px` |
+| `.tile-circle-label` font-size | `11.8px` | `11.8px` | `11.5px` |
+
+All values match the standalone-harness ground truth exactly, including the confirmed
+single-transition (1000px only) behavior for `.tile-circle`/`.tile-circle-img` — 768px
+and 390px are identical for those two selectors, only the label's font-size changes at
+≤680px. Zero console/page errors at any viewport.
+
+### Cleanup
+
+Dev server stopped and verified via `ps aux` (no lingering process). DB restored via `cp`
+from the `post_c1_cleanup_baseline.sqlite3` continuation baseline
+(`9fe52ff5e97de6359c70c9bd3fdd3fd5344190a93252fb6f93bf41b2ee063c4d`) and hash-verified
+equal.
+
+### Permanent regression guard
+
+`CategoryGridCircularNonHomeCssTests`: 2 markup-rendering tests (Cart, Listing) + 1
+Home-unaffected test (also asserting `home.html` never references `tiles-circular`) + 1
+full-declaration CSS-content test covering every selector/breakpoint this fix adds, plus
+explicit `assertNotIn` checks for all 4 dead-code `@680px` declarations from passes 1/2
+(so a future edit cannot silently reintroduce rules that would not actually match Home's
+real rendering).
+
+### Verification
+
+Full sweep — `test_phase4_task5_cross_page_css` (24 tests, all pass) plus
+`test_qa_harness_contract`, `test_r4_settings_schema`, `test_section_registry`,
+`test_render_service`, `test_r4_mutation_api` — **499 tests, OK (1 pre-existing skip)**.
+`manage.py check`: 0 issues. `manage.py makemigrations --check --dry-run`: no changes
+detected.
+
+### STOP conditions checked
+
+`main` = `973c1dc00bacb6f2f7d2604fa3880bb4d6250579` (unchanged). Start safety ref
+`backup/rastisi6-phase4-start-20260908` = `969a9b411ca712928c2bf31416bdde2ee8aaabb5`
+(unchanged). No destructive git operation used. `git status` before commit contains only
+the intended C2 production/test/evidence files.

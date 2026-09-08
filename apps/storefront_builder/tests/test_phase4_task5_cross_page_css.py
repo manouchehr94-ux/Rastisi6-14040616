@@ -667,3 +667,133 @@ class CategoryGridTilesNonHomeCssTests(TestCase):
         svc.publish(self.store)
         resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
         self.assertEqual(resp.status_code, 200)
+
+
+@override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
+class CategoryGridCircularNonHomeCssTests(TestCase):
+    """Group C2 — category_grid's "circular" display mode
+    (`.tiles-circular`/`.tile-circle`/`.tile-circle-img`/`.tile-circle-wm`/
+    `.tile-circle-label`). home.css layers this family across 4 passes
+    (base + 3 unconditioned overrides, one with its own @1000px block) —
+    the most cascade-scattered category_grid mode. Real-browser
+    ground-truth verification (a standalone harness loading home.css
+    alone against this exact markup, not just reading the source)
+    confirmed the base pass's and the "Universal dense storefront
+    modules" pass's own @680px overrides for `.tile-circle`/
+    `.tile-circle-img` are dead code — completely shadowed at every
+    viewport by the later, unconditioned "V3" pass and its own @1000px
+    block (which also matches everything ≤680px) — so only ONE
+    responsive transition (at 1000px) is real for those two selectors,
+    confirmed identical at both 900px and 390px. Deliberately NOT
+    mirrored for that reason; see the CSS file's own comment."""
+
+    def setUp(self):
+        cache.clear()
+        self.store = _akhlaghi()
+        _verified_domain(self.store, HOST)
+        self.draft = svc.get_or_create_draft(self.store)
+        from apps.catalog.models import Category
+
+        self.cat_a = Category.objects.create(
+            store=self.store, name="دسته الف", slug="task5-c2-cat-a", is_active=True,
+        )
+        self.cat_b = Category.objects.create(
+            store=self.store, name="دسته ب", slug="task5-c2-cat-b", is_active=True,
+        )
+
+    def _place_and_publish(self, page_type: str):
+        section = section_structure_service.add_section(
+            draft=self.draft, section_key="category_grid", page_type=page_type,
+        )
+        section.settings = {
+            **section.settings,
+            "display_mode": "circular",
+            "category_ids": [self.cat_a.pk, self.cat_b.pk],
+        }
+        section.save(update_fields=["settings"])
+        svc.publish(self.store)
+        return section
+
+    def test_circular_mode_renders_on_cart(self):
+        self._place_and_publish(StorefrontPage.PageType.CART)
+        resp = self.client.get(reverse("cart:detail"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="section category-circle-section"', html)
+        self.assertIn('class="tiles-circular"', html)
+        self.assertIn('class="tile-circle"', html)
+        self.assertIn('class="tile-circle-img"', html)
+        self.assertIn('class="tile-circle-label"', html)
+
+    def test_circular_mode_renders_on_listing(self):
+        self._place_and_publish(StorefrontPage.PageType.LISTING)
+        resp = self.client.get(reverse("catalog:product-list"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="tiles-circular"', html)
+        self.assertIn('class="tile-circle"', html)
+
+    def test_storefront_builder_css_carries_the_merged_final_circular_rules(self):
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(".category-circle-section{margin:9px 0 7px}", css)
+        self.assertIn(
+            ".tiles-circular{display:flex;flex-wrap:nowrap;justify-content:space-around;"
+            "gap:28px;overflow:visible;padding:2px 12px 5px}",
+            css,
+        )
+        self.assertIn(
+            ".tile-circle{display:flex;flex-direction:column;align-items:center;"
+            "text-align:center;color:var(--ink);gap:5px;width:auto;min-width:0;"
+            "flex:0 1 145px}",
+            css,
+        )
+        self.assertIn(
+            ".tile-circle:hover .tile-circle-img{transform:none;"
+            "box-shadow:0 2px 8px rgba(15,23,42,.08)}",
+            css,
+        )
+        self.assertIn(
+            ".tile-circle-img{width:112px;height:112px;border-radius:50%;overflow:hidden;"
+            "background:transparent;border:0;box-shadow:none;display:grid;"
+            "place-items:center;transition:.2s}",
+            css,
+        )
+        self.assertIn(
+            ".tile-circle-img img{width:100%;height:100%;object-fit:contain;background:#fff;"
+            "border-radius:50%;border:1px solid #e3e5e8;padding:4px}",
+            css,
+        )
+        self.assertIn(".tile-circle-wm{font-size:38px}", css)
+        self.assertIn(".tile-circle-label{font-size:11.8px;font-weight:600;color:#333}", css)
+        self.assertIn(
+            "@media(max-width:1000px){\n"
+            "  .tiles-circular{overflow-x:auto;justify-content:flex-start;gap:14px}\n"
+            "  .tile-circle{flex:0 0 110px}\n"
+            "  .tile-circle-img{width:92px;height:92px}\n"
+            "}",
+            css,
+        )
+        self.assertIn(
+            "@media(max-width:680px){\n  .tile-circle-label{font-size:11.5px}\n}",
+            css,
+        )
+        # The base pass's and the "Universal dense storefront modules" pass's
+        # own @680px `.tile-circle`/`.tile-circle-img` width/flex-basis
+        # overrides are dead code on Home (proven via real-browser
+        # ground-truth verification — see the CSS comment) and must never
+        # be mirrored here, since doing so would NOT match Home's actual
+        # rendering at any viewport.
+        self.assertNotIn(".tile-circle{width:84px}", css)
+        self.assertNotIn(".tile-circle{flex-basis:88px;width:88px}", css)
+        self.assertNotIn(".tile-circle-img{width:76px;height:76px}", css)
+        self.assertNotIn(".tile-circle-img{width:78px;height:78px}", css)
+
+    def test_home_page_is_unaffected_since_it_never_loads_storefront_builder_css(self):
+        home_html = Path(settings.BASE_DIR, "apps", "catalog", "templates", "catalog", "home.html").read_text(
+            encoding="utf-8",
+        )
+        self.assertNotIn("storefront_builder.css", home_html)
+        self.assertNotIn("tiles-circular", home_html)
+        svc.publish(self.store)
+        resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
