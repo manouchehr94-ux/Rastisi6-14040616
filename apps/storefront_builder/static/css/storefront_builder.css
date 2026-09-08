@@ -4660,6 +4660,89 @@ a.sfb-v3-component-item,
   .special-buy{padding:6px 10px;font-size:9px}
 }
 
+/* Phase 4 (Task 5, Group B) — single_banner (emits `.promo-dark`) and
+   multi_banner (emits `.banner-section`/`.promo-grid`/
+   `.promo-grid--{layout_variant}`/`.promo-card`/`.promo-media`/
+   `.promo-overlay`) were Home-only. `multi_banner`'s `layout_variant` has
+   exactly 6 real, currently-possible values (see
+   `section_registry.MULTI_BANNER_KNOWN_LAYOUT_VARIANTS`) — all 6,
+   including `atelier-duo`/`atelier-wide`, are in scope here (unlike
+   hero_banner's variants, which are separate registered renderers,
+   multi_banner is ONE template branching purely on this CSS class
+   suffix). Confirmed via `grep` that none of these selectors exist
+   anywhere in this file today (a `.gf-promo-grid`/`.gf--promo` hit
+   elsewhere is a differently-namespaced, unrelated component).
+
+   This selector family accretes across 4 unconditioned passes plus 3
+   width breakpoints (1000px, 900px [atelier-duo `.promo-card` only],
+   680px) — each rule below is the MERGED FINAL value per property per
+   scope, following the same verified methodology as Group A3.
+
+   Two explicit judgment calls, made deliberately rather than silently:
+   1. `.promo-overlay small` is `display:none` on Home today (an earlier
+      pass hides it and nothing later restores it — its color/font-size
+      rules are dead code there). Mirrored byte-for-byte (matching Home's
+      actual current rendered behavior, not "fixing" a suspected
+      pre-existing bug — out of this task's scope per Ruling D).
+   2. `.promo-grid--atelier-duo .promo-card`'s min-height is set at THREE
+      overlapping max-width scopes (unconditioned 410px, `@900px` 320px,
+      `@680px` 250px) — both media queries match below 680px, and the
+      later one in file order wins there, not the narrower one. Mirrored
+      as the exact same 3-tier cascade, in the same relative order. */
+.promo-dark{position:relative;border-radius:22px;overflow:hidden;background:linear-gradient(100deg,#2a2440,#3b2f63);color:#fff;display:grid;grid-template-columns:1.3fr 1fr;align-items:center;padding:34px 40px;gap:20px}
+.promo-dark::after{content:'🛍️';position:absolute;left:30px;top:50%;transform:translateY(-50%);font-size:150px;opacity:.1}
+.promo-dark h3{font-size:23px;font-weight:900;margin-bottom:8px}
+.promo-dark p{opacity:.85;font-size:13px;margin-bottom:18px;max-width:380px}
+.promo-dark .mini{background:#fff;color:var(--ink);border-radius:16px;padding:12px;display:flex;gap:12px;align-items:center;max-width:300px;position:relative;z-index:2}
+.promo-dark .mini .im{width:62px;height:62px;border-radius:12px;background:var(--violet-soft);display:grid;place-items:center;font-size:32px}
+.promo-dark .mini .now{font-weight:900;font-size:15px;color:var(--pink)}
+.promo-dark .mini .old{font-size:11px;color:var(--muted);text-decoration:line-through}
+.banner-section{margin:7px 0}
+.promo-grid{gap:12px}
+.promo-card{position:relative;display:block;overflow:hidden;border-radius:5px;background:#fff;border:1px solid #dfe3e8;min-height:260px;box-shadow:0 1px 5px rgba(15,23,42,.05)}
+.promo-media{position:absolute;inset:0;display:block}
+.promo-media img{display:block;width:100%;height:100%;object-fit:cover}
+.promo-overlay{position:absolute;inset:auto 0 0 0;z-index:2;display:flex;flex-direction:column;gap:4px;padding:32px 11px 8px;color:#111;background:linear-gradient(0deg,rgba(255,255,255,.96),rgba(255,255,255,.70) 58%,transparent)}
+.promo-overlay strong{font-size:12.2px;font-weight:800;line-height:1.6}
+.promo-overlay small{display:none;font-size:10.6px;line-height:1.6;color:#555}
+.promo-overlay em{display:inline-flex;align-self:flex-start;background:#fff;border:1px solid #222;border-radius:10px;padding:1px 7px;font-size:9.5px;font-style:normal}
+.promo-grid--promo-4 .promo-card{min-height:245px}
+.promo-grid--wide-single .promo-card{min-height:185px}
+.promo-grid--mini-4 .promo-card{min-height:118px}
+.promo-grid--strip .promo-card{min-height:48px!important;background:#fff;border:1px solid #e1e4e8;box-shadow:0 1px 4px rgba(15,23,42,.04)}
+.promo-grid--strip .promo-media{opacity:0;pointer-events:none}
+.promo-grid--strip .promo-media img{object-fit:cover}
+.promo-grid--strip .promo-overlay{inset:0;display:flex;align-items:center;justify-content:center;padding:0 14px;background:#fff;text-align:center;color:#e4475d}
+.promo-grid--strip .promo-overlay strong{font-size:10px;font-weight:700;color:#e4475d;text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:1px}
+.promo-grid--strip .promo-overlay small,.promo-grid--strip .promo-overlay em{display:none}
+.promo-grid--atelier-duo{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.promo-grid--atelier-duo .promo-card{min-height:410px;border-radius:0}
+.promo-grid--atelier-wide{grid-template-columns:1fr}
+.promo-grid--atelier-wide .promo-card{min-height:300px;border-radius:0}
+.promo-grid--atelier-duo .promo-media img,.promo-grid--atelier-wide .promo-media img{object-fit:cover}
+.promo-grid--atelier-duo .promo-overlay,.promo-grid--atelier-wide .promo-overlay{padding:48px 20px 18px;background:linear-gradient(0deg,rgba(20,16,12,.58),rgba(20,16,12,.04) 72%,transparent);color:#fff}
+.promo-grid--atelier-duo .promo-overlay strong,.promo-grid--atelier-wide .promo-overlay strong{font-size:clamp(18px,2vw,30px);font-weight:950}
+.promo-grid--atelier-duo .promo-overlay small,.promo-grid--atelier-wide .promo-overlay small{font-size:11px;color:rgba(255,255,255,.9)}
+.promo-grid--atelier-duo .promo-overlay em,.promo-grid--atelier-wide .promo-overlay em{border-radius:2px;background:#fff;color:#201B17;padding:6px 12px;font-size:10px}
+.promo-card.is-clickable{cursor:pointer}
+.promo-card.is-clickable:focus-visible{outline:3px solid rgba(22,163,74,.35);outline-offset:2px}
+@media(hover:hover){.promo-card.is-clickable:hover{filter:saturate(1.03) brightness(.99)}}
+@media(max-width:1000px){
+  .promo-dark{grid-template-columns:1fr;text-align:center}
+  .promo-dark .mini{margin-inline:auto}
+}
+@media(max-width:900px){
+  .promo-grid--atelier-duo .promo-card{min-height:320px}
+}
+@media(max-width:680px){
+  .promo-card{min-height:185px}
+  .promo-grid--promo-4 .promo-card,.promo-grid--wide-single .promo-card{min-height:170px}
+  .promo-grid--mini-4 .promo-card{min-height:110px}
+  .promo-grid--atelier-duo{grid-template-columns:1fr;gap:9px}
+  .promo-grid--atelier-duo .promo-card{min-height:250px}
+  .promo-grid--atelier-wide .promo-card{min-height:205px}
+}
+
 /* Generic luxury showcase hero / category shortcuts. */
 .hero-luxury{margin-top:20px}.hero-luxury-stage{position:relative;overflow:hidden;border:1px solid color-mix(in srgb,var(--theme-primary,#d4af37) 25%,var(--theme-border,#2a2515));border-radius:calc(var(--sfb-radius,18px) + 4px);background:linear-gradient(115deg,#090909 0%,#111 54%,#21180a 100%);box-shadow:0 24px 60px rgba(0,0,0,.28)}
 .hero-luxury-slide{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);min-height:470px;direction:rtl}.hero-luxury-copy{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:54px;position:relative;z-index:2;color:var(--theme-text,#f8f1cf)}

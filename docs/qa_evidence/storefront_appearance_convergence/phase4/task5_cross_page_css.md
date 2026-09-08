@@ -476,4 +476,115 @@ permanent regression guard, RED-verified via `git stash` against the pre-fix CSS
 
 All three Group A sub-fixes (A1 hero_banner/image_slider, A2 product_section spotlight/
 campaign_band, A3 amazing_offers) are complete, twice-reviewed on A1/A2 (both rounds'
-findings fixed), and once-reviewed on A3. Proceeding to Group B.
+findings fixed), and once-reviewed on A3 (the single CRITICAL finding fixed). The hero
+selector family was independently re-reviewed a third time after the A1/A2 fix-up and
+returned a clean PASS — the reviewer explicitly confirmed no further pass is warranted.
+
+## Group B — `single_banner` (`.promo-dark`) + `multi_banner` (`.banner-section`/`.promo-grid`/`.promo-grid--{layout_variant}`/`.promo-card`/`.promo-media`/`.promo-overlay`)
+
+### Result: PASS
+
+### Investigation
+
+`multi_banner` is ONE template branching purely on a CSS class suffix (`layout_variant`),
+unlike `hero_banner`'s variants (separate registered renderers) — so, per
+`section_registry.MULTI_BANNER_KNOWN_LAYOUT_VARIANTS`, all **6** real, currently-possible
+values (`promo-4`, `wide-single`, `mini-4`, `strip`, `atelier-duo`, `atelier-wide`) are in
+scope, not just the "obvious" four. Confirmed via `manage.py shell` that this constant is
+documentation-only (never read by `validate_settings`, per an explicit R1 §9 "do not
+narrow accepted values" ruling already in the codebase) but the four CSS classes it lists
+plus `atelier-duo`/`atelier-wide` are the only ones that actually exist in `home.css`.
+
+Applying the exhaustive-whole-file-grep methodology from the start this time (learned from
+Group A1/A3's review rounds), a dedicated investigation pass found this selector family
+accretes across **4 unconditioned passes plus 3 width breakpoints** (1000px, a
+`multi_banner`-only 900px scoped to `atelier-duo`'s card only, and 680px) — one more
+breakpoint than any other Group A/B fix has needed. Two explicit judgment calls were
+surfaced (not silently resolved):
+
+1. **`.promo-overlay small` is `display:none` on Home today** — an earlier pass hides it
+   and nothing later restores it, so its color/font-size rules are dead code there.
+   Mirrored byte-for-byte (matching Home's actual current rendered behavior, not "fixing" a
+   suspected pre-existing bug — out of this task's scope per Ruling D).
+2. **`.promo-grid--atelier-duo .promo-card`'s `min-height` is set at THREE overlapping
+   max-width scopes** (unconditioned 410px, `@max-width:900px` 320px, `@max-width:680px`
+   250px) — both media queries match simultaneously below 680px, and the LATER one in file
+   order wins there (250px), not the "more specific-sounding" narrower breakpoint. Mirrored
+   as the exact same 3-tier cascade, verified against a real browser at all three zones
+   (see below).
+
+Confirmed (per Group A1's precedent) `.tiles`/`.orig` — two unrelated classes sitting in
+the same early "responsive" catch-all block as `.promo-dark` — are not emitted by either
+template and correctly excluded.
+
+### Browser verification
+
+Placed `single_banner` on Cart and `multi_banner` (`layout_variant: "strip"` and
+`"atelier-duo"`) on Cart/Listing with real `PromotionalBanner` fixtures, published, checked
+real `getComputedStyle`:
+
+| Check | Viewport | Result |
+|---|---|---|
+| `.promo-dark` grid split | 1440×900 | `1.3fr 1fr` (`601px 462px`) ✓ |
+| `.promo-dark` collapses + centers | 900×800 (≤1000) | single track, `text-align:center` ✓ |
+| `.promo-grid--strip .promo-card` min-height | 1440×900 | `48px` (the `!important` value) ✓ |
+| `.promo-grid--strip .promo-overlay` layout | 1440×900 | `display:flex`, `padding:0 14px`, white background ✓ |
+| Atelier-duo card min-height (3-tier) | 1440×900 / 800×900 / 390×844 | `410px` / `320px` / `250px` — **exact match to the derived 3-tier cascade** ✓ |
+| `.banner-section` margin | 1440×900 | `7px 0` ✓ |
+
+Two findings during verification, both traced to **pre-existing, globally-shared
+stylesheets already loaded on Home** (not divergences introduced by this fix):
+
+- `.promo-grid--strip .promo-overlay`'s mirrored `color:#e4475d` is inert in practice — a
+  pre-existing `!important` rule in `apps/core/static/css/theme_palette.css` (loaded on
+  every page type via the shared base template, Home included) always wins for this
+  selector's `color`, applying the merchant's theme text color instead. This is not a
+  divergence: both Home and non-Home already get the same overridden result from the same
+  shared file. Mirrored anyway for byte-for-byte source fidelity per the same reasoning as
+  judgment call 1.
+- At ≤680px, `.promo-grid--atelier-duo`'s `grid-template-columns:1fr` mobile collapse
+  (this fix) does not actually take effect — `apps/catalog/static/css/product_card.css`'s
+  `.grid.rsec-cols{grid-template-columns:repeat(var(--cols-mobile,2),1fr)}` responsive rule
+  has higher specificity (two classes vs. one) and wins regardless of source order. Traced
+  and confirmed this is a **pre-existing specificity interaction in the shared
+  `multi_banner.html` template markup itself** (`class="grid rsec-cols promo-grid
+  promo-grid--{variant}"`) — Home experiences the identical non-collapse for the identical
+  reason, since `product_card.css` is loaded there too. Not a divergence; not fixed (out of
+  this task's CSS-completeness scope — a specificity/markup issue, not a missing-CSS-file
+  issue).
+
+### Cleanup
+
+Dev server stopped; `db.sqlite3` restored from a pre-fixture backup, SHA256-verified
+identical to the shared baseline (`d53a687b...`).
+
+### Permanent regression guard
+
+`test_phase4_task5_cross_page_css.py`, `BannerNonHomeCssTests` (4 tests): renders
+`single_banner` and `multi_banner` (`strip` variant) on non-Home pages via the real
+Draft→Publish→Public flow and asserts the markup appears; asserts the full final
+declaration (not a narrow substring) for every multi-layer-merged selector — following the
+lesson from the A3 review that narrow substring checks let a one-property merge error ship
+undetected — including both documented judgment calls, plus an explicit
+`assertLess`/index check proving the `@900px` block appears before the `@680px` block
+(textual order is what makes the 3-tier cascade resolve correctly) and `assertNotIn` guards
+against pulling in the unrelated `.tiles`/`.orig` classes.
+
+### Verification
+
+- New suite: **16/16 pass** (12 from Groups A1-A3 + 4 new). RED-verified via `git stash`
+  (CSS-only) — fails with the exact missing-declaration error.
+- Regression sweep: **491 tests, 0 failures, 1 known skip**.
+- `python manage.py check`: clean. `makemigrations --check --dry-run`: no changes.
+- Real dev DB restored and SHA256-stable at `d53a687b...`.
+
+### STOP conditions checked
+
+Pure CSS-completeness fix. No new template, section registration, schema, or renderer
+path. Both judgment calls preserve Home's exact current rendered behavior rather than
+introducing any new visual variant (Ruling D). The two pre-existing cross-stylesheet
+interactions found during verification are documented, not fixed — genuinely out of this
+task's scope (one is a merchant-theming layer already applied identically everywhere; the
+other is a specificity interaction in markup shared with Home, not a missing-CSS gap).
+
+## Group B — closed. Proceeding to Group C.

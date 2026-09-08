@@ -409,3 +409,130 @@ class AmazingOffersNonHomeCssTests(TestCase):
         # brand classes) must never get pulled in — this mirror is scoped to
         # the ONE widget amazing_offers.html actually emits.
         self.assertNotIn(".special-list>a{", css)
+
+
+@override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
+class BannerNonHomeCssTests(TestCase):
+    """Group B — single_banner (`.promo-dark`) and multi_banner
+    (`.banner-section`/`.promo-grid`/`.promo-grid--{layout_variant}`/
+    `.promo-card`/`.promo-media`/`.promo-overlay`). All 6 real
+    `layout_variant` values (``section_registry.
+    MULTI_BANNER_KNOWN_LAYOUT_VARIANTS``) are in scope — unlike
+    hero_banner's variants (separate registered renderers), multi_banner
+    is ONE template branching purely on this CSS class suffix."""
+
+    def setUp(self):
+        cache.clear()
+        self.store = _akhlaghi()
+        _verified_domain(self.store, HOST)
+        self.draft = svc.get_or_create_draft(self.store)
+
+    def _place_and_publish(self, section_key: str, page_type: str, settings_patch: dict | None = None):
+        from apps.content.models import PromotionalBanner
+
+        section = section_structure_service.add_section(
+            draft=self.draft, section_key=section_key, page_type=page_type,
+        )
+        if settings_patch:
+            section.settings = {**section.settings, **settings_patch}
+            section.save(update_fields=["settings"])
+        PromotionalBanner.objects.create(
+            store=self.store, section=section, title="بنر تست",
+            destination_type="none", is_active=True, display_order=0,
+        )
+        svc.publish(self.store)
+        return section
+
+    def test_single_banner_renders_on_cart(self):
+        self._place_and_publish("single_banner", StorefrontPage.PageType.CART)
+        resp = self.client.get(reverse("cart:detail"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('class="promo-dark"', resp.content.decode())
+
+    def test_multi_banner_strip_variant_renders_on_listing(self):
+        self._place_and_publish(
+            "multi_banner", StorefrontPage.PageType.LISTING, {"layout_variant": "strip"},
+        )
+        resp = self.client.get(reverse("catalog:product-list"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn("promo-grid--strip", html)
+        self.assertIn('class="promo-card"', html)
+
+    def test_storefront_builder_css_carries_the_promo_dark_rules(self):
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(
+            ".promo-dark{position:relative;border-radius:22px;overflow:hidden;"
+            "background:linear-gradient(100deg,#2a2440,#3b2f63);color:#fff;"
+            "display:grid;grid-template-columns:1.3fr 1fr;align-items:center;"
+            "padding:34px 40px;gap:20px}",
+            css,
+        )
+        self.assertIn(
+            ".promo-dark .mini{background:#fff;color:var(--ink);border-radius:16px;"
+            "padding:12px;display:flex;gap:12px;align-items:center;max-width:300px;"
+            "position:relative;z-index:2}",
+            css,
+        )
+        self.assertIn(".promo-dark{grid-template-columns:1fr;text-align:center}", css)
+
+    def test_storefront_builder_css_carries_the_merged_final_banner_grid_rules(self):
+        # Broad coverage after the amazing_offers review lesson: assert the
+        # FULL final declaration for every multi-layer-merged selector, not
+        # a narrow substring, so a one-property merge error cannot pass
+        # silently (e.g. .promo-card's border/min-height/box-shadow/
+        # border-radius are each individually merged from 2-3 separate
+        # passes; .promo-overlay/strong/em similarly).
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(".banner-section{margin:7px 0}", css)
+        self.assertIn(".promo-grid{gap:12px}", css)
+        self.assertIn(
+            ".promo-card{position:relative;display:block;overflow:hidden;"
+            "border-radius:5px;background:#fff;border:1px solid #dfe3e8;"
+            "min-height:260px;box-shadow:0 1px 5px rgba(15,23,42,.05)}",
+            css,
+        )
+        self.assertIn(
+            ".promo-overlay{position:absolute;inset:auto 0 0 0;z-index:2;"
+            "display:flex;flex-direction:column;gap:4px;padding:32px 11px 8px;"
+            "color:#111;background:linear-gradient(0deg,rgba(255,255,255,.96),"
+            "rgba(255,255,255,.70) 58%,transparent)}",
+            css,
+        )
+        self.assertIn(".promo-overlay strong{font-size:12.2px;font-weight:800;line-height:1.6}", css)
+        # Judgment call 1 (documented in the CSS comment): .promo-overlay
+        # small is display:none on Home today — mirrored byte-for-byte,
+        # not "fixed", since matching Home's actual current rendering (not
+        # a suspected pre-existing bug) is this task's job.
+        self.assertIn(".promo-overlay small{display:none;font-size:10.6px;line-height:1.6;color:#555}", css)
+        self.assertIn(
+            ".promo-overlay em{display:inline-flex;align-self:flex-start;"
+            "background:#fff;border:1px solid #222;border-radius:10px;"
+            "padding:1px 7px;font-size:9.5px;font-style:normal}",
+            css,
+        )
+        self.assertIn(
+            ".promo-grid--strip .promo-card{min-height:48px!important;"
+            "background:#fff;border:1px solid #e1e4e8;box-shadow:0 1px 4px rgba(15,23,42,.04)}",
+            css,
+        )
+        self.assertIn(
+            ".promo-grid--strip .promo-overlay{inset:0;display:flex;"
+            "align-items:center;justify-content:center;padding:0 14px;"
+            "background:#fff;text-align:center;color:#e4475d}",
+            css,
+        )
+        # Judgment call 2 (documented in the CSS comment): atelier-duo's
+        # card min-height is set at THREE overlapping max-width scopes;
+        # below 680px the later-in-file @680 rule wins over @900, not the
+        # "more specific-sounding" narrower breakpoint.
+        self.assertIn(".promo-grid--atelier-duo .promo-card{min-height:410px;border-radius:0}", css)
+        self.assertIn(".promo-grid--atelier-duo .promo-card{min-height:320px}", css)
+        self.assertIn(".promo-grid--atelier-duo .promo-card{min-height:250px}", css)
+        idx_900 = css.index("@media(max-width:900px)")
+        idx_680 = css.index("@media(max-width:680px)", idx_900)
+        self.assertLess(idx_900, idx_680)
+        # No unrelated classes from the same home.css "responsive" block
+        # (.tiles/.orig — a different, unrelated section) pulled in.
+        self.assertNotIn(".tiles{grid-template-columns", css)
+        self.assertNotIn(".orig{grid-template-columns", css)
