@@ -4395,6 +4395,58 @@ a.sfb-v3-component-item,
   .gh-luxury-mobile-search .gh-search{display:flex;max-width:none;width:100%;height:46px}
 }
 
+/* Phase 4 (Task 5, Group A) — hero_banner's default "overlay" style and
+   image_slider (they share `partials/hero_slider_body.html` — the exact
+   same template, so this is one root cause, not two) were Home-only: these
+   base rules previously existed only in catalog/static/css/home.css, so
+   placing either section on a non-Home envelope (product detail, listing,
+   collection, cart) rendered an unstyled stack of slides instead of the
+   absolutely-positioned overlay slider. Mirrored verbatim from home.css
+   (universal image-first hero block + the Phase 3.7 data-text-position
+   rules) — this file cannot affect Home's own presentation at all, since
+   Home never loads storefront_builder.css (only product_card.css and
+   home.css; see catalog/templates/catalog/home.html). */
+.hero{padding:0;margin:0}
+.hero-inner{position:relative;overflow:hidden;border:1px solid #e2e5ea;border-radius:8px;background:#fff;aspect-ratio:1053/420;min-height:0;color:#fff;box-shadow:0 2px 10px rgba(15,23,42,.05)}
+.hero-slide{position:absolute;inset:0;width:100%;height:100%}
+.hero-slide.single{display:block}
+.hero-media{display:block;width:100%;height:100%}
+.hero-media img{display:block;width:100%;height:100%;object-fit:cover}
+.hero-text{position:absolute;z-index:2;inset-inline-end:22px;bottom:42px;max-width:46%;padding:10px 14px;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.45)}
+.hero-text h1{font-size:var(--sfb-hero-heading-size,21px);font-family:var(--sfb-hero-font,inherit);line-height:1.55;font-weight:800;margin:0 0 4px}
+.hero-text p{font-size:var(--sfb-hero-body-size,11px);font-family:var(--sfb-hero-font,inherit);line-height:1.8;margin:0 0 8px;opacity:.96}
+.hero-cta{display:inline-flex;align-items:center;justify-content:center;background:#fff;color:#25282e;border:1px solid rgba(0,0,0,.15);padding:5px 12px;font-size:10px;font-weight:600;border-radius:2px;text-shadow:none}
+.hero-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:4;width:32px;height:32px;border-radius:50%;border:1px solid rgba(0,0,0,.12);background:rgba(255,255,255,.92);color:#333;font-size:18px;line-height:1;display:grid;place-items:center}
+.hero-arrow:hover{background:#fff}
+.hero-arrow:disabled{opacity:.35;cursor:not-allowed}
+.hero-arrow-prev{right:12px}.hero-arrow-next{left:12px}
+.hero-tabs{position:absolute;z-index:4;bottom:0;right:0;left:0;display:flex;justify-content:center;background:linear-gradient(0deg,rgba(0,0,0,.30),transparent);padding-top:26px}
+.hero-tabs button{min-width:116px;max-width:180px;height:34px;padding:0 10px;color:#fff;border-inline-start:1px solid rgba(255,255,255,.35);font-size:9.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.78}
+.hero-tabs button:first-child{border-inline-start:0}
+.hero-tabs button.active{opacity:1;background:rgba(0,0,0,.12)}
+.hero-inner[data-text-position="start"] .hero-text{inset-inline-start:34px;inset-inline-end:auto;text-align:right}
+.hero-inner[data-text-position="end"] .hero-text{inset-inline-end:34px;inset-inline-start:auto;text-align:right}
+.hero-inner[data-text-position="center"] .hero-text{inset-inline-start:50%;inset-inline-end:auto;transform:translateX(-50%);width:min(560px,70%);max-width:70%;text-align:center}
+.hero-inner[data-text-position="center"] .hero-cta{margin-inline:auto}
+@media(max-width:1000px){
+  .hero-inner{aspect-ratio:16/7}
+  .hero-text{max-width:55%;bottom:36px}
+  .hero-inner[data-text-position="start"] .hero-text,
+  .hero-inner[data-text-position="end"] .hero-text{inset-inline:18px}
+  .hero-inner[data-text-position="center"] .hero-text{width:76%;max-width:76%}
+}
+@media(max-width:680px){
+  .hero-inner{aspect-ratio:auto;min-height:300px;border-radius:5px}
+  .hero-media img{object-fit:cover}
+  .hero-text{inset-inline:12px;bottom:38px;max-width:none;text-align:right;padding:8px}
+  .hero-text h1{font-size:17px}
+  .hero-text p{font-size:10.5px}
+  .hero-arrow{width:28px;height:28px}
+  .hero-tabs{overflow-x:auto;justify-content:flex-start;direction:rtl}
+  .hero-tabs button{min-width:90px;height:32px;font-size:8.5px}
+  .hero-inner[data-text-position] .hero-text{inset-inline:12px;transform:none;width:auto;max-width:none;text-align:right}
+}
+
 /* Generic luxury showcase hero / category shortcuts. */
 .hero-luxury{margin-top:20px}.hero-luxury-stage{position:relative;overflow:hidden;border:1px solid color-mix(in srgb,var(--theme-primary,#d4af37) 25%,var(--theme-border,#2a2515));border-radius:calc(var(--sfb-radius,18px) + 4px);background:linear-gradient(115deg,#090909 0%,#111 54%,#21180a 100%);box-shadow:0 24px 60px rgba(0,0,0,.28)}
 .hero-luxury-slide{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);min-height:470px;direction:rtl}.hero-luxury-copy{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:54px;position:relative;z-index:2;color:var(--theme-text,#f8f1cf)}
