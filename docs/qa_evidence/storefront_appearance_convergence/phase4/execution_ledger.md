@@ -109,3 +109,45 @@ Chronological record of Phase-4 task starts/completions, commits, and backup ref
   reproduction, not just documentation).
 - **COMPLETE** 2026-09-08. Task 3 gate (3A/3B/3C/3D/3E all reviewed): 0 unresolved CRITICAL, 0
   unresolved IMPORTANT. Proceeding to Task 4.
+
+## Task 4 — Generalize the certified R4 QA browser certification harness
+
+- **START** 2026-09-08. Ran `--phase3` before any code change to derive the exact baseline
+  the plan requires be preserved: `metrics.json` showed `variant_checks.length === 45`
+  (Brand) and `collection.variant_checks.length === 36` (Collection), `known_red_findings`
+  empty, 0 console/page/request errors, DB restore SHA256 match — saved as the pre-refactor
+  baseline to diff against, explicitly distinguished from the coarser scenario-level
+  "16/16 PASS" count.
+- Extracted the duplicated Brand/Collection browser assertion block in `run.mjs` into one
+  shared `phase3FamilyPublicMatrix(cfg)` covering every listed assertion category (asset
+  envelope, document overflow, RTL, computed grid/flex layout, objectFit, native scroll,
+  keyboard focus, error collection), with each family's distinct business logic (tile
+  shape/order semantics, the Brand-throws-vs-Collection-records layout-mismatch policy,
+  Brand's V02 view-all-anchor check) injected via config. Restructured `manifest.phase3`'s
+  single boolean into a `PHASE3_FAMILIES` gate-registration loop. Backfilled a registry-wide
+  schema-enable guard (`SchemaEnablementRegistryGuardTests`) covering all 36 registered
+  section keys (previously only `image_slider`/`faq` were spot-checked).
+- Re-ran `--phase3` post-refactor and diffed `metrics.json` against the saved baseline:
+  Brand 45/45 and Collection 36/36 unchanged, 0 known-red findings, 0 errors, DB restore
+  hash match, only one strictly-additive metrics field difference. One real bug (a
+  Playwright `locator.evaluate()` call passed two positional arguments instead of one
+  bundled object) was caught by this exact re-run (`FAIL phase3-brand-gate`) and fixed
+  before commit.
+- Official Phase-3 baseline Run A/B/C: 953 tests total, 3 failures + 1 error + 1 skip, all
+  matching known-or-newly-classified pre-existing signatures. One failure
+  (`test_header_footer_variant_labels_shown_for_updated_preset`) had not been previously
+  documented; isolated, reproduced standalone, then reproduced identically against the
+  clean parent commit (`9bacc80`) via `git stash` — confirmed pre-existing and unrelated to
+  this task, not a new regression. Committed as a checkpoint (`130a876`), pushed, sent to a
+  fresh independent reviewer with explicit instructions to use an isolated `git worktree`
+  for any RED-verification (per the Task 3C incident) rather than the shared tree.
+- Reviewer verdict: PASS, 0 CRITICAL, 0 IMPORTANT, 2 MINOR (a cosmetic assertion-message
+  wording change with no functional effect or repo references; a docstring referencing a
+  non-existent `EXPECTED_UNSCHEMATIZED` attribute name). The reviewer independently
+  reproduced the pre-existing-failure classification via its own isolated worktree
+  (`git worktree add`/`remove`, never touching the primary checkout) and confirmed it.
+  The docstring MINOR was fixed (now correctly describes unschematized as implicit — any
+  registered key not in `EXPECTED_SCHEMA_ENABLED`); re-verified 64/64 in
+  `test_r4_settings_schema`.
+- **COMPLETE** 2026-09-08. Task 4 gate: 0 unresolved CRITICAL, 0 unresolved IMPORTANT.
+  Proceeding to Task 5.

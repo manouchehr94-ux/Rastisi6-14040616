@@ -449,10 +449,10 @@ class SchemaEnablementRegistryGuardTests(SimpleTestCase):
     (``NoOtherSectionBecomesSchemaEnabledTests`` above only ever checked
     ``image_slider``/``faq``). As Task 6 gives each of the remaining MIGRATE
     families its own R4 settings schema, this test fails immediately unless
-    that family's key is deliberately moved from ``EXPECTED_UNSCHEMATIZED``
-    into ``EXPECTED_SCHEMA_ENABLED`` in the SAME change — no family can
-    become schema-enabled (or silently regress to unschematized) without
-    this guard noticing."""
+    that family's key is deliberately added to ``EXPECTED_SCHEMA_ENABLED``
+    (unschematized is implicit: any registered key not in that set) in the
+    SAME change — no family can become schema-enabled (or silently regress
+    to unschematized) without this guard noticing."""
 
     # The 5 families with an R4 settings schema today (Phase 3's two
     # certified pilots — brand_carousel, collection_tiles — plus
