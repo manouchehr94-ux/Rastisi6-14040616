@@ -774,3 +774,21 @@ OK (1 pre-existing skip)**. `manage.py check`: 0 issues. `manage.py makemigratio
 `backup/rastisi6-phase4-start-20260908` = `969a9b411ca712928c2bf31416bdde2ee8aaabb5`
 (unchanged). No destructive git operation used. `git status` before commit contains only
 the intended C1 production/test/evidence files.
+
+### Independent review (commit `ffc695b`)
+
+Isolated-worktree review, checked out at the commit's parent, re-derived the whole-file
+home.css cascade grep independently, diffed every mirrored property against source,
+re-ran the test suite, and performed its own RED re-verification (reverting just the new
+CSS hunk and confirming the CSS-content test genuinely fails). **PASS — 0 CRITICAL, 0
+IMPORTANT, 1 MINOR** (informational: the new bare `.tiles-carousel` rule also matches the
+pre-existing Task 7 `.collection-tiles-carousel.tiles-carousel` compound-selector markup,
+since that markup carries both classes — harmless today only because the two rules'
+declaration bodies are byte-identical; flagged as latent fragility if either ever needs to
+diverge). Addressed with an explanatory comment on the Group C1 CSS block cross-
+referencing the Task 7 rule (no functional change; full regression sweep re-run clean
+after the comment-only edit) — no re-review required for a MINOR-only finding per the
+process mandate.
+
+## Group C1 — closed (0 unresolved CRITICAL / 0 unresolved IMPORTANT). Proceeding to
+Group C2 (`circular` mode).

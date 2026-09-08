@@ -4752,7 +4752,15 @@ a.sfb-v3-component-item,
    together. `luxury_shortcuts` was already mirrored (see above); the
    other 8 category_grid modes are separate Group C sub-fixes. Single
    generation in home.css — no cascade scattering to merge (verified via
-   exhaustive whole-file grep). */
+   exhaustive whole-file grep).
+
+   Review note: this bare `.tiles-carousel` rule also matches the Task 7
+   repair's `.collection-tiles-carousel.tiles-carousel` compound-selector
+   markup below (that element carries both classes) — harmless today
+   only because the two rules' declaration bodies are byte-for-byte
+   identical. If either `category_grid`'s or `collection_tiles`'s
+   carousel sizing ever needs to diverge, that compound rule (not this
+   one) is the one to change, and this coupling should be revisited. */
 .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
 .tile{position:relative;border-radius:20px;overflow:hidden;min-height:200px;padding:24px;color:#fff;display:flex;flex-direction:column;justify-content:flex-end;transition:.25s}
 .tile:hover{transform:translateY(-3px)}
