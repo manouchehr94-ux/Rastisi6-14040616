@@ -98,3 +98,14 @@ Chronological record of Phase-4 task starts/completions, commits, and backup ref
   environment knows background review agents and the primary session can collide on one shared
   working tree, and that RED-verification should use an isolated `git worktree` instead (the
   Task 3C reviewer was explicitly instructed to do this).
+- Reviewer verdict (3C, performed in an isolated `git worktree` per the incident note above): PASS,
+  0 CRITICAL, 0 IMPORTANT, 2 MINOR — (1) no `@transaction.atomic`/row-lock around
+  `apply_page_appearance_patch`'s check-then-save, matching the pre-existing sibling
+  `apply_appearance_patch`'s same shape, not a new weakness; (2) no merchant-facing UI/API endpoint
+  yet for this tier, already explicitly disclosed as an intentional, in-scope-boundary limitation in
+  `task3c_page_appearance.md`. Both informational, neither blocks the gate. Independently
+  re-verified the `_clone_version_content` fix is load-bearing (isolated-worktree RED reproduction
+  with only that fix removed) and the 5-key allowlist is genuinely enforced (live `manage.py shell`
+  reproduction, not just documentation).
+- **COMPLETE** 2026-09-08. Task 3 gate (3A/3B/3C/3D/3E all reviewed): 0 unresolved CRITICAL, 0
+  unresolved IMPORTANT. Proceeding to Task 4.
