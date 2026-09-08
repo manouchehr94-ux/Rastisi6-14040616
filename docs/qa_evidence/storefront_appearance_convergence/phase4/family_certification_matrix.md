@@ -21,7 +21,7 @@ ResourceSource · browser certification (Task 4 harness) · status.
 | `newest_products` | MIGRATE | already safe | no | no | no | NOT YET CERTIFIED |
 | `best_sellers` | MIGRATE | already safe | no | no | no | NOT YET CERTIFIED |
 | `discounted_products` | MIGRATE | already safe | no | no | no | NOT YET CERTIFIED |
-| `amazing_offers` | MIGRATE | pending (Task 5 Group A-adjacent) | no | no | no | NOT YET CERTIFIED |
+| `amazing_offers` | MIGRATE | pending (Task 5 Group A) | no | no | no | NOT YET CERTIFIED |
 | `brand_carousel` | CERTIFY-ONLY | pending (`beauty_tabs` cosmetic gap) | yes | yes | **yes (Phase-3, 45/45)** | CERTIFIED (Phase 3) — regression sentinel |
 | `collection_tiles` | CERTIFY-ONLY | already safe | yes | yes | **yes (Phase-3, 36/36)** | CERTIFIED (Phase 3) — regression sentinel |
 | `promo_cards` | MIGRATE | pending (Task 5 Group D) | no | no | no | NOT YET CERTIFIED |
