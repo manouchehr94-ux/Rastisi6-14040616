@@ -591,4 +591,186 @@ interactions found during verification are documented, not fixed — genuinely o
 task's scope (one is a merchant-theming layer already applied identically everywhere; the
 other is a specificity interaction in markup shared with Home, not a missing-CSS gap).
 
-## Group B — closed. Proceeding to Group C.
+Follow-up review found 1 CRITICAL in the new regression-guard test itself (the
+`atelier-duo` ordering check matched the first `@media(...)` string anywhere in the whole
+~4900-line file rather than Group B's own two blocks, so it would not have caught the
+regression it claims to guard against — the underlying CSS mirroring was independently
+re-derived and confirmed fully correct). Fixed by anchoring to the two Group-B-specific
+declaration strings directly; proven via a swap experiment (temporarily reordering the two
+declarations) that the fixed test genuinely fails, then passes again once restored. This
+same commit also corrected an IMPORTANT documentation-accuracy finding from the separate
+A3 `.special-discount` re-review (a wrong causal claim about "one new test" in this doc,
+now corrected). A final confirmation review of both fixes together returned PASS, 0
+CRITICAL / 0 IMPORTANT / 0 MINOR.
+
+## Group B — closed (all review chains closed: A1/A2 fix-up, A3 fix-up, Group B — each
+0 unresolved CRITICAL / 0 unresolved IMPORTANT). Proceeding to Group C.
+
+## Group C — `category_grid` (10 of 11 display modes; `luxury_shortcuts` already mirrored)
+
+### Investigation
+
+`category_grid` has 11 `display_mode` values (`section_registry.CATEGORY_GRID_DISPLAY_MODES`).
+`luxury_shortcuts` is already fully mirrored (`.category-luxury-*`, pre-existing). A
+dedicated exhaustive-whole-file-grep investigation (same methodology as Groups A/B) across
+all 10 remaining modes found:
+
+- **`grid` + `carousel`** share one CSS root (`.tile`/`.wm`/`.t1`/`.t2`/`.t3`/`h4`/scoped
+  `.btn` are byte-identical; only the container class differs, `.tiles` vs
+  `.tiles-carousel`) — single generation, no cascade scattering. One bounded fix.
+- **`circular`** — the most complex mode in this group: 4 separate cascade passes, mixed
+  680px/1000px breakpoints, one genuinely ambiguous browser-dependent interaction
+  (`.tile-circle`'s `width` vs `flex-basis` both apply simultaneously at ≤680px from two
+  different-breakpoint blocks) flagged for explicit real-browser verification rather than
+  guessed. Own bounded fix.
+- **`image_strip`** — 2 cascade passes across the file, plus one Home-only `:has()`
+  ancestor rule and one density variant, both correctly excludable. Own bounded fix.
+- **`fashion_flat`**, **`fashion_mosaic`** — despite adjacent naming and comment blocks,
+  confirmed via the source's own comments to be fully independent, single-generation,
+  no-conflict class families (860px and 1000px/680px breakpoints respectively). Two
+  independent bounded fixes.
+- **`beauty_icons`** — investigation surfaced a genuine pre-existing-overlap flag: its
+  `.beauty-section-title`/`h2` heading class is BYTE-IDENTICAL to one already mirrored in
+  storefront_builder.css from Task 5 Group A2 (product_section's campaign_band mode reuses
+  the exact same heading widget). Confirmed by direct comparison before writing anything —
+  `.beauty-section-title` itself is out of scope for this fix (already present); only
+  `.category-beauty-*` (the icon-strip-specific classes) are genuinely unmirrored. Own
+  bounded fix, explicitly scoped to avoid a duplicate/conflicting second definition of the
+  shared heading class.
+- **`chocolate_story` + `chocolate_badges`** — share exactly one class pair
+  (`.chocolate-section-title`/`h2`); all other classes independent (`-story-` infix
+  distinguishes them). Mirrored together in one bounded fix (shared heading rule written
+  once, per the investigation's explicit recommendation).
+- **`atelier_mosaic`** — single generation, one clean `:hover` state, 900px/680px
+  breakpoints. Own bounded fix.
+
+Each sub-fix below follows the required order: exhaustive derivation (this investigation)
+→ browser RED → bounded CSS change → permanent regression tests → browser GREEN at
+1440/768/390 → DB restore/hash proof → regression sweep → commit → independent
+isolated-worktree review → fix/re-review if needed → next sub-fix.
+
+### DB restore/hash-proof baseline — continuation note
+
+The scratchpad file-copy backup used for this session's RED/GREEN dev-DB fixture cycles
+(`db.sqlite3.bak5`, taken before Group C1's first fixture pass) did not survive the
+session-continuation boundary that occurred mid-Task-5 — the file was absent when this
+session resumed, so the byte-identical `cp`-restore-and-rehash protocol used for every
+prior group (A1, A2, A3, Group B) could not be repeated verbatim for Group C1's first
+fixture pass. What was done instead, in order:
+
+1. The exact rows that first fixture pass had created were identified precisely by ID
+   (3 `Category` rows; 2 `StorefrontSection`/`StorefrontCell`/`StorefrontContainer`
+   triples on Cart/Listing) and removed via the ORM.
+2. This also surfaced that `layout_service.publish()` had, as a side effect, lazily
+   auto-seeded a full first-ever `StorefrontLayoutVersion` + 6 `StorefrontPage` rows +
+   14 default `StorefrontSection` rows for the store (every prior group's fixture cycle
+   did the same, silently — it only became visible here because the usual whole-file
+   `cp` restore was unavailable to wipe it). This scaffolding was fully removed by
+   deleting the `StorefrontLayoutVersion` row, which correctly `CASCADE`s through the
+   pages/containers/cells/sections it owns (`Page.version` is `on_delete=CASCADE`).
+3. Row-level cleanliness was verified directly: `StorefrontLayoutVersion`, `StorefrontPage`,
+   `StorefrontSection`, `StorefrontContainer`, `StorefrontCell`, `Category`, and
+   `StoreDomain` all read `0` after cleanup — logically identical to the pre-Task-5 state.
+4. The file's SHA256 no longer matches the previously-recorded canonical baseline
+   (`d53a687b6701b61a12a1a7f57d9764b035f3e9cbcb6be65cef6940eda7592061`), confirmed to be
+   solely because SQLite `AUTOINCREMENT` sequence counters (`sqlite_sequence`) never
+   decrease after a `DELETE` — standard SQLite behavior, not a data-integrity issue; every
+   prior group's cycle advanced these same counters too, it just never surfaced because
+   the whole file was replaced by `cp` afterward.
+5. **Per explicit Product Owner instruction: the loss of the old byte-identical backup is
+   accepted — no important real data needs preserving in this local dev DB — but
+   row-level equivalence alone is not treated as the permanent restore proof going
+   forward.** A **new** byte-identical file-copy baseline was captured at that verified-clean
+   state (`db_backups/post_c1_cleanup_baseline.sqlite3`), and its SHA256 is recorded as the
+   new Task-5 continuation baseline:
+   **`9fe52ff5e97de6359c70c9bd3fdd3fd5344190a93252fb6f93bf41b2ee063c4d`**
+   — this does **not** equal, and is not claimed to equal, the historical
+   `d53a687b...` hash.
+6. Group C1's actual browser GREEN proof (below) was then run against a fresh fixture
+   pass created on top of that new baseline, exactly like every other group's cycle.
+7. Afterward, the DB was restored via `cp` from that exact new baseline file (not by
+   manual row deletion), and the restored file's SHA256 was verified equal to the
+   baseline's own SHA256 (`9fe52ff5...` == `9fe52ff5...`) — a true byte-identical
+   restore proof, matching the standard used by every prior group.
+8. **All subsequent Task 5 groups (`circular` onward) must restore to this new
+   `9fe52ff5...` baseline, not the old `d53a687b...` one.**
+
+### Browser RED
+
+With `apps/storefront_builder/static/css/storefront_builder.css` stashed back to its
+pre-fix state (`git stash push -- <that file>`), the new
+`CategoryGridTilesNonHomeCssTests.test_storefront_builder_css_carries_the_tiles_rules`
+failed exactly as expected, on its first assertion:
+`AssertionError: '.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}' not
+found in <css>`. The 3 markup-only tests in the same class (grid/carousel rendering,
+Home-unaffected) passed even with the CSS stashed, as expected — they assert HTML
+structure only, not layout. `git stash pop` restored the fix.
+
+### Fix
+
+`apps/storefront_builder/static/css/storefront_builder.css` — one new block (see the
+Group C1 comment in the file) mirroring `.tiles`/`.tile`/`.tile:hover`/`.tile .wm`/
+`.tile::after`/`.tile>*`/`.tile h4`/`.tile .btn`/`.t1`/`.t2`/`.t3`/`.tiles-carousel`/
+`.tiles-carousel .tile`, plus the `@media(max-width:1000px){.tiles{grid-template-
+columns:1fr}}` and `@media(max-width:680px){.tiles-carousel .tile{flex-basis:200px}}`
+breakpoints — verified via exhaustive whole-file grep of `home.css` to be a single,
+unscattered generation (no multi-pass cascade merge needed, unlike every prior group).
+
+A pre-existing, differently-scoped `collection_tiles` carousel mirror already in this
+file (`.collection-tiles-carousel.tiles-carousel{...}`) was confirmed non-colliding: its
+selector is a compound class specifically chosen (per that rule's own comment) to avoid
+matching the bare `.tiles-carousel` this fix defines.
+
+### Browser GREEN (1440 / 768 / 390)
+
+Fresh fixtures: 3 `Category` rows, a `category_grid` section with `display_mode: "grid"`
+and explicit `category_ids` on Cart, and one with `display_mode: "carousel"` on Listing
+(the template's `{% elif category_grid_settings.category_ids %}` branch — confirmed to
+emit byte-identical `.tiles`/`.tile`/`.wm`/`h4`/`.btn` markup to the auto-pick `{% else %}`
+fallback, so an explicit selection gives a deterministic fixture for either mode).
+
+| Viewport | Cart `.tiles` (grid) | Listing `.tiles-carousel .tile` (carousel) |
+|---|---|---|
+| 1440×900 | `display:grid`, 3 tracks × ~377px, `gap:16px`; `.tile` `borderRadius:20px`, `minHeight:200px` | `display:flex`, `overflowX:auto`; `flexBasis:240px`, `minHeight:180px` |
+| 768×900 | `gridTemplateColumns:"704px"` (single collapsed track — `@media(max-width:1000px)` rule) | `flexBasis:240px` (unchanged — above the 680px breakpoint) |
+| 390×844 | `gridTemplateColumns:"336px"` (single collapsed track) | `flexBasis:200px` (`@media(max-width:680px)` rule) |
+
+All 6 checks GREEN, zero console/page errors reported by Playwright at any viewport.
+
+### Cleanup
+
+Dev server stopped (`pkill -f "runserver 127.0.0.1:8765"`; verified via `ps aux` — no
+lingering process, per the documented Exit-144 hazard). DB restored via `cp` from the new
+`post_c1_cleanup_baseline.sqlite3` baseline and hash-verified equal, per the note above.
+
+### Permanent regression guard
+
+`CategoryGridTilesNonHomeCssTests` in
+`apps/storefront_builder/tests/test_phase4_task5_cross_page_css.py`: 2 markup-rendering
+tests (grid on Cart, carousel on Listing) + 1 Home-unaffected test + 1 full-declaration
+CSS-content test covering every selector this fix adds, including a bare-vs-compound
+`.tiles-carousel` disambiguation (asserting the newline-prefixed bare selector, since a
+plain substring match would also match the pre-existing compound
+`.collection-tiles-carousel.tiles-carousel` rule's identical declaration body).
+
+`BannerNonHomeCssTests` (Group B, already closed/reviewed) required one small, necessary
+adjustment: its `assertNotIn(".tiles{grid-template-columns", css)` leak-prevention check
+(originally guarding against Group B accidentally pulling in `.tiles`/`.orig` from the
+same home.css source block) is now a false positive now that `.tiles` is Group C1's own
+legitimate selector — the `.tiles` half of that check was removed with an explanatory
+comment; the still-valid `.orig` half was kept unchanged.
+
+### Verification
+
+Full sweep — `test_phase4_task5_cross_page_css` (20 tests, all pass, including the
+adjusted Group B test) plus `test_qa_harness_contract`, `test_r4_settings_schema`,
+`test_section_registry`, `test_render_service`, `test_r4_mutation_api` — **495 tests,
+OK (1 pre-existing skip)**. `manage.py check`: 0 issues. `manage.py makemigrations
+--check --dry-run`: no changes detected.
+
+### STOP conditions checked
+
+`main` = `973c1dc00bacb6f2f7d2604fa3880bb4d6250579` (unchanged). Start safety ref
+`backup/rastisi6-phase4-start-20260908` = `969a9b411ca712928c2bf31416bdde2ee8aaabb5`
+(unchanged). No destructive git operation used. `git status` before commit contains only
+the intended C1 production/test/evidence files.

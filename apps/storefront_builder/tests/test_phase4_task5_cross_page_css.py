@@ -540,7 +540,130 @@ class BannerNonHomeCssTests(TestCase):
         idx_320 = css.index(".promo-grid--atelier-duo .promo-card{min-height:320px}")
         idx_250 = css.index(".promo-grid--atelier-duo .promo-card{min-height:250px}")
         self.assertLess(idx_320, idx_250)
-        # No unrelated classes from the same home.css "responsive" block
-        # (.tiles/.orig — a different, unrelated section) pulled in.
-        self.assertNotIn(".tiles{grid-template-columns", css)
+        # No unrelated class from the same home.css "responsive" block
+        # (`.orig` — a different, unrelated section) pulled in. `.tiles`
+        # was the other neighbor in that same source block, but it is now
+        # a legitimate Group C1 selector (see CategoryGridTilesNonHomeCssTests
+        # below) — asserting its absence here would be a false positive,
+        # not a real leak check, so that half of the original check moved
+        # to Group C1's own test instead of staying here.
         self.assertNotIn(".orig{grid-template-columns", css)
+
+
+@override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
+class CategoryGridTilesNonHomeCssTests(TestCase):
+    """Group C1 — category_grid's plain "grid" and "carousel" display
+    modes: the template's shared final branches (an explicit merchant
+    ``category_ids`` selection, or — when that list is empty — an
+    auto-picked top-level category set) both render the identical
+    ``.tiles``/``.tiles-carousel``/``.tile``/``.wm``/``h4``/``.btn``
+    markup (verified by reading ``category_grid.html`` directly), so an
+    explicit selection is used here for a deterministic fixture rather
+    than depending on auto-pick ordering. Unlike every other Task 5
+    group so far, home.css defines this whole selector family in a
+    single, unscattered generation (base rule plus one
+    ``@media(max-width:1000px)`` collapse) — confirmed via an exhaustive
+    whole-file grep before writing this fix, so no multi-pass cascade
+    merge/ordering assertion is needed here."""
+
+    def setUp(self):
+        cache.clear()
+        self.store = _akhlaghi()
+        _verified_domain(self.store, HOST)
+        self.draft = svc.get_or_create_draft(self.store)
+        from apps.catalog.models import Category
+
+        self.cat_a = Category.objects.create(
+            store=self.store, name="دسته الف", slug="task5-c1-cat-a", is_active=True,
+        )
+        self.cat_b = Category.objects.create(
+            store=self.store, name="دسته ب", slug="task5-c1-cat-b", is_active=True,
+        )
+
+    def _place_and_publish(self, page_type: str, display_mode: str):
+        section = section_structure_service.add_section(
+            draft=self.draft, section_key="category_grid", page_type=page_type,
+        )
+        section.settings = {
+            **section.settings,
+            "display_mode": display_mode,
+            "category_ids": [self.cat_a.pk, self.cat_b.pk],
+        }
+        section.save(update_fields=["settings"])
+        svc.publish(self.store)
+        return section
+
+    def test_grid_mode_renders_on_cart(self):
+        self._place_and_publish(StorefrontPage.PageType.CART, "grid")
+        resp = self.client.get(reverse("cart:detail"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="tiles"', html)
+        self.assertIn('class="tile t1"', html)
+        self.assertIn('class="tile t2"', html)
+
+    def test_carousel_mode_renders_on_listing(self):
+        self._place_and_publish(StorefrontPage.PageType.LISTING, "carousel")
+        resp = self.client.get(reverse("catalog:product-list"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="tiles-carousel"', html)
+        self.assertIn('class="tile t1"', html)
+
+    def test_storefront_builder_css_carries_the_tiles_rules(self):
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(".tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}", css)
+        self.assertIn(
+            ".tile{position:relative;border-radius:20px;overflow:hidden;min-height:200px;"
+            "padding:24px;color:#fff;display:flex;flex-direction:column;"
+            "justify-content:flex-end;transition:.25s}",
+            css,
+        )
+        self.assertIn(".tile:hover{transform:translateY(-3px)}", css)
+        self.assertIn(".tile .wm{position:absolute;top:10px;left:14px;font-size:90px;opacity:.22}", css)
+        self.assertIn(
+            ".tile::after{content:'';position:absolute;inset:0;"
+            "background:linear-gradient(transparent 30%,rgba(0,0,0,.45))}",
+            css,
+        )
+        self.assertIn(".tile>*{position:relative;z-index:2}", css)
+        self.assertIn(".tile h4{font-size:16px;font-weight:800;margin-bottom:10px}", css)
+        self.assertIn(
+            ".tile .btn{width:fit-content;padding:8px 16px;font-size:12px;"
+            "background:rgba(255,255,255,.92);color:var(--ink)}",
+            css,
+        )
+        self.assertIn(".t1{background:linear-gradient(135deg,#0ea5a3,#13c2c2)}", css)
+        self.assertIn(".t2{background:linear-gradient(135deg,#334155,#475569)}", css)
+        self.assertIn(".t3{background:linear-gradient(135deg,#e0567f,#f06595)}", css)
+        self.assertIn(
+            ".tiles-carousel{display:flex;gap:16px;overflow-x:auto;scroll-snap-type:x mandatory;"
+            "padding-bottom:6px;-webkit-overflow-scrolling:touch}",
+            css,
+        )
+        self.assertIn(
+            ".tiles-carousel .tile{flex:0 0 240px;scroll-snap-align:start;min-height:180px}", css,
+        )
+        self.assertIn("@media(max-width:1000px){\n  .tiles{grid-template-columns:1fr}\n}", css)
+        self.assertIn("@media(max-width:680px){\n  .tiles-carousel .tile{flex-basis:200px}\n}", css)
+        # This must be the BARE `.tiles-carousel` rule, on its own line —
+        # not merely a substring match against the pre-existing
+        # `collection_tiles` carousel mirror elsewhere in this file,
+        # which deliberately uses the compound
+        # `.collection-tiles-carousel.tiles-carousel` selector (its
+        # declaration body happens to be textually identical, so a plain
+        # substring check would pass even if this rule were deleted).
+        self.assertIn(
+            "\n.tiles-carousel{display:flex;gap:16px;overflow-x:auto;scroll-snap-type:x mandatory;"
+            "padding-bottom:6px;-webkit-overflow-scrolling:touch}",
+            css,
+        )
+
+    def test_home_page_is_unaffected_since_it_never_loads_storefront_builder_css(self):
+        home_html = Path(settings.BASE_DIR, "apps", "catalog", "templates", "catalog", "home.html").read_text(
+            encoding="utf-8",
+        )
+        self.assertNotIn("storefront_builder.css", home_html)
+        svc.publish(self.store)
+        resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)

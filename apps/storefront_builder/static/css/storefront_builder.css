@@ -4743,6 +4743,36 @@ a.sfb-v3-component-item,
   .promo-grid--atelier-wide .promo-card{min-height:205px}
 }
 
+/* Phase 4 (Task 5, Group C1) — category_grid's "grid" and "carousel"
+   display modes (the template's own {% else %}/ternary fallback branch,
+   not a mode-specific class family like the other 9 modes) were
+   Home-only. Both modes share one CSS root — `.tile`/`.wm`/`.t1`/`.t2`/
+   `.t3`/`h4`/scoped `.btn` are identical; only the container class
+   (`.tiles` vs `.tiles-carousel`) differs — one root cause, mirrored
+   together. `luxury_shortcuts` was already mirrored (see above); the
+   other 8 category_grid modes are separate Group C sub-fixes. Single
+   generation in home.css — no cascade scattering to merge (verified via
+   exhaustive whole-file grep). */
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.tile{position:relative;border-radius:20px;overflow:hidden;min-height:200px;padding:24px;color:#fff;display:flex;flex-direction:column;justify-content:flex-end;transition:.25s}
+.tile:hover{transform:translateY(-3px)}
+.tile .wm{position:absolute;top:10px;left:14px;font-size:90px;opacity:.22}
+.tile::after{content:'';position:absolute;inset:0;background:linear-gradient(transparent 30%,rgba(0,0,0,.45))}
+.tile>*{position:relative;z-index:2}
+.tile h4{font-size:16px;font-weight:800;margin-bottom:10px}
+.tile .btn{width:fit-content;padding:8px 16px;font-size:12px;background:rgba(255,255,255,.92);color:var(--ink)}
+.t1{background:linear-gradient(135deg,#0ea5a3,#13c2c2)}
+.t2{background:linear-gradient(135deg,#334155,#475569)}
+.t3{background:linear-gradient(135deg,#e0567f,#f06595)}
+.tiles-carousel{display:flex;gap:16px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:6px;-webkit-overflow-scrolling:touch}
+.tiles-carousel .tile{flex:0 0 240px;scroll-snap-align:start;min-height:180px}
+@media(max-width:1000px){
+  .tiles{grid-template-columns:1fr}
+}
+@media(max-width:680px){
+  .tiles-carousel .tile{flex-basis:200px}
+}
+
 /* Generic luxury showcase hero / category shortcuts. */
 .hero-luxury{margin-top:20px}.hero-luxury-stage{position:relative;overflow:hidden;border:1px solid color-mix(in srgb,var(--theme-primary,#d4af37) 25%,var(--theme-border,#2a2515));border-radius:calc(var(--sfb-radius,18px) + 4px);background:linear-gradient(115deg,#090909 0%,#111 54%,#21180a 100%);box-shadow:0 24px 60px rgba(0,0,0,.28)}
 .hero-luxury-slide{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);min-height:470px;direction:rtl}.hero-luxury-copy{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:54px;position:relative;z-index:2;color:var(--theme-text,#f8f1cf)}
