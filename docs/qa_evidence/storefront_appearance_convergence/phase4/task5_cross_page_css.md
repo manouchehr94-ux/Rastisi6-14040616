@@ -398,7 +398,54 @@ Pure CSS-completeness fix. No new template, section registration, schema, or ren
 path. The desktop-only LTR-direction mirror is an existing, permanent Home design decision
 (not a new visual variant introduced by this task) — mirrored, not invented.
 
+## Second review round on the A1/A2 fix-up: 2 more CRITICAL findings, fixed
+
+The A1/A2 cascade fix-up commit (`58e1601`) was reviewed and returned **FAIL** again: 2
+CRITICAL findings. home.css has a THIRD, EARLIER `/* ===== responsive ===== */` section
+(home.css:225-243) that predates the "V3"/"V4.2.2" comment headers entirely — so a sweep
+that specifically chases those two named passes (as the first fix-up did) does not find it.
+This section sets, at breakpoints already otherwise mirrored:
+- `@media(max-width:1000px){ .hero-inner{text-align:center} .hero-text h1{margin-inline:auto} .hero-text p{margin-inline:auto} }`
+- `@media(max-width:680px){ .hero-inner{padding:28px 22px} }`
+
+Missing these meant hero_banner/image_slider would render un-centered (right-aligned RTL
+default) at 681-1000px, and with the hero slide filling the box edge-to-edge instead of
+inset at ≤680px — real, visible divergences from Home neither the original nor the first
+fix-up's browser-verification table happened to catch (position/height were checked, not
+text-align; padding wasn't spot-checked at exactly that breakpoint).
+
+**Response**: rather than trust another round of "chase the named comment headers," ran an
+exhaustive `grep -n` for every occurrence of every Group A selector (`hero-inner`,
+`hero-text`, `hero-cta`, `hero-tabs`, `hero-slide`, `hero-media`, `.hero{`, `hero-arrow`,
+`product-spotlight*`, `product-section--spotlight`, `product-campaign*`,
+`beauty-section-title`, and the full `special-*`/`amazing-offers-section` family) across
+the ENTIRE home.css file — not scoped to any comment-headed region — and manually
+classified every single result as: already mirrored, correctly out of scope (a different
+hero style variant, the `:has()` Home-only row-co-placement feature, or the dead/superseded
+"special offers" widget), or missing. Also confirmed `.hero-btns`/`.hero-visual`/
+`.hero-frame` (present in this same "responsive" section) are used directly in
+`catalog/templates/catalog/home.html` itself — a completely separate, hardcoded element,
+not part of `hero_slider_body.html` — genuinely out of scope, not a third missed layer.
+
+Fixed the 2 CRITICAL findings (added to the existing `@media` blocks in
+`storefront_builder.css`, no new blocks needed since the properties don't conflict with
+what's already there). Verified via real browser: `.hero-inner` `text-align` computes to
+`center` at 900×800 (681-1000px zone), and `padding` computes to `28px 22px` at 390×844
+(≤680px) — both exactly matching the fix. The exhaustive re-check of every other Group A
+selector (product_section, amazing_offers) found no further gaps — both remain complete.
+
+Added `test_storefront_builder_css_carries_the_pre_v3_responsive_hero_overrides` as a new
+permanent regression guard, RED-verified via `git stash` against the pre-fix CSS.
+
+### Verification
+
+- `test_phase4_task5_cross_page_css`: **12/12 pass**.
+- Regression sweep: **487 tests, 0 failures, 1 known skip**.
+- `python manage.py check`: clean. `makemigrations --check --dry-run`: no changes.
+- Real dev DB restored and SHA256-stable at `d53a687b...`.
+
 ## Group A — closed
 
 All three Group A sub-fixes (A1 hero_banner/image_slider, A2 product_section spotlight/
-campaign_band, A3 amazing_offers) are complete and reviewed. Proceeding to Group B.
+campaign_band, A3 amazing_offers) are complete, twice-reviewed on A1/A2 (both rounds'
+findings fixed), and once-reviewed on A3. Proceeding to Group B.

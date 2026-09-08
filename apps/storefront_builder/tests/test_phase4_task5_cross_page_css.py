@@ -144,6 +144,23 @@ class HeroSliderNonHomeCssCompletenessTests(TestCase):
         )
         self.assertIn('.hero-inner[data-text-position="center"] .hero-text{', css)
 
+    def test_storefront_builder_css_carries_the_pre_v3_responsive_hero_overrides(self):
+        # A third, EARLIER "===== responsive =====" section in home.css
+        # (before the V3/V4.2.2 comment headers, so a v3/v4.2.2-only sweep
+        # doesn't find it) sets .hero-inner text-align/padding and
+        # .hero-text h1/p margin-inline at the SAME two breakpoints already
+        # mirrored above. A review-caught CRITICAL gap: missing this made
+        # hero_banner/image_slider render un-centered at 681-1000px and
+        # un-inset at <=680px, a real visible divergence from Home.
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(".hero-inner{aspect-ratio:16/7;text-align:center}", css)
+        self.assertIn(".hero-text h1{margin-inline:auto}", css)
+        self.assertIn(".hero-text p{margin-inline:auto}", css)
+        self.assertIn(
+            ".hero-inner{aspect-ratio:auto;min-height:300px;border-radius:5px;padding:28px 22px}",
+            css,
+        )
+
     def test_home_page_is_unaffected_since_it_never_loads_storefront_builder_css(self):
         home_html = Path(settings.BASE_DIR, "apps", "catalog", "templates", "catalog", "home.html").read_text(
             encoding="utf-8",

@@ -4429,14 +4429,16 @@ a.sfb-v3-component-item,
 .hero-inner[data-text-position="center"] .hero-text{inset-inline-start:50%;inset-inline-end:auto;transform:translateX(-50%);width:min(560px,70%);max-width:70%;text-align:center}
 .hero-inner[data-text-position="center"] .hero-cta{margin-inline:auto}
 @media(max-width:1000px){
-  .hero-inner{aspect-ratio:16/7}
+  .hero-inner{aspect-ratio:16/7;text-align:center}
+  .hero-text h1{margin-inline:auto}
+  .hero-text p{margin-inline:auto}
   .hero-text{max-width:55%;bottom:36px}
   .hero-inner[data-text-position="start"] .hero-text,
   .hero-inner[data-text-position="end"] .hero-text{inset-inline:18px}
   .hero-inner[data-text-position="center"] .hero-text{width:76%;max-width:76%}
 }
 @media(max-width:680px){
-  .hero-inner{aspect-ratio:auto;min-height:300px;border-radius:5px}
+  .hero-inner{aspect-ratio:auto;min-height:300px;border-radius:5px;padding:28px 22px}
   .hero-media img{object-fit:cover}
   .hero-text{inset-inline:12px;bottom:38px;max-width:none;text-align:right;padding:8px}
   .hero-text h1{font-size:17px}
