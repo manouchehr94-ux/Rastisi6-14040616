@@ -424,6 +424,40 @@ def apply_preset(
         update_fields.append("footer_config")
     draft.save(update_fields=update_fields)
 
+    # Phase 4 (Task 1, authority convergence) — a non-Ready structural preset's
+    # explicit header_variant/footer_variant overlay must update the typed
+    # Store Appearance manifest through the canonical authority primitives,
+    # not just the legacy header_config/footer_config mirror written above.
+    # The manifest — not header_config/footer_config directly — is the actual
+    # render authority (storefront_context_service derives
+    # header_variant_template/footer_variant_template from
+    # resolve_store_appearance_render_state), so leaving it unsynced meant a
+    # merchant's explicit non-Ready preset choice was silently ignored by the
+    # rendered storefront. Ready Templates are exempt here: their COMPLETE
+    # declared manifest is applied authoritatively below, which already
+    # supersedes any per-field sync and must remain the single write for that
+    # case (routing both through the same two authority calls would just be
+    # redundant, not wrong, but this keeps each preset kind's write path to
+    # exactly one canonical call).
+    if not preset.store_appearance:
+        if preset.header is not None and "header_variant" in preset.header:
+            appearance_authority_service.apply_header_variant(
+                version=draft, header_variant=cleaned_header["header_variant"],
+            )
+        footer_variant = None
+        mobile_nav_variant = None
+        if preset.footer is not None:
+            if "footer_variant" in preset.footer:
+                footer_variant = cleaned_footer["footer_variant"]
+            if "mobile_nav_variant" in preset.footer:
+                mobile_nav_variant = cleaned_footer["mobile_nav_variant"]
+        if footer_variant is not None or mobile_nav_variant is not None:
+            appearance_authority_service.apply_footer_variant(
+                version=draft,
+                footer_variant=footer_variant,
+                mobile_nav_variant=mobile_nav_variant,
+            )
+
     # Phase 1 (Task 5, A02 closure) — persist the Ready Template's COMPLETE
     # declared typed Store Appearance manifest through the canonical authority
     # service. This runs inside apply_preset's own @transaction.atomic

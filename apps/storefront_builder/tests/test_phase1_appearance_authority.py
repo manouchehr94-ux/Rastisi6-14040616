@@ -959,3 +959,129 @@ class ExplicitLocalVariantMarkerTests(Phase1AppearanceAuthorityBase):
             "overlay",
             "explicit local variant must win over inherited Store default at render",
         )
+
+
+# =====================================================================
+# PHASE 4 TASK 1 — NON-READY PRESET / MANIFEST AUTHORITY CONVERGENCE
+# =====================================================================
+class NonReadyPresetHeaderFooterAuthorityTests(Phase1AppearanceAuthorityBase):
+    """Phase 4, Task 1. ``preset_service.apply_preset`` writes a non-Ready
+    structural preset's ``header_variant``/``footer_variant`` overlay directly
+    to ``header_config``/``footer_config`` (the legacy compatibility mirror)
+    without routing through ``appearance_authority_service.apply_header_variant``/
+    ``apply_footer_variant`` — so the typed Store Appearance manifest (the
+    actual render authority; see ``storefront_context_service`` deriving
+    ``header_variant_template``/``footer_variant_template`` from
+    ``resolve_store_appearance_render_state``, never from the raw
+    ``header_config`` field) is never updated. A merchant who explicitly
+    applies a non-Ready preset with a different header/footer sees the legacy
+    mirror change but the *rendered* header/footer silently stay on whatever
+    a prior Ready Template declared — a real, currently-live, user-visible
+    bug, not merely an architectural nicety.
+    """
+
+    def test_non_ready_preset_header_variant_updates_manifest_not_just_mirror(self):
+        ready = get_layout_preset("dense_marketplace")
+        non_ready = get_layout_preset("clean_minimal")
+        self.assertTrue(ready.is_ready_template)
+        self.assertFalse(non_ready.is_ready_template)
+        self.assertEqual(non_ready.header.get("header_variant"), "legacy_default")
+
+        preset_service.apply_preset(self.draft, ready)
+        self.draft.refresh_from_db()
+        seeded_header_selection = self._effective_selections()["header"]
+        self.assertNotEqual(seeded_header_selection, "header.legacy_default.v1")
+
+        preset_service.apply_preset(self.draft, non_ready)
+        self.draft.refresh_from_db()
+
+        # The legacy mirror DOES change (this part already works today).
+        self.assertEqual(self.draft.header_config.get("header_variant"), "legacy_default")
+
+        # EXPECTED (desired) behavior: the manifest — the actual render
+        # authority — must follow the merchant's explicit non-Ready preset
+        # choice, not silently keep serving the previous Ready Template's
+        # header.
+        self.assertEqual(
+            self._effective_selections()["header"],
+            "header.legacy_default.v1",
+            "applying a non-Ready preset's header_variant overlay must update "
+            "the typed manifest (the real render authority), not just the "
+            "legacy header_config mirror — otherwise the merchant's choice is "
+            "silently ignored by the actual rendered storefront",
+        )
+
+    def test_non_ready_preset_footer_variant_updates_manifest_not_just_mirror(self):
+        ready = get_layout_preset("dense_marketplace")
+        non_ready = get_layout_preset("clean_minimal")
+        self.assertEqual(non_ready.footer.get("footer_variant"), "legacy_default")
+
+        preset_service.apply_preset(self.draft, ready)
+        self.draft.refresh_from_db()
+        preset_service.apply_preset(self.draft, non_ready)
+        self.draft.refresh_from_db()
+
+        self.assertEqual(self.draft.footer_config.get("footer_variant"), "legacy_default")
+        self.assertEqual(
+            self._effective_selections()["footer"],
+            "footer.legacy_default.v1",
+            "applying a non-Ready preset's footer_variant overlay must update "
+            "the typed manifest, not just the legacy footer_config mirror",
+        )
+
+    def test_non_ready_preset_without_variant_overlay_preserves_manifest(self):
+        # v5_golden_homepage carries header/footer TOGGLE overlays only (no
+        # header_variant/footer_variant key) — applying it must not disturb
+        # an unrelated, already-declared manifest header/footer selection.
+        ready = get_layout_preset("dense_marketplace")
+        toggle_only = get_layout_preset("v5_golden_homepage")
+        self.assertNotIn("header_variant", toggle_only.header)
+        self.assertNotIn("footer_variant", toggle_only.footer)
+
+        preset_service.apply_preset(self.draft, ready)
+        self.draft.refresh_from_db()
+        before = self._effective_selections()
+
+        preset_service.apply_preset(self.draft, toggle_only)
+        self.draft.refresh_from_db()
+        after = self._effective_selections()
+
+        self.assertEqual(before["header"], after["header"])
+        self.assertEqual(before["footer"], after["footer"])
+
+    def test_non_ready_preset_apply_does_not_erase_store_appearance_key(self):
+        # Characterization (already GREEN today via
+        # ``validate_appearance_config``'s explicit opaque-key preservation) —
+        # protected here as an explicit regression guard for Task 1's fix,
+        # which must not accidentally regress this while fixing the
+        # header/footer mirror-vs-manifest divergence above.
+        ready = get_layout_preset("dense_marketplace")
+        non_ready = get_layout_preset("clean_minimal")
+        preset_service.apply_preset(self.draft, ready)
+        self.draft.refresh_from_db()
+        self.assertIn(STORE_APPEARANCE_CONFIG_KEY, self.draft.appearance_config)
+
+        preset_service.apply_preset(self.draft, non_ready)
+        self.draft.refresh_from_db()
+        self.assertIn(STORE_APPEARANCE_CONFIG_KEY, self.draft.appearance_config)
+
+
+class ResetAppearanceSettingToBaselineAuthorityTests(Phase1AppearanceAuthorityBase):
+    """Phase 4, Task 1 — RED property 3: unrelated appearance state
+    (the typed manifest) must survive a managed-field-only write, including
+    ``preset_service.reset_appearance_setting_to_baseline`` (which the audit
+    flagged as writing ``appearance_config`` directly, bypassing the
+    authority service's ``_merge_appearance_config`` opaque-key preservation
+    path)."""
+
+    def test_reset_appearance_setting_to_baseline_preserves_manifest(self):
+        ready = get_layout_preset("dense_marketplace")
+        preset_service.apply_preset(self.draft, ready)
+        self.draft.refresh_from_db()
+        before = self._effective_selections()
+
+        preset_service.reset_appearance_setting_to_baseline(self.draft, "font")
+        self.draft.refresh_from_db()
+
+        self.assertIn(STORE_APPEARANCE_CONFIG_KEY, self.draft.appearance_config)
+        self.assertEqual(self._effective_selections(), before)
