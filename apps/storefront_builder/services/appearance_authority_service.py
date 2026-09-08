@@ -254,3 +254,43 @@ def apply_ready_template_appearance(
         persist_store_appearance_manifest(version, preset.store_appearance)
 
     return version
+
+
+class PageAppearanceNotDraftError(ValueError):
+    """Phase 4 (Task 3C) — a Page Appearance patch was attempted against a
+    page whose version is not the active Draft. Tenant-safety/lifecycle
+    boundary, not a validation error — never silently applied to a
+    Published (immutable, historical) or Archived version."""
+
+
+def apply_page_appearance_patch(*, page, patch: Mapping[str, Any]):
+    """Phase 4 (Task 3C) — the ONE canonical write primitive for the Page
+    Appearance tier. Draft-only (mirrors every other mutation boundary in
+    this domain — Published/Archived versions are immutable history);
+    sparse-merge (only the keys present in ``patch`` change; every other
+    key already stored on ``page.page_appearance_overrides`` survives
+    untouched — the same principle ``_merge_appearance_config`` applies for
+    Store Global, simpler here since this JSON field only ever holds the
+    bounded ``PAGE_APPEARANCE_KEYS`` set, so there is no opaque-key
+    preservation concern)."""
+    if page.version.status != page.version.__class__.Status.DRAFT:
+        raise PageAppearanceNotDraftError(
+            "بازنویسیِ ظاهرِ صفحه فقط رویِ Draftِ فعال مجاز است"
+        )
+    validated_patch = layout_service.validate_page_appearance_overrides(dict(patch))
+    merged = dict(page.page_appearance_overrides or {})
+    merged.update(validated_patch)
+    page.page_appearance_overrides = merged
+    page.save(update_fields=["page_appearance_overrides", "updated_at"])
+    return page
+
+
+def effective_page_appearance_config(*, store_appearance_config: Mapping[str, Any], page) -> dict:
+    """Phase 4 (Task 3C) — the canonical resolver: Store Global's already-
+    fully-defaulted appearance config, with this Page's sparse override (if
+    any) applied on top for exactly the bounded ``PAGE_APPEARANCE_KEYS``
+    set. This is the ONE function Preview and Public both must call — never
+    a second, independently-derived resolution of the same precedence."""
+    resolved = dict(store_appearance_config)
+    resolved.update(dict(page.page_appearance_overrides or {}))
+    return resolved

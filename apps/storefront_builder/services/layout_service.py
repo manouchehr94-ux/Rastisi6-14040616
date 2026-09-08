@@ -492,6 +492,38 @@ def validate_appearance_config(config: dict) -> dict:
     # فروشگاه‌هایِ قدیمی‌تر ممکن است غیرِ «modern» باشد) به‌عنوانِ fallback
     # می‌خواند — یعنی صفر تغییرِ بصری برایِ فروشگاه‌هایی که این پنلِ جدید
     # را هرگز لمس نکرده‌اند.
+    #
+    # Phase 4 (Task 3C) — this exact sparse-by-design shape (absence means
+    # "inherit", never a fabricated default) is why these 5 fields, and only
+    # these 5, were chosen as the Page Appearance tier's allowed key set
+    # (see PAGE_APPEARANCE_KEYS / validate_page_appearance_overrides below):
+    # they are already architecturally distinct from the core brand-identity
+    # tokens (colors/font/button_style/motion/type_scale) that
+    # apps.core.context_processors._global_identity_version's own docstring
+    # explicitly requires stay Store-global/never page-varying (a customer
+    # must see the same brand on product-detail as on Home) — extracted into
+    # a standalone helper so the page-scoped validator below reuses the
+    # exact same per-field choice-set checks, never a second copy.
+    _apply_structural_page_fields(config, cleaned)
+
+    return cleaned
+
+
+#: Phase 4 (Task 3C) — the Page Appearance tier's bounded, typed, sparse
+#: override key set. Deliberately exactly these 5 pre-existing "structural,
+#: non-identity" fields (see the comment above) — never colors/font/
+#: button_style/motion/type_scale/palette_slug/template_slug, which must
+#: stay Store-global per the explicit architecture decision in
+#: apps.core.context_processors._global_identity_version.
+PAGE_APPEARANCE_KEYS = frozenset({"content_width", "grid_density", "card_shadow", "card_hover", "hero_style"})
+
+
+def _apply_structural_page_fields(config: dict, cleaned: dict) -> None:
+    """Mutates ``cleaned`` in place with any of the 5 ``PAGE_APPEARANCE_KEYS``
+    present (non-empty) in ``config`` — shared by ``validate_appearance_config``
+    (Store-global, full-defaulted) and ``validate_page_appearance_overrides``
+    (Page-scoped, sparse) so the exact same choice-set validation is never
+    duplicated between the two tiers."""
     content_width = config.get("content_width")
     if content_width:
         try:
@@ -530,6 +562,21 @@ def validate_appearance_config(config: dict) -> dict:
             raise AppearanceConfigValidationError("سبکِ هیرویِ انتخاب‌شده نامعتبر است")
         cleaned["hero_style"] = hero_style
 
+
+def validate_page_appearance_overrides(raw: dict) -> dict:
+    """Phase 4 (Task 3C) — the Page Appearance tier's own validator: a
+    BOUNDED, TYPED, SPARSE override (never a fully-defaulted dict like
+    ``validate_appearance_config`` produces) — only keys genuinely present
+    in ``raw`` are validated and kept; everything else is absent, meaning
+    "inherit from Store Global" (never a fabricated value). Unknown keys are
+    silently dropped (the same "unknown key ignored" convention every other
+    appearance validator in this module already uses)."""
+    if not isinstance(raw, dict):
+        raise AppearanceConfigValidationError("پیکربندیِ ظاهرِ صفحه باید یک شیء باشد")
+    cleaned: dict = {}
+    _apply_structural_page_fields(
+        {key: value for key, value in raw.items() if key in PAGE_APPEARANCE_KEYS}, cleaned,
+    )
     return cleaned
 
 
@@ -680,6 +727,16 @@ def _clone_version_content(source: StorefrontLayoutVersion | None, target: Store
             # هر شش صفحه را می‌سازد — اما به‌جایِ کرش، defensive skip
             # (همان الگویِ section_key ناشناخته در render_service).
             continue
+
+        # Phase 4 (Task 3C) — the Page Appearance tier must survive exactly
+        # like header/footer/appearance_config above: a Draft spun off a
+        # Published version (the normal post-publish "resume editing" flow)
+        # must start from that version's actual effective state, not
+        # silently drop a merchant's page-level override the moment they
+        # publish and reopen the editor.
+        if target_page.page_appearance_overrides != source_page.page_appearance_overrides:
+            target_page.page_appearance_overrides = dict(source_page.page_appearance_overrides or {})
+            target_page.save(update_fields=["page_appearance_overrides"])
 
         source_sections = list(source_page.sections.order_by("order", "id"))
         cloned_sections = [

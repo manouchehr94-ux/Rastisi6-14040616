@@ -544,6 +544,19 @@ class StorefrontPage(TimeStampedModel):
         on_delete=models.CASCADE, related_name="pages",
     )
     page_type = models.CharField("نوع صفحه", max_length=20, choices=PageType.choices)
+    #: Phase 4 (Task 3C) — the Page Appearance tier: a bounded, typed,
+    #: sparse override (see ``layout_service.PAGE_APPEARANCE_KEYS``/
+    #: ``validate_page_appearance_overrides``) sitting between Store Global
+    #: (``StorefrontLayoutVersion.appearance_config``) and Section/Component
+    #: overrides in the resolution precedence. Lives on ``StorefrontPage``
+    #: (not a new model) because a page is already the correctly-scoped,
+    #: versioned, typed-slot unit this tier needs — no new lifecycle, no
+    #: new Draft/Publish cycle: publishing the version publishes every
+    #: page's override atomically, exactly like every other field here.
+    #: Absence of a key means "inherit from Store Global", never a
+    #: fabricated default — an empty dict is the correct, safe value for
+    #: every page that has never used this tier.
+    page_appearance_overrides = models.JSONField("بازنویسیِ ظاهرِ صفحه", default=dict, blank=True)
 
     class Meta:
         verbose_name = "صفحه چیدمان فروشگاه"

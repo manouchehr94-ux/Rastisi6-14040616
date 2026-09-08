@@ -270,6 +270,12 @@ def storefront_preview(request):
         )
     else:
         request.storefront_appearance_version = draft
+    # Phase 4 (Task 3C) — the same pattern as ``storefront_appearance_version``
+    # just above: Preview independently sets this request attribute (it does
+    # not call ``build_universal_storefront_context``, which is the public-only
+    # entry point), so ``apps.core.context_processors._versioned_appearance``
+    # resolves the Page Appearance tier identically here.
+    request.storefront_appearance_page = page
     header_config = draft.effective_header_config()
     footer_config = draft.effective_footer_config()
     header_variant_template = store_appearance_global_renderer_template(

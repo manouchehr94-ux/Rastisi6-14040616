@@ -125,6 +125,12 @@ def build_universal_storefront_context(request, store, page_type: str, page_cont
     # قدیمی است که این attribute را ست می‌کند؛ اکنون برایِ هر شش نوعِ
     # صفحه یکسان است، نه فقط صفحه‌ی اصلی.
     request.storefront_appearance_version = version
+    # Phase 4 (Task 3C) — the SAME pattern, for the current StorefrontPage,
+    # so apps.core.context_processors._versioned_appearance can resolve the
+    # Page Appearance tier (Store Global merged with this page's own sparse
+    # override) identically for Preview and Public — both routes reach this
+    # exact function, so both set this attribute exactly the same way.
+    request.storefront_appearance_page = page
 
     store_appearance = render_service.resolve_store_appearance_render_state(version)
     items = render_service.build_page_render_items(

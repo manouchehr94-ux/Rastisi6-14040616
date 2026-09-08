@@ -24,8 +24,23 @@ def _versioned_appearance(request):
         return None
 
     from apps.storefront_builder import appearance_registry
+    from apps.storefront_builder.services.appearance_authority_service import (
+        effective_page_appearance_config,
+    )
 
     config = version.effective_appearance_config()
+    # Phase 4 (Task 3C) — the Page Appearance tier: merges this page's own
+    # sparse structural override (content_width/grid_density/card_shadow/
+    # card_hover/hero_style — see layout_service.PAGE_APPEARANCE_KEYS) on
+    # top of the Store-global config resolved above. ``storefront_appearance_page``
+    # is set by the exact same call (``build_universal_storefront_context``)
+    # that sets ``storefront_appearance_version`` just above, so Preview and
+    # Public always resolve this identically. Absent (non-Builder-aware
+    # request) simply skips the merge — zero behavior change for any page
+    # that never reaches the Builder-aware code path.
+    page = getattr(request, "storefront_appearance_page", None)
+    if page is not None:
+        config = effective_page_appearance_config(store_appearance_config=config, page=page)
     template = appearance_registry.get_template(config["template_slug"]) or appearance_registry.get_template("modern")
     return {"template": template, "config": config}
 
