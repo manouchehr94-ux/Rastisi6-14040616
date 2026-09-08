@@ -60,3 +60,41 @@ Chronological record of Phase-4 task starts/completions, commits, and backup ref
   the test now exercises both call sites under the same patch and asserts `call_count == 2`.
 - **COMPLETE** 2026-09-08. Task 2 gate: 0 unresolved CRITICAL, 0 unresolved IMPORTANT. Proceeding
   to Task 3.
+
+## Task 3 — Page Appearance + R4 non-Home + live entry (3A/3B/3D/3E, then 3C)
+
+- **START** 2026-09-08. Executed 3A (real R4 dashboard entry point, gated on the existing
+  `r4_editor_enabled` per-store flag — deliberately not flipped globally since R4 lacks Task 7's
+  composition/media parity yet), 3B (generalized `section_structure_service`/`r4_views`/`r4_editor.js`
+  from Home-only to all 6 page types via one shared `StorefrontPage.resolve_page_type`), 3D (audited
+  and confirmed-by-construction the Collection Index/Detail boundary per Ruling L, added the
+  explicit documentation and end-to-end leak-proof test the ruling requires), and 3E (fixed the
+  Listing/Search HTMX fragment context-propagation gap — both paths now call the same canonical
+  context builder). Zero regression across 398 targeted tests and Phase-3 baseline Run A/B/C.
+  Committed as a checkpoint (`baab587`), pushed, sent to a fresh independent reviewer.
+- Reviewer verdict (3A/3B/3D/3E): PASS, 0 CRITICAL, 0 IMPORTANT, 1 MINOR (an operational incident
+  during the review itself — see below — not a code defect).
+- Implemented 3C (the Page Appearance tier, Ruling F) as a separate commit per the Master Prompt's
+  explicit allowance: investigated for an existing canonical JSON surface (none — `StorefrontPage`
+  had no field of its own), added a minimal forward migration
+  (`0019_page_appearance_overrides.py`), chose the bounded 5-key allowlist from evidence (the
+  pre-existing sparse-by-design structural fields, architecturally distinct from the core-identity
+  tokens `_global_identity_version` requires stay Store-global), built the canonical write primitive
+  and resolver, and wired them into the exact rendering path Preview and Public already share.
+  Found and fixed a real latent bug during end-to-end testing: `_clone_version_content` never
+  copied `page_appearance_overrides` when a Draft is spun off a Published version, so a published
+  override would silently vanish on the next edit session — caught by this task's own
+  Preview-vs-Public-after-publish test. Zero regression across 395 targeted tests. Committed
+  (`5713b4b`), pushed, sent to a fresh independent reviewer.
+- **Operational incident** (documented candidly in `phase4/task3c_page_appearance.md`'s closing
+  note): while Task 3C was still in progress (uncommitted), a background reviewer working on the
+  already-committed 3A/3B/3D/3E chunk performed a `git checkout <parent-commit> -- <file>` RED-
+  verification step on the SAME shared working tree, which briefly reverted two of Task 3C's
+  in-progress edits (`models.py`'s new field, `views.py`'s `storefront_preview` change) before
+  restoring the tree to the last commit. Both edits were detected missing (via `git status`/grep)
+  and re-applied; the real dev database's one corrupted scratch row (created during diagnosis) was
+  cleaned up; the full test suite and `makemigrations --check` were re-verified clean before
+  committing. No lasting damage to committed history. Noted here so a future session in this same
+  environment knows background review agents and the primary session can collide on one shared
+  working tree, and that RED-verification should use an isolated `git worktree` instead (the
+  Task 3C reviewer was explicitly instructed to do this).
