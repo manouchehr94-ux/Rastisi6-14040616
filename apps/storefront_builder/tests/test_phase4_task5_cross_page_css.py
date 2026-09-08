@@ -117,3 +117,85 @@ class HeroSliderNonHomeCssCompletenessTests(TestCase):
         svc.publish(self.store)
         resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
         self.assertEqual(resp.status_code, 200)
+
+
+@override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
+class ProductSectionSpotlightAndCampaignBandNonHomeCssTests(TestCase):
+    """Group A2 — product_section's "spotlight" (carousel + autoplay) and
+    "campaign_band" display modes. Investigated and REFUTED the plan's
+    hypothesis that this shares a CSS root with amazing_offers (disjoint
+    class families, verified zero selector overlap) — fixed here as its
+    own independent gap; amazing_offers is Group A3.
+
+    ``render_service.hide_empty_public_sections`` deliberately hides
+    ``product_section`` on Public when it resolves zero products (a
+    pre-existing, unrelated rule) — so, unlike the hero fixture, this
+    needs at least one real Product for the section to render at all."""
+
+    def setUp(self):
+        cache.clear()
+        self.store = _akhlaghi()
+        _verified_domain(self.store, HOST)
+        self.draft = svc.get_or_create_draft(self.store)
+        from apps.catalog.models import Product, Vendor
+
+        vendor = Vendor.objects.create(store=self.store, slug="task5-vendor", name="فروشنده تست")
+        Product.objects.create(
+            store=self.store, vendor=vendor, name="کالای تست", slug="task5-product",
+            sku="T5-P", price="100000", status="active",
+        )
+
+    def _place_and_publish(self, page_type: str, settings_patch: dict):
+        section = section_structure_service.add_section(
+            draft=self.draft, section_key="product_section", page_type=page_type,
+        )
+        section.settings = {**section.settings, **settings_patch}
+        section.save(update_fields=["settings"])
+        svc.publish(self.store)
+        return section
+
+    def test_spotlight_mode_renders_on_cart(self):
+        self._place_and_publish(
+            StorefrontPage.PageType.CART,
+            {"display_mode": "carousel", "carousel_autoplay": True},
+        )
+        resp = self.client.get(reverse("cart:detail"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('product-section--spotlight', html)
+        self.assertIn('class="product-spotlight-track"', html)
+
+    def test_campaign_band_mode_renders_on_listing(self):
+        self._place_and_publish(
+            StorefrontPage.PageType.LISTING, {"display_mode": "campaign_band"},
+        )
+        resp = self.client.get(reverse("catalog:product-list"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('product-section--campaign-band', html)
+        self.assertIn('class="product-campaign-band"', html)
+
+    def test_storefront_builder_css_carries_the_spotlight_and_campaign_band_rules(self):
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        # The base rule AND the later overriding rule for the same selector
+        # (home.css layers two `.product-section--spotlight` rules — border/
+        # background only exist in the second one) — both required.
+        self.assertIn(".product-section--spotlight{height:100%;display:flex;flex-direction:column}", css)
+        self.assertIn(
+            ".product-section--spotlight{height:100%;margin:0;border:1px solid #e1e4e8;"
+            "border-top:2px solid var(--brand-accent,#f43f5e);border-radius:6px;"
+            "background:#fff;overflow:hidden;display:flex;flex-direction:column}",
+            css,
+        )
+        self.assertIn(
+            ".product-spotlight-track{position:relative;display:grid;"
+            "grid-template-columns:minmax(0,1fr);flex:1;min-height:0;background:#fff}",
+            css,
+        )
+        self.assertIn(
+            ".product-campaign-band{display:grid;"
+            "grid-template-columns:minmax(168px,2.05fr) minmax(0,9.95fr);"
+            "gap:12px;align-items:stretch;min-width:0}",
+            css,
+        )
+        self.assertIn('.beauty-section-title{display:grid;grid-template-columns:1fr auto 1fr', css)
