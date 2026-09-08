@@ -185,17 +185,29 @@ class SharedOwnershipUnificationTests(TestCase):
         from apps.storefront_builder import views
         from apps.storefront_builder.services import r4_mutation_service
 
+        dummy_store = object()
         with mock.patch.object(
             section_data_service, "validate_resource_source_ownership",
-        ) as shared:
+        ) as shared, mock.patch.object(views, "_resolve_store", return_value=dummy_store):
             # Both call sites reference the module-level function looked up
             # at call time via ``section_data_service.validate_resource_source_ownership``
             # (not a rebound local import), so patching the shared module
             # attribute affects both — proving there is no second,
             # independently-invocable copy of the ownership logic anywhere.
+            # Exercise BOTH call sites under the same patch, not just R4's —
+            # a prior version of this test only checked R4 and left an
+            # unused ``views`` import, which would have let a reintroduced
+            # local legacy copy (with identical output) slip past silently.
             source = resource_source.ResourceSource(kind="brand", mode="auto", auto_rule="all_active")
-            r4_mutation_service._validate_resource_source_ownership(store=object(), source=source)
-            shared.assert_called_once()
+            r4_mutation_service._validate_resource_source_ownership(store=dummy_store, source=source)
+
+            views._validate_universal_selection_ownership(
+                request=object(), section_key="brand_carousel", cleaned={"brand_ids": []},
+            )
+
+            self.assertEqual(shared.call_count, 2)
+            for call in shared.call_args_list:
+                self.assertEqual(call.kwargs["store"], dummy_store)
 
     def test_category_kind_is_no_longer_a_silent_noop(self):
         # Before this task, R4's local ownership check silently no-opped for

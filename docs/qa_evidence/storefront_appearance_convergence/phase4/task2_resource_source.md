@@ -92,6 +92,29 @@ introduced — the fix reuses each kind's exact existing Store-scoped query patt
 (`searchable_products(store)` for product, plain `filter(store=store, pk__in=...)` for the other
 three), matching Ruling M's "no generic abstraction" constraint.
 
+## Independent review
+
+A fresh reviewer verified the RED reproduction (checked out the pre-fix source files, confirmed
+the exact two tests fail as claimed, restored and confirmed a clean working tree), the SECURITY
+STOP investigation's safety claim (independently re-read `_resolve_category`/`_resolve_brand`/
+`_resolve_collection` and grepped every consumer of `settings["source_id"]` in the codebase,
+confirmed no leak path exists), every branch of the shared ownership function, and the 207/207
+regression run. **Verdict: PASS, 0 CRITICAL, 1 IMPORTANT, 1 MINOR** — both resolved:
+
+1. **IMPORTANT**: `test_legacy_and_r4_call_the_same_shared_function` mocked and exercised only the
+   R4 call site (`r4_mutation_service._validate_resource_source_ownership`); it imported `views`
+   but never invoked `views._validate_universal_selection_ownership` under the same patch, so it
+   didn't actually prove the legacy path shares the function object — only asserted so by comment.
+   The reviewer independently confirmed the real code IS correctly unified (manual mock execution),
+   so this was a test-coverage gap, not a functional defect. Fixed: the test now calls both
+   `r4_mutation_service._validate_resource_source_ownership` and
+   `views._validate_universal_selection_ownership` under the same
+   `mock.patch.object(section_data_service, "validate_resource_source_ownership")`, asserting
+   `call_count == 2` and that both calls received the same `store` — a reintroduced local legacy
+   copy would now fail this test even if its output happened to match.
+2. **MINOR**: the unused `from apps.storefront_builder import views` import is now used by the
+   fix above.
+
 ## Verification
 
 - New suite: `test_phase4_task2_resource_source_ownership` — **10/10 pass**.

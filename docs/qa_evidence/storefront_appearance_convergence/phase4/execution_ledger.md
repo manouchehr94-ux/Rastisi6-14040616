@@ -43,3 +43,20 @@ Chronological record of Phase-4 task starts/completions, commits, and backup ref
   now) and expanded `task1_authority.md`'s review section to explain the architecture choice.
 - **COMPLETE** 2026-09-08. Task 1 gate: 0 unresolved CRITICAL, 0 unresolved IMPORTANT. Proceeding
   to Task 2.
+
+## Task 2 — ResourceSource read/write + tenant ownership convergence
+
+- **START** 2026-09-08. Characterized the real divergence: legacy never checked `product_section`'s
+  single-reference auto `source_id`; R4's ownership check no-opped for `category` kind. Investigated
+  the SECURITY STOP condition first — confirmed the render path independently re-scopes every
+  `source_id` by Store, so the write-side gap was never an exploitable data leak (documented in
+  `phase4/task2_resource_source.md`). Added a category `ResourceSource` adapter, one shared
+  DB-backed ownership function in `section_data_service.py`, and made legacy + R4 both delegate to
+  it. RED tests confirmed the gap empirically (stash/restore), zero regression across 207 targeted
+  tests and Phase-3 baseline Run A/B/C. Committed as a checkpoint (`aaf9162`), pushed, sent to a
+  fresh independent reviewer.
+- Reviewer verdict: PASS, 0 CRITICAL, 1 IMPORTANT (the unification test only exercised R4's call
+  site, not legacy's, under the shared mock), 1 MINOR (a resulting unused import). Both resolved:
+  the test now exercises both call sites under the same patch and asserts `call_count == 2`.
+- **COMPLETE** 2026-09-08. Task 2 gate: 0 unresolved CRITICAL, 0 unresolved IMPORTANT. Proceeding
+  to Task 3.
