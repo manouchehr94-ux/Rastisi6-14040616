@@ -80,10 +80,36 @@ primitive" per Ruling A.
    calls the same `preset_service.apply_preset` (line 475), a documented one-off internal exception
    per Ruling G, not a separate authority; unaffected by this fix.
 
+## Independent review
+
+A fresh reviewer with no prior task context verified the RED reproduction (swapped in the
+pre-fix `preset_service.py`, confirmed both new tests genuinely fail with the exact described
+divergence), the atomicity/rollback guarantee, the Ready-Template gate's reliability (a Ready
+Template with a missing/invalid `store_appearance` cannot exist in the registry —
+`register_layout_preset` validates this at import time), and every factual claim in this document
+against source. **Verdict: PASS, 0 CRITICAL, 0 IMPORTANT, 2 MINOR** — both resolved before this
+task was closed:
+
+1. The `mobile_nav_variant` sub-branch of the fix had no test coverage (no registry preset sets it
+   on a non-Ready overlay). Added `test_non_ready_preset_mobile_nav_variant_updates_manifest_not_just_mirror`,
+   which constructs a synthetic non-Ready preset via `dataclasses.replace` (the same shape as an
+   ordinary registry entry) to exercise it — now 37/37 in this test module.
+2. The architecture audit's plan document (§21/line 503 of the earlier audit) suggested routing
+   through `appearance_authority_service.apply_ready_template_appearance` for "one orchestration."
+   This fix deliberately does not: `apply_ready_template_appearance` is shaped for a Ready
+   Template's *complete* declared manifest, not a non-Ready preset's *partial* header/footer
+   overlay — using it here would require fabricating a fake `store_appearance` surface for presets
+   that don't have one. Calling the finer-grained `apply_header_variant`/`apply_footer_variant`
+   primitives directly (the same ones the legacy Header/Footer editors already use) is the correct
+   fit for this narrower case; `apply_ready_template_appearance` remains reserved for wiring the
+   Ready-Template path itself, unchanged by this task. Noted here explicitly so the two documents
+   don't appear to disagree on architecture.
+
 ## Verification
 
 - Targeted suite: `python manage.py test apps.storefront_builder.tests.test_phase1_appearance_authority`
-  — **36 tests, OK** (31 pre-existing + 5 new, zero regressions, both new failing tests now pass).
+  — **37 tests, OK** (31 pre-existing + 6 new — including the post-review `mobile_nav_variant`
+  coverage addition — zero regressions, all new tests pass).
 - Full Phase-3 baseline Run A/B/C re-run verbatim:
   - Run A: **739 tests** (734 + 5 new), `FAILED (failures=1, skipped=1)` — the one failure is the
     exact same known pre-existing signature (`test_validate_appearance_config_is_the_validator_boundary`).

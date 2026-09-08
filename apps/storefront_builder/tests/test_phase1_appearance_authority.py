@@ -1049,6 +1049,38 @@ class NonReadyPresetHeaderFooterAuthorityTests(Phase1AppearanceAuthorityBase):
         self.assertEqual(before["header"], after["header"])
         self.assertEqual(before["footer"], after["footer"])
 
+    def test_non_ready_preset_mobile_nav_variant_updates_manifest_not_just_mirror(self):
+        # No registry preset today sets mobile_nav_variant on a non-Ready
+        # overlay — construct one via dataclasses.replace (same pattern as an
+        # ordinary registry entry) to cover the sibling branch of the header/
+        # footer fix above, which is otherwise untested.
+        import dataclasses
+
+        ready = get_layout_preset("dense_marketplace")
+        base = get_layout_preset("clean_minimal")
+        synthetic = dataclasses.replace(
+            base,
+            footer={**base.footer, "mobile_nav_variant": "luxury_floating_cart"},
+        )
+
+        preset_service.apply_preset(self.draft, ready)
+        self.draft.refresh_from_db()
+        seeded_bottom_nav = self._effective_selections()["bottom_nav"]
+        self.assertNotEqual(seeded_bottom_nav, "bottom_nav.luxury_floating_cart.v1")
+
+        preset_service.apply_preset(self.draft, synthetic)
+        self.draft.refresh_from_db()
+
+        self.assertEqual(
+            self.draft.footer_config.get("mobile_nav_variant"), "luxury_floating_cart"
+        )
+        self.assertEqual(
+            self._effective_selections()["bottom_nav"],
+            "bottom_nav.luxury_floating_cart.v1",
+            "applying a non-Ready preset's mobile_nav_variant overlay must "
+            "update the typed manifest, not just the legacy footer_config mirror",
+        )
+
     def test_non_ready_preset_apply_does_not_erase_store_appearance_key(self):
         # Characterization (already GREEN today via
         # ``validate_appearance_config``'s explicit opaque-key preservation) —

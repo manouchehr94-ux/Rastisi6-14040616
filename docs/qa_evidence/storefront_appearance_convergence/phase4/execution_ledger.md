@@ -24,3 +24,22 @@ Chronological record of Phase-4 task starts/completions, commits, and backup ref
   `origin`-vs-`rastisi5` remote note resolved). Fix-up committed as a follow-up (not an amend).
 - **COMPLETE** 2026-09-08. Task 0 gate: SPEC COVERAGE PASS, ARCHITECTURE PASS, 0 unresolved
   CRITICAL, 0 unresolved IMPORTANT. Proceeding to Task 1.
+
+## Task 1 — Appearance + Ready-Template authority convergence
+
+- **START** 2026-09-08. Empirically verified (not assumed from audit prose) that the real defect
+  is narrower than "manifest erased": a non-Ready preset's header/footer overlay updates the
+  legacy `header_config`/`footer_config` mirror but never the typed manifest, which is the actual
+  render authority — so the merchant's explicit choice was silently ignored by the rendered
+  storefront. RED tests added, fix applied to `preset_service.apply_preset` (route the overlay's
+  `header_variant`/`footer_variant`/`mobile_nav_variant` through the existing
+  `appearance_authority_service.apply_header_variant`/`apply_footer_variant` primitives). Zero
+  regression across the full Phase-3 baseline Run A/B/C. Committed as a checkpoint (`5ae1ffc`),
+  pushed, then sent to a fresh independent reviewer.
+- Reviewer verdict: PASS, 0 CRITICAL, 0 IMPORTANT, 2 MINOR (untested `mobile_nav_variant` branch;
+  evidence doc should note the deliberate deviation from the audit's suggested
+  `apply_ready_template_appearance` routing). Both resolved: added
+  `test_non_ready_preset_mobile_nav_variant_updates_manifest_not_just_mirror` (37/37 in the module
+  now) and expanded `task1_authority.md`'s review section to explain the architecture choice.
+- **COMPLETE** 2026-09-08. Task 1 gate: 0 unresolved CRITICAL, 0 unresolved IMPORTANT. Proceeding
+  to Task 2.
