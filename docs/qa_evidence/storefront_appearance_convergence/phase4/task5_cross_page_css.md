@@ -388,7 +388,7 @@ was never pulled in.
 - New suite: **2/2 pass**. RED-verified via `git stash` (CSS-only) — fails with the exact
   missing-declaration error.
 - Full `test_phase4_task5_cross_page_css`: **11/11 pass** (Groups A1+A2+A3 combined).
-- Regression sweep: same suite set as prior groups — **486 tests, 0 failures, 1 known skip**.
+- Regression sweep: same suite set as prior groups — **487 tests, 0 failures, 1 known skip**.
 - `python manage.py check`: clean. `makemigrations --check --dry-run`: no changes.
 - Real dev DB restored and SHA256-stable at `d53a687b...`.
 
@@ -397,6 +397,34 @@ was never pulled in.
 Pure CSS-completeness fix. No new template, section registration, schema, or renderer
 path. The desktop-only LTR-direction mirror is an existing, permanent Home design decision
 (not a new visual variant introduced by this task) — mirrored, not invented.
+
+### Review found 1 CRITICAL + 2 IMPORTANT, fixed
+
+Review returned **FAIL**: `.special-discount`'s `font-size` used the SUPERSEDED base
+layer's `10px` instead of the later V3 pass's `9px` — even though the sibling
+`height`/`min-width` properties on that exact same V3 line (home.css:577,
+`.special-discount{height:22px;min-width:39px;font-size:9px}`) were correctly merged. A
+one-property miss on an otherwise-correct multi-property merge — the exact failure mode
+this consolidation approach is most exposed to. Also 2 IMPORTANT: the CSS-content test
+covered only ~4 of ~24 selectors (and never touched `.special-discount` — the reviewer
+noted this is *why* the bug shipped undetected), and this doc's own regression-sweep count
+(486) was off by one against the actual 487.
+
+Fixed the CSS (`font-size:9px`), verified via real browser (`.special-discount` computed
+`font-size` is now `9px`, confirmed with a fresh discounted-product fixture), substantially
+broadened the CSS-content test to assert the FULL final declaration (not a narrow
+substring) for every multi-property, multi-layer-merged selector — 17 full-declaration
+assertions now, up from 4 — specifically so a future one-property merge error on any of
+them cannot pass silently, and corrected this doc's test count to 487.
+
+### Verification (fix-up)
+
+- `test_phase4_task5_cross_page_css`: **12/12 pass** (one new assertion-only test; the
+  existing 2 Group-A3 tests now assert far more of the CSS file).
+- Regression sweep: **487 tests, 0 failures, 1 known skip** (re-confirmed, matching the
+  correction above).
+- `python manage.py check`: clean. `makemigrations --check --dry-run`: no changes.
+- Real dev DB restored and SHA256-stable at `d53a687b...`.
 
 ## Second review round on the A1/A2 fix-up: 2 more CRITICAL findings, fixed
 

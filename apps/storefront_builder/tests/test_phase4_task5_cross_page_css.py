@@ -314,6 +314,15 @@ class AmazingOffersNonHomeCssTests(TestCase):
         self.assertIn('class="special-wrap"', html)
 
     def test_storefront_builder_css_carries_the_merged_final_special_offer_rules(self):
+        # Broad, near-exhaustive coverage (not just 4 of ~24 selectors) —
+        # a review-caught CRITICAL bug (.special-discount's font-size
+        # carried the SUPERSEDED base layer's 10px instead of the later V3
+        # pass's 9px, even though the sibling height/min-width properties
+        # on that exact same selector/line were merged correctly) shipped
+        # undetected specifically because this test didn't touch that
+        # selector at all. Every multi-layer-merged selector is now
+        # asserted with its FULL final declaration, not a substring, so a
+        # similar one-property merge error cannot pass silently again.
         css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
         self.assertIn(".amazing-offers-section{margin:7px 0}", css)
         self.assertIn(
@@ -323,11 +332,78 @@ class AmazingOffersNonHomeCssTests(TestCase):
             css,
         )
         self.assertIn(
+            ".special-list{order:1;background:#f7f8fa;border-inline-end:1px solid #e5e7eb;"
+            "padding:8px;display:flex;flex-direction:column;gap:4px;min-width:0}",
+            css,
+        )
+        self.assertIn(
+            ".special-list-title{display:flex;flex-direction:column;gap:5px;"
+            "padding:2px 3px 6px;border-bottom:1px solid #e2e5e9;font-weight:800;"
+            "font-size:12px;color:#24272c}",
+            css,
+        )
+        self.assertIn(
+            ".special-list>button{display:grid;grid-template-columns:minmax(0,1fr) auto;"
+            "align-items:center;gap:8px;width:100%;min-height:42px;padding:6px 8px;"
+            "border:1px solid transparent;border-radius:3px;background:#fff;"
+            "color:#4b4f56;text-align:right;cursor:pointer}",
+            css,
+        )
+        self.assertIn(
+            ".special-list-name{min-width:0;font-size:10.8px;line-height:1.6;"
+            "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
+            css,
+        )
+        self.assertIn(".special-list-price{font-size:9.8px;color:#767b84;white-space:nowrap}", css)
+        self.assertIn(
+            ".special-main{grid-area:1/1;min-width:0;display:grid;"
+            "grid-template-columns:minmax(0,1fr) minmax(230px,37%);align-items:center;"
+            "padding:16px 22px;gap:16px}",
+            css,
+        )
+        self.assertIn(
+            ".special-copy{display:flex;flex-direction:column;align-items:flex-start;"
+            "gap:6px;min-width:0}",
+            css,
+        )
+        self.assertIn(".special-kicker{font-size:10.5px;color:#ef4444;font-weight:800}", css)
+        # The exact selector the CRITICAL merge error landed on.
+        self.assertIn(
+            ".special-discount{display:inline-grid;place-items:center;min-width:39px;"
+            "height:22px;border-radius:999px;background:#ef4444;color:#fff;"
+            "font-size:9px;font-weight:900}",
+            css,
+        )
+        self.assertIn(
+            ".special-copy h3{font-size:18px;line-height:1.55;font-weight:800;"
+            "color:#222;margin:0;max-width:520px}",
+            css,
+        )
+        self.assertIn(".special-brand{font-size:10px;color:#777d86;margin:0}", css)
+        self.assertIn(".special-price strong{font-size:18px;color:#169b62;font-weight:800}", css)
+        self.assertIn(".special-price del{font-size:10px;color:#9aa0a6}", css)
+        self.assertIn(
+            ".special-buy{margin-top:4px;border:1px solid #34383f;background:#fff;"
+            "color:#292d33;border-radius:2px;padding:6px 12px;font-size:10.5px;"
+            "font-weight:700}",
+            css,
+        )
+        self.assertIn(
+            ".special-image{height:215px;display:grid;place-items:center;"
+            "overflow:hidden;border-radius:4px;background:#fff}",
+            css,
+        )
+        self.assertIn(
             ".amazing-offers-section .special-wrap{direction:ltr;"
             "grid-template-columns:270px minmax(0,1fr)}",
             css,
         )
-        self.assertIn(".special-copy h3{font-size:18px;line-height:1.55", css)
+        self.assertIn(
+            ".amazing-offers-section .special-main{direction:ltr;"
+            "grid-template-columns:minmax(0,1fr) minmax(210px,34%);padding:14px 20px;gap:14px}",
+            css,
+        )
+        self.assertIn(".amazing-offers-section .special-image{direction:rtl;height:205px}", css)
         # The two older, unrelated "special offers" widget definitions
         # elsewhere in home.css (`.special-list>a`, no title/kicker/discount/
         # brand classes) must never get pulled in — this mirror is scoped to
