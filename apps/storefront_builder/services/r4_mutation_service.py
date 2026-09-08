@@ -24,6 +24,7 @@ from apps.storefront_builder.services import (
     edit_history_service,
     layout_service,
     preset_service,
+    section_data_service,
     section_structure_service,
 )
 from apps.storefront_builder.settings_schema import clean_section_schema_patch
@@ -75,73 +76,18 @@ def _is_strict_int(value: object) -> bool:
     return type(value) is int
 
 
-def _require_owned_resource(model, *, store, source_id: int) -> None:
-    """Fail closed: a foreign-Store id and a nonexistent id both simply
-    fail this single Store-scoped ``exists()`` check — never a second
-    query against another Store to tell them apart."""
-    if not model.objects.filter(store=store, pk=source_id).exists():
-        raise R4MutationError("invalid_resource_ownership")
-
-
 def _validate_resource_source_ownership(*, store, source: "resource_source.ResourceSource") -> None:
-    """R4 Task 10 (Section 8) — a Store-scoped Picker search endpoint alone
-    does not stop a client from POSTing an arbitrary foreign-Store id
-    straight to this mutation endpoint. Every manual id / auto source_id a
-    ``source`` patch actually references must belong to the current Store
-    BEFORE the settings are persisted."""
-    # Imported here, not at module scope: resource_source.py itself must
-    # stay a pure, DB-free domain module (Task 9's hard rule) — the DB
-    # lookups this ownership check needs live only in this service.
-    from apps.catalog.models import Brand, Category, MerchantCollection
-    from apps.catalog.services.collection_service import searchable_products
-
-    if source.kind == "product":
-        if source.mode == "manual":
-            if not source.manual_ids:
-                return
-            owned_ids = set(
-                searchable_products(store).filter(pk__in=source.manual_ids).values_list("pk", flat=True)
-            )
-            if owned_ids != set(source.manual_ids):
-                raise R4MutationError("invalid_resource_ownership")
-            return
-        if source.auto_rule == "by_category":
-            _require_owned_resource(Category, store=store, source_id=source.auto_parameters["source_id"])
-        elif source.auto_rule == "by_brand":
-            _require_owned_resource(Brand, store=store, source_id=source.auto_parameters["source_id"])
-        elif source.auto_rule == "by_collection":
-            _require_owned_resource(MerchantCollection, store=store, source_id=source.auto_parameters["source_id"])
-        # newest/discounted/best_sellers/most_viewed reference no specific
-        # resource id — nothing to own-check.
-        return
-
-    if source.kind == "brand":
-        if source.mode == "manual":
-            if not source.manual_ids:
-                return
-            owned_count = Brand.objects.filter(store=store, pk__in=source.manual_ids).count()
-            if owned_count != len(set(source.manual_ids)):
-                raise R4MutationError("invalid_resource_ownership")
-        # auto_rule == "all_active" references no specific resource id.
-        return
-
-    if source.kind == "collection":
-        # R4 Task 4 (V03) — collection_tiles is now schema-enabled with a
-        # typed ``source``, so a client could POST foreign collection_ids
-        # straight to this endpoint. Every manual id must belong to THIS
-        # Store; auto_rule == "all_active" references no specific id.
-        if source.mode == "manual":
-            if not source.manual_ids:
-                return
-            owned_count = MerchantCollection.objects.filter(
-                store=store, pk__in=source.manual_ids,
-            ).count()
-            if owned_count != len(set(source.manual_ids)):
-                raise R4MutationError("invalid_resource_ownership")
-        return
-
-    # category kind is not exposed by the Task 10 UI and carries no ownership
-    # rule yet — defensively a no-op rather than a false reject.
+    """Phase 4 (Task 2) — delegates to the ONE shared, DB-backed ownership
+    check (``section_data_service.validate_resource_source_ownership``) also
+    used by the legacy settings-save view, translating its stable error into
+    R4's own external error-code contract. R4 Task 10 (Section 8)'s original
+    rationale still applies: a Store-scoped Picker search endpoint alone does
+    not stop a client from POSTing an arbitrary foreign-Store id straight to
+    this mutation endpoint."""
+    try:
+        section_data_service.validate_resource_source_ownership(store=store, source=source)
+    except section_data_service.ResourceSourceOwnershipError:
+        raise R4MutationError("invalid_resource_ownership") from None
 
 
 def _apply_section_update_settings(*, store, draft: StorefrontLayoutVersion, mutation: dict) -> None:

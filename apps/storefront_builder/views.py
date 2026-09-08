@@ -34,6 +34,7 @@ from .models import (
     StorefrontPage,
     StorefrontSection,
 )
+from . import resource_source
 from .services import (
     appearance_authority_service,
     container_service,
@@ -41,6 +42,7 @@ from .services import (
     layout_service,
     r4_mutation_service,
     row_service,
+    section_data_service,
 )
 from .services.layout_service import _clone_section_scoped_media
 from .services.render_service import (
@@ -1067,26 +1069,30 @@ def _universal_selection_context(section, context) -> dict:
 
 
 def _validate_universal_selection_ownership(request, section_key, cleaned) -> None:
-    """Reject foreign/nonexistent explicit IDs before they are persisted."""
-    from apps.catalog.models import Brand, Category, MerchantCollection, Product
+    """Reject foreign/nonexistent explicit IDs before they are persisted.
 
-    specs = {
-        "product_section": (Product, "product_ids"),
-        "category_grid": (Category, "category_ids"),
-        "brand_carousel": (Brand, "brand_ids"),
-        "collection_tiles": (MerchantCollection, "collection_ids"),
-    }
-    spec = specs.get(section_key)
-    if spec is None:
-        return
-    model, field = spec
-    ids = cleaned.get(field) or []
-    if not ids:
+    Phase 4 (Task 2) — projects ``cleaned`` into the same typed
+    ``ResourceSource`` R4 uses and delegates to the ONE shared, DB-backed
+    ownership check (``section_data_service.validate_resource_source_ownership``)
+    instead of a second, independently-maintained per-model dict lookup. This
+    also closes a real gap the old dict-based check never covered:
+    ``product_section``'s single-reference auto sources (``data_source`` in
+    {category, brand, collection}) carry a merchant-supplied ``source_id``
+    that was never ownership-checked at write time (only ``product_ids``,
+    i.e. manual mode, was) — the shared check covers both. Any section not
+    in ``resource_source``'s adapter registry has nothing to check here (its
+    own logic never assembles a ``ResourceSource``, e.g. context-aware
+    sections), matching the previous behavior's default no-op.
+    """
+    try:
+        source = resource_source.resource_source_from_section_settings(section_key, cleaned)
+    except resource_source.ResourceSourceError:
         return
     store = _resolve_store(request)
-    owned = set(model.objects.filter(store=store, pk__in=ids).values_list("pk", flat=True))
-    if any(item_id not in owned for item_id in ids):
-        raise ValueError("یک یا چند مورد انتخاب‌شده متعلق به این فروشگاه نیست")
+    try:
+        section_data_service.validate_resource_source_ownership(store=store, source=source)
+    except section_data_service.ResourceSourceOwnershipError:
+        raise ValueError("یک یا چند مورد انتخاب‌شده متعلق به این فروشگاه نیست") from None
 
 def _extract_background_raw(request, section) -> dict:
     """Read the shared merchant-facing background control.

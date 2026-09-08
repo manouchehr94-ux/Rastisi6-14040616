@@ -80,13 +80,29 @@ class UniversalSelectionPatternTests(SimpleTestCase):
         self.assertIn("multiPickerForm", form)
 
     def test_store_ownership_guard_is_called_before_settings_save(self):
+        # Phase 4 (Task 2) — the guard now delegates to the ONE shared,
+        # DB-backed check (``section_data_service.validate_resource_source_ownership``)
+        # via a typed ``ResourceSource`` projection, instead of an inline
+        # per-model dict lookup — the same check the R4 mutation service
+        # uses, so legacy and R4 can no longer disagree on ownership
+        # semantics for these four sections.
         views = self._read("apps/storefront_builder/views.py")
         call = "_validate_universal_selection_ownership(request, section.section_key, cleaned)"
         self.assertIn(call, views)
         self.assertLess(views.index(call), views.index("section.settings = cleaned"))
-        self.assertIn("filter(store=store, pk__in=ids)", views)
-        for model in ("Product", "Brand", "Category", "MerchantCollection"):
-            self.assertIn(model, views)
+        self.assertIn("resource_source_from_section_settings", views)
+        self.assertIn("section_data_service.validate_resource_source_ownership", views)
+
+        section_data_service = self._read(
+            "apps/storefront_builder/services/section_data_service.py"
+        )
+        self.assertIn("filter(store=store, pk__in=", section_data_service)
+        for model in ("Brand", "Category", "MerchantCollection"):
+            self.assertIn(model, section_data_service)
+        # Product ownership is checked via ``searchable_products(store)``,
+        # not a bare ``Product.objects.filter`` — the same Store-scoped query
+        # every other product ownership check in this domain uses.
+        self.assertIn("searchable_products(store)", section_data_service)
 
     def test_universal_context_uses_existing_picker_data_and_limits(self):
         views = self._read("apps/storefront_builder/views.py")

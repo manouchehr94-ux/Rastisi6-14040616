@@ -17,10 +17,92 @@ from urllib.parse import urlencode
 from django.db.models import Q
 from django.urls import reverse
 
-from apps.catalog.models import Brand, Category
+from apps.catalog.models import Brand, Category, MerchantCollection
 from apps.catalog.services import collection_service
+from apps.catalog.services.collection_service import searchable_products
 from apps.catalog.services.product_publish_service import storefront_listing_products
 from apps.orders.services import best_seller_service
+from apps.storefront_builder import resource_source
+
+
+class ResourceSourceOwnershipError(ValueError):
+    """A ``ResourceSource``'s manual id(s) or auto-rule ``source_id`` do not
+    belong to the current Store — raised before anything is persisted."""
+
+
+def _require_owned_resource(model, *, store, source_id: int) -> None:
+    """Fail closed: a foreign-Store id and a nonexistent id both simply fail
+    this single Store-scoped ``exists()`` check — never a second query
+    against another Store to tell them apart (never leaks *which* reason)."""
+    if not model.objects.filter(store=store, pk=source_id).exists():
+        raise ResourceSourceOwnershipError("invalid_resource_ownership")
+
+
+def validate_resource_source_ownership(*, store, source: "resource_source.ResourceSource") -> None:
+    """Phase 4 (Task 2) — the ONE shared, DB-backed Store-ownership check for
+    a ``ResourceSource``, used by BOTH the legacy settings-save view and the
+    R4 mutation service. Every manual id / auto-rule ``source_id`` a
+    ``source`` actually references must belong to the current Store BEFORE
+    the settings are persisted — a Store-scoped Picker/search endpoint alone
+    does not stop a client from POSTing an arbitrary foreign-Store id
+    straight to a save endpoint.
+
+    ``resource_source.py`` itself stays a pure, DB-free domain module (its
+    own hard rule) — every DB lookup this check needs lives only here, in
+    this service, which already owns Store-ownership resolution for the
+    same resource kinds at render time (see the module docstring above).
+    """
+    if source.kind == "product":
+        if source.mode == "manual":
+            if not source.manual_ids:
+                return
+            owned_ids = set(
+                searchable_products(store).filter(pk__in=source.manual_ids).values_list("pk", flat=True)
+            )
+            if owned_ids != set(source.manual_ids):
+                raise ResourceSourceOwnershipError("invalid_resource_ownership")
+            return
+        if source.auto_rule == "by_category":
+            _require_owned_resource(Category, store=store, source_id=source.auto_parameters["source_id"])
+        elif source.auto_rule == "by_brand":
+            _require_owned_resource(Brand, store=store, source_id=source.auto_parameters["source_id"])
+        elif source.auto_rule == "by_collection":
+            _require_owned_resource(MerchantCollection, store=store, source_id=source.auto_parameters["source_id"])
+        # newest/discounted/best_sellers/most_viewed reference no specific
+        # resource id — nothing to own-check.
+        return
+
+    if source.kind == "brand":
+        if source.mode == "manual":
+            if not source.manual_ids:
+                return
+            owned_count = Brand.objects.filter(store=store, pk__in=source.manual_ids).count()
+            if owned_count != len(set(source.manual_ids)):
+                raise ResourceSourceOwnershipError("invalid_resource_ownership")
+        # auto_rule == "all_active" references no specific resource id.
+        return
+
+    if source.kind == "collection":
+        if source.mode == "manual":
+            if not source.manual_ids:
+                return
+            owned_count = MerchantCollection.objects.filter(
+                store=store, pk__in=source.manual_ids,
+            ).count()
+            if owned_count != len(set(source.manual_ids)):
+                raise ResourceSourceOwnershipError("invalid_resource_ownership")
+        # auto_rule == "all_active" references no specific resource id.
+        return
+
+    if source.kind == "category":
+        if source.mode == "manual":
+            if not source.manual_ids:
+                return
+            owned_count = Category.objects.filter(store=store, pk__in=source.manual_ids).count()
+            if owned_count != len(set(source.manual_ids)):
+                raise ResourceSourceOwnershipError("invalid_resource_ownership")
+        # auto_rule == "all_active" references no specific resource id.
+        return
 
 
 def _reorder_by_ids(products_by_id: dict, ordered_ids: list) -> list:
