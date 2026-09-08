@@ -4576,6 +4576,88 @@ a.sfb-v3-component-item,
   .beauty-section-title h2{font-size:13px}
 }
 
+/* Phase 4 (Task 5, Group A3) — amazing_offers was Home-only: its CSS
+   previously existed only in home.css, so placing it on a non-Home
+   envelope rendered correct HTML (an unstyled vertical stack of buttons
+   and an unstyled image) with no two-column list/panel layout at all.
+   Confirmed (Group A2's evidence) zero selector overlap with
+   product_section — an independent fix, not a shared root.
+
+   home.css layers this selector family across FOUR separate passes (base
+   "Product spotlight carousel + Amazing Offers composition" block, "V3
+   universal dense-marketplace fidelity pass", a "V4 Golden visual polish"
+   desktop-only list-left/image-right direction mirror, and "V4.2.2
+   readability calibration") plus three margin-only overrides across the
+   file (18px -> 9px -> 7px) — the same multi-pass-cascade pattern Group
+   A1's review found missing for hero. Rather than reproduce every
+   historical layer (CSS only renders the FINAL winning value per property
+   regardless of how many earlier layers it overrode), each rule below is
+   the MERGED FINAL computed value across all of home.css's unconditioned
+   passes for that selector at that breakpoint — verified against a real
+   browser's getComputedStyle, not just re-typed from the source. Two
+   older, unrelated "special offers" widget definitions elsewhere in
+   home.css (a different class shape: `.special-list>a`, no
+   `.special-list-title`/`.special-kicker`/`.special-discount`/
+   `.special-brand`) are a superseded/dead widget and are NOT mirrored.
+   `html[data-sfb-density="compact"]` variants are deliberately excluded,
+   consistent with Groups A1/A2. */
+.amazing-offers-section{margin:7px 0}
+.special-wrap{display:grid;grid-template-columns:290px minmax(0,1fr);gap:0;background:#fff;border:1px solid #e0e3e8;border-radius:5px;overflow:hidden;box-shadow:0 1px 6px rgba(15,23,42,.05);min-height:250px}
+.special-list{order:1;background:#f7f8fa;border-inline-end:1px solid #e5e7eb;padding:8px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.special-list-title{display:flex;flex-direction:column;gap:5px;padding:2px 3px 6px;border-bottom:1px solid #e2e5e9;font-weight:800;font-size:12px;color:#24272c}
+.special-count{display:flex;align-items:center;gap:3px;color:#ef4444;font-size:12px;font-weight:800;direction:ltr}
+.special-list>button{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;width:100%;min-height:42px;padding:6px 8px;border:1px solid transparent;border-radius:3px;background:#fff;color:#4b4f56;text-align:right;cursor:pointer}
+.special-list>button:hover{border-color:#d9dde3;background:#fff}
+.special-list>button.active{border-color:#fecaca;background:#fff;color:#b91c1c;box-shadow:inset -3px 0 #ef4444}
+.special-list-name{min-width:0;font-size:10.8px;line-height:1.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.special-list-price{font-size:9.8px;color:#767b84;white-space:nowrap}
+.special-panels{order:2;min-width:0;display:grid;background:linear-gradient(135deg,#fff 0%,#fbfbfc 100%)}
+.special-main{grid-area:1/1;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,37%);align-items:center;padding:16px 22px;gap:16px}
+.special-copy{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
+.special-kicker{font-size:10.5px;color:#ef4444;font-weight:800}
+.special-discount{display:inline-grid;place-items:center;min-width:39px;height:22px;border-radius:999px;background:#ef4444;color:#fff;font-size:10px;font-weight:900}
+.special-copy h3{font-size:18px;line-height:1.55;font-weight:800;color:#222;margin:0;max-width:520px}
+.special-brand{font-size:10px;color:#777d86;margin:0}
+.special-price{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.special-price strong{font-size:18px;color:#169b62;font-weight:800}
+.special-price del{font-size:10px;color:#9aa0a6}
+.special-buy{margin-top:4px;border:1px solid #34383f;background:#fff;color:#292d33;border-radius:2px;padding:6px 12px;font-size:10.5px;font-weight:700}
+.special-buy:hover{background:#292d33;color:#fff}
+.special-image{height:215px;display:grid;place-items:center;overflow:hidden;border-radius:4px;background:#fff}
+.special-image img{width:100%;height:100%;object-fit:contain;padding:10px}
+.special-image .product-placeholder{width:130px;height:130px;color:#c5cad0;display:grid;place-items:center}
+.special-image .product-placeholder svg{width:84px;height:84px}
+/* The approved special-offer module is list-left / content-centre /
+   image-right on desktop, unconditionally (not a merchant setting) —
+   direction is set only on these layout containers; Persian content
+   inside them stays RTL via the nested direction:rtl resets below. */
+.amazing-offers-section .special-list{background:#f7f8fa}
+.amazing-offers-section .special-list>button{background:#fff;border-color:#e7e9ec}
+.amazing-offers-section .special-list>button.active{box-shadow:inset -3px 0 #ef4444}
+@media(min-width:1001px){
+  .amazing-offers-section .special-wrap{direction:ltr;grid-template-columns:270px minmax(0,1fr)}
+  .amazing-offers-section .special-list,
+  .amazing-offers-section .special-panels{direction:rtl}
+  .amazing-offers-section .special-main{direction:ltr;grid-template-columns:minmax(0,1fr) minmax(210px,34%);padding:14px 20px;gap:14px}
+  .amazing-offers-section .special-copy{direction:rtl;text-align:right;align-items:flex-start}
+  .amazing-offers-section .special-image{direction:rtl;height:205px}
+}
+@media(max-width:1000px){
+  .special-wrap{grid-template-columns:1fr;min-height:0}
+  .special-list{order:2;border-inline-end:0;border-top:1px solid #e5e7eb;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .special-list-title{grid-column:1/-1}
+  .special-main{order:1;grid-template-columns:1fr minmax(190px,35%);padding:22px}
+}
+@media(max-width:680px){
+  .special-list{grid-template-columns:1fr;padding:8px}
+  .special-list>button:nth-of-type(n+4){display:none}
+  .special-main{grid-template-columns:1fr 120px;padding:12px;gap:10px}
+  .special-image{height:145px}
+  .special-copy h3{font-size:13px}
+  .special-price strong{font-size:15px}
+  .special-buy{padding:6px 10px;font-size:9px}
+}
+
 /* Generic luxury showcase hero / category shortcuts. */
 .hero-luxury{margin-top:20px}.hero-luxury-stage{position:relative;overflow:hidden;border:1px solid color-mix(in srgb,var(--theme-primary,#d4af37) 25%,var(--theme-border,#2a2515));border-radius:calc(var(--sfb-radius,18px) + 4px);background:linear-gradient(115deg,#090909 0%,#111 54%,#21180a 100%);box-shadow:0 24px 60px rgba(0,0,0,.28)}
 .hero-luxury-slide{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);min-height:470px;direction:rtl}.hero-luxury-copy{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:54px;position:relative;z-index:2;color:var(--theme-text,#f8f1cf)}

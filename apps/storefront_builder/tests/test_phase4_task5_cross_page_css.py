@@ -248,3 +248,71 @@ class ProductSectionSpotlightAndCampaignBandNonHomeCssTests(TestCase):
                        "grid-template-columns:minmax(0,1fr);flex:1;min-height:0;background:#fff}"),
             css.index(".product-spotlight-head h2{font-size:13.5px}"),
         )
+
+
+@override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
+class AmazingOffersNonHomeCssTests(TestCase):
+    """Group A3 — amazing_offers. Confirmed (Group A2's evidence) zero
+    selector overlap with product_section; an independent fix.
+
+    home.css layers this selector family across four passes (base, "V3",
+    a desktop-only "V4 Golden" list-left/image-right direction mirror, and
+    "V4.2.2"), plus three separate margin-only overrides. The CSS mirror
+    stores the MERGED FINAL value per property/breakpoint (verified
+    against a real browser) rather than re-typing every historical layer
+    — see the CSS file's own comment for why that is equivalent."""
+
+    def setUp(self):
+        cache.clear()
+        self.store = _akhlaghi()
+        _verified_domain(self.store, HOST)
+        self.draft = svc.get_or_create_draft(self.store)
+        from apps.catalog.models import Product, Vendor
+
+        vendor = Vendor.objects.create(store=self.store, slug="task5-a3-vendor", name="فروشنده تست")
+        for i in range(2):
+            Product.objects.create(
+                store=self.store, vendor=vendor, name=f"کالای تست {i}", slug=f"task5-a3-product-{i}",
+                sku=f"T5A3-P{i}", price="100000", status="active", discount_percent=20,
+            )
+
+    def _place_and_publish(self, page_type: str):
+        section = section_structure_service.add_section(
+            draft=self.draft, section_key="amazing_offers", page_type=page_type,
+        )
+        section.settings = {**section.settings, "item_limit": 2}
+        section.save(update_fields=["settings"])
+        svc.publish(self.store)
+        return section
+
+    def test_renders_on_cart(self):
+        # amazing_offers is in render_service.OPTIONAL_PRODUCT_DATA_SECTION_KEYS
+        # (hidden on Public with zero resolved products) — the discounted
+        # products in setUp are required, not incidental.
+        self._place_and_publish(StorefrontPage.PageType.CART)
+        resp = self.client.get(reverse("cart:detail"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="section amazing-offers-section"', html)
+        self.assertIn('class="special-wrap"', html)
+
+    def test_storefront_builder_css_carries_the_merged_final_special_offer_rules(self):
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(".amazing-offers-section{margin:7px 0}", css)
+        self.assertIn(
+            ".special-wrap{display:grid;grid-template-columns:290px minmax(0,1fr);"
+            "gap:0;background:#fff;border:1px solid #e0e3e8;border-radius:5px;"
+            "overflow:hidden;box-shadow:0 1px 6px rgba(15,23,42,.05);min-height:250px}",
+            css,
+        )
+        self.assertIn(
+            ".amazing-offers-section .special-wrap{direction:ltr;"
+            "grid-template-columns:270px minmax(0,1fr)}",
+            css,
+        )
+        self.assertIn(".special-copy h3{font-size:18px;line-height:1.55", css)
+        # The two older, unrelated "special offers" widget definitions
+        # elsewhere in home.css (`.special-list>a`, no title/kicker/discount/
+        # brand classes) must never get pulled in — this mirror is scoped to
+        # the ONE widget amazing_offers.html actually emits.
+        self.assertNotIn(".special-list>a{", css)

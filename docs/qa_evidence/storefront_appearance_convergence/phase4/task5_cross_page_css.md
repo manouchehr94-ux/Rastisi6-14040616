@@ -319,3 +319,86 @@ Pure CSS-completeness fix, same shape as Group A1. No new template, section regi
 schema, or renderer path. The `hide_empty_public_sections` discovery is pre-existing,
 unrelated, and untouched — documented, not escalated (it is working exactly as its own
 docstring specifies).
+
+## Group A3 — `amazing_offers`
+
+### Result: PASS
+
+### Investigation
+
+Confirmed (already established in Group A2) zero selector overlap with `product_section` —
+an independent fix. `amazing_offers` is the most heavily-layered case in Group A: applying
+the "check the whole file, not just the main comment block" lesson from the A1/A2 fix-up,
+a full-file `grep` for every `.special-*`/`.amazing-offers-section` occurrence found FOUR
+separate cascade passes (the base "Product spotlight carousel + Amazing Offers composition"
+block, "V3 universal dense-marketplace fidelity pass", a desktop-only "V4 Golden visual
+polish" list-left/image-right direction mirror scoped to `@media(min-width:1001px)`, and
+"V4.2.2 readability calibration"), plus three separate `.amazing-offers-section{margin:...}`
+overrides across the file (18px → 9px → 7px, each superseding the last). Also confirmed two
+older, structurally different "special offers" widget definitions elsewhere in home.css
+(`.special-list>a`, no `.special-list-title`/`.special-kicker`/`.special-discount`/
+`.special-brand`) are a superseded/dead widget — not the one `amazing_offers.html` emits —
+and correctly excluded (per the original Group-A investigation).
+
+**Consolidation approach**: rather than mechanically re-typing all four historical layers
+(which would require reproducing exact relative file order for over a dozen properties,
+as Groups A1/A2 did), each rule mirrored here is the **merged final computed value** per
+property per breakpoint — i.e. only the value that actually wins the cascade, which is all
+a browser ever renders regardless of how many earlier layers it overrode. This is
+behaviorally identical to reproducing every layer (CSS has no notion of "history," only the
+final winning declaration matters) and was independently verified against a real browser at
+three breakpoint zones (see GREEN below) rather than trusted as a paper exercise.
+
+### Browser verification
+
+Since the "before" state (zero `.special-*`/`amazing-offers-section` selectors in
+`storefront_builder.css`) was already directly confirmed by the original Group-A background
+investigation, RED was not re-captured empirically for this group; verification focused on
+proving the consolidated GREEN fix is correct at every breakpoint zone the layered cascade
+distinguishes, which is the harder and more error-prone part of this particular fix.
+
+Placed `amazing_offers` (with 2 discounted products — `render_service.
+OPTIONAL_PRODUCT_DATA_SECTION_KEYS` hides it on Public with zero resolved products, same
+discovery as Group A2) on Cart, published, and checked real `getComputedStyle` at three
+zones:
+
+| Viewport | `.special-wrap` gridTemplateColumns | direction | `.special-main` padding/direction | `.special-image` height | Console errors |
+|---|---|---|---|---|---|
+| 1440×900 (≥1001, LTR mirror active) | `270px 892px` | `ltr` | `14px 20px` / `ltr` | `205px` | 0 |
+| 900×800 (681-1000, mid) | `834px` (1 track) | `rtl` | `22px` / `rtl` | `215px` (merged base+V3 value) | 0 |
+| 390×844 (≤680, mobile) | `334px` (1 track) | `rtl` | `12px` / `rtl` | `145px` | 0 |
+
+All three exactly match the hand-derived merged-cascade values, including the
+desktop-only LTR-direction mirror correctly activating only at ≥1001px and the "middle"
+215px `.special-image` height (a value that exists ONLY as the base+V3 merge, touched by
+neither the desktop mirror's 205px nor the mobile breakpoint's 145px) — the strongest
+possible confirmation the consolidation is correct, since a wrong merge would most likely
+show up exactly at this untouched-by-either-extreme middle case.
+
+### Permanent regression guard
+
+`test_phase4_task5_cross_page_css.py`, `AmazingOffersNonHomeCssTests` (2 tests): renders
+`amazing_offers` with real discounted products on Cart via the real Draft→Publish→Public
+flow and asserts the markup appears; asserts the merged-final CSS declarations are present,
+INCLUDING an explicit `assertNotIn` proving the dead/superseded `.special-list>a{` widget
+was never pulled in.
+
+### Verification
+
+- New suite: **2/2 pass**. RED-verified via `git stash` (CSS-only) — fails with the exact
+  missing-declaration error.
+- Full `test_phase4_task5_cross_page_css`: **11/11 pass** (Groups A1+A2+A3 combined).
+- Regression sweep: same suite set as prior groups — **486 tests, 0 failures, 1 known skip**.
+- `python manage.py check`: clean. `makemigrations --check --dry-run`: no changes.
+- Real dev DB restored and SHA256-stable at `d53a687b...`.
+
+### STOP conditions checked
+
+Pure CSS-completeness fix. No new template, section registration, schema, or renderer
+path. The desktop-only LTR-direction mirror is an existing, permanent Home design decision
+(not a new visual variant introduced by this task) — mirrored, not invented.
+
+## Group A — closed
+
+All three Group A sub-fixes (A1 hero_banner/image_slider, A2 product_section spotlight/
+campaign_band, A3 amazing_offers) are complete and reviewed. Proceeding to Group B.
