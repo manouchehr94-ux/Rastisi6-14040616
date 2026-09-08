@@ -3,9 +3,51 @@
   هر صفحه‌ی دیگری که از catalog/partials/product_card.html استفاده کند.
   کپی دقیق از docs/spec/shop-frontend.html.
 */
-.sec-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap}
-.sec-head h2{font-size:var(--sfb-heading-size, 19px);font-weight:900;display:flex;align-items:center;gap:9px}
-.sec-head h2 .bar{width:5px;height:22px;border-radius:4px;background:linear-gradient(var(--violet),var(--violet-3))}
+/* Phase 4 (Task 5, Group C2.5) — this whole block was a byte-for-byte
+   copy of home.css's ORIGINAL, pre-refinement `.sec-head` rule (per the
+   file header above), frozen at that point and never updated as
+   home.css's own later "Universal dense storefront modules"/"V3
+   universal dense-marketplace fidelity pass"/"V4.2.2 readability
+   calibration" passes refined these values — a shared base contract
+   this file owns but silently let go stale. `.sec-head` is loaded here
+   on EVERY page (Home included, where home.css's later, equal-
+   specificity rules already override every property changed below —
+   confirmed via real-browser ground truth, so Home's rendering is
+   unaffected) and used by the vast majority of section templates
+   across the whole builder, not any one family — so this is fixed once,
+   here, at the shared source, rather than shadowed per-family
+   elsewhere (which would leave this rule permanently wrong and create
+   a second, competing definition). `.sec-head .more`/`.sec-head .more
+   svg`/`.sec-head .btn` had NO base rule here at all before this fix —
+   not merely stale, entirely unstyled on every non-Home page. Values
+   below are home.css's own current merged-final result (last-pass-wins
+   across all three refinement passes), verified against a real-browser
+   ground-truth harness loading home.css alone.
+
+   EXCLUDED from this fix: `.sec-head h2`'s `font-size` stays on
+   `var(--sfb-heading-size, 19px)`, its original fallback, UNCHANGED.
+   This is the one property on this whole rule that is NOT a frozen
+   stale copy — `--sfb-heading-size` is a real, deliberate, already
+   merchant-configurable per-store heading-size token (set on every
+   page via `templates/base.html`'s `SHOP_HEADING_SIZE`, default 19,
+   and it is the ONLY CSS consumer of this variable anywhere in the
+   codebase; `apps/storefront_builder/tests/test_appearance.py`
+   already tests merchants configuring it, e.g. to 22px). home.css
+   itself never uses this variable for `.sec-head h2` at all (its own
+   merged value, 16px, is a plain literal) — Home and non-Home simply
+   have two independently-designed, still-both-current heading-size
+   mechanisms for this one property, not a staleness gap. Changing the
+   variable's default, or dropping the variable to hardcode a literal,
+   would touch a live, tested, unrelated feature well beyond this
+   bounded fix's scope — left alone. (No `@680px` override is added for
+   the same reason: one would exist only to force this same, explicitly
+   out-of-scope property back to a fixed value at small viewports.) */
+.sec-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:9px;flex-wrap:wrap}
+.sec-head h2{font-size:var(--sfb-heading-size, 19px);font-weight:800;display:flex;align-items:center;gap:6px}
+.sec-head h2 .bar{width:3px;height:17px;border-radius:1px;background:#111}
+.sec-head .more{color:#333;font-weight:700;font-size:10.5px;display:flex;align-items:center;gap:5px}
+.sec-head .more svg{width:16px;height:16px}
+.sec-head .btn,.product-section .sec-head .btn{height:23px;min-height:23px;padding:0 9px;border-radius:999px;background:#fff;border:1px solid #e3e5e9;color:#ef4760;font-weight:700;box-shadow:none;font-size:10px}
 .grid{display:grid;gap:16px}
 /* تراکم/فاصله‌گذاری (density) — کنترلِ مستقیمِ تاجر؛ همان الگویِ
    overrideهایِ data-sfb-card-shadow/hover پایین‌تر در همین فایل. */

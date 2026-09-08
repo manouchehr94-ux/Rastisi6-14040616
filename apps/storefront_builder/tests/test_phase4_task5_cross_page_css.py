@@ -42,6 +42,7 @@ HOST = "sfb-task5.example.com"
 _STOREFRONT_BUILDER_CSS = (
     Path(settings.BASE_DIR) / "apps" / "storefront_builder" / "static" / "css" / "storefront_builder.css"
 )
+_PRODUCT_CARD_CSS = Path(settings.BASE_DIR) / "apps" / "catalog" / "static" / "css" / "product_card.css"
 
 
 def _akhlaghi() -> Store:
@@ -794,6 +795,144 @@ class CategoryGridCircularNonHomeCssTests(TestCase):
         )
         self.assertNotIn("storefront_builder.css", home_html)
         self.assertNotIn("tiles-circular", home_html)
+        svc.publish(self.store)
+        resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+
+
+@override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
+class SecHeadSharedBaselineNonHomeCssTests(TestCase):
+    """Group C2.5 — cross-cutting `.sec-head` reconciliation, raised by
+    Group C2's independent review (a false claim that `.sec-head` has no
+    base CSS outside home.css at all masked a real divergence). Root
+    cause: `apps/catalog/static/css/product_card.css`'s own `.sec-head`
+    rule was a byte-for-byte copy of home.css's ORIGINAL, pre-refinement
+    base pass (its own file header literally says "کپی دقیق از
+    docs/spec/shop-frontend.html" — exact copy) — frozen at that point,
+    never updated as home.css's own later refinement passes changed
+    these values, and never given `.sec-head .more`/`.sec-head .more
+    svg`/`.sec-head .btn` at all (not stale — entirely absent). `.sec-
+    head` is the title-heading wrapper for the vast majority of section
+    templates in the whole registry (16 of 43 files under
+    storefront_builder/templates/.../sections use it), not any one
+    family — so this is a shared base-contract fix in `product_card.css`
+    itself (the file every page, Home included, actually loads it from),
+    not a per-family shadow override in storefront_builder.css (which
+    would create a second, competing definition).
+
+    Home's rendering is provably unaffected: home.css's own later,
+    equal-specificity rules already override every property this fix
+    changes — verified via a real-browser harness using Home's actual
+    `product_card.css`-then-`home.css` load order, confirming
+    byte-identical computed styles before and after this fix.
+
+    `.category-circle-section .sec-head{margin-bottom:6px}` (home.css:
+    535) is mirrored separately, in storefront_builder.css's own Group
+    C2 block — a genuinely family-specific override on top of this
+    shared baseline, not folded in here."""
+
+    def setUp(self):
+        cache.clear()
+        self.store = _akhlaghi()
+        _verified_domain(self.store, HOST)
+        self.draft = svc.get_or_create_draft(self.store)
+        from apps.catalog.models import Product, Vendor
+
+        vendor = Vendor.objects.create(store=self.store, slug="task5-c25-vendor", name="فروشنده تست")
+        Product.objects.create(
+            store=self.store, vendor=vendor, name="کالای تست", slug="task5-c25-product",
+            sku="T5C25-P", price="100000", status="active",
+        )
+
+    def test_newest_products_sec_head_renders_on_cart(self):
+        # newest_products is representative family #1 (distinct from
+        # circular/category_grid) — a title-only .sec-head with no
+        # `.more`/`.btn`, always rendered (no {% if title %} gate).
+        # Unlike best_sellers (which needs real OrderItem history via
+        # best_seller_service and would resolve empty here),
+        # newest_products only orders by -created_at, so 1 active
+        # product is sufficient to keep it visible on Public (it is
+        # also in OPTIONAL_PRODUCT_DATA_SECTION_KEYS).
+        section_structure_service.add_section(
+            draft=self.draft, section_key="newest_products", page_type=StorefrontPage.PageType.CART,
+        )
+        svc.publish(self.store)
+        resp = self.client.get(reverse("cart:detail"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="sec-head"', html)
+
+    def test_product_card_css_carries_the_merged_final_sec_head_baseline(self):
+        css = _PRODUCT_CARD_CSS.read_text(encoding="utf-8")
+        self.assertIn(
+            ".sec-head{display:flex;align-items:center;justify-content:space-between;"
+            "gap:12px;margin-bottom:9px;flex-wrap:wrap}",
+            css,
+        )
+        # `font-size` deliberately KEEPS its original fallback — see the
+        # CSS file's own comment: `--sfb-heading-size` is a real,
+        # already merchant-configurable, already-tested (test_appearance.
+        # py) per-store heading-size token, the ONLY CSS consumer of
+        # that variable anywhere, and NOT a stale copy like the other
+        # properties on this same rule — home.css itself never uses
+        # this variable at all for `.sec-head h2`. Only `font-weight`
+        # and `gap` (plain hardcoded values on both sides, no
+        # variable, no test coverage suggesting intentional divergence)
+        # are corrected to home.css's current merged value.
+        self.assertIn(
+            ".sec-head h2{font-size:var(--sfb-heading-size, 19px);font-weight:800;"
+            "display:flex;align-items:center;gap:6px}",
+            css,
+        )
+        # `.bar`'s violet-gradient WAS itself once real per-store brand
+        # theming (`--violet` resolves to `var(--brand-primary, ...)`
+        # per apps/core/static/css/tokens.css) — but home.css's OWN
+        # 3-pass history shows Home itself abandoned that gradient for
+        # a fixed neutral color, so mirroring the CURRENT #111 value is
+        # catching non-Home up to a decision Home already made, not
+        # removing a still-live feature (unlike font-size above).
+        self.assertIn(
+            ".sec-head h2 .bar{width:3px;height:17px;border-radius:1px;background:#111}",
+            css,
+        )
+        self.assertIn(
+            ".sec-head .more{color:#333;font-weight:700;font-size:10.5px;"
+            "display:flex;align-items:center;gap:5px}",
+            css,
+        )
+        self.assertIn(".sec-head .more svg{width:16px;height:16px}", css)
+        self.assertIn(
+            ".sec-head .btn,.product-section .sec-head .btn{height:23px;min-height:23px;"
+            "padding:0 9px;border-radius:999px;background:#fff;border:1px solid #e3e5e9;"
+            "color:#ef4760;font-weight:700;box-shadow:none;font-size:10px}",
+            css,
+        )
+        # No @680px override for `.sec-head h2` font-size: that would
+        # only exist to force the same, explicitly out-of-scope
+        # property back to a fixed value at small viewports.
+        self.assertNotIn("@media(max-width:680px){\n  .sec-head h2{font-size:15px}\n}", css)
+        # The stale, pre-fix values (a byte-for-byte copy of home.css's
+        # ORIGINAL pre-refinement base pass) must never reappear.
+        self.assertNotIn("margin-bottom:18px;flex-wrap:wrap}", css)
+        self.assertNotIn(".sec-head h2{font-size:var(--sfb-heading-size, 19px);font-weight:900", css)
+        self.assertNotIn(
+            "width:5px;height:22px;border-radius:4px;"
+            "background:linear-gradient(var(--violet),var(--violet-3))",
+            css,
+        )
+
+    def test_storefront_builder_css_carries_the_circular_sec_head_override(self):
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(".category-circle-section .sec-head{margin-bottom:6px}", css)
+
+    def test_home_page_is_unaffected_since_home_css_already_overrides_every_changed_property(self):
+        home_css = Path(settings.BASE_DIR, "apps", "catalog", "static", "css", "home.css").read_text(
+            encoding="utf-8",
+        )
+        # Home's OWN later cascade passes (not this fix) are what actually
+        # govern its rendering — confirm they still exist untouched.
+        self.assertIn(".sec-head{margin-bottom:9px}", home_css)
+        self.assertIn(".sec-head h2{font-size:16px}", home_css)
         svc.publish(self.store)
         resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
         self.assertEqual(resp.status_code, 200)

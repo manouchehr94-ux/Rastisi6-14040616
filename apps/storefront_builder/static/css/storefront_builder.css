@@ -4825,8 +4825,19 @@ a.sfb-v3-component-item,
    responsive transition (at 1000px), not two. Mirroring the dead @680px
    rules here would not match Home's actual rendering, so they are
    deliberately omitted — only `.tile-circle-label`'s own, genuinely
-   live, separate @680px font-size override is mirrored. */
+   live, separate @680px font-size override is mirrored.
+
+   Group C2.5 follow-up: `.category-circle-section .sec-head{margin-
+   bottom:6px}` (home.css:535) is now mirrored below too — genuinely
+   intentional-different-from-the-shared-baseline (which is fixed
+   separately, at its actual shared source in `product_card.css`, not
+   shadowed here) rather than a band-aid: the broader `.sec-head`
+   base-contract staleness affecting every section family was
+   independently root-caused and fixed once, in `product_card.css`
+   itself; this one nested override is the genuinely family-specific
+   remainder for circular mode specifically. */
 .category-circle-section{margin:9px 0 7px}
+.category-circle-section .sec-head{margin-bottom:6px}
 .tiles-circular{display:flex;flex-wrap:nowrap;justify-content:space-around;gap:28px;overflow:visible;padding:2px 12px 5px}
 .tile-circle{display:flex;flex-direction:column;align-items:center;text-align:center;color:var(--ink);gap:5px;width:auto;min-width:0;flex:0 1 145px}
 .tile-circle:hover .tile-circle-img{transform:none;box-shadow:0 2px 8px rgba(15,23,42,.08)}

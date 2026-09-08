@@ -972,3 +972,179 @@ detected.
 `backup/rastisi6-phase4-start-20260908` = `969a9b411ca712928c2bf31416bdde2ee8aaabb5`
 (unchanged). No destructive git operation used. `git status` before commit contains only
 the intended C2 production/test/evidence files.
+
+## Group C2.5 — cross-cutting `.sec-head` reconciliation
+
+Group C2's independent review found 1 IMPORTANT: its claim that `.section`/`.sec-head`
+have "no base CSS anywhere outside home.css today" was false, masking a real
+`margin-bottom` divergence (6px Home vs 18px non-Home). A follow-up commit (`072d977`)
+corrected the false claim and documented the gap as known-but-deferred; a second
+independent review confirmed the correction was accurate and introduced no new false
+claims, but still reported the same finding carried forward as 1 IMPORTANT (a real,
+unfixed divergence, honestly disclosed rather than a new defect). Per explicit
+instruction, this was NOT accepted as closing the chain — a bounded root-cause
+investigation and fix (Group C2.5) was required before Group C3 (`image_strip`) may
+begin, following the same order as every other group.
+
+### Investigation (before any CSS change)
+
+1. **Exhaustive whole-file grep of every `.sec-head` occurrence in home.css** (43 lines,
+   spanning base/unconditioned/@680/@1000/density-scoped/pattern-scoped/card-style-scoped
+   contexts) — categorized into:
+   - A **universal baseline** (bare `.sec-head`/`.sec-head h2`/`.sec-head h2 .bar`/
+     `.sec-head .more`/`.sec-head .more svg`/`.sec-head .btn,.product-section .sec-head
+     .btn`), touched across 3 unconditioned passes plus one `@680px` override — used by
+     any section with no more specific context.
+   - **3 genuinely family-specific nested overrides**: `.category-circle-section
+     .sec-head{margin-bottom:6px}` (circular, home.css:535), `.category-image-strip-
+     section .sec-head{margin-bottom:4px}` (image_strip, home.css:676 — belongs to Group
+     C3, not this group), `.catalog-product-wall-group .sec-head*` (a different,
+     non-`category_grid` section entirely, home.css:971 — out of Task 5's Group C scope).
+   - A larger set of `product_section` card-STYLE-variant overrides (`:has(.pcard.style-
+     fashion_sale)`, `:has(.pcard.style-beauty_retail)`, `:has(.pcard.style-
+     chocolate_retail)`, `:has(.pcard.style-minimal)`, `:has(.pcard.style-luxury_dark)`)
+     and pattern-background overrides (`.rsec[data-pattern]>.section>.sec-head*`) — these
+     already live in `product_card.css`/`storefront_builder.css`/`theme_palette.css`,
+     files loaded identically on Home and non-Home, so they are NOT a divergence source
+     at all (already consistently shared) and needed no change.
+
+2. **Located every real template emitting `.sec-head`**: 16 of 43 files under
+   `apps/storefront_builder/templates/storefront_builder/sections/` — confirming this is
+   the shared title-heading wrapper for the majority of the section registry, not a
+   `category_grid`-specific or `circular`-specific concept.
+
+3. **Root cause, found and confirmed**: `apps/catalog/static/css/product_card.css`'s own
+   base `.sec-head`/`.sec-head h2`/`.sec-head h2 .bar` rule (lines 6-8) is a byte-for-byte
+   copy of home.css's ORIGINAL, pre-refinement base pass — confirmed unambiguously by the
+   file's own header comment, "کپی دقیق از docs/spec/shop-frontend.html" ("exact copy
+   from docs/spec/shop-frontend.html"). It was frozen at that point and never updated as
+   home.css's own later "Universal dense storefront modules"/"V3"/"V4.2.2" passes refined
+   these values down. `.sec-head .more`/`.sec-head .more svg`/`.sec-head .btn` had **no**
+   base rule in `product_card.css` at all — not stale, entirely absent.
+
+4. **Load-order confirmation**: `apps/catalog/templates/catalog/home.html` loads
+   `product_card.css` then `home.css` (home.css's later, equal-specificity rules always
+   win); every non-Home template in scope (`cart_detail.html`, `product_list.html`,
+   `product_detail.html`, `collection_detail.html`) loads `product_card.css` then
+   `cart.css`/`storefront_builder.css` — never `home.css` — so nothing ever overrides
+   `product_card.css`'s stale base there. This is a genuine **shared missing base
+   contract** (category (a) from the required determination), not family-specific
+   overrides needing individual patching, confirming a narrow `.category-circle-section`
+   band-aid would have been wrong.
+
+5. **One property required a real revert, caught only by running the new tests**: initial
+   fixture browser verification failed on a markup assertion unrelated to CSS, which
+   surfaced that `--sfb-heading-size` (used only by `.sec-head h2`'s `font-size`) is set
+   via `templates/base.html` (`SHOP_HEADING_SIZE`, default 19) on every page's `<html>`
+   inline style — a real, already merchant-configurable, already-tested
+   (`test_appearance.py`, e.g. setting it to 22px) per-store heading-size token, and the
+   ONLY CSS consumer of that variable anywhere in the codebase. home.css itself never
+   uses this variable for `.sec-head h2` at all (its own merged value, 16px, is a plain
+   literal) — Home and non-Home have two independently-designed, both-still-current
+   heading-size mechanisms for this one property, not a staleness gap. **`font-size` was
+   excluded from this fix** (its original `var(--sfb-heading-size, 19px)` fallback is
+   unchanged) to avoid touching a live, tested, unrelated feature — only `font-weight`
+   and `gap` on that same selector (plain hardcoded values, no variable, no test evidence
+   of intentionality) were corrected.
+
+6. **`.bar`'s violet-gradient was also real per-store theming** (`--violet` resolves to
+   `var(--brand-primary, #6d28d9)` per `apps/core/static/css/tokens.css`) — but unlike
+   `font-size`, home.css's OWN 3-pass history shows Home itself abandoned that gradient
+   for a fixed neutral `#111` color across its later passes. Mirroring the CURRENT `#111`
+   value catches non-Home up to a decision Home already made, not removing a still-live
+   feature — kept in the fix.
+
+### Preferred outcome achieved
+
+One shared non-Home `.sec-head` baseline (fixed once, in `product_card.css`, the file
+every page actually loads it from) plus the one genuinely family-specific override
+directly relevant to Group C2 (`.category-circle-section .sec-head{margin-bottom:6px}`,
+mirrored in `storefront_builder.css`, matching the established per-group pattern). No new
+design, no beautification, no duplicate styling system — `font-size` explicitly excluded
+where evidence showed real intentional divergence; `image_strip`'s and `catalog_product_
+wall`'s own nested overrides are left for their own future groups, not folded in here.
+
+### Browser RED
+
+With both `product_card.css` and `storefront_builder.css` stashed, `SecHeadShared
+BaselineNonHomeCssTests`'s two CSS-content tests failed on their first assertions (the
+stale `margin-bottom:18px` base rule; the absent circular nested override), while the two
+markup/Home tests passed unaffected, as expected. (One iteration was needed: the first
+representative family chosen, `best_sellers`, requires real `OrderItem` history via
+`best_seller_service` and resolved empty in the test fixture — switched to
+`newest_products`, which only orders by `-created_at` and needs just 1 active product.)
+
+### Fix
+
+- `apps/catalog/static/css/product_card.css` — corrected the stale base `.sec-head`/
+  `.sec-head h2`/`.sec-head h2 .bar` rule in place (margin-bottom 18px→9px, h2
+  font-weight 900→800 and gap 9px→6px, bar width/height/radius/color corrected, violet
+  gradient→`#111`), and added the previously entirely-missing `.sec-head .more`/`.sec-
+  head .more svg`/`.sec-head .btn,.product-section .sec-head .btn` base rules — all
+  matching home.css's own current merged-final values, verified against the same
+  real-browser ground-truth harness technique used throughout Task 5.
+- `apps/storefront_builder/static/css/storefront_builder.css` — added `.category-circle-
+  section .sec-head{margin-bottom:6px}` to the existing Group C2 block.
+
+### Browser GREEN (1440×900 / 768×1024 / 390×844)
+
+Fresh fixtures: 1 active `Product` + a `newest_products` section on Cart (representative
+family #1, generic shared baseline, no nested override); 3 `Category` rows + a
+`category_grid` section with `display_mode: "circular"` **and an explicit `title`**
+(required — `category_grid.html` only renders its `.sec-head` div when a title is set,
+default is empty, which is exactly why this gap was silent in Group C2's own
+browser-GREEN proof) on Listing (representative family #2, the nested override).
+
+| Selector | 1440×900 | 768×1024 | 390×844 |
+|---|---|---|---|
+| Cart `.sec-head` margin-bottom | `9px` | `9px` | `9px` |
+| Cart `.sec-head h2` font-weight | `800` | `800` | `800` |
+| Cart `.sec-head h2 .bar` width/height/color | `3px`/`17px`/`rgb(17,17,17)` | — | — |
+| Listing `.category-circle-section .sec-head` margin-bottom | `6px` | `6px` | `6px` |
+
+All values match home.css's own merged-final result exactly, at every viewport. Zero
+console/page errors. Home itself re-verified: `curl` 200 OK on `/`.
+
+### Home-unaffected proof (before writing the fix)
+
+Before writing any CSS, a real-browser harness using Home's ACTUAL load order
+(`product_card.css` then `home.css`, matching `home.html` exactly) was probed for
+`.sec-head`/`.sec-head h2`/`.sec-head h2 .bar`/`.sec-head .more`/`.sec-head .more svg`
+and the nested `.category-circle-section .sec-head` override, BOTH with the stashed
+(pre-fix) `product_card.css` and with the fix applied. Every single computed value was
+byte-identical in both runs (`marginBottom:9px`/`6px`, `fontWeight:800`,
+`fontSize:16px`, bar `3px`/`17px`/`#111`, `.more` `10.5px`/`#333`, svg `16x16`) —
+mathematically expected (home.css's later, equal-specificity rules already override
+every property this fix touches) and now empirically confirmed, not merely assumed.
+
+### Cleanup
+
+Dev server stopped and verified via `ps aux` (no lingering process). DB restored via `cp`
+from the `post_c1_cleanup_baseline.sqlite3` continuation baseline
+(`9fe52ff5e97de6359c70c9bd3fdd3fd5344190a93252fb6f93bf41b2ee063c4d`) and hash-verified
+equal.
+
+### Permanent regression guard
+
+`SecHeadSharedBaselineNonHomeCssTests`: 2 markup-rendering tests (`newest_products` on
+Cart, Home-unaffected) + 1 full-declaration CSS-content test for `product_card.css`'s
+corrected/added rules (including explicit `assertNotIn` guards for every stale pre-fix
+value, and an explicit comment/assertion documenting why `font-size` is deliberately
+excluded) + 1 CSS-content test for the new `storefront_builder.css` nested override.
+
+### Verification
+
+Full sweep — `test_phase4_task5_cross_page_css` (28 tests, all pass) plus
+`test_qa_harness_contract`, `test_r4_settings_schema`, `test_section_registry`,
+`test_render_service`, `test_r4_mutation_api`, and **`test_appearance`** (added to this
+sweep specifically since this fix touches `.sec-head h2`'s font-weight/gap on the same
+selector `--sfb-heading-size` theming tests exercise, to catch any interaction) —
+**581 tests, OK (1 pre-existing skip)**. `manage.py check`: 0 issues. `manage.py
+makemigrations --check --dry-run`: no changes detected.
+
+### STOP conditions checked
+
+`main` = `973c1dc00bacb6f2f7d2604fa3880bb4d6250579` (unchanged). Start safety ref
+`backup/rastisi6-phase4-start-20260908` = `969a9b411ca712928c2bf31416bdde2ee8aaabb5`
+(unchanged). No destructive git operation used. `git status` before commit contains only
+the intended C2.5 production/test/evidence files.
