@@ -107,6 +107,41 @@ class HeroSliderNonHomeCssCompletenessTests(TestCase):
             'color:#fff;box-shadow:0 2px 10px rgba(15,23,42,.05)}',
             css,
         )
+
+    def test_storefront_builder_css_carries_the_later_hero_cascade_overrides(self):
+        # home.css layers two further, unconditioned passes ("V3 universal
+        # dense-marketplace fidelity pass", "V4.2.2 readability calibration")
+        # on top of the base hero rule above, plus their own mobile reset for
+        # .hero-text — all equal-specificity plain-class rules, so which one
+        # a browser actually renders depends on this file's own text order
+        # matching home.css's, not just each declaration's mere presence.
+        # Missing this layer was a real review-caught gap: hero_banner/
+        # image_slider rendered structurally correct but with the wrong text
+        # color/shadow, CTA shape, and tabs gradient above 680px.
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(".hero-inner{border-radius:6px;box-shadow:0 2px 8px rgba(15,23,42,.05)}", css)
+        self.assertIn(
+            '.hero-text{inset-inline-end:34px;bottom:48px;max-width:48%;'
+            'padding:7px 10px;text-shadow:none;color:#24252a}',
+            css,
+        )
+        self.assertIn(
+            '.hero-cta{min-width:88px;height:30px;border-radius:18px;border:0;'
+            'background:#fff;color:#222;font-weight:800;box-shadow:0 1px 4px rgba(0,0,0,.12)}',
+            css,
+        )
+        self.assertIn(
+            '.hero-tabs{padding-top:18px;'
+            'background:linear-gradient(0deg,rgba(40,55,70,.72),transparent)}',
+            css,
+        )
+        self.assertIn('.hero-cta{font-size:11.2px}', css)
+        # The override block must appear AFTER the base block (cascade order
+        # is what makes it win) — not merely present somewhere in the file.
+        self.assertLess(
+            css.index(".hero-slide{position:absolute;inset:0;width:100%;height:100%}"),
+            css.index(".hero-inner{border-radius:6px;box-shadow:0 2px 8px rgba(15,23,42,.05)}"),
+        )
         self.assertIn('.hero-inner[data-text-position="center"] .hero-text{', css)
 
     def test_home_page_is_unaffected_since_it_never_loads_storefront_builder_css(self):
@@ -199,3 +234,17 @@ class ProductSectionSpotlightAndCampaignBandNonHomeCssTests(TestCase):
             css,
         )
         self.assertIn('.beauty-section-title{display:grid;grid-template-columns:1fr auto 1fr', css)
+
+    def test_storefront_builder_css_carries_the_later_spotlight_cascade_overrides(self):
+        # Same missing-cascade-layer issue as hero (see the hero test above)
+        # — home.css's V3/V4.2.2 passes also touch product-spotlight-head's
+        # font-size and .beauty-section-title's own mobile breakpoint.
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(".product-spotlight-slider{border-radius:6px;border-color:#e0e2e6}", css)
+        self.assertIn(".product-spotlight-head h2{font-size:13.5px}", css)
+        self.assertIn(".beauty-section-title{gap:10px;margin-bottom:14px}", css)
+        self.assertLess(
+            css.index(".product-spotlight-track{position:relative;display:grid;"
+                       "grid-template-columns:minmax(0,1fr);flex:1;min-height:0;background:#fff}"),
+            css.index(".product-spotlight-head h2{font-size:13.5px}"),
+        )

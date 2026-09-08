@@ -4447,6 +4447,32 @@ a.sfb-v3-component-item,
   .hero-inner[data-text-position] .hero-text{inset-inline:12px;transform:none;width:auto;max-width:none;text-align:right}
 }
 
+/* Review follow-up (Task 5, Group A1) — home.css layers TWO further,
+   unconditioned cascade passes on top of the base hero rules above
+   ("V3 universal dense-marketplace fidelity pass" and "V4.2.2 readability
+   calibration"), plus their own separate mobile reset for .hero-text. All
+   three are equal-specificity plain-class rules, so home.css's own file
+   order decides the final computed style — reproduced here in the exact
+   same relative order so the cascade result matches, not just the base
+   rule. Missing this layer was flagged by review: hero_banner/image_slider
+   would otherwise render structurally correct but with the wrong text
+   color/shadow, CTA shape, and tabs-strip gradient above 680px. */
+.hero-inner{border-radius:6px;box-shadow:0 2px 8px rgba(15,23,42,.05)}
+.hero-text{inset-inline-end:34px;bottom:48px;max-width:48%;padding:7px 10px;text-shadow:none;color:#24252a}
+.hero-text h1{font-size:var(--sfb-hero-heading-size,24px);line-height:1.45;font-weight:900;margin-bottom:2px}
+.hero-text p{font-size:var(--sfb-hero-body-size,12px);color:#34363d;margin-bottom:9px}
+.hero-cta{min-width:88px;height:30px;border-radius:18px;border:0;background:#fff;color:#222;font-weight:800;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.hero-tabs{padding-top:18px;background:linear-gradient(0deg,rgba(40,55,70,.72),transparent)}
+.hero-tabs button{height:30px;font-size:8.5px}
+@media(max-width:680px){
+  .hero-text{inset-inline:12px;bottom:40px;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.45)}
+  .hero-text p{color:#fff}
+  .hero-text h1{font-size:17px}
+}
+.hero-text p{font-size:var(--sfb-hero-body-size,13px)}
+.hero-cta{font-size:11.2px}
+.hero-tabs button{font-size:10px}
+
 /* Phase 4 (Task 5, Group A2) — product_section's "campaign_band" mode and
    its "spotlight" mode (display_mode="carousel" + carousel_autoplay=True)
    were Home-only: previously existed only in home.css, so placing either
@@ -4533,6 +4559,21 @@ a.sfb-v3-component-item,
   .product-campaign-copy p{font-size:9px;margin:0;align-self:start}
   .product-campaign-link{grid-row:1/3;grid-column:3;margin:0;align-self:center;white-space:nowrap;padding:6px 8px;font-size:9px}
   .product-campaign-products{gap:7px}
+}
+
+/* Review follow-up (Task 5, Group A2) — same missing-cascade-layer issue
+   found in Group A1: home.css's "V3 universal dense-marketplace fidelity
+   pass" and "V4.2.2 readability calibration" also override
+   .product-spotlight-slider/-head/-dots and .beauty-section-title's own
+   mobile breakpoint. Reproduced in the same relative file order. */
+.product-spotlight-slider{border-radius:6px;border-color:#e0e2e6}
+.product-spotlight-head{padding:9px 10px 7px}
+.product-spotlight-head h2{font-size:12px}
+.product-spotlight-dots{padding:5px 8px 7px}
+.product-spotlight-head h2{font-size:13.5px}
+@media(max-width:680px){
+  .beauty-section-title{gap:10px;margin-bottom:14px}
+  .beauty-section-title h2{font-size:13px}
 }
 
 /* Generic luxury showcase hero / category shortcuts. */

@@ -27,6 +27,65 @@ envelopes → desktop/tablet/mobile → review → bounded commit.
   on a non-Home page via the real Draft→Publish→Public flow and asserts the markup appears,
   and (b) asserts the exact CSS declarations the fix depends on are present in
   `storefront_builder.css` — RED-verified via `git stash` on the CSS file only.
+- **Process correction learned from Group A1's review (applies to every remaining group)**:
+  `home.css` is not one clean per-feature block per selector — it carries at least two
+  further, unconditioned, file-wide cascade passes layered on top of nearly every
+  selector's "main" block: a comment-headed **"V3 universal dense-marketplace fidelity
+  pass"** (~home.css:510-540) and a **"V4.2.2 readability calibration"** (~home.css:720-735),
+  plus occasional narrowly-scoped extra resets (e.g. a second `@media(max-width:680px)`
+  block specifically re-touching `.hero-text`). Because these are equal-specificity plain
+  class rules, home.css's own file order — not just each rule's presence — decides the
+  final computed style. From Group A2 onward (and Group A1's fix-up below), every group's
+  CSS mirror is verified by `grep`-ing the selector name across the **entire** home.css
+  file (not just its "main" comment-headed block) before considering the fix complete, and
+  the mirrored rules are reproduced in the exact same relative order.
+
+## Review outcomes and fix-up for Groups A1/A2 (Playwright-adjacent process note)
+
+Group A1's review returned **FAIL** (3 IMPORTANT: the "V3"/"V4.2.2" passes above were not
+mirrored for `.hero-text`/`.hero-cta`/`.hero-tabs`, so hero_banner/image_slider would render
+structurally correct but with the wrong text color/shadow, CTA shape, and tabs gradient
+above 680px; 3 MINOR: a stale `.hero-inner` border-radius/shadow, a test that baked in the
+stale value, and an already-no-op density-reset omission). Fixed in a follow-up commit:
+appended the missing V3 override block, the V3-era `.hero-text` mobile reset, and the
+V4.2.2 override block, in the exact relative order home.css uses, plus a new test
+(`test_storefront_builder_css_carries_the_later_hero_cascade_overrides`) asserting both the
+override declarations AND that they appear textually after the base block (cascade order,
+not just presence). Re-verified via real browser: `.hero-text` color/shadow/padding/bottom,
+`.hero-cta` border-radius/min-width/height/font-size/box-shadow, `.hero-tabs`
+background-image/padding-top, `.hero-tabs button` height/font-size, and `.hero-inner`
+border-radius/box-shadow all now match home.css's actual final computed values exactly at
+1440×900; the mobile (390×844) breakpoint correctly restores white text + shadow, matching
+home.css's own mobile reset.
+
+Group A2's review returned **PASS** (0 CRITICAL, 0 IMPORTANT, 1 MINOR — a dangling
+`--accent` custom property referenced by the `data-palette-role="tone-3"` heading-accent
+rule that is never defined anywhere in the live app, confirmed pre-existing in home.css
+itself, not introduced by this commit). While applying Group A1's fix, the same systematic
+whole-file `grep` was applied to Group A2's `product-spotlight`/`beauty-section-title`
+selectors and found the identical class of gap the A2 review had not caught: V3's
+`.product-spotlight-slider{border-radius:6px;border-color:#e0e2e6}`,
+`.product-spotlight-head{padding:9px 10px 7px}`, `.product-spotlight-head h2{font-size:12px}`,
+`.product-spotlight-dots{padding:5px 8px 7px}`; V4.2.2's
+`.product-spotlight-head h2{font-size:13.5px}`; and `.beauty-section-title`'s own
+`@media(max-width:680px)` breakpoint (`gap:10px;margin-bottom:14px`,`h2{font-size:13px}`).
+Added proactively in the same follow-up commit, with a matching new test
+(`test_storefront_builder_css_carries_the_later_spotlight_cascade_overrides`). Verified via
+real browser that `.product-spotlight-slider`'s nested spotlight-mode override
+(`.product-section--spotlight .product-spotlight-slider{border:0;border-radius:0}`, added in
+the base A2 fix, specificity 0,2,0) correctly still wins over the new V3 addition
+(specificity 0,1,0) for the spotlight display mode — i.e. `border-radius:0` — exactly
+matching what the identical specificity relationship produces in home.css itself; the plain
+(non-spotlight) `carousel` display mode is where the new V3 rule actually takes effect.
+
+### Verification (fix-up)
+
+- `test_phase4_task5_cross_page_css`: **9/9 pass** (4 Group A1 + 3 Group A2 + 2 new
+  cascade-order tests).
+- Regression sweep: same suite set as Group A2 — **484 tests, 0 failures, 1 known skip**.
+- `python manage.py check`: clean. `makemigrations --check --dry-run`: no changes.
+- Real dev DB restored and SHA256-stable at `d53a687b...` after this fix-up's own
+  browser-verification fixture mutation.
 
 ## Group A1 — `hero_banner` (default `overlay` style) + `image_slider`
 
