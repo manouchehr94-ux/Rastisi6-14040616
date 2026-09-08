@@ -804,15 +804,28 @@ category-circle-section">` → `<div class="tiles-circular">` → `<a class="til
 
 Exhaustive whole-file grep of `home.css` for every one of these selectors (word-boundary
 checked against similarly-named unrelated classes like `.category-fashion-tile`,
-`.brand-tile`) found FOUR separate passes — the most cascade-scattered `category_grid`
-mode:
+`.brand-tile`) found the most cascade-scattered `category_grid` mode so far: `.tile-circle`
+family selectors are touched by 4 passes (base at home.css:149; "Universal dense storefront
+modules" at :294; "V3 universal dense-marketplace fidelity pass" at :534, with its own
+`@media(max-width:1000px)` block; and a final unconditioned pass at :734 touching only
+`.tile-circle-label`'s font-size, with its own `@680px` override) — and
+`.category-circle-section`'s own margin is touched by a 5th, partially overlapping set of
+occurrences (the "Universal dense" pass at :294, the "V3" pass at :534, and a further
+unlabeled "Final vertical rhythm" pass at :668 — the last of which is textually latest and
+wins):
 
-1. Base pass (unconditioned + its own `@media(max-width:680px)` block).
+1. Base pass (unconditioned + its own `@media(max-width:680px)` block) — `.tile-circle`
+   family only, does not touch `.category-circle-section`.
 2. "Universal dense storefront modules" pass (unconditioned + its own separate
-   `@media(max-width:680px)` block).
+   `@media(max-width:680px)` block) — both `.category-circle-section` and `.tile-circle`
+   family.
 3. "V3 universal dense-marketplace fidelity pass" (unconditioned + its own
-   `@media(max-width:1000px)` block — no `@680px` block of its own for these selectors).
-4. "V4.2.2 readability calibration" (unconditioned, `.tile-circle-label` font-size only,
+   `@media(max-width:1000px)` block — no `@680px` block of its own for these selectors) —
+   both `.category-circle-section`/`.category-circle-section .sec-head` and `.tile-circle`
+   family.
+4. "Final vertical rhythm" (unconditioned, `.category-circle-section` margin only —
+   textually last, so it wins for that property).
+5. "V4.2.2 readability calibration" (unconditioned, `.tile-circle-label` font-size only,
    plus its own `@media(max-width:680px)` override).
 
 Merged-final desktop values were derived property-by-property in file order (last wins
@@ -855,10 +868,34 @@ was used for ground truth instead of trying to render real Home.
 
 `.category-circle-section`'s own margin (analogous to Group B's `.banner-section` and
 Group A3's `.amazing-offers-section`) is in scope and mirrored; its nested
-`.category-circle-section .sec-head{margin-bottom:6px}` override is NOT — consistent with
-every prior Task 5 group, `.section`/`.sec-head` themselves have no base CSS anywhere
-outside home.css today (confirmed by grep across every CSS file in the repo), a
-pre-existing gap wider than any single section family and out of this task's scope.
+`.category-circle-section .sec-head{margin-bottom:6px}` override (home.css:535) is NOT.
+
+**Correction (raised by independent review of the original commit, `949d1ac`):** the
+original version of this section claimed `.section`/`.sec-head` have "no base CSS anywhere
+outside home.css today." That is false and was not actually verified against every CSS
+file before being written. `apps/catalog/static/css/product_card.css:6` defines a real,
+complete, deliberately-designed base rule set —
+`.sec-head{display:flex;align-items:center;justify-content:space-between;gap:12px;
+margin-bottom:18px;flex-wrap:wrap}` plus its own `.sec-head h2`/`.sec-head h2 .bar` styling
+(19px heading, violet gradient bar) — loaded on every non-Home envelope in scope
+(`cart_detail.html`, `product_list.html`, `product_detail.html`, `collection_detail.html`).
+Non-Home pages are NOT unstyled for section headings; they get a real, different, generic
+heading treatment. Measured via two standalone browser harnesses (Home's own cascade vs.
+the real non-Home load order): `.sec-head`'s `margin-bottom` is `6px` on Home (the nested
+override wins) vs. `18px` on non-Home (product_card.css's base rule, unmirrored) whenever a
+merchant sets a `title` on this section (the default empty title means neither this
+section's own tests nor its browser-GREEN proof ever render the `.sec-head` div, so this
+gap is real but silent today).
+
+Because `.sec-head` is the SAME shared wrapper class used by the title heading of
+virtually every section family in the registry — not something specific to
+`category_grid` or to `circular` mode — reconciling it with Home's per-section values is a
+cross-cutting concern spanning the whole builder, not a bounded per-group fix. Mirroring
+only `.category-circle-section .sec-head{margin-bottom:6px}` here would leave every other
+section's heading in the identical, unaddressed divergent state — an arbitrary, partial
+fix, not a real answer. **Left as an explicitly tracked, known, pre-existing gap** (see the
+CSS file's own corrected comment) for a future dedicated audit, rather than patched ad hoc
+mid-group.
 
 ### Browser RED
 
@@ -888,7 +925,10 @@ blocks from passes 1/2.
 ### Browser GREEN (1440 / 768 / 390)
 
 Fresh fixture: 3 `Category` rows, one `category_grid` section with `display_mode:
-"circular"` and explicit `category_ids` on Cart.
+"circular"` and explicit `category_ids` on Cart. (This is a separate probe from the
+ground-truth harness above, which used 900×800 for its own mid-range check — both 768px
+and 900px sit in the same 680–1000px media-query band and produce identical computed
+values, confirmed independently in both passes.)
 
 | Property | 1440×900 | 768×900 | 390×844 |
 |---|---|---|---|

@@ -4784,18 +4784,36 @@ a.sfb-v3-component-item,
 /* Phase 4 (Task 5, Group C2) — category_grid's "circular" display mode
    (`.tiles-circular`/`.tile-circle`/`.tile-circle-img`/`.tile-circle-wm`/
    `.tile-circle-label`) was Home-only. home.css layers this selector
-   family across FOUR passes (base; an unconditioned "Universal dense
-   storefront modules" pass; the unconditioned "V3 universal
-   dense-marketplace fidelity pass" plus its own @1000px override; and a
-   final "V4.2.2 readability calibration" pass touching only
-   `.tile-circle-label`'s font-size). Merged-final values below, verified
-   against a standalone real-browser harness loading home.css alone with
-   this exact markup (not just derived by reading the source) — the
-   ``.category-circle-section``/``.sec-head`` wrapper's own font/flex
-   styling (as opposed to its margin, mirrored below) stays out of scope,
-   consistent with every prior Task 5 group: `.section`/`.sec-head` have
-   no base CSS anywhere outside home.css today, a pre-existing gap wider
-   than any one section family.
+   family across passes at home.css:294 ("Universal dense storefront
+   modules"), :534 ("V3 universal dense-marketplace fidelity pass" —
+   plus its own @1000px override), and :668 ("Final vertical rhythm";
+   the ":533" `.sec-head` margin nested override sits in the same "V3"
+   pass, not a separate one), on top of the base pass at :294. Merged-
+   final values below, verified against a standalone real-browser
+   harness loading home.css alone with this exact markup (not just
+   derived by reading the source).
+
+   ``.category-circle-section .sec-head``'s own nested margin override
+   (home.css:535, `margin-bottom:6px`) and the rest of `.sec-head`'s
+   styling are DELIBERATELY left unmirrored here — CORRECTION: an
+   earlier version of this comment incorrectly claimed `.section`/
+   `.sec-head` have no base CSS outside home.css at all; in fact
+   `apps/catalog/static/css/product_card.css` defines a real, complete,
+   deliberately-designed base `.sec-head`/`.sec-head h2`/`.sec-head h2
+   .bar` rule set (loaded on every non-Home envelope in scope) with its
+   OWN different values (18px margin, 19px heading, violet gradient
+   bar) — non-Home pages are NOT unstyled here, they get a genuinely
+   different, universal heading treatment. Since `.sec-head` is the
+   SAME shared wrapper class used by virtually every section family's
+   own title heading (not something specific to `category_grid` or to
+   `circular` mode), reconciling it with Home's per-section values is a
+   cross-cutting concern spanning the whole builder, not a bounded
+   per-group fix — silently patching only this one selector here would
+   leave every other section's heading in the identical, unaddressed
+   divergent state, which is worse than the status quo (an arbitrary,
+   inconsistent partial fix rather than a real answer). Left as an
+   explicitly tracked, known, pre-existing gap for a future dedicated
+   audit, not patched ad hoc mid-group.
 
    Judgment call: the base pass's and the "Universal dense storefront
    modules" pass's own `@media(max-width:680px)` overrides for
