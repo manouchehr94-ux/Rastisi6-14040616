@@ -95,6 +95,15 @@
       <button type="button" class="sfb-v22-action-btn is-primary-context" @click="openAppearancePanel()" title="ظاهر فروشگاه"><span class="sfb-v22-action-icon">◉</span><span>ظاهر فروشگاه</span></button>
       <a class="sfb-v3-ghost-btn" href="{% url 'dashboard:storefront-builder-templates' %}">▦ <span>قالب‌های آماده</span></a>
       <a class="sfb-v3-ghost-btn" href="{% url 'dashboard:storefront-builder-preview' %}?page={{ page_type }}" target="_blank" rel="noopener">◎ <span>پیش‌نمایش</span></a>
+      {% if layout.r4_editor_enabled %}
+      {# Phase 4 (Task 3A) — R4's real dashboard entry point. Deliberately #}
+      {# gated on the existing r4_editor_enabled per-Store flag (unchanged #}
+      {# authorization: same STOREFRONT_LAYOUT_MANAGE-permitted page already #}
+      {# resolves `layout` — no new query, no weakened authorization) so a #}
+      {# store can be rolled back to the legacy editor during the R4 #}
+      {# migration without any code change, until R4 reaches full parity. #}
+      <a class="sfb-v3-ghost-btn" href="{% url 'dashboard:storefront-builder-r4-editor' %}?page={{ page_type }}">✦ <span>ادیتور جدید (R4)</span></a>
+      {% endif %}
       <form method="post" action="{% url 'dashboard:storefront-builder-publish' %}" class="sfb-prototype-publish-form"
             onsubmit="return confirm('این پیش‌نویس روی فروشگاه عمومی منتشر شود؟')">
         {% csrf_token %}

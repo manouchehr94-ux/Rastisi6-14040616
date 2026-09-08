@@ -2,6 +2,22 @@
 
 ## Result: PASS
 
+## Addendum (found during Task 3's wider regression sweep)
+
+Task 3B's regression run (the first time this session ran the FULL
+`apps.storefront_builder.tests.test_views` module, not just the `FullscreenEditorTests` class the
+official Phase-3 baseline scopes) surfaced one more test whose own assertions encoded the exact
+pre-Task-2 behavior for `product_section`'s `data_source="collection"` single-reference mode:
+`ProductSectionSettingsFormTests.test_cross_store_collection_rejected_by_data_service_not_crash`
+asserted a foreign-Store collection `source_id` was silently persisted (302, accepted) — this
+should have been caught by Task 2's own regression sweep, which ran only
+`test_views.FullscreenEditorTests`, not the full module. Renamed to
+`test_cross_store_collection_rejected_before_persisting` and updated to assert the new, correct,
+intentional behavior (200 + Persian rejection message, `data_source` unchanged) — the exact same
+outcome the `category` case already had a dedicated Task 2 test for. No other test in the full
+`test_views` module encoded the old behavior (verified: full module run, 215 tests, only the two
+known pre-existing `FullscreenEditorTests` exceptions remain).
+
 ## Scope
 
 Unify the two independently-maintained Store-ownership validators — legacy's

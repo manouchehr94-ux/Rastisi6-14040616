@@ -243,3 +243,41 @@ class CollectionIndexBoundaryTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.context["page_obj"].number, 2)
         self.assertEqual(resp.context["page_obj"].paginator.num_pages, 2)
+
+    def test_editing_collection_detail_section_composition_never_leaks_into_index(self):
+        """Phase 4 (Task 3D, Ruling L) — end-to-end proof of the boundary
+        both prior tests approach only structurally: a merchant customizing
+        the shared ``StorefrontPage.PageType.COLLECTION`` section
+        composition (which is Collection DETAIL's, per Ruling L) must never
+        become visible on Collection Index, even though both routes resolve
+        the exact same page_type/context builder call."""
+        from apps.storefront_builder.models import StorefrontPage, StorefrontSection
+        from apps.storefront_builder.services import layout_service
+
+        svc.create_collection(self.store, name="کالکشنِ مرزیِ سه")
+        draft = layout_service.get_or_create_draft(self.store)
+        collection_page = draft.get_page(StorefrontPage.PageType.COLLECTION)
+        marker_section = StorefrontSection.objects.create(
+            page=collection_page, section_key="rich_text", order=999,
+            settings={"body_html": "<p>PHASE4-TASK3D-DETAIL-ONLY-MARKER</p>"},
+        )
+        layout_service.publish(self.store)
+
+        resp = self.client.get(reverse("catalog:collection-index"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, "PHASE4-TASK3D-DETAIL-ONLY-MARKER")
+
+        # Sanity check: the marker section IS real, on the correct page —
+        # this proves the test would have caught a leak, not that the
+        # section was silently never created.
+        self.assertTrue(
+            StorefrontSection.objects.filter(pk=marker_section.pk, page=collection_page).exists()
+        )
+
+    def test_index_uses_canonical_global_header_and_footer(self):
+        """Ruling L — Collection Index stays on the shared storefront shell
+        (canonical Global Appearance/Header/Footer), it just never resolves
+        a "current" collection or Builder section composition of its own."""
+        resp = self.client.get(reverse("catalog:collection-index"))
+        template_names = [t.name for t in resp.templates if t.name]
+        self.assertIn("storefront_shell.html", template_names)

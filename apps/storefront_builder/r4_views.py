@@ -226,7 +226,12 @@ def storefront_r4_editor(request):
         raise Http404
 
     draft = layout_service.get_or_create_draft(store, user=request.user)
-    page = draft.get_page(StorefrontPage.PageType.HOME)
+    # Phase 4 (Task 3B) — the exact same validated PageType input the legacy
+    # editor uses (StorefrontPage.resolve_page_type): an absent/invalid
+    # ``?page=`` silently resolves to Home, so every existing bookmark/link
+    # to this route keeps working unchanged.
+    page_type = StorefrontPage.resolve_page_type(request.GET.get("page"))
+    page = draft.get_page(page_type)
     container_service.ensure_page_containers(page)
     sections = page.sections.select_related("cell", "cell__container").order_by("order", "id")
 
@@ -249,16 +254,17 @@ def storefront_r4_editor(request):
             "is_locked": section_obj.is_locked,
         })
 
-    # The safe "Add Section" library projection: only definitions allowed
-    # on Home and not hidden_from_library — Registry stays the single
-    # source of truth, never duplicated into JS.
+    # The safe "Add Section" library projection: only definitions allowed on
+    # the CURRENT page_type and not hidden_from_library — Registry stays the
+    # single source of truth, never duplicated into JS. Phase 4 (Task 3B):
+    # generalized from a hardcoded Home to the resolved page_type above.
     structure_library = [
         {
             "category": category,
             "items": [{"key": d.key, "label": d.label_fa} for d in members],
         }
         for category, members in section_registry.list_library_groups(
-            page_type=StorefrontPage.PageType.HOME,
+            page_type=page_type,
         )
     ]
 
@@ -275,6 +281,12 @@ def storefront_r4_editor(request):
             "layout": layout,
             "draft": draft,
             "page": page,
+            "page_type": page_type,
+            # Phase 4 (Task 3B) — the page switcher's data source: the exact
+            # same 6 registered PageType choices the legacy editor's own
+            # switcher already uses (``StorefrontPage.PageType.choices``),
+            # never a second hardcoded list.
+            "page_types": StorefrontPage.PageType.choices,
             "sections": sections,
             "r4_edit_revision": draft.edit_revision,
             "structure_items": structure_items,

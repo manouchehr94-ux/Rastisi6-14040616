@@ -10,13 +10,22 @@
 
 {% block content %}
 <div class="r4-builder" data-r4-shell="true" data-r4-inspector-open="false"
-     data-r4-sidebar-expanded="false" data-r4-structure-open="false" data-edit-revision="{{ r4_edit_revision }}">
+     data-r4-sidebar-expanded="false" data-r4-structure-open="false" data-edit-revision="{{ r4_edit_revision }}"
+     data-r4-page-type="{{ page_type }}">
   <header class="r4-topbar">
     <button type="button" id="r4SidebarToggle" class="r4-icon-btn"
             aria-label="نمایش/پنهان‌سازی نوار کناری مدیریت" aria-expanded="false">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
     </button>
     <strong>طراحی فروشگاه</strong>
+    <nav id="r4PageSwitcher" aria-label="انتخاب صفحه" class="r4-page-switcher">
+      <select id="r4PageSwitcherSelect" class="r4-control" aria-label="صفحه در حال ویرایش"
+              onchange="window.location.search = '?page=' + encodeURIComponent(this.value)">
+        {% for value, label in page_types %}
+        <option value="{{ value }}" {% if value == page_type %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </nav>
     <button type="button" id="r4StructureToggle" class="r4-icon-btn r4-structure-toggle-btn"
             aria-label="نمایش/پنهان‌سازی ساختار صفحه" aria-expanded="false">ساختار</button>
     <button type="button" id="r4GlobalDesignToggle" class="r4-icon-btn r4-structure-toggle-btn"
@@ -67,7 +76,7 @@
       <iframe
         id="r4PreviewFrame"
         title="پیش‌نمایش فروشگاه"
-        src="{% url 'dashboard:storefront-builder-preview' %}?page=home">
+        src="{% url 'dashboard:storefront-builder-preview' %}?page={{ page_type }}">
       </iframe>
     </section>
     <aside id="r4Inspector" hidden aria-label="تنظیمات بخش"></aside>

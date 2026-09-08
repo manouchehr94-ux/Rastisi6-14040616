@@ -49,6 +49,21 @@ class EditorAccessTests(StorefrontBuilderViewsTestCase):
         # نوارِ اعلانِ section نباید در کتابخانه ظاهر شود (چکپوینتِ ۹)
         self.assertNotContains(resp, 'section_key": "announcement_bar"')
 
+    def test_r4_editor_link_hidden_when_gate_disabled(self):
+        # Phase 4 (Task 3A) — StorefrontLayout.r4_editor_enabled defaults
+        # False; the legacy editor must not offer a link into a route that
+        # would 404.
+        resp = self.client.get(reverse("dashboard:storefront-builder-editor"))
+        self.assertNotContains(resp, "ادیتور جدید (R4)")
+
+    def test_r4_editor_link_shown_when_gate_enabled(self):
+        layout = svc.get_or_create_layout(self.store)
+        layout.r4_editor_enabled = True
+        layout.save(update_fields=["r4_editor_enabled"])
+        resp = self.client.get(reverse("dashboard:storefront-builder-editor"))
+        self.assertContains(resp, "ادیتور جدید (R4)")
+        self.assertContains(resp, reverse("dashboard:storefront-builder-r4-editor"))
+
     def test_anonymous_denied(self):
         self.client.logout()
         resp = self.client.get(reverse("dashboard:storefront-builder-editor"))
@@ -1147,11 +1162,16 @@ class ProductSectionSettingsFormTests(StorefrontBuilderViewsTestCase):
         self.section.refresh_from_db()
         self.assertEqual(self.section.settings["data_source"], "newest")  # unchanged
 
-    def test_cross_store_collection_rejected_by_data_service_not_crash(self):
-        """انتخابِ یک کالکشنِ متعلق به فروشگاهِ دیگر (مثلاً با دستکاریِ
-        فرم) نباید کرش کند — در سطحِ section_registry هر source_id مثبت
-        پذیرفته می‌شود (بدونِ چکِ مالکیت)؛ مالکیت در section_data_service
-        در زمانِ رندر چک می‌شود، نه اینجا."""
+    def test_cross_store_collection_rejected_before_persisting(self):
+        """Phase 4 (Task 2) — انتخابِ یک کالکشنِ متعلق به فروشگاهِ دیگر
+        (مثلاً با دستکاریِ فرم) نباید کرش کند و دیگر نباید بی‌صدا ذخیره
+        هم بشود: پیش از این چکپوینت، section_registry هر source_id مثبت
+        را می‌پذیرفت (بدونِ چکِ مالکیت) و فقط section_data_service در
+        زمانِ رندر (نه در زمانِ نوشتن) مالکیت را چک می‌کرد. Task 2 همان
+        چکِ مالکیتِ مشترک (ResourceSource-محور) را به این مسیر هم اضافه
+        کرد — دقیقاً همان رفتاری که category_grid/`data_source=category`
+        از قبل داشت، اکنون برایِ `data_source=collection` هم برقرار
+        است."""
         other_store = Store.objects.create(
             name="فروشگاه دیگر تنظیمات", slug="ps-settings-other-store", admin_subdomain="ps-settings-other-store",
         )
@@ -1161,9 +1181,10 @@ class ProductSectionSettingsFormTests(StorefrontBuilderViewsTestCase):
             "data_source": "collection", "source_id": str(other_collection.pk), "item_limit": "8",
             "display_mode": "carousel",
         })
-        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "متعلق به این فروشگاه نیست")
         self.section.refresh_from_db()
-        self.assertEqual(self.section.settings["source_id"], other_collection.pk)
+        self.assertEqual(self.section.settings["data_source"], "newest")  # unchanged
 
     def test_duplicate_then_independent_edit_does_not_affect_original(self):
         """سناریوی «دو نمونه‌ی مستقلِ product_section» (Playwright B) از

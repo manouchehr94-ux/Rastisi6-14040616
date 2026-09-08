@@ -95,14 +95,13 @@ def _record_edit_history(label):
 
 
 def _resolve_page_type(raw) -> str:
-    """Phase 2 (سازنده‌ی تک‌صفحه‌ای): رشته‌یِ خامِ ``page`` (از querystring
-    یا فرمِ POST) را به یکی از شش نوعِ معتبرِ ``StorefrontPage.PageType``
-    حل می‌کند — مقدارِ غایب/نامعتبر بی‌صدا به ``HOME`` بازمی‌گردد (نه
-    خطا) تا لینک/فرمِ قدیمیِ بدونِ این پارامتر (پیش از این چکپوینت)
-    دقیقاً همان رفتارِ فعلی را حفظ کند."""
-    if raw in StorefrontPage.PageType.values:
-        return raw
-    return StorefrontPage.PageType.HOME
+    """Phase 2 (سازنده‌ی تک‌صفحه‌ای)، Phase 4 (Task 3B) — رشته‌یِ خامِ ``page``
+    (از querystring یا فرمِ POST) را به یکی از شش نوعِ معتبرِ
+    ``StorefrontPage.PageType`` حل می‌کند. اکنون فقط یک نازک‌لایه‌یِ
+    سازگاریِ اسمِ قدیمی روی ``StorefrontPage.resolve_page_type`` است —
+    که R4 (``r4_views.py``) هم مستقیماً از همان تابعِ مشترک استفاده
+    می‌کند تا دو زنجیره‌یِ اعتبارسنجیِ کپی‌شده وجود نداشته باشد."""
+    return StorefrontPage.resolve_page_type(raw)
 
 
 @staff_required

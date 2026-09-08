@@ -62,7 +62,7 @@ class AddSectionTests(R4VerticalSliceTestCase):
         before_count = self._history_count()
         response = self._post_json({
             "base_revision": starting_revision,
-            "mutation": {"type": "section.add", "section_key": "rich_text"},
+            "mutation": {"type": "section.add", "section_key": "rich_text", "page_type": "home"},
         })
         self.assertEqual(response.status_code, 200)
         body = response.json()
@@ -84,7 +84,7 @@ class AddSectionTests(R4VerticalSliceTestCase):
 
         self._post_json({
             "base_revision": self.draft.edit_revision,
-            "mutation": {"type": "section.add", "section_key": "faq"},
+            "mutation": {"type": "section.add", "section_key": "faq", "page_type": "home"},
         })
 
         containers_after = set(StorefrontContainer.objects.filter(page=self.home_page).values_list("pk", flat=True))
@@ -98,7 +98,7 @@ class AddSectionTests(R4VerticalSliceTestCase):
         starting_revision = self.draft.edit_revision
         response = self._post_json({
             "base_revision": starting_revision,
-            "mutation": {"type": "section.add", "section_key": "does_not_exist"},
+            "mutation": {"type": "section.add", "section_key": "does_not_exist", "page_type": "home"},
         })
         self.assertEqual(response.status_code, 400)
         self.assertEqual(self._refresh_revision(), starting_revision)
@@ -107,7 +107,7 @@ class AddSectionTests(R4VerticalSliceTestCase):
         starting_revision = self.draft.edit_revision
         response = self._post_json({
             "base_revision": starting_revision,
-            "mutation": {"type": "section.add", "section_key": "announcement_bar"},
+            "mutation": {"type": "section.add", "section_key": "announcement_bar", "page_type": "home"},
         })
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["code"], "section_hidden_from_library")
@@ -117,7 +117,7 @@ class AddSectionTests(R4VerticalSliceTestCase):
         starting_revision = self.draft.edit_revision
         response = self._post_json({
             "base_revision": starting_revision,
-            "mutation": {"type": "section.add", "section_key": "product_main"},
+            "mutation": {"type": "section.add", "section_key": "product_main", "page_type": "home"},
         })
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["code"], "section_not_allowed_on_page")
@@ -129,7 +129,7 @@ class AddSectionTests(R4VerticalSliceTestCase):
         before_count = self.home_page.sections.filter(section_key="trust_features").count()
         response = self._post_json({
             "base_revision": starting_revision,
-            "mutation": {"type": "section.add", "section_key": "trust_features"},
+            "mutation": {"type": "section.add", "section_key": "trust_features", "page_type": "home"},
         })
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["code"], "max_instances_exceeded")
@@ -140,12 +140,12 @@ class AddSectionTests(R4VerticalSliceTestCase):
         starting_revision = self.draft.edit_revision
         self._post_json({
             "base_revision": starting_revision,
-            "mutation": {"type": "section.add", "section_key": "rich_text"},
+            "mutation": {"type": "section.add", "section_key": "rich_text", "page_type": "home"},
         })
         count_after_first = self.home_page.sections.count()
         response = self._post_json({
             "base_revision": starting_revision,
-            "mutation": {"type": "section.add", "section_key": "rich_text"},
+            "mutation": {"type": "section.add", "section_key": "rich_text", "page_type": "home"},
         })
         self.assertEqual(response.status_code, 409)
         self.assertEqual(self.home_page.sections.count(), count_after_first)
@@ -450,7 +450,7 @@ class SparsePageOrderingTests(R4VerticalSliceTestCase):
         starting_revision = self.draft.edit_revision
         response = self._post_json({
             "base_revision": starting_revision,
-            "mutation": {"type": "section.add", "section_key": "faq"},
+            "mutation": {"type": "section.add", "section_key": "faq", "page_type": "home"},
         })
         self.assertEqual(response.status_code, 200)
 
@@ -478,7 +478,7 @@ class SparsePageOrderingTests(R4VerticalSliceTestCase):
 
         add_response = self._post_json({
             "base_revision": revision_after_remove,
-            "mutation": {"type": "section.add", "section_key": "faq"},
+            "mutation": {"type": "section.add", "section_key": "faq", "page_type": "home"},
         })
         self.assertEqual(add_response.status_code, 200)
         revision_after_add = self._refresh_revision()
@@ -720,7 +720,7 @@ class TenantAndScopeSecurityTests(R4VerticalSliceTestCase):
         self.layout.save(update_fields=["r4_editor_enabled"])
         response = self._post_json({
             "base_revision": self.draft.edit_revision,
-            "mutation": {"type": "section.add", "section_key": "rich_text"},
+            "mutation": {"type": "section.add", "section_key": "rich_text", "page_type": "home"},
         })
         self.assertEqual(response.status_code, 404)
 
@@ -1332,6 +1332,62 @@ class GlobalDesignUiContractTests(R4MutationApiTestCase):
         self.assertIn("disabled", undo_tag)
 
 
+class NonHomePageEditorLoadTests(R4MutationApiTestCase):
+    """Phase 4 (Task 3B) — the R4 editor GET route must resolve, render, and
+    scope its "Add Section" library to whichever ``?page=`` was requested,
+    not always Home."""
+
+    def _get_editor(self, page=None):
+        url = reverse("dashboard:storefront-builder-r4-editor")
+        if page is not None:
+            url += f"?page={page}"
+        return self.client.get(url)
+
+    def test_missing_page_param_defaults_to_home(self):
+        response = self._get_editor()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["page_type"], StorefrontPage.PageType.HOME)
+
+    def test_invalid_page_param_defaults_to_home(self):
+        response = self._get_editor(page="not_a_real_page")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["page_type"], StorefrontPage.PageType.HOME)
+
+    def test_cart_page_param_loads_cart_page(self):
+        response = self._get_editor(page="cart")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["page_type"], StorefrontPage.PageType.CART)
+        self.assertEqual(response.context["page"].page_type, StorefrontPage.PageType.CART)
+        # cart_items/cart_summary are cart-only, mandatory, context-aware —
+        # they must appear in Cart's own structure projection.
+        structure_keys = {item["label"] for item in response.context["structure_items"]}
+        self.assertTrue(structure_keys)
+
+    def test_page_switcher_renders_all_six_page_types(self):
+        response = self._get_editor(page="cart")
+        body = response.content.decode()
+        self.assertIn('id="r4PageSwitcherSelect"', body)
+        for value, _label in StorefrontPage.PageType.choices:
+            self.assertIn(f'value="{value}"', body)
+        self.assertIn('data-r4-page-type="cart"', body)
+
+    def test_preview_iframe_targets_the_current_page_type(self):
+        response = self._get_editor(page="listing")
+        body = response.content.decode()
+        self.assertIn("?page=listing", body)
+
+    def test_add_section_library_is_scoped_to_current_page_type(self):
+        # rich_text is allowed on all 6 page types; fashion_lifestyle_hero
+        # is Home-only — Cart's library must include the former and never
+        # the (already-hidden-from-library-by-page-restriction) latter.
+        response = self._get_editor(page="cart")
+        body = response.content.decode()
+        add_select_start = body.index('id="r4StructureAddSelect"')
+        add_select_end = body.index("</select>", add_select_start)
+        add_select_html = body[add_select_start:add_select_end]
+        self.assertIn('value="rich_text"', add_select_html)
+
+
 class ClientQueueStaticContractTests(TestCase):
     def setUp(self):
         js_path = Path(__file__).resolve().parents[1] / "static" / "storefront_builder" / "r4_editor.js"
@@ -1350,3 +1406,98 @@ class ClientQueueStaticContractTests(TestCase):
         self.assertIn("r4UndoButton", self.content)
         self.assertIn("r4RedoButton", self.content)
         self.assertIn("r4PublishButton", self.content)
+
+
+class NonHomePageStructureMutationTests(R4VerticalSliceTestCase):
+    """Phase 4 (Task 3B) — section.add/remove/duplicate/move must work on
+    every StorefrontPage.PageType, not just Home. Before this task,
+    section_structure_service hardcoded Home for every operation."""
+
+    def _cart_page(self):
+        return self.draft.get_page(StorefrontPage.PageType.CART)
+
+    def test_add_section_on_cart_page_succeeds(self):
+        cart_page = self._cart_page()
+        starting_revision = self.draft.edit_revision
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {"type": "section.add", "section_key": "rich_text", "page_type": "cart"},
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertIs(response.json()["ok"], True)
+        new_section = StorefrontSection.objects.get(page=cart_page, section_key="rich_text")
+        self.assertIsNotNone(new_section.cell_id)
+        # Confirms it landed on Cart, never silently on Home (the pre-Task-3B
+        # hardcoded default).
+        self.assertFalse(
+            StorefrontSection.objects.filter(page=self.home_page, section_key="rich_text").exists()
+        )
+
+    def test_add_section_missing_page_type_is_rejected(self):
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {"type": "section.add", "section_key": "rich_text"},
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "invalid_page_type")
+
+    def test_add_section_invalid_page_type_is_rejected(self):
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {"type": "section.add", "section_key": "rich_text", "page_type": "not_a_real_page"},
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "invalid_page_type")
+
+    def test_remove_section_on_non_home_page_succeeds(self):
+        cart_page = self._cart_page()
+        order = cart_page.sections.count()
+        section = StorefrontSection.objects.create(
+            page=cart_page, section_key="rich_text", order=order,
+        )
+        container = container_service.create_empty_container(cart_page, "single")
+        container_service.place_section(container.cells.get(), section)
+
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {"type": "section.remove", "section_id": section.pk},
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(StorefrontSection.objects.filter(pk=section.pk).exists())
+
+    def test_duplicate_section_on_non_home_page_succeeds(self):
+        cart_page = self._cart_page()
+        section = StorefrontSection.objects.create(
+            page=cart_page, section_key="rich_text", order=cart_page.sections.count(),
+        )
+        container = container_service.create_empty_container(cart_page, "single")
+        container_service.place_section(container.cells.get(), section)
+
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {"type": "section.duplicate", "section_id": section.pk},
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            StorefrontSection.objects.filter(page=cart_page, section_key="rich_text").count(), 2,
+        )
+
+    def test_section_id_from_another_store_is_rejected_regardless_of_page_type(self):
+        # Regression guard for dropping the hardcoded page_type filter in
+        # _scoped_section: cross-Store scoping must still be airtight (it
+        # was always enforced via page__version=draft — unrelated to the
+        # page_type change — this proves the two are independent).
+        other_store = Store.objects.create(
+            name="فروشگاه دیگر", slug="phase4-task3-other-store", admin_subdomain="phase4-task3-other-store",
+        )
+        other_draft = layout_service.get_or_create_draft(other_store)
+        other_cart = other_draft.get_page(StorefrontPage.PageType.CART)
+        foreign_section = StorefrontSection.objects.create(
+            page=other_cart, section_key="rich_text", order=0,
+        )
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {"type": "section.remove", "section_id": foreign_section.pk},
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "section_not_found")

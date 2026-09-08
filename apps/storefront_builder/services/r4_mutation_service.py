@@ -197,11 +197,20 @@ def _validate_brand_view_all_enable(*, store, patch: dict, cleaned: dict) -> Non
 
 
 def _apply_section_add(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    from ..models import StorefrontPage
+
     section_key = mutation.get("section_key")
     if not isinstance(section_key, str) or not section_key:
         raise R4MutationError("invalid_section_key")
+    # Phase 4 (Task 3B) — page_type is required and explicitly validated
+    # here (not defaulted to Home) because a mutation is a deliberate
+    # merchant action, unlike a page LOAD where an absent/invalid value
+    # silently falling back to Home preserves old bookmarks/links.
+    page_type = mutation.get("page_type")
+    if page_type not in StorefrontPage.PageType.values:
+        raise R4MutationError("invalid_page_type")
     try:
-        section_structure_service.add_section(draft=draft, section_key=section_key)
+        section_structure_service.add_section(draft=draft, section_key=section_key, page_type=page_type)
     except section_structure_service.SectionStructureError as exc:
         raise R4MutationError(exc.code) from exc
 

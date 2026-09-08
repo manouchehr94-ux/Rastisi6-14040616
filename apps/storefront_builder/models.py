@@ -559,6 +559,19 @@ class StorefrontPage(TimeStampedModel):
         return f"{self.get_page_type_display()} — نسخه {self.version_id}"
 
     @classmethod
+    def resolve_page_type(cls, raw: object) -> str:
+        """Phase 4 (Task 3B) — the ONE validated PageType input, extracted
+        from the legacy editor's own ``views.py::_resolve_page_type`` (a
+        single-caller private helper before this task) so R4's editor uses
+        the exact same resolution instead of a second, copy-pasted branch
+        chain. A missing/invalid raw value silently resolves to ``HOME`` —
+        never an error — so an old link/bookmark/request without this
+        parameter keeps behaving exactly as before this generalization."""
+        if raw in cls.PageType.values:
+            return raw
+        return cls.PageType.HOME
+
+    @classmethod
     def ensure_version_pages(cls, version: "StorefrontLayoutVersion") -> None:
         """اطمینان از اینکه ``version`` هر شش نوعِ صفحه را دارد — idempotent
         (اگر همه از قبل وجود داشته باشند، هیچ ردیفِ جدیدی ساخته نمی‌شود؛

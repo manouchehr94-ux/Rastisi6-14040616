@@ -451,7 +451,15 @@ window.RastiSiR4 = {
         var addSelect = structurePanel.querySelector('#r4StructureAddSelect');
         var sectionKey = addSelect ? addSelect.value : '';
         if (!sectionKey) return;
-        R4.enqueueStructuralMutation({ type: 'section.add', section_key: sectionKey });
+        // Phase 4 (Task 3B) — every section.add mutation must name its
+        // target page explicitly; read from the shell's own data attribute
+        // (server-rendered from the SAME validated page_type the current
+        // editor load resolved — never re-derived/guessed client-side).
+        R4.enqueueStructuralMutation({
+          type: 'section.add',
+          section_key: sectionKey,
+          page_type: shell ? shell.dataset.r4PageType : 'home',
+        });
         if (addSelect) addSelect.value = '';
         return;
       }

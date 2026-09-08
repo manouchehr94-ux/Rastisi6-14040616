@@ -5,11 +5,17 @@ messages framework, no user-facing HTML. ``r4_mutation_service`` is the only
 caller — it converts ``SectionStructureError.code`` into the stable
 ``R4MutationError`` codes the mutation boundary already returns.
 
-Every function here operates on the active Home Draft page only (Phase 1's
-single-page vertical slice) and preserves real Container/Cell composition —
-none of these ever call ``container_service.rebuild_page_from_legacy_rows``,
-which would destroy empty Cells, multi-block Cells, and merchant-chosen
-layouts (see the architecture ruling in the Task 8 plan).
+Phase 4 (Task 3B) generalized every function here from Home-only to all six
+``StorefrontPage.PageType`` values — ``add_section`` takes an explicit,
+caller-validated ``page_type``; ``remove_section``/``duplicate_section``/
+``move_section`` infer their page from the resolved ``section_id`` itself
+(a section already uniquely belongs to exactly one page on exactly one
+Draft, so no separate page_type input is needed or asked for — the same
+principle the legacy editor's per-section views already use). None of these
+ever call ``container_service.rebuild_page_from_legacy_rows``, which would
+destroy empty Cells, multi-block Cells, and merchant-chosen layouts (see the
+architecture ruling in the Task 8 plan) — that invariant is unchanged by the
+page-type generalization.
 """
 
 from __future__ import annotations
@@ -27,19 +33,20 @@ class SectionStructureError(ValueError):
         super().__init__(code)
 
 
-def _home_page(draft) -> StorefrontPage:
-    return draft.get_page(StorefrontPage.PageType.HOME)
-
-
 def _scoped_section(draft, section_id) -> StorefrontSection:
     """The one strict scoping rule every mutation must use: a crafted
     ``section_id`` belonging to another Store, another page, or a
-    non-active-Draft version is indistinguishable from "does not exist"."""
+    non-active-Draft version is indistinguishable from "does not exist".
+
+    Phase 4 (Task 3B): scoped by ``page__version=draft`` only — not by a
+    specific ``page_type`` — because the section_id itself already uniquely
+    identifies exactly one page on this exact Draft; requiring a second,
+    redundant page_type match here would just be a copy of that same fact,
+    never a real additional safety boundary."""
     try:
         return StorefrontSection.objects.select_for_update().get(
             pk=section_id,
             page__version=draft,
-            page__page_type=StorefrontPage.PageType.HOME,
         )
     except StorefrontSection.DoesNotExist:
         raise SectionStructureError("section_not_found") from None
@@ -75,15 +82,17 @@ def _next_page_order(page) -> int:
     return (last.order + 1) if last is not None else 0
 
 
-def add_section(*, draft, section_key: str) -> StorefrontSection:
+def add_section(*, draft, section_key: str, page_type: str) -> StorefrontSection:
     if not isinstance(section_key, str) or not section_key:
         raise SectionStructureError("invalid_section_key")
+    if page_type not in StorefrontPage.PageType.values:
+        raise SectionStructureError("invalid_page_type")
 
     definition = _get_definition(section_key)
     if definition is None:
         raise SectionStructureError("invalid_section_key")
 
-    page = _home_page(draft)
+    page = draft.get_page(page_type)
     if not section_registry.is_section_allowed_on_page(section_key, page.page_type):
         raise SectionStructureError("section_not_allowed_on_page")
     if definition.hidden_from_library:
