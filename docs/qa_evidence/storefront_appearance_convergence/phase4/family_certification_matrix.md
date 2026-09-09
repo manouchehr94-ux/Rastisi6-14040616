@@ -42,9 +42,9 @@ ResourceSource · browser certification (Task 4 harness) · status.
 | `product_description` | CONTEXT-AWARE-DOMAIN-OWNED | n/a | no | no | no | SAFE BY CONSTRUCTION |
 | `product_video` | CONTEXT-AWARE-DOMAIN-OWNED | n/a | no | no | no | SAFE BY CONSTRUCTION |
 | `related_products` | CONTEXT-AWARE-DOMAIN-OWNED | n/a | no | no | no | SAFE BY CONSTRUCTION |
-| `product_listing` | CONTEXT-AWARE-DOMAIN-OWNED | n/a | no | no | no | PENDING Task 3E fragment fix |
-| `collection_header` | CONTEXT-AWARE-DOMAIN-OWNED | n/a | no | no | no | PENDING Task 3D boundary test |
-| `collection_products` | CONTEXT-AWARE-DOMAIN-OWNED | n/a | no | no | no | PENDING Task 3D boundary test |
+| `product_listing` | CONTEXT-AWARE-DOMAIN-OWNED | n/a | no | no | no | **CERTIFIED (Task 6 Group E — route-context contract, Task 3E fragment fix confirmed closed; 15/15 targeted GREEN)** |
+| `collection_header` | CONTEXT-AWARE-DOMAIN-OWNED | n/a | no | no | no | **CERTIFIED (Task 6 Group E — route-context contract, Task 3D boundary confirmed closed; 15/15 targeted GREEN)** |
+| `collection_products` | CONTEXT-AWARE-DOMAIN-OWNED | n/a | no | no | no | **CERTIFIED (Task 6 Group E — route-context contract, Task 3D boundary confirmed closed; 15/15 targeted GREEN)** |
 | `cart_items` | CONTEXT-AWARE-DOMAIN-OWNED | n/a | no | no | no | SAFE BY CONSTRUCTION |
 | `cart_summary` | CONTEXT-AWARE-DOMAIN-OWNED | n/a | no | no | no | SAFE BY CONSTRUCTION |
 
@@ -56,7 +56,7 @@ ResourceSource · browser certification (Task 4 harness) · status.
 | Footer | CERTIFY-ONLY | Canonical, converged — regression sentinel only |
 | Mobile Bottom Navigation | CERTIFY-ONLY | Canonical, converged — regression sentinel only |
 | Motion | CERTIFY-ONLY | Canonical, converged — regression sentinel only |
-| `hero` (Store Appearance family) | TEMPORARY-ADAPTER | PENDING Task 6 Group F write/effective reconciliation; no new selector UI (Ruling J) |
-| `product_view` | TEMPORARY-ADAPTER | PENDING Task 6 Group F |
-| `card` | TEMPORARY-ADAPTER | PENDING Task 6 Group F |
-| `badge` | TEMPORARY-ADAPTER | PENDING Task 6 Group F |
+| `hero` (Store Appearance family) | TEMPORARY-ADAPTER | **CERTIFIED (Task 6 Group F — explicit-local-override-wins write/effective reconciliation confirmed via the real R4 mutation endpoint; no new selector UI, Ruling J)** |
+| `product_view` | TEMPORARY-ADAPTER | **CERTIFIED (Task 6 Group F — same explicit-local-override contract confirmed for `product_section.display_mode`)** |
+| `card` | TEMPORARY-ADAPTER | **CERTIFIED (Task 6 Group F — manifest confirmed sole write authority: no local write path exists anywhere; overlay verified consistent across the entire live Ready Template registry)** |
+| `badge` | TEMPORARY-ADAPTER | **CERTIFIED (Task 6 Group F — same sole-write-authority contract confirmed for `badge_treatment`)** |

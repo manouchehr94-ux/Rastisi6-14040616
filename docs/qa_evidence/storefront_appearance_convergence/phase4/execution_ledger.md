@@ -198,3 +198,14 @@ commit-by-commit summary.
   browser proof PASS (see above), targeted + full-app regression PASS (same pre-existing
   signatures only), `manage.py check`/`makemigrations --check --dry-run`/`git diff --check` all
   clean. Proceeding only as far as this checkpoint; Task 6 itself is NOT complete.
+
+- **Batch 1 — Group E certification + Group F reconciliation** (fast-continuation session,
+  2026-09-09). Both groups investigated and certified AS-IS — no production code change in either
+  group. See `phase4/task6_family_convergence.md` for the full investigation record. New
+  certification test file: `apps/storefront_builder/tests/test_phase4_task6_group_f_reconciliation.py`
+  (10 tests, all GREEN). Targeted regression across Group-F-adjacent modules
+  (`test_phase4_task6_group_f_reconciliation`, `test_phase1_appearance_authority`,
+  `test_r4_store_appearance_mutations`, `test_r4_mutation_api`, `test_section_registry`,
+  `test_u10_ready_template_catalog`, `test_a8_ready_template_contracts`): 428/428 GREEN.
+  `manage.py check`: clean. `makemigrations --check --dry-run`: no changes detected. Committed as
+  `<pending>` (recorded once pushed). Proceeding to Batch 2 (`story_rail`).

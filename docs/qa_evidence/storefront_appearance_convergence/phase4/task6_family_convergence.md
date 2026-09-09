@@ -169,14 +169,79 @@ type is generic, not FAQ-specific:
   hardcodes desktop/mobile image fields but `StoryRailItem` has one `image` field), not just a
   settings schema. Not started.
 
+## Group E (product_listing, collection_header, collection_products) — certification only
+
+Per the plan's own disposition, these three are context-aware page sections (route context, not a
+merchant-facing selector, is the authority) — certification-tests only, no code change expected.
+Investigated and confirmed already correct as-is:
+
+- Task 3D/3E (an earlier Phase-4 task) already closed the two real defects that existed for this
+  group (`task3_non_home_page_appearance.md`: 3D — Collection Index/Detail boundary; 3E — Listing/
+  Search HTMX fragment `card_settings` propagation gap). The `family_certification_matrix.md` rows
+  for these three families still read "PENDING Task 3D/3E" only because the matrix itself was never
+  updated after those fixes landed — the underlying code has been correct since Task 3.
+- Existing test coverage already certifies the full route-context contract end to end:
+  `ProductListingContextAwareSectionTests`/`CollectionContextAwareSectionsTests`
+  (`test_render_service.py` — context threading, fail-safe-without-collection, exact parity with
+  the domain view's own query objects) and `ProductListingContextAwareSectionPreviewTests`/
+  `CollectionContextAwareSectionsPreviewTests` (`test_views.py` — real rendered Preview HTML on
+  both listing/search tabs and the collection page, plus the page-type exclusivity guards). Ran
+  targeted: 15/15 GREEN.
+  `CollectionIndexBoundaryTests`/`HtmxFragmentCardSettingsPropagationTests`
+  (`apps/catalog/tests/test_collection_public_views.py` /
+  `apps/catalog/tests/test_u5_listing_filter_search.py` — the Task 3D/3E fixes themselves) plus
+  `test_g22_preview_media_render_consistency`'s wrapper-consistency suite: 26/26 GREEN. 41/41 total.
+- No production code changed for Group E. `family_certification_matrix.md` updated to CERTIFIED.
+
+## Group F (hero, product_view, card, badge — global Store-Appearance families) — reconciliation
+
+Per the plan (Ruling J): write/effective-state reconciliation only, no new merchant-facing selector
+UI. Investigated each family's actual write/read reconciliation contract:
+
+- **`hero`/`product_view`** already have a full write-path reconciliation, built generically in an
+  earlier phase (Phase 1 Task 6 — `docs/qa_evidence/storefront_appearance_convergence/phase1/task6_explicit_local_variant.md`):
+  any section with a registered `variant_setting_key` (which covers both `hero_banner.hero_style`
+  for the `hero` family and `product_section.display_mode` for the `product_view` family) stamps
+  `appearance_overrides.variant_explicit=True` on a genuine local variant edit (R4 or legacy), and
+  the renderer honors that marker over a conflicting Store Appearance manifest selection — exactly
+  the `apply_header_variant`-style single-write-authority-with-local-override-precedence contract.
+  This was already fully built and tested generically; Task 6 Group F's job for these two families
+  is certification that the contract holds specifically named for `hero`/`product_view`, done via
+  a new test file exercising the real R4 mutation HTTP endpoint end to end (not just direct service
+  calls) — see below.
+- **`card`/`badge`** have NO local write path anywhere in the codebase — confirmed by exhaustive
+  search: no `SettingsSchema` field, no legacy section-settings form field, for `card.card_style`
+  or `card.badge_treatment` on any section. The only place a local `card.card_style` value ever
+  originates is a Ready Template's own authored `PresetSectionEntry.settings.card` — and every
+  Ready Template in the live production registry (`layout_preset_registry.list_ready_templates()`)
+  either sets that local value equal to its own declared `card` family selection, or leaves its
+  shared non-Home boilerplate sections (`product_listing`/`collection_products`/`related_products`
+  — the identical composition reused by `_u10_standard_non_home_pages()` across every recipe) at
+  the inert `"standard"` value specifically so the Store Appearance manifest is free to be the
+  single overlay authority for them. Verified directly, not by inspection alone: a new test
+  (`ReadyTemplateCardFamilyConsistencyTests`) applies every registered Ready Template with a
+  non-default `card` selection and asserts the effective render-time `card_style` on each of its
+  shared boilerplate sections equals that template's own declared family value — GREEN across the
+  entire live registry. This confirms the existing unconditional render-time overlay
+  (`card_settings_for`/`badge_settings_for` in `storefront_appearance/rendering.py`, already wired
+  into `render_service._build_items_from_sections`) is the correct, sole write/effective-state
+  authority for these two families — not a defect, and nothing to change.
+- New certification test file:
+  `apps/storefront_builder/tests/test_phase4_task6_group_f_reconciliation.py` — 10 tests: explicit-
+  local-override-wins for `hero` and `product_view` (through the real R4 HTTP mutation endpoint,
+  named specifically for each family, not just the generic variant-key mechanism); manifest-is-
+  sole-authority + safe-default-restores-local-value for `card` and `badge`; and the full-registry
+  Ready Template consistency check. All GREEN; no production code changed.
+- `family_certification_matrix.md` updated: all four TEMPORARY-ADAPTER rows moved from PENDING to
+  CERTIFIED.
+
 ## Remaining Task 6 work (not started)
 
-- `story_rail`'s media-form/model rework (Group D).
-- **Group E** (`product_listing`, `collection_header`, `collection_products`) — certification-tests
-  only, no code change expected (already correct as-is per the earlier gap-analysis investigation).
-- **Group F** (`hero`, `product_view`, `card`, `badge` — global Store-Appearance families) —
-  write/effective-state reconciliation only, per Ruling J no new merchant-facing selector UI.
-- Task 4-harness browser certification has not yet been run against any Group A–D family from this
-  task (the "Browser cert" column in `family_certification_matrix.md` stays "no" for all of them);
-  this document's browser proof above is a targeted, hand-driven verification of the new repeater
-  field type specifically, not a Task-4-harness run.
+- `story_rail`'s media-form/model rework (Group D) — the one still-open item from the earlier
+  Group D checkpoint.
+- Task 4-harness browser certification has not yet been run against any family from this task (the
+  "Browser cert" column in `family_certification_matrix.md` stays "no" for all of them); this
+  document's browser proof above is a targeted, hand-driven verification of the new repeater field
+  type specifically, not a Task-4-harness run. Scheduled once per the plan's Batch 3 (Task-6 final
+  gate), after `story_rail` lands.
+- One final Task-6 independent review (Batch 3), after the above.
