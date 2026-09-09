@@ -32,11 +32,15 @@
    page via `templates/base.html`'s `SHOP_HEADING_SIZE`, default 19,
    and it is the ONLY CSS consumer of this variable anywhere in the
    codebase; `apps/storefront_builder/tests/test_appearance.py`
-   already tests merchants configuring it, e.g. to 22px). home.css
-   itself never uses this variable for `.sec-head h2` at all (its own
-   merged value, 16px, is a plain literal) — Home and non-Home simply
-   have two independently-designed, still-both-current heading-size
-   mechanisms for this one property, not a staleness gap. Changing the
+   exercises merchants configuring it, e.g. to 22px — though only by
+   asserting the `--sfb-heading-size:22px` custom property appears in
+   `catalog:home`'s HTML, not a rendered `font-size`, since home.css
+   itself never consumes the variable for `.sec-head h2` at all: its
+   own merged value, 16px, is a plain literal, so the merchant setting
+   is already inert on Home while remaining live here on non-Home).
+   Home and non-Home simply have two independently-designed, still-
+   both-current heading-size mechanisms for this one property, not a
+   staleness gap. Changing the
    variable's default, or dropping the variable to hardcode a literal,
    would touch a live, tested, unrelated feature well beyond this
    bounded fix's scope — left alone. (No `@680px` override is added for
@@ -48,6 +52,36 @@
 .sec-head .more{color:#333;font-weight:700;font-size:10.5px;display:flex;align-items:center;gap:5px}
 .sec-head .more svg{width:16px;height:16px}
 .sec-head .btn,.product-section .sec-head .btn{height:23px;min-height:23px;padding:0 9px;border-radius:999px;background:#fff;border:1px solid #e3e5e9;color:#ef4760;font-weight:700;box-shadow:none;font-size:10px}
+/* Group C2.5 follow-up (raised by this fix's own independent review):
+   `html[data-sfb-density="compact"] .sec-head .btn` had no compact-
+   density override at all here — unlike `font-size` on `.sec-head h2`
+   (a real, deliberately-excluded merchant variable, see above), this
+   `.btn` size/font-size pairing is a plain literal on both sides, with
+   no theming mechanism, so home.css's own compact-density merged value
+   (home.css:699-700) is mirrored verbatim. */
+html[data-sfb-density="compact"] .sec-head .btn,
+html[data-sfb-density="compact"] .product-section .sec-head .btn{font-size:9.4px;min-height:24px;height:24px}
+/* Group C2.5 follow-up — `.rsec[data-pattern]>.section>.sec-head*`
+   (the small white-capsule heading treatment for patterned-background
+   rails) had NO rule anywhere in this file before this fix, despite
+   `data-pattern` being emitted by the one shared
+   `responsive_section_wrapper.html` used on every page type, Home
+   included — a real, previously-undiscovered non-Home gap in the same
+   `.sec-head` family this fix already reconciles, found during this
+   fix's own review. Values are home.css's current merged-final result
+   (verified by tracing every `.rsec[data-pattern]>.section>.sec-head`
+   occurrence across the whole file, including the two later,
+   higher-specificity `html[data-sfb-density="compact"]`-scoped
+   passes, which win over the plain @680px override at compact density
+   regardless of source order). */
+.rsec[data-pattern]>.section>.sec-head{margin-bottom:7px;align-items:center}
+.rsec[data-pattern]>.section>.sec-head h2{width:max-content;max-width:75%;padding:4px 10px;border-radius:999px;background:#fff;color:#ef4760;font-size:11.4px;line-height:1.4;font-weight:800;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.rsec[data-pattern]>.section>.sec-head h2 .bar{display:none;background:#ff5a72}
+.rsec[data-pattern]>.section>.sec-head .btn{height:21px;min-height:21px;padding-inline:8px;font-size:9.4px;background:rgba(255,255,255,.96);color:#ef4760;border-color:#fff}
+@media(max-width:680px){
+  .rsec[data-pattern]>.section>.sec-head h2{font-size:11px}
+}
+html[data-sfb-density="compact"] .rsec[data-pattern]>.section>.sec-head h2{font-size:11.4px}
 .grid{display:grid;gap:16px}
 /* تراکم/فاصله‌گذاری (density) — کنترلِ مستقیمِ تاجر؛ همان الگویِ
    overrideهایِ data-sfb-card-shadow/hover پایین‌تر در همین فایل. */
@@ -281,6 +315,13 @@ html[data-sfb-density="relaxed"] .pcard .body{padding:18px 18px 20px;gap:10px}
 
 .pcard.style-minimal{border-radius:4px;box-shadow:none}
 .pcard.style-minimal:hover{transform:none;box-shadow:none}
+/* Group C2.5 follow-up — home.css:1375-1377's own `.sec-head` companion
+   for this card style, previously unmirrored (found by this fix's own
+   review while re-checking the doc's claim that no other `.sec-head`
+   overlay existed outside home.css). */
+.product-section:has(.pcard.style-minimal) .sec-head{justify-content:center;text-align:center;margin-bottom:18px}
+.product-section:has(.pcard.style-minimal) .sec-head h2{font-size:16px;font-weight:850}
+.product-section:has(.pcard.style-minimal) .sec-head h2 .bar{display:none}
 
 /* ========================================================================
    Fashion/campaign sale card (card_style="fashion_sale")
@@ -336,11 +377,14 @@ html[data-sfb-density="relaxed"] .pcard .body{padding:18px 18px 20px;gap:10px}
 }
 
 /* Part 2C precision pass — section headings inside a fashion_sale product
-   row read as much more integrated/compact in the reference (small top/
-   bottom margin, almost touching the row below) than this shared
-   ``.sec-head`` rule's own default 18px margin, which is correct for
-   every other Ready Template. Scoped via :has() to the one card style
-   unique to fashion_promo_catalog so no other template's heading spacing
+   row read as much more integrated/compact than the shared `.sec-head`
+   rule's own default margin. (Originally written against that rule's
+   pre-Group-C2.5 stale 18px default — Group C2.5 corrected the shared
+   default to 9px, so this 8px override is now only a 1px reduction;
+   this card style has no home.css counterpart at all to re-derive a
+   value from, so the override is left as-is rather than guessed at.)
+   Scoped via :has() to the one card style unique to
+   fashion_promo_catalog so no other template's heading spacing
    changes. */
 .product-section:has(.pcard.style-fashion_sale){margin:14px 0}
 .product-section:has(.pcard.style-fashion_sale) .sec-head{margin-bottom:8px}
@@ -502,6 +546,14 @@ html[data-sfb-density="compact"] .pcarousel{--pcarousel-gap:8px}
   .pcard.style-beauty_retail .beauty-actions{padding:0 8px 8px}
   .pcard.style-beauty_retail .beauty-cart{min-height:32px;font-size:9.8px}
 }
+/* Group C2.5 follow-up — home.css:1102-1111,1116-1118's own `.sec-head`
+   companions for this card style (a palette-background variant and a
+   plain one), previously unmirrored (found by this fix's own review). */
+.rsec[data-bg-mode="palette"]:has(.pcard.style-beauty_retail) .sec-head h2{color:#fff}
+.rsec[data-bg-mode="palette"]:has(.pcard.style-beauty_retail) .sec-head .btn{background:#fff;border-color:#fff;color:var(--violet)}
+.product-section:has(.pcard.style-beauty_retail) .sec-head{margin-bottom:10px}
+.product-section:has(.pcard.style-beauty_retail) .sec-head h2{font-size:15px}
+.product-section:has(.pcard.style-beauty_retail) .sec-head h2 .bar{background:var(--violet);height:17px;width:3px}
 
 /* ========================================================================
    Compact horizontal retail list card (card_style="retail_list")
@@ -592,6 +644,13 @@ html[data-sfb-density="compact"] .pcarousel{--pcarousel-gap:8px}
   .pcard.style-chocolate_retail .price .now{font-size:11px}
   .pcard.style-chocolate_retail .chocolate-actions{padding:0 9px 9px}
   .pcard.style-chocolate_retail .chocolate-cart{min-height:32px;font-size:9.5px}
+}
+/* Group C2.5 follow-up — home.css:1308-1310's own `.sec-head` companion
+   for this card style, previously unmirrored (found by this fix's own
+   review). */
+.product-section:has(.pcard.style-chocolate_retail) .sec-head{margin-bottom:14px}
+.product-section:has(.pcard.style-chocolate_retail) .sec-head h2{font-size:16px;color:#33271d}
+.product-section:has(.pcard.style-chocolate_retail) .sec-head h2 .bar{background:#7B4518}
 }
 
 /* Generic premium dark commerce card (card_style="luxury_dark"). */

@@ -910,7 +910,13 @@ class SecHeadSharedBaselineNonHomeCssTests(TestCase):
         # No @680px override for `.sec-head h2` font-size: that would
         # only exist to force the same, explicitly out-of-scope
         # property back to a fixed value at small viewports.
-        self.assertNotIn("@media(max-width:680px){\n  .sec-head h2{font-size:15px}\n}", css)
+        # A bare (non-`:has()`/non-`[data-...]`-scoped) `.sec-head h2` rule
+        # with a literal numeric `font-size` would mean the deliberately-
+        # excluded `--sfb-heading-size` variable got dropped or shadowed;
+        # scoped companions (e.g. `:has(.pcard.style-beauty_retail)
+        # .sec-head h2{font-size:15px}`) legitimately use literal values
+        # and must not trip this guard, hence the line-start anchor.
+        self.assertNotRegex(css, r"(?m)^\.sec-head h2\{font-size:\d")
         # The stale, pre-fix values (a byte-for-byte copy of home.css's
         # ORIGINAL pre-refinement base pass) must never reappear.
         self.assertNotIn("margin-bottom:18px;flex-wrap:wrap}", css)
@@ -924,6 +930,97 @@ class SecHeadSharedBaselineNonHomeCssTests(TestCase):
     def test_storefront_builder_css_carries_the_circular_sec_head_override(self):
         css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
         self.assertIn(".category-circle-section .sec-head{margin-bottom:6px}", css)
+
+    def test_product_card_css_carries_the_compact_density_btn_override(self):
+        # Raised by this fix's own independent review: the base `.btn`
+        # rule added above only matched home.css's DEFAULT-density
+        # merged value — home.css also has a real, higher-specificity
+        # `html[data-sfb-density="compact"]` override (home.css:699-700)
+        # for this exact selector that was missing here entirely.
+        css = _PRODUCT_CARD_CSS.read_text(encoding="utf-8")
+        self.assertIn(
+            'html[data-sfb-density="compact"] .sec-head .btn,\n'
+            'html[data-sfb-density="compact"] .product-section .sec-head .btn'
+            "{font-size:9.4px;min-height:24px;height:24px}",
+            css,
+        )
+
+    def test_product_card_css_carries_the_patterned_rail_sec_head_baseline(self):
+        # Raised by this fix's own independent review: `.rsec[data-
+        # pattern]>.section>.sec-head*` (the small white-capsule heading
+        # on patterned-background rails) had no rule anywhere in this
+        # file before, despite `data-pattern` being emitted by the one
+        # shared `responsive_section_wrapper.html` on every page type —
+        # a real, previously-undiscovered non-Home gap in the exact
+        # same `.sec-head` family this fix otherwise reconciles.
+        css = _PRODUCT_CARD_CSS.read_text(encoding="utf-8")
+        self.assertIn(".rsec[data-pattern]>.section>.sec-head{margin-bottom:7px;align-items:center}", css)
+        self.assertIn(
+            ".rsec[data-pattern]>.section>.sec-head h2{width:max-content;max-width:75%;"
+            "padding:4px 10px;border-radius:999px;background:#fff;color:#ef4760;"
+            "font-size:11.4px;line-height:1.4;font-weight:800;"
+            "box-shadow:0 1px 3px rgba(0,0,0,.05)}",
+            css,
+        )
+        self.assertIn(".rsec[data-pattern]>.section>.sec-head h2 .bar{display:none;background:#ff5a72}", css)
+        self.assertIn(
+            ".rsec[data-pattern]>.section>.sec-head .btn{height:21px;min-height:21px;"
+            "padding-inline:8px;font-size:9.4px;background:rgba(255,255,255,.96);"
+            "color:#ef4760;border-color:#fff}",
+            css,
+        )
+        # The plain @680px override (11px) only wins at default density —
+        # home.css's compact-density override (11.4px) is MORE specific
+        # and wins regardless of viewport, so it must be its own rule,
+        # not folded into the @680px block.
+        self.assertIn(".rsec[data-pattern]>.section>.sec-head h2{font-size:11px}", css)
+        self.assertIn(
+            'html[data-sfb-density="compact"] .rsec[data-pattern]>.section>.sec-head h2{font-size:11.4px}',
+            css,
+        )
+
+    def test_product_card_css_carries_the_missing_card_style_sec_head_companions(self):
+        # Raised by this fix's own independent review: the evidence doc
+        # claimed every card-style/pattern `.sec-head` overlay other than
+        # fashion_sale/luxury_dark was "already shared" — false for
+        # beauty_retail, chocolate_retail, and minimal, whose home.css
+        # `.sec-head` companions had never been mirrored here at all.
+        css = _PRODUCT_CARD_CSS.read_text(encoding="utf-8")
+        self.assertIn(
+            '.rsec[data-bg-mode="palette"]:has(.pcard.style-beauty_retail) .sec-head h2{color:#fff}',
+            css,
+        )
+        self.assertIn(
+            '.rsec[data-bg-mode="palette"]:has(.pcard.style-beauty_retail) .sec-head .btn'
+            "{background:#fff;border-color:#fff;color:var(--violet)}",
+            css,
+        )
+        self.assertIn(".product-section:has(.pcard.style-beauty_retail) .sec-head{margin-bottom:10px}", css)
+        self.assertIn(".product-section:has(.pcard.style-beauty_retail) .sec-head h2{font-size:15px}", css)
+        self.assertIn(
+            ".product-section:has(.pcard.style-beauty_retail) .sec-head h2 .bar"
+            "{background:var(--violet);height:17px;width:3px}",
+            css,
+        )
+        self.assertIn(".product-section:has(.pcard.style-chocolate_retail) .sec-head{margin-bottom:14px}", css)
+        self.assertIn(
+            ".product-section:has(.pcard.style-chocolate_retail) .sec-head h2{font-size:16px;color:#33271d}",
+            css,
+        )
+        self.assertIn(
+            ".product-section:has(.pcard.style-chocolate_retail) .sec-head h2 .bar{background:#7B4518}",
+            css,
+        )
+        self.assertIn(
+            ".product-section:has(.pcard.style-minimal) .sec-head"
+            "{justify-content:center;text-align:center;margin-bottom:18px}",
+            css,
+        )
+        self.assertIn(
+            ".product-section:has(.pcard.style-minimal) .sec-head h2{font-size:16px;font-weight:850}",
+            css,
+        )
+        self.assertIn(".product-section:has(.pcard.style-minimal) .sec-head h2 .bar{display:none}", css)
 
     def test_home_page_is_unaffected_since_home_css_already_overrides_every_changed_property(self):
         home_css = Path(settings.BASE_DIR, "apps", "catalog", "static", "css", "home.css").read_text(

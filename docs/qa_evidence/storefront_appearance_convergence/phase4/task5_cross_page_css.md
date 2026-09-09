@@ -988,7 +988,7 @@ begin, following the same order as every other group.
 
 ### Investigation (before any CSS change)
 
-1. **Exhaustive whole-file grep of every `.sec-head` occurrence in home.css** (43 lines,
+1. **Exhaustive whole-file grep of every `.sec-head` occurrence in home.css** (52 lines,
    spanning base/unconditioned/@680/@1000/density-scoped/pattern-scoped/card-style-scoped
    contexts) — categorized into:
    - A **universal baseline** (bare `.sec-head`/`.sec-head h2`/`.sec-head h2 .bar`/
@@ -1003,10 +1003,20 @@ begin, following the same order as every other group.
    - A larger set of `product_section` card-STYLE-variant overrides (`:has(.pcard.style-
      fashion_sale)`, `:has(.pcard.style-beauty_retail)`, `:has(.pcard.style-
      chocolate_retail)`, `:has(.pcard.style-minimal)`, `:has(.pcard.style-luxury_dark)`)
-     and pattern-background overrides (`.rsec[data-pattern]>.section>.sec-head*`) — these
-     already live in `product_card.css`/`storefront_builder.css`/`theme_palette.css`,
-     files loaded identically on Home and non-Home, so they are NOT a divergence source
-     at all (already consistently shared) and needed no change.
+     and pattern-background overrides (`.rsec[data-pattern]>.section>.sec-head*`).
+     **Correction (raised by this fix's own independent review, round 2 — see below):**
+     the original version of this section claimed these "already live in
+     `product_card.css`/`storefront_builder.css`/`theme_palette.css` ... so they are NOT
+     a divergence source at all." That was verified false for most of them without
+     actually checking each one individually first: only `fashion_sale`
+     (`product_card.css`, pre-existing) and `luxury_dark` (`product_card.css`,
+     pre-existing) were genuinely already shared. `:has(.pcard.style-beauty_retail)`,
+     `:has(.pcard.style-chocolate_retail)`, `:has(.pcard.style-minimal)`, and every
+     `.rsec[data-pattern]>.section>.sec-head*` rule existed ONLY in home.css — a second
+     real divergence set in this exact `.sec-head` family, reachable on non-Home
+     (`data-pattern`/`data-bg-mode` are both emitted by the one shared
+     `responsive_section_wrapper.html` used on every page type, and `.pcard.style-*` by
+     the shared `product_card.html`). Fixed in the round-2 follow-up below, not deferred.
 
 2. **Located every real template emitting `.sec-head`**: 16 of 43 files under
    `apps/storefront_builder/templates/storefront_builder/sections/` — confirming this is
@@ -1148,3 +1158,148 @@ makemigrations --check --dry-run`: no changes detected.
 `backup/rastisi6-phase4-start-20260908` = `969a9b411ca712928c2bf31416bdde2ee8aaabb5`
 (unchanged). No destructive git operation used. `git status` before commit contains only
 the intended C2.5 production/test/evidence files.
+
+### Independent review, round 1 (commit `c5c884b`)
+
+Fresh isolated-worktree review (no context carried over from the implementer). Independently
+re-derived the entire `.sec-head` cascade via brace-depth-aware parsing of all 52
+occurrences in home.css (not trusting indentation), cross-checked every property this
+commit's `product_card.css` changes touch against that independent derivation, ran the full
+regression sweep (confirmed exactly **581 tests, OK, skipped=1**), RED-verified by reverting
+just the CSS with the tests kept, and did real-browser `getComputedStyle` verification of
+Home pre-fix vs post-fix (byte-identical on every property) and Home vs non-Home post-fix
+(converges everywhere except the one deliberately-excluded `h2` `font-size`).
+
+**Verdict: CRITICAL 0, IMPORTANT 2, MINOR 4.** All 6 architecture questions answered yes/no
+correctly and the commit's own actual CSS changes were confirmed correct, bounded, and
+well-guarded — both IMPORTANT findings were about the evidence doc's investigation section
+overreaching, not about the shipped fix being wrong:
+
+1. **IMPORTANT** — the doc's claim (corrected above) that all card-style/pattern-background
+   `.sec-head` overlays besides fashion_sale/luxury_dark were "already shared" was false;
+   `beauty_retail`/`chocolate_retail`/`minimal` and every `.rsec[data-pattern]` rule existed
+   only in home.css, a second real non-Home divergence in the same `.sec-head` family.
+2. **IMPORTANT** — `product_card.css`'s new `.sec-head .btn` base rule matches home.css's
+   DEFAULT-density merged value only; home.css also has a real, higher-specificity
+   `html[data-sfb-density="compact"]` override for the identical selector
+   (height/min-height 24px vs 23px, font-size 9.4px vs 10px) that was entirely missing here.
+3. **MINOR** — the "43 lines" whole-file-grep count (corrected above to 52) undercounted,
+   which is what let the density-scoped rules in finding 2 go uncategorized.
+4. **MINOR** — `product_card.css`'s pre-existing fashion_sale comment still asserted the
+   shared rule's "own default 18px margin" after this fix corrected that default to 9px.
+5. **MINOR** — the test file's `assertNotIn` guarding against an @680px `h2` `font-size`
+   override pinned an exact, artificially-indented multi-line string that would pass
+   vacuously against this file's real minified formatting.
+6. **MINOR** — the file header's `--sfb-heading-size` rationale overstated what
+   `test_appearance.py` actually verifies (only that the custom property appears in HTML,
+   never a rendered `font-size`) — a rationale-accuracy issue, not a wrong decision.
+
+Per the same standard this project has already applied once to Group C2 itself (a false
+claim masking a real, verified divergence is not accepted as closing the review chain by
+documenting it as "known but deferred"), both IMPORTANT findings were treated as requiring
+an actual root-cause fix, not a documentation-only correction, since the reviewer's own
+real-browser measurements confirmed both were genuine, currently-shipping divergences in
+the exact `.sec-head` family this fix already exists to reconcile — not a new, unrelated
+feature area.
+
+### Round-2 fix-up (this commit)
+
+**Fix for IMPORTANT 1** — mirrored every missing `.sec-head`-family declaration found by
+the reviewer, at its established shared-owner location (alongside each card style's other
+existing rules in `product_card.css`, matching the fashion_sale/luxury_dark precedent):
+- `.rsec[data-bg-mode="palette"]:has(.pcard.style-beauty_retail) .sec-head h2`/`.sec-head
+  .btn`, plus `.product-section:has(.pcard.style-beauty_retail) .sec-head`/`h2`/`h2 .bar`
+  (home.css:1110-1111,1116-1118).
+- `.product-section:has(.pcard.style-chocolate_retail) .sec-head`/`h2`/`h2 .bar`
+  (home.css:1308-1310).
+- `.product-section:has(.pcard.style-minimal) .sec-head`/`h2`/`h2 .bar`
+  (home.css:1375-1377).
+- A brand-new `.rsec[data-pattern]>.section>.sec-head` block (base + `h2`/`h2 .bar`/`.btn`
+  + one `@media(max-width:680px)` override + one `html[data-sfb-density="compact"]`
+  override for `h2`) — this selector had NO rule anywhere in `product_card.css` before.
+  Merged-final values were independently re-derived by hand from home.css's full occurrence
+  list (home.css:563-565, 616-623, 706-707, 740-741, 755-756, 764) — the compact-density
+  override is genuinely required as its own rule (not foldable into the `@680px` block)
+  because it wins by SPECIFICITY over the plain `@680px` rule regardless of viewport, a
+  subtlety a real-browser ground-truth harness (loading home.css alone, `data-sfb-density`
+  toggled via `document.documentElement`) confirmed exactly at 1440×900/390×844 × default/
+  compact density (4 combinations, all matching the hand-derivation) before being written
+  into `product_card.css`, then re-confirmed producing byte-identical computed values when
+  `product_card.css` is loaded standalone.
+
+**Fix for IMPORTANT 2** — added the missing `html[data-sfb-density="compact"] .sec-head
+.btn,html[data-sfb-density="compact"] .product-section .sec-head .btn{font-size:9.4px;
+min-height:24px;height:24px}` rule to `product_card.css` (home.css:699-700), verified via
+the same real-browser technique (home.css alone vs product_card.css alone, both densities)
+to produce byte-identical `.btn` height/font-size.
+
+**Fixes for MINOR 3-6**: corrected the "43 lines" count to 52 (above); reworded the
+fashion_sale comment to state the corrected 9px shared default and note this card style has
+no home.css counterpart to re-derive a value from; replaced the vacuous multi-line
+`assertNotIn` with `assertNotRegex(css, r"(?m)^\.sec-head h2\{font-size:\d")` — a line-start
+anchor that only forbids a BARE, non-`:has()`/non-`[data-...]`-scoped `.sec-head h2` rule
+from using a literal numeric `font-size` (guarding the real regression: the
+`--sfb-heading-size` variable being dropped or shadowed) without colliding with the
+legitimate scoped companions added in this same fix (e.g. `:has(.pcard.style-
+beauty_retail) .sec-head h2{font-size:15px}`) — this collision was caught by actually
+re-running the suite after the substring-based version was first tried, not assumed safe;
+reworded the file header's `--sfb-heading-size` rationale to state precisely what
+`test_appearance.py` checks (HTML custom-property presence, not rendered font-size) and
+that this makes the merchant setting already inert on Home while remaining the live
+mechanism on non-Home.
+
+### RED/GREEN verification (round-2 fix-up)
+
+RED: with `git stash push -- apps/catalog/static/css/product_card.css` (test file changes
+kept), the 3 new test methods
+(`test_product_card_css_carries_the_compact_density_btn_override`,
+`test_product_card_css_carries_the_patterned_rail_sec_head_baseline`,
+`test_product_card_css_carries_the_missing_card_style_sec_head_companions`) failed on their
+first assertions with the exact missing-declaration `AssertionError`; the pre-existing 4
+tests in the same class passed unaffected. `git stash pop` restored the fix.
+
+GREEN: `apps/storefront_builder/tests/test_phase4_task5_cross_page_css` — **31/31 pass**
+(28 prior + 3 new). Same regression sweep as the original C2.5 commit (`test_phase4_
+task5_cross_page_css` + `test_qa_harness_contract` + `test_r4_settings_schema` +
+`test_section_registry` + `test_render_service` + `test_r4_mutation_api` +
+`test_appearance`) — **584 tests, OK (1 pre-existing skip)**. `manage.py check`: 0 issues.
+`manage.py makemigrations --check --dry-run`: no changes detected.
+
+Real-browser ground truth (home.css alone vs product_card.css alone, both densities, two
+viewports where relevant) confirmed byte-identical computed values for: the base compact
+`.btn` override; the full `.rsec[data-pattern]>.section>.sec-head` family at
+1440×900/390×844 × default/compact density (4 combinations); `beauty_retail` (including
+its `data-bg-mode="palette"` variant); `chocolate_retail`; `minimal`. Home-unaffected proof
+re-run via product_card.css-then-home.css (Home's real load order) for both the pattern
+family and `beauty_retail`: both produce values identical to home.css loaded alone,
+confirming home.css's own later, equal-specificity rules still win for every property this
+fix-up touches — Home's rendering remains provably unaffected.
+
+### DB baseline note (session continuation)
+
+This fix-up's own work required no dev-DB fixture mutation (pure static-CSS + standalone
+browser-harness verification, no Django views exercised beyond the existing `manage.py
+test` suite, which uses its own ephemeral test database). Separately, at the start of this
+continuation session, the container's dev `db.sqlite3` and the previously-recorded
+`9fe52ff5...` continuation-baseline backup file were both confirmed absent (container
+restart, not assumed to have survived). Per the standing DB-baseline instruction: verified
+current DB logical cleanliness by running `manage.py migrate --no-input` from a fully empty
+database (clean run, no errors; confirms the `akhlaghi` store via the `0002_create_
+akhlaghi_store` data migration, and zero domains/layout-versions/pages/sections/categories/
+products — a genuinely clean slate, cleaner than the old baseline which carried
+accumulated fixture rows). Captured a durable file-copy backup at
+`db_backups/task5_c2_5_continuation_baseline.sqlite3` (gitignored, not committed) and
+recorded its SHA256 as the new Task-5 continuation baseline:
+**`bde91d0a91caec058b229ff7a92be008df5cbc555af33875be817cff1e0e614e`**
+— superseding the `9fe52ff5...` baseline (which is not claimed to still exist anywhere).
+**All subsequent Task 5 groups (`image_strip`/Group C3 onward) must restore to this new
+baseline, not `9fe52ff5...`.**
+
+### STOP conditions checked (round-2 fix-up)
+
+`main` = `973c1dc00bacb6f2f7d2604fa3880bb4d6250579` (unchanged). Start safety ref
+`backup/rastisi6-phase4-start-20260908` = `969a9b411ca712928c2bf31416bdde2ee8aaabb5`
+(unchanged). No destructive git operation used. Every change is inside the `.sec-head`
+family (or its own regression tests/evidence) already in this fix's declared scope — no
+unrelated Phase-5 design change introduced. `git status` before commit contains only the
+intended round-2 production/test/evidence files.
