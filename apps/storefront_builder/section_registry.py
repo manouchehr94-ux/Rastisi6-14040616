@@ -2118,6 +2118,27 @@ NEWSLETTER_SCHEMA = SettingsSchema(fields=(
 ))
 
 
+#: R4 Task 6 (Group C) — declarative counterpart of
+#: ``_validate_image_text_settings``. ``image_url`` is deliberately NOT
+#: declared here: the Inspector has no "media" field-type widget yet
+#: (``_INSPECTOR_SUPPORTED_FIELD_TYPES`` in ``r4_views.py`` covers text/
+#: rich_text/integer/boolean/choice/appearance_override/resource_source
+#: only), so it stays managed exclusively through the legacy form's
+#: existing image-URL input, preserved as an unmanaged key.
+IMAGE_TEXT_SCHEMA = SettingsSchema(fields=(
+    SettingsField("title", "عنوان", "text", "basic", default="", max_length=_MAX_IMAGE_TEXT_TITLE_LENGTH),
+    SettingsField(
+        "body_html", "متن", "rich_text", "basic",
+        default="", max_length=_MAX_RICH_TEXT_LENGTH,
+        widget_hint="merchant_rich_text",
+    ),
+    SettingsField(
+        "image_position", "جای تصویر", "choice", "advanced",
+        default="right", choices=(("right", "سمت راست"), ("left", "سمت چپ")),
+    ),
+))
+
+
 def _validate_image_text_settings(raw: dict) -> dict:
     if not isinstance(raw, dict):
         raise ValueError("تنظیمات باید یک شیء JSON باشد")
@@ -2385,6 +2406,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
             VariantDefinition(key="left", label_fa="تصویر سمت چپ"),
         ),
         default_variant="right", variant_setting_key="image_position",
+        settings_schema=IMAGE_TEXT_SCHEMA,
     ),
     "blog_posts": SectionDefinition(
         key="blog_posts", label_fa="مطالب وبلاگ", icon="newspaper",

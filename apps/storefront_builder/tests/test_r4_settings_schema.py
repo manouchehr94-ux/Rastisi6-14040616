@@ -462,7 +462,7 @@ class SchemaEnablementRegistryGuardTests(SimpleTestCase):
     # certified pilots — brand_carousel, collection_tiles — plus
     # hero_banner, rich_text, product_section; Task 6 adds category_grid,
     # image_slider, blog_posts, amazing_offers, quick_links, video_section,
-    # and newsletter).
+    # newsletter, and image_text).
     EXPECTED_SCHEMA_ENABLED = frozenset({
         "hero_banner",
         "brand_carousel",
@@ -476,6 +476,7 @@ class SchemaEnablementRegistryGuardTests(SimpleTestCase):
         "quick_links",
         "video_section",
         "newsletter",
+        "image_text",
     })
 
     def test_every_registered_section_key_matches_its_expected_schema_state(self):
