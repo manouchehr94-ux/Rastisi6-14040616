@@ -1535,3 +1535,340 @@ and one `assertNotIn` line). `manage.py check`: 0 issues. `manage.py makemigrati
 
 ## Group C3 — closed (0 unresolved CRITICAL / 0 unresolved IMPORTANT). Proceeding to
 Group C4.
+
+## Group C, remaining 6 modes — `fashion_flat`, `fashion_mosaic`, `beauty_icons`,
+`chocolate_story`, `chocolate_badges`, `atelier_mosaic`
+
+**Process note**: per a simplified execution instruction covering all remaining Task-5 CSS
+work as one implementation batch, this and the following groups (D, E, `beauty_tabs`) are
+implemented and evidenced together, with one combined verification and one combined
+independent review at the end, rather than a separate review gate per group.
+
+### Investigation
+
+Markup for all 6 (`category_grid.html`): `fashion_flat` → `.category-fashion-rail-section`
+→ `.category-fashion-rail` → `.category-fashion-tile` → `.category-fashion-media`(+
+`.category-fashion-fallback`) → `.category-fashion-label`. `fashion_mosaic` →
+`.category-fashion-mosaic-section` → `.category-fashion-mosaic` → `.category-mosaic-tile`
+→ `.category-mosaic-heading`(+`.category-mosaic-chevron`) + `.category-mosaic-media`(+
+`.category-mosaic-fallback`). `beauty_icons` → `.category-beauty-strip-section` →
+`.beauty-section-title` (shared, already mirrored from Group A2) + `.category-beauty-strip`
+→ `.category-beauty-tile` → `.category-beauty-media`(+`.category-beauty-fallback`) →
+`.category-beauty-label`. `chocolate_story`/`chocolate_badges` → `.category-chocolate-
+story-section`/`.category-chocolate-section`, sharing one `.chocolate-section-title` →
+their own rail/grid → tile → media(+fallback) → label. `atelier_mosaic` →
+`.category-atelier-section` → `.atelier-section-title` → `.category-atelier-mosaic` →
+`.category-atelier-tile` → `.category-atelier-media`(+`.category-atelier-fallback`) +
+`.category-atelier-shade` → `.category-atelier-label`.
+
+Exhaustive whole-file grep of home.css for every one of these selector families (unlike
+`circular`'s 4-pass or `image_strip`'s 2-pass cascade) found each is a single, unscattered
+generation — confirmed no other occurrence anywhere else in the file for any of them. No
+cascade merge needed; values mirrored verbatim from their one source block.
+`.beauty-section-title` is the exact same shared heading class already mirrored in Group
+A2 (`product_section` campaign_band) — not duplicated here. `.chocolate-section-title` is
+shared by `chocolate_story`/`chocolate_badges` and written once.
+
+### Fix
+
+`apps/storefront_builder/static/css/storefront_builder.css` — one new block (see the
+"remaining Group C" comment) with the merged (here: simply copied) rules for all 6 modes,
+their `@860px`/`@1000px`/`@900px`/`@680px` breakpoints exactly as they appear in home.css.
+
+### Ground-truth verification
+
+A standalone real-browser harness (Playwright/Chromium) loaded home.css alone and
+`storefront_builder.css` alone against each mode's exact markup at 1440/900/390px and
+diffed every explicitly-set computed-style property (`display`, `gridTemplateColumns`,
+`gap`, `width`/`height`, `fontSize`, `fontWeight`, `margin`, `padding`, `borderRadius`,
+`color`, `backgroundColor`, etc.) — byte-identical for all 6 modes at every viewport (the
+only differences found were each section's own auto/intrinsic `height`, which neither file
+sets explicitly — an artifact of the two harnesses' unrelated global baseline CSS, not a
+divergence in any rule this fix adds).
+
+### Browser RED
+
+With `apps/storefront_builder/static/css/storefront_builder.css` stashed,
+`CategoryGridRemainingModesNonHomeCssTests`'s 5 CSS-content tests failed on their first
+assertions with the exact missing-declaration error; the 6 markup-rendering tests and the
+Home-unaffected test passed unaffected, as expected (exactly 5 failures out of 12 tests).
+(Process note: the first pass at the markup tests forgot the `@override_settings
+(ALLOWED_HOSTS=...)` class decorator every sibling test class in this file carries,
+producing a `DisallowedHost` 400 unrelated to the CSS fix — caught immediately by running
+the new class in isolation before RED-verifying, and fixed. A second pass then found 4
+markup tests asserting the presence of `beauty-section-title`/`chocolate-section-title`/
+`atelier-section-title` failing for an unrelated reason: like `.sec-head` itself (Group
+C2.5's finding), these title elements only render when `category_grid_settings.title` is
+set — the fixture helper now sets an explicit title, matching the established pattern.)
+
+### Fix
+
+`git stash pop` restored the CSS fix; full re-run confirmed 47/47 pass in
+`test_phase4_task5_cross_page_css` (35 prior + 12 new).
+
+### Browser GREEN (1440×900 / 768×1024 / 390×844), live dev server
+
+Real Draft→Publish→Public flow: `beauty_icons` (with an explicit title) on Cart,
+`atelier_mosaic` on Listing, against a `127.0.0.1`-hostname `StoreDomain` fixture (the real
+dev-DB backup/restore discipline applied around this mutation, see below).
+
+| Property | 1440×900 | 768×1024 | 390×844 |
+|---|---|---|---|
+| `.category-beauty-strip` display / grid-template-columns | `grid` / 6×170.66px | `grid` / 6×94px (`@1000px`) | `grid` / 6×78px (`@680px`) |
+| `.category-beauty-media` width | `96px` | `80px` | `66px` |
+| `.category-beauty-label` font-size | `12px` | `12px` | `10px` (`@680px`) |
+| `.beauty-section-title` margin-bottom | `24px` | `24px` | `14px` (`@680px`) |
+| `.category-atelier-mosaic` grid-template-columns | 4×279px | 3×226.66px (`@900px`) | 2×163.5px (`@680px`) |
+| `.category-atelier-tile` aspect-ratio | `0.83/1` (constant) | `0.83/1` | `0.83/1` |
+| `.category-atelier-label` font-size | `25.92px` (`clamp` vw-based) | `16px` (clamp floor) | `16px` (`@680px` explicit) |
+
+All values match the standalone-harness ground truth exactly, confirming every documented
+responsive breakpoint (`@1000px`/`@680px` for beauty_icons; `@900px`/`@680px` for
+atelier_mosaic) is genuinely active. Zero console/page errors at any viewport.
+
+### Cleanup
+
+Dev server stopped (`pkill -f "runserver 127.0.0.1:8765"`, non-zero exit per the documented
+Exit-144 hazard — verified via `ps aux` that no process actually remained, then re-ran the
+`cp` restore since the first attempt inside the same aborted shell invocation had not taken
+effect). DB restored via `cp` from `db_backups/task5_c2_5_continuation_baseline.sqlite3`
+(`bde91d0a91caec058b229ff7a92be008df5cbc555af33875be817cff1e0e614e`) and hash-verified
+equal.
+
+### Permanent regression guard
+
+`CategoryGridRemainingModesNonHomeCssTests` (12 tests): 6 markup-rendering tests (one per
+mode, split across Cart/Listing) + 5 full-declaration CSS-content tests (one per mode,
+`chocolate_story`/`chocolate_badges` share one since they share `.chocolate-section-title`)
++ 1 Home-unaffected test (asserts `home.html` never references any of these classes and
+still renders 200).
+
+### Verification
+
+`test_phase4_task5_cross_page_css`: **47/47 pass** (35 prior + 12 new). Regression sweep
+(`test_phase4_task5_cross_page_css` + `test_qa_harness_contract` + `test_r4_settings_schema`
++ `test_section_registry` + `test_render_service` + `test_r4_mutation_api` +
+`test_appearance`): **600 tests, OK (1 pre-existing skip)**. `manage.py check`: 0 issues.
+`manage.py makemigrations --check --dry-run`: no changes detected.
+
+### STOP conditions checked
+
+`main` = `973c1dc00bacb6f2f7d2604fa3880bb4d6250579` (unchanged). Start safety ref
+`backup/rastisi6-phase4-start-20260908` = `969a9b411ca712928c2bf31416bdde2ee8aaabb5`
+(unchanged). No destructive git operation used. No Phase-5 design expansion — every value
+is copied verbatim from home.css's own existing, already-shipped rendering.
+
+## Group C — closed (all 11 `category_grid` display modes now covered: `grid`/`carousel`
+[C1], `circular` [C2/C2.5], `image_strip` [C3], and these final 6 — 0 unresolved CRITICAL /
+0 unresolved IMPORTANT across every reviewed sub-group). Proceeding to Group D.
+
+## Group D — `promo_cards` + `image_text` + `blog_posts`
+
+### Investigation
+
+`promo_cards.html` needs no new CSS at all: its markup (`<section class="section"><div
+class="tiles">` → `.tile`/`.wm`/`h4`/`.btn`) is byte-for-byte identical to `category_grid`'s
+`grid`/`carousel` modes, already mirrored from Group C1 — confirmed by direct template
+comparison. `image_text` (`.cream`) is a single, unscattered home.css generation (base +
+one `@1000px` block, confirmed via whole-file grep). `blog_posts` (`.blog-grid`/
+`.blog-card`) has TWO unconditioned passes (home.css:199-210 base, home.css:365-372 a
+later, unlabeled pass overriding a subset of properties) plus its own `@1000px`/`@680px`
+blocks.
+
+### Ground-truth verification
+
+A real-browser harness (Playwright/Chromium) loaded `product_card.css`+home.css with the
+exact `blog_posts` markup at 1440/900/390px and read every explicitly-set computed-style
+property for `.blog-grid`/`.blog-card`(+`.th`/`.bd`/`.meta`/`.meta .cat`/`h4`/`.read`) —
+confirmed every manually-derived merged-final value exactly, including the non-obvious
+`h4`/`small` computed `line-height` pixel values (cross-checked against `font-size ×
+line-height` arithmetic) and the `:hover` state.
+
+### Fix
+
+`apps/storefront_builder/static/css/storefront_builder.css` — one new block: `.cream`
+family verbatim; `.blog-grid`/`.blog-card` family at merged-final per-property values
+(later pass wins; properties the later pass never touches keep the base value) plus its
+`@1000px`/`@680px` blocks.
+
+### Browser RED
+
+With the new block stashed, the 2 new CSS-content tests (`image_text`, `blog_posts`)
+failed on their first assertions with the exact missing-declaration error; the 4 markup
+tests (`promo_cards`/`image_text`/`blog_posts`/Home-unaffected) passed unaffected —
+confirming `promo_cards` genuinely needs no CSS change (exactly 2 failures out of 6 tests).
+
+### Permanent regression guard
+
+`GroupDNonHomeCssTests` (6 tests): 3 markup-rendering tests (one per family) + 2
+full-declaration CSS-content tests (`image_text`, `blog_posts` — with `assertNotIn` guards
+against the superseded base-only `blog_posts` values) + 1 Home-unaffected test.
+
+### Verification
+
+`test_phase4_task5_cross_page_css`: **53/53 pass** (47 prior + 6 new). `manage.py check`:
+0 issues. `manage.py makemigrations --check --dry-run`: no changes detected.
+
+## Group E — `faq` + `testimonials` + `trust_features` + `video_section`
+
+### Investigation
+
+`faq`/`testimonials`/`video_section` (home.css's "checkpoint 12" block, lines 252-270) are
+a single, unscattered generation — confirmed via whole-file grep, no other occurrence
+anywhere else in the file. `trust_features` (`.features`/`.feat`) is the most
+cascade-scattered family in this entire task — genuinely live on Home's own hardcoded
+`home.html` template (unlike every `category_grid` mode, which is dead there) — 30
+occurrences across 5 unconditioned passes plus density scoping:
+
+1. Base pass (home.css:216-223, + its own `@1000px`/`@680px` block at 236/242).
+2. "Universal dense storefront modules"-era unconditioned pass (home.css:302-307, + its own
+   separate `@1000px`/`@680px` block at 375/385).
+3. "V3 universal dense-marketplace fidelity pass" (home.css:542-545, unconditioned).
+4. "Final vertical rhythm" pass (home.css:669, `.features` margin only).
+5. "V4.2.2 readability calibration" (home.css:735-736, `.feat b`/`.feat small` font-size
+   only, + its own `@680px` override at 763).
+Plus `html[data-sfb-density]` compact/relaxed scoping at 217-218 for `.features` itself.
+
+### Ground-truth verification (before writing any fix)
+
+A real-browser harness (home.css alone, exact `trust_features` markup) at 1440/900/390px,
+both default and compact density, confirmed every manually-derived merged-final value
+exactly, including two non-obvious findings:
+
+1. **The same "later unconditioned rule shadows an earlier breakpoint override" pattern
+   found in Group C2/C3**: pass 2's own `@680px` block sets `.features{display:flex;
+   overflow-x:auto;gap:8px}` — since this is textually AFTER pass 1's `@680px`
+   `grid-template-columns:1fr` and pass 2's own `@1000px` `repeat(3,1fr)`, the element is
+   no longer `display:grid` at all at ≤680px, making both of those `grid-template-columns`
+   values dead (confirmed: the browser still computes a stale, inert `gridTemplateColumns`
+   value at ≤680px, exactly like `.tile-circle`'s dead overrides in Group C2). Separately,
+   pass 2's `@680px` `.feat{min-height:56px}` is ALSO dead — pass 3 (V3, unconditioned,
+   textually AFTER pass 2's `@680px` block) sets `.feat{min-height:54px}` unconditionally,
+   which wins at every viewport regardless of the `@680px` rule's specificity-tying
+   media-query scope.
+2. **A genuine (non-coincidental) compact-density divergence**: unlike every prior
+   density-scoped rule found in this task (which turned out to be exact numeric no-ops,
+   e.g. Group C2.5's pattern-background `.btn`), `.features`'s own
+   `html[data-sfb-density="compact"]` gap/margin (10px / 18px 0) genuinely differs from
+   default density's merged-final gap/margin (9px / 7px 0 8px) — confirmed via the same
+   harness toggling `data-sfb-density` on `document.documentElement`. Mirrored per the
+   Group C2.5 precedent (density is mirrored when a real gap is found, not reflexively
+   excluded) rather than left out — `data-sfb-density` is set on every page via
+   `templates/base.html`, so this is reachable on non-Home too.
+
+### Fix
+
+`apps/storefront_builder/static/css/storefront_builder.css` — one new block: the
+`faq`/`testimonials`/`video_section` family verbatim, plus `.features`/`.feat`'s
+merged-final values (display:grid/5-col/gap:9px/margin:7px 0 8px base; the one genuine
+compact/relaxed density override; the one genuinely-live `@1000px` 3-col override; the one
+genuinely-live `@680px` block for display/overflow-x/gap and `.feat`'s `flex`/`b`/`small`
+font-size — deliberately omitting the two now-proven-dead `@680px`
+grid-template-columns/min-height values from passes 1/2).
+
+### Browser RED
+
+With the new block stashed, the 2 new CSS-content tests failed on their first assertions
+with the exact missing-declaration error; the 5 markup/Home-unaffected tests passed
+unaffected (exactly 2 failures out of 7 tests). (Process note: an initial `assertNotIn`
+guard against the dead `grid-template-columns:repeat(2,1fr)` value used an unscoped
+substring that collided with an unrelated, pre-existing `.gf--promo .gf-promo-grid` rule
+elsewhere in the file — caught immediately by re-running GREEN and seeing the false
+failure; fixed by anchoring the guard to the full `.features{...}` selector.)
+
+### Permanent regression guard
+
+`GroupENonHomeCssTests` (7 tests): 4 markup-rendering tests (one per family) + 2
+full-declaration CSS-content tests (with `assertNotIn` guards for both dead `@680px`
+values, correctly scoped to avoid the false-positive above) + 1 Home-unaffected test.
+
+### Verification
+
+`test_phase4_task5_cross_page_css`: **60/60 pass** (53 prior + 7 new). `manage.py check`:
+0 issues. `manage.py makemigrations --check --dry-run`: no changes detected.
+
+## Plus: `brand_carousel`'s `beauty_tabs` display-mode cosmetic gap
+
+### Investigation
+
+`brand_carousel` is already Phase-3 CERTIFY-ONLY (its base `.brand-carousel`/`.brand-tile`/
+`.brand-tile-name`/`.grid` rules already mirrored). Per the Task-0 plan's disposition table
+(row 12: "`beauty_tabs` cosmetic CSS gap fixed alongside Task 5"), the `beauty_tabs`
+display mode's own selectors
+(`.brand-section--beauty-tabs`/`.beauty-brand-title`/`.brand-beauty-tabs`/`.brand-beauty-
+tabs .brand-beauty-tab`/`.brand-beauty-tabs .brand-tile-name`) were never mirrored at all
+— a single, unscattered home.css generation (confirmed via whole-file grep). The mode's
+title div also carries `.beauty-section-title` (already mirrored, Group A2/beauty_icons
+reuse) alongside the new `.beauty-brand-title`.
+
+### Fix
+
+`apps/storefront_builder/static/css/storefront_builder.css` — one new block mirroring the
+5 selectors verbatim plus their `@680px` override.
+
+### Browser RED
+
+With the new block stashed, the 1 new CSS-content test failed on its first assertion with
+the exact missing-declaration error; the markup/Home-unaffected tests passed unaffected
+(exactly 1 failure out of 3 tests).
+
+### Permanent regression guard
+
+`BrandCarouselBeautyTabsNonHomeCssTests` (3 tests): 1 markup-rendering test (Cart, with a
+real active `Brand`) + 1 full-declaration CSS-content test + 1 Home-unaffected test.
+
+### Verification
+
+`test_phase4_task5_cross_page_css`: **63/63 pass** (60 prior + 3 new). `manage.py check`:
+0 issues. `manage.py makemigrations --check --dry-run`: no changes detected.
+
+## Combined browser GREEN (1440×900 / 768×1024 / 390×844), live dev server — Groups D, E, `beauty_tabs`
+
+Real Draft→Publish→Public flow against a `127.0.0.1`-hostname `StoreDomain` fixture:
+`image_text`/`blog_posts`/`beauty_tabs` on Cart, `faq`/`testimonials`/`trust_features` on
+Listing.
+
+| Property | 1440×900 | 768×1024 | 390×844 |
+|---|---|---|---|
+| `.cream` grid-template-columns | 2×532px | 1×624px (`@1000px`) | 1×256px |
+| `.blog-grid` grid-template-columns | 5×223.2px | 3×226.66px (`@1000px`) | 2×164px (`@680px`) |
+| `.blog-card` border-radius | `7px` | `7px` | `7px` |
+| `.brand-beauty-tabs` display | `flex` | `flex` | `flex` |
+| `.brand-beauty-tab` min-height | `64px` | `64px` | `56px` (`@680px`) |
+| `.testimonial-list` grid-template-columns | 3×377.3px | 2×344px (`@1000px`) | 1×336px (`@680px`) |
+| `.features` display | `grid` | `grid` | `flex` (`@680px`, confirmed dead grid-cols leftover) |
+| `.features` grid-template-columns | 5 cols | 3 cols (`@1000px`) | — (inert, `display:flex`) |
+| `.feat` min-height | `54px` | `54px` | `54px` (confirmed the `@680px` 56px override is dead) |
+
+All values match every ground-truth harness exactly, including both confirmed
+dead-responsive-code predictions. Zero console/page errors at any viewport.
+
+### Cleanup
+
+Dev server stopped (`pkill -f "runserver 127.0.0.1:8765"`, non-zero exit per the documented
+Exit-144 hazard; verified via `ps aux` that no process remained). DB restored via `cp` from
+`db_backups/task5_c2_5_continuation_baseline.sqlite3`
+(`bde91d0a91caec058b229ff7a92be008df5cbc555af33875be817cff1e0e614e`) and hash-verified
+equal.
+
+## Combined final regression sweep (Groups D, E, `beauty_tabs`)
+
+`test_phase4_task5_cross_page_css` (63 tests) + `test_qa_harness_contract` +
+`test_r4_settings_schema` + `test_section_registry` + `test_render_service` +
+`test_r4_mutation_api` + `test_appearance`: **616 tests, OK (1 pre-existing skip)**.
+`manage.py check`: 0 issues. `manage.py makemigrations --check --dry-run`: no changes
+detected.
+
+### STOP conditions checked
+
+`main` = `973c1dc00bacb6f2f7d2604fa3880bb4d6250579` (unchanged). Start safety ref
+`backup/rastisi6-phase4-start-20260908` = `969a9b411ca712928c2bf31416bdde2ee8aaabb5`
+(unchanged). No destructive git operation used. No Phase-5 design expansion — every value
+copied verbatim from home.css's own existing, already-shipped rendering. `git status`
+before commit contains only the intended production/test/evidence files.
+
+## Task 5 — ALL groups implemented (A, B, C, D, E, plus `beauty_tabs`). Per the simplified
+execution instruction covering all remaining Task-5 CSS work as one batch, dispatching ONE
+fresh isolated-worktree independent review covering Groups D, E, and `beauty_tabs`
+together (Groups A/B/C were already independently reviewed and closed above). Required
+verdict: CRITICAL 0, IMPORTANT 0 before Task 6 begins.

@@ -1184,3 +1184,748 @@ class CategoryGridImageStripNonHomeCssTests(TestCase):
         svc.publish(self.store)
         resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
         self.assertEqual(resp.status_code, 200)
+
+
+@override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
+class CategoryGridRemainingModesNonHomeCssTests(TestCase):
+    """Task 5, remaining Group C — the last 6 of `category_grid`'s 11
+    `display_mode`s (`fashion_flat`, `fashion_mosaic`, `beauty_icons`,
+    `chocolate_story`, `chocolate_badges`, `atelier_mosaic`) were
+    Home-only. Exhaustive whole-file grep of home.css for every one of
+    these selector families confirmed each is a single, unscattered
+    generation (unlike `circular`'s 4-pass cascade or `image_strip`'s
+    2-pass one) — no cascade merge needed, values mirrored verbatim.
+    `.beauty-section-title` (beauty_icons) is the SAME shared heading
+    already mirrored from Group A2 (`product_section` campaign_band);
+    `.chocolate-section-title` (chocolate_story/chocolate_badges) is
+    shared by those two modes and written once. Ground-truth verified
+    via a standalone real-browser harness (home.css alone vs
+    storefront_builder.css alone, byte-identical at 1440/900/390 for
+    every explicitly-set property)."""
+
+    def setUp(self):
+        cache.clear()
+        self.store = _akhlaghi()
+        _verified_domain(self.store, HOST)
+        self.draft = svc.get_or_create_draft(self.store)
+        from apps.catalog.models import Category
+
+        self.cat_a = Category.objects.create(
+            store=self.store, name="دسته الف", slug="task5-cgrem-cat-a", is_active=True,
+        )
+        self.cat_b = Category.objects.create(
+            store=self.store, name="دسته ب", slug="task5-cgrem-cat-b", is_active=True,
+        )
+
+    def _place_and_publish(self, page_type: str, display_mode: str):
+        section = section_structure_service.add_section(
+            draft=self.draft, section_key="category_grid", page_type=page_type,
+        )
+        section.settings = {
+            **section.settings,
+            "display_mode": display_mode,
+            "category_ids": [self.cat_a.pk, self.cat_b.pk],
+            # An explicit title is required: `beauty_section_title`/
+            # `chocolate-section-title`/`atelier-section-title` (like
+            # `.sec-head` itself, per Group C2.5's finding) only render
+            # inside `{% if category_grid_settings.title %}` — the
+            # default empty title would silently skip that markup.
+            "title": "دسته‌بندی",
+        }
+        section.save(update_fields=["settings"])
+        svc.publish(self.store)
+        return section
+
+    def test_fashion_flat_renders_on_cart(self):
+        self._place_and_publish(StorefrontPage.PageType.CART, "fashion_flat")
+        resp = self.client.get(reverse("cart:detail"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="section category-fashion-rail-section"', html)
+        self.assertIn('class="sec-head"', html)
+        self.assertIn('class="category-fashion-rail"', html)
+        self.assertIn('class="category-fashion-tile"', html)
+        self.assertIn('class="category-fashion-media"', html)
+        self.assertIn('class="category-fashion-label"', html)
+
+    def test_fashion_mosaic_renders_on_listing(self):
+        self._place_and_publish(StorefrontPage.PageType.LISTING, "fashion_mosaic")
+        resp = self.client.get(reverse("catalog:product-list"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="section category-fashion-mosaic-section"', html)
+        self.assertIn('class="sec-head"', html)
+        self.assertIn('class="category-fashion-mosaic"', html)
+        self.assertIn('class="category-mosaic-tile"', html)
+        self.assertIn('class="category-mosaic-heading"', html)
+        self.assertIn('class="category-mosaic-media"', html)
+
+    def test_beauty_icons_renders_on_cart(self):
+        self._place_and_publish(StorefrontPage.PageType.CART, "beauty_icons")
+        resp = self.client.get(reverse("cart:detail"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="section category-beauty-strip-section"', html)
+        self.assertIn('class="beauty-section-title"', html)
+        self.assertIn('class="category-beauty-strip"', html)
+        self.assertIn('class="category-beauty-tile"', html)
+        self.assertIn('class="category-beauty-media"', html)
+        self.assertIn('class="category-beauty-label"', html)
+
+    def test_chocolate_story_renders_on_listing(self):
+        self._place_and_publish(StorefrontPage.PageType.LISTING, "chocolate_story")
+        resp = self.client.get(reverse("catalog:product-list"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="section category-chocolate-story-section"', html)
+        self.assertIn('class="chocolate-section-title"', html)
+        self.assertIn('class="category-chocolate-story-rail"', html)
+        self.assertIn('class="category-chocolate-story-item"', html)
+        self.assertIn('class="category-chocolate-story-media"', html)
+        self.assertIn('class="category-chocolate-story-label"', html)
+
+    def test_chocolate_badges_renders_on_cart(self):
+        self._place_and_publish(StorefrontPage.PageType.CART, "chocolate_badges")
+        resp = self.client.get(reverse("cart:detail"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="section category-chocolate-section"', html)
+        self.assertIn('class="chocolate-section-title"', html)
+        self.assertIn('class="category-chocolate-grid"', html)
+        self.assertIn('class="category-chocolate-tile"', html)
+        self.assertIn('class="category-chocolate-media"', html)
+        self.assertIn('class="category-chocolate-label"', html)
+
+    def test_atelier_mosaic_renders_on_listing(self):
+        self._place_and_publish(StorefrontPage.PageType.LISTING, "atelier_mosaic")
+        resp = self.client.get(reverse("catalog:product-list"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="section category-atelier-section"', html)
+        self.assertIn('class="atelier-section-title"', html)
+        self.assertIn('class="category-atelier-mosaic"', html)
+        self.assertIn('class="category-atelier-tile"', html)
+        self.assertIn('class="category-atelier-media"', html)
+        self.assertIn('class="category-atelier-shade"', html)
+        self.assertIn('class="category-atelier-label"', html)
+
+    def test_storefront_builder_css_carries_fashion_flat_rules(self):
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(".category-fashion-rail-section{margin:2px 0}", css)
+        self.assertIn(
+            ".category-fashion-rail{display:flex;overflow-x:auto;gap:18px;"
+            "padding-inline:2px 2px;scroll-snap-type:x proximity;scrollbar-width:none}",
+            css,
+        )
+        self.assertIn(
+            ".category-fashion-tile{display:flex;flex-direction:column;align-items:center;"
+            "gap:6px;color:#25282d;text-align:center;flex:0 0 64px;scroll-snap-align:start}",
+            css,
+        )
+        self.assertIn(
+            ".category-fashion-media{width:60px;height:60px;aspect-ratio:1/1;"
+            "border-radius:50%;overflow:hidden;background:#f4f2f5;display:grid;"
+            "place-items:center;border:none}",
+            css,
+        )
+        self.assertIn(
+            ".category-fashion-label{font-size:10.5px;font-weight:700;line-height:1.35;"
+            "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:72px}",
+            css,
+        )
+        self.assertIn(
+            "@media(max-width:860px){\n"
+            "  .category-fashion-tile{flex-basis:56px}\n"
+            "  .category-fashion-media{width:52px;height:52px}\n"
+            "}",
+            css,
+        )
+
+    def test_storefront_builder_css_carries_fashion_mosaic_rules(self):
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(".category-fashion-mosaic-section{margin:10px 0}", css)
+        self.assertIn(
+            ".category-fashion-mosaic{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}",
+            css,
+        )
+        self.assertIn(
+            ".category-mosaic-tile{display:flex;flex-direction:column;gap:8px;"
+            "color:#25282d;background:#fff;border-radius:10px;overflow:hidden}",
+            css,
+        )
+        self.assertIn(
+            ".category-mosaic-heading{display:flex;align-items:center;gap:4px;"
+            "font-size:12.5px;font-weight:800;padding-inline:2px}",
+            css,
+        )
+        self.assertIn(
+            ".category-mosaic-media{aspect-ratio:1/1;border-radius:8px;overflow:hidden;"
+            "background:#f6f4f5}",
+            css,
+        )
+        self.assertIn(
+            "@media(max-width:1000px){\n"
+            "  .category-fashion-mosaic{grid-template-columns:repeat(3,1fr)}\n"
+            "}",
+            css,
+        )
+        self.assertIn(
+            "@media(max-width:680px){\n"
+            "  .category-fashion-mosaic{grid-template-columns:repeat(2,1fr);gap:10px}\n"
+            "  .category-mosaic-heading{font-size:12.5px}\n"
+            "}",
+            css,
+        )
+
+    def test_storefront_builder_css_carries_beauty_icons_rules(self):
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(".category-beauty-strip-section{margin:24px 0 30px}", css)
+        self.assertIn(
+            ".category-beauty-strip{display:grid;grid-template-columns:"
+            "repeat(6,minmax(0,1fr));gap:28px;align-items:start}",
+            css,
+        )
+        self.assertIn(
+            ".category-beauty-tile{display:flex;flex-direction:column;align-items:center;"
+            "gap:7px;text-align:center;color:var(--ink);min-width:0}",
+            css,
+        )
+        self.assertIn(
+            ".category-beauty-media{width:96px;height:96px;border-radius:14px;padding:7px;"
+            "overflow:hidden;display:grid;place-items:center;background:linear-gradient"
+            "(145deg,var(--violet),color-mix(in srgb,var(--violet) 70%,#ef41ba));"
+            "box-shadow:0 4px 10px color-mix(in srgb,var(--violet) 18%,transparent)}",
+            css,
+        )
+        self.assertIn(
+            ".category-beauty-label{font-size:12px;font-weight:750;line-height:1.45;"
+            "max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
+            css,
+        )
+        self.assertIn(
+            "@media(max-width:1000px){\n"
+            "  .category-beauty-strip{grid-template-columns:repeat(6,94px);"
+            "overflow-x:auto;scrollbar-width:none;justify-content:flex-start;gap:16px;"
+            "padding-bottom:4px}\n"
+            "  .category-beauty-strip::-webkit-scrollbar{display:none}\n"
+            "  .category-beauty-media{width:80px;height:80px}\n"
+            "}",
+            css,
+        )
+        self.assertIn(
+            "@media(max-width:680px){\n"
+            "  .category-beauty-strip-section{margin:16px 0 20px}\n"
+            "  .category-beauty-strip{grid-template-columns:repeat(6,78px);gap:12px}\n"
+            "  .category-beauty-media{width:66px;height:66px;border-radius:11px;padding:5px}\n"
+            "  .category-beauty-media img{padding:8px}\n"
+            "  .category-beauty-label{font-size:10px}\n"
+            "}",
+            css,
+        )
+
+    def test_storefront_builder_css_carries_chocolate_rules(self):
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(".category-chocolate-story-section{margin:12px 0 10px}", css)
+        self.assertIn(
+            ".category-chocolate-story-rail{display:flex;align-items:flex-start;"
+            "justify-content:center;gap:14px;overflow-x:auto;padding:2px 6px 8px;"
+            "scrollbar-width:none}",
+            css,
+        )
+        self.assertIn(
+            ".category-chocolate-story-media{width:82px;height:82px;border-radius:50%;"
+            "padding:3px;background:#fff;border:2px solid #C85C72;box-shadow:0 3px 10px "
+            "rgba(74,48,25,.08);display:grid;place-items:center;overflow:hidden}",
+            css,
+        )
+        self.assertIn(".category-chocolate-section{margin:16px 0 24px}", css)
+        self.assertIn(".chocolate-section-title{text-align:center;margin-bottom:14px}", css)
+        self.assertIn(
+            ".chocolate-section-title h2{font-size:15px;font-weight:800;color:#3c2b1d;margin:0}",
+            css,
+        )
+        self.assertIn(
+            ".category-chocolate-grid{display:grid;grid-template-columns:"
+            "repeat(6,minmax(0,1fr));gap:18px 16px}",
+            css,
+        )
+        self.assertIn(
+            ".category-chocolate-media{width:124px;height:98px;display:grid;"
+            "place-items:center;position:relative;border-radius:48% 52% 45% 55%/58% 45% "
+            "55% 42%;background:#E7D1B7;overflow:hidden;box-shadow:0 3px 10px rgba(93,54,22,.07)}",
+            css,
+        )
+        self.assertIn(
+            ".category-chocolate-label{min-width:98px;max-width:100%;padding:5px 13px;"
+            "border-radius:999px;background:#7B4518;color:#fff;font-size:10.5px;"
+            "font-weight:700;line-height:1.25;white-space:nowrap;overflow:hidden;"
+            "text-overflow:ellipsis}",
+            css,
+        )
+        self.assertIn(
+            "@media(max-width:900px){\n"
+            "  .category-chocolate-grid{grid-template-columns:repeat(4,minmax(0,1fr))}\n"
+            "  .category-chocolate-media{width:104px;height:82px}\n"
+            "}",
+            css,
+        )
+        self.assertIn(".category-chocolate-story-item{flex-basis:78px}", css)
+        self.assertIn(".category-chocolate-media{width:82px;height:68px}", css)
+
+    def test_storefront_builder_css_carries_atelier_mosaic_rules(self):
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(".category-atelier-section{margin:16px 0 24px}", css)
+        self.assertIn(".atelier-section-title{text-align:center;margin:0 0 15px}", css)
+        self.assertIn(
+            ".atelier-section-title h2{margin:0;font-size:18px;font-weight:900;color:var(--ink)}",
+            css,
+        )
+        self.assertIn(
+            ".category-atelier-mosaic{display:grid;grid-template-columns:"
+            "repeat(4,minmax(0,1fr));gap:16px}",
+            css,
+        )
+        self.assertIn(
+            ".category-atelier-tile{position:relative;display:block;min-width:0;"
+            "aspect-ratio:.83/1;overflow:hidden;background:var(--palette-tone-4,#EEE4D6);"
+            "color:#fff;text-decoration:none}",
+            css,
+        )
+        self.assertIn(
+            ".category-atelier-shade{position:absolute;inset:0;background:linear-gradient"
+            "(180deg,rgba(20,16,12,.02) 45%,rgba(20,16,12,.64) 100%);pointer-events:none}",
+            css,
+        )
+        self.assertIn(
+            ".category-atelier-label{position:absolute;z-index:2;inset-inline:16px;"
+            "bottom:15px;color:#fff;font-size:clamp(16px,1.8vw,27px);line-height:1.25;"
+            "font-weight:950;text-shadow:0 1px 8px rgba(0,0,0,.22)}",
+            css,
+        )
+        self.assertIn(
+            "@media(max-width:900px){\n"
+            "  .category-atelier-mosaic{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}\n"
+            "}",
+            css,
+        )
+        self.assertIn(
+            "@media(max-width:680px){\n"
+            "  .category-atelier-mosaic{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}\n"
+            "  .category-atelier-label{inset-inline:10px;bottom:10px;font-size:16px}\n"
+            "}",
+            css,
+        )
+
+    def test_home_page_is_unaffected_since_it_never_loads_storefront_builder_css(self):
+        home_html = Path(settings.BASE_DIR, "apps", "catalog", "templates", "catalog", "home.html").read_text(
+            encoding="utf-8",
+        )
+        self.assertNotIn("storefront_builder.css", home_html)
+        for marker in (
+            "category-fashion", "category-mosaic", "category-beauty",
+            "category-chocolate", "category-atelier",
+        ):
+            self.assertNotIn(marker, home_html)
+        svc.publish(self.store)
+        resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+
+
+@override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
+class GroupDNonHomeCssTests(TestCase):
+    """Task 5, Group D — `promo_cards` + `image_text` + `blog_posts` were
+    Home-only. `promo_cards` needs no new CSS at all: its markup
+    (`.tiles`/`.tile`/`.wm`/`h4`/`.btn`) is byte-identical to
+    `category_grid`'s `grid`/`carousel` modes, already mirrored from
+    Group C1 — confirmed by direct template comparison, not assumed.
+    `image_text` (`.cream`) is a single, unscattered home.css
+    generation. `blog_posts` (`.blog-grid`/`.blog-card`) has two
+    unconditioned passes; merged-final values independently
+    re-derived via a real-browser ground-truth harness (byte-identical
+    to a direct read of both passes in file order)."""
+
+    def setUp(self):
+        cache.clear()
+        self.store = _akhlaghi()
+        _verified_domain(self.store, HOST)
+        self.draft = svc.get_or_create_draft(self.store)
+
+    def test_promo_cards_renders_on_cart_reusing_group_c1_tiles_css(self):
+        from apps.catalog.models import Category
+
+        Category.objects.create(store=self.store, name="دسته الف", slug="task5-d-cat-a", is_active=True)
+        section_structure_service.add_section(
+            draft=self.draft, section_key="promo_cards", page_type=StorefrontPage.PageType.CART,
+        )
+        svc.publish(self.store)
+        resp = self.client.get(reverse("cart:detail"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="section"><div class="tiles"', html)
+        self.assertIn('class="tile t1"', html)
+        self.assertIn('class="wm"', html)
+
+    def test_image_text_renders_on_listing(self):
+        section = section_structure_service.add_section(
+            draft=self.draft, section_key="image_text", page_type=StorefrontPage.PageType.LISTING,
+        )
+        section.settings = {
+            **section.settings,
+            "title": "متن نمونه", "body_html": "<p>بدنه</p>", "image_url": "https://example.com/x.png",
+        }
+        section.save(update_fields=["settings"])
+        svc.publish(self.store)
+        resp = self.client.get(reverse("catalog:product-list"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="cream"', html)
+        self.assertIn('class="rack"', html)
+
+    def test_blog_posts_renders_on_cart(self):
+        from apps.blog.models import BlogPost
+
+        BlogPost.objects.create(
+            title="مطلب تست", slug="task5-d-post", body="متن", category_label="اخبار",
+            published_at=timezone.now(),
+        )
+        section_structure_service.add_section(
+            draft=self.draft, section_key="blog_posts", page_type=StorefrontPage.PageType.CART,
+        )
+        svc.publish(self.store)
+        resp = self.client.get(reverse("cart:detail"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="grid blog-grid"', html)
+        self.assertIn('class="blog-card"', html)
+        self.assertIn('class="th"', html)
+        self.assertIn('class="bd"', html)
+        self.assertIn('class="meta"', html)
+        self.assertIn('class="read"', html)
+
+    def test_storefront_builder_css_carries_image_text_rules(self):
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(
+            ".cream{position:relative;border-radius:22px;overflow:hidden;background:"
+            "linear-gradient(100deg,#f3e9d8,#efe2cb);display:grid;"
+            "grid-template-columns:1fr 1fr;align-items:center;padding:36px 40px;gap:20px}",
+            css,
+        )
+        self.assertIn(
+            ".cream h3{font-size:22px;font-weight:900;color:#5b4326;margin-bottom:10px}", css,
+        )
+        self.assertIn(
+            ".cream .rack{font-size:74px;letter-spacing:6px;text-align:center;"
+            "filter:drop-shadow(0 8px 16px rgba(120,90,40,.2))}",
+            css,
+        )
+        self.assertIn(
+            "@media(max-width:1000px){\n"
+            "  .cream{grid-template-columns:1fr;text-align:center}\n"
+            "  .cream .rack{margin-inline:auto}\n"
+            "}",
+            css,
+        )
+
+    def test_storefront_builder_css_carries_the_merged_final_blog_posts_rules(self):
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(".blog-grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}", css)
+        self.assertIn(
+            ".blog-card{background:#fff;border:1px solid var(--line);border-radius:7px;"
+            "overflow:hidden;transition:.2s;box-shadow:0 1px 5px rgba(15,23,42,.04)}",
+            css,
+        )
+        self.assertIn(
+            ".blog-card:hover{transform:none;box-shadow:0 3px 10px rgba(15,23,42,.08)}", css,
+        )
+        self.assertIn(
+            ".blog-card .th{height:150px;display:grid;place-items:center;font-size:38px}", css,
+        )
+        self.assertIn(".blog-card .bd{padding:10px 11px}", css)
+        self.assertIn(
+            ".blog-card .meta{font-size:8.5px;color:var(--muted);display:flex;gap:10px;"
+            "margin-bottom:4px}",
+            css,
+        )
+        self.assertIn(
+            ".blog-card h4{font-size:10.5px;font-weight:700;line-height:1.65;margin-bottom:5px}",
+            css,
+        )
+        self.assertIn(
+            ".blog-card .read{color:#444;font-size:9px;font-weight:700;display:flex;"
+            "align-items:center;gap:4px}",
+            css,
+        )
+        self.assertIn(
+            "@media(max-width:1000px){\n  .blog-grid{grid-template-columns:repeat(3,1fr)}\n}", css,
+        )
+        self.assertIn(
+            "@media(max-width:680px){\n"
+            "  .blog-grid{grid-template-columns:repeat(2,1fr);gap:8px}\n"
+            "  .blog-card .th{height:105px}\n"
+            "}",
+            css,
+        )
+        # Stale base-only values (superseded by the later, unconditioned
+        # pass) must never reappear on their own.
+        self.assertNotIn("grid-template-columns:repeat(auto-fill,minmax(200px,1fr))", css)
+        self.assertNotIn(".blog-card{border-radius:var(--radius)}", css)
+
+    def test_home_page_is_unaffected_since_it_never_loads_storefront_builder_css(self):
+        home_html = Path(settings.BASE_DIR, "apps", "catalog", "templates", "catalog", "home.html").read_text(
+            encoding="utf-8",
+        )
+        self.assertNotIn("storefront_builder.css", home_html)
+        svc.publish(self.store)
+        resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+
+
+@override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
+class GroupENonHomeCssTests(TestCase):
+    """Task 5, Group E — `faq` + `testimonials` + `trust_features` +
+    `video_section` were Home-only. `faq`/`testimonials`/`video_section`
+    (home.css's "checkpoint 12" block) are a single, unscattered
+    generation. `trust_features` (`.features`/`.feat`) is the most
+    cascade-scattered family in this task — 5 unconditioned passes plus
+    density scoping, genuinely live on Home's own hardcoded template
+    (30 occurrences) — merged-final values independently re-derived via
+    a real-browser ground-truth harness, which confirmed the same
+    "later unconditioned rule shadows an earlier breakpoint override"
+    pattern as Group C2/C3, PLUS a genuine (non-coincidental)
+    compact-density divergence for `.features` itself, mirrored per
+    the Group C2.5 precedent."""
+
+    def setUp(self):
+        cache.clear()
+        self.store = _akhlaghi()
+        _verified_domain(self.store, HOST)
+        self.draft = svc.get_or_create_draft(self.store)
+
+    def _place(self, section_key: str, page_type: str, settings_patch: dict):
+        section = section_structure_service.add_section(
+            draft=self.draft, section_key=section_key, page_type=page_type,
+        )
+        section.settings = {**section.settings, **settings_patch}
+        section.save(update_fields=["settings"])
+        return section
+
+    def test_faq_renders_on_cart(self):
+        self._place(
+            "faq", StorefrontPage.PageType.CART,
+            {"title": "سوالات", "items": [{"question": "س", "answer": "ج"}]},
+        )
+        svc.publish(self.store)
+        resp = self.client.get(reverse("cart:detail"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="sec-head"', html)
+        self.assertIn('class="faq-list"', html)
+        self.assertIn('class="faq-item"', html)
+
+    def test_testimonials_renders_on_listing(self):
+        self._place(
+            "testimonials", StorefrontPage.PageType.LISTING,
+            {"title": "نظرات", "items": [{"quote": "ق", "name": "ن", "role": "ر"}]},
+        )
+        svc.publish(self.store)
+        resp = self.client.get(reverse("catalog:product-list"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="testimonial-list"', html)
+        self.assertIn('class="testimonial-card"', html)
+        self.assertIn('class="quote"', html)
+        self.assertIn('class="who"', html)
+
+    def test_trust_features_renders_on_cart_with_default_items(self):
+        self._place("trust_features", StorefrontPage.PageType.CART, {})
+        svc.publish(self.store)
+        resp = self.client.get(reverse("cart:detail"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="features"', html)
+        self.assertIn('class="feat"', html)
+        self.assertIn('class="ic"', html)
+
+    def test_video_section_renders_on_listing(self):
+        self._place(
+            "video_section", StorefrontPage.PageType.LISTING,
+            {"title": "ویدیو", "video_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
+        )
+        svc.publish(self.store)
+        resp = self.client.get(reverse("catalog:product-list"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="sec-head"', html)
+        self.assertIn('class="video-embed-wrap"', html)
+        self.assertIn("<iframe", html)
+
+    def test_storefront_builder_css_carries_faq_testimonials_video_rules(self):
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(
+            ".faq-list{display:flex;flex-direction:column;gap:10px;max-width:760px;margin:0 auto}",
+            css,
+        )
+        self.assertIn(
+            ".faq-item{border:1px solid var(--line);border-radius:12px;padding:14px 18px;"
+            "background:var(--card)}",
+            css,
+        )
+        self.assertIn(".faq-item summary{cursor:pointer;font-weight:700;font-size:13.5px;list-style:none}", css)
+        self.assertIn(".faq-item p{margin-top:10px;color:var(--muted);font-size:13px;line-height:1.9}", css)
+        self.assertIn(
+            ".testimonial-list{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}", css,
+        )
+        self.assertIn(
+            ".testimonial-card{border:1px solid var(--line);border-radius:14px;padding:20px;"
+            "background:var(--card)}",
+            css,
+        )
+        self.assertIn(".testimonial-card .quote{font-size:13.5px;line-height:1.9;margin-bottom:12px}", css)
+        self.assertIn(
+            "@media(max-width:1000px){.testimonial-list{grid-template-columns:repeat(2,1fr)}}", css,
+        )
+        self.assertIn("@media(max-width:680px){.testimonial-list{grid-template-columns:1fr}}", css)
+        self.assertIn(
+            ".video-embed-wrap{position:relative;max-width:860px;margin:0 auto;aspect-ratio:16/9;"
+            "border-radius:16px;overflow:hidden;background:#000;display:flex;align-items:center;"
+            "justify-content:center}",
+            css,
+        )
+        self.assertIn(".video-embed-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:0}", css)
+
+    def test_storefront_builder_css_carries_the_merged_final_trust_features_rules(self):
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(
+            ".features{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;"
+            "margin:7px 0 8px}",
+            css,
+        )
+        self.assertIn(
+            ".feat{background:#fff;border:1px solid var(--line);border-radius:5px;padding:6px 9px;"
+            "display:flex;align-items:center;gap:8px;min-height:54px;"
+            "box-shadow:0 1px 5px rgba(15,23,42,.04)}",
+            css,
+        )
+        self.assertIn(
+            ".feat .ic{width:31px;height:31px;border-radius:4px;background:#fff;color:#f43f5e;"
+            "border:0;display:grid;place-items:center;flex-shrink:0;font-size:15px}",
+            css,
+        )
+        self.assertIn(".feat .ic svg{width:21px;height:21px}", css)
+        self.assertIn(".feat b{font-size:11px;font-weight:600;line-height:1.45;display:block}", css)
+        self.assertIn(".feat small{color:var(--muted);font-size:9.5px;line-height:1.5}", css)
+        self.assertIn(
+            'html[data-sfb-density="compact"] .features{gap:10px;margin:18px 0}', css,
+        )
+        self.assertIn(
+            'html[data-sfb-density="relaxed"] .features{gap:22px;margin:54px 0}', css,
+        )
+        self.assertIn(
+            "@media(max-width:1000px){\n  .features{grid-template-columns:repeat(3,1fr)}\n}", css,
+        )
+        self.assertIn(
+            "@media(max-width:680px){\n"
+            "  .features{display:flex;overflow-x:auto;gap:8px}\n"
+            "  .feat{flex:0 0 180px}\n"
+            "  .feat b{font-size:10.8px}\n"
+            "  .feat small{font-size:9.4px}\n"
+            "}",
+            css,
+        )
+        # The dead pass-1 breakpoint overrides (shadowed by later
+        # unconditioned rules — the element is display:flex at ≤680px,
+        # not grid, so its own @1000px/@680px grid-template-columns
+        # never actually apply, and a still-later pass's min-height
+        # always wins over the @680px block's 56px) must never reappear.
+        self.assertNotIn(".features{grid-template-columns:repeat(2,1fr)}", css)
+        self.assertNotIn(".features{grid-template-columns:1fr}", css)
+        self.assertNotIn(".feat{flex:0 0 180px;min-height:56px}", css)
+
+    def test_home_page_is_unaffected_since_it_never_loads_storefront_builder_css_group_e(self):
+        home_html = Path(settings.BASE_DIR, "apps", "catalog", "templates", "catalog", "home.html").read_text(
+            encoding="utf-8",
+        )
+        self.assertNotIn("storefront_builder.css", home_html)
+        svc.publish(self.store)
+        resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+
+
+@override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
+class BrandCarouselBeautyTabsNonHomeCssTests(TestCase):
+    """Task 5, plus: `brand_carousel`'s `beauty_tabs` display mode
+    cosmetic gap (the Task-0 plan's disposition table, row 12). Base
+    `brand_carousel` CSS is already Phase-3 CERTIFY-ONLY/mirrored;
+    only `beauty_tabs`'s own selectors
+    (`.brand-section--beauty-tabs`/`.beauty-brand-title`/
+    `.brand-beauty-tabs`/`.brand-beauty-tabs .brand-beauty-tab`/
+    `.brand-beauty-tabs .brand-tile-name`) were never mirrored — a
+    single, unscattered home.css generation, confirmed via whole-file
+    grep."""
+
+    def setUp(self):
+        cache.clear()
+        self.store = _akhlaghi()
+        _verified_domain(self.store, HOST)
+        self.draft = svc.get_or_create_draft(self.store)
+
+    def test_beauty_tabs_renders_on_cart(self):
+        from apps.catalog.models import Brand
+
+        Brand.objects.create(store=self.store, name="برند تست", slug="task5-beautytabs-brand", is_active=True)
+        section = section_structure_service.add_section(
+            draft=self.draft, section_key="brand_carousel", page_type=StorefrontPage.PageType.CART,
+        )
+        section.settings = {**section.settings, "display_mode": "beauty_tabs"}
+        section.save(update_fields=["settings"])
+        svc.publish(self.store)
+        resp = self.client.get(reverse("cart:detail"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="section brand-section--beauty-tabs"', html)
+        self.assertIn('class="beauty-section-title beauty-brand-title"', html)
+        self.assertIn('class="brand-beauty-tabs"', html)
+        self.assertIn('class="brand-tile brand-beauty-tab"', html)
+
+    def test_storefront_builder_css_carries_the_beauty_tabs_rules(self):
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(".brand-section--beauty-tabs{margin:19px 0 22px}", css)
+        self.assertIn(".beauty-brand-title{margin-bottom:16px}", css)
+        self.assertIn(
+            ".brand-beauty-tabs{display:flex;overflow-x:auto;scroll-snap-type:x proximity;"
+            "scrollbar-width:none;border:1px solid var(--line);border-radius:9px;"
+            "background:#fff;padding:0}",
+            css,
+        )
+        self.assertIn(
+            ".brand-beauty-tabs .brand-beauty-tab{flex:1 0 150px;min-width:150px;min-height:64px;"
+            "border:0;border-inline-end:1px solid var(--line);border-radius:0;background:#fff;"
+            "padding:9px 13px;box-shadow:none;scroll-snap-align:start}",
+            css,
+        )
+        self.assertIn(".brand-beauty-tabs .brand-beauty-tab:last-child{border-inline-end:0}", css)
+        self.assertIn(
+            ".brand-beauty-tabs .brand-beauty-tab:hover{background:#fff9fc;color:var(--violet)}", css,
+        )
+        self.assertIn(
+            ".brand-beauty-tabs .brand-tile-name{color:var(--violet);font-size:10.5px;"
+            "font-weight:700;text-align:center}",
+            css,
+        )
+        self.assertIn(
+            "@media(max-width:680px){\n"
+            "  .brand-section--beauty-tabs{margin:14px 0 17px}\n"
+            "  .brand-beauty-tabs .brand-beauty-tab{flex-basis:128px;min-width:128px;"
+            "min-height:56px}\n"
+            "}",
+            css,
+        )
+
+    def test_home_page_is_unaffected_since_it_never_loads_storefront_builder_css(self):
+        home_html = Path(settings.BASE_DIR, "apps", "catalog", "templates", "catalog", "home.html").read_text(
+            encoding="utf-8",
+        )
+        self.assertNotIn("storefront_builder.css", home_html)
+        svc.publish(self.store)
+        resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
