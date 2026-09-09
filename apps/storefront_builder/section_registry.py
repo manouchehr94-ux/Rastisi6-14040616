@@ -1536,6 +1536,51 @@ HERO_BANNER_SCHEMA = SettingsSchema(fields=(
 ))
 
 
+#: R4 Task 6 — same declarative counterpart for ``image_slider``, which
+#: shares ``_validate_slider_settings``/``default_slider_settings`` with
+#: ``hero_banner`` but has no registered variants, so ``hero_style`` is
+#: deliberately omitted here (that field only has a rendered control on
+#: ``hero_banner``'s settings form). The validator still always returns a
+#: ``hero_style`` key for ``image_slider`` too — that key simply survives
+#: as an unmanaged, unused value, exactly as it already does today.
+#: ``appearance_overrides`` is ALSO deliberately omitted — Task 7 exposed
+#: that Inspector field on ``hero_banner`` only (see
+#: ``HeroSchemaFieldTests`` in ``test_r4_appearance_overrides.py``, which
+#: explicitly asserts ``image_slider`` does not get it); the underlying
+#: ``_with_appearance_overrides`` wrapper still applies to every section's
+#: legacy validator regardless, so this omission only affects Inspector
+#: field exposure, not the actual override capability.
+IMAGE_SLIDER_SCHEMA = SettingsSchema(fields=(
+    SettingsField(
+        "autoplay", "پخش خودکار", "boolean", "basic",
+        default=True,
+    ),
+    SettingsField(
+        "interval_ms", "فاصله اسلاید", "integer", "advanced",
+        default=_SLIDER_DEFAULT_INTERVAL_MS,
+        min_value=_SLIDER_MIN_INTERVAL_MS,
+        max_value=_SLIDER_MAX_INTERVAL_MS,
+    ),
+    SettingsField(
+        "show_arrows", "نمایش فلش‌ها", "boolean", "advanced",
+        default=True,
+    ),
+    SettingsField(
+        "show_dots", "نمایش نقاط", "boolean", "advanced",
+        default=True,
+    ),
+    SettingsField(
+        "loop", "تکرار", "boolean", "advanced",
+        default=True,
+    ),
+    SettingsField(
+        "text_position", "جای متن", "choice", "advanced",
+        default="end",
+        choices=(("start", "ابتدا"), ("center", "وسط"), ("end", "انتها")),
+    ),
+))
+
+
 class CategoryGridSettingsError(ValueError):
     """شکلِ خامِ تنظیماتِ «گرید دسته‌بندی» نامعتبر است (فقط شکل/enum —
     مالکیتِ Storeِ ``category_ids`` در خودِ ``render_service`` چک می‌شود،
@@ -2126,6 +2171,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         template_name="storefront_builder/sections/image_slider.html",
         validate_settings=_validate_slider_settings, default_settings=default_slider_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="تصاویر و تبلیغات",
+        settings_schema=IMAGE_SLIDER_SCHEMA,
     ),
     "single_banner": SectionDefinition(
         key="single_banner", label_fa="بنر تکی", icon="image",

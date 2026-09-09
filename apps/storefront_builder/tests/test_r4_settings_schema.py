@@ -430,13 +430,17 @@ class HeroBannerSchemaRegistrationTests(SimpleTestCase):
 
 
 class NoOtherSectionBecomesSchemaEnabledTests(SimpleTestCase):
-    def test_image_slider_shares_the_slider_validator_but_is_not_schema_enabled(self):
-        # image_slider uses the exact same _validate_slider_settings /
-        # default_slider_settings pair as hero_banner, but has no
-        # `variants` registered — Task 4 must not accidentally schema-
-        # enable it just because it shares the validator function.
+    def test_image_slider_is_now_schema_enabled_via_its_own_schema(self):
+        # image_slider shares _validate_slider_settings/default_slider_settings
+        # with hero_banner but has no `variants` registered, so Task 4
+        # deliberately did NOT schema-enable it just because it shares the
+        # validator function. Task 6 gives it its own IMAGE_SLIDER_SCHEMA
+        # (identical to HERO_BANNER_SCHEMA minus the hero_style field, which
+        # only has a rendered control on hero_banner's settings form).
         image_slider = section_registry.get_definition("image_slider")
-        self.assertIsNone(image_slider.settings_schema)
+        self.assertIsNotNone(image_slider.settings_schema)
+        field_keys = {field.key for field in image_slider.settings_schema.fields}
+        self.assertNotIn("hero_style", field_keys)
 
     def test_representative_unrelated_section_is_still_unschematized(self):
         faq = section_registry.get_definition("faq")
@@ -456,7 +460,8 @@ class SchemaEnablementRegistryGuardTests(SimpleTestCase):
 
     # The families with an R4 settings schema today (Phase 3's two
     # certified pilots — brand_carousel, collection_tiles — plus
-    # hero_banner, rich_text, product_section; Task 6 adds category_grid).
+    # hero_banner, rich_text, product_section; Task 6 adds category_grid
+    # and image_slider).
     EXPECTED_SCHEMA_ENABLED = frozenset({
         "hero_banner",
         "brand_carousel",
@@ -464,6 +469,7 @@ class SchemaEnablementRegistryGuardTests(SimpleTestCase):
         "product_section",
         "collection_tiles",
         "category_grid",
+        "image_slider",
     })
 
     def test_every_registered_section_key_matches_its_expected_schema_state(self):
