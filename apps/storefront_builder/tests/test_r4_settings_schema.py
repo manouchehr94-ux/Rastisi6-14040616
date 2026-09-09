@@ -462,9 +462,10 @@ class SchemaEnablementRegistryGuardTests(SimpleTestCase):
     # certified pilots — brand_carousel, collection_tiles — plus
     # hero_banner, rich_text, product_section; Task 6 adds category_grid,
     # image_slider, blog_posts, amazing_offers, quick_links, video_section,
-    # newsletter, image_text, and multi_banner. single_banner is
-    # deliberately excluded: it has no settings-driven field at all
-    # (Task 6 Group C fixed/static disposition).
+    # newsletter, image_text, multi_banner, and Group B's
+    # newest_products/best_sellers/discounted_products/promo_cards.
+    # single_banner is deliberately excluded: it has no settings-driven
+    # field at all (Task 6 Group C fixed/static disposition).
     EXPECTED_SCHEMA_ENABLED = frozenset({
         "hero_banner",
         "brand_carousel",
@@ -480,6 +481,10 @@ class SchemaEnablementRegistryGuardTests(SimpleTestCase):
         "newsletter",
         "image_text",
         "multi_banner",
+        "newest_products",
+        "best_sellers",
+        "discounted_products",
+        "promo_cards",
     })
 
     def test_every_registered_section_key_matches_its_expected_schema_state(self):

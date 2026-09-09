@@ -2158,6 +2158,118 @@ def _validate_image_text_settings(raw: dict) -> dict:
     return {"title": title, "body_html": body_html, "image_url": image_url, "image_position": position}
 
 
+#: Task 6 (Group B) — "simple auto-source catalog families, no
+#: independent selector needed beyond the existing implicit query"
+#: (``newest_products``/``best_sellers``/``discounted_products``). Their
+#: render-time context builders (``_newest_products_context`` etc. in
+#: ``render_service.py``) hardcode a slice limit and never read
+#: ``section.settings`` at all today; the only merchant-facing knob Group
+#: B's disposition calls for is that count, so each gets a minimal
+#: single-field validator/schema — bounds match ``product_section``'s own
+#: ``item_limit`` (2-24), and each default equals its own current
+#: hardcoded slice so an untouched section renders byte-identically.
+_MIN_AUTO_SOURCE_PRODUCT_ITEMS = _PRODUCT_SECTION_MIN_LIMIT
+_MAX_AUTO_SOURCE_PRODUCT_ITEMS = _PRODUCT_SECTION_MAX_LIMIT
+_DEFAULT_NEWEST_PRODUCTS_ITEMS = 8
+_DEFAULT_BEST_SELLERS_ITEMS = 8
+_DEFAULT_DISCOUNTED_PRODUCTS_ITEMS = 6
+
+
+class AutoSourceProductSettingsError(ValueError):
+    """شکلِ خامِ تنظیماتِ خانواده‌یِ محصولاتِ auto-source (جدیدترین/پرفروش/تخفیف‌دار) نامعتبر است."""
+
+
+def _validate_auto_source_product_settings(raw: dict, default_item_limit: int) -> dict:
+    if not isinstance(raw, dict):
+        raise AutoSourceProductSettingsError("تنظیمات باید یک شیء JSON باشد")
+    try:
+        item_limit = int(raw.get("item_limit", default_item_limit))
+    except (TypeError, ValueError):
+        raise AutoSourceProductSettingsError("تعدادِ محصولات باید عدد باشد") from None
+    item_limit = max(_MIN_AUTO_SOURCE_PRODUCT_ITEMS, min(_MAX_AUTO_SOURCE_PRODUCT_ITEMS, item_limit))
+    return {"item_limit": item_limit}
+
+
+def _validate_newest_products_settings(raw: dict) -> dict:
+    return _validate_auto_source_product_settings(raw, _DEFAULT_NEWEST_PRODUCTS_ITEMS)
+
+
+def default_newest_products_settings() -> dict:
+    return {"item_limit": _DEFAULT_NEWEST_PRODUCTS_ITEMS}
+
+
+def _validate_best_sellers_settings(raw: dict) -> dict:
+    return _validate_auto_source_product_settings(raw, _DEFAULT_BEST_SELLERS_ITEMS)
+
+
+def default_best_sellers_settings() -> dict:
+    return {"item_limit": _DEFAULT_BEST_SELLERS_ITEMS}
+
+
+def _validate_discounted_products_settings(raw: dict) -> dict:
+    return _validate_auto_source_product_settings(raw, _DEFAULT_DISCOUNTED_PRODUCTS_ITEMS)
+
+
+def default_discounted_products_settings() -> dict:
+    return {"item_limit": _DEFAULT_DISCOUNTED_PRODUCTS_ITEMS}
+
+
+def _auto_source_product_schema(label_fa: str, default_item_limit: int) -> "SettingsSchema":
+    return SettingsSchema(fields=(
+        SettingsField(
+            "item_limit", label_fa, "integer", "basic",
+            default=default_item_limit,
+            min_value=_MIN_AUTO_SOURCE_PRODUCT_ITEMS, max_value=_MAX_AUTO_SOURCE_PRODUCT_ITEMS,
+        ),
+    ))
+
+
+NEWEST_PRODUCTS_SCHEMA = _auto_source_product_schema("تعداد محصولات", _DEFAULT_NEWEST_PRODUCTS_ITEMS)
+BEST_SELLERS_SCHEMA = _auto_source_product_schema("تعداد محصولات", _DEFAULT_BEST_SELLERS_ITEMS)
+DISCOUNTED_PRODUCTS_SCHEMA = _auto_source_product_schema("تعداد محصولات", _DEFAULT_DISCOUNTED_PRODUCTS_ITEMS)
+
+
+#: Task 6 (Group B) — ``promo_cards`` shares the same disposition
+#: (auto-source, no independent selector) but its render context
+#: (``_category_context_for_promo_cards``) sources active Store
+#: categories, not products, and renders them through the exact same
+#: ``.tiles``/``.tile`` markup as ``category_grid``'s ``grid``/
+#: ``carousel`` modes (see the Task 5 review note above) — so its bounds
+#: mirror ``CATEGORY_GRID_SCHEMA``'s own ``item_limit`` (2-12), not the
+#: product families' wider 2-24.
+_MIN_PROMO_CARDS_ITEMS = 2
+_MAX_PROMO_CARDS_ITEMS = 12
+_DEFAULT_PROMO_CARDS_ITEMS = 4
+
+
+class PromoCardsSettingsError(ValueError):
+    """شکلِ خامِ تنظیماتِ «کارت‌های تبلیغاتی» نامعتبر است."""
+
+
+def _validate_promo_cards_settings(raw: dict) -> dict:
+    if not isinstance(raw, dict):
+        raise PromoCardsSettingsError("تنظیمات باید یک شیء JSON باشد")
+    try:
+        item_limit = int(raw.get("item_limit", _DEFAULT_PROMO_CARDS_ITEMS))
+    except (TypeError, ValueError):
+        raise PromoCardsSettingsError("تعدادِ کارت‌ها باید عدد باشد") from None
+    item_limit = max(_MIN_PROMO_CARDS_ITEMS, min(_MAX_PROMO_CARDS_ITEMS, item_limit))
+    return {"item_limit": item_limit}
+
+
+def default_promo_cards_settings() -> dict:
+    return {"item_limit": _DEFAULT_PROMO_CARDS_ITEMS}
+
+
+PROMO_CARDS_SCHEMA = SettingsSchema(fields=(
+    SettingsField(
+        "item_limit", "تعداد کارت‌ها", "integer", "basic",
+        default=_DEFAULT_PROMO_CARDS_ITEMS,
+        min_value=_MIN_PROMO_CARDS_ITEMS, max_value=_MAX_PROMO_CARDS_ITEMS,
+    ),
+))
+
+
 # ---------------------------------------------------------------- ثبت انواع بخش
 
 #: Task 6 (Group C) — the U1A finding above (R1 §9) is now RESOLVED into
@@ -2414,20 +2526,23 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     "newest_products": SectionDefinition(
         key="newest_products", label_fa="جدیدترین محصولات", icon="sparkles",
         template_name="storefront_builder/sections/newest_products.html",
-        validate_settings=_passthrough_dict, default_settings=_empty_defaults,
+        validate_settings=_validate_newest_products_settings, default_settings=default_newest_products_settings,
         duplicable=True, removable=True, category_fa="محصولات",
+        settings_schema=NEWEST_PRODUCTS_SCHEMA,
     ),
     "best_sellers": SectionDefinition(
         key="best_sellers", label_fa="پرفروش‌ترین‌ها", icon="trending-up",
         template_name="storefront_builder/sections/best_sellers.html",
-        validate_settings=_passthrough_dict, default_settings=_empty_defaults,
+        validate_settings=_validate_best_sellers_settings, default_settings=default_best_sellers_settings,
         duplicable=True, removable=True, category_fa="محصولات",
+        settings_schema=BEST_SELLERS_SCHEMA,
     ),
     "discounted_products": SectionDefinition(
         key="discounted_products", label_fa="محصولات تخفیف‌دار", icon="percent",
         template_name="storefront_builder/sections/discounted_products.html",
-        validate_settings=_passthrough_dict, default_settings=_empty_defaults,
+        validate_settings=_validate_discounted_products_settings, default_settings=default_discounted_products_settings,
         duplicable=True, removable=True, category_fa="محصولات",
+        settings_schema=DISCOUNTED_PRODUCTS_SCHEMA,
     ),
     "amazing_offers": SectionDefinition(
         key="amazing_offers", label_fa="پیشنهادهای شگفت‌انگیز", icon="zap",
@@ -2455,8 +2570,9 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     "promo_cards": SectionDefinition(
         key="promo_cards", label_fa="کارت‌های تبلیغاتی", icon="layout",
         template_name="storefront_builder/sections/promo_cards.html",
-        validate_settings=_passthrough_dict, default_settings=_empty_defaults,
+        validate_settings=_validate_promo_cards_settings, default_settings=default_promo_cards_settings,
         duplicable=True, removable=True, category_fa="تصاویر و تبلیغات",
+        settings_schema=PROMO_CARDS_SCHEMA,
     ),
     "rich_text": SectionDefinition(
         key="rich_text", label_fa="متن", icon="text",

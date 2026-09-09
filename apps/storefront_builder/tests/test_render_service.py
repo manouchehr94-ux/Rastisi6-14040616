@@ -123,7 +123,19 @@ class BuildRenderItemsTests(TestCase):
     def test_duplicated_section_type_does_not_duplicate_queries(self):
         """بهینه‌سازی کوئری: دو نمونه از یک section_key یکسان (قابلیت
         پشتیبانی‌شده duplicable) نباید کوئری داده را دو بار اجرا کنند —
-        هیچ‌کدام از context builderها به تنظیمات نمونه وابسته نیستند.
+        وقتی context builder به تنظیماتِ خودِ همان نمونه وابسته نیست
+        (بنابراین در ``PER_INSTANCE_SECTION_KEYS`` نیست).
+
+        ``featured_products`` (نه ``newest_products``) عمداً انتخاب شده:
+        از چکپوینتِ Task 6 Group B به بعد، ``newest_products`` خودش
+        ``item_limit``ِ per-instance دارد (نگاه کنید به
+        ``test_different_instances_of_same_type_share_live_data_correctly``
+        برایِ آن دسته)، اما ``featured_products`` یک MARKETING-ALIAS ثابت
+        است که هرگز settings مستقلِ خودش را نداشته (همیشه
+        ``_passthrough_dict``/``_empty_defaults``) — هرچند در پسِ‌پرده
+        همان context builderِ ``newest_products`` را صدا می‌زند، تنظیماتش
+        هرگز ``item_limit`` ندارد، پس واقعاً هنوز نمونه‌یِ درستِ این
+        بهینه‌سازیِ سطح-Store است.
 
         به‌جای یک عدد ثابت (که به وجود/عدم‌وجود محصول در دیتابیس تست
         وابسته است — prefetch وقتی محصولی نیست کوئری اضافه نمی‌زند)،
@@ -133,14 +145,14 @@ class BuildRenderItemsTests(TestCase):
         store = _akhlaghi()
         draft = svc.get_or_create_draft(store)
         draft.sections.all().delete()
-        StorefrontSection.objects.create(version=draft, section_key="newest_products", order=0)
+        StorefrontSection.objects.create(version=draft, section_key="featured_products", order=0)
         with CaptureQueriesContext(connection) as single_ctx:
             items = build_render_items(draft, store)
             for i in items:
                 list(i["context"]["products"])
         single_count = len(single_ctx.captured_queries)
 
-        StorefrontSection.objects.create(version=draft, section_key="newest_products", order=1)
+        StorefrontSection.objects.create(version=draft, section_key="featured_products", order=1)
         with CaptureQueriesContext(connection) as double_ctx:
             items = build_render_items(draft, store)
             for i in items:

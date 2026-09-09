@@ -255,9 +255,10 @@ def _catalog_product_wall_context(store, section):
 
 
 def _newest_products_context(store, section):
+    item_limit = (section.settings or {}).get("item_limit", 8)
     products = (
         storefront_listing_products(store).select_related("brand").prefetch_related("images", "metafields")
-        .order_by("-created_at")[:8]
+        .order_by("-created_at")[:item_limit]
     )
     return {"products": products}
 
@@ -268,7 +269,8 @@ def _best_sellers_context(store, section):
     (به مستندسازیِ ``best_seller_service`` مراجعه شود). ``pk__in`` ترتیبِ
     رتبه را حفظ نمی‌کند، پس فهرست دستی طبقِ همان ترتیبِ رتبه‌بندی بازسازی
     می‌شود (همان الگویِ ``collection_products_add``ی فازِ B)."""
-    product_ids = best_seller_service.best_selling_product_ids(store, limit=8)
+    item_limit = (section.settings or {}).get("item_limit", 8)
+    product_ids = best_seller_service.best_selling_product_ids(store, limit=item_limit)
     if not product_ids:
         return {"products": []}
     products_by_id = {
@@ -281,9 +283,10 @@ def _best_sellers_context(store, section):
 
 
 def _discounted_products_context(store, section):
+    item_limit = (section.settings or {}).get("item_limit", 6)
     products = (
         storefront_listing_products(store).select_related("brand").prefetch_related("images", "metafields")
-        .filter(discount_percent__gt=0).order_by("-discount_percent")[:6]
+        .filter(discount_percent__gt=0).order_by("-discount_percent")[:item_limit]
     )
     return {"products": products}
 
@@ -432,7 +435,8 @@ def _video_section_context(store, section):
 
 
 def _category_context_for_promo_cards(store, section):
-    categories = Category.objects.filter(store=store, is_active=True).order_by("order", "name")[:4]
+    item_limit = (section.settings or {}).get("item_limit", 4)
+    categories = Category.objects.filter(store=store, is_active=True).order_by("order", "name")[:item_limit]
     return {"categories": categories}
 
 
@@ -489,6 +493,13 @@ PER_INSTANCE_SECTION_KEYS = {
     #: نمونه (``item_limit``/``deadline_hours``) وابسته‌اند، دقیقاً همان
     #: دلیلِ بالا (``product_section``).
     "amazing_offers", "blog_posts",
+    #: Task 6 (Group B) — همین دلیل: از این چکپوینت به بعد،
+    #: ``_newest_products_context``/``_best_sellers_context``/
+    #: ``_discounted_products_context``/``_category_context_for_promo_cards``
+    #: هم به ``item_limit``ی خودِ همان نمونه وابسته‌اند (پیش از این
+    #: چکپوینت، این چهار context builder اصلاً به ``section.settings``
+    #: نگاه نمی‌کردند — یک مقدارِ ثابتِ hardcode‌شده داشتند).
+    "newest_products", "best_sellers", "discounted_products", "promo_cards",
 }
 
 
