@@ -1,3 +1,4 @@
+{% load storefront_builder_extras %}
 <div class="r4-inspector-panel" data-r4-section-inspector data-r4-section-id="{{ section.pk }}">
   <header class="r4-inspector-header">
     <strong class="r4-inspector-title">{{ definition.label_fa }}</strong>
@@ -14,13 +15,13 @@
   <div class="r4-inspector-body">
     <section class="r4-inspector-panel-fields" role="tabpanel" data-r4-tab-panel="basic">
       {% for field in basic_fields %}
-        {% include "dashboard/storefront_builder/r4/partials/settings_field.html" with field=field %}
+        {% include "dashboard/storefront_builder/r4/partials/settings_field.html" with field=field current_field_value=field_values|dictget:field.key %}
       {% endfor %}
     </section>
 
     <section class="r4-inspector-panel-fields" role="tabpanel" data-r4-tab-panel="advanced" hidden>
       {% for field in advanced_fields %}
-        {% include "dashboard/storefront_builder/r4/partials/settings_field.html" with field=field %}
+        {% include "dashboard/storefront_builder/r4/partials/settings_field.html" with field=field current_field_value=field_values|dictget:field.key %}
       {% endfor %}
     </section>
   </div>

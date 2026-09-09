@@ -1695,6 +1695,26 @@ def default_trust_features_settings() -> dict:
     return {"items": []}
 
 
+#: R4 Task 6 (Group D) — the first real user of the new ``repeater`` field
+#: type. Only shape/length cleaning happens at this layer (icon/title/
+#: subtitle max lengths, item-count cap) — the legacy validator above
+#: stays the sole authority for the "title required" business rule (an
+#: item with a blank title is accepted by the schema but still rejected
+#: by ``validate_trust_features_settings`` afterward, exactly as today).
+TRUST_FEATURES_SCHEMA = SettingsSchema(fields=(
+    SettingsField(
+        "items", "ردیف‌های اعتماد", "repeater", "basic",
+        default=[],
+        min_value=0, max_value=_MAX_TRUST_FEATURE_ITEMS,
+        repeater_item_fields=(
+            SettingsField("icon", "آیکون", "text", "basic", default="", max_length=_MAX_TRUST_FEATURE_ICON_LENGTH),
+            SettingsField("title", "عنوان", "text", "basic", default="", max_length=_MAX_TRUST_FEATURE_TEXT_LENGTH),
+            SettingsField("subtitle", "زیرعنوان", "text", "basic", default="", max_length=_MAX_TRUST_FEATURE_TEXT_LENGTH),
+        ),
+    ),
+))
+
+
 #: Phase 3 (Universal Storefront — V5 Golden Homepage) — ``amazing_offers``
 #: تا پیش از این چکپوینت همیشه دقیقاً یک محصول نمایش می‌داد (تنظیمات اصلاً
 #: خوانده نمی‌شد) — «Product Spotlight» یِ V5 چند پیشنهادِ هم‌زمان لازم دارد.
@@ -2001,6 +2021,23 @@ def default_faq_settings() -> dict:
     return {"title": "سوالات متداول", "items": []}
 
 
+#: R4 Task 6 (Group D) — legacy validator above stays the authority for
+#: "an item missing question or answer is silently dropped" — the schema
+#: layer only cleans shape/length.
+FAQ_SCHEMA = SettingsSchema(fields=(
+    SettingsField("title", "عنوان بخش", "text", "basic", default="سوالات متداول", max_length=_MAX_SECTION_TITLE_LENGTH),
+    SettingsField(
+        "items", "سوالات", "repeater", "basic",
+        default=[],
+        min_value=0, max_value=_MAX_FAQ_ITEMS,
+        repeater_item_fields=(
+            SettingsField("question", "سوال", "text", "basic", default="", max_length=_MAX_FAQ_QUESTION_LENGTH),
+            SettingsField("answer", "پاسخ", "text", "basic", default="", max_length=_MAX_FAQ_ANSWER_LENGTH),
+        ),
+    ),
+))
+
+
 class TestimonialsSettingsError(ValueError):
     """شکلِ خامِ تنظیماتِ «نظرات مشتریان» نامعتبر است."""
 
@@ -2034,6 +2071,24 @@ def _validate_testimonials_settings(raw: dict) -> dict:
 
 def default_testimonials_settings() -> dict:
     return {"title": "نظرات مشتریان", "items": []}
+
+
+#: R4 Task 6 (Group D) — same shape/length-only cleaning; the legacy
+#: validator above stays the authority for dropping an item missing a
+#: name or quote.
+TESTIMONIALS_SCHEMA = SettingsSchema(fields=(
+    SettingsField("title", "عنوان بخش", "text", "basic", default="نظرات مشتریان", max_length=_MAX_SECTION_TITLE_LENGTH),
+    SettingsField(
+        "items", "نظرات", "repeater", "basic",
+        default=[],
+        min_value=0, max_value=_MAX_TESTIMONIAL_ITEMS,
+        repeater_item_fields=(
+            SettingsField("name", "نام", "text", "basic", default="", max_length=_MAX_TESTIMONIAL_NAME_LENGTH),
+            SettingsField("quote", "متن نظر", "text", "basic", default="", max_length=_MAX_TESTIMONIAL_QUOTE_LENGTH),
+            SettingsField("role", "نقش/شهر", "text", "advanced", default="", max_length=_MAX_TESTIMONIAL_ROLE_LENGTH),
+        ),
+    ),
+))
 
 
 class VideoSectionSettingsError(ValueError):
@@ -2656,6 +2711,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         template_name="storefront_builder/sections/trust_features.html",
         validate_settings=validate_trust_features_settings, default_settings=default_trust_features_settings,
         max_instances=1, duplicable=False, removable=True, has_settings_form=True, category_fa="ساختار",
+        settings_schema=TRUST_FEATURES_SCHEMA,
     ),
     # -------------------------------------------------- چکپوینتِ ۱۲: بخش‌های جدید
     "collection_tiles": SectionDefinition(
@@ -2684,12 +2740,14 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         template_name="storefront_builder/sections/faq.html",
         validate_settings=_validate_faq_settings, default_settings=default_faq_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="محتوا",
+        settings_schema=FAQ_SCHEMA,
     ),
     "testimonials": SectionDefinition(
         key="testimonials", label_fa="نظرات مشتریان", icon="message-circle",
         template_name="storefront_builder/sections/testimonials.html",
         validate_settings=_validate_testimonials_settings, default_settings=default_testimonials_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="محتوا",
+        settings_schema=TESTIMONIALS_SCHEMA,
     ),
     "video_section": SectionDefinition(
         key="video_section", label_fa="بخش ویدیو", icon="play-circle",

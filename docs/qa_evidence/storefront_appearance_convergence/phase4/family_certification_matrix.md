@@ -13,30 +13,30 @@ ResourceSource · browser certification (Task 4 harness) · status.
 |---|---|---|---|---|---|---|
 | `hero_banner` | MIGRATE | **yes (Task 5 Group A)** | yes (pre-existing) | no | no | NOT YET CERTIFIED |
 | `fashion_lifestyle_hero` | HOME-ONLY | n/a (Home-only) | no | no | no | NO ACTION REQUIRED |
-| `image_slider` | MIGRATE | **yes (Task 5 Group A)** | no | no | no | NOT YET CERTIFIED |
-| `single_banner` | MIGRATE | **yes (Task 5 Group B)** | no | no | no | NOT YET CERTIFIED |
-| `multi_banner` | MIGRATE | **yes (Task 5 Group B)** | no | no | no | NOT YET CERTIFIED |
-| `category_grid` | MIGRATE | **yes (Task 5 Group C, all 11 display_modes)** | no | no | no | NOT YET CERTIFIED |
+| `image_slider` | MIGRATE | **yes (Task 5 Group A)** | **yes (Task 6 Group A)** | no | no | NOT YET CERTIFIED |
+| `single_banner` | MIGRATE | **yes (Task 5 Group B)** | **no — explicit FIXED/STATIC disposition (Task 6 Group C): no settings-driven field at all** | no | no | NOT YET CERTIFIED |
+| `multi_banner` | MIGRATE | **yes (Task 5 Group B)** | **yes (Task 6 Group C — real closed-enum validator + schema, replacing `_passthrough_dict`)** | no | no | NOT YET CERTIFIED |
+| `category_grid` | MIGRATE | **yes (Task 5 Group C, all 11 display_modes)** | **yes (Task 6 Group C)** | **yes (Task 6 — category kind wired into the shared Resource Picker)** | no | NOT YET CERTIFIED |
 | `featured_products` | MARKETING-ALIAS | n/a | no | no | no | DOCUMENTED AS ALIAS |
-| `newest_products` | MIGRATE | already safe | no | no | no | NOT YET CERTIFIED |
-| `best_sellers` | MIGRATE | already safe | no | no | no | NOT YET CERTIFIED |
-| `discounted_products` | MIGRATE | already safe | no | no | no | NOT YET CERTIFIED |
-| `amazing_offers` | MIGRATE | **yes (Task 5 Group A)** | no | no | no | NOT YET CERTIFIED |
+| `newest_products` | MIGRATE | already safe | **yes (Task 6 Group B — item_limit)** | no | no | NOT YET CERTIFIED |
+| `best_sellers` | MIGRATE | already safe | **yes (Task 6 Group B — item_limit)** | no | no | NOT YET CERTIFIED |
+| `discounted_products` | MIGRATE | already safe | **yes (Task 6 Group B — item_limit)** | no | no | NOT YET CERTIFIED |
+| `amazing_offers` | MIGRATE | **yes (Task 5 Group A)** | **yes (Task 6 Group D)** | no | no | NOT YET CERTIFIED |
 | `brand_carousel` | CERTIFY-ONLY | **yes (`beauty_tabs` gap closed, Task 5)** | yes | yes | **yes (Phase-3, 45/45)** | CERTIFIED (Phase 3) — regression sentinel |
 | `collection_tiles` | CERTIFY-ONLY | already safe | yes | yes | **yes (Phase-3, 36/36)** | CERTIFIED (Phase 3) — regression sentinel |
-| `promo_cards` | MIGRATE | **yes (Task 5 Group D — reuses Group C1 CSS)** | no | no | no | NOT YET CERTIFIED |
+| `promo_cards` | MIGRATE | **yes (Task 5 Group D — reuses Group C1 CSS)** | **yes (Task 6 Group B — item_limit)** | no | no | NOT YET CERTIFIED |
 | `rich_text` | MIGRATE | already safe (inline) | yes (legacy) | no | no | NOT YET CERTIFIED |
-| `image_text` | MIGRATE | **yes (Task 5 Group D)** | no | no | no | NOT YET CERTIFIED |
-| `blog_posts` | MIGRATE | **yes (Task 5 Group D)** | no | no | no | NOT YET CERTIFIED |
+| `image_text` | MIGRATE | **yes (Task 5 Group D)** | **yes (Task 6 Group C)** | no | no | NOT YET CERTIFIED |
+| `blog_posts` | MIGRATE | **yes (Task 5 Group D)** | **yes (Task 6 Group C)** | no | no | NOT YET CERTIFIED |
 | `product_section` | MIGRATE | **yes (Task 5 Group A)** | yes | yes | no | NOT YET CERTIFIED |
 | `catalog_product_wall` | HOME-ONLY | n/a | no | no | no | NO ACTION REQUIRED |
-| `trust_features` | MIGRATE | **yes (Task 5 Group E)** | no | no | no | NOT YET CERTIFIED |
-| `quick_links` | MIGRATE | already safe | no | no | no | NOT YET CERTIFIED |
-| `faq` | MIGRATE | **yes (Task 5 Group E)** | no | no | no | NOT YET CERTIFIED |
-| `testimonials` | MIGRATE | **yes (Task 5 Group E)** | no | no | no | NOT YET CERTIFIED |
-| `video_section` | MIGRATE | **yes (Task 5 Group E)** | no | no | no | NOT YET CERTIFIED |
-| `story_rail` | MIGRATE | already safe | no | no | no | NOT YET CERTIFIED |
-| `newsletter` | MIGRATE | already safe (inline) | no | no | no | NOT YET CERTIFIED |
+| `trust_features` | MIGRATE | **yes (Task 5 Group E)** | **yes (Task 6 Group D — first user of the new `repeater` field type; browser-verified end to end)** | no | no | NOT YET CERTIFIED |
+| `quick_links` | MIGRATE | already safe | **yes (Task 6 Group D — title only; `menu_id` stays legacy-form-managed, no matching Inspector field type)** | no | no | NOT YET CERTIFIED |
+| `faq` | MIGRATE | **yes (Task 5 Group E)** | **yes (Task 6 Group D — `repeater` field type; browser-verified end to end)** | no | no | NOT YET CERTIFIED |
+| `testimonials` | MIGRATE | **yes (Task 5 Group E)** | **yes (Task 6 Group D — `repeater` field type)** | no | no | NOT YET CERTIFIED |
+| `video_section` | MIGRATE | **yes (Task 5 Group E)** | **yes (Task 6 Group D)** | no | no | NOT YET CERTIFIED |
+| `story_rail` | MIGRATE | already safe | **no — pending (needs media-form/model rework, not just a schema; not yet started)** | no | no | NOT YET CERTIFIED |
+| `newsletter` | MIGRATE | already safe (inline) | **yes (Task 6 Group D)** | no | no | NOT YET CERTIFIED |
 | `announcement_bar` | LEGACY-RETIRE | n/a | no | no | no | RETIREMENT CANDIDATE (see legacy_disposition.md) |
 | `product_main` | CONTEXT-AWARE-DOMAIN-OWNED | n/a | no | no | no | SAFE BY CONSTRUCTION |
 | `product_description` | CONTEXT-AWARE-DOMAIN-OWNED | n/a | no | no | no | SAFE BY CONSTRUCTION |

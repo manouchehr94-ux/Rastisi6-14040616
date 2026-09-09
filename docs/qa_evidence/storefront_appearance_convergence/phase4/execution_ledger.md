@@ -151,3 +151,50 @@ Chronological record of Phase-4 task starts/completions, commits, and backup ref
   `test_r4_settings_schema`.
 - **COMPLETE** 2026-09-08. Task 4 gate: 0 unresolved CRITICAL, 0 unresolved IMPORTANT.
   Proceeding to Task 5.
+
+## Task 5 — Cross-page CSS completeness
+
+- **COMPLETE** 2026-09-08/09. All groups (A–E, plus the `brand_carousel` `beauty_tabs` gap)
+  completed as one batch per the simplified execution model, one complete verification run, one
+  independent isolated-worktree review (0 CRITICAL, 2 IMPORTANT — both real dead-CSS findings on
+  Home, fixed by removal and RED/GREEN-verified via real-browser ground truth, not invented
+  replacement values). Committed across `79c53c6`/`f09e5cf` (CSS work) and `89f34df` (family
+  certification matrix CSS-completeness column). See `phase4/task5_cross_page_css.md` for the full
+  per-group evidence. Proceeding to Task 6.
+
+## Task 6 — Converge every required product-facing family
+
+Full narrative evidence in `phase4/task6_family_convergence.md`; this entry is the chronological
+commit-by-commit summary.
+
+- **START** 2026-09-09. Gap-analysis investigation surfaced two pre-existing defects entangled
+  with Group C/D scope (Finding 1: `category_grid` ResourceSource inert without a schema; Finding
+  2: legacy-form Save destructively wiping `trust_features`/`amazing_offers`/`blog_posts`) — both
+  fixed and pushed as `2664792` before group work began.
+- Group A (`image_slider`'s own schema): `72e3cca`.
+- Group C (`blog_posts`): `a956ad9`.
+- Group D "easy batch" (`amazing_offers`, `quick_links`, `video_section`, `newsletter`): `13c0143`.
+- Group C (`image_text`): `cd17eb7`.
+- Group C (`multi_banner` real closed-enum validator + schema; `single_banner` explicit
+  FIXED/STATIC disposition comment): `5a2169c`.
+- Group B (`newest_products`/`best_sellers`/`discounted_products`/`promo_cards` `item_limit`):
+  `49ffda5`.
+- Group D (`trust_features`/`faq`/`testimonials` — the new `repeater` settings-schema field type,
+  built end to end: `settings_schema.py` contract, `r4_views.py` allowlist, the Inspector
+  template/JS/CSS, and the three families' schemas). Two real defects found only by real-browser
+  verification (a duplicate-request race from an unguarded generic listener; an eagerly-saved,
+  guaranteed-to-fail empty row on every "add" click) were fixed before this checkpoint — see
+  `phase4/task6_family_convergence.md` for the full browser-proof record. **Checkpoint SHA and
+  backup ref recorded once pushed below.**
+- Zero regressions across the full `apps.storefront_builder` suite after every one of the commits
+  above (each pushed only after a matching full-app run showed no new failures beyond the same
+  pre-existing 30 failures/2 errors/4 skips — 2 of them, `FullscreenEditorTests`, confirmed
+  pre-existing on clean HEAD independently; the other 28/1 confirmed identical to the Task-4-era
+  baseline by exact test-name match). "Exactly one session may write/push this branch" discipline
+  maintained throughout: `git fetch` + SHA comparison before every push, no concurrent-writer
+  collision.
+- **Group D checkpoint gate** (this document's own review, at the Product Owner's explicit
+  request — not a full Task 6 gate; `story_rail`, Group E, Group F, and Task 7 remain open):
+  browser proof PASS (see above), targeted + full-app regression PASS (same pre-existing
+  signatures only), `manage.py check`/`makemigrations --check --dry-run`/`git diff --check` all
+  clean. Proceeding only as far as this checkpoint; Task 6 itself is NOT complete.

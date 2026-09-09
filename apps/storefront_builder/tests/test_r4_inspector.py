@@ -147,11 +147,17 @@ class FeatureGateTests(R4MutationApiTestCase):
 
 
 class NonSchemaSectionTests(R4MutationApiTestCase):
-    def test_faq_section_inspector_is_not_found(self):
-        faq_section = StorefrontSection.objects.create(
-            version=self.draft, section_key="faq", order=1,
+    def test_single_banner_section_inspector_is_not_found(self):
+        # ``faq`` was this test's original representative — Task 6 Group D
+        # later gave it a real schema (the new ``repeater`` field type's
+        # first user), so it no longer qualifies. ``single_banner`` is the
+        # correct representative now: it has an explicit FIXED/STATIC
+        # disposition and will never legitimately gain a schema (see its
+        # SectionDefinition comment in section_registry.py).
+        single_banner_section = StorefrontSection.objects.create(
+            version=self.draft, section_key="single_banner", order=1,
         )
-        response = self.client.get(_inspector_url(faq_section.pk))
+        response = self.client.get(_inspector_url(single_banner_section.pk))
         self.assertEqual(response.status_code, 404)
 
 

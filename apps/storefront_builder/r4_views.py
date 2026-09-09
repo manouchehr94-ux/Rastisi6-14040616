@@ -35,6 +35,7 @@ _INSPECTOR_SUPPORTED_FIELD_TYPES = frozenset({
     "choice",
     "appearance_override",
     "resource_source",
+    "repeater",
 })
 
 #: R4 Task 7 — merchant-facing Persian labels for the existing curated

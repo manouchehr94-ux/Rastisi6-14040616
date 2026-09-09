@@ -2,7 +2,7 @@ from django.test import SimpleTestCase
 
 from apps.storefront_builder import resource_source as resource_source_module
 from apps.storefront_builder import section_registry
-from apps.storefront_builder.section_registry import SectionDefinition, get_definition
+from apps.storefront_builder.section_registry import SectionDefinition, TrustFeaturesSettingsError, get_definition
 from apps.storefront_builder.settings_schema import (
     SettingsField,
     SettingsSchema,
@@ -443,8 +443,16 @@ class NoOtherSectionBecomesSchemaEnabledTests(SimpleTestCase):
         self.assertNotIn("hero_style", field_keys)
 
     def test_representative_unrelated_section_is_still_unschematized(self):
-        faq = section_registry.get_definition("faq")
-        self.assertIsNone(faq.settings_schema)
+        # ``faq`` was this test's original representative — Task 6 Group D
+        # later gave it a real schema (the repeater field type's first
+        # user), so it no longer qualifies. ``single_banner`` is now the
+        # correct representative: it has NO settings-driven field at all
+        # (its render context ignores section.settings entirely — see the
+        # explicit FIXED/STATIC disposition comment on its
+        # SectionDefinition), so unlike every other family here it will
+        # never legitimately gain a schema.
+        single_banner = section_registry.get_definition("single_banner")
+        self.assertIsNone(single_banner.settings_schema)
 
 
 class SchemaEnablementRegistryGuardTests(SimpleTestCase):
@@ -462,10 +470,12 @@ class SchemaEnablementRegistryGuardTests(SimpleTestCase):
     # certified pilots — brand_carousel, collection_tiles — plus
     # hero_banner, rich_text, product_section; Task 6 adds category_grid,
     # image_slider, blog_posts, amazing_offers, quick_links, video_section,
-    # newsletter, image_text, multi_banner, and Group B's
-    # newest_products/best_sellers/discounted_products/promo_cards.
-    # single_banner is deliberately excluded: it has no settings-driven
-    # field at all (Task 6 Group C fixed/static disposition).
+    # newsletter, image_text, multi_banner, Group B's
+    # newest_products/best_sellers/discounted_products/promo_cards, and
+    # Group D's trust_features/faq/testimonials (the first schemas to use
+    # the new "repeater" field type). single_banner is deliberately
+    # excluded: it has no settings-driven field at all (Task 6 Group C
+    # fixed/static disposition).
     EXPECTED_SCHEMA_ENABLED = frozenset({
         "hero_banner",
         "brand_carousel",
@@ -485,6 +495,9 @@ class SchemaEnablementRegistryGuardTests(SimpleTestCase):
         "best_sellers",
         "discounted_products",
         "promo_cards",
+        "trust_features",
+        "faq",
+        "testimonials",
     })
 
     def test_every_registered_section_key_matches_its_expected_schema_state(self):
@@ -836,3 +849,175 @@ class Phase3SharedPilotPreservationTests(SimpleTestCase):
                 else:
                     self.assertNotIn("show_view_all", sourced)
                     self.assertNotIn("desktop_columns", sourced["responsive"])
+
+
+class RepeaterFieldContractTests(SimpleTestCase):
+    """Task 6 (Group D) — the new ``repeater`` field type's own contract
+    layer (shape/length cleaning only; business rules like "drop an item
+    missing a required text" stay the section's own validate_settings'
+    job, exercised separately in RepeaterSchemaEnabledFamilyTests below)."""
+
+    def _schema(self, **field_kwargs):
+        return SettingsSchema(fields=(
+            SettingsField(
+                "items", "آیتم‌ها", "repeater", "basic",
+                default=[],
+                repeater_item_fields=(
+                    SettingsField("label", "برچسب", "text", "basic", default="", max_length=10),
+                    SettingsField("enabled", "فعال", "boolean", "basic", default=False),
+                ),
+                **field_kwargs,
+            ),
+        ))
+
+    def test_repeater_field_requires_repeater_item_fields(self):
+        with self.assertRaises(SettingsSchemaError):
+            SettingsField("items", "آیتم‌ها", "repeater", "basic", default=[])
+
+    def test_repeater_item_fields_rejected_on_non_repeater_field(self):
+        with self.assertRaises(SettingsSchemaError):
+            SettingsField(
+                "title", "عنوان", "text", "basic", default="",
+                repeater_item_fields=(SettingsField("x", "x", "text", "basic"),),
+            )
+
+    def test_nested_repeater_item_field_type_is_rejected(self):
+        with self.assertRaises(SettingsSchemaError):
+            SettingsField(
+                "items", "آیتم‌ها", "repeater", "basic", default=[],
+                repeater_item_fields=(
+                    SettingsField("nested", "تودرتو", "repeater", "basic", default=[],
+                                  repeater_item_fields=(SettingsField("x", "x", "text", "basic"),)),
+                ),
+            )
+
+    def test_duplicate_repeater_item_field_key_is_rejected(self):
+        with self.assertRaises(SettingsSchemaError):
+            SettingsField(
+                "items", "آیتم‌ها", "repeater", "basic", default=[],
+                repeater_item_fields=(
+                    SettingsField("x", "یک", "text", "basic"),
+                    SettingsField("x", "دو", "text", "basic"),
+                ),
+            )
+
+    def test_valid_list_of_items_is_cleaned_per_declared_sub_field(self):
+        schema = self._schema()
+        cleaned = clean_schema_patch(schema, {"items": [
+            {"label": "برچسب یک", "enabled": "on"},
+            {"label": "کوتاه"},
+        ]}, {})
+        self.assertEqual(cleaned["items"], [
+            {"label": "برچسب یک", "enabled": True},
+            {"label": "کوتاه", "enabled": False},
+        ])
+
+    def test_overlong_repeater_item_sub_field_is_rejected(self):
+        # Sub-field cleaning delegates to the exact same _clean_field_value
+        # every top-level "text" field uses, which rejects an overlong
+        # value rather than silently truncating it.
+        schema = self._schema()
+        with self.assertRaises(SettingsSchemaError):
+            clean_schema_patch(schema, {"items": [
+                {"label": "این یک برچسبِ خیلی طولانی است", "enabled": False},
+            ]}, {})
+
+    def test_non_list_value_is_rejected(self):
+        schema = self._schema()
+        with self.assertRaises(SettingsSchemaError):
+            clean_schema_patch(schema, {"items": {"not": "a list"}}, {})
+
+    def test_non_dict_item_is_rejected(self):
+        schema = self._schema()
+        with self.assertRaises(SettingsSchemaError):
+            clean_schema_patch(schema, {"items": ["not a dict"]}, {})
+
+    def test_min_value_bounds_item_count(self):
+        schema = self._schema(min_value=1)
+        with self.assertRaises(SettingsSchemaError):
+            clean_schema_patch(schema, {"items": []}, {})
+
+    def test_max_value_bounds_item_count(self):
+        schema = self._schema(max_value=1)
+        with self.assertRaises(SettingsSchemaError):
+            clean_schema_patch(schema, {"items": [{"label": "a"}, {"label": "b"}]}, {})
+
+    def test_serialize_schema_includes_repeater_item_fields(self):
+        schema = self._schema(max_value=6)
+        payload = serialize_schema(schema)
+        items_field = payload["fields"][0]
+        self.assertEqual(items_field["field_type"], "repeater")
+        self.assertEqual(items_field["max_value"], 6)
+        sub_keys = [f["key"] for f in items_field["repeater_item_fields"]]
+        self.assertEqual(sub_keys, ["label", "enabled"])
+
+    def test_preserve_unmanaged_keeps_other_keys_when_patching_items(self):
+        schema = self._schema()
+        current = {"items": [], "unmanaged_key": "still here"}
+        cleaned = clean_schema_patch(schema, {"items": [{"label": "x"}]}, current)
+        self.assertEqual(cleaned["unmanaged_key"], "still here")
+
+
+class RepeaterSchemaEnabledFamilyTests(SimpleTestCase):
+    """Task 6 (Group D) — trust_features/faq/testimonials, end to end
+    through clean_section_schema_patch (schema cleaning THEN the real
+    legacy validator), proving the repeater field type composes correctly
+    with each family's own business rules rather than bypassing them."""
+
+    def test_trust_features_schema_round_trips_and_still_enforces_required_title(self):
+        definition = get_definition("trust_features")
+        current = definition.validate_settings({})
+        cleaned = clean_section_schema_patch(definition, {
+            "items": [{"icon": "🚚", "title": "ارسال رایگان", "subtitle": "تا ۲۴ ساعت"}],
+        }, current)
+        self.assertEqual(cleaned["items"], [
+            {"icon": "🚚", "title": "ارسال رایگان", "subtitle": "تا ۲۴ ساعت"},
+        ])
+        # The schema layer accepts a blank title (shape-only cleaning); the
+        # legacy validator still rejects it afterward — the business rule
+        # is not bypassed just because the write path is new.
+        with self.assertRaises(TrustFeaturesSettingsError):
+            clean_section_schema_patch(definition, {"items": [{"icon": "x", "title": "", "subtitle": ""}]}, current)
+
+    def test_trust_features_schema_enforces_max_items_cap(self):
+        definition = get_definition("trust_features")
+        current = definition.validate_settings({})
+        too_many = [{"icon": "x", "title": f"عنوان {i}", "subtitle": ""} for i in range(7)]
+        with self.assertRaises(SettingsSchemaError):
+            clean_section_schema_patch(definition, {"items": too_many}, current)
+
+    def test_faq_schema_round_trips_title_and_items(self):
+        definition = get_definition("faq")
+        current = definition.validate_settings({})
+        cleaned = clean_section_schema_patch(definition, {
+            "title": "پرسش‌های پرتکرار",
+            "items": [{"question": "سوالِ تست؟", "answer": "پاسخِ تست"}],
+        }, current)
+        self.assertEqual(cleaned["title"], "پرسش‌های پرتکرار")
+        self.assertEqual(cleaned["items"], [{"question": "سوالِ تست؟", "answer": "پاسخِ تست"}])
+
+    def test_faq_schema_drops_item_missing_answer_via_legacy_validator(self):
+        definition = get_definition("faq")
+        current = definition.validate_settings({})
+        cleaned = clean_section_schema_patch(definition, {
+            "items": [{"question": "بدون پاسخ؟", "answer": ""}],
+        }, current)
+        self.assertEqual(cleaned["items"], [])
+
+    def test_testimonials_schema_round_trips_title_and_items(self):
+        definition = get_definition("testimonials")
+        current = definition.validate_settings({})
+        cleaned = clean_section_schema_patch(definition, {
+            "title": "نظرات",
+            "items": [{"name": "سارا", "quote": "عالی بود", "role": "تهران"}],
+        }, current)
+        self.assertEqual(cleaned["title"], "نظرات")
+        self.assertEqual(cleaned["items"], [{"name": "سارا", "quote": "عالی بود", "role": "تهران"}])
+
+    def test_testimonials_schema_drops_item_missing_name_via_legacy_validator(self):
+        definition = get_definition("testimonials")
+        current = definition.validate_settings({})
+        cleaned = clean_section_schema_patch(definition, {
+            "items": [{"name": "", "quote": "بدون نام", "role": ""}],
+        }, current)
+        self.assertEqual(cleaned["items"], [])

@@ -1,3 +1,4 @@
+{% load storefront_builder_extras %}
 {% comment %}
 Generic, schema-driven field control — branches only on field.field_type,
 never on section.section_key or a specific section-type name. New schema
@@ -106,6 +107,77 @@ must never silently fall back to a plain text input for an unsupported type.
     </div>
     {% endif %}
     <button type="button" class="r4-resource-source-open" data-r4-resource-picker-open>انتخاب / ویرایش</button>
+  </div>
+
+  {% elif field.field_type == "repeater" %}
+  {# R4 Task 6 (Group D) — a compound field like appearance_override: one  #}
+  {# schema key, a list-of-objects value, rendered server-side from the    #}
+  {# CURRENT value (no Alpine reactive array — plain DOM, exactly like      #}
+  {# appearance_override's own plain controls) so add/remove/reorder are   #}
+  {# ordinary DOM operations (clone the hidden <template> row, remove a    #}
+  {# row element, swap two adjacent row elements) done by the dedicated    #}
+  {# r4_editor.js listener below, which re-reads every remaining row's     #}
+  {# inputs on any such change and sends ONE compound patch — never a      #}
+  {# global function, so this partial has no dependency on the legacy      #}
+  {# editor page's itemRepeaterForm().                                     #}
+  <div class="r4-repeater"
+       id="r4Field-{{ field.key }}"
+       data-r4-field-key="{{ field.key }}"
+       data-r4-field-type="repeater"
+       {% if field.max_value %}data-r4-repeater-max-items="{{ field.max_value }}"{% endif %}>
+    <div data-r4-repeater-rows>
+      {% for row in current_field_value %}
+      <div class="r4-repeater-row" data-r4-repeater-row>
+        {% for item_field in field.repeater_item_fields %}
+        <div class="r4-repeater-subfield">
+          <label class="r4-field-sublabel">{{ item_field.label }}</label>
+          {% if item_field.field_type == "boolean" %}
+          <input type="checkbox" class="r4-switch" data-r4-repeater-subfield="{{ item_field.key }}" {% if row|dictget:item_field.key %}checked{% endif %}>
+          {% elif item_field.field_type == "choice" %}
+          <select class="r4-control" data-r4-repeater-subfield="{{ item_field.key }}">
+            {% for value, label in item_field.choices %}
+            <option value="{{ value }}" {% if row|dictget:item_field.key == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          {% else %}
+          <input type="text" class="r4-control" data-r4-repeater-subfield="{{ item_field.key }}" {% if item_field.max_length %}maxlength="{{ item_field.max_length }}"{% endif %} value="{{ row|dictget:item_field.key }}">
+          {% endif %}
+        </div>
+        {% endfor %}
+        <div class="r4-repeater-row-actions">
+          <button type="button" data-r4-repeater-move-up aria-label="انتقال به بالا">↑</button>
+          <button type="button" data-r4-repeater-move-down aria-label="انتقال به پایین">↓</button>
+          <button type="button" class="danger" data-r4-repeater-remove aria-label="حذف">×</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <template data-r4-repeater-row-template>
+      <div class="r4-repeater-row" data-r4-repeater-row>
+        {% for item_field in field.repeater_item_fields %}
+        <div class="r4-repeater-subfield">
+          <label class="r4-field-sublabel">{{ item_field.label }}</label>
+          {% if item_field.field_type == "boolean" %}
+          <input type="checkbox" class="r4-switch" data-r4-repeater-subfield="{{ item_field.key }}">
+          {% elif item_field.field_type == "choice" %}
+          <select class="r4-control" data-r4-repeater-subfield="{{ item_field.key }}">
+            {% for value, label in item_field.choices %}
+            <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+          {% else %}
+          <input type="text" class="r4-control" data-r4-repeater-subfield="{{ item_field.key }}" {% if item_field.max_length %}maxlength="{{ item_field.max_length }}"{% endif %}>
+          {% endif %}
+        </div>
+        {% endfor %}
+        <div class="r4-repeater-row-actions">
+          <button type="button" data-r4-repeater-move-up aria-label="انتقال به بالا">↑</button>
+          <button type="button" data-r4-repeater-move-down aria-label="انتقال به پایین">↓</button>
+          <button type="button" class="danger" data-r4-repeater-remove aria-label="حذف">×</button>
+        </div>
+      </div>
+    </template>
+    <button type="button" class="r4-repeater-add" data-r4-repeater-add>+ افزودن ردیف</button>
   </div>
   {% endif %}
 </div>

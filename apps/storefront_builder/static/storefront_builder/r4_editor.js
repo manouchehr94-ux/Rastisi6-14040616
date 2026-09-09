@@ -249,8 +249,12 @@ window.RastiSiR4 = {
       // Compound fields are hydrated separately below — this loop only
       // handles scalar controls. resource_source (R4 Task 9) is a
       // server-rendered READ-ONLY summary with no editable control at
-      // all — nothing to hydrate client-side.
-      if (fieldType === 'appearance_override' || fieldType === 'resource_source') return;
+      // all — nothing to hydrate client-side. repeater (R4 Task 6 Group D)
+      // is entirely server-rendered from the current value too (see
+      // section_inspector.html's current_field_value) — its wrapper carries
+      // data-r4-field-key for the compound patch listener below, but has no
+      // .value of its own to hydrate.
+      if (fieldType === 'appearance_override' || fieldType === 'resource_source' || fieldType === 'repeater') return;
       var key = control.getAttribute('data-r4-field-key');
       if (!Object.prototype.hasOwnProperty.call(values, key)) return;
       var value = values[key];
@@ -261,6 +265,55 @@ window.RastiSiR4 = {
       }
     });
     hydrateAppearanceOverrideFields(values);
+  }
+
+  // R4 Task 6 (Group D) — repeater: reads every remaining row's declared
+  // sub-fields straight from the DOM (never from a second in-memory copy —
+  // the server-rendered rows plus whatever add/remove/reorder has done to
+  // them ARE the source of truth) into a plain array of objects, matching
+  // exactly the shape settings_schema._clean_repeater_value expects.
+  function collectRepeaterRows(wrapper) {
+    var rows = [];
+    wrapper.querySelectorAll('[data-r4-repeater-rows] > [data-r4-repeater-row]').forEach(function (rowEl) {
+      var row = {};
+      rowEl.querySelectorAll('[data-r4-repeater-subfield]').forEach(function (subInput) {
+        var subKey = subInput.getAttribute('data-r4-repeater-subfield');
+        row[subKey] = subInput.type === 'checkbox' ? subInput.checked : subInput.value;
+      });
+      rows.push(row);
+    });
+    return rows;
+  }
+
+  function patchRepeaterField(wrapper) {
+    if (R4.selected == null) return;
+    var key = wrapper.getAttribute('data-r4-field-key');
+    var patch = {};
+    patch[key] = collectRepeaterRows(wrapper);
+    R4.enqueueMutation({
+      type: 'section.update_settings',
+      section_id: R4.selected,
+      patch: patch,
+    });
+  }
+
+  function addRepeaterRow(wrapper) {
+    var maxItems = Number(wrapper.getAttribute('data-r4-repeater-max-items') || '0');
+    var rowsContainer = wrapper.querySelector('[data-r4-repeater-rows]');
+    var rowTemplate = wrapper.querySelector('[data-r4-repeater-row-template]');
+    if (!rowsContainer || !rowTemplate) return;
+    if (maxItems > 0 && rowsContainer.querySelectorAll('[data-r4-repeater-row]').length >= maxItems) return;
+    var clone = rowTemplate.content.cloneNode(true);
+    rowsContainer.appendChild(clone);
+    // Deliberately no patchRepeaterField() here, unlike remove/move: a
+    // freshly added row is blank and has nothing meaningful to persist
+    // yet — for families with a required sub-field (e.g. trust_features'
+    // title), eagerly saving it would predictably fail on every single
+    // "add" click, before the merchant has typed anything. The row is
+    // saved naturally once its own change listener fires from an actual
+    // edit; if the merchant never fills it in and navigates away, it is
+    // simply never persisted, which is the correct outcome for a blank
+    // template row.
   }
 
   R4.openSection = function (sectionId) {
@@ -324,18 +377,68 @@ window.RastiSiR4 = {
         var pickerFieldWrapper = pickerOpenButton.closest('[data-r4-field-key]');
         R4.openResourcePicker(pickerFieldWrapper);
       }
+      // R4 Task 6 (Group D) — repeater row add/remove/reorder: plain DOM
+      // operations (clone the hidden <template> row, remove a row element,
+      // swap two adjacent row elements), never Alpine reactive state — see
+      // the comment in settings_field.html's repeater branch. Each action
+      // immediately re-collects and patches (no native 'change' event fires
+      // for a removed/reordered/cloned row on its own).
+      var repeaterAddButton = evt.target.closest('[data-r4-repeater-add]');
+      if (repeaterAddButton) {
+        var addWrapper = repeaterAddButton.closest('[data-r4-field-type="repeater"]');
+        if (addWrapper) addRepeaterRow(addWrapper);
+        return;
+      }
+      var repeaterRemoveButton = evt.target.closest('[data-r4-repeater-remove]');
+      if (repeaterRemoveButton) {
+        var removeWrapper = repeaterRemoveButton.closest('[data-r4-field-type="repeater"]');
+        var removeRow = repeaterRemoveButton.closest('[data-r4-repeater-row]');
+        if (removeWrapper && removeRow) {
+          removeRow.remove();
+          patchRepeaterField(removeWrapper);
+        }
+        return;
+      }
+      var repeaterMoveUpButton = evt.target.closest('[data-r4-repeater-move-up]');
+      if (repeaterMoveUpButton) {
+        var moveUpWrapper = repeaterMoveUpButton.closest('[data-r4-field-type="repeater"]');
+        var moveUpRow = repeaterMoveUpButton.closest('[data-r4-repeater-row]');
+        var prevRow = moveUpRow && moveUpRow.previousElementSibling;
+        if (moveUpWrapper && moveUpRow && prevRow) {
+          moveUpRow.parentNode.insertBefore(moveUpRow, prevRow);
+          patchRepeaterField(moveUpWrapper);
+        }
+        return;
+      }
+      var repeaterMoveDownButton = evt.target.closest('[data-r4-repeater-move-down]');
+      if (repeaterMoveDownButton) {
+        var moveDownWrapper = repeaterMoveDownButton.closest('[data-r4-field-type="repeater"]');
+        var moveDownRow = repeaterMoveDownButton.closest('[data-r4-repeater-row]');
+        var nextRow = moveDownRow && moveDownRow.nextElementSibling;
+        if (moveDownWrapper && moveDownRow && nextRow) {
+          moveDownRow.parentNode.insertBefore(nextRow, moveDownRow);
+          patchRepeaterField(moveDownWrapper);
+        }
+        return;
+      }
     });
 
     inspector.addEventListener('change', function (evt) {
       var control = evt.target.closest('[data-r4-field-key]');
       if (!control || R4.selected == null) return;
       var fieldType = control.getAttribute('data-r4-field-type');
+      // repeater (R4 Task 6 Group D): a row's sub-input has no
+      // data-r4-field-key of its own, but `.closest()` still reaches the
+      // repeater wrapper div, which does carry one — without this
+      // exclusion every row edit would ALSO fire here with a bogus
+      // `undefined`-valued patch racing the real one from the dedicated
+      // repeater listener below.
       // CKEditor mounts over the rich_text textarea (aria-hidden, no
       // direct user interaction) — its save path is the dedicated
       // focusout handler below, not this native 'change' listener.
-      // appearance_override is a compound field handled by the dedicated
-      // listener below — it must never be sent as a scalar patch here.
-      if (fieldType === 'rich_text' || fieldType === 'appearance_override') return;
+      // appearance_override is a compound field with its own dedicated
+      // listener below too.
+      if (fieldType === 'rich_text' || fieldType === 'appearance_override' || fieldType === 'repeater') return;
       var key = control.getAttribute('data-r4-field-key');
       var value = fieldType === 'boolean' ? control.checked : control.value;
       var patch = {};
@@ -385,6 +488,17 @@ window.RastiSiR4 = {
         section_id: R4.selected,
         patch: patch,
       });
+    });
+
+    // R4 Task 6 (Group D) — repeater: any edit inside an existing row
+    // (typing into a text input, toggling a checkbox, picking a choice)
+    // re-collects every row and sends ONE compound patch, exactly like
+    // appearance_override's own dedicated listener above.
+    inspector.addEventListener('change', function (evt) {
+      var wrapper = evt.target.closest('[data-r4-field-type="repeater"]');
+      if (!wrapper || R4.selected == null) return;
+      if (!evt.target.closest('[data-r4-repeater-subfield]')) return;
+      patchRepeaterField(wrapper);
     });
 
     // Rich text: enqueue one patch only when focus genuinely LEAVES the
