@@ -2160,16 +2160,89 @@ def _validate_image_text_settings(raw: dict) -> dict:
 
 # ---------------------------------------------------------------- ثبت انواع بخش
 
-#: U1A (R1 §9) — تنها چهار مقداری که تا امروز در کدِ کدبیس (فقط از
-#: طریقِ preset ``v5_golden_homepage``) برایِ ``multi_banner.settings.layout_variant``
-#: نوشته شده‌اند؛ دقیقاً همان چهار کلاسِ CSSای که واقعاً وجود دارند
-#: (``apps/catalog/static/css/home.css``). **این ثابت صرفاً مستندسازی
-#: است — در ``validate_settings`` خوانده/اعمال نمی‌شود** (نگاه کنید به
-#: کامنتِ توضیحیِ کنارِ تعریفِ ``multi_banner`` پایین). چون فرمِ ادیتور
-#: هیچ کنترلی برایِ این کلید ندارد، این فهرست تنها *مسیرِ نوشتنِ شناخته‌شده*
-#: را می‌پوشاند، نه لزوماً هر دیتایِ واقعاً ذخیره‌شده در تولید — پس هنوز
-#: enum بسته‌ی رسمی نیست.
+#: Task 6 (Group C) — the U1A finding above (R1 §9) is now RESOLVED into
+#: a real closed enum: a fresh full-codebase re-enumeration (every
+#: ``layout_preset_registry.py`` preset, every fixture/migration/test —
+#: there is still no merchant-facing form control for this key at all)
+#: found exactly these six values ever persisted for
+#: ``multi_banner.settings.layout_variant``, matching exactly the six
+#: ``.promo-grid--*``/``.banner-section--*`` CSS classes that actually
+#: exist in ``storefront_builder.css`` (the stale "only four" count
+#: predates the ``atelier-duo``/``atelier-wide`` additions). An absent or
+#: unrecognized value coerces to ``""`` (the historical "no override"
+#: state — Django's ``|default:'default'`` template filter treats an
+#: empty string exactly like an absent key, so this is byte-identical to
+#: today's un-set behaviour, never a new "promo-4" default).
 MULTI_BANNER_KNOWN_LAYOUT_VARIANTS = ("promo-4", "wide-single", "mini-4", "strip", "atelier-duo", "atelier-wide")
+
+
+class MultiBannerSettingsError(ValueError):
+    """شکلِ خامِ تنظیماتِ «ردیف چند بنری» نامعتبر است."""
+
+
+_MIN_MULTI_BANNER_OFFSET = 0
+_MAX_MULTI_BANNER_OFFSET = 50
+_MIN_MULTI_BANNER_ITEMS = 1
+_MAX_MULTI_BANNER_ITEMS = 24
+
+
+def _validate_multi_banner_settings(raw: dict) -> dict:
+    """دقیقاً همان clampهایی که ``_multi_banner_context`` (render_service)
+    از قبل به‌شکلِ دفاعی در زمانِ رندر اعمال می‌کند — اینجا فقط همان
+    قرارداد در زمانِ نوشتن هم رسمی می‌شود. ``item_limit`` غایب/خالی یعنی
+    «همه‌ی بنرها» (رفتارِ تاریخیِ سکشن‌هایی که هرگز این کلید را لمس
+    نکرده‌اند) — این معنا حفظ می‌شود، نه به یک عددِ پیش‌فرض تبدیل می‌شود."""
+    if not isinstance(raw, dict):
+        raise MultiBannerSettingsError("تنظیمات باید یک شیء JSON باشد")
+
+    try:
+        offset = max(_MIN_MULTI_BANNER_OFFSET, min(_MAX_MULTI_BANNER_OFFSET, int(raw.get("offset", 0))))
+    except (TypeError, ValueError):
+        offset = 0
+
+    raw_limit = raw.get("item_limit")
+    if raw_limit in (None, ""):
+        item_limit = None
+    else:
+        try:
+            item_limit = max(_MIN_MULTI_BANNER_ITEMS, min(_MAX_MULTI_BANNER_ITEMS, int(raw_limit)))
+        except (TypeError, ValueError):
+            item_limit = _MAX_MULTI_BANNER_ITEMS
+
+    layout_variant = raw.get("layout_variant", "")
+    if layout_variant not in MULTI_BANNER_KNOWN_LAYOUT_VARIANTS:
+        layout_variant = ""
+
+    return {"item_limit": item_limit, "offset": offset, "layout_variant": layout_variant}
+
+
+def default_multi_banner_settings() -> dict:
+    return {"item_limit": None, "offset": 0, "layout_variant": ""}
+
+
+#: R4 Task 6 (Group C) — declarative counterpart of
+#: ``_validate_multi_banner_settings``. ``item_limit``'s schema-metadata
+#: ``default`` (24) is a display placeholder for the Inspector widget
+#: only — it is independent of ``default_multi_banner_settings()`` above,
+#: which keeps returning ``None`` (unlimited) for a genuinely new
+#: section, exactly as documented there.
+MULTI_BANNER_SCHEMA = SettingsSchema(fields=(
+    SettingsField(
+        "layout_variant", "قالبِ نمایش", "choice", "basic",
+        default="",
+        choices=(("", "پیش‌فرض (بدون قالبِ خاص)"),) + tuple((x, x) for x in MULTI_BANNER_KNOWN_LAYOUT_VARIANTS),
+    ),
+    SettingsField(
+        "item_limit", "حداکثر تعداد بنر", "integer", "advanced",
+        default=_MAX_MULTI_BANNER_ITEMS,
+        min_value=_MIN_MULTI_BANNER_ITEMS, max_value=_MAX_MULTI_BANNER_ITEMS,
+    ),
+    SettingsField(
+        "offset", "شروع از بنرِ چندم", "integer", "advanced",
+        default=0,
+        min_value=_MIN_MULTI_BANNER_OFFSET, max_value=_MAX_MULTI_BANNER_OFFSET,
+    ),
+))
 
 #: ترتیبِ نمایشِ گروه‌هایِ کتابخانه‌ی «افزودن بخش جدید» (چکپوینتِ ۱۰) —
 #: پنج گروهِ کسب‌وکاریِ ثابت، نه اصطلاحِ فنی؛ ``category_fa`` هر
@@ -2264,33 +2337,35 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     "single_banner": SectionDefinition(
         key="single_banner", label_fa="بنر تکی", icon="image",
         template_name="storefront_builder/sections/single_banner.html",
+        # Task 6 (Group C) disposition: FIXED/STATIC, deliberately. Its
+        # render context (``_single_banner_context``) reads only the
+        # section-scoped ``PromotionalBanner`` pool (via the existing
+        # media CRUD — see "بنرهای همین بخش" in the settings-drawer
+        # shortcuts) and ignores ``section.settings`` entirely — it always
+        # shows exactly the first active banner. There is no field for a
+        # schema to declare; ``_passthrough_dict``/``_empty_defaults``
+        # stay exactly as they are, now as an explicit, verified
+        # disposition rather than an unclassified placeholder.
         validate_settings=_passthrough_dict, default_settings=_empty_defaults,
         duplicable=True, removable=True, category_fa="تصاویر و تبلیغات",
     ),
     "multi_banner": SectionDefinition(
         key="multi_banner", label_fa="ردیف چند بنری", icon="layout-grid",
         template_name="storefront_builder/sections/multi_banner.html",
-        # U1A finding (R1 §9, characterization only — validate_settings is
-        # DELIBERATELY left as _passthrough_dict, unchanged): the template
-        # reads a raw ``layout_variant`` key that this validator never
-        # checks. The complete write-path enumeration across the repo
-        # (layout_preset_registry.py, tests, fixtures, migrations, seed
-        # commands) found exactly four values ever persisted — all via the
-        # single ``v5_golden_homepage`` preset — matching the only four CSS
-        # classes that actually exist for it
-        # (apps/catalog/static/css/home.css: .promo-grid--promo-4/
-        # wide-single/mini-4/strip). The merchant-facing settings form has
-        # no control for this key at all (section_settings_form.html),
-        # meaning today's *known* write path is fully enumerable — but
-        # ``_passthrough_dict`` accepts any dict shape, so a value written
-        # outside that one known path cannot be ruled out from source alone.
-        # Per R1 §9's explicit rule ("If the complete compatibility-safe
-        # closed set cannot be proven, DO NOT narrow accepted values"),
-        # this constant is informational-only and is NOT read by
-        # ``validate_settings`` — narrowing is deferred to U1B, after the
-        # live data itself (not just the code paths) can be inspected.
-        validate_settings=_passthrough_dict, default_settings=_empty_defaults,
+        # Task 6 (Group C) — the U1A finding above is now resolved: see
+        # ``_validate_multi_banner_settings``/``MULTI_BANNER_SCHEMA``.
+        # ``has_settings_form`` is deliberately left unset (the legacy
+        # drawer stays unreachable, exactly as before) — adding it would
+        # also need a real POST-parsing branch in
+        # ``storefront_section_settings``, since the legacy view's
+        # destructive ``else: raw = {}`` fallback would otherwise wipe
+        # these fields on Save (the same class of bug Task 6 Group D fixed
+        # for trust_features/amazing_offers/blog_posts); the new R4
+        # Inspector path does not depend on ``has_settings_form`` at all,
+        # so it is unlocked here with zero legacy-path risk.
+        validate_settings=_validate_multi_banner_settings, default_settings=default_multi_banner_settings,
         duplicable=True, removable=True, category_fa="تصاویر و تبلیغات",
+        settings_schema=MULTI_BANNER_SCHEMA,
     ),
     "category_grid": SectionDefinition(
         key="category_grid", label_fa="گرید دسته‌بندی", icon="grid",

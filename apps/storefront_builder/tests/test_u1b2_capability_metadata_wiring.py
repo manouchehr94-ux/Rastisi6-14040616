@@ -337,10 +337,14 @@ class RegistryInvariantsUnchangedByU1B2Tests(TestCase):
             SECTION_REGISTRY["image_slider"].template_name,
         )
 
-    def test_multi_banner_layout_variant_still_unvalidated_passthrough(self):
+    def test_multi_banner_layout_variant_now_coerces_malformed_value(self):
+        # Task 6 (Group C) narrowed multi_banner's validate_settings to a
+        # real closed-enum validator — a malformed/unrecognized value is
+        # now coerced to "" (the historical "no override" state) instead
+        # of passing through verbatim.
         definition = get_definition("multi_banner")
         cleaned = definition.validate_settings({"layout_variant": {"anything": "goes", "n": 1}})
-        self.assertEqual(cleaned["layout_variant"], {"anything": "goes", "n": 1})
+        self.assertEqual(cleaned["layout_variant"], "")
 
     def test_persisted_settings_for_representative_sections_still_validate_identically(self):
         """A previously-saved settings dict for a card/motion/background/column

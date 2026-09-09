@@ -1372,14 +1372,20 @@ class U1ABackwardsCompatibilityTests(TestCase):
         self.assertEqual(product_defaults["display_mode"], "carousel")
         self.assertEqual(product_defaults["data_source"], "newest")
 
-    def test_multi_banner_validator_still_passes_through_any_shape_unchanged(self):
-        """Proves R1 §9's instruction was followed literally: validation was
-        NOT narrowed. An arbitrary, never-seen-before ``layout_variant``
-        string must still pass through unchanged, exactly like a known one."""
+    def test_multi_banner_validator_now_narrowed_with_full_evidence(self):
+        """R1 §9's instruction was followed literally at the time this test
+        was written: validation was NOT narrowed without proof from live
+        data. Task 6 (Group C) later supplied that proof (a fresh
+        full-codebase write-path re-enumeration cross-checked against the
+        real CSS classes), so every known real value round-trips unchanged,
+        while a never-seen-before value is now deliberately coerced to the
+        historical "no override" empty string, not passed through."""
         definition = get_definition("multi_banner")
-        for value in (*MULTI_BANNER_KNOWN_LAYOUT_VARIANTS, "some-future-value-nobody-wrote-yet"):
+        for value in MULTI_BANNER_KNOWN_LAYOUT_VARIANTS:
             cleaned = definition.validate_settings({"layout_variant": value})
             self.assertEqual(cleaned["layout_variant"], value)
+        cleaned = definition.validate_settings({"layout_variant": "some-future-value-nobody-wrote-yet"})
+        self.assertEqual(cleaned["layout_variant"], "")
 
 
 class U1ACapabilitiesConsistencyTests(TestCase):

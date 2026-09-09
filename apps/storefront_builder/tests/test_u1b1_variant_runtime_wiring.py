@@ -330,10 +330,15 @@ class MultiBannerUnchangedTests(TestCase):
         self.assertEqual(items[0]["template_name"], definition.template_name)
         self.assertIsNone(items[0]["active_variant"])
 
-    def test_multi_banner_validate_settings_still_a_pure_passthrough(self):
+    def test_multi_banner_validate_settings_now_coerces_unknown_layout_variant(self):
+        # Task 6 (Group C) deliberately narrowed multi_banner's
+        # validate_settings from _passthrough_dict to a real closed-enum
+        # validator (see MULTI_BANNER_KNOWN_LAYOUT_VARIANTS) — an
+        # unrecognized value is now coerced to "" (the historical
+        # "no override" state), not passed through verbatim.
         definition = get_definition("multi_banner")
         cleaned = definition.validate_settings({"layout_variant": "anything-at-all"})
-        self.assertEqual(cleaned["layout_variant"], "anything-at-all")
+        self.assertEqual(cleaned["layout_variant"], "")
 
 
 def _synthetic_definition_with_variants():

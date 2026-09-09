@@ -61,18 +61,25 @@ def _img(name="u4-hero.png"):
 
 
 class MultiBannerNotNarrowedTests(TestCase):
-    """R1 §9 explicitly forbids narrowing ``multi_banner`` into a closed
-    enum without proof from live data — this is a tripwire against a future
-    change accidentally doing that anyway while "helping" U4."""
+    """R1 §9 explicitly forbade narrowing ``multi_banner`` into a closed
+    enum without proof from live data — U4 could not yet supply that proof,
+    so this was a tripwire against a future change accidentally doing so
+    anyway while "helping" U4. Task 6 (Group C) later did supply that proof
+    (a fresh full-codebase write-path re-enumeration cross-checked against
+    the actual CSS classes — see ``MULTI_BANNER_KNOWN_LAYOUT_VARIANTS``),
+    so the deliberate narrowing this class used to guard against is now the
+    correct, evidence-based state; ``variants`` stays empty on purpose
+    (``layout_variant`` is a plain schema-validated field, not a registered
+    component variant with its own renderer)."""
 
     def test_multi_banner_has_no_registered_variants(self):
         definition = get_definition("multi_banner")
         self.assertEqual(definition.variants, ())
 
-    def test_multi_banner_validate_settings_still_passthrough(self):
+    def test_multi_banner_validate_settings_now_narrowed_by_task6(self):
         definition = get_definition("multi_banner")
         cleaned = definition.validate_settings({"layout_variant": "anything-at-all"})
-        self.assertEqual(cleaned["layout_variant"], "anything-at-all")
+        self.assertEqual(cleaned["layout_variant"], "")
 
 
 class ImageTextVariantFormalizationTests(TestCase):
