@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
 
-from apps.content.models import HeroSlide, PromotionalBanner
+from apps.content.models import HeroSlide, MediaAsset, PromotionalBanner, StoryRailItem
 from apps.storefront_builder.models import StorefrontSection
 from apps.storefront_builder.services import layout_service as svc
 from apps.stores.models import Store, StoreMembership
@@ -42,9 +42,10 @@ class MediaViewsTestCase(TestCase):
         self.client = Client(HTTP_HOST=HOST)
         self.client.login(username="media_owner", password="pass12345")
         self.draft = svc.get_or_create_draft(self.store)
-        self.draft.sections.filter(section_key__in=["hero_banner", "multi_banner"]).delete()
+        self.draft.sections.filter(section_key__in=["hero_banner", "multi_banner", "story_rail"]).delete()
         self.hero_section = StorefrontSection.objects.create(version=self.draft, section_key="hero_banner", order=900)
         self.banner_section = StorefrontSection.objects.create(version=self.draft, section_key="multi_banner", order=901)
+        self.story_section = StorefrontSection.objects.create(version=self.draft, section_key="story_rail", order=902)
 
 
 class HeroSlideCrudTests(MediaViewsTestCase):
@@ -200,6 +201,96 @@ class BannerCrudTests(MediaViewsTestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(PromotionalBanner.objects.filter(section=self.banner_section).exists())
+
+
+class StoryRailItemCrudTests(MediaViewsTestCase):
+    """Phase 4 (Task 6) — ``StoryRailItem`` has one ``image`` field, not the
+    desktop/mobile pair ``HeroSlide``/``PromotionalBanner`` have.
+    ``storefront_section_media_form`` used to hardcode that pair (reading
+    ``obj.desktop_image``/``obj.mobile_image`` unconditionally), which meant
+    editing (not creating — ``obj.pk`` being falsy on create short-circuited
+    the crash) any existing story item raised ``AttributeError`` — a live,
+    reachable 500 for any merchant clicking "ویرایش" on a story rail item.
+    Fixed by making the form's file-field handling config-driven
+    (``_MEDIA_KINDS[kind]["file_fields"]``)."""
+
+    def test_media_list_page_renders(self):
+        resp = self.client.get(
+            reverse("dashboard:storefront-builder-section-media-list", args=[self.story_section.pk, "story-items"])
+        )
+        self.assertEqual(resp.status_code, 200)
+
+    def test_add_form_shows_single_image_field_not_desktop_mobile(self):
+        resp = self.client.get(
+            reverse("dashboard:storefront-builder-section-media-add", args=[self.story_section.pk, "story-items"])
+        )
+        self.assertNotContains(resp, "تصویر دسکتاپ")
+        self.assertNotContains(resp, "تصویر موبایل")
+        self.assertContains(resp, 'name="image"')
+
+    def test_add_story_item(self):
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-section-media-add", args=[self.story_section.pk, "story-items"]),
+            {"title": "استوری تست", "destination_type": "none", "image": _img(), "is_active": "on"},
+        )
+        self.assertEqual(resp.status_code, 302)
+        item = StoryRailItem.objects.get(section=self.story_section)
+        self.assertEqual(item.title, "استوری تست")
+        self.assertEqual(item.store_id, self.store.pk)
+        self.assertIsNotNone(item.image_asset_id)
+
+    def test_add_story_item_without_image_rejected(self):
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-section-media-add", args=[self.story_section.pk, "story-items"]),
+            {"title": "بدون تصویر", "destination_type": "none"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(StoryRailItem.objects.filter(section=self.story_section).exists())
+
+    def test_edit_story_item_title_only_does_not_crash(self):
+        """The real defect: an edit that touches no file field used to raise
+        ``AttributeError`` unconditionally on ``obj.desktop_image``."""
+        item = StoryRailItem.objects.create(store=self.store, section=self.story_section, title="قدیم", image=_img())
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-section-media-edit", args=[self.story_section.pk, "story-items", item.pk]),
+            {"title": "جدید", "destination_type": "none", "is_active": "on"},
+        )
+        self.assertEqual(resp.status_code, 302)
+        item.refresh_from_db()
+        self.assertEqual(item.title, "جدید")
+
+    def test_edit_story_item_replaces_image_and_creates_new_asset(self):
+        item = StoryRailItem.objects.create(store=self.store, section=self.story_section, title="قدیم", image=_img("first.png"))
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-section-media-edit", args=[self.story_section.pk, "story-items", item.pk]),
+            {"title": "قدیم", "destination_type": "none", "is_active": "on", "image": _img("second.png")},
+        )
+        self.assertEqual(resp.status_code, 302)
+        item.refresh_from_db()
+        self.assertIn("second", item.image.name)
+        self.assertEqual(MediaAsset.objects.get(pk=item.image_asset_id).image, item.image.name)
+
+    def test_delete_story_item(self):
+        item = StoryRailItem.objects.create(store=self.store, section=self.story_section, title="حذف‌شو", image=_img())
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-section-media-delete", args=[self.story_section.pk, "story-items", item.pk]),
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(StoryRailItem.objects.filter(pk=item.pk).exists())
+
+    def test_toggle_story_item(self):
+        item = StoryRailItem.objects.create(store=self.store, section=self.story_section, title="ت", image=_img(), is_active=True)
+        self.client.post(
+            reverse("dashboard:storefront-builder-section-media-toggle", args=[self.story_section.pk, "story-items", item.pk]),
+        )
+        item.refresh_from_db()
+        self.assertFalse(item.is_active)
+
+    def test_wrong_kind_for_section_type_is_404(self):
+        resp = self.client.get(
+            reverse("dashboard:storefront-builder-section-media-list", args=[self.hero_section.pk, "story-items"]),
+        )
+        self.assertEqual(resp.status_code, 404)
 
 
 class MediaCrossStoreIsolationTests(MediaViewsTestCase):

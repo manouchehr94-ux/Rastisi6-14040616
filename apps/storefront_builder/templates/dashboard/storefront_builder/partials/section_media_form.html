@@ -25,21 +25,21 @@
              value="{% if item %}{{ item|getattribute:config.text_field|default:'' }}{% endif %}">
     </div>
 
+    {% for f in config.file_fields %}
     <div class="form-group">
-      <label for="id_desktop_image">تصویر دسکتاپ{% if not item %} (الزامی){% endif %}</label>
-      <input type="file" name="desktop_image" id="id_desktop_image" accept="image/png,image/jpeg,image/webp">
-      {% if item and item.desktop_image %}<p style="font-size:12px;color:var(--muted);margin:6px 0 0">تصویر فعلی حفظ می‌شود مگر فایل جدیدی انتخاب کنید.</p>{% endif %}
-    </div>
-
-    <div class="form-group">
-      <label for="id_mobile_image">تصویر موبایل (اختیاری)</label>
-      <input type="file" name="mobile_image" id="id_mobile_image" accept="image/png,image/jpeg,image/webp">
-      {% if item and item.mobile_image %}
-      <label style="display:flex;align-items:center;gap:6px;font-weight:normal;margin-top:6px">
-        <input type="checkbox" name="remove_mobile"> حذف تصویر موبایلِ فعلی
-      </label>
+      <label for="id_{{ f.name }}">{{ f.label }}{% if f.required and not item %} (الزامی){% endif %}</label>
+      <input type="file" name="{{ f.name }}" id="id_{{ f.name }}" accept="image/png,image/jpeg,image/webp">
+      {% if item and item|getattribute:f.name %}
+        {% if f.remove_field %}
+        <label style="display:flex;align-items:center;gap:6px;font-weight:normal;margin-top:6px">
+          <input type="checkbox" name="{{ f.remove_field }}"> {{ f.remove_label }}
+        </label>
+        {% else %}
+        <p style="font-size:12px;color:var(--muted);margin:6px 0 0">تصویر فعلی حفظ می‌شود مگر فایل جدیدی انتخاب کنید.</p>
+        {% endif %}
       {% endif %}
     </div>
+    {% endfor %}
 
     <div class="form-group">
       <label style="display:flex;align-items:center;gap:6px;font-weight:normal">

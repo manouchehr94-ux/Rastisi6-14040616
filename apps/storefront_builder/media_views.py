@@ -38,6 +38,16 @@ from .views import _get_scoped_section, _resolve_store
 #: فارسی + نامِ فیلدِ متنِ دومِ اختصاصی (``subtitle`` برایِ اسلاید،
 #: ``description`` برایِ بنر) + مسیرِ section_key هایی که این رسانه را
 #: مصرف می‌کنند (فقط برایِ اعتبارسنجیِ ورودیِ URL، نه چیزِ دیگر).
+#: Phase 4 (Task 6) — ``file_fields`` (ordered) is what makes
+#: ``storefront_section_media_form`` genuinely model-agnostic: each kind
+#: declares its own real image field(s) here (a desktop/mobile pair for
+#: ``HeroSlide``/``PromotionalBanner``, one single field for
+#: ``StoryRailItem``) instead of the form hardcoding
+#: ``desktop_image``/``mobile_image``. ``asset_fields`` (file field → asset
+#: FK) is now the single mapping shared by create/edit AND delete — every
+#: kind's file field has a matching entry, so
+#: ``_sync_asset_references``/``storefront_section_media_delete`` need no
+#: per-kind branching either.
 _MEDIA_KINDS = {
     "hero-slides": {
         "model": HeroSlide,
@@ -51,6 +61,11 @@ _MEDIA_KINDS = {
         # ردیفِ MediaAsset را ایجاد/به‌روزرسانی کند — بدونِ کپیِ بایتِ فایل،
         # فقط با اشاره‌گر به همان فایلِ تازه‌آپلودشده.
         "asset_fields": {"desktop_image": "desktop_asset", "mobile_image": "mobile_asset"},
+        "file_fields": (
+            {"name": "desktop_image", "label": "تصویر دسکتاپ", "required": True},
+            {"name": "mobile_image", "label": "تصویر موبایل (اختیاری)", "required": False,
+             "remove_field": "remove_mobile", "remove_label": "حذف تصویر موبایلِ فعلی"},
+        ),
     },
     "banners": {
         "model": PromotionalBanner,
@@ -60,6 +75,11 @@ _MEDIA_KINDS = {
         "text_label": "توضیحات",
         "section_keys": {"single_banner", "multi_banner"},
         "asset_fields": {"desktop_image": "desktop_asset", "mobile_image": "mobile_asset"},
+        "file_fields": (
+            {"name": "desktop_image", "label": "تصویر دسکتاپ", "required": True},
+            {"name": "mobile_image", "label": "تصویر موبایل (اختیاری)", "required": False,
+             "remove_field": "remove_mobile", "remove_label": "حذف تصویر موبایلِ فعلی"},
+        ),
     },
     "story-items": {
         "model": StoryRailItem,
@@ -68,18 +88,14 @@ _MEDIA_KINDS = {
         "text_field": "title",
         "text_label": "عنوان",
         "section_keys": {"story_rail"},
-        "image_field": "image",  # single image, not desktop/mobile pair
-        # توجه (پیش از Phase 0.5، محدودیتِ از‌قبل‌موجود): این kind از طریقِ
-        # همین فرمِ عمومیِ ایجاد/ویرایش (``storefront_section_media_form``،
-        # که به‌طورِ سخت‌کدشده ``desktop_image``/``mobile_image`` می‌خواند)
-        # قابل‌ایجاد/ویرایش نیست — ``StoryRailItem`` فقط یک فیلدِ واحدِ
-        # ``image`` دارد. این محدودیت مستقل از Phase 0.5 است و اینجا رفع
-        # نمی‌شود (خارج از محدوده‌ی این چکپوینت). عمداً در ``asset_fields``
-        # ثبت نشده تا ``storefront_section_media_form`` تلاش نکند
-        # ``desktop_image``/``mobile_image``ی ناموجود را روی این مدل بخواند.
-        # ``asset_fields`` فقط برایِ مسیرِ حذف (Part 8) استفاده می‌شود —
-        # نگاه کنید به ``storefront_section_media_delete``.
-        "delete_asset_fields": {"image": "image_asset"},
+        # Phase 4 (Task 6) — ``StoryRailItem`` has exactly one image field
+        # (``image``), unlike the desktop/mobile pair above; the shared form
+        # now reads that shape from ``file_fields`` instead of assuming the
+        # pair exists.
+        "asset_fields": {"image": "image_asset"},
+        "file_fields": (
+            {"name": "image", "label": "تصویر", "required": True},
+        ),
     },
 }
 
@@ -169,10 +185,14 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
     store = _resolve_store(request)
     item = get_object_or_404(model, pk=item_pk, section=section) if item_pk else None
 
+    file_fields = config["file_fields"]
+
     if request.method == "POST":
         obj = item or model(store=store, section=section)
-        old_desktop_name = obj.desktop_image.name if obj.pk and obj.desktop_image else None
-        old_mobile_name = obj.mobile_image.name if obj.pk and obj.mobile_image else None
+        old_names = {
+            f["name"]: (getattr(obj, f["name"]).name if obj.pk and getattr(obj, f["name"]) else None)
+            for f in file_fields
+        }
 
         obj.title = request.POST.get("title", "").strip()
         setattr(obj, config["text_field"], request.POST.get(config["text_field"], "").strip())
@@ -184,38 +204,33 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
             obj.display_order = (last.display_order + 1) if last else 0
         _apply_destination_fields(obj, request)
 
-        if "desktop_image" in request.FILES:
-            obj.desktop_image = request.FILES["desktop_image"]
-        if "mobile_image" in request.FILES:
-            obj.mobile_image = request.FILES["mobile_image"]
-        if request.POST.get("remove_mobile") == "on" and "mobile_image" not in request.FILES:
-            obj.mobile_image = ""
+        for f in file_fields:
+            name = f["name"]
+            if name in request.FILES:
+                setattr(obj, name, request.FILES[name])
+            remove_field = f.get("remove_field")
+            if remove_field and request.POST.get(remove_field) == "on" and name not in request.FILES:
+                setattr(obj, name, "")
 
         try:
             obj.full_clean()
             obj.save()
-            storage = model.desktop_image.field.storage
-            new_desktop_name = obj.desktop_image.name if obj.desktop_image else None
-            new_mobile_name = obj.mobile_image.name if obj.mobile_image else None
-            desktop_changed = old_desktop_name != new_desktop_name
-            mobile_changed = old_mobile_name != new_mobile_name
-            files_to_delete = [
-                name for name in (
-                    old_desktop_name if desktop_changed else None,
-                    old_mobile_name if mobile_changed else None,
-                ) if name
-            ]
-            if files_to_delete:
-                transaction.on_commit(lambda: [storage.delete(f) for f in files_to_delete if storage.exists(f)])
+            storage = getattr(model, file_fields[0]["name"]).field.storage
             # Phase 0.5 — تصمیمِ مالک ۵: فقط برایِ فیلدهایی که واقعاً تغییر
             # کردند (نه هر بار ذخیره)، یک ردیفِ MediaAsset تازه بساز و FKِ
             # asset را به آن وصل کن. اگر چیزی تغییر نکرده (مثلاً فقط عنوان
             # ویرایش شده)، asset FKِ قبلی (اگر باشد) دست‌نخورده می‌ماند.
             changed = set()
-            if desktop_changed:
-                changed.add("desktop_image")
-            if mobile_changed:
-                changed.add("mobile_image")
+            files_to_delete = []
+            for f in file_fields:
+                name = f["name"]
+                new_name = getattr(obj, name).name if getattr(obj, name) else None
+                if old_names[name] != new_name:
+                    changed.add(name)
+                    if old_names[name]:
+                        files_to_delete.append(old_names[name])
+            if files_to_delete:
+                transaction.on_commit(lambda names=files_to_delete: [storage.delete(f) for f in names if storage.exists(f)])
             if changed:
                 _sync_asset_references(obj, config, store, changed_fields=changed)
             messages.success(request, f"«{config['label']}» ذخیره شد")
@@ -256,11 +271,10 @@ def storefront_section_media_delete(request, pk, kind, item_pk):
     section = _get_scoped_section(request, pk)
     config = _media_config(kind, section)
     item = get_object_or_404(config["model"], pk=item_pk, section=section)
-    # ``asset_fields`` (hero-slides/banners) یا ``delete_asset_fields``
-    # (story-items — فقط همین یکی چون مسیرِ نوشتنِ آن هنوز به asset FK
-    # متصل نشده، اما فیلدِ image_asset ممکن است از طریقِ Migrationِ
-    # Backfill پر شده باشد) — هرکدام موجود بود استفاده می‌شود.
-    asset_field_map = config.get("asset_fields") or config.get("delete_asset_fields") or {}
+    # Phase 4 (Task 6) — every kind's file field now has a matching
+    # ``asset_fields`` entry (unified with create/edit above), so no
+    # per-kind fallback is needed here any more.
+    asset_field_map = config["asset_fields"]
 
     # جفتِ (asset موجود، نامِ فایلِ legacy) — فقط برایِ فیلدهایی که asset
     # FK ندارند (ردیفِ قدیمی‌تر) نامِ فایل ذخیره می‌شود؛ برایِ بقیه، حذفِ
@@ -276,9 +290,7 @@ def storefront_section_media_delete(request, pk, kind, item_pk):
             file_obj = getattr(item, file_field, None)
             if file_obj:
                 legacy_cleanup_names.append(file_obj.name)
-    storage_field = getattr(item, "desktop_image", None)
-    if storage_field is None:
-        storage_field = getattr(item, "image", None)
+    storage_field = getattr(item, config["file_fields"][0]["name"], None)
     storage = storage_field.storage if storage_field is not None else None
 
     item.delete()

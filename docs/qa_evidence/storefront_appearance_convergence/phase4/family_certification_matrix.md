@@ -35,7 +35,7 @@ ResourceSource · browser certification (Task 4 harness) · status.
 | `faq` | MIGRATE | **yes (Task 5 Group E)** | **yes (Task 6 Group D — `repeater` field type; browser-verified end to end)** | no | no | NOT YET CERTIFIED |
 | `testimonials` | MIGRATE | **yes (Task 5 Group E)** | **yes (Task 6 Group D — `repeater` field type)** | no | no | NOT YET CERTIFIED |
 | `video_section` | MIGRATE | **yes (Task 5 Group E)** | **yes (Task 6 Group D)** | no | no | NOT YET CERTIFIED |
-| `story_rail` | MIGRATE | already safe | **no — pending (needs media-form/model rework, not just a schema; not yet started)** | no | no | NOT YET CERTIFIED |
+| `story_rail` | MIGRATE | already safe | **n/a — no section-level settings to schematize (media-only family, `_passthrough_dict`/`_empty_defaults`); real gap was the media-form/model rework (Task 6), now closed** | no | no | **media-form/model rework CLOSED (Task 6) — real `AttributeError` on every story-item edit fixed; 29/29 targeted GREEN**; Browser cert still pending (Batch 3) |
 | `newsletter` | MIGRATE | already safe (inline) | **yes (Task 6 Group D)** | no | no | NOT YET CERTIFIED |
 | `announcement_bar` | LEGACY-RETIRE | n/a | no | no | no | RETIREMENT CANDIDATE (see legacy_disposition.md) |
 | `product_main` | CONTEXT-AWARE-DOMAIN-OWNED | n/a | no | no | no | SAFE BY CONSTRUCTION |

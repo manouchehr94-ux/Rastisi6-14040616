@@ -235,13 +235,59 @@ UI. Investigated each family's actual write/read reconciliation contract:
 - `family_certification_matrix.md` updated: all four TEMPORARY-ADAPTER rows moved from PENDING to
   CERTIFIED.
 
+## story_rail media-form/model convergence (Group D, closed)
+
+Investigated per the plan's instruction ("do not invent a second media model or second media
+authority"). Found the real, live defect the plan anticipated:
+
+- `storefront_section_media_form` (the ONE shared create/edit view for `hero-slides`/`banners`/
+  `story-items`, in `media_views.py`) hardcoded `obj.desktop_image`/`obj.mobile_image` — but
+  `StoryRailItem` has exactly one image field (`image`), not that pair. **Creating** a new story
+  item happened to not crash only by accident (`obj.pk` is falsy for a new instance, so
+  `obj.pk and obj.desktop_image` short-circuited before the missing-attribute access). **Editing**
+  any existing story item crashed immediately with `AttributeError: 'StoryRailItem' object has no
+  attribute 'desktop_image'` — a real 500 reachable by any merchant clicking "ویرایش" on a story
+  rail item from the Storefront Builder's own media list page (confirmed with a RED test against
+  the pre-fix code before touching anything). The GET-render path never crashed only because
+  Django's template variable resolution silently swallows `AttributeError` on dotted lookups — but
+  the rendered form was still wrong, showing "تصویر دسکتاپ"/"تصویر موبایل" fields that mean nothing
+  for a single-image model.
+- Fixed by making the form (and the `_MEDIA_KINDS` config it reads) genuinely model-agnostic: each
+  kind now declares its own ordered `file_fields` (a desktop/mobile pair for
+  `HeroSlide`/`PromotionalBanner`; one single `image` field for `StoryRailItem`), and
+  `storefront_section_media_form` loops over that instead of hardcoding the pair. `asset_fields`
+  (file field → `MediaAsset` FK) is now the single mapping shared by create/edit AND delete —
+  `story-items` had a separate `delete_asset_fields` key before (used only by delete, because
+  create/edit for this kind never worked at all); that's gone now, replaced by one `asset_fields`
+  entry (`{"image": "image_asset"}`) that both paths share, exactly the same canonical-authority
+  pattern the rest of this Phase enforces elsewhere (one write path, not two). No second media
+  model, no second media authority — this reuses the exact existing `MediaAsset`/
+  `_sync_asset_references`/`delete_media_asset_if_unreferenced` machinery `HeroSlide`/
+  `PromotionalBanner` already use, now genuinely shared rather than assumed-shared.
+  `section_media_form.html` updated the same way (loops over `config.file_fields`, using the
+  existing `getattribute` filter already in use for the kind-specific text field).
+- New test coverage: `StoryRailItemCrudTests` in `test_media_views.py` (9 tests — list/add/add
+  without image rejected/edit title-only [the exact defect]/edit replacing the image and creating
+  a new `MediaAsset`/delete/toggle/wrong-kind-404/form renders the single `image` field, not
+  desktop/mobile). `test_media_views` full module: 29/29 GREEN (including the pre-existing
+  `HeroSlideCrudTests`/`BannerCrudTests`/`MediaCrossStoreIsolationTests`, confirming zero
+  regression on the two working kinds). Broader targeted regression across every module touching
+  `media_views.py`/media CRUD/lifecycle safety (`test_admin_v22_live_builder`,
+  `test_g22_on_g21_integration`, `test_g2_1_media_editability_roundtrip`, `test_media_views`,
+  `test_media_write_path`, `test_phase2_lifecycle_safety`): 132/132 GREEN. `manage.py check`:
+  clean. `makemigrations --check --dry-run`: no changes detected (no model change was needed or
+  made — this was purely a view/template bug, exactly matching the plan's "media-form/model
+  rework", not a schema addition). No merchant-facing media UI *shape* changed for
+  `hero-slides`/`banners` (identical fields, identical behavior) — only `story-items` gained a
+  correct, working form where none existed before, so no browser verification beyond the above
+  Django test coverage was required for this batch (deferred to the Task-4 harness pass in Batch 3
+  per the plan, alongside every other Task-6 family).
+
 ## Remaining Task 6 work (not started)
 
-- `story_rail`'s media-form/model rework (Group D) — the one still-open item from the earlier
-  Group D checkpoint.
 - Task 4-harness browser certification has not yet been run against any family from this task (the
   "Browser cert" column in `family_certification_matrix.md` stays "no" for all of them); this
   document's browser proof above is a targeted, hand-driven verification of the new repeater field
   type specifically, not a Task-4-harness run. Scheduled once per the plan's Batch 3 (Task-6 final
-  gate), after `story_rail` lands.
+  gate).
 - One final Task-6 independent review (Batch 3), after the above.

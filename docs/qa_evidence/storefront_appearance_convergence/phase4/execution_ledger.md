@@ -207,5 +207,24 @@ commit-by-commit summary.
   (`test_phase4_task6_group_f_reconciliation`, `test_phase1_appearance_authority`,
   `test_r4_store_appearance_mutations`, `test_r4_mutation_api`, `test_section_registry`,
   `test_u10_ready_template_catalog`, `test_a8_ready_template_contracts`): 428/428 GREEN.
-  `manage.py check`: clean. `makemigrations --check --dry-run`: no changes detected. Committed as
-  `<pending>` (recorded once pushed). Proceeding to Batch 2 (`story_rail`).
+  `manage.py check`: clean. `makemigrations --check --dry-run`: no changes detected. Committed and
+  pushed as `e524a35`. Proceeding to Batch 2 (`story_rail`).
+
+- **Batch 2 — story_rail media-form/model convergence** (fast-continuation session, 2026-09-09).
+  Investigated first per the plan's instruction; found a real, live defect (not just a missing
+  schema): `storefront_section_media_form` hardcoded the `desktop_image`/`mobile_image` pair that
+  `HeroSlide`/`PromotionalBanner` have, but `StoryRailItem` has one `image` field — editing (not
+  creating) any existing story item raised `AttributeError` unconditionally, a real 500 reachable
+  from the Storefront Builder's own "ویرایش" link. Fixed by making the shared form genuinely
+  model-agnostic (`_MEDIA_KINDS[kind]["file_fields"]`, looped over in both the view and
+  `section_media_form.html`), unifying `asset_fields` as the one mapping shared by create/edit AND
+  delete (no second media model, no second media authority — reuses the existing `MediaAsset`/
+  `_sync_asset_references`/`delete_media_asset_if_unreferenced` machinery). See
+  `phase4/task6_family_convergence.md` for the full investigation and fix record. New test class
+  `StoryRailItemCrudTests` in `test_media_views.py` (9 tests). Targeted regression: `test_media_views`
+  alone 29/29 GREEN; broader media/lifecycle-safety sweep (`test_admin_v22_live_builder`,
+  `test_g22_on_g21_integration`, `test_g2_1_media_editability_roundtrip`, `test_media_views`,
+  `test_media_write_path`, `test_phase2_lifecycle_safety`) 132/132 GREEN. `manage.py check`: clean.
+  `makemigrations --check --dry-run`: no changes detected (view/template-only fix, no model
+  change). Committed as `<pending>` (recorded once pushed). All Task-6 implementation is now
+  complete; proceeding to Batch 3 (Task-6 final gate).
