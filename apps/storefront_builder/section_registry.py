@@ -1770,6 +1770,20 @@ def default_blog_posts_settings() -> dict:
     return {"item_limit": _DEFAULT_BLOG_POST_ITEMS, "title": ""}
 
 
+#: R4 Task 6 (Group C) — minimal declarative counterpart of
+#: ``validate_blog_posts_settings``, following the same one-field-plus-
+#: bounded-integer pattern already used by ``RICH_TEXT_SCHEMA``/
+#: ``CATEGORY_GRID_SCHEMA``.
+BLOG_POSTS_SCHEMA = SettingsSchema(fields=(
+    SettingsField("title", "عنوان بخش", "text", "basic", default="", max_length=_MAX_SECTION_TITLE_LENGTH),
+    SettingsField(
+        "item_limit", "تعداد مطالب", "integer", "advanced",
+        default=_DEFAULT_BLOG_POST_ITEMS,
+        min_value=_MIN_BLOG_POST_ITEMS, max_value=_MAX_BLOG_POST_ITEMS,
+    ),
+))
+
+
 class BrandCarouselSettingsError(ValueError):
     """شکلِ خامِ تنظیماتِ «کاروسل برندها» نامعتبر است."""
 
@@ -2323,6 +2337,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         template_name="storefront_builder/sections/blog_posts.html",
         validate_settings=validate_blog_posts_settings, default_settings=default_blog_posts_settings,
         max_instances=1, duplicable=False, removable=True, has_settings_form=True, category_fa="محتوا",
+        settings_schema=BLOG_POSTS_SCHEMA,
     ),
     "product_section": SectionDefinition(
         key="product_section", label_fa="بخش محصولات", icon="shopping-bag",

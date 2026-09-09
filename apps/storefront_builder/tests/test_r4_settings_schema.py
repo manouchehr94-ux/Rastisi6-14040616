@@ -460,8 +460,8 @@ class SchemaEnablementRegistryGuardTests(SimpleTestCase):
 
     # The families with an R4 settings schema today (Phase 3's two
     # certified pilots — brand_carousel, collection_tiles — plus
-    # hero_banner, rich_text, product_section; Task 6 adds category_grid
-    # and image_slider).
+    # hero_banner, rich_text, product_section; Task 6 adds category_grid,
+    # image_slider, and blog_posts).
     EXPECTED_SCHEMA_ENABLED = frozenset({
         "hero_banner",
         "brand_carousel",
@@ -470,6 +470,7 @@ class SchemaEnablementRegistryGuardTests(SimpleTestCase):
         "collection_tiles",
         "category_grid",
         "image_slider",
+        "blog_posts",
     })
 
     def test_every_registered_section_key_matches_its_expected_schema_state(self):
