@@ -1734,6 +1734,23 @@ def default_amazing_offers_settings() -> dict:
     return {"item_limit": _DEFAULT_AMAZING_OFFER_ITEMS, "deadline_hours": _DEFAULT_AMAZING_OFFER_HOURS, "title": ""}
 
 
+#: R4 Task 6 (Group D) — declarative counterpart of
+#: ``validate_amazing_offers_settings``.
+AMAZING_OFFERS_SCHEMA = SettingsSchema(fields=(
+    SettingsField("title", "عنوان بخش", "text", "basic", default="", max_length=_MAX_SECTION_TITLE_LENGTH),
+    SettingsField(
+        "item_limit", "حداکثر تعداد پیشنهاد", "integer", "basic",
+        default=_DEFAULT_AMAZING_OFFER_ITEMS,
+        min_value=_MIN_AMAZING_OFFER_ITEMS, max_value=_MAX_AMAZING_OFFER_ITEMS,
+    ),
+    SettingsField(
+        "deadline_hours", "مدت زمان‌شمار (ساعت)", "integer", "advanced",
+        default=_DEFAULT_AMAZING_OFFER_HOURS,
+        min_value=_MIN_AMAZING_OFFER_HOURS, max_value=_MAX_AMAZING_OFFER_HOURS,
+    ),
+))
+
+
 #: Phase 3 (Universal Storefront — V5 Golden Homepage) — بلوکِ کاملاً
 #: جدید «مطالب وبلاگ» (طبقِ نقشه‌ی V5→Universal Block، ردیفِ «Blog»: نه
 #: هیچ بلوکِ موجودی این نقش را پوشش می‌دهد، نه توجیهی برایِ بیش‌سازی
@@ -1934,6 +1951,20 @@ def default_quick_links_settings() -> dict:
     return {"title": "", "menu_id": None}
 
 
+#: R4 Task 6 (Group D) — ``menu_id`` is deliberately NOT declared here:
+#: it is an FK into the existing Menu/MenuItem navigation infrastructure
+#: (see ``_validate_quick_links_settings`` above), not a catalog
+#: ResourceSource kind (``ALLOWED_KINDS`` is product/category/brand/
+#: collection only) and none of the other Inspector-supported field
+#: types fit an FK picker either. It stays managed exclusively through
+#: the legacy settings form's existing Menu picker UI, preserved as an
+#: unmanaged key exactly like the responsive/motion/layout/background/
+#: spacing wrapper blocks are.
+QUICK_LINKS_SCHEMA = SettingsSchema(fields=(
+    SettingsField("title", "عنوان بخش", "text", "basic", default="", max_length=_MAX_SECTION_TITLE_LENGTH),
+))
+
+
 class FaqSettingsError(ValueError):
     """شکلِ خامِ تنظیماتِ «سوالات متداول» نامعتبر است."""
 
@@ -2038,6 +2069,19 @@ def default_video_section_settings() -> dict:
     return {"title": "", "video_url": "", "caption": ""}
 
 
+#: R4 Task 6 (Group D) — ``video_url`` has no dedicated Inspector field
+#: type (there is no ``url`` entry in ``ALLOWED_FIELD_TYPES``), so it is
+#: declared as ``text`` here — the schema layer only cleans shape/length,
+#: exactly as it does for every other field; the real provider/URL
+#: validation in ``_validate_video_section_settings`` above still runs
+#: afterward and still rejects an unrecognized URL, unchanged.
+VIDEO_SECTION_SCHEMA = SettingsSchema(fields=(
+    SettingsField("title", "عنوان بخش", "text", "basic", default="", max_length=_MAX_SECTION_TITLE_LENGTH),
+    SettingsField("video_url", "آدرس ویدیو", "text", "basic", default=""),
+    SettingsField("caption", "زیرنویس", "text", "advanced", default="", max_length=_MAX_VIDEO_CAPTION_LENGTH),
+))
+
+
 class NewsletterSettingsError(ValueError):
     """شکلِ خامِ تنظیماتِ «خبرنامه» نامعتبر است."""
 
@@ -2063,6 +2107,15 @@ def _validate_newsletter_settings(raw: dict) -> dict:
 
 def default_newsletter_settings() -> dict:
     return {"title": "عضویت در خبرنامه", "subtitle": "", "button_label": "عضویت"}
+
+
+#: R4 Task 6 (Group D) — declarative counterpart of
+#: ``_validate_newsletter_settings``.
+NEWSLETTER_SCHEMA = SettingsSchema(fields=(
+    SettingsField("title", "عنوان بخش", "text", "basic", default="عضویت در خبرنامه", max_length=_MAX_NEWSLETTER_TITLE_LENGTH),
+    SettingsField("subtitle", "زیرعنوان", "text", "basic", default="", max_length=_MAX_NEWSLETTER_SUBTITLE_LENGTH),
+    SettingsField("button_label", "متن دکمه", "text", "advanced", default="عضویت", max_length=_MAX_NEWSLETTER_BUTTON_LABEL_LENGTH),
+))
 
 
 def _validate_image_text_settings(raw: dict) -> dict:
@@ -2285,6 +2338,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         template_name="storefront_builder/sections/amazing_offers.html",
         validate_settings=validate_amazing_offers_settings, default_settings=default_amazing_offers_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="محصولات",
+        settings_schema=AMAZING_OFFERS_SCHEMA,
     ),
     "brand_carousel": SectionDefinition(
         key="brand_carousel", label_fa="کاروسل برندها", icon="award",
@@ -2410,6 +2464,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         template_name="storefront_builder/sections/quick_links.html",
         validate_settings=_validate_quick_links_settings, default_settings=default_quick_links_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="کشف و خرید",
+        settings_schema=QUICK_LINKS_SCHEMA,
     ),
     "faq": SectionDefinition(
         key="faq", label_fa="سوالات متداول", icon="help-circle",
@@ -2428,6 +2483,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         template_name="storefront_builder/sections/video_section.html",
         validate_settings=_validate_video_section_settings, default_settings=default_video_section_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="محتوا",
+        settings_schema=VIDEO_SECTION_SCHEMA,
     ),
     # -------------------------------------------------- Story Rail (بخشِ مشترکِ اختیاری)
     "story_rail": SectionDefinition(
@@ -2444,6 +2500,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         # یک بلوکِ ثبتِ ایمیلِ سراسری کافی‌ست — مثلِ trust_features/
         # story_rail، تکرارِ آن (دو فرمِ مستقل روی یک صفحه) گیج‌کننده است.
         max_instances=1, duplicable=False, removable=True, has_settings_form=True, category_fa="محتوا",
+        settings_schema=NEWSLETTER_SCHEMA,
     ),
     # -------------------------------------------------- Phase 5: بخش‌های context-aware صفحه محصول
     # هر چهار نوعِ زیر فقط رویِ product_detail قابل‌افزودن‌اند (page_types)
