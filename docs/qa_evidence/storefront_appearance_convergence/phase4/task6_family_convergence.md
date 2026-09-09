@@ -283,11 +283,75 @@ authority"). Found the real, live defect the plan anticipated:
   Django test coverage was required for this batch (deferred to the Task-4 harness pass in Batch 3
   per the plan, alongside every other Task-6 family).
 
-## Remaining Task 6 work (not started)
+## Task 6 final gate (Batch 3)
 
-- Task 4-harness browser certification has not yet been run against any family from this task (the
-  "Browser cert" column in `family_certification_matrix.md` stays "no" for all of them); this
-  document's browser proof above is a targeted, hand-driven verification of the new repeater field
-  type specifically, not a Task-4-harness run. Scheduled once per the plan's Batch 3 (Task-6 final
-  gate).
-- One final Task-6 independent review (Batch 3), after the above.
+### Full apps.storefront_builder suite (run once, per the speed policy)
+
+Two runs were needed: the first attempt's own environment tampering (renaming the session's
+Python virtualenv directory WHILE the 47-minute test process was still running against it)
+corrupted PIL/bs4/dns imports and Django's own template lookup mid-run, producing 154 spurious
+errors that were confirmed (by traceback: `ImportError: cannot import name 'ImageFile' from
+'PIL'` pointing at the renamed path) to be 100% self-inflicted, not real regressions — that run's
+result was discarded in full, not partially trusted. A second, genuinely clean run (no filesystem
+changes of any kind while the suite executed) produced:
+
+```
+Ran 2785 tests in 2815.845s
+FAILED (failures=30, errors=2, skipped=4)
+```
+
+**Exact match to the frozen baseline (30 failures / 2 errors / 4 skips) — zero new regressions.**
+Verified by name, not just count: the 32 failing signatures are the already-documented
+`FullscreenEditorTests` pair, `test_header_footer_variant_labels_shown_for_updated_preset`, and
+`test_validate_appearance_config_is_the_validator_boundary` (all three named in
+`phase4/baseline.md` and `phase4/task4_qa_harness.md`), plus a family of `test_*_v2`
+"frozen Ready Template contract" tests across `test_warm_boutique_lalerokh_v2`,
+`test_dark_digital_luxury_v2`, `test_dense_marketplace_beraito_v2`,
+`test_editorial_jewelry_saremi_v2`, `test_premium_leather_shokolati_v2` — a stable, internally
+consistent pre-existing category (version-frozen assertions predating this task; none of Batch
+1/2's changes touch any of these five preset modules or their underlying sections/fixtures).
+`manage.py check`: clean. `makemigrations --check --dry-run`: no changes detected.
+`git diff --check`: clean. `git status`: clean (matches `origin/feature/phase4-builder-legacy-convergence`).
+
+### Browser certification — scope decision
+
+Per the plan: "run the generalized Task-4 browser harness ONCE across the Task-6 family
+certification matrix... do not run a separate full browser campaign per family if the
+parameterized harness can certify them in one run." Investigated the actual harness
+(`tools/storefront_builder_r4_qa/run.mjs`, ~2570 lines) before running anything: Task 4 only
+generalized the Brand/Collection TILE-matrix helper (`phase3FamilyPublicMatrix`) into one shared
+parameterized function — it built no scenario code at all for the other ~20 Task-6 families
+(banners/sliders/story_rail/repeater fields/item_limit pickers/etc.), which have entirely
+different, non-tile DOM shapes. Building real per-family browser assertions for all of them would
+be substantial new engineering (comparable in size to Task 4 itself), not a "run it once"
+verification step. Put to the Product Owner explicitly rather than either silently skipping
+browser certification or unilaterally undertaking that much new scope inside this gate; decision:
+run the harness's existing generic coverage as-is and record the per-family DOM-assertion gap
+honestly rather than claim coverage that was never built.
+
+**Run**: `qa_storefront_builder_r4 --store-slug akhlaghi --username task6_qa_owner
+--browser-channel auto --phase3` (dev DB freshly migrated + a throwaway staff/owner QA user
+created for this session, since the container's `db.sqlite3` started empty).
+
+- **16/16 scenarios PASS**: the 13 generic R4 workflow scenarios (initial load, Hero
+  basic/advanced typography, product add/reorder/auto-source/manual-picker, Brand manual picker,
+  undo/redo, real stale-conflict, publish, public parity, Draft-only change, public-unchanged) +
+  `final-instrumentation-assertions` + `final-screenshot-verification` + `phase3-brand-gate`
+  (Brand 45/45 + Collection 36/36 variant checks, 0 real errors, `known_red_findings: []` —
+  identical to the Task-4 evidence's own recorded counts).
+- Console "errors" recorded (30) are exclusively the harness's own deliberate
+  `qa-broken-nonexistent.png` broken-image fixtures (the documented broken-image-classification
+  exemption) — not real defects; the runner's own pass/fail gate already accounts for this
+  (`Passed: 16 Failed: 0`).
+- DB restore SHA256 verified byte-for-byte match on both invocations (base run and `--phase3` run).
+- **Known, explicitly recorded gap** (not silently passed as "certified"): no browser-level DOM
+  assertions exist for the ~20 other Task-6 MIGRATE/TEMPORARY-ADAPTER families (their own
+  settings-schema fields, repeater UI, item_limit pickers, card/badge family selectors, etc.) —
+  those remain certified only at the Django-test level (documented per-family throughout this
+  document and in `family_certification_matrix.md`'s own "Browser cert" column, which stays "no"
+  for every one of them). Building that coverage is a separately-scoped follow-up, not silently
+  claimed here.
+
+### Independent Task-6 review
+
+See the fresh isolated-worktree reviewer's verdict recorded separately below.
