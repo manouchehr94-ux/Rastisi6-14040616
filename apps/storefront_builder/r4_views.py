@@ -7,7 +7,7 @@ from django.middleware.csrf import get_token
 from django.shortcuts import render
 from django.views.decorators.http import require_GET, require_POST
 
-from apps.catalog.models import Brand, MerchantCollection
+from apps.catalog.models import Brand, Category, MerchantCollection
 from apps.catalog.services.collection_service import searchable_products
 from apps.dashboard.decorators import permission_required, staff_required
 from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
@@ -71,11 +71,10 @@ _RESOURCE_SOURCE_AUTO_RULE_LABELS_FA = {
     "all_active": "همه‌ی موارد فعال",
 }
 
-#: R4 Task 10 — the ONE shared Resource Picker's UI-exposed kinds. Category
-#: and Collection remain valid ResourceSource kinds (Task 9) but Task 10's
-#: Picker UI is Product/Brand only — anything else is a controlled 400, not
-#: a new picker lifecycle.
-_PICKER_UI_KINDS = ("product", "brand", "collection")
+#: R4 Task 10 — the ONE shared Resource Picker's UI-exposed kinds. Every
+#: valid ResourceSource kind (Task 9) is exposed here; any value outside
+#: this tuple is a controlled 400, not a new picker lifecycle.
+_PICKER_UI_KINDS = ("product", "brand", "collection", "category")
 _PICKER_SEARCH_RESULT_LIMIT = 20
 
 #: Task 10 Phase 1's directly-interactive auto rules per kind — the only
@@ -88,6 +87,7 @@ _PICKER_PRODUCT_AUTO_RULES = tuple(
 )
 _PICKER_BRAND_AUTO_RULES = (("all_active", _RESOURCE_SOURCE_AUTO_RULE_LABELS_FA["all_active"]),)
 _PICKER_COLLECTION_AUTO_RULES = (("all_active", _RESOURCE_SOURCE_AUTO_RULE_LABELS_FA["all_active"]),)
+_PICKER_CATEGORY_AUTO_RULES = (("all_active", _RESOURCE_SOURCE_AUTO_RULE_LABELS_FA["all_active"]),)
 
 #: One explicit per-kind map for the Picker's directly-settable auto rules —
 #: no per-kind ternary chain in the view.
@@ -95,6 +95,7 @@ _PICKER_AUTO_RULES_BY_KIND = {
     "product": _PICKER_PRODUCT_AUTO_RULES,
     "brand": _PICKER_BRAND_AUTO_RULES,
     "collection": _PICKER_COLLECTION_AUTO_RULES,
+    "category": _PICKER_CATEGORY_AUTO_RULES,
 }
 
 
@@ -122,23 +123,36 @@ def _search_collections(store, query):
     return list(qs.order_by("name", "id")[:_PICKER_SEARCH_RESULT_LIMIT])
 
 
+def _search_categories(store, query):
+    # Store-scoped + active-only, ordered by (order, name) — the exact same
+    # active/own-store set category_grid's own auto-pick already uses
+    # (section_registry._validate_category_grid_settings / render_service).
+    qs = Category.objects.filter(store=store, is_active=True)
+    if query:
+        qs = qs.filter(name__icontains=query)
+    return list(qs.order_by("order", "name", "id")[:_PICKER_SEARCH_RESULT_LIMIT])
+
+
 #: One explicit, server-owned map — no getattr/dynamic import/eval on
-#: user-supplied ``kind``, no separate Product/Brand/Collection picker
-#: lifecycle.
+#: user-supplied ``kind``, no separate Product/Brand/Collection/Category
+#: picker lifecycle.
 _RESOURCE_SEARCHERS = {
     "product": _search_products,
     "brand": _search_brands,
     "collection": _search_collections,
+    "category": _search_categories,
 }
 
 
 def _serialize_picker_item(kind, obj):
     if kind == "product":
         return {"id": obj.pk, "label": obj.name, "sublabel": obj.sku}
-    # Collection is dispatched EXPLICITLY before the brand fall-through:
-    # MerchantCollection has no ``name_en`` attribute, so it must never reach
-    # the brand branch below.
+    # Collection/Category are dispatched EXPLICITLY before the brand
+    # fall-through: neither has a ``name_en`` attribute, so they must never
+    # reach the brand branch below.
     if kind == "collection":
+        return {"id": obj.pk, "label": obj.name, "sublabel": obj.slug}
+    if kind == "category":
         return {"id": obj.pk, "label": obj.name, "sublabel": obj.slug}
     return {"id": obj.pk, "label": obj.name, "sublabel": obj.name_en}
 
@@ -175,6 +189,12 @@ def _resolve_selected_items(store, kind, ordered_ids):
         found = {
             obj.pk: obj
             for obj in MerchantCollection.objects.filter(store=store, is_active=True, pk__in=ordered_ids)
+        }
+    elif kind == "category":
+        # Same all_active + same-store + fail-closed contract as collection.
+        found = {
+            obj.pk: obj
+            for obj in Category.objects.filter(store=store, is_active=True, pk__in=ordered_ids)
         }
     else:
         found = {obj.pk: obj for obj in Brand.objects.filter(store=store, pk__in=ordered_ids)}

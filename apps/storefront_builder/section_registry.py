@@ -766,7 +766,9 @@ def default_destination_settings() -> dict:
 #: destination/responsive/motion/card/layout/background/spacing/...) so
 #: every outer wrapper's own key-stripping still runs on a dict that
 #: already carries only legacy-shaped keys.
-_RESOURCE_SOURCE_AWARE_SECTION_KEYS = frozenset({"product_section", "brand_carousel", "collection_tiles"})
+_RESOURCE_SOURCE_AWARE_SECTION_KEYS = frozenset({
+    "product_section", "brand_carousel", "collection_tiles", "category_grid",
+})
 
 
 def _with_resource_source(section_key: str, validate_fn, default_fn):
@@ -787,6 +789,7 @@ def _with_resource_source(section_key: str, validate_fn, default_fn):
         "product_section": ProductSectionSettingsError,
         "brand_carousel": BrandCarouselSettingsError,
         "collection_tiles": CollectionTilesSettingsError,
+        "category_grid": CategoryGridSettingsError,
     }[section_key]
 
     def wrapped_validate(raw: dict) -> dict:
@@ -1578,6 +1581,32 @@ def default_category_grid_settings() -> dict:
     return {"title": "", "display_mode": "grid", "category_ids": [], "item_limit": 12}
 
 
+#: Task 6 — the declarative Inspector-facing schema for "گرید دسته‌بندی".
+#: Exactly analogous to COLLECTION_TILES_SCHEMA: ``category_ids`` is NOT
+#: schema-registered directly — it is a compatibility persistence detail
+#: hidden behind the typed ``source`` field (see ``_with_resource_source``
+#: below, now covering ``category_grid`` too). ``display_mode`` is the
+#: variant marker (all 11 CATEGORY_GRID_DISPLAY_MODES, matching the
+#: registered ``variants=`` tuple below verbatim — no narrowing).
+CATEGORY_GRID_SCHEMA = SettingsSchema(fields=(
+    SettingsField("title", "عنوان بخش", "text", "basic", default="", max_length=_MAX_SECTION_TITLE_LENGTH),
+    SettingsField(
+        "source", "منبع دسته‌بندی‌ها", "resource_source", "basic",
+        default=resource_source_module.serialize_resource_source(
+            resource_source_module.ResourceSource(kind="category", mode="auto", auto_rule="all_active"),
+        ),
+    ),
+    SettingsField(
+        "display_mode", "نوع نمایش", "choice", "basic", default="grid",
+        choices=tuple((x, x) for x in CATEGORY_GRID_DISPLAY_MODES),
+    ),
+    SettingsField(
+        "item_limit", "حداکثر تعداد", "integer", "advanced",
+        default=12, min_value=2, max_value=12,
+    ),
+))
+
+
 #: Phase 3 (Universal Storefront — V5 Golden Homepage) — ``trust_features``
 #: تا پیش از این چکپوینت یک بلوکِ کاملاً ثابتِ ۴ آیتمی بود (هیچ کلیدی از
 #: ``settings`` خوانده نمی‌شد)، پس واقعاً «تنظیم‌پذیر» نبود — یک شکافِ
@@ -2134,6 +2163,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         template_name="storefront_builder/sections/category_grid.html",
         validate_settings=_validate_category_grid_settings, default_settings=default_category_grid_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="کشف و خرید",
+        settings_schema=CATEGORY_GRID_SCHEMA,
         # U1A — نگاشتِ الگویِ A (همان template، شاخه‌زنیِ CSS رویِ همان
         # کلیدِ enum بستهٔ از‌قبل‌موجود ``display_mode``؛ نگاه کنید به
         # CATEGORY_GRID_DISPLAY_MODES بالا و category_grid.html) روی

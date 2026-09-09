@@ -454,15 +454,16 @@ class SchemaEnablementRegistryGuardTests(SimpleTestCase):
     SAME change — no family can become schema-enabled (or silently regress
     to unschematized) without this guard noticing."""
 
-    # The 5 families with an R4 settings schema today (Phase 3's two
+    # The families with an R4 settings schema today (Phase 3's two
     # certified pilots — brand_carousel, collection_tiles — plus
-    # hero_banner, rich_text, product_section).
+    # hero_banner, rich_text, product_section; Task 6 adds category_grid).
     EXPECTED_SCHEMA_ENABLED = frozenset({
         "hero_banner",
         "brand_carousel",
         "rich_text",
         "product_section",
         "collection_tiles",
+        "category_grid",
     })
 
     def test_every_registered_section_key_matches_its_expected_schema_state(self):

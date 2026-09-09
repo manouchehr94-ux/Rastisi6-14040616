@@ -915,6 +915,27 @@ def storefront_section_settings(request, pk):
                 "subtitle": request.POST.get("subtitle", ""),
                 "button_label": request.POST.get("button_label", ""),
             }
+        elif section.section_key == "trust_features":
+            icons = request.POST.getlist("tf_icon")
+            titles = request.POST.getlist("tf_title")
+            subtitles = request.POST.getlist("tf_subtitle")
+            raw = {
+                "items": [
+                    {"icon": icon, "title": title, "subtitle": subtitle}
+                    for icon, title, subtitle in zip(icons, titles, subtitles)
+                ],
+            }
+        elif section.section_key == "amazing_offers":
+            raw = {
+                "title": request.POST.get("title", ""),
+                "item_limit": request.POST.get("item_limit", 1),
+                "deadline_hours": request.POST.get("deadline_hours", 8),
+            }
+        elif section.section_key == "blog_posts":
+            raw = {
+                "title": request.POST.get("title", ""),
+                "item_limit": request.POST.get("item_limit", 5),
+            }
         else:
             # انواعی که هیچ فیلدِ اختصاصیِ خودشان را ندارند (فازِ D) —
             # تنها چیزی که این فرم برایشان دارد بلوکِ responsive است.

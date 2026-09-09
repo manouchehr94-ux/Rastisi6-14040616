@@ -1854,6 +1854,50 @@ class NewSectionTypesSettingsFormTests(StorefrontBuilderViewsTestCase):
         self.client.post(reverse("dashboard:storefront-builder-section-add"), {"section_key": "newsletter"})
         self.assertEqual(self.draft.sections.filter(section_key="newsletter").count(), 1)
 
+    def test_trust_features_settings_form_saves_items(self):
+        section = StorefrontSection.objects.create(
+            version=self.draft, section_key="trust_features", order=1,
+            settings={"items": [{"icon": "old", "title": "قدیمی", "subtitle": ""}]},
+        )
+        resp = self.client.post(reverse("dashboard:storefront-builder-section-settings", args=[section.pk]), {
+            "tf_icon": ["🚚", "🔒"],
+            "tf_title": ["ارسال رایگان", "پرداخت امن"],
+            "tf_subtitle": ["تا ۲۴ ساعت", ""],
+        })
+        self.assertEqual(resp.status_code, 302)
+        section.refresh_from_db()
+        self.assertEqual(section.settings["items"], [
+            {"icon": "🚚", "title": "ارسال رایگان", "subtitle": "تا ۲۴ ساعت"},
+            {"icon": "🔒", "title": "پرداخت امن", "subtitle": ""},
+        ])
+
+    def test_amazing_offers_settings_form_saves_fields(self):
+        section = StorefrontSection.objects.create(
+            version=self.draft, section_key="amazing_offers", order=1,
+            settings={"title": "قدیمی", "item_limit": 1, "deadline_hours": 8},
+        )
+        resp = self.client.post(reverse("dashboard:storefront-builder-section-settings", args=[section.pk]), {
+            "title": "پیشنهاد شگفت‌انگیز", "item_limit": "3", "deadline_hours": "24",
+        })
+        self.assertEqual(resp.status_code, 302)
+        section.refresh_from_db()
+        self.assertEqual(section.settings["title"], "پیشنهاد شگفت‌انگیز")
+        self.assertEqual(section.settings["item_limit"], 3)
+        self.assertEqual(section.settings["deadline_hours"], 24)
+
+    def test_blog_posts_settings_form_saves_fields(self):
+        section = StorefrontSection.objects.create(
+            version=self.draft, section_key="blog_posts", order=1,
+            settings={"title": "قدیمی", "item_limit": 5},
+        )
+        resp = self.client.post(reverse("dashboard:storefront-builder-section-settings", args=[section.pk]), {
+            "title": "آخرین مطالب وبلاگ", "item_limit": "6",
+        })
+        self.assertEqual(resp.status_code, 302)
+        section.refresh_from_db()
+        self.assertEqual(section.settings["title"], "آخرین مطالب وبلاگ")
+        self.assertEqual(section.settings["item_limit"], 6)
+
 
 class PageSwitchingTests(StorefrontBuilderViewsTestCase):
     """Phase 2 (سازنده‌ی تک‌صفحه‌ای): ادیتور اکنون رویِ هر شش نوعِ صفحه
