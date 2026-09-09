@@ -988,9 +988,13 @@ begin, following the same order as every other group.
 
 ### Investigation (before any CSS change)
 
-1. **Exhaustive whole-file grep of every `.sec-head` occurrence in home.css** (43 lines,
-   spanning base/unconditioned/@680/@1000/density-scoped/pattern-scoped/card-style-scoped
-   contexts) — categorized into:
+1. **Exhaustive whole-file grep of every `.sec-head` occurrence in home.css** (52 lines —
+   corrected here per independent review of this section, which caught this doc's
+   original "43" as an inaccurate transcription, likely conflated with the correct "16 of
+   43 templates" figure two paragraphs below; the fix itself was never affected, since
+   every merged value was independently re-derived from the actual file content, not from
+   this count — spanning base/unconditioned/@680/@1000/density-scoped/pattern-scoped/
+   card-style-scoped contexts) — categorized into:
    - A **universal baseline** (bare `.sec-head`/`.sec-head h2`/`.sec-head h2 .bar`/
      `.sec-head .more`/`.sec-head .more svg`/`.sec-head .btn,.product-section .sec-head
      .btn`), touched across 3 unconditioned passes plus one `@680px` override — used by
@@ -1036,9 +1040,14 @@ begin, following the same order as every other group.
    fixture browser verification failed on a markup assertion unrelated to CSS, which
    surfaced that `--sfb-heading-size` (used only by `.sec-head h2`'s `font-size`) is set
    via `templates/base.html` (`SHOP_HEADING_SIZE`, default 19) on every page's `<html>`
-   inline style — a real, already merchant-configurable, already-tested
-   (`test_appearance.py`, e.g. setting it to 22px) per-store heading-size token, and the
-   ONLY CSS consumer of that variable anywhere in the codebase. home.css itself never
+   inline style — a real, already merchant-configurable per-store heading-size token, and
+   the ONLY CSS consumer of that variable anywhere in the codebase.
+   `test_appearance.py` already tests the variable pipeline reaching the public page
+   (e.g. `--sfb-heading-size:22px` appearing in the rendered `<html>` style attribute) —
+   precision correction per independent review: this confirms the variable itself is a
+   live, tested mechanism, not that any existing test asserts `.sec-head h2`'s *computed*
+   font-size responds to it; the two are related but distinct, and only the former was
+   verified pre-fix. home.css itself never
    uses this variable for `.sec-head h2` at all (its own merged value, 16px, is a plain
    literal) — Home and non-Home have two independently-designed, both-still-current
    heading-size mechanisms for this one property, not a staleness gap. **`font-size` was
@@ -1148,3 +1157,27 @@ makemigrations --check --dry-run`: no changes detected.
 `backup/rastisi6-phase4-start-20260908` = `969a9b411ca712928c2bf31416bdde2ee8aaabb5`
 (unchanged). No destructive git operation used. `git status` before commit contains only
 the intended C2.5 production/test/evidence files.
+
+### Independent review (commit `c5c884b`)
+
+Isolated-worktree review independently re-derived every merged-final value from home.css
+by its own exhaustive grep (not trusting cited line/count numbers — correctly catching
+this doc's "43 lines" transcription error, fixed above), confirmed the load-order
+mechanism and byte-for-byte-copy root cause from source, and built its OWN independent
+real-browser harness matching Home's exact load order — deliberately stress-tested with
+non-default `--brand-primary`/`--sfb-heading-size` values (beyond what this fix's own
+harness described) to rule out variable-dependent divergence, confirming ZERO computed-
+style differences before/after the fix for every touched selector. Also independently
+confirmed both judgment calls (excluding `font-size`, including the `.bar` color change)
+are supported by home.css's own cascade history, not post-hoc rationalization, and
+verified RED honestly reproduces (reverting just this commit's CSS hunks fails exactly
+the 2 CSS-content tests, not the 2 markup tests). **PASS — 0 CRITICAL, 0 IMPORTANT, 2
+MINOR** (the "43 lines" doc transcription error above, and an "already-tested" claim
+narrowed above to precisely what `test_appearance.py` actually covers — the live
+variable-pipeline mechanism, not `.sec-head h2`'s computed style specifically). Both
+addressed with documentation-only corrections; no code or test change required, no
+re-review needed for MINOR-only findings per the process mandate.
+
+## Group C2 (and its C2.5 addendum) — closed (0 unresolved CRITICAL / 0 unresolved
+IMPORTANT across both the original Group C2 review and this root-cause follow-up).
+Proceeding to Group C3 (`image_strip`).
