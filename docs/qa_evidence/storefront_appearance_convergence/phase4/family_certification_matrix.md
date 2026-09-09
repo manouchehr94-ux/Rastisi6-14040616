@@ -35,7 +35,7 @@ ResourceSource · browser certification (Task 4 harness) · status.
 | `faq` | MIGRATE | **yes (Task 5 Group E)** | **yes (Task 6 Group D — `repeater` field type; browser-verified end to end)** | no | no | NOT YET CERTIFIED |
 | `testimonials` | MIGRATE | **yes (Task 5 Group E)** | **yes (Task 6 Group D — `repeater` field type)** | no | no | NOT YET CERTIFIED |
 | `video_section` | MIGRATE | **yes (Task 5 Group E)** | **yes (Task 6 Group D)** | no | no | NOT YET CERTIFIED |
-| `story_rail` | MIGRATE | already safe | **n/a — no section-level settings to schematize (media-only family, `_passthrough_dict`/`_empty_defaults`); real gap was the media-form/model rework (Task 6), now closed** | no | no | **media-form/model rework CLOSED (Task 6) — real `AttributeError` on every story-item edit fixed; 29/29 targeted GREEN**; Browser cert still pending (Batch 3) |
+| `story_rail` | MIGRATE | already safe | **n/a — no section-level settings to schematize (media-only family, `_passthrough_dict`/`_empty_defaults`); real gap was the media-form/model rework (Task 6), now closed** | no | no | **media-form/model rework CLOSED (Task 6) — real `AttributeError` on every story-item edit fixed, plus a duplicate-`title`-input data-loss bug and a missing-thumbnail bug found by independent review, also fixed; 56/56 targeted GREEN**; Browser cert still pending (Batch 3) |
 | `newsletter` | MIGRATE | already safe (inline) | **yes (Task 6 Group D)** | no | no | NOT YET CERTIFIED |
 | `announcement_bar` | LEGACY-RETIRE | n/a | no | no | no | RETIREMENT CANDIDATE (see legacy_disposition.md) |
 | `product_main` | CONTEXT-AWARE-DOMAIN-OWNED | n/a | no | no | no | SAFE BY CONSTRUCTION |
@@ -58,5 +58,5 @@ ResourceSource · browser certification (Task 4 harness) · status.
 | Motion | CERTIFY-ONLY | Canonical, converged — regression sentinel only |
 | `hero` (Store Appearance family) | TEMPORARY-ADAPTER | **CERTIFIED (Task 6 Group F — explicit-local-override-wins write/effective reconciliation confirmed via the real R4 mutation endpoint; no new selector UI, Ruling J)** |
 | `product_view` | TEMPORARY-ADAPTER | **CERTIFIED (Task 6 Group F — same explicit-local-override contract confirmed for `product_section.display_mode`)** |
-| `card` | TEMPORARY-ADAPTER | **CERTIFIED (Task 6 Group F — manifest confirmed sole write authority: no local write path exists anywhere; overlay verified consistent across the entire live Ready Template registry)** |
-| `badge` | TEMPORARY-ADAPTER | **CERTIFIED (Task 6 Group F — same sole-write-authority contract confirmed for `badge_treatment`)** |
+| `card` | TEMPORARY-ADAPTER | **CERTIFIED (Task 6 Group F — independent review found the first certification's "no local write path" claim false: the legacy card-settings form is a real write path that the manifest overlay was silently clobbering. Fixed with a `card_style_explicit` marker mirroring `variant_explicit`; explicit local wins, unmarked sections still inherit the Store default; full-suite re-verified with zero new regressions)** |
+| `badge` | TEMPORARY-ADAPTER | **CERTIFIED (Task 6 Group F — `badge_treatment` genuinely has no local write path anywhere; manifest is unconditionally the sole write authority)** |

@@ -209,31 +209,49 @@ UI. Investigated each family's actual write/read reconciliation contract:
   is certification that the contract holds specifically named for `hero`/`product_view`, done via
   a new test file exercising the real R4 mutation HTTP endpoint end to end (not just direct service
   calls) — see below.
-- **`card`/`badge`** have NO local write path anywhere in the codebase — confirmed by exhaustive
-  search: no `SettingsSchema` field, no legacy section-settings form field, for `card.card_style`
-  or `card.badge_treatment` on any section. The only place a local `card.card_style` value ever
-  originates is a Ready Template's own authored `PresetSectionEntry.settings.card` — and every
-  Ready Template in the live production registry (`layout_preset_registry.list_ready_templates()`)
-  either sets that local value equal to its own declared `card` family selection, or leaves its
-  shared non-Home boilerplate sections (`product_listing`/`collection_products`/`related_products`
-  — the identical composition reused by `_u10_standard_non_home_pages()` across every recipe) at
-  the inert `"standard"` value specifically so the Store Appearance manifest is free to be the
-  single overlay authority for them. Verified directly, not by inspection alone: a new test
-  (`ReadyTemplateCardFamilyConsistencyTests`) applies every registered Ready Template with a
-  non-default `card` selection and asserts the effective render-time `card_style` on each of its
-  shared boilerplate sections equals that template's own declared family value — GREEN across the
-  entire live registry. This confirms the existing unconditional render-time overlay
-  (`card_settings_for`/`badge_settings_for` in `storefront_appearance/rendering.py`, already wired
-  into `render_service._build_items_from_sections`) is the correct, sole write/effective-state
-  authority for these two families — not a defect, and nothing to change.
+- **`badge`** genuinely has NO local write path anywhere in the codebase — confirmed by exhaustive
+  search: no `SettingsSchema` field, no legacy section-settings form field, for `card.badge_treatment`
+  on any section. The Store Appearance manifest is unconditionally the sole write/effective-state
+  authority for it.
+- **`card` — a real gap, found by independent review, now fixed.** The first draft of this
+  certification claimed `card_style` had no local write path either. **That claim was false** — an
+  independent isolated-worktree reviewer (dispatched as this task's final-gate review) found the
+  legacy card-settings form (`section_card_fields.html`'s `card_style` `<select>`, rendered for
+  every `CARD_AWARE_SECTION_KEYS` section, parsed by `views._extract_card_raw`) IS a real
+  merchant-facing write path, and the render-time overlay
+  (`storefront_appearance/rendering.py.card_settings_for`, wired into
+  `render_service._build_items_from_sections`) was unconditionally clobbering it whenever the
+  Store's `card` family selection was non-default — with no way for the merchant's own saved
+  choice to ever take effect (CRITICAL finding, empirically reproduced by the reviewer over real
+  HTTP). **Fixed** by extending the exact `variant_explicit` precedent (Phase 1 Task 6) to this
+  independent axis: a new `card_style_explicit` marker (`settings_schema.py`), stamped by
+  `views.storefront_section_settings` only on a genuine legacy-form change (same "presence is not
+  intent" rule as the existing variant marker — the form submits `card_style` on every POST), and
+  honored by `render_service.py` exactly like the variant axis (an explicit local `card_style` now
+  wins over a later, conflicting Store-level `card` family selection; an unmarked section still
+  inherits the Store default). The independent review's SAME investigation also surfaced two
+  further real defects while verifying this claim (both now fixed, see "Independent Task-6 review"
+  below): `amazing_offers`'s dedicated legacy-form branch was silently wiping the whole `card` block
+  on every Save (no `card_*` controls rendered there, but `_extract_card_raw` ran unconditionally),
+  and the story-item media form's two identically-named `title` inputs discarded the merchant's
+  typed title.
+
+  `ReadyTemplateCardFamilyConsistencyTests` remains valid and GREEN: every registered Ready
+  Template's shared non-Home boilerplate sections (`product_listing`/`collection_products`/
+  `related_products`) are never locally overridden (no Ready Template authors an explicit local
+  `card_style` disagreeing with its own declared family selection there), so the manifest overlay
+  correctly remains their effective authority — this test just never exercised the
+  merchant-authored-disagreement case the CRITICAL finding was about, which is why the gap wasn't
+  caught before independent review.
 - New certification test file:
-  `apps/storefront_builder/tests/test_phase4_task6_group_f_reconciliation.py` — 10 tests: explicit-
-  local-override-wins for `hero` and `product_view` (through the real R4 HTTP mutation endpoint,
-  named specifically for each family, not just the generic variant-key mechanism); manifest-is-
-  sole-authority + safe-default-restores-local-value for `card` and `badge`; and the full-registry
-  Ready Template consistency check. All GREEN; no production code changed.
-- `family_certification_matrix.md` updated: all four TEMPORARY-ADAPTER rows moved from PENDING to
-  CERTIFIED.
+  `apps/storefront_builder/tests/test_phase4_task6_group_f_reconciliation.py` — 12 tests: explicit-
+  local-override-wins for `hero`, `product_view`, and (after the fix) `card` (through the real R4/
+  legacy-form HTTP endpoints, named specifically for each family); the "presence is not intent"
+  no-mark-on-resubmission case for `card_style`; manifest-is-sole-authority + safe-default-restores-
+  local-value for `card`/`badge`; and the full-registry Ready Template consistency check. All
+  GREEN.
+- `family_certification_matrix.md` updated: all four TEMPORARY-ADAPTER rows CERTIFIED — `hero`/
+  `product_view`/`badge` on the first pass, `card` only after the fix above.
 
 ## story_rail media-form/model convergence (Group D, closed)
 
@@ -354,4 +372,60 @@ created for this session, since the container's `db.sqlite3` started empty).
 
 ### Independent Task-6 review
 
-See the fresh isolated-worktree reviewer's verdict recorded separately below.
+A fresh, isolated-worktree reviewer with no prior context reviewed the cumulative Task 6 diff
+(`a31da39..f98930b` — Task 5's close through the end of Batch 2), read the plan's Task 6 section
+and this evidence document, and scrutinized the two not-yet-independently-reviewed commits
+(`e524a35`/Group E+F certification, `f98930b`/story_rail fix) the hardest, including empirical
+HTTP-level reproduction of its findings against a real venv. Verdict on the first pass:
+
+```
+CRITICAL: 1
+IMPORTANT: 2
+MINOR: 2
+```
+
+- **CRITICAL (C1)** — the `card` family's "no local write path" claim was false; the render-time
+  overlay was silently discarding a real merchant `card_style` choice. Fixed as described in the
+  "Group F" section above.
+- **IMPORTANT (I1)** — `amazing_offers`'s legacy-form Save silently wiped its entire `card` block
+  (no `card_*` controls in that dedicated branch, but `_extract_card_raw` ran unconditionally,
+  defaulting every absent field to off/`"standard"`) — the exact class of destructive-Save bug
+  Finding 2 (Group D checkpoint) was meant to close, reintroduced by that same fix's own new
+  branch. Fixed: `_extract_card_raw` is now preserve-safe (mirrors `_extract_background_raw`) —
+  absence of every one of its ten POST keys means this form never had the card block, so the
+  stored block survives untouched. Regression test:
+  `test_views.NewSectionTypesSettingsFormTests.test_amazing_offers_settings_form_does_not_wipe_card_block`.
+- **IMPORTANT (I2)** — the story-item media form (`f98930b`) rendered two `<input name="title">`
+  elements (the generic title block plus the kind-specific text-field block, since `story-items`'
+  own `text_field` IS `"title"`); a browser posts duplicate keys as a list, and Django's
+  `QueryDict.get()` returns the last one, silently discarding whatever the merchant typed into the
+  first box. Fixed: the generic title block is skipped when `config.text_field == "title"`.
+  Regression tests: `test_media_views.StoryRailItemCrudTests.test_add_form_renders_title_input_exactly_once`
+  / `test_add_story_item_title_is_actually_saved`.
+- **MINOR (M1)** — the media list partial read `item.desktop_image_url` unconditionally, which
+  `StoryRailItem` doesn't have (its own property is `image_url`); Django's template engine
+  swallows the `AttributeError`, so story items showed no thumbnail at all. Fixed via a per-kind
+  `thumb_field` config entry (`media_views.py`), used generically by the list template. Regression
+  test: `test_media_views.StoryRailItemCrudTests.test_media_list_shows_story_item_thumbnail`.
+- **MINOR (M2)** — dead imports/an unused helper and an over-broad docstring claim in the new
+  Group F test file. Cleaned up; docstrings corrected to match the actual (now-fixed) contract.
+
+**Fix verification** (per "rerun only affected verification unless the fix changes a cross-cutting
+contract" — the C1 fix DOES change a cross-cutting contract, the card/badge overlay precedence, so
+the full gate was re-run, not just the touched modules):
+- Targeted: `test_phase4_task6_group_f_reconciliation` (12/12), `test_media_views` (56/56, includes
+  the new story-item regression tests), `test_views.NewSectionTypesSettingsFormTests` (12/12),
+  `test_views` full module (221 tests, 1 failure + 1 error — the two known pre-existing
+  `FullscreenEditorTests` signatures, nothing else), `test_render_service` +
+  `test_g22_preview_media_render_consistency` + `test_u10_ready_template_catalog` +
+  `test_a8_ready_template_contracts` + `test_section_registry` (418/418, 1 pre-existing skip) — all
+  GREEN.
+- **Full `apps.storefront_builder` suite re-run once more** (the fix touches `render_service.py`'s
+  per-section overlay loop, a cross-cutting path): 2791 tests (6 more than the pre-fix run — the
+  new regression tests), 30 failures / 2 errors / 4 skips. Diffed the full by-name failure/error
+  list against the pre-fix run byte-for-byte: **identical set, zero new regressions.**
+- `manage.py check` / `makemigrations --check --dry-run` / `git diff --check`: all clean, both
+  before and after the fix.
+
+No second review round was required — every finding was concrete, reproducible, and fixed; no new
+finding surfaced during fix verification.

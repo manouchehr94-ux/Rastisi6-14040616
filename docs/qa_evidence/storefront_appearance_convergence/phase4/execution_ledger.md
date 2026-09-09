@@ -226,5 +226,41 @@ commit-by-commit summary.
   `test_g22_on_g21_integration`, `test_g2_1_media_editability_roundtrip`, `test_media_views`,
   `test_media_write_path`, `test_phase2_lifecycle_safety`) 132/132 GREEN. `manage.py check`: clean.
   `makemigrations --check --dry-run`: no changes detected (view/template-only fix, no model
-  change). Committed as `<pending>` (recorded once pushed). All Task-6 implementation is now
-  complete; proceeding to Batch 3 (Task-6 final gate).
+  change). Committed and pushed as `f98930b`. All Task-6 implementation is now complete;
+  proceeding to Batch 3 (Task-6 final gate).
+
+- **Batch 3 — Task-6 final gate** (fast-continuation session, 2026-09-09). Full
+  `apps.storefront_builder` suite run once, per the speed policy: first attempt corrupted by this
+  session's own mid-run venv-directory rename (154 spurious errors, traced to a `PIL`/`bs4`/Django-
+  template-lookup breakage at the renamed path — discarded in full, not partially trusted); a
+  genuinely clean re-run produced 2785 tests, 30 failures/2 errors/4 skips, verified by exact
+  failure/error NAME match (not just count) against the frozen baseline — zero new regressions.
+  `manage.py check`/`makemigrations --check --dry-run`/`git diff --check` all clean. Browser
+  certification: investigated the actual harness before running anything — Task 4 only generalized
+  the Brand/Collection tile-matrix helper, never built scenario code for the other ~20 Task-6
+  families; put the scope question to the Product Owner rather than silently claiming coverage
+  that doesn't exist or unilaterally building a large new harness extension; decision: run the
+  harness's existing generic scenarios (13 R4 workflow scenarios + `phase3-brand-gate`) as-is and
+  record the gap honestly. Ran it (dev DB freshly migrated + a throwaway QA user, container started
+  with an empty `db.sqlite3`): 16/16 scenarios PASS, Brand 45/45 + Collection 36/36 variant checks,
+  0 real errors, DB restore SHA256 verified byte-for-byte on both invocations. Full record in
+  `phase4/task6_family_convergence.md`'s "Task 6 final gate" section. Committed and pushed as
+  `0cae527`.
+
+- **Independent Task-6 review + fix cycle** (fast-continuation session, 2026-09-09). A fresh
+  isolated-worktree reviewer with no prior context reviewed the cumulative Task 6 diff
+  (`a31da39..f98930b`). Verdict: CRITICAL 1, IMPORTANT 2, MINOR 2 — all real, empirically
+  reproduced findings (the `card` family's Group F certification rested on a false "no local write
+  path" premise; a real merchant-facing `card_style` write path existed and was silently
+  overridden by the render-time overlay; a destructive-Save regression in `amazing_offers`'s
+  legacy form; a duplicate-`title`-input data-loss bug in the new story-item form; a missing
+  story-item thumbnail; dead test code). All fixed — see `phase4/task6_family_convergence.md`'s
+  "Independent Task-6 review" section for the full record. Full `apps.storefront_builder` suite
+  re-run once more after the fix (the `card` fix touches `render_service.py`'s cross-cutting
+  per-section overlay): 2791 tests, 30 failures/2 errors/4 skips, byte-for-byte identical
+  failure/error names to the pre-fix run — zero new regressions. `manage.py check`/
+  `makemigrations --check --dry-run`/`git diff --check` clean. Committed and pushed as `f7e71b9`.
+  Matrix corrected: `card`'s CERTIFIED status now reflects the actual (fixed) contract rather than
+  the disproven claim; `story_rail`'s CLOSED status now also covers the two defects the review
+  found in that same commit. No second review round required — every finding was concrete and
+  fixed; no new finding surfaced during fix verification. **Task 6 is now CLOSED.**
