@@ -4854,6 +4854,62 @@ a.sfb-v3-component-item,
   .tile-circle-label{font-size:11.5px}
 }
 
+/* Phase 4 (Task 5, Group C3) — category_grid's "image_strip" display
+   mode (`.category-image-strip-section`/`.category-image-strip`/
+   `.category-image-tile`/`.category-image-media`/`.category-image-
+   fallback`/`.category-image-label`) was Home-only. home.css layers
+   this family across TWO passes: "V4.1 reference polish — visual
+   category strip" (base + its own @1000px/@680px blocks) and a later,
+   unlabeled "Phase 3.7 — top-of-page professional composition" pass
+   (unconditioned, plus its own separate @680px block). Merged-final
+   values below, verified against a standalone real-browser harness
+   loading home.css alone with this exact markup.
+
+   Judgment call (same pattern as Group C2's `.tile-circle`, verified
+   the same way): the V4.1 pass's own `@1000px`/`@680px` overrides for
+   `.category-image-media`'s `height` (98px/78px) and `.category-image-
+   label`'s `@680px` `font-size` (8.5px) are BOTH dead code — the later,
+   unconditioned "Phase 3.7" pass's values (106px / 10.5px) always win
+   instead, confirmed identical at 1440/900/390px in the ground-truth
+   harness. Mirroring the dead rules would not match Home's actual
+   rendering, so they are omitted; `.category-image-tile`'s own
+   `flex-basis` responsive values (untouched by "Phase 3.7") remain
+   genuinely live and are mirrored, as is "Phase 3.7"'s own separate
+   `@680px` `gap` override.
+
+   `.category-circle-section .sec-head`-style nested title-heading
+   override (`.category-image-strip-section .sec-head{margin-bottom:
+   4px}`, home.css:676) is mirrored below, matching the Group C2.5
+   pattern. `.rcontainer:has(.category-image-strip-section){margin-
+   bottom:5px}` (home.css:884) is ALSO mirrored below — an initial
+   assumption that `.rcontainer` markup never renders on the 5 public
+   non-Home envelopes (Container/Cell being preview/editor-only) was
+   WRONG, caught by running this group's own new tests: `.rcontainer`/
+   `.rcontainer-cell`/`.rsec` genuinely wrap every section on these
+   pages. `.rcontainer`'s own base rule (`margin:0`, above in this same
+   file) already covers the shared structural layout — this fix only
+   adds the one narrow, family-specific `:has()` margin exception,
+   exactly matching the established pattern for every other nested
+   override in this file. */
+.category-image-strip-section{margin:8px 0 7px}
+.category-image-strip-section .sec-head{margin-bottom:4px}
+.rcontainer:has(.category-image-strip-section){margin-bottom:5px}
+.category-image-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:14px;align-items:start;padding:2px 6px 4px}
+.category-image-tile{min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;color:#25282d;text-align:center}
+.category-image-media{width:100%;height:106px;display:grid;place-items:center;overflow:hidden;background:transparent}
+.category-image-media img{display:block;width:100%;height:100%;object-fit:contain;border:0;border-radius:0;padding:0;box-shadow:none}
+.category-image-fallback{font-size:42px;line-height:1}
+.category-image-label{font-size:10.5px;font-weight:700;line-height:1.45;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.category-image-tile:hover .category-image-media{transform:translateY(-1px)}
+@media(max-width:1000px){
+  .category-image-strip{display:flex;overflow-x:auto;scroll-snap-type:x proximity}
+  .category-image-tile{flex:0 0 126px;scroll-snap-align:start}
+}
+@media(max-width:680px){
+  .category-image-tile{flex-basis:96px}
+  .category-image-strip{gap:12px}
+}
+
 /* Generic luxury showcase hero / category shortcuts. */
 .hero-luxury{margin-top:20px}.hero-luxury-stage{position:relative;overflow:hidden;border:1px solid color-mix(in srgb,var(--theme-primary,#d4af37) 25%,var(--theme-border,#2a2515));border-radius:calc(var(--sfb-radius,18px) + 4px);background:linear-gradient(115deg,#090909 0%,#111 54%,#21180a 100%);box-shadow:0 24px 60px rgba(0,0,0,.28)}
 .hero-luxury-slide{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);min-height:470px;direction:rtl}.hero-luxury-copy{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:54px;position:relative;z-index:2;color:var(--theme-text,#f8f1cf)}

@@ -936,3 +936,152 @@ class SecHeadSharedBaselineNonHomeCssTests(TestCase):
         svc.publish(self.store)
         resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
         self.assertEqual(resp.status_code, 200)
+
+
+@override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
+class CategoryGridImageStripNonHomeCssTests(TestCase):
+    """Group C3 — category_grid's "image_strip" display mode
+    (`.category-image-strip-section`/`.category-image-strip`/`.category-
+    image-tile`/`.category-image-media`/`.category-image-fallback`/
+    `.category-image-label`). home.css layers this family across TWO
+    passes: "V4.1 reference polish" (base + its own @1000px/@680px
+    blocks) and a later, unlabeled "Phase 3.7" pass (unconditioned +
+    its own separate @680px block). Real-browser ground-truth
+    verification (a standalone harness loading home.css alone against
+    this exact markup) confirmed the V4.1 pass's own @1000px/@680px
+    overrides for `.category-image-media`'s `height` and `.category-
+    image-label`'s `@680px` `font-size` are dead code — completely
+    shadowed at every viewport by the later, unconditioned "Phase 3.7"
+    pass — so those responsive transitions never actually occur, while
+    `.category-image-tile`'s own `flex-basis` responsive values
+    (untouched by "Phase 3.7") remain genuinely live. Deliberately NOT
+    mirrored for that reason; see the CSS file's own comment."""
+
+    def setUp(self):
+        cache.clear()
+        self.store = _akhlaghi()
+        _verified_domain(self.store, HOST)
+        self.draft = svc.get_or_create_draft(self.store)
+        from apps.catalog.models import Category
+
+        self.cat_a = Category.objects.create(
+            store=self.store, name="دسته الف", slug="task5-c3-cat-a", is_active=True,
+        )
+        self.cat_b = Category.objects.create(
+            store=self.store, name="دسته ب", slug="task5-c3-cat-b", is_active=True,
+        )
+
+    def _place_and_publish(self, page_type: str):
+        section = section_structure_service.add_section(
+            draft=self.draft, section_key="category_grid", page_type=page_type,
+        )
+        section.settings = {
+            **section.settings,
+            "display_mode": "image_strip",
+            "category_ids": [self.cat_a.pk, self.cat_b.pk],
+        }
+        section.save(update_fields=["settings"])
+        svc.publish(self.store)
+        return section
+
+    def test_image_strip_renders_on_cart(self):
+        self._place_and_publish(StorefrontPage.PageType.CART)
+        resp = self.client.get(reverse("cart:detail"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="section category-image-strip-section"', html)
+        self.assertIn('class="category-image-strip"', html)
+        self.assertIn('class="category-image-tile"', html)
+        self.assertIn('class="category-image-media"', html)
+        self.assertIn('class="category-image-label"', html)
+        # An initial assumption that `.rcontainer` never renders on this
+        # public route was wrong (caught by this very test failing) —
+        # it genuinely wraps every section here, confirming the
+        # `.rcontainer:has(.category-image-strip-section)` mirror below
+        # is real and necessary, not inert.
+        self.assertIn('class="rcontainer"', html)
+
+    def test_image_strip_renders_on_listing(self):
+        self._place_and_publish(StorefrontPage.PageType.LISTING)
+        resp = self.client.get(reverse("catalog:product-list"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('class="category-image-strip"', html)
+        self.assertIn('class="category-image-tile"', html)
+
+    def test_storefront_builder_css_carries_the_merged_final_image_strip_rules(self):
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(".category-image-strip-section{margin:8px 0 7px}", css)
+        self.assertIn(".category-image-strip-section .sec-head{margin-bottom:4px}", css)
+        self.assertIn(
+            ".category-image-strip{display:grid;"
+            "grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:14px;"
+            "align-items:start;padding:2px 6px 4px}",
+            css,
+        )
+        self.assertIn(
+            ".category-image-tile{min-width:0;display:flex;flex-direction:column;"
+            "align-items:center;gap:4px;color:#25282d;text-align:center}",
+            css,
+        )
+        self.assertIn(
+            ".category-image-media{width:100%;height:106px;display:grid;"
+            "place-items:center;overflow:hidden;background:transparent}",
+            css,
+        )
+        self.assertIn(
+            ".category-image-media img{display:block;width:100%;height:100%;"
+            "object-fit:contain;border:0;border-radius:0;padding:0;box-shadow:none}",
+            css,
+        )
+        self.assertIn(".category-image-fallback{font-size:42px;line-height:1}", css)
+        self.assertIn(
+            ".category-image-label{font-size:10.5px;font-weight:700;line-height:1.45;"
+            "white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}",
+            css,
+        )
+        self.assertIn(
+            ".category-image-tile:hover .category-image-media{transform:translateY(-1px)}",
+            css,
+        )
+        self.assertIn(
+            "@media(max-width:1000px){\n"
+            "  .category-image-strip{display:flex;overflow-x:auto;"
+            "scroll-snap-type:x proximity}\n"
+            "  .category-image-tile{flex:0 0 126px;scroll-snap-align:start}\n"
+            "}",
+            css,
+        )
+        self.assertIn(
+            "@media(max-width:680px){\n"
+            "  .category-image-tile{flex-basis:96px}\n"
+            "  .category-image-strip{gap:12px}\n"
+            "}",
+            css,
+        )
+        # The V4.1 pass's own @1000px/@680px `.category-image-media`
+        # height overrides and @680px `.category-image-label` font-size
+        # override are dead code on Home (proven via real-browser
+        # ground-truth verification) and must never be mirrored, since
+        # doing so would NOT match Home's actual rendering at any
+        # viewport.
+        self.assertNotIn(".category-image-media{height:98px}", css)
+        self.assertNotIn(".category-image-media{height:78px}", css)
+        self.assertNotIn(".category-image-label{font-size:8.5px}", css)
+        # `.rcontainer` genuinely renders on every public non-Home page
+        # (confirmed by the markup test above — an initial assumption
+        # that it didn't was wrong) — its own base rule (`margin:0`)
+        # already exists elsewhere in this file; this narrow `:has()`
+        # exception is the one genuinely family-specific piece that
+        # needed adding, matching home.css's own real rendering.
+        self.assertIn(".rcontainer:has(.category-image-strip-section){margin-bottom:5px}", css)
+
+    def test_home_page_is_unaffected_since_it_never_loads_storefront_builder_css(self):
+        home_html = Path(settings.BASE_DIR, "apps", "catalog", "templates", "catalog", "home.html").read_text(
+            encoding="utf-8",
+        )
+        self.assertNotIn("storefront_builder.css", home_html)
+        self.assertNotIn("category-image-strip", home_html)
+        svc.publish(self.store)
+        resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
+        self.assertEqual(resp.status_code, 200)

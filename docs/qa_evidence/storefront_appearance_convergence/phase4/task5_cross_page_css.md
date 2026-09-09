@@ -1181,3 +1181,118 @@ re-review needed for MINOR-only findings per the process mandate.
 ## Group C2 (and its C2.5 addendum) — closed (0 unresolved CRITICAL / 0 unresolved
 IMPORTANT across both the original Group C2 review and this root-cause follow-up).
 Proceeding to Group C3 (`image_strip`).
+
+## Group C3 — `category_grid`'s `image_strip` display mode
+
+### Investigation
+
+Markup (`category_grid.html`, `image_strip` branch): `<section class="section
+category-image-strip-section">` → `<div class="category-image-strip">` → `<a
+class="category-image-tile">` → `<span class="category-image-media">` (with a `<span
+class="category-image-fallback">` icon fallback) → `<span class="category-image-label">`.
+
+Exhaustive whole-file grep of home.css found TWO passes: "V4.1 reference polish — visual
+category strip" (base, plus its own `@1000px`/`@680px` blocks) and a later, unlabeled
+pass under the "Phase 3.7 — top-of-page professional composition" header (unconditioned,
+plus its own separate `@680px` block touching only `.category-image-strip`'s `gap`).
+
+Manual cascade tracing surfaced the same class of "later unconditioned rule shadows an
+earlier breakpoint-scoped rule" pattern found in Group C2: the "Phase 3.7" pass's
+unconditioned `.category-image-media{height:106px}` and `.category-image-label{font-
+size:10.5px}` are textually AFTER the V4.1 pass's own `@1000px`/`@680px` overrides for
+those same properties (98px/78px height; 8.5px font-size) — predicting those responsive
+transitions never actually occur.
+
+### Ground-truth verification (before writing any fix)
+
+A standalone HTML harness loading home.css alone with the exact `image_strip` markup was
+opened in a real browser at 1440×900, 900×800, and 390×844. Results confirmed the
+prediction: `.category-image-media`'s `height` is `106px` at ALL THREE viewports (never
+98px or 78px), and `.category-image-label`'s `font-size` is `10.5px` at all three (never
+8.5px) — both V4.1 responsive overrides are dead code, fully shadowed by the later "Phase
+3.7" pass. `.category-image-tile`'s own `flex-basis` responsive values (untouched by
+"Phase 3.7") were confirmed genuinely live (126px at 900px, 96px at 390px), as was "Phase
+3.7"'s own separate `@680px` `.category-image-strip{gap:12px}` override.
+
+`.category-image-strip-section .sec-head{margin-bottom:4px}` (home.css:676) is mirrored,
+matching the Group C2.5 pattern for nested title-heading overrides.
+
+**A wrong initial assumption, caught by the tests themselves**: `.rcontainer:has
+(.category-image-strip-section){margin-bottom:5px}` (home.css:884) was first assumed to
+be inert on the 5 public non-Home envelopes, on the theory that `.rcontainer` belonged
+only to a separate Container/Cell preview/editor rendering path. Running the new
+`test_image_strip_renders_on_cart` markup test immediately disproved this — the real Cart
+page HTML genuinely wraps every section in `.rcontainer`/`.rcontainer-cell`/`.rsec` divs.
+Corrected before writing the final CSS: `.rcontainer`'s own base rule (`margin:0`) already
+exists in `storefront_builder.css` from earlier work (confirmed: `home_visual.html`, the
+"universal shell" Home variant, loads `product_card.css` → `home.css` →
+`storefront_builder.css`, so home.css's higher-specificity `:has()` override already wins
+there via specificity regardless of load order) — only the one narrow, genuinely
+family-specific `:has()` margin exception needed adding here, which was verified via a
+real browser to be entirely absent (`marginBottom:"0px"`) before the fix.
+
+### Browser RED
+
+With the CSS stashed, `CategoryGridImageStripNonHomeCssTests.
+test_storefront_builder_css_carries_the_merged_final_image_strip_rules` failed on its
+first assertion, while the 3 markup/Home-unaffected tests passed unaffected, as expected.
+
+### Fix
+
+`apps/storefront_builder/static/css/storefront_builder.css` — one new block (see the
+Group C3 comment) with the merged-final desktop rules for `.category-image-strip-
+section`/`.category-image-strip-section .sec-head`/`.rcontainer:has(.category-image-
+strip-section)`/`.category-image-strip`/`.category-image-tile`/`.category-image-media`(+
+`img`)/`.category-image-fallback`/`.category-image-label`/hover state, one
+`@media(max-width:1000px)` block (`.category-image-strip`/`.category-image-tile`), and
+one `@media(max-width:680px)` block (`.category-image-tile`/`.category-image-strip`) —
+deliberately omitting the two now-proven-dead V4.1-pass responsive overrides.
+
+### Browser GREEN (1440 / 768 / 390)
+
+Fresh fixture: 3 `Category` rows, one `category_grid` section with `display_mode:
+"image_strip"` and explicit `category_ids` on Cart.
+
+| Property | 1440×900 | 768×1024 | 390×844 |
+|---|---|---|---|
+| `.category-image-strip` display/gap | `grid` / `14px` | `flex`, `overflowX:auto` | `gap:12px` |
+| `.category-image-tile` flex-basis | — | `126px` | `96px` |
+| `.category-image-media` height | `106px` | `106px` | `106px` |
+| `.category-image-label` font-size | `10.5px` | `10.5px` | `10.5px` |
+| `.category-image-strip-section` margin | `8px 0px 7px` | — | — |
+| `.rcontainer:has(.category-image-strip-section)` margin-bottom | `5px` | — | — |
+
+All values match the standalone-harness ground truth exactly, including the confirmed
+dead-responsive-code behavior for `.category-image-media`/`.category-image-label` (fully
+constant across all three viewports) alongside `.category-image-tile`'s genuinely live
+responsive transitions. Zero console/page errors at any viewport.
+
+### Cleanup
+
+Dev server stopped and verified via `ps aux` (no lingering process). DB restored via `cp`
+from the `post_c1_cleanup_baseline.sqlite3` continuation baseline
+(`9fe52ff5e97de6359c70c9bd3fdd3fd5344190a93252fb6f93bf41b2ee063c4d`) and hash-verified
+equal.
+
+### Permanent regression guard
+
+`CategoryGridImageStripNonHomeCssTests`: 2 markup-rendering tests (Cart, Listing —
+including an explicit `assertIn('class="rcontainer"', html)` proving the wrapper genuinely
+renders, after the wrong initial assumption) + 1 Home-unaffected test + 1
+full-declaration CSS-content test covering every selector/breakpoint this fix adds, with
+explicit `assertNotIn` guards for the two dead V4.1-pass responsive declarations.
+
+### Verification
+
+Full sweep — `test_phase4_task5_cross_page_css` (32 tests, all pass) plus
+`test_qa_harness_contract`, `test_r4_settings_schema`, `test_section_registry`,
+`test_render_service`, `test_r4_mutation_api`, `test_appearance` — **585 tests, OK (1
+pre-existing skip)**. `manage.py check`: 0 issues. `manage.py makemigrations --check
+--dry-run`: no changes detected.
+
+### STOP conditions checked
+
+`main` = `973c1dc00bacb6f2f7d2604fa3880bb4d6250579` (unchanged). Start safety ref
+`backup/rastisi6-phase4-start-20260908` = `969a9b411ca712928c2bf31416bdde2ee8aaabb5`
+(unchanged). No destructive git operation used. `git status` before commit contains only
+the intended C3 production/test/evidence files.
