@@ -24,8 +24,8 @@
               hx-post="{% url 'dashboard:storefront-builder-section-media-move' pk=section.pk kind=kind item_pk=item.pk %}"
               hx-vals='{"direction": "down"}' hx-target="#mediaList" hx-swap="outerHTML">▼</button>
     </div>
-    {% if item.desktop_image_url %}
-    <img src="{{ item.desktop_image_url }}" alt="" style="width:64px;height:48px;object-fit:cover;border-radius:8px">
+    {% if item|getattribute:config.thumb_field %}
+    <img src="{{ item|getattribute:config.thumb_field }}" alt="" style="width:64px;height:48px;object-fit:cover;border-radius:8px">
     {% endif %}
     <div style="flex:1">
       <strong>{{ item.title|default:"(بدون عنوان)" }}</strong>

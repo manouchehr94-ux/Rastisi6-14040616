@@ -19,7 +19,7 @@ from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
 from apps.stores.resolution import resolve_store_for_service
 
 from . import global_region_registry, section_registry
-from .settings_schema import mark_explicit_variant_override
+from .settings_schema import mark_explicit_card_style_override, mark_explicit_variant_override
 from .models import (
     APPEARANCE_CONFIG_DEFAULTS,
     FOOTER_CONFIG_DEFAULTS,
@@ -954,7 +954,7 @@ def storefront_section_settings(request, pk):
         if definition.supports_capability("motion"):
             raw["motion"] = {"style": request.POST.get("motion_style", "none")}
         if definition.supports_capability("card"):
-            raw["card"] = _extract_card_raw(request)
+            raw["card"] = _extract_card_raw(request, section)
         if definition.supports_capability("layout_width"):
             raw["layout"] = _extract_layout_raw(request)
         # Phase 3 (V01) — the legacy Brand form builds ``raw`` fresh from named
@@ -992,6 +992,18 @@ def storefront_section_settings(request, pk):
                     variant_setting_key=variant_key,
                     patch={variant_key: cleaned[variant_key]},
                 )
+            # Phase 4 (Task 6, Group F correction) — same rule, independent
+            # axis: mark the local card_style explicit only on a genuine
+            # change, so the Store Appearance manifest's card family
+            # selection stops silently overriding a merchant's own saved
+            # choice at render time (render_service.py honors this marker
+            # exactly like variant_explicit above).
+            if (
+                definition.supports_capability("card")
+                and "card_style" in request.POST
+                and cleaned.get("card", {}).get("card_style") != (section.settings or {}).get("card", {}).get("card_style")
+            ):
+                cleaned = mark_explicit_card_style_override(settings=cleaned)
             section.settings = cleaned
             section.save(update_fields=["settings", "updated_at"])
             messages.success(request, "تنظیمات ذخیره شد")
@@ -1281,12 +1293,36 @@ def _extract_responsive_raw(request, definition) -> dict:
     return raw
 
 
-def _extract_card_raw(request) -> dict:
+#: Phase 4 (Task 6, Group F correction) — every POST field name
+#: ``_extract_card_raw`` reads. A form that sends ANY one of these
+#: genuinely has the card block; a form that sends NONE of them
+#: (``amazing_offers``'s own dedicated branch) never had it.
+_CARD_RAW_POST_KEYS = (
+    "card_show_brand", "card_show_price", "card_show_badge", "card_show_wishlist",
+    "card_show_quick_add", "card_show_rating", "card_border", "card_image_ratio",
+    "card_quick_add_reveal", "card_style",
+)
+
+
+def _extract_card_raw(request, section) -> dict:
     """Phase 8 P0-2 — بلوکِ خامِ «ظاهرِ کارتِ محصول» را از POST می‌خواند،
     فقط برایِ ``CARD_AWARE_SECTION_KEYS``. دقیقاً همان الگویِ
     ``_extract_responsive_raw``: تیک‌های مثبت («نمایشِ …») مستقیم به
     کلیدهایِ ``show_*`` تبدیل می‌شوند (بدونِ وارونگیِ منفی، چون خودِ
-    ``validate_card_settings`` هم مثبت است)."""
+    ``validate_card_settings`` هم مثبت است).
+
+    Phase 4 (Task 6, Group F correction) — دقیقاً همان الگویِ preserve-safeِ
+    ``_extract_background_raw``: یک section مثلِ ``amazing_offers`` شاخه‌یِ
+    فرمِ اختصاصیِ خودش را دارد که کنترل‌هایِ ``card_*`` را اصلاً رندر
+    نمی‌کند — بدونِ این محافظت، Saveِ آن فرم بلوکِ ``card`` را کاملاً به
+    پیش‌فرض‌ها بازمی‌گرداند (یک Save کاملاً مخرب، دقیقاً همان دسته‌ی باگی که
+    Finding 2 برایِ همین سه‌تا رفع کرد). غیابِ هر کدام از کلیدهایِ ``card_*``
+    از POST یعنی این فرمِ خاص هرگز بلوکِ کارت را نداشته — بلوکِ
+    ذخیره‌شده‌یِ فعلی دست‌نخورده حفظ می‌شود. (نه فقط ``card_style`` تنها —
+    فرمی که واقعاً کارت را رندر می‌کند ممکن است یک فیلدِ خاصِ کارت را بدونِ
+    ``card_style`` هم بفرستد.)"""
+    if not any(key in request.POST for key in _CARD_RAW_POST_KEYS):
+        return (section.settings or {}).get("card") or {}
     return {
         "show_brand": request.POST.get("card_show_brand") == "on",
         "show_price": request.POST.get("card_show_price") == "on",

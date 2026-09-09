@@ -758,24 +758,32 @@ def _build_items_from_sections(
         )
         effective_settings = dict(section.settings or {})
         render_section = section
+        # Phase 1 (Task 6) / Phase 4 (Task 6, Group F correction) — approved
+        # precedence: an EXPLICIT local override (stamped
+        # ``appearance_overrides.variant_explicit``/``card_style_explicit``
+        # by a genuine merchant edit) is the strongest normal override and
+        # wins over the inherited Store-level family default. Historical rows
+        # WITHOUT a marker keep the current inherited/global overlay behavior,
+        # so existing stores do not visually flip. The Store manifest
+        # selection itself is unchanged; only whether it overlays the local
+        # value differs. Computed here (before the card/badge overlay below)
+        # so both overlays can honor their own marker.
+        _local_overrides = effective_settings.get("appearance_overrides") or {}
+        _variant_explicit = bool(_local_overrides.get("variant_explicit"))
+        _card_style_explicit = bool(_local_overrides.get("card_style_explicit"))
         if store_appearance is not None and section.section_key in CARD_AWARE_SECTION_KEYS:
-            presentation_overlay = {
-                **card_settings_for(store_appearance),
-                **badge_settings_for(store_appearance),
-            }
+            presentation_overlay = dict(badge_settings_for(store_appearance))
+            # ``badge`` has no merchant-facing local write path anywhere, so
+            # its overlay always applies. ``card_style`` does (the legacy
+            # card-settings form) — an explicit local choice must survive a
+            # conflicting Store-level card family selection, exactly like the
+            # variant axis below.
+            if not _card_style_explicit:
+                presentation_overlay.update(card_settings_for(store_appearance))
             if presentation_overlay:
                 effective_card_settings = dict(effective_settings.get("card") or {})
                 effective_card_settings.update(presentation_overlay)
                 effective_settings["card"] = effective_card_settings
-        # Phase 1 (Task 6) — approved precedence: an EXPLICIT local Section
-        # variant (stamped ``appearance_overrides.variant_explicit=True`` by a
-        # genuine merchant variant edit) is the strongest normal override and
-        # wins over the inherited Store-level family default. Historical rows
-        # WITHOUT the marker keep the current inherited/global overlay behavior,
-        # so existing stores do not visually flip. The Store manifest selection
-        # itself is unchanged; only whether it overlays the local value differs.
-        _local_overrides = effective_settings.get("appearance_overrides") or {}
-        _variant_explicit = bool(_local_overrides.get("variant_explicit"))
         # When the local variant is explicit, the manifest variant no longer
         # overlays the section for this render (neither the settings mirror nor
         # the resolved ``active_variant`` below), so the saved local variant wins.

@@ -486,3 +486,31 @@ def mark_explicit_variant_override(
     overrides[VARIANT_EXPLICIT_OVERRIDE_KEY] = True
     updated["appearance_overrides"] = overrides
     return updated
+
+
+#: Phase 4 (Task 6, Group F) — the internal explicit-local-card-style marker,
+#: exactly the same mechanism/contract as ``VARIANT_EXPLICIT_OVERRIDE_KEY``
+#: above (lives inside ``appearance_overrides``, rejected by
+#: ``validate_appearance_overrides`` as an unknown key, stamped only by the
+#: trusted server-side path AFTER validation on a genuine change). A
+#: separate key from ``variant_explicit`` because the two axes are
+#: independent: a section may have an explicit local variant, an explicit
+#: local card style, both, or neither.
+CARD_STYLE_EXPLICIT_OVERRIDE_KEY = "card_style_explicit"
+
+
+def mark_explicit_card_style_override(*, settings: dict) -> dict:
+    """Return ``settings`` with the internal explicit-local-card-style marker
+    set. The caller must have already confirmed the change is genuine (the
+    cleaned ``card.card_style`` differs from the previously stored value —
+    the legacy card-settings form always submits ``card_style`` on every
+    POST, so presence alone is not intent, exactly the same rule
+    ``mark_explicit_variant_override``'s caller applies for the variant key).
+    Never mutates ``settings``."""
+    from copy import deepcopy
+
+    updated = deepcopy(settings)
+    overrides = dict(updated.get("appearance_overrides") or {})
+    overrides[CARD_STYLE_EXPLICIT_OVERRIDE_KEY] = True
+    updated["appearance_overrides"] = overrides
+    return updated

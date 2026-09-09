@@ -228,6 +228,28 @@ class StoryRailItemCrudTests(MediaViewsTestCase):
         self.assertNotContains(resp, "تصویر موبایل")
         self.assertContains(resp, 'name="image"')
 
+    def test_add_form_renders_title_input_exactly_once(self):
+        """Phase 4 (Task 6, Group F correction) — ``story-items``' kind-
+        specific text field IS ``title`` (unlike ``hero-slides``'
+        ``subtitle``/``banners``' ``description``), so the form's generic
+        title block and its kind-specific text-field block used to both
+        render a ``name="title"`` input. A browser posts duplicate keys as
+        a list; Django's ``QueryDict.get`` returns the LAST one, so the
+        merchant's typed title was silently discarded on every save."""
+        resp = self.client.get(
+            reverse("dashboard:storefront-builder-section-media-add", args=[self.story_section.pk, "story-items"])
+        )
+        self.assertEqual(resp.content.decode().count('name="title"'), 1)
+
+    def test_add_story_item_title_is_actually_saved(self):
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-section-media-add", args=[self.story_section.pk, "story-items"]),
+            {"title": "عنوان تایپ‌شده", "destination_type": "none", "image": _img(), "is_active": "on"},
+        )
+        self.assertEqual(resp.status_code, 302)
+        item = StoryRailItem.objects.get(section=self.story_section)
+        self.assertEqual(item.title, "عنوان تایپ‌شده")
+
     def test_add_story_item(self):
         resp = self.client.post(
             reverse("dashboard:storefront-builder-section-media-add", args=[self.story_section.pk, "story-items"]),
@@ -269,6 +291,19 @@ class StoryRailItemCrudTests(MediaViewsTestCase):
         item.refresh_from_db()
         self.assertIn("second", item.image.name)
         self.assertEqual(MediaAsset.objects.get(pk=item.image_asset_id).image, item.image.name)
+
+    def test_media_list_shows_story_item_thumbnail(self):
+        """Phase 4 (Task 6, Group F correction) — the list partial used to
+        read ``item.desktop_image_url`` unconditionally, which does not
+        exist on ``StoryRailItem`` (its own resolved property is
+        ``image_url``); Django's template lookup swallows the
+        ``AttributeError``, so every story item rendered with no thumbnail
+        at all. Fixed via a per-kind ``thumb_field`` config entry."""
+        item = StoryRailItem.objects.create(store=self.store, section=self.story_section, title="ت", image=_img())
+        resp = self.client.get(
+            reverse("dashboard:storefront-builder-section-media-list", args=[self.story_section.pk, "story-items"])
+        )
+        self.assertContains(resp, f'<img src="{item.image_url}"')
 
     def test_delete_story_item(self):
         item = StoryRailItem.objects.create(store=self.store, section=self.story_section, title="حذف‌شو", image=_img())

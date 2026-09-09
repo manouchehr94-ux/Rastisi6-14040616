@@ -1885,6 +1885,36 @@ class NewSectionTypesSettingsFormTests(StorefrontBuilderViewsTestCase):
         self.assertEqual(section.settings["item_limit"], 3)
         self.assertEqual(section.settings["deadline_hours"], 24)
 
+    def test_amazing_offers_settings_form_does_not_wipe_card_block(self):
+        """Phase 4 (Task 6, Group F correction) — ``amazing_offers``'s own
+        dedicated legacy-form branch (added by an earlier Finding-2 fix)
+        renders no ``card_*`` controls at all; before this fix, Saving that
+        form unconditionally overwrote the whole ``card`` block back to
+        every field's off/default value (a destructive Save, exactly the
+        class of bug Finding 2 was meant to close). Absence of
+        ``card_style`` in this exact POST must now preserve the stored
+        block untouched."""
+        section = StorefrontSection.objects.create(
+            version=self.draft, section_key="amazing_offers", order=1,
+            settings={
+                "title": "قدیمی", "item_limit": 1, "deadline_hours": 8,
+                "card": {
+                    "show_brand": True, "show_price": True, "show_badge": True,
+                    "show_wishlist": True, "show_quick_add": True, "show_rating": True,
+                    "card_border": True, "image_ratio": "square",
+                    "quick_add_reveal": "hover_slide", "card_style": "minimal",
+                },
+            },
+        )
+        resp = self.client.post(reverse("dashboard:storefront-builder-section-settings", args=[section.pk]), {
+            "title": "پیشنهاد شگفت‌انگیز", "item_limit": "3", "deadline_hours": "24",
+        })
+        self.assertEqual(resp.status_code, 302)
+        section.refresh_from_db()
+        self.assertEqual(section.settings["card"]["card_style"], "minimal")
+        self.assertTrue(section.settings["card"]["show_brand"])
+        self.assertTrue(section.settings["card"]["show_badge"])
+
     def test_blog_posts_settings_form_saves_fields(self):
         section = StorefrontSection.objects.create(
             version=self.draft, section_key="blog_posts", order=1,

@@ -66,6 +66,10 @@ _MEDIA_KINDS = {
             {"name": "mobile_image", "label": "تصویر موبایل (اختیاری)", "required": False,
              "remove_field": "remove_mobile", "remove_label": "حذف تصویر موبایلِ فعلی"},
         ),
+        # Phase 4 (Task 6) — the model attribute the media LIST partial shows
+        # as a thumbnail (never a raw file field — both models resolve
+        # MediaAsset->legacy-file precedence through this property).
+        "thumb_field": "desktop_image_url",
     },
     "banners": {
         "model": PromotionalBanner,
@@ -80,6 +84,7 @@ _MEDIA_KINDS = {
             {"name": "mobile_image", "label": "تصویر موبایل (اختیاری)", "required": False,
              "remove_field": "remove_mobile", "remove_label": "حذف تصویر موبایلِ فعلی"},
         ),
+        "thumb_field": "desktop_image_url",
     },
     "story-items": {
         "model": StoryRailItem,
@@ -96,6 +101,9 @@ _MEDIA_KINDS = {
         "file_fields": (
             {"name": "image", "label": "تصویر", "required": True},
         ),
+        # ``StoryRailItem`` has no ``desktop_image_url``; its own resolved
+        # thumbnail property is ``image_url`` (``apps.content.models.StoryRailItem``).
+        "thumb_field": "image_url",
     },
 }
 

@@ -14,10 +14,12 @@
           '{% if item.destination_type == "product" %}{{ item.destination_product.name|default:""|escapejs }}{% endif %}')">
     {% csrf_token %}
 
+    {% if config.text_field != "title" %}
     <div class="form-group">
       <label for="id_title">عنوان</label>
       <input type="text" name="title" id="id_title" class="form-input" maxlength="200" value="{{ item.title|default:'' }}">
     </div>
+    {% endif %}
 
     <div class="form-group">
       <label for="id_text_field">{{ config.text_label }}</label>

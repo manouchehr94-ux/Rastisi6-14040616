@@ -11,26 +11,27 @@ These tests certify that mechanism end-to-end for the two families
 specifically (not just generically), through the real R4 mutation HTTP
 endpoint.
 
-`card`/`badge` never had (and, per investigation, never need) a comparable
-local-override marker: neither family has ANY merchant-facing local write
-path (no SettingsSchema field, no legacy form field for `card_style`/
-`badge_treatment` on any section) — the only place a local `card.card_style`
-value ever originates is a Ready Template's own authored `settings.card`,
-and every registered Ready Template (verified below across the full live
-registry) either matches its own declared `card` family selection or leaves
-its shared non-Home boilerplate sections at the inert `"standard"` value
-specifically so the Store Appearance manifest is free to be the single
-overlay authority for them (mirrors `apply_header_variant`: one canonical
-write authority, no independent second writer). These tests certify that the
-manifest is the sole effective-state authority for `card`/`badge`, applied
-consistently to every `CARD_AWARE_SECTION_KEYS` section, and that reverting
-to the safe default leaves each section's own locally-authored value
-untouched.
+`badge` never had (and never needs) a local-override marker: `badge_treatment`
+has no merchant-facing local write path anywhere (no SettingsSchema field, no
+legacy form field on any section) — the Store Appearance manifest is
+unconditionally the sole effective-state authority for it.
+
+`card` DOES have a real local write path — the legacy card-settings form
+(`section_card_fields.html`'s `card_style` `<select>`, parsed by
+`views._extract_card_raw`) — that an earlier draft of this evidence missed
+(caught by independent review). It now gets the exact same
+`variant_explicit`-style marker as `hero`/`product_view`
+(`card_style_explicit`, stamped by `views.storefront_section_settings` on a
+genuine change, honored by `render_service._build_items_from_sections`): an
+explicit local `card_style` wins over a later, conflicting Store Appearance
+`card` family selection; an unmarked section still inherits the Store
+default. `ReadyTemplateCardFamilyConsistencyTests` below additionally proves
+the manifest overlay still applies correctly for every Ready-Template-
+authored (never locally overridden) section across the live registry.
 """
 
 from __future__ import annotations
 
-import copy
 import json
 
 from django.core.cache import cache
@@ -38,23 +39,10 @@ from django.urls import reverse
 
 from apps.storefront_builder import layout_preset_registry
 from apps.storefront_builder.models import StorefrontPage, StorefrontSection
-from apps.storefront_builder.section_registry import CARD_AWARE_SECTION_KEYS, get_definition
+from apps.storefront_builder.section_registry import get_definition
 from apps.storefront_builder.services import layout_service, preset_service, render_service
-from apps.storefront_builder.storefront_appearance.families import (
-    DEFAULT_STORE_APPEARANCE_MANIFEST,
-)
-from apps.storefront_builder.storefront_appearance.persistence import (
-    persist_store_appearance_manifest,
-)
-from apps.storefront_builder.storefront_appearance.validation import manifest_to_primitive
 
 from .test_views import StorefrontBuilderViewsTestCase
-
-
-def _manifest_with(**selections):
-    raw = copy.deepcopy(manifest_to_primitive(DEFAULT_STORE_APPEARANCE_MANIFEST))
-    raw["selections"].update(selections)
-    return raw
 
 
 class GroupFReconciliationBase(StorefrontBuilderViewsTestCase):
@@ -197,12 +185,11 @@ class ProductViewFamilyReconciliationTests(GroupFReconciliationBase):
 
 
 class CardFamilyReconciliationTests(GroupFReconciliationBase):
-    """`card` family — no local write path exists anywhere for
-    `card.card_style` (no SettingsSchema field, no legacy form field on any
-    section), so the Store Appearance manifest is the sole write authority;
-    a non-default selection must overlay EVERY `CARD_AWARE_SECTION_KEYS`
-    section consistently, and the safe default must leave each section's own
-    (Ready-Template-authored or otherwise persisted) value untouched."""
+    """`card` family — the Store Appearance manifest overlays an unmarked
+    section's `card.card_style`; an explicit local edit through the real
+    legacy card-settings form (the one actual write path for this field)
+    wins over a later, conflicting manifest selection — same contract as
+    `hero`/`product_view`, via the independent `card_style_explicit` marker."""
 
     def setUp(self):
         super().setUp()
@@ -222,6 +209,44 @@ class CardFamilyReconciliationTests(GroupFReconciliationBase):
 
     def _card_style(self, item):
         return item["context"]["settings"].get("card", {}).get("card_style")
+
+    def _post_legacy_product_section_settings(self, section, *, card_style):
+        return self.client.post(
+            reverse("dashboard:storefront-builder-section-settings", args=[section.pk]),
+            {
+                "data_source": "newest", "display_mode": "grid", "item_limit": "8",
+                "title": "", "card_style": card_style,
+            },
+        )
+
+    def test_explicit_local_card_style_wins_over_later_manifest_selection(self):
+        r1 = self._post_legacy_product_section_settings(self.product_section, card_style="minimal")
+        self.assertEqual(r1.status_code, 302)
+        self.product_section.refresh_from_db()
+        self.assertTrue(
+            self.product_section.settings.get("appearance_overrides", {}).get("card_style_explicit")
+        )
+
+        r2 = self._component_update("card", "card.luxury_dark.v1")
+        self.assertEqual(r2.status_code, 200)
+
+        item = self._item_for(self._render_items(), "product_section")
+        self.assertEqual(self._card_style(item), "minimal")
+        # An unrelated, unmarked section still inherits the Store default.
+        wall_item = self._item_for(self._render_items(), "catalog_product_wall")
+        self.assertEqual(self._card_style(wall_item), "luxury_dark")
+
+    def test_legacy_resubmission_of_same_card_style_does_not_mark_explicit(self):
+        # The legacy form always submits card_style on every POST; presence
+        # is not intent — only a genuine change marks the override, same
+        # "presence is not intent" rule as the variant marker.
+        resp = self._post_legacy_product_section_settings(self.product_section, card_style="standard")
+        self.assertEqual(resp.status_code, 302)
+        self.product_section.refresh_from_db()
+        self.assertNotIn(
+            "card_style_explicit",
+            self.product_section.settings.get("appearance_overrides", {}),
+        )
 
     def test_manifest_card_selection_overlays_every_card_aware_section(self):
         resp = self._component_update("card", "card.luxury_dark.v1")
