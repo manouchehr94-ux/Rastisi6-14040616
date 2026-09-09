@@ -1564,6 +1564,19 @@ class GroupDNonHomeCssTests(TestCase):
         self.assertIn('class="section"><div class="tiles"', html)
         self.assertIn('class="tile t1"', html)
         self.assertIn('class="wm"', html)
+        # Guard the "no new CSS needed" claim directly (raised by this
+        # batch's own independent review): if the Group C1 `.tiles`
+        # block ever regresses, promo_cards would silently lose its
+        # layout too, since it reuses that exact selector family.
+        css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
+        self.assertIn(".tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}", css)
+        self.assertIn(".tile .wm{position:absolute;top:10px;left:14px;font-size:90px;opacity:.22}", css)
+        self.assertIn(".tile h4{font-size:16px;font-weight:800;margin-bottom:10px}", css)
+        self.assertIn(
+            ".tile .btn{width:fit-content;padding:8px 16px;font-size:12px;"
+            "background:rgba(255,255,255,.92);color:var(--ink)}",
+            css,
+        )
 
     def test_image_text_renders_on_listing(self):
         section = section_structure_service.add_section(
@@ -1825,13 +1838,15 @@ class GroupENonHomeCssTests(TestCase):
         )
         self.assertIn(
             "@media(max-width:680px){\n"
-            "  .features{display:flex;overflow-x:auto;gap:8px}\n"
+            "  .features{display:flex;overflow-x:auto}\n"
             "  .feat{flex:0 0 180px}\n"
             "  .feat b{font-size:10.8px}\n"
             "  .feat small{font-size:9.4px}\n"
             "}",
             css,
         )
+        self.assertIn('html[data-sfb-density="compact"] .feat b{font-size:11px}', css)
+        self.assertIn('html[data-sfb-density="compact"] .feat small{font-size:9.5px}', css)
         # The dead pass-1 breakpoint overrides (shadowed by later
         # unconditioned rules — the element is display:flex at ≤680px,
         # not grid, so its own @1000px/@680px grid-template-columns
@@ -1840,6 +1855,12 @@ class GroupENonHomeCssTests(TestCase):
         self.assertNotIn(".features{grid-template-columns:repeat(2,1fr)}", css)
         self.assertNotIn(".features{grid-template-columns:1fr}", css)
         self.assertNotIn(".feat{flex:0 0 180px;min-height:56px}", css)
+        # Round-2 correction (raised by this batch's own independent
+        # review): the @680px block's own `.features` `gap:8px` is ALSO
+        # dead code — shadowed by the same later, unconditioned V3 pass
+        # that gives the base rule its `gap:9px` (which wins at every
+        # viewport, ≤680px included) — must never reappear.
+        self.assertNotIn(".features{display:flex;overflow-x:auto;gap:8px}", css)
 
     def test_home_page_is_unaffected_since_it_never_loads_storefront_builder_css_group_e(self):
         home_html = Path(settings.BASE_DIR, "apps", "catalog", "templates", "catalog", "home.html").read_text(
@@ -1856,12 +1877,21 @@ class BrandCarouselBeautyTabsNonHomeCssTests(TestCase):
     """Task 5, plus: `brand_carousel`'s `beauty_tabs` display mode
     cosmetic gap (the Task-0 plan's disposition table, row 12). Base
     `brand_carousel` CSS is already Phase-3 CERTIFY-ONLY/mirrored;
-    only `beauty_tabs`'s own selectors
-    (`.brand-section--beauty-tabs`/`.beauty-brand-title`/
-    `.brand-beauty-tabs`/`.brand-beauty-tabs .brand-beauty-tab`/
-    `.brand-beauty-tabs .brand-tile-name`) were never mirrored — a
-    single, unscattered home.css generation, confirmed via whole-file
-    grep."""
+    `beauty_tabs`'s own `.brand-beauty-tabs`/`.brand-beauty-tabs
+    .brand-beauty-tab`/`.brand-beauty-tabs .brand-tile-name` were never
+    mirrored — a single, unscattered home.css generation.
+
+    Round-2 correction (raised by this batch's own independent review):
+    `.brand-section--beauty-tabs{margin:...}` and `.beauty-brand-
+    title{margin-bottom:16px}` are dead code on Home — a per-selector
+    grep cannot see that the title div carries a SECOND class,
+    `beauty-section-title` (already mirrored, Group A2), whose
+    textually-later home.css rule wins, and that the section itself
+    also carries the generic `.section` class, whose own textually-
+    later home.css rule (`margin:14px 0`, a pre-existing, cross-cutting
+    gap affecting every mirrored section in this task, not just this
+    one) wins over `.brand-section--beauty-tabs`'s own margin. Both
+    dead rules were removed rather than mirrored."""
 
     def setUp(self):
         cache.clear()
@@ -1889,8 +1919,13 @@ class BrandCarouselBeautyTabsNonHomeCssTests(TestCase):
 
     def test_storefront_builder_css_carries_the_beauty_tabs_rules(self):
         css = _STOREFRONT_BUILDER_CSS.read_text(encoding="utf-8")
-        self.assertIn(".brand-section--beauty-tabs{margin:19px 0 22px}", css)
-        self.assertIn(".beauty-brand-title{margin-bottom:16px}", css)
+        # `.brand-section--beauty-tabs`/`.beauty-brand-title` margins are
+        # dead code on Home (shadowed by the generic `.section` rule and
+        # by the already-mirrored `.beauty-section-title`, respectively)
+        # and must never be mirrored — doing so would give this element
+        # an active margin Home never actually renders.
+        self.assertNotIn(".brand-section--beauty-tabs{margin", css)
+        self.assertNotIn(".beauty-brand-title{margin-bottom:16px}", css)
         self.assertIn(
             ".brand-beauty-tabs{display:flex;overflow-x:auto;scroll-snap-type:x proximity;"
             "scrollbar-width:none;border:1px solid var(--line);border-radius:9px;"
@@ -1914,7 +1949,6 @@ class BrandCarouselBeautyTabsNonHomeCssTests(TestCase):
         )
         self.assertIn(
             "@media(max-width:680px){\n"
-            "  .brand-section--beauty-tabs{margin:14px 0 17px}\n"
             "  .brand-beauty-tabs .brand-beauty-tab{flex-basis:128px;min-width:128px;"
             "min-height:56px}\n"
             "}",

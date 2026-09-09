@@ -5115,7 +5115,23 @@ a.sfb-v3-component-item,
    itself) is a REAL, non-coincidental divergence from default density
    — confirmed via the same harness — and is mirrored (per the Group
    C2.5 precedent: density is mirrored when a real gap is found, not
-   reflexively excluded). */
+   reflexively excluded).
+
+   Round-2 correction (raised by this batch's own independent review):
+   the `@680px` block's `.features` `gap:8px` is ALSO dead code, missed
+   by the first pass despite it correctly catching the sibling
+   `grid-template-columns`/`min-height` dead values in the very same
+   block — home.css's own `@680px` `gap:8px` (home.css:385) is shadowed
+   by the SAME later, unconditioned V3 pass (home.css:542,
+   `.features{gap:9px;...}`) already mirrored above as the base rule's
+   `gap:9px`, which wins at every viewport since nothing later
+   overrides it. Removed from the `@680px` block — the base rule's
+   `gap:9px` already applies there correctly. Also adds the compact-
+   density `.feat b`/`.feat small` override home.css:751-752 sets
+   (specificity 0-2-2) that outranks the plain `@680px` rule
+   (home.css:763, 0-1-1): Home renders 11px/9.5px under compact density
+   at ≤680px, not 10.8px/9.4px — a real, sub-pixel gap the first pass's
+   "compact is always a no-op for `.feat`" generalization missed. */
 
 /* faq / testimonials / video_section */
 .faq-list{display:flex;flex-direction:column;gap:10px;max-width:760px;margin:0 auto}
@@ -5149,24 +5165,44 @@ html[data-sfb-density="relaxed"] .features{gap:22px;margin:54px 0}
   .features{grid-template-columns:repeat(3,1fr)}
 }
 @media(max-width:680px){
-  .features{display:flex;overflow-x:auto;gap:8px}
+  .features{display:flex;overflow-x:auto}
   .feat{flex:0 0 180px}
   .feat b{font-size:10.8px}
   .feat small{font-size:9.4px}
 }
+html[data-sfb-density="compact"] .feat b{font-size:11px}
+html[data-sfb-density="compact"] .feat small{font-size:9.5px}
 
 /* Phase 4 (Task 5, plus: `brand_carousel`'s `beauty_tabs` cosmetic
    gap) — `brand_carousel` is already Phase-3 CERTIFY-ONLY (its base
    `.brand-carousel`/`.brand-tile`/`.brand-tile-name`/`.grid` rules are
    already mirrored above), but the `beauty_tabs` display mode's own
-   selectors (`.brand-section--beauty-tabs`/`.beauty-brand-title`/
-   `.brand-beauty-tabs`/`.brand-beauty-tabs .brand-beauty-tab`/
-   `.brand-beauty-tabs .brand-tile-name`) were never mirrored at all —
-   confirmed via whole-file grep, a single unscattered generation.
-   `.beauty-section-title` itself (the OTHER class this mode's title
-   div carries) is already mirrored from Group A2/beauty_icons reuse. */
-.brand-section--beauty-tabs{margin:19px 0 22px}
-.beauty-brand-title{margin-bottom:16px}
+   selectors (`.brand-beauty-tabs`/`.brand-beauty-tabs .brand-beauty-
+   tab`/`.brand-beauty-tabs .brand-tile-name`) were never mirrored at
+   all — confirmed via whole-file grep, a single unscattered
+   generation.
+
+   Round-2 correction (raised by this batch's own independent review):
+   the title div carries `class="beauty-section-title beauty-brand-
+   title"` — TWO classes on one element. A per-selector grep of just
+   `.brand-section--beauty-tabs`/`.beauty-brand-title` cannot see that
+   home.css's OWN, textually-LATER `.section{margin:14px 0}` (a
+   generic, every-section rule, home.css:514) and `.beauty-section-
+   title{margin-bottom:24px}`/`{margin-bottom:14px}` (home.css:1067/
+   1093, already mirrored above from Group A2/beauty_icons) win over
+   the original `.brand-section--beauty-tabs` margin (home.css:345)
+   and `.beauty-brand-title`'s margin-bottom (home.css:346) at EVERY
+   viewport — both are dead code on Home. Mirroring them here (this
+   batch's original version did) was a real, reviewer-caught
+   regression: it gave THIS one element active margin values Home
+   never renders, using the exact wrong-per-element-cascade check the
+   review flagged. Removed entirely (not replaced) — `.beauty-section-
+   title`'s already-mirrored rule now correctly governs this element's
+   margin on non-Home too, exactly as it does on Home. (`.section`'s
+   own generic base margin is a separate, pre-existing, cross-cutting
+   gap affecting every mirrored section in this whole task, not
+   specific to `beauty_tabs` — left for a dedicated future pass, not
+   patched narrowly here; see the evidence doc.) */
 .brand-beauty-tabs{display:flex;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:none;border:1px solid var(--line);border-radius:9px;background:#fff;padding:0}
 .brand-beauty-tabs::-webkit-scrollbar{display:none}
 .brand-beauty-tabs .brand-beauty-tab{flex:1 0 150px;min-width:150px;min-height:64px;border:0;border-inline-end:1px solid var(--line);border-radius:0;background:#fff;padding:9px 13px;box-shadow:none;scroll-snap-align:start}
@@ -5175,7 +5211,6 @@ html[data-sfb-density="relaxed"] .features{gap:22px;margin:54px 0}
 .brand-beauty-tabs .brand-beauty-tab img{max-height:36px}
 .brand-beauty-tabs .brand-tile-name{color:var(--violet);font-size:10.5px;font-weight:700;text-align:center}
 @media(max-width:680px){
-  .brand-section--beauty-tabs{margin:14px 0 17px}
   .brand-beauty-tabs .brand-beauty-tab{flex-basis:128px;min-width:128px;min-height:56px}
 }
 

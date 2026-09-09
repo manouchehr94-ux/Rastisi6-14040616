@@ -1872,3 +1872,118 @@ execution instruction covering all remaining Task-5 CSS work as one batch, dispa
 fresh isolated-worktree independent review covering Groups D, E, and `beauty_tabs`
 together (Groups A/B/C were already independently reviewed and closed above). Required
 verdict: CRITICAL 0, IMPORTANT 0 before Task 6 begins.
+
+## Independent review (commit `79c53c6`) and round-2 fix-up
+
+Fresh isolated-worktree reviewer, no context from the implementer. Independently
+re-derived the whole-file home.css cascade for the two multi-pass families
+(`trust_features`, `blog_posts`) via its own brace-tracked media-context map (not trusting
+this doc's line numbers), built its own real-browser harness (home.css alone vs the new
+`storefront_builder.css` block alone, full computed-style diff across 9 density/viewport
+combinations) for every family in the batch, verified the `promo_cards` "no new CSS
+needed" claim by direct template diff, RED-verified all new tests (parent's CSS + this
+commit's tests → exactly the 10 expected missing-declaration failures, 0 unrelated
+errors), and ran the full regression sweep (**616 tests, OK, skipped=1** — exact match)
+plus `manage.py check`/`makemigrations --check --dry-run` (both clean). Confirmed the
+diff is 258 insertions / 0 deletions of CSS+tests+doc only, and that every one of the 139
+newly-added CSS declarations appears verbatim in home.css (no Phase-5 design invented).
+
+**Verdict: CRITICAL 0, IMPORTANT 2, MINOR 4.** Both IMPORTANT findings were the *same
+failure mode this batch's own methodology was built to catch* (a later, unconditioned
+home.css rule shadowing an earlier one this commit mirrored) — missed specifically because
+a per-selector whole-file grep cannot see shadowing that happens through a *different*
+selector matching the *same* multi-class element:
+
+1. **IMPORTANT** — `.brand-section--beauty-tabs{margin:19px 0 22px}` and `.beauty-brand-
+   title{margin-bottom:16px}` (the `beauty_tabs` title div carries BOTH
+   `beauty-section-title` and `beauty-brand-title`, and the section itself carries BOTH
+   `section` and `brand-section--beauty-tabs`) are dead code on Home: the generic,
+   textually-LATER `.section{margin:14px 0}` (home.css:514) and the already-mirrored,
+   textually-LATER `.beauty-section-title{margin-bottom:24px}`/`{margin-bottom:14px}`
+   (home.css:1067/1093) win at every viewport. Mirroring the dead values gave this ONE
+   element active margins Home never renders — a genuine regression, not merely a missed
+   opportunity.
+2. **IMPORTANT** — the `@680px` block's `.features{...gap:8px}` is ALSO dead code, missed
+   despite the very same block's `grid-template-columns`/`.feat` `min-height` dead values
+   (correctly caught) sharing the identical root cause: home.css's later, unconditioned V3
+   pass (`.features{gap:9px;...}`, home.css:542) wins at every viewport, including ≤680px.
+
+Both fixed by REMOVING the dead declarations (not inventing replacement values):
+`.brand-section--beauty-tabs`/`.beauty-brand-title` margins are gone entirely (the
+already-mirrored `.beauty-section-title` and the *separate*, pre-existing `.section`
+base-margin gap — see MINOR below — now correctly govern this element exactly as they do
+on Home); `.features`'s `@680px` block keeps `display:flex;overflow-x:auto` but drops
+`gap`, since the base rule's `gap:9px` already applies unconditionally.
+
+**MINOR (2 addressed, 2 recorded for Task 6):**
+
+- Addressed — `html[data-sfb-density="compact"] .feat b{font-size:11px}`/`.feat
+  small{font-size:9.5px}` were missing: home.css:751-752 (specificity 0-2-2) outrank the
+  plain `@680px` rule (home.css:763, 0-1-1), so Home renders 11px/9.5px under compact
+  density at ≤680px, not 10.8px/9.4px. `compact` is a real, shipped merchant density
+  (`appearance_registry.DENSITY_CHOICES`), reachable on non-Home via
+  `templates/base.html:4`. Added.
+- Addressed — `test_promo_cards_renders_on_cart_reusing_group_c1_tiles_css` asserted
+  markup only, never the `.tiles`/`.tile .wm`/`.tile h4`/`.tile .btn` CSS declarations
+  themselves, leaving the "no new CSS needed" claim unguarded within this test class (it
+  was indirectly covered by `CategoryGridTilesNonHomeCssTests`, so risk was low, but the
+  guard belongs where the claim is made). Added.
+- **Recorded, not fixed (out of this batch's bounded scope, per the reviewer's own
+  recommendation)**: `storefront_builder.css` has no `.section{margin}` base rule at all
+  (home.css's own real merged-final value, after its 4-pass cascade — 34px→22px→16px
+  `@680px` (dead)→14px unconditioned, wins — is `margin:14px 0` at every viewport) and no
+  `html[data-sfb-density=...] .section` rules either. This is a **pre-existing, cross-
+  cutting gap affecting every section mirrored across the ENTIRE Task 5 effort** (Groups
+  A-E, not just `beauty_tabs`), not something this batch introduced or should patch
+  narrowly for one family. **Flagged here explicitly so Task 6 does not re-discover it as
+  a "new" defect** — a dedicated fix (mirroring `.section`'s real merged-final base
+  contract once, at whatever file already owns the shared `.section` wrapper concept,
+  matching the Group C2.5 precedent for `.sec-head`) is recommended before/during Task 6,
+  scoped as its own bounded change.
+- **Recorded (methodology note)**: a per-selector whole-file grep is structurally unable
+  to detect shadowing that happens via a *different* class on the same multi-class
+  element, or via a shared wrapper class. Future groups with multi-class elements (any
+  section combining a family-specific class with a shared one, e.g. `.section`,
+  `.sec-head`-family, `.beauty-section-title`) need a per-element cascade check (or a
+  real-browser harness run at the whole-element level, not just per individual
+  declaration) — not just a per-selector grep — before considering the investigation
+  exhaustive.
+
+### RED/GREEN verification (round-2 fix-up)
+
+RED: checked out the reviewed commit's own (pre-fix) `apps/storefront_builder/static/css/
+storefront_builder.css` with this fix-up's test changes kept — exactly the 2 tests guarding
+the 2 IMPORTANT fixes (`BrandCarouselBeautyTabsNonHomeCssTests.
+test_storefront_builder_css_carries_the_beauty_tabs_rules`,
+`GroupENonHomeCssTests.test_storefront_builder_css_carries_the_merged_final_trust_features_rules`)
+failed, both on the exact assertion guarding the fix (an `assertNotIn` catching the real
+dead value; an `assertIn` for the corrected `@680px` block), 0 unrelated failures out of 16
+tests in the 3 affected classes. Restored the fix.
+
+(Process note: the first version of the `assertNotIn(".brand-section--beauty-tabs{margin",
+css)` guard collided with this fix's OWN explanatory comment, which quoted that exact
+substring — caught immediately by running the suite and seeing the guard fail against the
+now-correct CSS; fixed by rewording the comment.)
+
+GREEN: `test_phase4_task5_cross_page_css` **63/63 pass** (unchanged count — this fix-up
+only corrects/adds declarations inside existing test methods and adds 2 new assertions to
+`test_promo_cards_...`, no new test methods). Full 7-module regression sweep: **616 tests,
+OK (1 pre-existing skip)** — unchanged. `manage.py check`: 0 issues. `manage.py
+makemigrations --check --dry-run`: no changes detected. Real-browser re-verification
+(home.css alone vs the corrected `storefront_builder.css` alone) confirmed byte-identical
+computed values for the `beauty_tabs` title margin-bottom (24px/14px, both densities) and
+`.features`/`.feat b`/`.feat small` at ≤680px under both default and compact density.
+
+### STOP conditions checked
+
+`main` = `973c1dc00bacb6f2f7d2604fa3880bb4d6250579` (unchanged). Start safety ref
+`backup/rastisi6-phase4-start-20260908` = `969a9b411ca712928c2bf31416bdde2ee8aaabb5`
+(unchanged). No destructive git operation used. Every change is a removal of a dead-code
+mirror, an addition already fully specified by home.css, or a test fix — no unrelated
+Phase-5 design change. `git status` before commit contains only the intended round-2
+production/test/evidence files.
+
+## Task 5 — closed (0 unresolved CRITICAL / 0 unresolved IMPORTANT across every group's
+review, including this round-2 correction). One pre-existing, cross-cutting `.section`
+base-margin gap is explicitly recorded above for Task 6's attention, not silently
+forgotten. Proceeding to Task 6.
