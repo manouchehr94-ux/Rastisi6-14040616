@@ -988,9 +988,13 @@ begin, following the same order as every other group.
 
 ### Investigation (before any CSS change)
 
-1. **Exhaustive whole-file grep of every `.sec-head` occurrence in home.css** (52 lines,
-   spanning base/unconditioned/@680/@1000/density-scoped/pattern-scoped/card-style-scoped
-   contexts) — categorized into:
+1. **Exhaustive whole-file grep of every `.sec-head` occurrence in home.css** (52 lines —
+   corrected here per independent review of this section, which caught this doc's
+   original "43" as an inaccurate transcription, likely conflated with the correct "16 of
+   43 templates" figure two paragraphs below; the fix itself was never affected, since
+   every merged value was independently re-derived from the actual file content, not from
+   this count — spanning base/unconditioned/@680/@1000/density-scoped/pattern-scoped/
+   card-style-scoped contexts) — categorized into:
    - A **universal baseline** (bare `.sec-head`/`.sec-head h2`/`.sec-head h2 .bar`/
      `.sec-head .more`/`.sec-head .more svg`/`.sec-head .btn,.product-section .sec-head
      .btn`), touched across 3 unconditioned passes plus one `@680px` override — used by
@@ -1046,9 +1050,14 @@ begin, following the same order as every other group.
    fixture browser verification failed on a markup assertion unrelated to CSS, which
    surfaced that `--sfb-heading-size` (used only by `.sec-head h2`'s `font-size`) is set
    via `templates/base.html` (`SHOP_HEADING_SIZE`, default 19) on every page's `<html>`
-   inline style — a real, already merchant-configurable, already-tested
-   (`test_appearance.py`, e.g. setting it to 22px) per-store heading-size token, and the
-   ONLY CSS consumer of that variable anywhere in the codebase. home.css itself never
+   inline style — a real, already merchant-configurable per-store heading-size token, and
+   the ONLY CSS consumer of that variable anywhere in the codebase.
+   `test_appearance.py` already tests the variable pipeline reaching the public page
+   (e.g. `--sfb-heading-size:22px` appearing in the rendered `<html>` style attribute) —
+   precision correction per independent review: this confirms the variable itself is a
+   live, tested mechanism, not that any existing test asserts `.sec-head h2`'s *computed*
+   font-size responds to it; the two are related but distinct, and only the former was
+   verified pre-fix. home.css itself never
    uses this variable for `.sec-head h2` at all (its own merged value, 16px, is a plain
    literal) — Home and non-Home have two independently-designed, both-still-current
    heading-size mechanisms for this one property, not a staleness gap. **`font-size` was
@@ -1158,6 +1167,159 @@ makemigrations --check --dry-run`: no changes detected.
 `backup/rastisi6-phase4-start-20260908` = `969a9b411ca712928c2bf31416bdde2ee8aaabb5`
 (unchanged). No destructive git operation used. `git status` before commit contains only
 the intended C2.5 production/test/evidence files.
+
+### Independent review (commit `c5c884b`)
+
+Isolated-worktree review independently re-derived every merged-final value from home.css
+by its own exhaustive grep (not trusting cited line/count numbers — correctly catching
+this doc's "43 lines" transcription error, fixed above), confirmed the load-order
+mechanism and byte-for-byte-copy root cause from source, and built its OWN independent
+real-browser harness matching Home's exact load order — deliberately stress-tested with
+non-default `--brand-primary`/`--sfb-heading-size` values (beyond what this fix's own
+harness described) to rule out variable-dependent divergence, confirming ZERO computed-
+style differences before/after the fix for every touched selector. Also independently
+confirmed both judgment calls (excluding `font-size`, including the `.bar` color change)
+are supported by home.css's own cascade history, not post-hoc rationalization, and
+verified RED honestly reproduces (reverting just this commit's CSS hunks fails exactly
+the 2 CSS-content tests, not the 2 markup tests). **PASS — 0 CRITICAL, 0 IMPORTANT, 2
+MINOR** (the "43 lines" doc transcription error above, and an "already-tested" claim
+narrowed above to precisely what `test_appearance.py` actually covers — the live
+variable-pipeline mechanism, not `.sec-head h2`'s computed style specifically). Both
+addressed with documentation-only corrections; no code or test change required, no
+re-review needed for MINOR-only findings per the process mandate.
+
+## Group C2 (and its C2.5 addendum) — closed (0 unresolved CRITICAL / 0 unresolved
+IMPORTANT across both the original Group C2 review and this root-cause follow-up).
+Proceeding to Group C3 (`image_strip`).
+
+## Group C3 — `category_grid`'s `image_strip` display mode
+
+### Investigation
+
+Markup (`category_grid.html`, `image_strip` branch): `<section class="section
+category-image-strip-section">` → `<div class="category-image-strip">` → `<a
+class="category-image-tile">` → `<span class="category-image-media">` (with a `<span
+class="category-image-fallback">` icon fallback) → `<span class="category-image-label">`.
+
+Exhaustive whole-file grep of home.css found TWO passes: "V4.1 reference polish — visual
+category strip" (base, plus its own `@1000px`/`@680px` blocks) and a later, unlabeled
+pass under the "Phase 3.7 — top-of-page professional composition" header (unconditioned,
+plus its own separate `@680px` block touching only `.category-image-strip`'s `gap`).
+
+Manual cascade tracing surfaced the same class of "later unconditioned rule shadows an
+earlier breakpoint-scoped rule" pattern found in Group C2: the "Phase 3.7" pass's
+unconditioned `.category-image-media{height:106px}` and `.category-image-label{font-
+size:10.5px}` are textually AFTER the V4.1 pass's own `@1000px`/`@680px` overrides for
+those same properties (98px/78px height; 8.5px font-size) — predicting those responsive
+transitions never actually occur.
+
+### Ground-truth verification (before writing any fix)
+
+A standalone HTML harness loading home.css alone with the exact `image_strip` markup was
+opened in a real browser at 1440×900, 900×800, and 390×844. Results confirmed the
+prediction: `.category-image-media`'s `height` is `106px` at ALL THREE viewports (never
+98px or 78px), and `.category-image-label`'s `font-size` is `10.5px` at all three (never
+8.5px) — both V4.1 responsive overrides are dead code, fully shadowed by the later "Phase
+3.7" pass. `.category-image-tile`'s own `flex-basis` responsive values (untouched by
+"Phase 3.7") were confirmed genuinely live (126px at 900px, 96px at 390px), as was "Phase
+3.7"'s own separate `@680px` `.category-image-strip{gap:12px}` override.
+
+`.category-image-strip-section .sec-head{margin-bottom:4px}` (home.css:676) is mirrored,
+matching the Group C2.5 pattern for nested title-heading overrides.
+
+**A wrong initial assumption, caught by the tests themselves**: `.rcontainer:has
+(.category-image-strip-section){margin-bottom:5px}` (home.css:884) was first assumed to
+be inert on the 5 public non-Home envelopes, on the theory that `.rcontainer` belonged
+only to a separate Container/Cell preview/editor rendering path. Running the new
+`test_image_strip_renders_on_cart` markup test immediately disproved this — the real Cart
+page HTML genuinely wraps every section in `.rcontainer`/`.rcontainer-cell`/`.rsec` divs.
+Corrected before writing the final CSS: `.rcontainer`'s own base rule (`margin:0`) already
+exists in `storefront_builder.css` from earlier work (confirmed: `home_visual.html`, the
+"universal shell" Home variant, loads `product_card.css` → `home.css` →
+`storefront_builder.css`, so home.css's higher-specificity `:has()` override already wins
+there via specificity regardless of load order) — only the one narrow, genuinely
+family-specific `:has()` margin exception needed adding here, which was verified via a
+real browser to be entirely absent (`marginBottom:"0px"`) before the fix.
+
+### Browser RED
+
+With the CSS stashed, `CategoryGridImageStripNonHomeCssTests.
+test_storefront_builder_css_carries_the_merged_final_image_strip_rules` failed on its
+first assertion, while the 3 markup/Home-unaffected tests passed unaffected, as expected.
+
+### Fix
+
+`apps/storefront_builder/static/css/storefront_builder.css` — one new block (see the
+Group C3 comment) with the merged-final desktop rules for `.category-image-strip-
+section`/`.category-image-strip-section .sec-head`/`.rcontainer:has(.category-image-
+strip-section)`/`.category-image-strip`/`.category-image-tile`/`.category-image-media`(+
+`img`)/`.category-image-fallback`/`.category-image-label`/hover state, one
+`@media(max-width:1000px)` block (`.category-image-strip`/`.category-image-tile`), and
+one `@media(max-width:680px)` block (`.category-image-tile`/`.category-image-strip`) —
+deliberately omitting the two now-proven-dead V4.1-pass responsive overrides.
+
+### Browser GREEN (1440 / 768 / 390)
+
+Fresh fixture: 3 `Category` rows, one `category_grid` section with `display_mode:
+"image_strip"` and explicit `category_ids` on Cart.
+
+| Property | 1440×900 | 768×1024 | 390×844 |
+|---|---|---|---|
+| `.category-image-strip` display/gap | `grid` / `14px` | `flex`, `overflowX:auto` | `gap:12px` |
+| `.category-image-tile` flex-basis | — | `126px` | `96px` |
+| `.category-image-media` height | `106px` | `106px` | `106px` |
+| `.category-image-label` font-size | `10.5px` | `10.5px` | `10.5px` |
+| `.category-image-strip-section` margin | `8px 0px 7px` | — | — |
+| `.rcontainer:has(.category-image-strip-section)` margin-bottom | `5px` | — | — |
+
+All values match the standalone-harness ground truth exactly, including the confirmed
+dead-responsive-code behavior for `.category-image-media`/`.category-image-label` (fully
+constant across all three viewports) alongside `.category-image-tile`'s genuinely live
+responsive transitions. Zero console/page errors at any viewport.
+
+### Cleanup
+
+Dev server stopped and verified via `ps aux` (no lingering process). DB restored via `cp`
+from the `post_c1_cleanup_baseline.sqlite3` continuation baseline
+(`9fe52ff5e97de6359c70c9bd3fdd3fd5344190a93252fb6f93bf41b2ee063c4d`) and hash-verified
+equal.
+
+### Permanent regression guard
+
+`CategoryGridImageStripNonHomeCssTests`: 2 markup-rendering tests (Cart, Listing —
+including an explicit `assertIn('class="rcontainer"', html)` proving the wrapper genuinely
+renders, after the wrong initial assumption) + 1 Home-unaffected test + 1
+full-declaration CSS-content test covering every selector/breakpoint this fix adds, with
+explicit `assertNotIn` guards for the two dead V4.1-pass responsive declarations.
+
+### Verification
+
+Full sweep — `test_phase4_task5_cross_page_css` (32 tests, all pass) plus
+`test_qa_harness_contract`, `test_r4_settings_schema`, `test_section_registry`,
+`test_render_service`, `test_r4_mutation_api`, `test_appearance` — **585 tests, OK (1
+pre-existing skip)**. `manage.py check`: 0 issues. `manage.py makemigrations --check
+--dry-run`: no changes detected.
+
+### STOP conditions checked
+
+`main` = `973c1dc00bacb6f2f7d2604fa3880bb4d6250579` (unchanged). Start safety ref
+`backup/rastisi6-phase4-start-20260908` = `969a9b411ca712928c2bf31416bdde2ee8aaabb5`
+(unchanged). No destructive git operation used. `git status` before commit contains only
+the intended C3 production/test/evidence files.
+
+## Post-closure correction — a second, independent C2.5 review found 2 unresolved IMPORTANT findings
+
+**Process note**: a second Claude Code session was working this same branch concurrently
+with the review/Group-C3 work above, unaware of it (both sessions started from the same
+continuation-guard instructions). That second session dispatched its own fresh isolated-
+worktree reviewer against commit `c5c884b` *before* the "Independent review (commit
+`c5c884b`)" verdict above was pushed, and it returned materially different, more severe
+findings. Per the standing instruction to never discard verified work, both sessions'
+results are preserved here in full, in the order they actually happened: Group C2/C2.5 was
+closed and Group C3 completed above, and this section is a retroactive correction applied
+after that closure, not a fix folded into C2.5 before C3 began. It does not touch or
+conflict with Group C3's own selectors (`.category-image-strip-*`/`.rcontainer:has(...)`),
+which remain exactly as committed above.
 
 ### Independent review, round 1 (commit `c5c884b`)
 
@@ -1303,3 +1465,8 @@ baseline, not `9fe52ff5...`.**
 family (or its own regression tests/evidence) already in this fix's declared scope — no
 unrelated Phase-5 design change introduced. `git status` before commit contains only the
 intended round-2 production/test/evidence files.
+
+## Group C2.5 — now closed for real (0 unresolved CRITICAL / 0 unresolved IMPORTANT across
+both reviews and this correction). Group C3 (`image_strip`, above) was already completed
+and remains valid — its own selectors are disjoint from everything touched here. Proceeding
+to Group C4.
