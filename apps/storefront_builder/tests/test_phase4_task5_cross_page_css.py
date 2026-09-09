@@ -1157,14 +1157,16 @@ class CategoryGridImageStripNonHomeCssTests(TestCase):
             css,
         )
         # The V4.1 pass's own @1000px/@680px `.category-image-media`
-        # height overrides and @680px `.category-image-label` font-size
-        # override are dead code on Home (proven via real-browser
-        # ground-truth verification) and must never be mirrored, since
-        # doing so would NOT match Home's actual rendering at any
-        # viewport.
+        # height overrides, @680px `.category-image-label` font-size
+        # override, and @1000px `.category-image-strip` padding-inline
+        # override are all dead code on Home (proven via real-browser
+        # ground-truth verification — padding stays `2px 6px 4px` at
+        # every viewport) and must never be mirrored, since doing so
+        # would NOT match Home's actual rendering at any viewport.
         self.assertNotIn(".category-image-media{height:98px}", css)
         self.assertNotIn(".category-image-media{height:78px}", css)
         self.assertNotIn(".category-image-label{font-size:8.5px}", css)
+        self.assertNotIn("padding-inline:3px", css)
         # `.rcontainer` genuinely renders on every public non-Home page
         # (confirmed by the markup test above — an initial assumption
         # that it didn't was wrong) — its own base rule (`margin:0`)

@@ -1470,3 +1470,68 @@ intended round-2 production/test/evidence files.
 both reviews and this correction). Group C3 (`image_strip`, above) was already completed
 and remains valid — its own selectors are disjoint from everything touched here. Proceeding
 to Group C4.
+
+## Group C3 — independent review (process gap closed)
+
+Group C3 (`image_strip`, commit `8b4a99c`) was implemented, committed, and pushed without
+ever going through its own isolated-worktree independent review — the session that did it
+moved directly on to closing the Task-5 evidence for that group without dispatching one, a
+process gap. This section is that missing gate, run after the fact, before Group C4 begins.
+
+Fresh isolated-worktree reviewer, no context from the implementer. Independently
+re-derived the whole-file home.css cascade for every `.category-image-*` selector (found a
+THIRD pass beyond the two named in the commit — a density-scoped `.category-image-label`
+rule at home.css:701, numerically a no-op here) and built its own real-browser harness
+(home.css alone; home.css+storefront_builder.css matching the real published-Home stack
+via `home_visual.html`; storefront_builder.css alone for non-Home) across ~50 computed
+properties × 4 viewports — **0 differences** between published-Home and non-Home,
+confirming the mirror is complete and Home is unaffected. Independently confirmed the
+`.rcontainer` claim (base rule pre-exists, home.css override value correct, and
+`.rcontainer`/`.rcontainer-cell`/`.rsec` genuinely wrap sections on the real non-Home
+template chain — not just trusting the doc's account of the caught wrong assumption). Ran
+the 4 new tests, RED-reproduced by reverting just this commit's CSS (fails on the expected
+missing-declaration assertion), and ran the full 7-module regression sweep — exactly
+**585 tests, OK (skipped=1)**, matching the commit's own claim. Also ran all 17 other test
+modules touching `storefront_builder.css` as an extra check beyond what was asked: found
+17 failures + 1 error, but confirmed they reproduce identically at the parent commit
+(`d3bd5b6`) — pre-existing ready-template preset-version mismatches unrelated to CSS, not
+introduced by C3.
+
+**Verdict: CRITICAL 0, IMPORTANT 0, MINOR 4.** Two were addressed here (see below); two
+were left as accepted, pre-existing patterns:
+
+1. Addressed — the "TWO passes" investigation language undercounted a third, density-scoped
+   pass (home.css:701) that happens to be a numeric no-op against the mirrored value here.
+   `storefront_builder.css`'s Group C3 comment block now names it explicitly, per this
+   file's own established density-exclusion precedent (`.sec-head`/`.tile-circle`), so a
+   future group reusing this pass-inventory approach doesn't inherit the blind spot on a
+   family where the density value does differ.
+2. Addressed — the `@media(max-width:1000px)` mirror correctly omits the V4.1 pass's
+   `padding-inline:3px` (also dead, shadowed by the later unconditioned `padding:2px 6px
+   4px`, independently re-confirmed via a real-browser check: padding stays `2px 6px 4px`
+   at 1440/900/390px) but had no `assertNotIn` guard for it and no comment justifying the
+   omission alongside the height/font-size ones. Added both.
+3. Not addressed (accepted, pre-existing) — `test_home_page_is_unaffected_since_it_never_
+   loads_storefront_builder_css` is misnamed for the real published-Home route
+   (`home_visual.html` does load `storefront_builder.css`, after `home.css`; only the
+   legacy `catalog/home.html` file is checked). This exact name/scope pattern is used
+   identically by 3 other test classes in this same file (Groups A1, C1, C2), so renaming
+   it only here would be inconsistent rather than a real fix; a whole-file rename across
+   all 4 occurrences is out of this single group's bounded scope. The reviewer separately
+   confirmed via real browser that Group C3 itself produces zero computed-style
+   differences on the actual published-Home stack, so this is a naming/coverage-scope
+   defect in a pre-existing convention, not a live divergence.
+4. Not addressed (accepted, pre-existing) — the `assertNotIn` guards match home.css's exact
+   minified spelling and would not catch a reintroduction written in a different but
+   equivalent formatting. This matches the guard style used identically throughout this
+   entire test file; changing it only for Group C3 would be inconsistent, not a fix.
+
+### Verification (Group C3 MINOR fix-up)
+
+`test_phase4_task5_cross_page_css`: 35/35 pass. Same 7-module regression sweep: 588 tests,
+OK (1 pre-existing skip — unchanged from before this fix-up, since it only added a comment
+and one `assertNotIn` line). `manage.py check`: 0 issues. `manage.py makemigrations
+--check --dry-run`: no changes detected.
+
+## Group C3 — closed (0 unresolved CRITICAL / 0 unresolved IMPORTANT). Proceeding to
+Group C4.

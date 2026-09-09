@@ -4858,12 +4858,19 @@ a.sfb-v3-component-item,
    mode (`.category-image-strip-section`/`.category-image-strip`/
    `.category-image-tile`/`.category-image-media`/`.category-image-
    fallback`/`.category-image-label`) was Home-only. home.css layers
-   this family across TWO passes: "V4.1 reference polish — visual
-   category strip" (base + its own @1000px/@680px blocks) and a later,
-   unlabeled "Phase 3.7 — top-of-page professional composition" pass
-   (unconditioned, plus its own separate @680px block). Merged-final
-   values below, verified against a standalone real-browser harness
-   loading home.css alone with this exact markup.
+   this family across THREE passes: "V4.1 reference polish — visual
+   category strip" (base + its own @1000px/@680px blocks), a density-
+   scoped `html[data-sfb-density="compact"] .category-image-label{font-
+   size:10.5px}` rule (home.css:701 — per this file's established
+   density-exclusion precedent for `.sec-head`/`.tile-circle`, density
+   variants are deliberately not mirrored; noted here explicitly, per
+   independent review, because in THIS case it happens to be a numeric
+   no-op against the mirrored base value below rather than a divergence
+   to actively rule out), and a later, unlabeled "Phase 3.7 — top-of-
+   page professional composition" pass (unconditioned, plus its own
+   separate @680px block). Merged-final values below, verified against
+   a standalone real-browser harness loading home.css alone with this
+   exact markup.
 
    Judgment call (same pattern as Group C2's `.tile-circle`, verified
    the same way): the V4.1 pass's own `@1000px`/`@680px` overrides for
@@ -4871,7 +4878,11 @@ a.sfb-v3-component-item,
    label`'s `@680px` `font-size` (8.5px) are BOTH dead code — the later,
    unconditioned "Phase 3.7" pass's values (106px / 10.5px) always win
    instead, confirmed identical at 1440/900/390px in the ground-truth
-   harness. Mirroring the dead rules would not match Home's actual
+   harness. The V4.1 pass's own `@1000px` `gap`/`padding-inline`
+   overrides are dead for the same reason (the later "Phase 3.7" block
+   below always wins; confirmed via the same harness that padding stays
+   `2px 6px 4px` at every viewport, never the V4.1 `@1000px` value).
+   Mirroring any of these dead rules would not match Home's actual
    rendering, so they are omitted; `.category-image-tile`'s own
    `flex-basis` responsive values (untouched by "Phase 3.7") remain
    genuinely live and are mirrored, as is "Phase 3.7"'s own separate
