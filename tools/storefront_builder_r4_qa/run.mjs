@@ -2824,8 +2824,15 @@ async function scenario14CompositionAndRecoveryGate() {
   assert(result.mutation_posts.length - beforeCellAddMutateCount === 1, `Expected exactly 1 cell.add_section mutation, got ${result.mutation_posts.length - beforeCellAddMutateCount}`);
   assert(result.mutation_posts[result.mutation_posts.length - 1].status === 200, 'cell.add_section must return 200');
 
+  // Sixth-reviewer fix, MINOR-1 — `data-r4-structure-container-id` only
+  // ever exists in the admin Structure panel (editor.html), never in
+  // Preview's own storefront-rendered markup; the real per-section
+  // Container identifier there is `data-container-id`
+  // (responsive_section_wrapper.html's own `is_preview` block). Scope to
+  // it for real, not just "does this section-key exist anywhere on the
+  // page".
   let frame = await previewFrame();
-  await frame.locator(`[data-r4-structure-container-id="${heroContainerId}"] [data-section-key="rich_text"], [data-section-key="rich_text"]`).first().waitFor({ state: 'visible', timeout: 10000 });
+  await frame.locator(`[data-section-key="rich_text"][data-container-id="${heroContainerId}"]`).first().waitFor({ state: 'visible', timeout: 10000 });
 
   await withExpectedNavigation(() => page.reload({ waitUntil: 'domcontentloaded' }));
   await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });

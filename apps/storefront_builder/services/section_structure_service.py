@@ -127,16 +127,24 @@ def _scoped_cell(draft, cell_id) -> StorefrontCell:
 
 
 def add_section_to_cell(*, draft, section_key: str, cell_id: int) -> StorefrontSection:
-    """R4 Task 7 (final-review fix, IMPORTANT-2) — place a NEW section into
-    a specific, possibly-EMPTY Cell, exactly mirroring the legacy
-    ``storefront_cell_add_section`` view's own logic (``views.py``): same
-    validation order (section_key -> allowed-on-page -> hidden_from_library
-    -> max_instances), same canonical placement call
+    """R4 Task 7 (final-review fix, IMPORTANT-2; sixth-reviewer fix,
+    MINOR-2) — place a NEW section into a specific, possibly-EMPTY Cell,
+    reusing the legacy ``storefront_cell_add_section`` view's own checks
+    (``views.py``) and canonical placement calls
     (``container_service.place_section`` for a truly empty Cell,
-    ``add_block`` for a Cell that already holds a Block). Without this,
-    ``container.change_layout``'s grow branch can create an empty Cell that
-    no other R4 mutation could ever fill — the exact gap the second
-    independent Task-7 reviewer found."""
+    ``add_block`` for a Cell that already holds a Block) — never a second
+    composition authority. The CHECKS are the same set (section_key ->
+    allowed-on-page -> hidden_from_library -> max_instances) plus one this
+    Draft-scoped entry point additionally enforces (``container_locked``,
+    which the legacy view has no equivalent of); the ORDER differs, since
+    here the Cell must be resolved (and therefore its Container's lock
+    state known, and its page derived) before any section-level check can
+    run — the legacy view instead receives page_type as a separate
+    parameter and can validate section-key/page/max-instances before ever
+    touching the target Cell. Stricter here, never looser. Without this
+    function, ``container.change_layout``'s grow branch can create an
+    empty Cell that no other R4 mutation could ever fill — the exact gap
+    the second independent Task-7 reviewer found."""
     if not isinstance(section_key, str) or not section_key:
         raise SectionStructureError("invalid_section_key")
 
