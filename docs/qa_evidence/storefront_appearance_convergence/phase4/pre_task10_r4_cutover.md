@@ -11,7 +11,57 @@ Pre-remediation safety backup:
 `75ede8ab82c6e53090b04eadc7ea9cf9f8691480` (the Task-9 final checkpoint),
 pushed and verified before the first production change.
 
+## FINAL REMEDIATION CLOSURE (Pre-Task-10 final remediation — Gaps 1-4)
+
+A later session (this one) closed every item this document's first pass
+deferred, plus the four remaining gaps the resulting continuation prompt
+enumerated:
+
+- **Gap 1 (compound-field parity)** — `announcement_links`, header/footer
+  `extra_blocks`, and the header/footer `responsive` hide-on-tablet/
+  hide-on-mobile toggles (deferred below as "compound multi-row UI, not a
+  flat scalar patch key") are now all wired into `header.update`/
+  `footer.update`, reusing the SAME canonical validators
+  (`validate_header_config`/`validate_footer_config`) and the R4 Inspector's
+  existing `repeater` field-type concept (extended to the Global Design
+  panel via a new `data-r4-global-repeater-field` marker, not a second
+  architecture). Targeted RED/GREEN tests added. Commit `aeff5c1`.
+- **Gap 2 (family browser certification)** — the 15 `NOT YET CERTIFIED`
+  MIGRATE families are now certified with real executed browser evidence,
+  via one new config-driven scenario (`phase3-final-remediation-family-gate`
+  in `run.mjs`) reusing the existing generalized Task-4 harness mechanism.
+  Two genuine pre-existing bugs in that mechanism itself were found and
+  fixed along the way (a stale-section-id bug across a Publish+clone, a
+  save-state-polling race). Commit `d51671e`. See
+  `family_certification_matrix.md`.
+- **Gap 3 (second legacy-retirement pass)** — every row this document and
+  `legacy_disposition.md` previously left `NOT SAFE TO REMOVE YET` because
+  R4 lacked capability was re-verified against current code (not trusted
+  from either pass's claims) now that Gaps 1-2 closed the field/
+  certification gap. Result: settings-save, composition, toggle/lock, and
+  the granular reset family are reclassified THIN NON-AUTHORITATIVE ADAPTER
+  (R4 has full, verified parity); exactly two capabilities remain
+  genuinely legacy-only (restore/history browser; industry-vertical layout
+  presets), both CANONICAL KEEP. Commit `30c7c72`. See
+  `legacy_disposition.md`.
+- **Gap 4 (independent review)** — a fresh reviewer in an isolated worktree
+  reviewed the complete diff (`75ede8ab8...` → this session's final HEAD)
+  and returned 0 CRITICAL / 1 IMPORTANT: `container.update_settings`'s
+  `background_mode`/`background_color`/`background_pattern` keys were
+  backend-accepted from the first pass but had no R4 UI control at all — a
+  real merchant-facing gap the "full functional parity" claim below (Step
+  1C) did not catch. Fixed (commit `9d3d106`) by adding the missing R4
+  controls, reusing the existing `container.update_settings` mutation and
+  `effective_container_settings` validator unchanged; re-reviewed clean.
+
+The one item still NOT closed — Container `content_width` — remains correctly
+`INTERNAL/NOT MERCHANT-FACING` per its own row below: the legacy editor
+itself does not expose it either, so R4 matching that restraint is not a gap.
+
 ## Scope actually completed this session, and what was deliberately deferred
+
+**(Historical record of the FIRST remediation session — preserved as-is
+below; superseded where the closure section above says so.)**
 
 This remediation's true scope (full field parity across ~40 legacy
 Appearance/Header/Footer fields, closing every composition gap, formal

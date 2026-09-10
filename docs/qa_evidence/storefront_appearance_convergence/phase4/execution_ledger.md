@@ -627,3 +627,87 @@ commit-by-commit summary.
   disposition; `pre_task10_r4_cutover.md` created with the full evidence record.
 - Task 10 (full Phase-4 certification, including the 15 families' browser-harness certification and
   the second legacy-retirement pass deferred above) explicitly **NOT STARTED** in this session.
+
+## Pre-Task-10 FINAL remediation — Gaps 1-4 (2026-09-10, continuation session)
+
+- **START.** Startup recovery verified: local HEAD == origin `feature/phase4-builder-legacy-
+  convergence` == `704cd75` (the prior session's pushed checkpoint); `main` == `973c1dc` unchanged;
+  `backup/rastisi6-phase4-pre-final-remediation-20260910` == `75ede8a` unchanged; working tree clean;
+  no concurrent writer. Fresh container — no `.venv`/`db.sqlite3`/`node_modules` from any prior
+  session persisted (expected; ephemeral container), rebuilt via `migrate` + the documented
+  `phase3_qa_owner`/`akhlaghi` bootstrap one-liner (`docs/.../phase3-implementation-plan.md`).
+- **Gap 1 (compound-field parity) — CLOSED.** `announcement_links`, header/footer `extra_blocks`,
+  and header/footer per-component `responsive` hide-on-tablet/hide-on-mobile toggles wired into
+  `header.update`/`footer.update`, reusing `layout_service.validate_header_config`/
+  `validate_footer_config` and `appearance_authority_service` unchanged — no second Header/Footer
+  architecture. Repeater UI extends the R4 Inspector's existing `repeater` field-type concept (Task 6)
+  into the Global Design panel via a new `data-r4-global-repeater-field` marker (not
+  `data-r4-global-field`, to avoid collision with the generic single-scalar-field listener); responsive
+  toggles reuse the exact merge-onto-current-value pattern `color_overrides`/`theme_overrides` already
+  established. 10 new targeted RED/GREEN tests; 2 now-stale "unknown key" test assertions (which had
+  used `extra_blocks` as their representative unknown key, now a legitimate one) fixed to use a
+  genuinely unrecognized key. 272/273 targeted (1 pre-existing, confirmed unrelated). Committed `aeff5c1`,
+  pushed.
+- **Gap 2 (family browser certification) — CLOSED.** One new consolidated, config-driven scenario
+  (`phase3-final-remediation-family-gate`, `tools/storefront_builder_r4_qa/run.mjs`) certifies all 15
+  `NOT YET CERTIFIED` MIGRATE families, reusing the existing generalized Task-4 harness mechanism
+  (`task6FamilyFieldEditScenario` unchanged for 11 scalar-field families; one new shared function for
+  the 3 repeater-field families; one new function for `rich_text`'s CKEditor5 mechanism). While building
+  it, reproduced and fixed two genuine PRE-EXISTING bugs in the shared mechanism itself (both verified
+  live against a fresh DB, not theoretical): (1) `task6FamilyFieldEditScenario` opened a section by an id
+  the Python fixture captured once before the browser session started, which goes stale once this gate
+  runs after scenario 10 (Publish) + 12 (`get_or_create_draft` clones a new Draft with new Section PKs) —
+  switched to `openSectionViaPreview(sectionKey)`, the same dynamic-discovery mechanism the Brand/
+  Collection gates already use; (2) `waitSaved()`'s DOM-text poll can resolve on stale "saved" text from
+  a PRIOR edit in a dense back-to-back loop, racing the current edit's own save — fixed by polling the
+  actual `mutation_posts` count directly first. Iterated via `R4_QA_ONLY_SCENARIO`-filtered runs per the
+  browser-speed rule (multiple fix-and-rerun cycles: a duplicate-hero_banner/product_section placement
+  regression against scenario 12, a real YouTube embed tripping the "no nested iframe in Preview"
+  invariant, a repeater-selector strict-mode ambiguity, an intermediate-partial-row 400 on
+  `trust_features`, a Container-toolbar click interception on `rich_text`'s near-zero-height empty
+  state — each reproduced live, root-caused, and fixed, not guessed at). Final isolated run: GREEN.
+  Two SEPARATE pre-existing defects found are explicitly out of scope (documented in
+  `family_certification_matrix.md`, not fixed): `multi_banner`'s QA-fixture `PromotionalBanner` rows use
+  the legacy `desktop_image` file field, which `layout_service._clone_section_scoped_media` does not
+  carry across a Draft clone; and scenario 14's `brand_carousel` locator ambiguity from `phase3-brand-
+  gate`'s own 3-variant fixture persisting on Home. Committed `d51671e`, pushed.
+- **Gap 3 (second legacy-retirement pass) — CLOSED.** Every Task-9 `NOT SAFE TO REMOVE YET` row
+  re-verified against current code (not trusted from either pass's claims). The "~23 non-schema section
+  types" claim was stale: `section_registry.list_definitions()` shows 21/36 families schema-enabled now,
+  and the 15 remaining are all legitimately schema-less by design (verified per-family disposition, zero
+  genuine gaps). Settings-save, composition, toggle/lock, and the granular reset family reclassified
+  NOT SAFE TO REMOVE YET -> THIN NON-AUTHORITATIVE ADAPTER (R4 has full, now-verified parity). The
+  Appearance/Header/Footer form row reclassified KEEP AS CANONICAL -> THIN NON-AUTHORITATIVE ADAPTER
+  (Gap 1 closed the field gap in full). Exactly two capabilities re-verified as genuinely still
+  legacy-only (`r4_views.py` has no view calling `layout_service.restore_version`; industry-layout
+  presets only reachable from the legacy shell's own `editor.html`) — both CANONICAL KEEP, and the
+  reason the legacy editor shell itself is reclassified THIN NON-AUTHORITATIVE ADAPTER as a whole rather
+  than RETIRED. No row left UNKNOWN. Physical removal of the now-redundant panels inside `editor.html`
+  (real template surgery on a shell still serving two live required paths) correctly deferred to a
+  future task, not attempted here under time pressure. Committed `30c7c72`, pushed.
+- **Gap 4 (independent review) — dispatched, finding fixed, re-reviewed.** Fresh reviewer in an isolated
+  worktree reviewed the complete diff `75ede8a..HEAD` (4 commits). Verdict: all 10 required categories
+  PASS, CRITICAL 0, IMPORTANT 1 — `container.update_settings` accepted `background_mode`/
+  `background_color`/`background_pattern` from the first remediation pass, but R4's `editor.html` never
+  rendered a control for any of them, contradicting `legacy_disposition.md`'s "full functional parity"
+  claim for Container composition. Fixed: added the missing controls to R4's Structure panel, a new
+  dedicated JS listener sending `background_mode`+`background_color` together (single-key patches for
+  this pair are individually rejected by `effective_container_settings`'s own validation and silently
+  revert to "transparent" — traced and confirmed, not guessed), `background_pattern` reusing the legacy
+  form's own single fixed value verbatim. New targeted test
+  (`test_update_settings_persists_background_mode_and_color_together`); `ContainerUpdateSettingsTests`
+  and the full `test_r4_vertical_slice.py` re-run (165/166; the 1 is the same pre-existing signature).
+  `legacy_disposition.md`'s Container row corrected to record the finding and fix. Committed `9d3d106`,
+  pushed. Re-review dispatched in a fresh isolated worktree against the fix specifically.
+- Targeted regression (this session, cumulative across Gaps 1-4): 506 tests
+  (`test_r4_store_appearance_mutations`+`test_r4_vertical_slice`+`test_layout_service`+
+  `test_r4_foundation`+`test_views`) — 2 failures + 1 error, all 3 matching already-documented
+  pre-existing signatures (`test_validate_appearance_config_is_the_validator_boundary`;
+  `test_fullscreen_button_is_in_v3_topbar_with_device_and_zoom_controls`;
+  `test_fullscreen_state_is_a_pure_css_toggle_not_a_new_route`) — zero new regressions. `manage.py
+  check`, `makemigrations --check --dry-run`, `git diff --check` all clean throughout.
+- ONE complete existing R4 browser harness run (`--phase3`, full 01-15 sequence, from a genuinely
+  fresh/pristine local DB — not assumed from any prior session's accumulated state): 18/20 scenarios
+  PASS, including the new `phase3-final-remediation-family-gate`. The 2 failures are the two
+  pre-existing, out-of-scope defects named above, reproduced identically, not new regressions. Evidence
+  committed under `docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/`.
