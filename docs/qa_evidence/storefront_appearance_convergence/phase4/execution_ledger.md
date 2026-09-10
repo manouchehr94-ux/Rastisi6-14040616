@@ -472,3 +472,80 @@ commit-by-commit summary.
   one missing trailing `return;` in JS) were accepted as disclosed, low-risk tradeoffs per the
   reviewer's own framing. Committed and pushed as `18bedd1`. **CRITICAL 0 / IMPORTANT 0 after this
   fix — Task 8 is now CLOSED.**
+
+## Task 9 — Evidence-based legacy retirement
+
+- **START** 2026-09-10. Startup guard verified: local HEAD == `origin/feature/phase4-builder-
+  legacy-convergence` == `backup/rastisi6-phase4-task8-final-20260910` ==
+  `34c1fba9fd1f3919a383c365cbb3e6893a310f3c`; `origin/main` unchanged
+  (`973c1dc00bacb6f2f7d2604fa3880bb4d6250579`); working tree clean; exactly one writer session (no
+  stale Task 7/8 waiters in the process table). Pre-deletion safety backup
+  `backup/rastisi6-phase4-pre-legacy-retirement-20260910` created and pushed, pointing at
+  `34c1fba9`, before the first deletion commit.
+- Re-verified every `legacy_disposition.md` row against current code (three parallel `Explore`
+  recon passes covering: settings/structure/toggle/history/reset; media CRUD/editor shell/industry
+  presets/announcement_bar; Ready Template application and a full field-by-field Appearance/Header/
+  Footer parity matrix). **Headline finding, re-confirmed by direct code inspection**:
+  `StorefrontLayout.r4_editor_enabled` still defaults `False` and dashboard nav
+  (`base_admin.html`) still routes every merchant to the legacy editor shell, never R4 — R4 remains
+  reachable only via an opt-in link embedded inside the legacy editor itself. R4's
+  Appearance/Header/Footer mutation surface also covers only a narrow field subset (template/
+  palette/font/type_scale/motion/button_style, header_variant, footer_variant) — most legacy
+  header/footer toggle fields and appearance color/structural fields have no R4 write path at all.
+  Container/Cell arbitrary placement remains a documented gap even after Task 7. Ready Template
+  gallery/apply was deliberately kept as a separate orchestration from R4 per Task 8's own evidence.
+  Consequence: the legacy editor shell and every view still live-linked from it are **NOT SAFE TO
+  REMOVE YET** — this matches the disposition ledger's own pre-existing "KEEP AS FINAL UNTIL R4 IS
+  REACHABLE" ruling; deleting them now would remove real, currently-exercised merchant capability,
+  not dead code. Making R4 the live default (new-capability/default-routing work) is out of Task
+  9's deletion/convergence scope.
+- **Batch 1** (route/view/UI retirement) — the one candidate that actually cleared the evidence
+  bar: `storefront_discard` (`storefront-builder/discard/`) had zero live UI callers anywhere in
+  the legacy editor templates and a fully proven, stricter R4 replacement
+  (`storefront-builder/r4/discard/`, atomic + stale-revision gated, vs. the legacy view's bare
+  `layout_service.discard_draft` call). Removed the view, its URL, and its two now-redundant direct
+  tests (coverage retained via R4's own `DraftReplacingEndpointTests`). Targeted: 462 tests
+  (`test_views`, `test_phase2_lifecycle_safety`, `test_r4_vertical_slice`) — only the 3
+  already-known pre-existing failures (confirmed identical on unmodified `34c1fba9` via `git
+  stash`). Committed and pushed as `5ed6486`.
+- **Batch 2** (residual cleanup) — a real latent bug, not a section deletion: `announcement_bar` is
+  `hidden_from_library` and the merchant-facing add path (`section_structure_service.add_section`/
+  `duplicate_section`) already refuses to create new instances, but `preset_service.
+  _build_sections_for_page` built preset/Ready-Template sections with no such check — a second,
+  un-gated write authority. Four real A8 recipes (`premium_leather`/`street_drop`/`racer_tech`/
+  `anniversary_mosaic`) carry a `"ticker"` token mapping to `announcement_bar`; applying any of them
+  created a live instance double-rendering alongside the header's own notification bar (the exact
+  defect `golden_reference_service.py` documents avoiding on the Golden Home composition). Fixed by
+  filtering `hidden_from_library` entries once, where each page's preset entries are first bound —
+  before either section-building or the parallel Container/row-grouping logic (both keyed off the
+  same list) consume them, keeping `template_slot_key`/container-settings numbering consistent for
+  the common case. New regression test applies all four recipes and asserts no `announcement_bar`
+  section is built. `announcement_bar` itself is not deleted — existing instances still render.
+  Targeted: 40 `test_preset_service` tests plus a 355-test sweep across A8/section-registry/Ready-
+  Template modules — only the 1 already-known pre-existing failure (confirmed identical on
+  unmodified `34c1fba9`). Committed and pushed as `61eff5b`.
+- Consolidated Task-9 targeted regression (both batches, all 10 touched/related modules, 857
+  tests): `failures=2, errors=2` — the exact same 4 pre-existing failures found in the narrower
+  runs, zero new regressions. `python manage.py check`: clean. `python manage.py makemigrations
+  --check --dry-run`: no changes detected. `git diff --check` (`34c1fba9..HEAD`): clean.
+- **Independent review**, fresh reviewer, isolated `git worktree` (`/tmp/rastisi6-task9-review`,
+  detached at `61eff5b`), no prior session context. Verified the discard removal's zero-caller claim
+  via a full-worktree search (not scoped to one directory), read `preset_service.py` in full and
+  confirmed the filter's ordering is correct with no other un-gated caller of `hidden_from_library`
+  sections, independently re-ran all 10 targeted modules (857 tests, same 4 pre-existing failures by
+  name), and independently re-derived the R4-reachability/field-parity restraint claims from current
+  code. Verdict: **CRITICAL 0, IMPORTANT 1, MINOR 2.** IMPORTANT: commit `5ed6486`'s message claimed
+  `legacy_disposition.md` was updated when it wasn't touched until this closure pass — fixed by
+  actually updating every row now (see `legacy_disposition.md` and `task9_legacy_retirement.md`).
+  MINOR (fixed): `golden_reference_service._rebuild_home_composition` forks the same row-build
+  pattern `preset_service._build_sections_for_page` just gained a guard for, but lacked it itself —
+  safe today only because its static Golden composition tuple hand-omits `announcement_bar`; added
+  the same defensive assertion (54 golden-reference/media tests re-verified clean). MINOR (accepted,
+  out of scope): no migration to clean up any *already-existing* `announcement_bar` instance created
+  before this fix — consistent with the Product Owner ruling that no historical-data migration
+  machinery is required. **CRITICAL 0 / IMPORTANT 0 after the fix — Task 9 is CLOSED.**
+- Closure: `legacy_disposition.md` updated (every row re-verified, no `UNKNOWN` entries);
+  `task9_legacy_retirement.md` created (full evidence, classification table, reviewer verdict);
+  this ledger entry. `backup/rastisi6-phase4-task9-final-20260910` created pointing at the final
+  Task-9 SHA. Task 10 (final Phase-4 certification, including the full `apps.storefront_builder`
+  regression deferred from Task 8) explicitly **NOT STARTED** in this session.
