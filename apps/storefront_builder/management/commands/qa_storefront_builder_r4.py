@@ -28,6 +28,46 @@ from apps.storefront_builder.services import container_service, layout_service
 from apps.stores.models import Store, StoreMembership
 
 
+def _png_swatch(color):
+    try:
+        from PIL import Image  # noqa: WPS433 (local import; project dep)
+    except Exception:  # pragma: no cover — PIL is a project dependency
+        return None
+    from io import BytesIO
+    buf = BytesIO()
+    Image.new("RGB", (320, 180), color).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _save_with_media_asset(obj, file_field: str, asset_field: str, filename: str, payload: bytes) -> None:
+    """Pre-Task-10 corrective closure (Item 3) — module-level so both
+    ``_prepare_phase3_task6_family_gate`` and
+    ``_prepare_phase3_final_remediation_family_gate`` share ONE
+    implementation, never two copies of this same fixture-media fix.
+
+    Saving only the legacy file field (``obj.<file_field>.save(...)``) and
+    leaving ``<asset_field>`` (the MediaAsset FK) unset means
+    ``layout_service._clone_section_scoped_media`` (the Publish→new-Draft
+    clone step scenario 12/either family-certification gate triggers)
+    silently drops the row — exactly why ``multi_banner``'s own
+    certification broke once its gate started running after that clone
+    (reproduced live). This mirrors ``media_views.py``'s OWN real
+    production upload flow exactly (``_sync_media_assets_from_file_fields``):
+    save the real file first, THEN create a ``MediaAsset`` pointing at that
+    SAME saved path (no byte copy — ``image=obj.<file_field>.name``), THEN
+    set the FK — never a second media-storage mechanism."""
+    from django.core.files.base import ContentFile
+
+    from apps.content.models import MediaAsset
+
+    file_obj = getattr(obj, file_field)
+    file_obj.save(filename, ContentFile(payload), save=False)
+    obj.save()
+    asset = MediaAsset.objects.create(store=obj.store, image=file_obj.name)
+    setattr(obj, f"{asset_field}_id", asset.pk)
+    obj.save(update_fields=[asset_field])
+
+
 class Command(BaseCommand):
     """R4 Task-12 browser-QA orchestrator.
 
@@ -614,37 +654,61 @@ class Command(BaseCommand):
         return gate
 
     def _prepare_phase3_final_remediation_family_gate(self, draft) -> dict:
-        """Pre-Task-10 final remediation (Gap 2) — one representative section
-        per each of the 15 remaining MIGRATE families, all placed with their
-        own default settings (the browser scenario itself edits and proves
-        each family's own real schema field — see
-        ``FINAL_REMEDIATION_SCALAR_EDITS``/``FINAL_REMEDIATION_REPEATER_EDITS``
-        in ``run.mjs``). Deliberately no bound media (HeroSlide/
-        PromotionalBanner/StoryRailItem) for any of these: none of the 15
-        families' own certified field is media-dependent, and
-        ``_prepare_phase3_task6_family_gate``'s own hero_banner/image_slider
-        entries above already record why binding legacy-file-field media
-        here would not even survive this same gate's Publish→new-Draft clone
-        (``layout_service._clone_section_scoped_media`` only carries rows
-        already migrated to the MediaAsset FK).
+        """Pre-Task-10 final remediation (Gap 2, corrected this session —
+        see the "CORRECTIVE ITEM 1" continuation prompt) — one representative
+        section per each of the 15 remaining MIGRATE families.
 
-        Deliberately EXCLUDES ``hero_banner`` and ``product_section``: both
-        already have exactly one instance on this same Home page from
-        ``bootstrap_service`` (scenarios 02/03/15 and 04-07/12/13
-        respectively each discover it via
+        The independent-review corrective pass explicitly rejected
+        persistence-only proof as an acceptable certification for families
+        whose real merchant-facing contract is RENDERING real content —
+        classifying several of this session's ORIGINAL certifications as too
+        weak (hero_banner/image_slider's visual proof deferred,
+        amazing_offers/discounted_products never exercised with real
+        discounted-catalog data, blog_posts never exercised with real Post
+        rows, video_section deliberately avoiding a real embed). This method
+        now places REAL fixture data for every one of those:
+
+        - hero_banner (the EXISTING bootstrap section, not a new one — see
+          below) and image_slider each get a real ``HeroSlide`` bound via
+          the CANONICAL MediaAsset path (``_save_with_media_asset`` —
+          reused here for the SAME reason ``_prepare_phase3_task6_family_
+          gate``'s multi_banner fixture needed it: a legacy-file-field-only
+          row does not survive this gate's Publish→new-Draft clone).
+        - amazing_offers/discounted_products share ONE real discounted
+          Product (``discount_percent__gt=0`` — ``render_service.py``'s own
+          query for both).
+        - blog_posts gets one real ``apps.blog.models.BlogPost`` row (a
+          genuinely global, non-Store-scoped model — see
+          ``_blog_posts_context``'s own docstring).
+        - quick_links gets a real Menu + one real MenuItem (a Category
+          destination, reusing the SAME demo Category
+          ``_prepare_phase3_brand_gate`` already creates) — this is now the
+          family's OWN edited field via the new ``menu_picker`` Inspector
+          field type (see ``section_registry.QUICK_LINKS_SCHEMA``), not a
+          QA-only fixture concern.
+        - newest_products/best_sellers/promo_cards reuse catalog/category
+          demo data that already exists by this point in fixture setup (no
+          new fixture needed — their own real render proof is now a DOM
+          assertion instead of persistence-only).
+
+        Deliberately EXCLUDES ``hero_banner`` and ``product_section`` from
+        the generic ``place()`` loop: both already have exactly one instance
+        on this same Home page from ``bootstrap_service`` (scenarios 02/03/15
+        and 04-07/12/13 respectively each discover it via
         ``openSectionViaPreview(sectionKey)``'s own ``.first()`` semantics).
-        Placing a SECOND section under either key here would silently make
-        those earlier scenarios' discovery ambiguous — reproduced live while
-        building this gate: scenario 12 failed reading a stale/wrong
-        ``product_section`` title once a second one existed. R4's own
-        Inspector mechanism for both families is already exercised
-        end-to-end by those scenarios; this gate's own
-        FINAL_REMEDIATION_SCALAR_EDITS entries for them (run.mjs) reuse that
-        SAME existing section via the same dynamic discovery, never a
-        second placement."""
+        Placing a SECOND section under either key would silently make those
+        earlier scenarios' discovery ambiguous — reproduced live while
+        originally building this gate: scenario 12 failed reading a stale/
+        wrong ``product_section`` title once a second one existed. hero_banner
+        now gets its real HeroSlide bound to that SAME existing section
+        instead of a second one."""
+        from django.utils import timezone
+
+        from apps.content.models import HeroSlide
         from apps.storefront_builder.models import StorefrontSection
 
         home_page = draft.get_page("home")
+        store = draft.layout.store
 
         def place(section_key: str, settings_overrides: dict | None = None) -> int:
             definition = section_registry.get_definition(section_key)
@@ -689,6 +753,71 @@ class Command(BaseCommand):
                 ),
             },
         )
+
+        # --- CORRECTIVE ITEM 1 — real fixture data closing the persistence-
+        # only weaknesses the independent review found -----------------------
+
+        # hero_banner (existing bootstrap section) + image_slider (just
+        # placed above) each get their own real HeroSlide, canonical
+        # MediaAsset path.
+        hero_banner_section = home_page.sections.filter(
+            section_key="hero_banner",
+        ).order_by("order", "id").first()
+        if hero_banner_section is not None:
+            slide = HeroSlide(
+                store=store, section=hero_banner_section,
+                title="اسلاید هیرو QA تسک نهایی", is_active=True,
+            )
+            _save_with_media_asset(slide, "desktop_image", "desktop_asset", "final-hero.png", _png_swatch("#7c3aed"))
+        image_slider_section = StorefrontSection.objects.get(pk=section_ids["image_slider_section_id"])
+        slide = HeroSlide(
+            store=store, section=image_slider_section,
+            title="اسلاید تصویر QA تسک نهایی", is_active=True,
+        )
+        _save_with_media_asset(slide, "desktop_image", "desktop_asset", "final-slider.png", _png_swatch("#0ea5e9"))
+
+        # amazing_offers/discounted_products: ONE real discounted Product —
+        # render_service.py's own query for BOTH families is
+        # ``discount_percent__gt=0``.
+        vendor, _ = Vendor.objects.get_or_create(store=store, slug="qa-final-vendor", defaults=dict(name="فروشنده QA"))
+        category, _ = Category.objects.get_or_create(
+            store=store, slug="t12-category", defaults=dict(name="دسته T12", is_active=True),
+        )
+        Product.objects.get_or_create(
+            store=store, slug="qa-final-discounted-product",
+            defaults=dict(
+                name="کالای تخفیف‌دار QA تسک نهایی", vendor=vendor, category=category,
+                sku="SKU-QA-FINAL-DISCOUNTED", price=Decimal("500000"), discount_percent=25,
+                status=Product.Status.ACTIVE,
+            ),
+        )
+
+        # blog_posts: one real, global BlogPost row.
+        from apps.blog.models import BlogPost
+
+        BlogPost.objects.get_or_create(
+            slug="qa-final-remediation-post",
+            defaults=dict(
+                title="مطلب وبلاگ QA تسک نهایی", body="متنِ آزمایشیِ QA.",
+                published_at=timezone.now(),
+            ),
+        )
+
+        # quick_links: a real Menu + one real MenuItem (Category destination,
+        # reusing the same demo Category above) — the family's OWN new
+        # menu_picker field edits THIS Menu's id.
+        from apps.content.models import Menu, MenuItem
+
+        menu, _ = Menu.objects.get_or_create(
+            store=store, location=Menu.Location.HEADER,
+            defaults=dict(title="منوی QA تسک نهایی", is_active=True),
+        )
+        MenuItem.objects.get_or_create(
+            menu=menu, title="دسته T12 QA",
+            defaults=dict(destination_type="category", destination_category=category, is_active=True),
+        )
+        section_ids["quick_links_menu_id"] = menu.pk
+
         return section_ids
 
     def _prepare_phase3_task6_family_gate(self, draft) -> dict:
@@ -741,10 +870,6 @@ class Command(BaseCommand):
         section (the same in-memory PNG technique the Collection gate below
         already uses) is created here so the DOM assertions in ``run.mjs``
         check the family's actual rendering."""
-        from io import BytesIO
-
-        from django.core.files.base import ContentFile
-
         from apps.content.models import PromotionalBanner, StoryRailItem
         from apps.storefront_builder.models import StorefrontSection
 
@@ -764,15 +889,6 @@ class Command(BaseCommand):
             cell = container.cells.order_by("order", "id").first()
             container_service.place_section(cell, section)
             return section.pk
-
-        def _png_swatch(color):
-            try:
-                from PIL import Image  # noqa: WPS433 (local import; project dep)
-            except Exception:  # pragma: no cover — PIL is a project dependency
-                return None
-            buf = BytesIO()
-            Image.new("RGB", (320, 180), color).save(buf, format="PNG")
-            return buf.getvalue()
 
         # No "source" override: the schema's own default (auto/all_active) is
         # guaranteed valid, and ResourceSource itself is already certified
@@ -796,8 +912,7 @@ class Command(BaseCommand):
             item = StoryRailItem(
                 store=store, section=story_rail_section, title="استوری تسک ۶", is_active=True,
             )
-            item.image.save("task6-story.png", ContentFile(story_payload), save=False)
-            item.save()
+            _save_with_media_asset(item, "image", "image_asset", "task6-story.png", story_payload)
 
         single_banner_section = StorefrontSection.objects.get(pk=single_banner_section_id)
         single_banner_payload = _png_swatch("#0f766e")
@@ -805,8 +920,7 @@ class Command(BaseCommand):
             banner = PromotionalBanner(
                 store=store, section=single_banner_section, title="بنر تک تسک ۶", is_active=True,
             )
-            banner.desktop_image.save("task6-single-banner.png", ContentFile(single_banner_payload), save=False)
-            banner.save()
+            _save_with_media_asset(banner, "desktop_image", "desktop_asset", "task6-single-banner.png", single_banner_payload)
 
         multi_banner_section = StorefrontSection.objects.get(pk=multi_banner_section_id)
         for index, color in enumerate(("#ea580c", "#2563eb")):
@@ -817,8 +931,9 @@ class Command(BaseCommand):
                 store=store, section=multi_banner_section, title=f"بنر چندتایی تسک ۶ #{index + 1}",
                 is_active=True, display_order=index,
             )
-            banner.desktop_image.save(f"task6-multi-banner-{index}.png", ContentFile(multi_banner_payload), save=False)
-            banner.save()
+            _save_with_media_asset(
+                banner, "desktop_image", "desktop_asset", f"task6-multi-banner-{index}.png", multi_banner_payload,
+            )
 
         return {
             "category_grid_section_id": category_grid_section_id,

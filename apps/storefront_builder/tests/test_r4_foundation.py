@@ -44,9 +44,16 @@ class R4EditorRouteGateTests(StorefrontBuilderViewsTestCase):
 
     def test_r4_route_is_reachable_by_default_without_opting_in(self):
         # Pre-Task-10 remediation (R4 live cutover) — a Store that has
-        # never touched the flag (fresh ``get_or_create_layout`` above,
-        # untouched by this test) must still reach R4 directly: R4 is no
-        # longer opt-in-only.
+        # never touched the flag must still reach R4 directly: R4 is no
+        # longer opt-in-only. Pre-Task-10 CORRECTIVE closure (Item 2) — the
+        # shared base fixture (StorefrontBuilderViewsTestCase.setUp) now
+        # pins every Store it creates to r4_editor_enabled=False, so every
+        # OTHER test in this file keeps exercising the still-required full
+        # legacy editor body; this test's whole point is the real model
+        # default (True), so it explicitly restores it rather than
+        # inheriting the base's pin.
+        self.layout.r4_editor_enabled = True
+        self.layout.save(update_fields=["r4_editor_enabled"])
         response = self.client.get(reverse("dashboard:storefront-builder-r4-editor"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-r4-shell="true"')
@@ -64,6 +71,11 @@ class DashboardNavRoutesToR4Tests(StorefrontBuilderViewsTestCase):
         self.layout = svc.get_or_create_layout(self.store)
 
     def test_primary_storefront_builder_nav_item_points_at_r4(self):
+        # Pre-Task-10 CORRECTIVE closure (Item 2) — restore the real model
+        # default (True); the shared base fixture now pins it False for
+        # every OTHER test in this file (see the sibling test above).
+        self.layout.r4_editor_enabled = True
+        self.layout.save(update_fields=["r4_editor_enabled"])
         response = self.client.get(reverse("dashboard:storefront-builder-r4-editor"))
         self.assertEqual(response.status_code, 200)
         r4_url = reverse("dashboard:storefront-builder-r4-editor")

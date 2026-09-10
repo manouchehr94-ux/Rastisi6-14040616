@@ -278,6 +278,21 @@ async function waitSaved({ expectConflict = false, expectError = false, timeout 
 }
 
 // ---- Section 11 — preview helper -------------------------------------------
+// Pre-Task-10 corrective closure (Item 1) — video_section's own REAL
+// contract is a real third-party <iframe> embed (video_section.html:
+// `<iframe src="{{ video_embed_url }}">`, product_video_service.py's own
+// `embed_url()`) — the family's real render proof genuinely requires one to
+// exist inside Preview. Any src OUTSIDE this explicit allowlist is still a
+// hard failure (the invariant this guards — an accidentally double-nested
+// Preview-inside-Preview iframe — is completely unrelated to a real video
+// provider's domain, so this never masks that bug).
+function isExpectedVideoEmbedIframeSrc(src) {
+  return (
+    /^https:\/\/www\.youtube(-nocookie)?\.com\/embed\//.test(src || '')
+    || /^https:\/\/www\.aparat\.com\/video\/video\/embed\//.test(src || '')
+  );
+}
+
 async function previewFrame() {
   const locator = page.locator('#r4PreviewFrame');
   await locator.waitFor({ state: 'visible', timeout: 15000 });
@@ -285,8 +300,9 @@ async function previewFrame() {
   const frame = await handle.contentFrame();
   assert(frame, 'Preview iframe is not resolvable');
   assert(frame.url().includes('/storefront-builder/preview/'), `Preview navigated away from the existing Preview endpoint: ${frame.url()}`);
-  const nestedIframeCount = await frame.locator('iframe').count();
-  assert(nestedIframeCount === 0, `Unexpected nested iframe inside Preview (${nestedIframeCount})`);
+  const iframeSrcs = await frame.locator('iframe').evaluateAll((els) => els.map((el) => el.getAttribute('src')));
+  const unexpected = iframeSrcs.filter((src) => !isExpectedVideoEmbedIframeSrc(src));
+  assert(unexpected.length === 0, `Unexpected nested iframe(s) inside Preview: ${JSON.stringify(unexpected)}`);
   return frame;
 }
 
@@ -2806,58 +2822,139 @@ async function phase3Task6FamilyGate() {
 // (its own family only, exactly like image_text's docstring already
 // explains rich_text is a genuinely different Inspector CONTROL type, not a
 // sharing case) — so each gets exactly one new shared scenario function.
+function finalRemediationFixture() {
+  const fx = manifest.phase3_fixture && manifest.phase3_fixture.final_remediation_families;
+  assert(fx && typeof fx === 'object', 'manifest.phase3_fixture.final_remediation_families is missing');
+  return fx;
+}
+
+// Pre-Task-10 CORRECTIVE closure (Item 1) — the independent-review
+// corrective pass rejected persistence-only proof as an acceptable
+// certification for families whose real merchant-facing contract is
+// RENDERING real content. Every entry below whose real render is genuinely
+// content-gated (not just field-persistence) now asserts against a REAL
+// DOM result backed by real fixture data (qa_storefront_builder_r4.py's
+// own `_prepare_phase3_final_remediation_family_gate` — a real discounted
+// Product, a real BlogPost, a real Menu+MenuItem, real MediaAsset-backed
+// HeroSlides) — never an artificial scalar-only substitute.
 const FINAL_REMEDIATION_SCALAR_EDITS = [
-  // integer item_limit — identical mechanism/assertion shape to the already-
-  // certified category_grid (Task 6) above; persisted-value-after-reload is
-  // the proof (no cheap visible-count assertion — each family's own real
-  // rendered item count is bounded by real catalog data already seeded on
-  // the QA store, not solely by item_limit).
-  { sectionKey: 'newest_products', fieldKey: 'item_limit', fieldType: 'integer', value: '5', assertReflected: async () => {} },
-  { sectionKey: 'best_sellers', fieldKey: 'item_limit', fieldType: 'integer', value: '5', assertReflected: async () => {} },
-  { sectionKey: 'discounted_products', fieldKey: 'item_limit', fieldType: 'integer', value: '5', assertReflected: async () => {} },
-  { sectionKey: 'promo_cards', fieldKey: 'item_limit', fieldType: 'integer', value: '3', assertReflected: async () => {} },
-  { sectionKey: 'amazing_offers', fieldKey: 'item_limit', fieldType: 'integer', value: '4', assertReflected: async () => {} },
-  // blog_posts.html's own title IS a real <h2>, but the whole section is
-  // gated on real blog Post rows existing (`{% if posts %}`), which this QA
-  // fixture deliberately does not create (no blog Post model anywhere else
-  // in this harness). item_limit (advanced tab) is R4-reachable and persists
-  // regardless — this family's own real, honest, non-content-dependent proof.
-  { sectionKey: 'blog_posts', fieldKey: 'item_limit', fieldType: 'integer', value: '4', advanced: true, assertReflected: async () => {} },
+  // newest_products/best_sellers: real catalog data already seeded by this
+  // point (the t12-product-* fixtures _prepare_phase3_brand_gate creates) —
+  // a real product-card DOM assertion, not persistence-only.
+  {
+    sectionKey: 'newest_products', fieldKey: 'item_limit', fieldType: 'integer', value: '5',
+    assertReflected: async (frame, sectionKey) => {
+      const cards = frame.locator(`[data-section-key="${sectionKey}"] .pcard`);
+      await cards.first().waitFor({ state: 'visible', timeout: 10000 });
+      assert(await cards.count() > 0, 'newest_products: expected at least one real .pcard in Preview');
+    },
+  },
+  {
+    sectionKey: 'best_sellers', fieldKey: 'item_limit', fieldType: 'integer', value: '5',
+    assertReflected: async (frame, sectionKey) => {
+      const cards = frame.locator(`[data-section-key="${sectionKey}"] .pcard`);
+      await cards.first().waitFor({ state: 'visible', timeout: 10000 });
+      assert(await cards.count() > 0, 'best_sellers: expected at least one real .pcard in Preview');
+    },
+  },
+  // discounted_products/amazing_offers: render_service.py's own query for
+  // BOTH is `discount_percent__gt=0` — the Python fixture creates ONE real
+  // discounted Product both families share.
+  {
+    sectionKey: 'discounted_products', fieldKey: 'item_limit', fieldType: 'integer', value: '5',
+    assertReflected: async (frame, sectionKey) => {
+      const section = frame.locator(`[data-section-key="${sectionKey}"]`);
+      await section.locator('.pcard').first().waitFor({ state: 'visible', timeout: 10000 });
+      const text = await section.textContent();
+      assert(text && text.includes('کالای تخفیف‌دار QA تسک نهایی'), `discounted_products: expected the real discounted product in Preview, got: ${text}`);
+    },
+  },
+  {
+    sectionKey: 'amazing_offers', fieldKey: 'item_limit', fieldType: 'integer', value: '4',
+    assertReflected: async (frame, sectionKey) => {
+      const section = frame.locator(`[data-section-key="${sectionKey}"]`);
+      await section.locator('h3').first().waitFor({ state: 'visible', timeout: 10000 });
+      const text = await section.textContent();
+      assert(text && text.includes('کالای تخفیف‌دار QA تسک نهایی'), `amazing_offers: expected the real discounted product in Preview, got: ${text}`);
+    },
+  },
+  // promo_cards renders real active Categories (_category_context_for_
+  // promo_cards), not products — the t12-category fixture already exists
+  // by this point.
+  {
+    sectionKey: 'promo_cards', fieldKey: 'item_limit', fieldType: 'integer', value: '3',
+    assertReflected: async (frame, sectionKey) => {
+      const heading = frame.locator(`[data-section-key="${sectionKey}"] h4`);
+      await heading.first().waitFor({ state: 'visible', timeout: 10000 });
+      const texts = await heading.allTextContents();
+      assert(texts.some((t) => t.includes('دسته T12')), `promo_cards: expected the real demo category in Preview, got: ${JSON.stringify(texts)}`);
+    },
+  },
+  // blog_posts: a real, global BlogPost row (apps.blog.models.BlogPost —
+  // genuinely NOT Store-scoped, see _blog_posts_context's own docstring).
+  {
+    sectionKey: 'blog_posts', fieldKey: 'item_limit', fieldType: 'integer', value: '4', advanced: true,
+    assertReflected: async (frame, sectionKey) => {
+      const heading = frame.locator(`[data-section-key="${sectionKey}"] .blog-card h4`);
+      await heading.first().waitFor({ state: 'visible', timeout: 10000 });
+      const texts = await heading.allTextContents();
+      assert(texts.some((t) => t.includes('مطلب وبلاگ QA تسک نهایی')), `blog_posts: expected the real BlogPost title in Preview, got: ${JSON.stringify(texts)}`);
+    },
+  },
   // hero_banner/image_slider both render via the shared
-  // hero_slider_body.html partial, which — like story_rail/single_banner/
-  // multi_banner before Task 6's own fix above — needs a real bound
-  // HeroSlide row to show anything, and HeroSlide is exactly the legacy-
-  // file-field media type layout_service._clone_section_scoped_media cannot
-  // carry across the Publish→new-Draft clone this gate runs after (see
-  // task6FamilyFieldEditScenario's comment above — reproduced live while
-  // building this gate: a QA-fixture-created PromotionalBanner using the
-  // legacy desktop_image field silently did not survive scenario 12's
-  // get_or_create_draft clone, because _clone_section_scoped_media only
-  // carries rows already migrated to the MediaAsset FK). Their own real,
-  // schema-declared fields (a choice enum / an advanced integer) are R4-
-  // reachable and persist regardless of slide content — the honest proof.
-  { sectionKey: 'hero_banner', fieldKey: 'hero_style', fieldType: 'choice', value: 'split', assertReflected: async () => {} },
-  { sectionKey: 'image_slider', fieldKey: 'interval_ms', fieldType: 'integer', value: '4000', advanced: true, assertReflected: async () => {} },
-  // video_section's title (a real h2) is gated behind a VALID video_url
-  // resolving to a real embed provider (`{% if video_embed_url or
-  // video_is_instagram %}`). An Instagram URL (not YouTube) is used
-  // deliberately: Instagram always renders as a safe opens-in-new-tab link,
-  // never an <iframe> (product_video_service.py's own documented policy) —
-  // a real embed provider WOULD render a live third-party <iframe> inside
-  // Preview, tripping previewFrame()'s own "no nested iframe" invariant for
-  // the rest of this browser session (reproduced live while building this
-  // gate: a YouTube video_url broke scenarios 14/15 too, since Home keeps
-  // this section for the whole run). video_url is the family's own real,
-  // schema-declared, non-media field either way — the honest field to prove
-  // persisted, without a live third-party network-dependent embed.
-  { sectionKey: 'video_section', fieldKey: 'video_url', fieldType: 'text', value: 'https://www.instagram.com/p/CqaQAtaSTe/', assertReflected: async () => {} },
-  // quick_links' title (a real h2) is gated behind quick_link_items, which
-  // requires a real Menu selection — menu_id has no Inspector field at all
-  // (family_certification_matrix.md: "menu_id stays legacy-form-managed, no
-  // matching Inspector field type"), so title alone can never make anything
-  // else appear. title is still this family's one real R4-reachable field;
-  // persisted-value-after-reload is its own honest proof.
-  { sectionKey: 'quick_links', fieldKey: 'title', fieldType: 'text', value: 'دسترسی سریع QA', assertReflected: async () => {} },
+  // hero_slider_body.html partial via a real MediaAsset-backed HeroSlide
+  // (qa_storefront_builder_r4.py's own _save_with_media_asset — the SAME
+  // canonical-media fix Corrective Item 3 applies to multi_banner's
+  // fixture). A single slide renders `<article class="hero-slide single">
+  // ... <h1>{{ slide.title }}</h1>`.
+  {
+    sectionKey: 'hero_banner', fieldKey: 'hero_style', fieldType: 'choice', value: 'split',
+    assertReflected: async (frame, sectionKey) => {
+      const heading = frame.locator(`[data-section-key="${sectionKey}"] .hero-slide h1`);
+      await heading.first().waitFor({ state: 'visible', timeout: 10000 });
+      const text = await heading.first().textContent();
+      assert(text && text.includes('اسلاید هیرو QA تسک نهایی'), `hero_banner: expected the real HeroSlide title in Preview, got: ${text}`);
+    },
+  },
+  {
+    sectionKey: 'image_slider', fieldKey: 'interval_ms', fieldType: 'integer', value: '4000', advanced: true,
+    assertReflected: async (frame, sectionKey) => {
+      const heading = frame.locator(`[data-section-key="${sectionKey}"] .hero-slide h1`);
+      await heading.first().waitFor({ state: 'visible', timeout: 10000 });
+      const text = await heading.first().textContent();
+      assert(text && text.includes('اسلاید تصویر QA تسک نهایی'), `image_slider: expected the real HeroSlide title in Preview, got: ${text}`);
+    },
+  },
+  // video_section: a REAL YouTube URL — video_section.html's own
+  // `<iframe src="{{ video_embed_url }}">` is the family's real contract.
+  // previewFrame()'s "no nested iframe" invariant now explicitly allowlists
+  // this exact embed pattern (isExpectedVideoEmbedIframeSrc above) rather
+  // than avoiding a real embed provider to dodge that check.
+  {
+    sectionKey: 'video_section', fieldKey: 'video_url', fieldType: 'text', value: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    assertReflected: async (frame, sectionKey) => {
+      const iframe = frame.locator(`[data-section-key="${sectionKey}"] iframe`);
+      await iframe.first().waitFor({ state: 'visible', timeout: 10000 });
+      const src = await iframe.first().getAttribute('src');
+      assert(src && src.startsWith('https://www.youtube.com/embed/'), `video_section: expected a real YouTube embed iframe in Preview, got src: ${src}`);
+    },
+  },
+  // quick_links: Pre-Task-10 corrective closure — menu_id is now a real R4
+  // Inspector field (section_registry.QUICK_LINKS_SCHEMA's new
+  // `menu_picker` field type), not legacy-form-only. Selecting the Python
+  // fixture's real Menu (one real MenuItem, a Category destination) is this
+  // family's own real edit; quick_links.html renders one card per resolved
+  // MenuItem.
+  {
+    sectionKey: 'quick_links', fieldKey: 'menu_id', fieldType: 'choice',
+    value: String(finalRemediationFixture().quick_links_menu_id),
+    assertReflected: async (frame, sectionKey) => {
+      const link = frame.locator(`[data-section-key="${sectionKey}"] a`);
+      await link.first().waitFor({ state: 'visible', timeout: 10000 });
+      const texts = await link.allTextContents();
+      assert(texts.some((t) => t.includes('دسته T12 QA')), `quick_links: expected the real MenuItem card in Preview, got: ${JSON.stringify(texts)}`);
+    },
+  },
   // product_section's own title h2 (product_section.html) is OUTSIDE any
   // products-exist gate — a real DOM assertion, matching newsletter's own
   // proven pattern above.
@@ -3062,6 +3159,113 @@ async function phase3FinalRemediationFamilyGate() {
   await finalRemediationRichTextEditScenario();
   await closeInspectorIfOpen();
 
+  // Pre-Task-10 CORRECTIVE closure (Item 1) — the required contract chain
+  // is "... -> Publish -> Public reflects the published state -> later
+  // Draft-only mutation -> Public remains unchanged -> family-specific real
+  // DOM/render assertion." The 11 edits above already proved "R4 control
+  // reachable -> mutation -> persistence -> Draft Preview reflects it" for
+  // every family; repeating a full Publish/Public/Draft-isolation cycle for
+  // all 15 would be the "automatically rewrite/repeat all 15 scenarios"
+  // the user explicitly ruled out. ONE consolidated pass, reusing the exact
+  // primitives scenario10Publish/scenario11PublicParity/
+  // scenario12NewDraftOnlyChange/scenario13PublicUnchanged already proved
+  // (the shared `publicPage` tab opened by scenario11PublicParity is still
+  // open at this point in main()'s scenario order), is proportionate.
+  // quick_links is the representative family: it is the one the corrective
+  // prompt named as the concrete risk of a persistence-only rubber stamp
+  // ("If quick_links.menu_id is genuinely a required merchant-facing
+  // setting ... that is NOT a certification success"), and its real render
+  // (a resolved MenuItem's own label, quick_links.html's `<a>`) is a real
+  // domain fixture, not a synthetic sentinel string.
+  const finalRemediationFx = finalRemediationFixture();
+  assert(publicPage, 'phase3-final-remediation-family-gate: expected the shared publicPage tab from scenario11PublicParity to still be open');
+
+  const beforeFinalPublishCount = result.publish_posts.length;
+  await withExpectedNavigation(() => Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
+    page.click('#r4PublishButton'),
+  ]));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
+  assert(result.publish_posts.length - beforeFinalPublishCount === 1, `phase3-final-remediation-family-gate: expected exactly 1 publish POST, got ${result.publish_posts.length - beforeFinalPublishCount}`);
+  assert(result.publish_posts[result.publish_posts.length - 1].status === 200, 'phase3-final-remediation-family-gate: publish must return 200');
+
+  await publicPage.reload({ waitUntil: 'domcontentloaded', timeout: 20000 });
+  const publishedFinalRemediationHtml = await publicPage.content();
+  assert(
+    publishedFinalRemediationHtml.includes('دسته T12 QA'),
+    'phase3-final-remediation-family-gate: Public storefront must reflect the published quick_links MenuItem after Publish',
+  );
+  await publicPage.screenshot({ path: shot('12_final_remediation_publish_public_parity.png') });
+  result.screenshots.push(shot('12_final_remediation_publish_public_parity.png'));
+
+  // "... responsive/no-overflow ... checks where applicable" — Home now
+  // carries all 11 newly-real-rendered families (hero_banner's HeroSlide,
+  // quick_links' MenuItem, blog_posts' BlogPost, the discounted Product,
+  // the real Category/embed content, etc.) after the Publish above, so ONE
+  // mobile-viewport check on this single already-published page — the
+  // exact scrollWidth<=clientWidth assertion phase3PublicMatrix's own A06
+  // envelope check already uses — proportionately covers "where applicable"
+  // for the whole batch, rather than a bespoke per-family repeat.
+  const mobileViewport = PHASE3_VIEWPORTS.find((v) => v.name === 'mobile');
+  assert(mobileViewport, 'PHASE3_VIEWPORTS must define a "mobile" viewport');
+  const mobileCtx = await browser.newContext({ viewport: { width: mobileViewport.width, height: mobileViewport.height } });
+  await mobileCtx.addCookies([manifest.session]);
+  const mobilePublicPage = await mobileCtx.newPage();
+  try {
+    await mobilePublicPage.goto(manifest.public_url, { waitUntil: 'networkidle', timeout: 25000 });
+    const mobileOverflow = await mobilePublicPage.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
+    assert(
+      mobileOverflow.scrollWidth <= mobileViewport.width + 1,
+      `phase3-final-remediation-family-gate: Home must not overflow horizontally at mobile width — scrollWidth=${mobileOverflow.scrollWidth} > ${mobileViewport.width + 1}`,
+    );
+  } finally {
+    await mobileCtx.close();
+  }
+
+  // Publish cloned a brand-new Draft with new Section PKs — rediscover
+  // quick_links from the fresh Preview (openSectionById would 404, exactly
+  // task6FamilyFieldEditScenario's own documented reason for using
+  // openSectionViaPreview instead).
+  await openSectionViaPreview('quick_links');
+  const menuField = fieldControl('menu_id');
+  const beforeDraftOnlyMutateCount = result.mutation_posts.length;
+  await menuField.selectOption('');
+  await waitForMutationPostCount(beforeDraftOnlyMutateCount + 1);
+  await waitSaved();
+  assert(result.mutation_posts[result.mutation_posts.length - 1].status === 200, 'phase3-final-remediation-family-gate: Draft-only quick_links edit must succeed');
+  await closeInspectorIfOpen();
+
+  // A plain scalar Inspector edit does not itself reload the Preview
+  // iframe (task6FamilyFieldEditScenario's own documented reason) — reload
+  // R4, exactly scenario12NewDraftOnlyChange's own pattern, before reading
+  // Preview.
+  await withExpectedNavigation(() => page.reload({ waitUntil: 'domcontentloaded' }));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });
+  const draftOnlyFrame = await previewFrame();
+  const quickLinksSection = draftOnlyFrame.locator('[data-section-key="quick_links"]');
+  await quickLinksSection.first().waitFor({ state: 'visible', timeout: 10000 });
+  const draftOnlyLinkCount = await quickLinksSection.locator('a', { hasText: 'دسته T12 QA' }).count();
+  assert(draftOnlyLinkCount === 0, 'phase3-final-remediation-family-gate: Draft Preview must reflect the cleared menu_id (no MenuItem link)');
+
+  await publicPage.reload({ waitUntil: 'domcontentloaded', timeout: 20000 });
+  const publicAfterDraftOnlyEditHtml = await publicPage.content();
+  assert(
+    publicAfterDraftOnlyEditHtml.includes('دسته T12 QA'),
+    'phase3-final-remediation-family-gate: Public storefront must remain unchanged (still the published MenuItem) after a Draft-only edit',
+  );
+
+  // Restore the Draft to the fixture's real Menu selection so downstream
+  // scenarios (14, 15) observe the same fixture state task6FamilyFieldEditScenario
+  // already certified above, rather than leaving quick_links stripped.
+  await openSectionViaPreview('quick_links');
+  await fieldControl('menu_id').selectOption(String(finalRemediationFx.quick_links_menu_id));
+  await waitForMutationPostCount(beforeDraftOnlyMutateCount + 2);
+  await waitSaved();
+  await closeInspectorIfOpen();
+
   const consoleErrorsAfter = result.console_errors.filter(
     (e) => !isExpectedStaleConflictNoise(e) && !FAVICON_URL_PATTERN.test(e?.location?.url || '') && !isExpectedBrokenImageNoise(e?.location?.url),
   );
@@ -3209,17 +3413,28 @@ async function scenario14CompositionAndRecoveryGate() {
   // ---- Enable/disable: brand_carousel disappears from Preview when
   // toggled inactive (build_page_render_items filters is_active=True), and
   // reappears when toggled back — real effect, not just a class flip.
+  // Corrective closure (Item 3, defect #2) — phase3BrandGate's own base
+  // fixture ALSO places a brand_carousel Section on Home (see its "Home
+  // also carries the BASE fixture's brand_carousel" note near
+  // phase3FamilyPublicMatrix above), so a bare `[data-section-key=
+  // "brand_carousel"]` locator resolves to more than one element once this
+  // scenario runs after phase3BrandGate in the same --phase3 session —
+  // reproduced live as a strict-mode locator violation, not a theoretical
+  // concern. Scope to the SPECIFIC Section this scenario opened via its own
+  // real `data-section-id`, exactly like every Structure-panel selector on
+  // this same brandSectionId already does two lines below.
   const brandSectionId = await openSectionViaPreview('brand_carousel');
   await closeInspectorIfOpen();
+  const brandCarouselPreviewSelector = `[data-section-key="brand_carousel"][data-section-id="${brandSectionId}"]`;
   await page.click(`[data-r4-structure-row][data-r4-structure-section-id="${brandSectionId}"] [data-r4-structure-toggle-active]`);
   await waitSaved();
   frame = await previewFrame();
-  await frame.locator('[data-section-key="brand_carousel"]').waitFor({ state: 'detached', timeout: 10000 });
+  await frame.locator(brandCarouselPreviewSelector).waitFor({ state: 'detached', timeout: 10000 });
 
   await page.click(`[data-r4-structure-row][data-r4-structure-section-id="${brandSectionId}"] [data-r4-structure-toggle-active]`);
   await waitSaved();
   frame = await previewFrame();
-  await frame.locator('[data-section-key="brand_carousel"]').waitFor({ state: 'visible', timeout: 10000 });
+  await frame.locator(brandCarouselPreviewSelector).waitFor({ state: 'visible', timeout: 10000 });
 
   // ---- Lock: move buttons disable/re-enable with the flag; unlock again
   // so this section behaves normally afterward.

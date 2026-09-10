@@ -31,6 +31,14 @@ ALLOWED_FIELD_TYPES = frozenset({
     "resource_source",
     "appearance_override",
     "repeater",
+    #: Pre-Task-10 corrective closure — an FK picker into the existing
+    #: Store-scoped Menu/MenuItem navigation infrastructure (the same model
+    #: the legacy settings form's own Menu dropdown already uses — see
+    #: ``views.py``'s ``all_menus`` context helper). Exactly the same
+    #: "declare the field, let the view project a dynamic Store-scoped
+    #: choice list into the Inspector context" pattern ``resource_source``
+    #: already established below — never a second Menu authority/model.
+    "menu_picker",
 })
 
 #: R4 Task 6 (Group D) — a ``repeater`` item's own sub-fields must be
@@ -277,6 +285,27 @@ def _clean_field_value(field: SettingsField, raw_value: object) -> object:
 
     if field.field_type == "repeater":
         return _clean_repeater_value(field, raw_value)
+
+    if field.field_type == "menu_picker":
+        # Same "no value selected" contract as the legacy form's own
+        # `request.POST.get("menu_id") or None` — an empty/blank selection
+        # (or an explicit "" from the <select>'s placeholder option) is a
+        # valid, deliberate "no menu chosen" state, not an error. Store
+        # ownership is NOT re-checked here (this module has no request/store
+        # context) — exactly like the legacy form: the dropdown is already
+        # Store-scoped at render time (never offering a foreign Menu id to
+        # pick from), and render_service re-resolves/ignores a foreign or
+        # stale id at render time regardless of how it got saved. R4 matches
+        # this existing behavior exactly, not a new/stricter contract.
+        if raw_value in (None, "", "null"):
+            return None
+        try:
+            cleaned = int(normalize_digits(raw_value))
+        except (TypeError, ValueError) as exc:
+            raise SettingsSchemaError(
+                f"Invalid menu_picker value for {field.key!r}: {raw_value!r}"
+            ) from exc
+        return cleaned if cleaned > 0 else None
 
     if field.field_type == "resource_source":
         # R4 Task 9 — the generic typed shape only (kind/mode/auto_rule/

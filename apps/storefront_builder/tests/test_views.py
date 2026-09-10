@@ -32,6 +32,22 @@ class StorefrontBuilderViewsTestCase(TestCase):
         )
         self.client = Client(HTTP_HOST=HOST)
         self.client.login(username="sfb_owner", password="pass12345")
+        # Pre-Task-10 CORRECTIVE closure (Item 2, second legacy retirement
+        # pass) — editor.html's own composition/settings/toggle-lock/reset/
+        # Appearance-Header-Footer body now renders ONLY for a Store pinned
+        # back to the legacy editor (``r4_editor_enabled=False``); a Store
+        # on the live default (True) sees the new minimal compatibility
+        # surface instead (see editor.html's own top-of-file comment).
+        # Every test below this point was written against — and still
+        # genuinely exercises — the FULL legacy editor body: that body must
+        # keep working correctly for a Store that really is pinned back, so
+        # this fixture pins every test in this file (and every file that
+        # imports this base case) to that still-required code path, rather
+        # than the now-separate minimal-surface behavior EditorAccessTests
+        # and R4EditorMinimalCompatibilitySurfaceTests below test directly.
+        layout = svc.get_or_create_layout(self.store)
+        layout.r4_editor_enabled = False
+        layout.save(update_fields=["r4_editor_enabled"])
 
 
 class EditorAccessTests(StorefrontBuilderViewsTestCase):
@@ -55,7 +71,9 @@ class EditorAccessTests(StorefrontBuilderViewsTestCase):
         # canonical merchant editor); the flag is a non-blocking
         # compatibility mechanism only, for a Store explicitly pinned back
         # to the legacy editor. The legacy editor must not offer a link
-        # into a route that would 404 for such a Store.
+        # into a route that would 404 for such a Store. (The base setUp
+        # above already pins this Store to False — this test re-asserts it
+        # explicitly since it is the whole point being tested.)
         layout = svc.get_or_create_layout(self.store)
         layout.r4_editor_enabled = False
         layout.save(update_fields=["r4_editor_enabled"])
@@ -64,12 +82,28 @@ class EditorAccessTests(StorefrontBuilderViewsTestCase):
 
     def test_r4_editor_link_shown_by_default(self):
         # Pre-Task-10 remediation (R4 live cutover) — the default is now
-        # enabled, so a Store that never touched the flag still sees the
-        # link (and the dashboard nav itself, per base_admin.html, now
+        # enabled, so a Store that never touched the flag sees R4's own
+        # link/CTA (and the dashboard nav itself, per base_admin.html, now
         # routes straight to R4 rather than needing this link at all).
+        # Pre-Task-10 CORRECTIVE closure (Item 2) — the base setUp pins this
+        # whole file's Store to r4_editor_enabled=False so every OTHER test
+        # here keeps exercising the still-required full legacy body; this
+        # one test explicitly restores the real model default (True) to
+        # verify what a Store that never touched the flag actually sees:
+        # the new minimal compatibility surface (editor.html's ``{% if
+        # layout.r4_editor_enabled %}`` branch), not the retired full body.
+        layout = svc.get_or_create_layout(self.store)
+        layout.r4_editor_enabled = True
+        layout.save(update_fields=["r4_editor_enabled"])
         resp = self.client.get(reverse("dashboard:storefront-builder-editor"))
         self.assertContains(resp, "ادیتور جدید (R4)")
         self.assertContains(resp, reverse("dashboard:storefront-builder-r4-editor"))
+        # The retirement itself: none of the duplicate full-editor surfaces
+        # (composition/settings Alpine SPA, R3 modal, section library) may
+        # render for a Store on the live R4 default.
+        self.assertNotContains(resp, "sfb-add-section-category")
+        self.assertNotContains(resp, "storefrontEditor()")
+        self.assertNotContains(resp, "sfbR3Modal")
 
     def test_publish_form_carries_the_current_edit_revision(self):
         """R4 Task 8 (Batch 2, lifecycle-hardening) — ``storefront_publish``'s

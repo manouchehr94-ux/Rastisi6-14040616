@@ -2006,17 +2006,21 @@ def default_quick_links_settings() -> dict:
     return {"title": "", "menu_id": None}
 
 
-#: R4 Task 6 (Group D) — ``menu_id`` is deliberately NOT declared here:
-#: it is an FK into the existing Menu/MenuItem navigation infrastructure
-#: (see ``_validate_quick_links_settings`` above), not a catalog
-#: ResourceSource kind (``ALLOWED_KINDS`` is product/category/brand/
-#: collection only) and none of the other Inspector-supported field
-#: types fit an FK picker either. It stays managed exclusively through
-#: the legacy settings form's existing Menu picker UI, preserved as an
-#: unmanaged key exactly like the responsive/motion/layout/background/
-#: spacing wrapper blocks are.
+#: Pre-Task-10 corrective closure — ``menu_id`` IS now declared: R4 Task 6
+#: (Group D) originally left it legacy-form-managed because none of the
+#: then-existing Inspector field types fit an FK-into-Menu picker. The
+#: independent-review corrective pass classified that as a genuine R4
+#: field-parity gap (not an acceptable certification shortcut) rather than
+#: a QA-harness concern, so a new ``menu_picker`` field type was added to
+#: ``settings_schema``'s closed field-type vocabulary (never a second Menu
+#: model/authority — it is an FK into the exact same Store-scoped Menu the
+#: legacy settings form's own dropdown already uses; see
+#: ``r4_views.py``'s ``storefront_r4_section_inspector``, which projects
+#: the Store's own Menus into the Inspector context the same way it already
+#: projects a resource_source's dynamic summary).
 QUICK_LINKS_SCHEMA = SettingsSchema(fields=(
     SettingsField("title", "عنوان بخش", "text", "basic", default="", max_length=_MAX_SECTION_TITLE_LENGTH),
+    SettingsField("menu_id", "منو", "menu_picker", "basic", default=None),
 ))
 
 

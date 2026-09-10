@@ -543,6 +543,27 @@ class CleanSectionSchemaPatchBridgeTests(SimpleTestCase):
         expected = rich_text.validate_settings({**current, "body_html": "<p>سلام</p>"})
         self.assertEqual(bridged, expected)
 
+    def test_quick_links_menu_picker_bridge_matches_legacy_validator_result(self):
+        # Pre-Task-10 corrective closure — menu_id was previously an
+        # "Unknown settings key" through this R4 bridge (not schema-
+        # declared at all); now it is a real menu_picker field.
+        quick_links = section_registry.get_definition("quick_links")
+        current = quick_links.validate_settings(quick_links.default_settings())
+
+        bridged = clean_section_schema_patch(quick_links, {"menu_id": 7}, current)
+
+        expected = quick_links.validate_settings({**current, "menu_id": 7})
+        self.assertEqual(bridged, expected)
+        self.assertEqual(bridged["menu_id"], 7)
+
+    def test_quick_links_menu_picker_empty_string_clears_selection(self):
+        quick_links = section_registry.get_definition("quick_links")
+        current = quick_links.validate_settings({"menu_id": 7})
+
+        bridged = clean_section_schema_patch(quick_links, {"menu_id": ""}, current)
+
+        self.assertIsNone(bridged["menu_id"])
+
     def test_hero_preserves_supported_legacy_wrapper_blocks(self):
         hero = section_registry.get_definition("hero_banner")
         current = hero.validate_settings(hero.default_settings())

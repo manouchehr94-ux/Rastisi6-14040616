@@ -55,6 +55,25 @@ must never silently fall back to a plain text input for an unsupported type.
     {% endfor %}
   </select>
 
+  {% elif field.field_type == "menu_picker" %}
+  {# Pre-Task-10 corrective closure — an FK picker into the Store-scoped   #}
+  {# Menu/MenuItem navigation infrastructure (menu_choices, computed by    #}
+  {# r4_views.py the same way resource_source_summary is), never a second  #}
+  {# Menu authority. Hydrated by the same generic hydrateFieldValues()     #}
+  {# path every other scalar control uses (no dedicated JS listener).      #}
+  <select id="r4Field-{{ field.key }}"
+          class="r4-control"
+          data-r4-field-key="{{ field.key }}"
+          data-r4-field-type="menu_picker">
+    <option value="">— بدون منو —</option>
+    {% for menu in menu_choices %}
+    <option value="{{ menu.pk }}">{{ menu.title }} ({{ menu.get_location_display }})</option>
+    {% endfor %}
+  </select>
+  {% if not menu_choices %}
+  <p class="r4-field-sublabel">هنوز هیچ منویی نساخته‌اید — از «منوها» در پنل مدیریت یک منو بسازید.</p>
+  {% endif %}
+
   {% elif field.field_type == "appearance_override" %}
   {# Compound widget — represents ONE schema field (an object), never a  #}
   {# scalar. Nested controls intentionally carry no data-r4-field-key so #}

@@ -5,12 +5,57 @@
 {% block page_sub %}ویرایش بصری صفحات فروشگاه{% endblock %}
 
 {% block extra_css %}
+{% if not layout.r4_editor_enabled %}
 <link rel="stylesheet" href="{% static 'css/storefront_builder.css' %}">
 <link rel="stylesheet" href="{% static 'css/storefront_builder_v22.css' %}">
 <link rel="stylesheet" href="{% static 'css/storefront_builder_r3.css' %}">
+{% endif %}
 {% endblock %}
 
 {% block content %}
+{% if layout.r4_editor_enabled %}
+{% comment %}
+Pre-Task-10 CORRECTIVE closure (Item 2, second legacy retirement pass) —
+R4 is this Store's live default editor, so every merchant-facing surface
+below (composition editing, settings editing, toggle/lock, granular
+reset, Appearance/Header/Footer forms — everything the sfb-r3-shell
+Alpine SPA and its R3 modal used to expose) is now genuine duplicate
+dead-weight UI, per family_certification_matrix.md/legacy_disposition.md.
+Physically removing it here (not merely reclassifying the doc row) is
+what closes Gap 3 in full. The ONLY two capabilities re-verified to have
+no R4 equivalent — restore/history browsing and the industry-vertical
+layout preset — are preserved below, unconditionally reachable. The FULL
+legacy shell (the other branch below, byte-for-byte unchanged) still
+renders whenever r4_editor_enabled is False — the documented per-Store
+rollback safety valve. Retiring the duplicate UI must never also retire
+the one remaining editor for a Store deliberately pinned back to it, so
+this branch is conditional, not an outright deletion of the legacy body
+below.
+{% endcomment %}
+<div class="card">
+  <h2>ادیتور نسخه قدیمی</h2>
+  <p>ادیتور جدید (R4) اکنون ابزار اصلی و مرجع نوشتن برای ویرایش ظاهر این فروشگاه است. این صفحه فقط دو قابلیتی را نگه داشته که هنوز معادلی در R4 ندارند؛ بقیه‌ی امکانات ویرایش (بخش‌ها، چیدمان، ظاهر/هدر/فوتر و…) اکنون فقط از ادیتور جدید در دسترس‌اند.</p>
+  <a class="btn" href="{% url 'dashboard:storefront-builder-r4-editor' %}?page={{ page_type }}">✦ رفتن به ادیتور جدید (R4)</a>
+</div>
+
+<div class="card" style="margin-top:14px">
+  <h3>تاریخچه و بازگردانی نسخه‌ها</h3>
+  <p>نسخه‌های قبلاً منتشرشده را مرور و در صورت نیاز، محتوای یکی از آن‌ها را در یک پیش‌نویس جدید بازگردانی کن.</p>
+  <a class="btn" href="{% url 'dashboard:storefront-builder-history' %}">تاریخچه نسخه‌ها</a>
+</div>
+
+{% if industry_installation %}
+<div class="card" style="margin-top:14px">
+  <h3>چیدمان پیشنهادی صنف</h3>
+  <p>چیدمان پیشنهادیِ صنفِ نصب‌شده روی این فروشگاه را در یک پیش‌نویس جدید اعمال کن.</p>
+  <form method="post" action="{% url 'dashboard:storefront-builder-apply-industry-layout' %}"
+        {% if layout.published_version_id %}onsubmit="if(!confirm('اعمال چیدمان پیشنهادی، Draft فعلی را جایگزین می‌کند. ادامه می‌دهید؟')){return false;} this.confirm.value='1'; return true;"{% endif %}>
+    {% csrf_token %}<input type="hidden" name="confirm" value="0">
+    <button type="submit" class="btn">چیدمان پیشنهادی صنف</button>
+  </form>
+</div>
+{% endif %}
+{% else %}
 <div class="sfb-shell sfb-prototype-shell sfb-v3-shell sfb-v22-workspace sfb-r3-shell"
      :class="{
        'sfb-fullscreen': fullscreen,
@@ -389,9 +434,11 @@
     </div>
   </div>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
+{% if not layout.r4_editor_enabled %}
 <script>
 // Shared low-level POST used by every settings form's save path (R2 sidebar
 // autosave and the R3 modal's explicit Save/Done buttons alike) — one
@@ -1592,4 +1639,5 @@ function destinationPicker(initialType, initialId, initialName) {
   };
 }
 </script>
+{% endif %}
 {% endblock %}

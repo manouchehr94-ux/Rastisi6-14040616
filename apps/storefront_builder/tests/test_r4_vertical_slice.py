@@ -2606,3 +2606,77 @@ class TemplateSwitchPreservingContentTests(R4MutationApiTestCase):
         new_home.refresh_from_db()
         sections_after_reset_attempt = list(new_home.sections.order_by("order", "id").values_list("section_key", "settings"))
         self.assertEqual(sections_after_reset_attempt, sections_before_reset_attempt)
+
+
+class QuickLinksMenuPickerR4Tests(R4VerticalSliceTestCase):
+    """Pre-Task-10 corrective closure — ``quick_links.menu_id`` was a real
+    R4 field-parity gap (the independent-review corrective pass explicitly
+    rejected "R4 has no way to set it" as an acceptable certification
+    shortcut), not a QA-harness concern. Closed via a new ``menu_picker``
+    settings-schema field type — an FK into the exact same Store-scoped
+    Menu the legacy settings form's own dropdown already uses, never a
+    second Menu authority."""
+
+    def setUp(self):
+        super().setUp()
+        from apps.content.models import Menu
+
+        self.menu = Menu.objects.create(
+            store=self.store, title="منوی اصلی", location=Menu.Location.HEADER, is_active=True,
+        )
+        self.foreign_store = Store.objects.create(
+            name="فروشگاه دیگر", slug="r4-quick-links-other-store",
+            admin_subdomain="r4-quick-links-other-store",
+        )
+        self.foreign_menu = Menu.objects.create(
+            store=self.foreign_store, title="منوی دیگر", location=Menu.Location.HEADER, is_active=True,
+        )
+
+    def test_inspector_offers_only_this_stores_active_menus(self):
+        section, _, _ = self._place_new_section("quick_links")
+        response = self.client.get(
+            reverse("dashboard:storefront-builder-r4-section-inspector", kwargs={"pk": section.pk}),
+        )
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn(f'value="{self.menu.pk}"', content)
+        self.assertNotIn(f'value="{self.foreign_menu.pk}"', content)
+
+    def test_menu_id_mutation_persists_and_is_reachable(self):
+        section, _, _ = self._place_new_section("quick_links")
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": section.pk,
+                "patch": {"menu_id": self.menu.pk},
+            },
+        })
+        self.assertEqual(response.status_code, 200)
+        section.refresh_from_db()
+        self.assertEqual(section.settings["menu_id"], self.menu.pk)
+
+        # Server-authoritative reachability: re-open the Inspector and
+        # confirm the persisted value is what the field would hydrate to
+        # (the JSON script tag hydrateFieldValues() reads client-side).
+        response = self.client.get(
+            reverse("dashboard:storefront-builder-r4-section-inspector", kwargs={"pk": section.pk}),
+        )
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn('"menu_id"', content)
+        self.assertIn(str(self.menu.pk), content)
+
+    def test_clearing_menu_id_persists_none(self):
+        section, _, _ = self._place_new_section("quick_links", settings={"title": "", "menu_id": self.menu.pk})
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": section.pk,
+                "patch": {"menu_id": ""},
+            },
+        })
+        self.assertEqual(response.status_code, 200)
+        section.refresh_from_db()
+        self.assertIsNone(section.settings["menu_id"])

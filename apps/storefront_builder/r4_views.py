@@ -10,6 +10,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.catalog.models import Brand, Category, MerchantCollection
 from apps.catalog.services.collection_service import searchable_products
+from apps.content.models import Menu
 from apps.dashboard.decorators import permission_required, staff_required
 from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
 from apps.stores.resolution import resolve_store_for_service
@@ -54,6 +55,7 @@ _INSPECTOR_SUPPORTED_FIELD_TYPES = frozenset({
     "appearance_override",
     "resource_source",
     "repeater",
+    "menu_picker",
 })
 
 #: R4 Task 7 — merchant-facing Persian labels for the existing curated
@@ -729,6 +731,21 @@ def storefront_r4_section_inspector(request, pk):
             "manual_count": len(projected_source.manual_ids),
         }
 
+    # Pre-Task-10 corrective closure — a menu_picker field's dropdown is
+    # ALWAYS Store-scoped at render time, exactly like the legacy settings
+    # form's own ``all_menus`` context helper (``views.py``) — never a
+    # foreign Store's Menu is offered to pick from. Computed generically for
+    # any schema (menu_picker is not quick_links-specific in principle),
+    # same "only if this field type is present" pattern resource_source
+    # uses above.
+    menu_choices = None
+    for field in schema.fields:
+        if field.field_type != "menu_picker":
+            continue
+        menu_choices = list(
+            Menu.objects.filter(store=store, is_active=True).order_by("title")
+        )
+
     return render(
         request,
         "dashboard/storefront_builder/r4/partials/section_inspector.html",
@@ -747,6 +764,7 @@ def storefront_r4_section_inspector(request, pk):
             "resource_source_summary": resource_source_summary,
             "media_manage_url": media_manage_url,
             "media_label_plural": media_label_plural,
+            "menu_choices": menu_choices,
         },
     )
 

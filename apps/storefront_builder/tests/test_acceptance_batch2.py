@@ -834,6 +834,15 @@ class MerchantResetUITests(TestCase):
         self.preset = lpr.get_layout_preset("dense_marketplace")
         preset_service.apply_preset(self.draft, self.preset)
         self.draft.refresh_from_db()
+        # Pre-Task-10 CORRECTIVE closure (Item 2, second legacy retirement
+        # pass) — the granular reset UI this class exercises now renders
+        # only inside editor.html's still-required FULL legacy body (a
+        # Store explicitly pinned back with r4_editor_enabled=False); on
+        # the live R4 default it is retired along with the rest of the
+        # duplicate merchant-editing surface.
+        layout = svc.get_or_create_layout(self.store)
+        layout.r4_editor_enabled = False
+        layout.save(update_fields=["r4_editor_enabled"])
 
     def test_section_reset_control_shown_only_for_baseline_origin_sections(self):
         target = _baseline_section(self.draft, "product_section")
