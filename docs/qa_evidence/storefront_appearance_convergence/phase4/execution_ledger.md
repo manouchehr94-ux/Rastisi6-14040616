@@ -406,3 +406,69 @@ commit-by-commit summary.
   full 16-scenario browser harness re-run (not a fourth review round, since neither fix touches
   mutation/scoping logic) plus `py_compile`/`node --check`/sanity checks — all clean. Committed and
   pushed as `ab22e3d`. **Task 7 is now CLOSED.**
+
+- **Task 8 — Template Switch + lifecycle hardening, Batch 1+2** (continuation session,
+  2026-09-10). Short gap audit (12 requirements, using the committed Phase-4 architecture audit plus
+  direct code reads — no broad archaeology) found the real gap: `preset_service.apply_preset` always
+  wipes/rebuilds page composition for every recipe-covered page, so switching a store's Ready
+  Template has never been possible without losing merchant content; `appearance_authority_service.
+  apply_ready_template_appearance` (a canonical, already-tested DNA-only primitive) had zero
+  production callers. Batch 1: `preset_service.switch_template_preserving_content` (checkpoint-clone
+  + DNA-only apply, reusing both canonical primitives unchanged); a new Draft-replacing
+  `r4_mutation_service.switch_template` + `storefront_r4_switch_template` view/URL, same contract
+  shape as Publish/Discard/Reset-page/Reset-storefront; kept deliberately separate from the
+  pre-existing, already-tested `appearance.template.apply` full-recipe mutation type (two genuinely
+  different operations); new Global Design panel picker UI. Batch 2 (three items from the earlier
+  architecture audit, §5 conflict #6): legacy `storefront_section_remove`/`storefront_section_move`
+  gained the container-lock check R4's own equivalents already had (reusing
+  `section_structure_service.find_placement_cell`, made public for this); `container_service.
+  move_block` gained a source-side container-lock check (a first attempt hit a real intra-request
+  ORM-staleness bug, caught by a RED test before the fix); `@transaction.atomic` added to three
+  legacy structure views; the legacy Publish form's missing `base_revision` field added. Targeted
+  tests: 8 new `TemplateSwitchPreservingContentTests`, 4 new container-lock-parity tests, 1 new
+  move_block source-lock test, 3 new publish-base_revision tests — all pass; full targeted
+  regression across every touched module (606 tests) showed only the 3 already-documented
+  pre-existing frozen-baseline failures. Committed and pushed as `542197b`.
+
+- **Task 8 browser certification** (continuation session, 2026-09-10). `scenario15TemplateSwitch
+  LifecycleGate` added to the R4 browser QA harness (registered after Task 7's own last scenario),
+  exercising the full workflow end-to-end including a genuine before/after header-CSS-class diff
+  (never a hardcoded class name — a Ready Template's `header` kwarg is a component key that can
+  alias to a different rendered variant, discovered the hard way while iterating this scenario) and
+  Draft/Public separation. A debug-only `R4_QA_ONLY_SCENARIO` env-var scenario selector was added to
+  the harness to let a single scenario be iterated on directly instead of re-running the full ~15-
+  scenario campaign on every assertion fix — confirmed unreferenced by the Python management command
+  and a no-op when unset. Fixed while iterating to green: the merchant-content marker (hero_banner's
+  structural variant needs real media data this fixture lacks; switched to a `product_section`
+  title), ambiguous section discovery (multiple earlier scenarios already add their own
+  `product_section`s to the same long-lived fixture page; scoped by this scenario's own sentinel
+  text), an open Global Design panel intercepting Preview-targeted clicks, a "stale" `base_revision`
+  that went negative for a fresh Draft starting at revision 0, and `#r4UndoButton`'s disabled
+  attribute only being server-rendered at page-load time (never toggled client-side). Verified:
+  scenario 15 green in isolation, full 17-scenario harness green in one complete run, sanity checks
+  clean. Committed and pushed as `34278a6`.
+
+- **Independent Task-8 review and closure fix** (continuation session, 2026-09-10). One fresh,
+  isolated-worktree independent reviewer audited the full diff since the Task-7 baseline (`51df4a7`).
+  Verdict: CRITICAL 1, IMPORTANT 0, MINOR 4. The CRITICAL finding: `switch_template_preserving_
+  content` deliberately leaves `template_baseline_snapshot` describing the OLD Template after
+  updating `template_provenance` to the new one (documented as intentional — rebuilding it would
+  fabricate a historical baseline never actually applied) — but `reset_storefront_to_baseline` read
+  that specific mismatch as indistinguishable from "no accurate snapshot at all" and silently fell
+  into its legacy-compatibility fallback, fetching the new Template fresh from the live registry and
+  wiping every covered page's composition, reachable via an ordinary two-click merchant workflow
+  (switch template, then click the pre-existing Reset Storefront button). Fixed narrowly: a present-
+  but-mismatched snapshot now raises `TemplateBaselineVersionChangedError` outright instead of
+  falling through to the destructive fallback; confirmed this exact mismatch state is reachable only
+  through the new switch function (every other `template_provenance` writer keeps both fields in
+  lockstep), so a Draft with no snapshot at all (the genuine legacy case) is unaffected. The five
+  granular reset paths were independently confirmed NOT to share this bug (they never reach the live
+  registry). New regression test proves both the direct service-level rejection and the end-to-end
+  R4 endpoint rejection, with the Draft's composition provably unchanged after the rejected attempt.
+  Re-verified: 276 tests across every `preset_service`-touching module, only the one pre-existing
+  failure; sanity checks clean. The four MINOR findings (a small, justified duplication to avoid a
+  circular import; a missing no-op guard for a same-Template re-switch; a pre-existing header/footer
+  merge skipping validation, first exposed to production traffic here rather than introduced by it;
+  one missing trailing `return;` in JS) were accepted as disclosed, low-risk tradeoffs per the
+  reviewer's own framing. Committed and pushed as `18bedd1`. **CRITICAL 0 / IMPORTANT 0 after this
+  fix — Task 8 is now CLOSED.**
