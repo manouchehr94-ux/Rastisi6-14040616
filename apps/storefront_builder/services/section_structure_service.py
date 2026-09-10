@@ -23,7 +23,7 @@ from __future__ import annotations
 import copy
 
 from .. import section_registry
-from ..models import StorefrontCell, StorefrontPage, StorefrontSection
+from ..models import StorefrontCell, StorefrontContainer, StorefrontPage, StorefrontSection
 from . import container_service, layout_service, row_service
 
 
@@ -190,6 +190,52 @@ def duplicate_section(*, draft, section_id: int) -> StorefrontSection:
     source_index = section.cell_order
     container_service.add_block(cell, new_section, at_index=source_index + 1)
     return new_section
+
+
+def toggle_section_active(*, draft, section_id: int) -> StorefrontSection:
+    """R4 Task 7 (Batch 1) — the exact same flag/effect as the legacy
+    ``storefront_section_toggle`` view (``views.py``): flips ``is_active``
+    only. Independent of ``is_locked``/duplicable/removable, exactly like
+    the legacy view's own field-level independence."""
+    section = _scoped_section(draft, section_id)
+    section.is_active = not section.is_active
+    section.save(update_fields=["is_active", "updated_at"])
+    return section
+
+
+def toggle_section_locked(*, draft, section_id: int) -> StorefrontSection:
+    """R4 Task 7 (Batch 1) — the exact same flag as the legacy
+    ``storefront_section_lock_toggle`` view (spec §37): only the flag is
+    toggled here; the actual lock EFFECT (refusing move/remove) is enforced
+    where it already is, in ``remove_section``/``move_section`` above."""
+    section = _scoped_section(draft, section_id)
+    section.is_locked = not section.is_locked
+    section.save(update_fields=["is_locked", "updated_at"])
+    return section
+
+
+def _scoped_container(draft, container_id) -> StorefrontContainer:
+    """Same strict scoping rule as ``_scoped_section`` above, for a
+    Container id instead of a Section id."""
+    try:
+        return StorefrontContainer.objects.select_for_update().get(
+            pk=container_id, page__version=draft,
+        )
+    except StorefrontContainer.DoesNotExist:
+        raise SectionStructureError("container_not_found") from None
+
+
+def change_container_layout(*, draft, container_id: int, layout_key: str) -> StorefrontContainer:
+    """R4 Task 7 (Batch 1) — multi-column composition, wired to the EXACT
+    SAME canonical service the legacy editor's own layout-preset UI already
+    uses (``container_service.change_container_layout``): content-preserving
+    grow/shrink, never a second implementation of the merge-on-shrink/
+    locked-container rules that already live there."""
+    container = _scoped_container(draft, container_id)
+    try:
+        return container_service.change_container_layout(container, layout_key)
+    except container_service.ContainerLayoutError as exc:
+        raise SectionStructureError("invalid_container_layout") from exc
 
 
 def build_structure_projection(page) -> list[dict]:

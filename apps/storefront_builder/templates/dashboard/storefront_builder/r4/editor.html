@@ -39,6 +39,7 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h1"/></svg>
     </button>
     <span id="r4SaveState" aria-live="polite">ذخیره شد</span>
+    <button type="button" id="r4DiscardButton">رد کردن پیش‌نویس</button>
     <button type="button" id="r4PublishButton">انتشار</button>
   </header>
 
@@ -47,12 +48,27 @@
       <div class="r4-structure-header">ساختار صفحه</div>
       <div class="r4-structure-list">
         {% for item in structure_items %}
+        {% ifchanged item.container_id %}
+        {% if item.container_id %}
+        <div class="r4-structure-container-row" data-r4-structure-container-row data-r4-structure-container-id="{{ item.container_id }}">
+          <select class="r4-control r4-structure-layout-select" data-r4-structure-layout-select
+                  aria-label="چیدمان ردیف" {% if item.container_is_locked %}disabled{% endif %}>
+            {% for preset_key in container_layout_presets %}
+            <option value="{{ preset_key }}" {% if preset_key == item.container_layout_key %}selected{% endif %}>{{ preset_key }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+        {% endifchanged %}
         <div class="r4-structure-row" data-r4-structure-row data-r4-structure-section-id="{{ item.id }}">
           <span class="r4-structure-label">{{ item.label }}</span>
           <div class="r4-structure-actions">
             <button type="button" data-r4-structure-move="up" aria-label="جابه‌جایی به بالا" {% if item.is_locked %}disabled{% endif %}>↑</button>
             <button type="button" data-r4-structure-move="down" aria-label="جابه‌جایی به پایین" {% if item.is_locked %}disabled{% endif %}>↓</button>
             {% if item.duplicable %}<button type="button" data-r4-structure-duplicate aria-label="تکرار بخش">⧉</button>{% endif %}
+            <button type="button" data-r4-structure-toggle-active aria-label="نمایش/مخفی کردن بخش" aria-pressed="{% if item.is_active %}true{% else %}false{% endif %}">{% if item.is_active %}👁{% else %}🚫{% endif %}</button>
+            <button type="button" data-r4-structure-toggle-locked aria-label="{% if item.is_locked %}بازکردن قفل{% else %}قفل‌کردن بخش{% endif %}">{% if item.is_locked %}🔒{% else %}🔓{% endif %}</button>
+            <button type="button" data-r4-structure-reset-to-baseline aria-label="بازنشانی بخش به قالب" {% if not item.has_baseline %}disabled{% endif %}>↺</button>
             {% if item.removable %}<button type="button" data-r4-structure-remove aria-label="حذف بخش" {% if item.is_locked %}disabled{% endif %}>🗑</button>{% endif %}
           </div>
         </div>
@@ -71,6 +87,11 @@
         </select>
         <button type="button" id="r4StructureAddButton">افزودن</button>
       </div>
+      {% if page_has_baseline %}
+      <div class="r4-structure-add">
+        <button type="button" id="r4ResetPageButton">⟲ بازنشانی این صفحه به قالب</button>
+      </div>
+      {% endif %}
     </aside>
     <section class="r4-preview-pane">
       <iframe
@@ -88,6 +109,9 @@
         </button>
       </div>
       <div class="r4-global-design-body">
+        {% if storefront_has_baseline %}
+        <button type="button" id="r4ResetStorefrontButton">⟲ بازنشانی کل ظاهر فروشگاه به قالب</button>
+        {% endif %}
         <section class="r4-global-design-group" data-r4-global-mutation="appearance.update">
           <h4>ظاهر کلی</h4>
 
@@ -97,6 +121,7 @@
             <option value="{{ t.slug }}" {% if t.slug == global_design.appearance.template_slug %}selected{% endif %}>{{ t.label_fa }}</option>
             {% endfor %}
           </select>
+          {% if storefront_has_baseline %}<button type="button" data-r4-global-reset-field="template_slug" aria-label="بازنشانی قالب به قالب" class="r4-icon-btn">↺</button>{% endif %}
 
           <label class="r4-field-sublabel" for="r4GlobalPalette">پالت رنگی</label>
           <select id="r4GlobalPalette" class="r4-control" data-r4-global-field="palette_slug">
@@ -105,6 +130,7 @@
             <option value="{{ p.slug }}" {% if p.slug == global_design.appearance.palette_slug %}selected{% endif %}>{{ p.label_fa }}</option>
             {% endfor %}
           </select>
+          {% if storefront_has_baseline %}<button type="button" data-r4-global-reset-field="palette_slug" aria-label="بازنشانی پالت رنگی به قالب" class="r4-icon-btn">↺</button>{% endif %}
 
           <label class="r4-field-sublabel" for="r4GlobalFont">فونت</label>
           <select id="r4GlobalFont" class="r4-control" data-r4-global-field="font">
@@ -112,6 +138,7 @@
             <option value="{{ f }}" {% if f == global_design.appearance.font %}selected{% endif %}>{{ f }}</option>
             {% endfor %}
           </select>
+          {% if storefront_has_baseline %}<button type="button" data-r4-global-reset-field="font" aria-label="بازنشانی فونت به قالب" class="r4-icon-btn">↺</button>{% endif %}
 
           <label class="r4-field-sublabel" for="r4GlobalTypeScale">اندازه تایپوگرافی</label>
           <select id="r4GlobalTypeScale" class="r4-control" data-r4-global-field="type_scale">
@@ -119,6 +146,7 @@
             <option value="{{ value }}" {% if value == global_design.appearance.type_scale %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
+          {% if storefront_has_baseline %}<button type="button" data-r4-global-reset-field="type_scale" aria-label="بازنشانی اندازه تایپوگرافی به قالب" class="r4-icon-btn">↺</button>{% endif %}
 
           <label class="r4-field-sublabel" for="r4GlobalMotion">سبک حرکت</label>
           <select id="r4GlobalMotion" class="r4-control" data-r4-global-field="motion">
@@ -126,6 +154,7 @@
             <option value="{{ m }}" {% if m == global_design.appearance.motion %}selected{% endif %}>{{ m }}</option>
             {% endfor %}
           </select>
+          {% if storefront_has_baseline %}<button type="button" data-r4-global-reset-field="motion" aria-label="بازنشانی سبک حرکت به قالب" class="r4-icon-btn">↺</button>{% endif %}
 
           <label class="r4-field-sublabel" for="r4GlobalButtonStyle">سبک دکمه</label>
           <select id="r4GlobalButtonStyle" class="r4-control" data-r4-global-field="button_style">
@@ -133,6 +162,7 @@
             <option value="{{ b }}" {% if b == global_design.appearance.button_style %}selected{% endif %}>{{ b }}</option>
             {% endfor %}
           </select>
+          {% if storefront_has_baseline %}<button type="button" data-r4-global-reset-field="button_style" aria-label="بازنشانی سبک دکمه به قالب" class="r4-icon-btn">↺</button>{% endif %}
         </section>
 
         <section class="r4-global-design-group" data-r4-global-mutation="header.update">
@@ -143,6 +173,7 @@
             <option value="{{ v.key }}" {% if v.key == global_design.header.header_variant %}selected{% endif %}>{{ v.label_fa }}</option>
             {% endfor %}
           </select>
+          {% if storefront_has_baseline %}<button type="button" id="r4ResetHeaderButton">⟲ بازنشانی هدر به قالب</button>{% endif %}
         </section>
 
         <section class="r4-global-design-group" data-r4-global-mutation="footer.update">
@@ -153,6 +184,7 @@
             <option value="{{ v.key }}" {% if v.key == global_design.footer.footer_variant %}selected{% endif %}>{{ v.label_fa }}</option>
             {% endfor %}
           </select>
+          {% if storefront_has_baseline %}<button type="button" id="r4ResetFooterButton">⟲ بازنشانی فوتر به قالب</button>{% endif %}
         </section>
       </div>
     </aside>

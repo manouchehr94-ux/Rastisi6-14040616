@@ -7,7 +7,7 @@ from unittest.mock import patch
 from django.test import TestCase
 from django.urls import reverse
 
-from apps.storefront_builder import appearance_registry, global_region_registry
+from apps.storefront_builder import appearance_registry, global_region_registry, layout_preset_registry
 from apps.storefront_builder import section_registry as section_registry_module
 from apps.storefront_builder.models import (
     StorefrontCell,
@@ -16,7 +16,7 @@ from apps.storefront_builder.models import (
     StorefrontPage,
     StorefrontSection,
 )
-from apps.storefront_builder.services import container_service, layout_service
+from apps.storefront_builder.services import container_service, layout_service, preset_service
 from apps.stores.models import Store
 
 from .test_r4_mutation_api import R4MutationApiTestCase
@@ -1500,4 +1500,520 @@ class NonHomePageStructureMutationTests(R4VerticalSliceTestCase):
             "mutation": {"type": "section.remove", "section_id": foreign_section.pk},
         })
         self.assertEqual(response.status_code, 400)
+
+
+# ---------------------------------------------------------------------------
+# R4 Task 7 (Batch 1) — enable/disable, lock, multi-column composition
+# ---------------------------------------------------------------------------
+
+
+class ToggleSectionActiveTests(R4VerticalSliceTestCase):
+    def test_toggle_active_flips_and_increments_revision(self):
+        section, _, _ = self._place_new_section("rich_text")
+        self.assertTrue(section.is_active)
+        starting_revision = self.draft.edit_revision
+        before_count = self._history_count()
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {"type": "section.toggle_active", "section_id": section.pk},
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["new_revision"], starting_revision + 1)
+        self.assertEqual(self._refresh_revision(), starting_revision + 1)
+        self.assertEqual(self._history_count(), before_count + 1)
+        section.refresh_from_db()
+        self.assertFalse(section.is_active)
+
+    def test_toggle_active_twice_returns_to_original_state(self):
+        section, _, _ = self._place_new_section("rich_text")
+        for _ in range(2):
+            self._post_json({
+                "base_revision": self._refresh_revision(),
+                "mutation": {"type": "section.toggle_active", "section_id": section.pk},
+            })
+        section.refresh_from_db()
+        self.assertTrue(section.is_active)
+
+    def test_toggle_active_does_not_affect_is_locked(self):
+        section, _, _ = self._place_new_section("rich_text", is_locked=True)
+        self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {"type": "section.toggle_active", "section_id": section.pk},
+        })
+        section.refresh_from_db()
+        self.assertFalse(section.is_active)
+        self.assertTrue(section.is_locked)
+
+    def test_toggle_active_on_locked_section_still_succeeds(self):
+        # Independent of is_locked, exactly like the legacy view's contract
+        # (is_locked only guards move/remove, never enable/disable).
+        section, _, _ = self._place_new_section("rich_text", is_locked=True)
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {"type": "section.toggle_active", "section_id": section.pk},
+        })
+        self.assertEqual(response.status_code, 200)
+
+    def test_foreign_store_section_cannot_be_toggled(self):
+        other_store = Store.objects.create(
+            name="فروشگاه دیگر", slug="r4-task7-toggle-other-store",
+            admin_subdomain="r4-task7-toggle-other-store",
+        )
+        other_draft = layout_service.get_or_create_draft(other_store)
+        other_page = other_draft.get_page(StorefrontPage.PageType.HOME)
+        other_section = StorefrontSection.objects.create(
+            page=other_page, section_key="rich_text", order=0,
+        )
+        starting_revision = self.draft.edit_revision
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {"type": "section.toggle_active", "section_id": other_section.pk},
+        })
+        self.assertEqual(response.status_code, 400)
+        other_section.refresh_from_db()
+        self.assertTrue(other_section.is_active)
+        self.assertEqual(self._refresh_revision(), starting_revision)
+
+
+class ToggleSectionLockedTests(R4VerticalSliceTestCase):
+    def test_toggle_locked_flips_and_increments_revision(self):
+        section, _, _ = self._place_new_section("rich_text")
+        self.assertFalse(section.is_locked)
+        starting_revision = self.draft.edit_revision
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {"type": "section.toggle_locked", "section_id": section.pk},
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self._refresh_revision(), starting_revision + 1)
+        section.refresh_from_db()
+        self.assertTrue(section.is_locked)
+
+    def test_locking_then_move_is_rejected(self):
+        section, _, _ = self._place_new_section("rich_text")
+        self._place_new_section("faq")
+        self._post_json({
+            "base_revision": self._refresh_revision(),
+            "mutation": {"type": "section.toggle_locked", "section_id": section.pk},
+        })
+        response = self._post_json({
+            "base_revision": self._refresh_revision(),
+            "mutation": {"type": "section.move", "section_id": section.pk, "direction": "down"},
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "section_locked")
+
+    def test_unlocking_restores_move_capability(self):
+        section, _, _ = self._place_new_section("rich_text", is_locked=True)
+        self._place_new_section("faq")
+        self._post_json({
+            "base_revision": self._refresh_revision(),
+            "mutation": {"type": "section.toggle_locked", "section_id": section.pk},
+        })
+        response = self._post_json({
+            "base_revision": self._refresh_revision(),
+            "mutation": {"type": "section.move", "section_id": section.pk, "direction": "down"},
+        })
+        self.assertEqual(response.status_code, 200)
+
+
+class ChangeContainerLayoutTests(R4VerticalSliceTestCase):
+    def test_change_layout_grows_container_with_empty_cells(self):
+        section, container, _ = self._place_new_section("rich_text")
+        starting_revision = self.draft.edit_revision
+        before_count = self._history_count()
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {"type": "container.change_layout", "container_id": container.pk, "layout_key": "half"},
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self._refresh_revision(), starting_revision + 1)
+        self.assertEqual(self._history_count(), before_count + 1)
+        container.refresh_from_db()
+        self.assertEqual(container.layout_key, "half")
+        self.assertEqual(container.cells.count(), 2)
+        section.refresh_from_db()
+        self.assertEqual(section.cell.container_id, container.pk)
+
+    def test_change_layout_shrink_merges_content_into_last_cell(self):
+        container = container_service.create_empty_container(self.home_page, "thirds")
+        cells = list(container.cells.order_by("order", "id"))
+        sections = []
+        for index, cell in enumerate(cells):
+            section = StorefrontSection.objects.create(
+                page=self.home_page, section_key="rich_text", order=index,
+            )
+            container_service.place_section(cell, section)
+            sections.append(section)
+
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {"type": "container.change_layout", "container_id": container.pk, "layout_key": "single"},
+        })
+        self.assertEqual(response.status_code, 200)
+        container.refresh_from_db()
+        self.assertEqual(container.cells.count(), 1)
+        surviving_cell = container.cells.get()
+        for section in sections:
+            self.assertTrue(StorefrontSection.objects.filter(pk=section.pk).exists())
+        blocks = container_service.get_cell_blocks(surviving_cell)
+        self.assertEqual({s.pk for s in blocks}, {s.pk for s in sections})
+
+    def test_change_layout_rejects_invalid_layout_key(self):
+        _, container, _ = self._place_new_section("rich_text")
+        starting_revision = self.draft.edit_revision
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {"type": "container.change_layout", "container_id": container.pk, "layout_key": "nonexistent"},
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self._refresh_revision(), starting_revision)
+
+    def test_change_layout_rejects_locked_container(self):
+        _, container, _ = self._place_new_section("rich_text")
+        container.is_locked = True
+        container.save(update_fields=["is_locked"])
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {"type": "container.change_layout", "container_id": container.pk, "layout_key": "half"},
+        })
+        self.assertEqual(response.status_code, 400)
+
+    def test_foreign_store_container_cannot_be_changed(self):
+        other_store = Store.objects.create(
+            name="فروشگاه دیگر", slug="r4-task7-layout-other-store",
+            admin_subdomain="r4-task7-layout-other-store",
+        )
+        other_draft = layout_service.get_or_create_draft(other_store)
+        other_page = other_draft.get_page(StorefrontPage.PageType.HOME)
+        other_container = container_service.create_empty_container(other_page, "single")
+        starting_revision = self.draft.edit_revision
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {
+                "type": "container.change_layout",
+                "container_id": other_container.pk,
+                "layout_key": "half",
+            },
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "container_not_found")
+        other_container.refresh_from_db()
+        self.assertEqual(other_container.layout_key, "single")
+        self.assertEqual(self._refresh_revision(), starting_revision)
+
+
+# ---------------------------------------------------------------------------
+# R4 Task 7 (Batch 2) — granular baseline reset (in-place mutation types)
+# ---------------------------------------------------------------------------
+
+
+class BaselineResetMutationTests(R4MutationApiTestCase):
+    """The five ``preset_service`` baseline-reset granularities that operate
+    IN PLACE on the current Draft (never replace its identity), wired as
+    normal R4 mutation types: section / section-setting / appearance-setting
+    / header / footer. Discard/page-reset/storefront-reset — which DO
+    replace the Draft's identity — are covered separately below."""
+
+    def setUp(self):
+        super().setUp()
+        self.preset = layout_preset_registry.get_layout_preset("dense_marketplace")
+        preset_service.apply_preset(self.draft, self.preset)
+        self.draft.refresh_from_db()
+        self.home = self.draft.get_page(StorefrontPage.PageType.HOME)
+
+    def _section(self, section_key):
+        return self.home.sections.get(section_key=section_key)
+
+    def test_section_reset_to_baseline_restores_mutated_settings(self):
+        section = self._section("product_section")
+        baseline_title = section.settings["title"]
+        section.settings = {**section.settings, "title": "دستی"}
+        section.save(update_fields=["settings"])
+
+        starting_revision = self.draft.edit_revision
+        before_count = self._history_count()
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {"type": "section.reset_to_baseline", "section_id": section.pk},
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self._refresh_revision(), starting_revision + 1)
+        self.assertEqual(self._history_count(), before_count + 1)
+        section.refresh_from_db()
+        self.assertEqual(section.settings["title"], baseline_title)
+
+    def test_section_reset_to_baseline_rejects_non_baseline_section(self):
+        section = StorefrontSection.objects.create(
+            page=self.home, section_key="rich_text", order=999,
+        )
+        starting_revision = self.draft.edit_revision
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {"type": "section.reset_to_baseline", "section_id": section.pk},
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self._refresh_revision(), starting_revision)
+
+    def test_foreign_store_section_cannot_be_reset(self):
+        other_store = Store.objects.create(
+            name="فروشگاه دیگر", slug="r4-task7-reset-other-store",
+            admin_subdomain="r4-task7-reset-other-store",
+        )
+        other_draft = layout_service.get_or_create_draft(other_store)
+        other_page = other_draft.get_page(StorefrontPage.PageType.HOME)
+        other_section = StorefrontSection.objects.create(page=other_page, section_key="rich_text", order=0)
+        starting_revision = self.draft.edit_revision
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {"type": "section.reset_to_baseline", "section_id": other_section.pk},
+        })
+        self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["code"], "section_not_found")
+        self.assertEqual(self._refresh_revision(), starting_revision)
+
+    def test_section_reset_setting_to_baseline_restores_only_that_key(self):
+        section = self._section("product_section")
+        baseline_title = section.settings["title"]
+        section.settings = {**section.settings, "title": "دستی", "item_limit": 99}
+        section.save(update_fields=["settings"])
+
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {"type": "section.reset_setting_to_baseline", "section_id": section.pk, "key": "title"},
+        })
+        self.assertEqual(response.status_code, 200)
+        section.refresh_from_db()
+        self.assertEqual(section.settings["title"], baseline_title)
+        self.assertEqual(section.settings["item_limit"], 99)
+
+    def test_section_reset_setting_to_baseline_rejects_unknown_key(self):
+        section = self._section("product_section")
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {
+                "type": "section.reset_setting_to_baseline", "section_id": section.pk, "key": "not_a_real_field",
+            },
+        })
+        self.assertEqual(response.status_code, 400)
+
+    def test_appearance_reset_setting_to_baseline_restores_only_that_key(self):
+        self.draft.appearance_config = {
+            **self.draft.effective_appearance_config(), "density": "relaxed", "font": "Georgia",
+        }
+        self.draft.save(update_fields=["appearance_config"])
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {"type": "appearance.reset_setting_to_baseline", "key": "density"},
+        })
+        self.assertEqual(response.status_code, 200)
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.effective_appearance_config()["density"], self.preset.appearance["density"])
+        self.assertEqual(self.draft.effective_appearance_config()["font"], "Georgia")
+
+    def test_appearance_reset_setting_to_baseline_rejects_unknown_key(self):
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {"type": "appearance.reset_setting_to_baseline", "key": "not_a_real_appearance_field"},
+        })
+        self.assertEqual(response.status_code, 400)
+
+    def test_header_reset_to_baseline_restores_header_variant(self):
+        self.draft.header_config = {
+            **self.draft.effective_header_config(), "sticky": not self.preset.header["sticky"],
+        }
+        self.draft.save(update_fields=["header_config"])
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {"type": "header.reset_to_baseline"},
+        })
+        self.assertEqual(response.status_code, 200)
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.header_config["header_variant"], self.preset.header["header_variant"])
+
+    def test_footer_reset_to_baseline_restores_footer_variant(self):
+        self.draft.footer_config = {
+            **self.draft.effective_footer_config(),
+            "show_newsletter": not self.preset.footer.get("show_newsletter", True),
+        }
+        self.draft.save(update_fields=["footer_config"])
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {"type": "footer.reset_to_baseline"},
+        })
+        self.assertEqual(response.status_code, 200)
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.footer_config["footer_variant"], self.preset.footer["footer_variant"])
+
+
+class BaselineResetWithoutTemplateTests(R4MutationApiTestCase):
+    """A Draft that never had a Ready Template applied has no baseline to
+    reset anything to — ``preset_service`` itself already rejects this
+    (``NoTemplateBaselineError``); this is just the R4 mutation contract's
+    own external-code mapping of that same rejection."""
+
+    def test_header_reset_without_any_baseline_is_rejected(self):
+        self.assertFalse(self.draft.template_baseline_snapshot)
+        starting_revision = self.draft.edit_revision
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {"type": "header.reset_to_baseline"},
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self._refresh_revision(), starting_revision)
+
+    def test_appearance_reset_without_any_baseline_is_rejected(self):
+        starting_revision = self.draft.edit_revision
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {"type": "appearance.reset_setting_to_baseline", "key": "density"},
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self._refresh_revision(), starting_revision)
+
+
+# ---------------------------------------------------------------------------
+# R4 Task 7 (Batch 2) — discard / reset-page / reset-storefront: dedicated
+# endpoints (NOT normal mutation types) because each REPLACES the Draft's
+# identity (deletes it, or archives it behind a fresh checkpointed version)
+# — the exact same reason Publish is its own dedicated endpoint rather than
+# a ``_dispatch_mutation`` type.
+# ---------------------------------------------------------------------------
+
+
+class DraftReplacingEndpointTests(R4MutationApiTestCase):
+    def _post_discard(self, base_revision):
+        return self.client.post(
+            reverse("dashboard:storefront-builder-r4-discard"),
+            data=json.dumps({"base_revision": base_revision}),
+            content_type="application/json",
+        )
+
+    def _post_reset_page(self, base_revision, page_type):
+        return self.client.post(
+            reverse("dashboard:storefront-builder-r4-reset-page"),
+            data=json.dumps({"base_revision": base_revision, "page_type": page_type}),
+            content_type="application/json",
+        )
+
+    def _post_reset_storefront(self, base_revision):
+        return self.client.post(
+            reverse("dashboard:storefront-builder-r4-reset-storefront"),
+            data=json.dumps({"base_revision": base_revision}),
+            content_type="application/json",
+        )
+
+    def test_discard_deletes_the_draft(self):
+        draft_id = self.draft.pk
+        response = self._post_discard(self.draft.edit_revision)
+        self.assertEqual(response.status_code, 200)
+        self.assertIs(response.json()["ok"], True)
+        self.assertFalse(StorefrontLayoutVersion.objects.filter(pk=draft_id).exists())
+        self.layout.refresh_from_db()
+        self.assertIsNone(self.layout.draft_version_id)
+
+    def test_discard_rejects_stale_revision(self):
+        response = self._post_discard(self.draft.edit_revision + 1)
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(StorefrontLayoutVersion.objects.filter(pk=self.draft.pk).exists())
+
+    def test_discard_requires_gate_enabled(self):
+        self.layout.r4_editor_enabled = False
+        self.layout.save(update_fields=["r4_editor_enabled"])
+        response = self._post_discard(self.draft.edit_revision)
+        self.assertEqual(response.status_code, 404)
+
+    def test_reset_page_creates_a_checkpoint_and_new_draft(self):
+        preset = layout_preset_registry.get_layout_preset("dense_marketplace")
+        preset_service.apply_preset(self.draft, preset)
+        self.draft.refresh_from_db()
+        old_draft_id = self.draft.pk
+        versions_before = self.layout.versions.count()
+
+        response = self._post_reset_page(self.draft.edit_revision, "home")
+        self.assertEqual(response.status_code, 200)
+        self.assertIs(response.json()["ok"], True)
+        self.layout.refresh_from_db()
+        self.assertEqual(self.layout.versions.count(), versions_before + 1)
+        self.assertNotEqual(self.layout.draft_version_id, old_draft_id)
+        self.assertTrue(
+            StorefrontLayoutVersion.objects.filter(
+                pk=old_draft_id, status=StorefrontLayoutVersion.Status.ARCHIVED,
+            ).exists(),
+        )
+
+    def test_reset_page_rejects_page_type_not_covered_by_baseline(self):
+        preset = layout_preset_registry.get_layout_preset("dense_marketplace")
+        preset_service.apply_preset(self.draft, preset)
+        self.draft.refresh_from_db()
+        snapshot = dict(self.draft.template_baseline_snapshot)
+        snapshot["pages"] = {k: v for k, v in snapshot["pages"].items() if k != "cart"}
+        self.draft.template_baseline_snapshot = snapshot
+        self.draft.save(update_fields=["template_baseline_snapshot"])
+
+        starting_revision = self.draft.edit_revision
+        response = self._post_reset_page(starting_revision, "cart")
+        self.assertEqual(response.status_code, 400)
+        self.layout.refresh_from_db()
+        self.assertEqual(self.layout.draft_version_id, self.draft.pk)
+
+    def test_reset_page_rejects_invalid_page_type(self):
+        response = self._post_reset_page(self.draft.edit_revision, "not_a_real_page")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "invalid_page_type")
+
+    def test_reset_page_rejects_stale_revision(self):
+        preset = layout_preset_registry.get_layout_preset("dense_marketplace")
+        preset_service.apply_preset(self.draft, preset)
+        self.draft.refresh_from_db()
+        response = self._post_reset_page(self.draft.edit_revision + 1, "home")
+        self.assertEqual(response.status_code, 409)
+
+    def test_reset_storefront_creates_a_checkpoint_and_new_draft(self):
+        preset = layout_preset_registry.get_layout_preset("dense_marketplace")
+        preset_service.apply_preset(self.draft, preset)
+        self.draft.refresh_from_db()
+        old_draft_id = self.draft.pk
+        versions_before = self.layout.versions.count()
+
+        response = self._post_reset_storefront(self.draft.edit_revision)
+        self.assertEqual(response.status_code, 200)
+        self.layout.refresh_from_db()
+        self.assertEqual(self.layout.versions.count(), versions_before + 1)
+        self.assertNotEqual(self.layout.draft_version_id, old_draft_id)
+
+    def test_reset_storefront_without_any_baseline_is_rejected(self):
+        response = self._post_reset_storefront(self.draft.edit_revision)
+        self.assertEqual(response.status_code, 400)
+        self.layout.refresh_from_db()
+        self.assertEqual(self.layout.draft_version_id, self.draft.pk)
+
+    def test_reset_storefront_never_touches_the_published_version(self):
+        preset = layout_preset_registry.get_layout_preset("dense_marketplace")
+        preset_service.apply_preset(self.draft, preset)
+        self.draft.refresh_from_db()
+        layout_service.publish(self.store, user=self.staff)
+        draft2 = layout_service.get_or_create_draft(self.store, user=self.staff)
+        preset_service.apply_preset(draft2, preset)
+        draft2.refresh_from_db()
+        self.layout.refresh_from_db()
+        published_before = self.layout.published_version_id
+
+        response = self._post_reset_storefront(draft2.edit_revision)
+        self.assertEqual(response.status_code, 200)
+        self.layout.refresh_from_db()
+        self.assertEqual(self.layout.published_version_id, published_before)
+
+    def test_foreign_store_draft_cannot_be_discarded_via_own_session(self):
+        # Tenant isolation: resolve_store_for_service always resolves the
+        # CURRENT session's own Store — there is no store-id/draft-id input
+        # on this endpoint at all for a crafted id to target another Store.
+        other_store = Store.objects.create(
+            name="فروشگاه دیگر", slug="r4-task7-discard-other-store",
+            admin_subdomain="r4-task7-discard-other-store",
+        )
+        other_draft = layout_service.get_or_create_draft(other_store)
+        other_draft_id = other_draft.pk
+        response = self._post_discard(self.draft.edit_revision)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(StorefrontLayoutVersion.objects.filter(pk=other_draft_id).exists())

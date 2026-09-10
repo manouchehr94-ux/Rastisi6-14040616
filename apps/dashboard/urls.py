@@ -247,6 +247,21 @@ urlpatterns = [
         storefront_builder_r4_views.storefront_r4_publish,
         name="storefront-builder-r4-publish",
     ),
+    path(
+        "storefront-builder/r4/discard/",
+        storefront_builder_r4_views.storefront_r4_discard,
+        name="storefront-builder-r4-discard",
+    ),
+    path(
+        "storefront-builder/r4/reset-page/",
+        storefront_builder_r4_views.storefront_r4_reset_page,
+        name="storefront-builder-r4-reset-page",
+    ),
+    path(
+        "storefront-builder/r4/reset-storefront/",
+        storefront_builder_r4_views.storefront_r4_reset_storefront,
+        name="storefront-builder-r4-reset-storefront",
+    ),
     path("storefront-builder/templates/", storefront_builder_views.storefront_template_gallery, name="storefront-builder-templates"),
     path("storefront-builder/preview/", storefront_builder_views.storefront_preview, name="storefront-builder-preview"),
     path("storefront-builder/sections/", storefront_builder_views.storefront_section_list_partial, name="storefront-builder-section-list"),

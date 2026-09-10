@@ -34,6 +34,8 @@ window.RastiSiR4 = {
   var undoButton = document.getElementById('r4UndoButton');
   var redoButton = document.getElementById('r4RedoButton');
   var publishButton = document.getElementById('r4PublishButton');
+  var discardButton = document.getElementById('r4DiscardButton');
+  var resetStorefrontButton = document.getElementById('r4ResetStorefrontButton');
 
   // ---- Admin sidebar: R4-page-only, defaults to collapsed on every fresh
   // load (nothing persisted between page loads) — driven purely by a data
@@ -560,6 +562,48 @@ window.RastiSiR4 = {
         });
         return;
       }
+      var toggleActiveBtn = evt.target.closest('[data-r4-structure-toggle-active]');
+      if (toggleActiveBtn) {
+        var toggleActiveRow = toggleActiveBtn.closest('[data-r4-structure-row]');
+        if (!toggleActiveRow) return;
+        R4.enqueueStructuralMutation({
+          type: 'section.toggle_active',
+          section_id: Number(toggleActiveRow.getAttribute('data-r4-structure-section-id')),
+        });
+        return;
+      }
+      var toggleLockedBtn = evt.target.closest('[data-r4-structure-toggle-locked]');
+      if (toggleLockedBtn) {
+        var toggleLockedRow = toggleLockedBtn.closest('[data-r4-structure-row]');
+        if (!toggleLockedRow) return;
+        R4.enqueueStructuralMutation({
+          type: 'section.toggle_locked',
+          section_id: Number(toggleLockedRow.getAttribute('data-r4-structure-section-id')),
+        });
+        return;
+      }
+      var resetToBaselineBtn = evt.target.closest('[data-r4-structure-reset-to-baseline]');
+      if (resetToBaselineBtn) {
+        if (resetToBaselineBtn.disabled) return;
+        var resetRow = resetToBaselineBtn.closest('[data-r4-structure-row]');
+        if (!resetRow) return;
+        R4.enqueueStructuralMutation({
+          type: 'section.reset_to_baseline',
+          section_id: Number(resetRow.getAttribute('data-r4-structure-section-id')),
+        });
+        return;
+      }
+      var resetPageBtn = evt.target.closest('#r4ResetPageButton');
+      if (resetPageBtn) {
+        if (!window.confirm('این صفحه به ترکیبِ اولیه‌یِ قالب بازنشانی می‌شود — بخش‌هایِ دستیِ همین صفحه هم از بین می‌روند. ادامه می‌دهید؟')) return;
+        R4.queue = (R4.queue || Promise.resolve()).then(function () {
+          return sendReplaceDraftAction('reset-page/', { page_type: shell ? shell.dataset.r4PageType : 'home' });
+        });
+        R4.queue.then(function (result) {
+          if (result && result.ok) window.location.reload();
+        });
+        return;
+      }
       var addBtn = evt.target.closest('#r4StructureAddButton');
       if (addBtn) {
         var addSelect = structurePanel.querySelector('#r4StructureAddSelect');
@@ -583,6 +627,24 @@ window.RastiSiR4 = {
         if (!labelRow) return;
         R4.openSection(Number(labelRow.getAttribute('data-r4-structure-section-id')));
       }
+    });
+
+    // R4 Task 7 (Batch 1) — multi-column composition: one <select> per
+    // Container (rendered once per distinct container_id — see editor.html)
+    // choosing among the SAME LAYOUT_PRESETS keys the legacy layout-preset
+    // picker already offers. Delegated the same way as every other
+    // Structure panel control, so it keeps working after
+    // refreshStructureAndPreview() replaces the panel's innerHTML.
+    structurePanel.addEventListener('change', function (evt) {
+      var layoutSelect = evt.target.closest('[data-r4-structure-layout-select]');
+      if (!layoutSelect) return;
+      var containerRow = layoutSelect.closest('[data-r4-structure-container-row]');
+      if (!containerRow) return;
+      R4.enqueueStructuralMutation({
+        type: 'container.change_layout',
+        container_id: Number(containerRow.getAttribute('data-r4-structure-container-id')),
+        layout_key: layoutSelect.value,
+      });
     });
   }
 
@@ -915,11 +977,13 @@ window.RastiSiR4 = {
   // stopImmediatePropagation prevents sfb:selectSection for that same
   // click) — both are accepted and routed to the same openSection().
   //
-  // R4 Task 8 also maps the shared Preview toolbar's existing
-  // sfb:sectionCommand/sfb:blockCommand messages, but ONLY the four
-  // Task-8-supported commands (duplicate/remove/up/down) — toggle, lock,
-  // cellCommand and containerCommand are deliberately left unhandled
-  // (never routed to an R3 endpoint, never given a new mutation type).
+  // R4 Task 8 mapped the shared Preview toolbar's existing
+  // sfb:sectionCommand/sfb:blockCommand messages for duplicate/remove/up/
+  // down. R4 Task 7 (Batch 1) extends this to the two commands Task 8 left
+  // deliberately unhandled — toggle (enable/disable) and lock — now that
+  // real mutation types (section.toggle_active/section.toggle_locked) exist
+  // for them; cellCommand/containerCommand remain out of scope (multi-block
+  // Cell CRUD is not part of this batch's placement model).
   window.addEventListener('message', function (evt) {
     if (evt.origin !== window.location.origin) return;
     if (!previewFrame || evt.source !== previewFrame.contentWindow) return;
@@ -938,6 +1002,10 @@ window.RastiSiR4 = {
         R4.enqueueStructuralMutation({ type: 'section.duplicate', section_id: Number(sectionCommandId) });
       } else if (evt.data.command === 'remove') {
         R4.enqueueStructuralMutation({ type: 'section.remove', section_id: Number(sectionCommandId) });
+      } else if (evt.data.command === 'toggle') {
+        R4.enqueueStructuralMutation({ type: 'section.toggle_active', section_id: Number(sectionCommandId) });
+      } else if (evt.data.command === 'lock') {
+        R4.enqueueStructuralMutation({ type: 'section.toggle_locked', section_id: Number(sectionCommandId) });
       }
       return;
     }
@@ -984,6 +1052,32 @@ window.RastiSiR4 = {
   if (globalDesignPanel) {
     globalDesignPanel.addEventListener('click', function (evt) {
       if (evt.target.closest('[data-r4-global-design-close]')) closeGlobalDesign();
+
+      // R4 Task 7 (Batch 2) — one reset icon per appearance field, keyed
+      // off the SAME ``data-r4-global-reset-field`` attribute value as the
+      // field's own patch key (``appearance.reset_setting_to_baseline``'s
+      // ``key`` param) — never a second per-field mapping to maintain.
+      var resetFieldBtn = evt.target.closest('[data-r4-global-reset-field]');
+      if (resetFieldBtn) {
+        R4.enqueueMutation({
+          type: 'appearance.reset_setting_to_baseline',
+          key: resetFieldBtn.getAttribute('data-r4-global-reset-field'),
+        }).then(function (result) {
+          if (result && result.ok) refreshGlobalDesignAndPreview();
+        });
+        return;
+      }
+      if (evt.target.closest('#r4ResetHeaderButton')) {
+        R4.enqueueMutation({ type: 'header.reset_to_baseline' }).then(function (result) {
+          if (result && result.ok) refreshGlobalDesignAndPreview();
+        });
+        return;
+      }
+      if (evt.target.closest('#r4ResetFooterButton')) {
+        R4.enqueueMutation({ type: 'footer.reset_to_baseline' }).then(function (result) {
+          if (result && result.ok) refreshGlobalDesignAndPreview();
+        });
+      }
     });
 
     // One delegated change handler — the mutation `type` and patch `key`
@@ -1096,20 +1190,26 @@ window.RastiSiR4 = {
     });
   }
 
-  // ---- Publish: same queue, current R4.revision, existing conflict/error
-  // handling — never a second Publish-only queue.
-  function sendPublish() {
+  // ---- Publish/Discard/Reset-page/Reset-storefront: all four REPLACE the
+  // Draft's identity (a new/deleted version, never an in-place edit), so
+  // none of them go through R4.enqueueStructuralMutation's "refresh in
+  // place" contract — each shares this ONE fetch shape (same queue, same
+  // current R4.revision, same conflict/error handling), and the caller
+  // reloads the whole page on success, exactly like Undo/Redo already do
+  // for the same reason (Section 21).
+  function sendReplaceDraftAction(pathSegment, extraBody) {
     if (R4.conflict) return Promise.resolve();
     setSaveState('saving');
-    var url = new URL('publish/', window.location.href);
+    var url = new URL(pathSegment, window.location.href);
+    var body = Object.assign({ base_revision: R4.revision }, extraBody || {});
     return fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-      body: JSON.stringify({ base_revision: R4.revision }),
+      body: JSON.stringify(body),
     })
       .then(function (response) {
-        return response.json().then(function (body) {
-          return { status: response.status, body: body };
+        return response.json().then(function (responseBody) {
+          return { status: response.status, body: responseBody };
         });
       })
       .then(function (result) {
@@ -1131,6 +1231,10 @@ window.RastiSiR4 = {
       });
   }
 
+  function sendPublish() {
+    return sendReplaceDraftAction('publish/');
+  }
+
   if (publishButton) {
     publishButton.addEventListener('click', function () {
       R4.queue = (R4.queue || Promise.resolve()).then(function () {
@@ -1141,6 +1245,30 @@ window.RastiSiR4 = {
         // Draft — reload so the normal R4 GET resolves/creates the NEXT
         // Draft through the existing layout_service.get_or_create_draft
         // lifecycle (never manually cloned/created here).
+        if (result && result.ok) window.location.reload();
+      });
+    });
+  }
+
+  if (discardButton) {
+    discardButton.addEventListener('click', function () {
+      if (!window.confirm('پیش‌نویسِ فعلی رد می‌شود و همه‌ی تغییراتِ منتشرنشده از بین می‌رود. ادامه می‌دهید؟')) return;
+      R4.queue = (R4.queue || Promise.resolve()).then(function () {
+        return sendReplaceDraftAction('discard/');
+      });
+      R4.queue.then(function (result) {
+        if (result && result.ok) window.location.reload();
+      });
+    });
+  }
+
+  if (resetStorefrontButton) {
+    resetStorefrontButton.addEventListener('click', function () {
+      if (!window.confirm('کل ظاهر فروشگاه (همه‌یِ صفحاتِ پوشش‌داده‌شده، هدر، فوتر، ظاهر) به قالب بازنشانی می‌شود. ادامه می‌دهید؟')) return;
+      R4.queue = (R4.queue || Promise.resolve()).then(function () {
+        return sendReplaceDraftAction('reset-storefront/');
+      });
+      R4.queue.then(function (result) {
         if (result && result.ok) window.location.reload();
       });
     });

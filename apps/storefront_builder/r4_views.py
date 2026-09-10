@@ -263,6 +263,7 @@ def storefront_r4_editor(request):
     structure_items = []
     for item in section_structure_service.build_structure_projection(page):
         section_obj = item["section"]
+        container_obj = item["container"]
         try:
             item_definition = section_registry.get_definition(section_obj.section_key)
         except section_registry.UnknownSectionTypeError:
@@ -273,6 +274,24 @@ def storefront_r4_editor(request):
             "duplicable": bool(item_definition and item_definition.duplicable),
             "removable": bool(item_definition and item_definition.removable),
             "is_locked": section_obj.is_locked,
+            "is_active": section_obj.is_active,
+            # R4 Task 7 (Batch 2) — a manually-added section (never
+            # originated from a Ready Template slot) has no baseline to
+            # reset to; ``preset_service.reset_section_to_baseline`` itself
+            # already rejects this (``NotABaselineSectionError``), so the
+            # Structure panel disables the control instead of always
+            # offering a button that errors.
+            "has_baseline": bool(section_obj.template_slot_key),
+            # R4 Task 7 (Batch 1) — container_id/layout_key let the Structure
+            # panel render ONE layout-preset control per Container (not per
+            # Section) via ``{% ifchanged %}`` on container_id; None (an
+            # unplaced legacy Section — should not exist after
+            # ``ensure_page_containers`` above, same compatibility fallback
+            # ``build_structure_projection`` itself documents) simply never
+            # renders a layout control for that row.
+            "container_id": container_obj.pk if container_obj is not None else None,
+            "container_layout_key": container_obj.layout_key if container_obj is not None else None,
+            "container_is_locked": bool(container_obj.is_locked) if container_obj is not None else False,
         })
 
     # The safe "Add Section" library projection: only definitions allowed on
@@ -312,6 +331,20 @@ def storefront_r4_editor(request):
             "r4_edit_revision": draft.edit_revision,
             "structure_items": structure_items,
             "structure_library": structure_library,
+            # R4 Task 7 (Batch 1) — the SAME preset registry the legacy
+            # editor's layout-preset picker already uses
+            # (``container_service.LAYOUT_PRESETS``), never a second list.
+            "container_layout_presets": list(container_service.LAYOUT_PRESETS.keys()),
+            # R4 Task 7 (Batch 2) — same gating condition the legacy editor's
+            # own "Reset page/storefront to Template" buttons already use
+            # (``editor.html``: ``draft.template_baseline_snapshot.pages|
+            # dictget:page_type`` / ``draft.template_baseline_snapshot``):
+            # a Draft that never had a Ready Template applied has nothing
+            # to reset to, and ``preset_service`` itself already rejects
+            # that case (``NoTemplateBaselineError``/``UnknownBaselinePageError``)
+            # — these flags just keep the button from always erroring.
+            "page_has_baseline": bool((draft.template_baseline_snapshot or {}).get("pages", {}).get(page_type)),
+            "storefront_has_baseline": bool(draft.template_baseline_snapshot),
             "global_design": _build_global_design_context(draft),
             "history": edit_history_service.history_state(draft),
         },
@@ -651,3 +684,123 @@ def storefront_r4_publish(request):
         "published_version_id": published.pk,
         "published_version_number": published.version_number,
     })
+
+
+@require_POST
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
+def storefront_r4_discard(request):
+    """R4 Task 7 (Batch 2) — discard the entire Draft. Same JSON contract
+    shape as ``storefront_r4_publish`` (base_revision-gated, ``{ok: true}``
+    on success) — the client reloads on success exactly like Publish/Undo/
+    Redo already do, since discarding replaces the Draft's identity."""
+    store = resolve_store_for_service(request)
+    layout = layout_service.get_or_create_layout(store)
+    if not layout.r4_editor_enabled:
+        raise Http404
+
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({"ok": False, "code": "malformed_json"}, status=400)
+
+    if not isinstance(payload, dict):
+        return JsonResponse({"ok": False, "code": "invalid_request_shape"}, status=400)
+
+    base_revision = payload.get("base_revision")
+    if not _is_strict_int(base_revision) or base_revision < 0:
+        return JsonResponse({"ok": False, "code": "invalid_base_revision"}, status=400)
+
+    try:
+        r4_mutation_service.discard_draft(store=store, actor=request.user, base_revision=base_revision)
+    except r4_mutation_service.R4StaleRevision as exc:
+        return JsonResponse(
+            {"ok": False, "code": "stale_revision", "current_revision": exc.current_revision},
+            status=409,
+        )
+    except r4_mutation_service.R4MutationError as exc:
+        return JsonResponse({"ok": False, "code": str(exc)}, status=400)
+
+    return JsonResponse({"ok": True})
+
+
+@require_POST
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
+def storefront_r4_reset_page(request):
+    """R4 Task 7 (Batch 2) — RESET PAGE (checkpoint-then-replace). Same
+    contract shape as Publish/Discard above; the replaced page_type comes
+    from the request body, validated the same way ``section.add`` already
+    validates one."""
+    from .models import StorefrontPage
+
+    store = resolve_store_for_service(request)
+    layout = layout_service.get_or_create_layout(store)
+    if not layout.r4_editor_enabled:
+        raise Http404
+
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({"ok": False, "code": "malformed_json"}, status=400)
+
+    if not isinstance(payload, dict):
+        return JsonResponse({"ok": False, "code": "invalid_request_shape"}, status=400)
+
+    base_revision = payload.get("base_revision")
+    if not _is_strict_int(base_revision) or base_revision < 0:
+        return JsonResponse({"ok": False, "code": "invalid_base_revision"}, status=400)
+
+    page_type = payload.get("page_type")
+    if page_type not in StorefrontPage.PageType.values:
+        return JsonResponse({"ok": False, "code": "invalid_page_type"}, status=400)
+
+    try:
+        r4_mutation_service.reset_page(
+            store=store, actor=request.user, base_revision=base_revision, page_type=page_type,
+        )
+    except r4_mutation_service.R4StaleRevision as exc:
+        return JsonResponse(
+            {"ok": False, "code": "stale_revision", "current_revision": exc.current_revision},
+            status=409,
+        )
+    except r4_mutation_service.R4MutationError as exc:
+        return JsonResponse({"ok": False, "code": str(exc)}, status=400)
+
+    return JsonResponse({"ok": True})
+
+
+@require_POST
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
+def storefront_r4_reset_storefront(request):
+    """R4 Task 7 (Batch 2) — RESET STOREFRONT (checkpoint-then-replace the
+    whole Draft). Same contract shape as ``storefront_r4_reset_page``."""
+    store = resolve_store_for_service(request)
+    layout = layout_service.get_or_create_layout(store)
+    if not layout.r4_editor_enabled:
+        raise Http404
+
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({"ok": False, "code": "malformed_json"}, status=400)
+
+    if not isinstance(payload, dict):
+        return JsonResponse({"ok": False, "code": "invalid_request_shape"}, status=400)
+
+    base_revision = payload.get("base_revision")
+    if not _is_strict_int(base_revision) or base_revision < 0:
+        return JsonResponse({"ok": False, "code": "invalid_base_revision"}, status=400)
+
+    try:
+        r4_mutation_service.reset_storefront(store=store, actor=request.user, base_revision=base_revision)
+    except r4_mutation_service.R4StaleRevision as exc:
+        return JsonResponse(
+            {"ok": False, "code": "stale_revision", "current_revision": exc.current_revision},
+            status=409,
+        )
+    except r4_mutation_service.R4MutationError as exc:
+        return JsonResponse({"ok": False, "code": str(exc)}, status=400)
+
+    return JsonResponse({"ok": True})

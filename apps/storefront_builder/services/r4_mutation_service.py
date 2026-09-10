@@ -59,6 +59,14 @@ _MUTATION_HISTORY_LABELS = {
     "section.remove": "حذف بخش",
     "section.duplicate": "تکرار بخش",
     "section.move": "جابه‌جایی بخش",
+    "section.toggle_active": "نمایش/مخفی کردن بخش",
+    "section.toggle_locked": "قفل/بازکردن بخش",
+    "container.change_layout": "تغییر چیدمان",
+    "section.reset_to_baseline": "بازنشانی بخش به قالب",
+    "section.reset_setting_to_baseline": "بازنشانی فیلد بخش به قالب",
+    "appearance.reset_setting_to_baseline": "بازنشانی تنظیم ظاهر به قالب",
+    "header.reset_to_baseline": "بازنشانی هدر به قالب",
+    "footer.reset_to_baseline": "بازنشانی فوتر به قالب",
     "appearance.update": "ویرایش طراحی کلی",
     "header.update": "ویرایش هدر",
     "footer.update": "ویرایش فوتر",
@@ -196,6 +204,81 @@ def _validate_brand_view_all_enable(*, store, patch: dict, cleaned: dict) -> Non
         raise R4MutationError("view_all_unsupported")
 
 
+#: R4 Task 7 (Batch 2) — every ``preset_service`` baseline-reset exception
+#: mapped to ONE stable, external code per FAMILY (not one per subclass —
+#: the same coarseness every other R4MutationError code in this module
+#: already uses). The human-readable Persian message these exceptions
+#: carry is a legacy-view-only concern (shown via ``django.contrib.messages``)
+#: and is never surfaced through the R4 JSON contract.
+def _reset_error_code(exc: "preset_service.BaselineResetError | preset_service.InvalidPresetError") -> str:
+    if isinstance(exc, preset_service.LockedSectionsPresentError):
+        return "locked_sections_present"
+    if isinstance(exc, preset_service.InvalidPresetError):
+        return "invalid_preset"
+    return "baseline_reset_error"
+
+
+def _scoped_section_for_reset(draft: StorefrontLayoutVersion, section_id) -> StorefrontSection:
+    """Same strict Draft-scoping rule ``_apply_section_update_settings`` uses
+    above — a crafted ``section_id`` belonging to another Store, page, or
+    non-active-Draft version is indistinguishable from "does not exist"."""
+    try:
+        return StorefrontSection.objects.select_for_update().get(
+            pk=section_id, page__version=draft,
+        )
+    except StorefrontSection.DoesNotExist:
+        raise R4MutationError("section_not_found") from None
+
+
+def _apply_section_reset_to_baseline(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    section_id = mutation.get("section_id")
+    if not _is_strict_int(section_id):
+        raise R4MutationError("invalid_section_id")
+    section = _scoped_section_for_reset(draft, section_id)
+    try:
+        preset_service.reset_section_to_baseline(draft, section)
+    except preset_service.BaselineResetError as exc:
+        raise R4MutationError(_reset_error_code(exc)) from exc
+
+
+def _apply_section_reset_setting_to_baseline(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    section_id = mutation.get("section_id")
+    key = mutation.get("key")
+    if not _is_strict_int(section_id):
+        raise R4MutationError("invalid_section_id")
+    if not isinstance(key, str) or not key:
+        raise R4MutationError("invalid_key")
+    section = _scoped_section_for_reset(draft, section_id)
+    try:
+        preset_service.reset_section_setting_to_baseline(draft, section, key)
+    except preset_service.BaselineResetError as exc:
+        raise R4MutationError(_reset_error_code(exc)) from exc
+
+
+def _apply_appearance_reset_setting_to_baseline(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    key = mutation.get("key")
+    if not isinstance(key, str) or not key:
+        raise R4MutationError("invalid_key")
+    try:
+        preset_service.reset_appearance_setting_to_baseline(draft, key)
+    except preset_service.BaselineResetError as exc:
+        raise R4MutationError(_reset_error_code(exc)) from exc
+
+
+def _apply_header_reset_to_baseline(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    try:
+        preset_service.reset_header_to_baseline(draft)
+    except preset_service.BaselineResetError as exc:
+        raise R4MutationError(_reset_error_code(exc)) from exc
+
+
+def _apply_footer_reset_to_baseline(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    try:
+        preset_service.reset_footer_to_baseline(draft)
+    except preset_service.BaselineResetError as exc:
+        raise R4MutationError(_reset_error_code(exc)) from exc
+
+
 def _apply_section_add(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
     from ..models import StorefrontPage
 
@@ -244,6 +327,41 @@ def _apply_section_move(*, draft: StorefrontLayoutVersion, mutation: dict) -> No
         raise R4MutationError("invalid_direction")
     try:
         section_structure_service.move_section(draft=draft, section_id=section_id, direction=direction)
+    except section_structure_service.SectionStructureError as exc:
+        raise R4MutationError(exc.code) from exc
+
+
+def _apply_section_toggle_active(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    section_id = mutation.get("section_id")
+    if not _is_strict_int(section_id):
+        raise R4MutationError("invalid_section_id")
+    try:
+        section_structure_service.toggle_section_active(draft=draft, section_id=section_id)
+    except section_structure_service.SectionStructureError as exc:
+        raise R4MutationError(exc.code) from exc
+
+
+def _apply_section_toggle_locked(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    section_id = mutation.get("section_id")
+    if not _is_strict_int(section_id):
+        raise R4MutationError("invalid_section_id")
+    try:
+        section_structure_service.toggle_section_locked(draft=draft, section_id=section_id)
+    except section_structure_service.SectionStructureError as exc:
+        raise R4MutationError(exc.code) from exc
+
+
+def _apply_container_change_layout(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    container_id = mutation.get("container_id")
+    layout_key = mutation.get("layout_key")
+    if not _is_strict_int(container_id):
+        raise R4MutationError("invalid_container_id")
+    if not isinstance(layout_key, str) or not layout_key:
+        raise R4MutationError("invalid_layout_key")
+    try:
+        section_structure_service.change_container_layout(
+            draft=draft, container_id=container_id, layout_key=layout_key,
+        )
     except section_structure_service.SectionStructureError as exc:
         raise R4MutationError(exc.code) from exc
 
@@ -579,6 +697,30 @@ def _dispatch_mutation(*, store, draft: StorefrontLayoutVersion, mutation: dict)
     if mutation_type == "section.move":
         _apply_section_move(draft=draft, mutation=mutation)
         return
+    if mutation_type == "section.toggle_active":
+        _apply_section_toggle_active(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "section.toggle_locked":
+        _apply_section_toggle_locked(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "container.change_layout":
+        _apply_container_change_layout(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "section.reset_to_baseline":
+        _apply_section_reset_to_baseline(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "section.reset_setting_to_baseline":
+        _apply_section_reset_setting_to_baseline(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "appearance.reset_setting_to_baseline":
+        _apply_appearance_reset_setting_to_baseline(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "header.reset_to_baseline":
+        _apply_header_reset_to_baseline(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "footer.reset_to_baseline":
+        _apply_footer_reset_to_baseline(draft=draft, mutation=mutation)
+        return
     if mutation_type == "appearance.update":
         _apply_appearance_update(draft=draft, mutation=mutation)
         return
@@ -755,3 +897,52 @@ def publish_draft(*, store, actor, base_revision: int) -> StorefrontLayoutVersio
     as part of ``layout_service.publish`` itself."""
     _lock_active_draft(store=store, base_revision=base_revision)
     return layout_service.publish(store, user=actor)
+
+
+@transaction.atomic
+def discard_draft(*, store, actor, base_revision: int) -> None:
+    """R4 Task 7 (Batch 2) — discard the entire Draft (revert to whatever
+    ``layout_service.discard_draft`` already means: delete the Draft, no
+    effect on the Published version). Same shape as ``publish_draft``
+    above: gated through the SAME concurrency boundary, then delegates the
+    whole operation to the existing service — never a second, hand-rolled
+    copy of it. Deliberately NOT a normal ``_dispatch_mutation`` type: this
+    DELETES the locked Draft row entirely, so there is no ``edit_revision``
+    left to report afterwards — the caller (the R4 view) tells the client
+    to reload, exactly like Publish/Undo/Redo already do for the same
+    reason (a whole-Draft identity change, not an in-place edit)."""
+    _lock_active_draft(store=store, base_revision=base_revision)
+    layout_service.discard_draft(store)
+
+
+@transaction.atomic
+def reset_page(*, store, actor, base_revision: int, page_type: str) -> StorefrontLayoutVersion:
+    """R4 Task 7 (Batch 2) — RESET PAGE, gated through the same concurrency
+    boundary as Publish/Discard, delegating the actual (checkpoint-then-
+    replace) operation to the existing ``preset_service.reset_page_with_
+    checkpoint`` — never a second copy of its checkpoint/baseline logic.
+    Replaces the active Draft with a NEW version (the old one archived as a
+    recoverable checkpoint), so — like ``discard_draft`` above — this is
+    deliberately NOT a normal ``_dispatch_mutation`` type."""
+    _lock_active_draft(store=store, base_revision=base_revision)
+    try:
+        return preset_service.reset_page_with_checkpoint(store, page_type, user=actor)
+    except preset_service.BaselineResetError as exc:
+        raise R4MutationError(_reset_error_code(exc)) from exc
+    except preset_service.InvalidPresetError as exc:
+        raise R4MutationError(_reset_error_code(exc)) from exc
+
+
+@transaction.atomic
+def reset_storefront(*, store, actor, base_revision: int) -> StorefrontLayoutVersion:
+    """R4 Task 7 (Batch 2) — RESET STOREFRONT (the most destructive
+    granularity: appearance + header + footer + every Ready-Template-covered
+    page), same shape as ``reset_page`` above, delegating to the existing
+    ``preset_service.reset_storefront_with_checkpoint``."""
+    _lock_active_draft(store=store, base_revision=base_revision)
+    try:
+        return preset_service.reset_storefront_with_checkpoint(store, user=actor)
+    except preset_service.BaselineResetError as exc:
+        raise R4MutationError(_reset_error_code(exc)) from exc
+    except preset_service.InvalidPresetError as exc:
+        raise R4MutationError(_reset_error_code(exc)) from exc
