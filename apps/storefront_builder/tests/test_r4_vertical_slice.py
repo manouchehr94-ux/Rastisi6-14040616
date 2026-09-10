@@ -2314,3 +2314,52 @@ class TemplateSwitchPreservingContentTests(R4MutationApiTestCase):
             (unchanged_other_draft.template_provenance or {}).get("template", {}).get("key"),
             self.template_a.key,
         )
+
+    def test_reset_storefront_after_switch_is_rejected_not_silently_destructive(self):
+        """R4 Task 8 (final-review fix, CRITICAL-1) — after a content-
+        preserving switch, ``template_provenance`` declares Template B
+        while ``template_baseline_snapshot`` still (deliberately, per
+        ``switch_template_preserving_content``'s own docstring) describes
+        Template A. Before this fix, ``reset_storefront_to_baseline`` read
+        that mismatch as "this Draft never had an accurate snapshot" and
+        silently fell back to fetching Template B fresh from the live
+        registry and applying its BARE recipe — wiping every page's
+        composition, including the exact merchant content a content-
+        preserving switch exists to preserve. It must now be refused
+        outright, with the Draft's content completely untouched."""
+        home = self.draft.get_page(StorefrontPage.PageType.HOME)
+        merchant_section = StorefrontSection.objects.create(
+            page=home, section_key="rich_text", order=home.sections.count(),
+            settings={"body_html": "<p>هرگز نباید پاک شود</p>"},
+        )
+        response = self._post_switch(self.draft.edit_revision)
+        self.assertEqual(response.status_code, 200)
+        self.layout.refresh_from_db()
+        new_draft = StorefrontLayoutVersion.objects.get(pk=self.layout.draft_version_id)
+        new_home = new_draft.get_page(StorefrontPage.PageType.HOME)
+        sections_before_reset_attempt = list(new_home.sections.order_by("order", "id").values_list("section_key", "settings"))
+        self.assertTrue(
+            new_home.sections.filter(section_key="rich_text", settings__body_html="<p>هرگز نباید پاک شود</p>").exists(),
+        )
+
+        # Direct service-level proof: the specific mismatch is refused, not
+        # silently treated as "no accurate snapshot" and rebuilt from the
+        # live registry.
+        with self.assertRaises(preset_service.TemplateBaselineVersionChangedError):
+            preset_service.reset_storefront_to_baseline(new_draft)
+
+        # End-to-end proof through the real R4 endpoint: rejected, and the
+        # Draft's composition is completely unchanged — never even
+        # partially rebuilt.
+        response = self.client.post(
+            reverse("dashboard:storefront-builder-r4-reset-storefront"),
+            data=json.dumps({"base_revision": new_draft.edit_revision}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "invalid_preset")
+        self.layout.refresh_from_db()
+        self.assertEqual(self.layout.draft_version_id, new_draft.pk)
+        new_home.refresh_from_db()
+        sections_after_reset_attempt = list(new_home.sections.order_by("order", "id").values_list("section_key", "settings"))
+        self.assertEqual(sections_after_reset_attempt, sections_before_reset_attempt)

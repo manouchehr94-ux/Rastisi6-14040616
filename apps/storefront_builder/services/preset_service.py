@@ -592,6 +592,28 @@ def reset_storefront_to_baseline(draft: StorefrontLayoutVersion) -> LayoutPreset
         apply_baseline_snapshot(draft, snapshot)
         return layout_preset_registry.get_layout_preset(template_key)
 
+    # R4 Task 8 (final-review fix, CRITICAL-1) — a snapshot that EXISTS but
+    # does not match this Draft's current provenance is a genuinely
+    # different situation than "this Draft never had an accurate snapshot
+    # at all" (the legacy-compatibility fallback below). It arises from
+    # ``switch_template_preserving_content``: a content-preserving Template
+    # Switch deliberately updates ``template_provenance`` to the new
+    # Template WITHOUT rebuilding ``template_baseline_snapshot`` (see that
+    # function's own docstring — rebuilding it would mean fabricating an
+    # exact historical baseline for composition this operation never
+    # actually applied). Before this fix, that mismatch fell straight into
+    # the fallback below, which re-fetches the new Template from the LIVE
+    # registry and does a full ``apply_preset`` — silently wiping every
+    # page's composition, including the exact content a content-preserving
+    # switch just went out of its way to preserve. A Draft with NO
+    # snapshot at all (``snapshot`` falsy) is unaffected by this check and
+    # still takes the legacy best-effort path exactly as before.
+    if snapshot:
+        raise TemplateBaselineVersionChangedError(
+            f"عکسِ baselineِ ذخیره‌شده‌یِ این Draft برایِ «{snapshot.get('template_key')}» است، نه «{template_key}» — "
+            f"بازنشانیِ خودکارِ کلِ فروشگاه برایِ این وضعیت (مثلاً پس از تعویضِ محتوا-محفوظِ قالب) پشتیبانی نمی‌شود"
+        )
+
     preset = layout_preset_registry.get_layout_preset(template_key)
     if preset is None:
         raise UnknownPresetError(f"Ready Templateِ «{template_key}» دیگر در Registry موجود نیست")
