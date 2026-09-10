@@ -64,6 +64,30 @@ class PresetServiceTestCase(TestCase):
         self.preset = lpr.get_layout_preset("dense_catalog")
 
 
+class HiddenFromLibrarySectionsNeverBuiltByPresetTests(PresetServiceTestCase):
+    """Task 9 — ``_build_sections_for_page`` must honor the same
+    ``hidden_from_library`` gate ``section_structure_service.add_section``/
+    ``duplicate_section`` already enforce. Four real A8 recipes
+    (``premium_leather``, ``street_drop``, ``racer_tech``,
+    ``anniversary_mosaic``) still carry a ``ticker`` component token that maps
+    to ``announcement_bar`` (hidden from the library, superseded by the
+    header's own notification bar) — applying any of them must not create an
+    ``announcement_bar`` section, since one would double-render the strip the
+    header already shows."""
+
+    def test_ticker_bearing_a8_recipes_never_create_announcement_bar_section(self):
+        for key in ("premium_leather", "street_drop", "racer_tech", "anniversary_mosaic"):
+            preset = lpr.get_layout_preset(key)
+            draft = svc.get_or_create_draft(self.store)
+            preset_service.apply_preset(draft, preset)
+            self.assertFalse(
+                StorefrontSection.objects.filter(
+                    page__version=draft, section_key="announcement_bar",
+                ).exists(),
+                f"preset {key!r} must not build a hidden_from_library announcement_bar section",
+            )
+
+
 class ValidationRejectionTests(PresetServiceTestCase):
     """۴، ۵، ۶ — appearance/header/footerِ نامعتبر باید رد شوند، نه بی‌صدا اصلاح."""
 

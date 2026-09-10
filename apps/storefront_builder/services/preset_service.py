@@ -370,7 +370,18 @@ def apply_preset(
     # --- ۲) آماده‌سازیِ ردیف‌هایِ هر صفحه (بدونِ نوشتن — فقط ساختِ آبجکت) ---
     pages_to_replace = {}
     snapshot_pages = {}
-    for page_type, entries in preset.pages.items():
+    for page_type, raw_entries in preset.pages.items():
+        # Same gate `section_structure_service.add_section`/`duplicate_section`
+        # enforce for merchant-facing adds — a preset recipe must not be able
+        # to create an instance of a section the library itself hides (e.g.
+        # `announcement_bar`, superseded by the header notification bar; two
+        # such instances double-render the same strip). Filtered once, here,
+        # so section-building and Container/row grouping (both keyed off this
+        # same `entries` list) stay in sync.
+        entries = [
+            e for e in raw_entries
+            if not section_registry.get_definition(e.section_key).hidden_from_library
+        ]
         page = draft.get_page(page_type)
         # Phase 1 correction (spec §37 — Lock): این صفحه به‌طورِ کامل
         # جایگزین می‌شود (زیر را نگاه کنید) — اگر یکی از sectionهایِ فعلی‌اش
