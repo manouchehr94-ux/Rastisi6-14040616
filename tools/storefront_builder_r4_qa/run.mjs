@@ -87,6 +87,7 @@ const result = {
   mutation_posts: [],
   history_posts: [],
   publish_posts: [],
+  discard_posts: [],
   http_error_responses: [],
   console_errors: [],
   page_errors: [],
@@ -1084,6 +1085,7 @@ function attachNetworkInstrumentation(targetPage, { source } = {}) {
     if (url.includes('/r4/mutate/')) bucket = 'mutation_posts';
     else if (url.includes('/r4/history/')) bucket = 'history_posts';
     else if (url.includes('/r4/publish/')) bucket = 'publish_posts';
+    else if (url.includes('/r4/discard/')) bucket = 'discard_posts';
     if (bucket) result[bucket].push({ url, status, source });
 
     if (status >= 400 && !FAVICON_URL_PATTERN.test(url)) {
@@ -2724,6 +2726,196 @@ async function phase3Task6FamilyGate() {
   );
 }
 
+// =============================================================================
+// R4 Task 7 — composition (multi-column reshape, enable/disable, lock),
+// media reachability, non-Home page switching, and Discard, in ONE
+// consolidated scenario (per the plan's own "do not create one browser
+// campaign per control"). add/remove/duplicate/move, undo/redo, stale
+// conflict, publish, and Draft/Public separation are ALREADY exercised by
+// scenarios 01-13 above — this scenario only covers the workflows those
+// never touch. Registered at the very END of main() (after the phase3
+// block, if any), because Discard destroys the live Draft's identity —
+// running it any earlier would pull the rug out from under every
+// scenario/gate that assumes the Draft it set up still exists (most
+// notably phase3BrandGate/phase3Task6FamilyGate's own Python-side
+// fixtures, prepared once before this browser session even starts).
+async function scenario14CompositionAndRecoveryGate() {
+  // Same before/after instrumentation-guard shape as phase3Task6FamilyGate's
+  // own guard (Task 6 final-review fix, M3/IMPORTANT-1) — this scenario runs
+  // AFTER finalInstrumentationAssertions, so nothing else checks it.
+  const consoleErrorsBefore = result.console_errors.filter(
+    (e) => !isExpectedStaleConflictNoise(e) && !FAVICON_URL_PATTERN.test(e?.location?.url || '') && !isExpectedBrokenImageNoise(e?.location?.url),
+  );
+  const pageErrorsBefore = result.page_errors.slice();
+  const requestFailuresBefore = result.request_failures.filter(
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url),
+  );
+  const httpErrorResponsesBefore = result.http_error_responses.filter(
+    (e) => !isExpectedStale409Response(e) && !isExpectedBrokenImageNoise(e.url),
+  );
+
+  await withExpectedNavigation(() => page.goto(manifest.builder_url, { waitUntil: 'domcontentloaded' }));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
+
+  const structureOpen = await page.evaluate(() => document.querySelector('[data-r4-shell]').dataset.r4StructureOpen);
+  if (structureOpen !== 'true') {
+    await page.click('#r4StructureToggle');
+    await page.locator('#r4Structure').waitFor({ state: 'visible', timeout: 5000 });
+  }
+
+  // ---- Multi-column composition: reshape hero_banner's own (single-
+  // column) Container to a 2-up layout, reusing container_service.
+  // change_container_layout's existing grow-with-empty-cells behavior.
+  const heroSectionId = await openSectionViaPreview('hero_banner');
+  await closeInspectorIfOpen();
+  const heroContainerId = await page.evaluate((sectionId) => {
+    const row = document.querySelector(`[data-r4-structure-row][data-r4-structure-section-id="${sectionId}"]`);
+    let el = row ? row.previousElementSibling : null;
+    while (el && !el.hasAttribute('data-r4-structure-container-row')) el = el.previousElementSibling;
+    return el ? el.getAttribute('data-r4-structure-container-id') : null;
+  }, heroSectionId);
+  assert(heroContainerId, 'Could not discover hero_banner\'s own Container id from the Structure panel');
+
+  const layoutSelect = page.locator(`[data-r4-structure-container-row][data-r4-structure-container-id="${heroContainerId}"] [data-r4-structure-layout-select]`);
+  await layoutSelect.waitFor({ state: 'visible', timeout: 5000 });
+  const beforeLayoutMutateCount = result.mutation_posts.length;
+  await layoutSelect.selectOption('half');
+  await waitSaved();
+  assert(result.mutation_posts.length - beforeLayoutMutateCount === 1, `Expected exactly 1 container.change_layout mutation, got ${result.mutation_posts.length - beforeLayoutMutateCount}`);
+  assert(result.mutation_posts[result.mutation_posts.length - 1].status === 200, 'container.change_layout must return 200');
+
+  // Persistence proof — reload and re-read, same pattern every other
+  // scenario in this file uses.
+  await withExpectedNavigation(() => page.reload({ waitUntil: 'domcontentloaded' }));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });
+  if ((await page.evaluate(() => document.querySelector('[data-r4-shell]').dataset.r4StructureOpen)) !== 'true') {
+    await page.click('#r4StructureToggle');
+    await page.locator('#r4Structure').waitFor({ state: 'visible', timeout: 5000 });
+  }
+  const persistedLayout = await page.locator(`[data-r4-structure-container-row][data-r4-structure-container-id="${heroContainerId}"] [data-r4-structure-layout-select]`).inputValue();
+  assert(persistedLayout === 'half', `container.change_layout: expected persisted layout_key "half", got: ${persistedLayout}`);
+
+  // ---- Enable/disable: brand_carousel disappears from Preview when
+  // toggled inactive (build_page_render_items filters is_active=True), and
+  // reappears when toggled back — real effect, not just a class flip.
+  const brandSectionId = await openSectionViaPreview('brand_carousel');
+  await closeInspectorIfOpen();
+  await page.click(`[data-r4-structure-row][data-r4-structure-section-id="${brandSectionId}"] [data-r4-structure-toggle-active]`);
+  await waitSaved();
+  let frame = await previewFrame();
+  await frame.locator('[data-section-key="brand_carousel"]').waitFor({ state: 'detached', timeout: 10000 });
+
+  await page.click(`[data-r4-structure-row][data-r4-structure-section-id="${brandSectionId}"] [data-r4-structure-toggle-active]`);
+  await waitSaved();
+  frame = await previewFrame();
+  await frame.locator('[data-section-key="brand_carousel"]').waitFor({ state: 'visible', timeout: 10000 });
+
+  // ---- Lock: move buttons disable/re-enable with the flag; unlock again
+  // so this section behaves normally afterward.
+  await page.click(`[data-r4-structure-row][data-r4-structure-section-id="${brandSectionId}"] [data-r4-structure-toggle-locked]`);
+  await waitSaved();
+  const brandMoveUp = page.locator(`[data-r4-structure-row][data-r4-structure-section-id="${brandSectionId}"] [data-r4-structure-move="up"]`);
+  assert(await brandMoveUp.isDisabled(), 'section.toggle_locked: move-up must be disabled on a locked section');
+
+  await page.click(`[data-r4-structure-row][data-r4-structure-section-id="${brandSectionId}"] [data-r4-structure-toggle-locked]`);
+  await waitSaved();
+  assert(!(await brandMoveUp.isDisabled()), 'section.toggle_locked: move-up must be re-enabled once unlocked');
+
+  // ---- Granular reset: click-through reset-to-baseline is certified at
+  // the Django level (BaselineResetMutationTests/DraftReplacingEndpointTests
+  // in test_r4_vertical_slice.py — success, tenant isolation, stale
+  // revision, no-baseline rejection, Published-version-untouched, all real
+  // HTTP round trips). This Draft was never built from a Ready Template
+  // (a deliberate property of THIS shared fixture — hero_banner/
+  // brand_carousel's specific default settings are what scenarios 01-13
+  // above depend on; retrofitting a real baseline snapshot into this one
+  // fixture would risk destabilizing all of them). What the browser CAN
+  // and does prove here: the gating contract that keeps every reset
+  // control from ever offering an always-erroring action is real and live
+  // — the per-section icon disables itself, and the two whole-storefront
+  // buttons do not render at all, when there is genuinely nothing to
+  // reset to.
+  const resetIcon = page.locator(`[data-r4-structure-row][data-r4-structure-section-id="${brandSectionId}"] [data-r4-structure-reset-to-baseline]`);
+  assert(await resetIcon.isDisabled(), 'section.reset_to_baseline: the reset icon must be disabled for a section with no Ready Template baseline');
+  assert(await page.locator('#r4ResetStorefrontButton').count() === 0, 'Reset Storefront button must not render when the Draft has no baseline at all');
+  assert(await page.locator('#r4ResetPageButton').count() === 0, 'Reset Page button must not render when the Draft has no baseline at all');
+
+  // ---- Media reachability: hero_banner (schema-enabled, media-owning)
+  // gets a real "manage media" link inside its normal Inspector partial.
+  await openSectionViaPreview('hero_banner');
+  const mediaLink = page.locator('[data-r4-section-inspector] .r4-inspector-media-link a');
+  await mediaLink.waitFor({ state: 'visible', timeout: 5000 });
+  const mediaHref = await mediaLink.getAttribute('href');
+  assert(mediaHref && mediaHref.includes('/media/hero-slides/'), `hero_banner Inspector: expected a hero-slides media management link, got: ${mediaHref}`);
+  await closeInspectorIfOpen();
+
+  // ---- Non-Home page editing: the page switcher actually loads a
+  // different page_type, not just changing the URL query string cosmetically.
+  // page.selectOption() itself only waits for the <select>'s own value/
+  // change-event dispatch, not for the subsequent navigation the
+  // onchange="window.location.search=..." handler kicks off — bundling it
+  // with page.waitForNavigation() (the exact same pattern scenario10Publish
+  // already uses for its own click-triggers-async-navigation case) is what
+  // makes withExpectedNavigation's synchronous before/after counter see it.
+  await withExpectedNavigation(() => Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
+    page.selectOption('#r4PageSwitcherSelect', 'cart'),
+  ]));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 10000 });
+  const loadedPageType = await page.evaluate(() => document.querySelector('[data-r4-shell]').dataset.r4PageType);
+  assert(loadedPageType === 'cart', `Page switcher: expected page_type="cart" to load, got: ${loadedPageType}`);
+  await withExpectedNavigation(() => Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
+    page.selectOption('#r4PageSwitcherSelect', 'home'),
+  ]));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 10000 });
+
+  // ---- Discard: destroys the Draft entirely — genuinely LAST in this
+  // scenario (and in the whole default run) for exactly that reason. A
+  // fresh Draft (bootstrapped from the already-published version — see
+  // scenario10) must exist immediately after, with the normal starting
+  // edit_revision.
+  const beforeDiscardCount = result.discard_posts.length;
+  page.once('dialog', (dialog) => dialog.accept());
+  await withExpectedNavigation(() => Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
+    page.click('#r4DiscardButton'),
+  ]));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });
+  assert(result.discard_posts.length - beforeDiscardCount === 1, `Expected exactly 1 discard POST, got ${result.discard_posts.length - beforeDiscardCount}`);
+  assert(result.discard_posts[result.discard_posts.length - 1].status === 200, 'Discard must return 200');
+  const revisionAfterDiscard = await page.evaluate(() => window.RastiSiR4.revision);
+  assert(revisionAfterDiscard === 0, `Expected the fresh post-Discard Draft to start at its normal lifecycle revision (0), got ${revisionAfterDiscard}`);
+
+  const consoleErrorsAfter = result.console_errors.filter(
+    (e) => !isExpectedStaleConflictNoise(e) && !FAVICON_URL_PATTERN.test(e?.location?.url || '') && !isExpectedBrokenImageNoise(e?.location?.url),
+  );
+  assert(
+    consoleErrorsAfter.length === consoleErrorsBefore.length,
+    `scenario14-composition-and-recovery: unexpected new console errors: ${JSON.stringify(consoleErrorsAfter.slice(consoleErrorsBefore.length))}`,
+  );
+  assert(
+    result.page_errors.length === pageErrorsBefore.length,
+    `scenario14-composition-and-recovery: unexpected new page errors: ${JSON.stringify(result.page_errors.slice(pageErrorsBefore.length))}`,
+  );
+  const requestFailuresAfter = result.request_failures.filter(
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url),
+  );
+  assert(
+    requestFailuresAfter.length === requestFailuresBefore.length,
+    `scenario14-composition-and-recovery: unexpected new failed requests: ${JSON.stringify(requestFailuresAfter.slice(requestFailuresBefore.length))}`,
+  );
+  const httpErrorResponsesAfter = result.http_error_responses.filter(
+    (e) => !isExpectedStale409Response(e) && !isExpectedBrokenImageNoise(e.url),
+  );
+  assert(
+    httpErrorResponsesAfter.length === httpErrorResponsesBefore.length,
+    `scenario14-composition-and-recovery: unexpected new HTTP error responses: ${JSON.stringify(httpErrorResponsesAfter.slice(httpErrorResponsesBefore.length))}`,
+  );
+
+  await capture('11_task7_composition_and_recovery.png');
+}
+
 async function main() {
   deleteStaleScreenshots();
 
@@ -2762,6 +2954,13 @@ async function main() {
     await scenario('phase3-brand-gate', phase3BrandGate);
     await scenario('phase3-task6-family-gate', phase3Task6FamilyGate);
   }
+
+  // R4 Task 7 — always runs (not phase3-gated: composition/enable-disable/
+  // lock/media-reachability/non-Home-switch/Discard are now core R4
+  // capabilities, not an opt-in matrix). Registered LAST, after the phase3
+  // block, because Discard would otherwise destroy the Draft phase3BrandGate/
+  // phase3Task6FamilyGate's own Python-side fixtures depend on.
+  await scenario('14-task7-composition-and-recovery', scenario14CompositionAndRecoveryGate);
 }
 
 try {
