@@ -698,7 +698,16 @@ commit-by-commit summary.
   (`test_update_settings_persists_background_mode_and_color_together`); `ContainerUpdateSettingsTests`
   and the full `test_r4_vertical_slice.py` re-run (165/166; the 1 is the same pre-existing signature).
   `legacy_disposition.md`'s Container row corrected to record the finding and fix. Committed `9d3d106`,
-  pushed. Re-review dispatched in a fresh isolated worktree against the fix specifically.
+  pushed. Re-review dispatched in a fresh isolated worktree against the fix specifically — verdict
+  **FIX VERIFIED: PASS, CRITICAL 0, IMPORTANT 0**. The re-reviewer independently traced the
+  `effective_container_settings` revert-to-transparent logic itself (not trusting the fix commit's
+  claim), confirmed `PATTERN_REGISTRY` genuinely has exactly one entry (`commerce-doodle`, matching the
+  legacy form's own hardcoded value), re-ran `ContainerUpdateSettingsTests` (5/5) and the full
+  `test_r4_vertical_slice.py` (165/166, the 1 the same pre-existing signature) against the actual
+  post-fix tree, and separately confirmed no double-fire risk between the new and generic container-
+  settings change listeners, no template crash risk if `container_settings` were ever incomplete
+  (it never is — always built via `effective_container_settings`), and no XSS risk (server-side hex-
+  color validation, no `{% autoescape off %}`). Gap 4 CLOSED.
 - Targeted regression (this session, cumulative across Gaps 1-4): 506 tests
   (`test_r4_store_appearance_mutations`+`test_r4_vertical_slice`+`test_layout_service`+
   `test_r4_foundation`+`test_views`) — 2 failures + 1 error, all 3 matching already-documented
