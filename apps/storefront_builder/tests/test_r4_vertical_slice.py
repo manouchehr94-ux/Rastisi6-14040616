@@ -1697,6 +1697,160 @@ class ChangeContainerLayoutTests(R4VerticalSliceTestCase):
         self.assertEqual(self._refresh_revision(), starting_revision)
 
 
+class CellAddSectionTests(R4VerticalSliceTestCase):
+    """R4 Task 7 (final-review fix, IMPORTANT-2; fifth-reviewer fix,
+    IMPORTANT-1) — ``cell.add_section`` is the ONLY way to place a section
+    into a Cell that ``container.change_layout``'s grow branch created
+    empty. Mirrors ``ChangeContainerLayoutTests`` above (same page/store
+    fixture shape) so this new mutation type gets the exact same
+    negative-path coverage every sibling Task-7 mutation type already has:
+    tenant isolation, locked-container rejection, invalid ids, stale
+    revision — not just the browser harness's same-tenant happy path."""
+
+    def _grown_empty_cell(self):
+        _, container, occupied_cell = self._place_new_section("rich_text")
+        grown = container_service.change_container_layout(container, "half")
+        empty_cell = next(
+            c for c in grown.cells.order_by("order", "id")
+            if not container_service.get_cell_blocks(c)
+        )
+        return grown, occupied_cell, empty_cell
+
+    def test_add_section_to_empty_cell_succeeds(self):
+        container, _, empty_cell = self._grown_empty_cell()
+        starting_revision = self.draft.edit_revision
+        before_count = self._history_count()
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {"type": "cell.add_section", "section_key": "trust_features", "cell_id": empty_cell.pk},
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self._refresh_revision(), starting_revision + 1)
+        self.assertEqual(self._history_count(), before_count + 1)
+        new_section = StorefrontSection.objects.get(page=self.home_page, section_key="trust_features")
+        self.assertEqual(new_section.cell_id, empty_cell.pk)
+        empty_cell.refresh_from_db()
+        self.assertEqual(list(container_service.get_cell_blocks(empty_cell)), [new_section])
+
+    def test_add_section_to_occupied_cell_appends_as_second_block(self):
+        _, occupied_cell, _ = self._grown_empty_cell()
+        existing = list(container_service.get_cell_blocks(occupied_cell))
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {"type": "cell.add_section", "section_key": "trust_features", "cell_id": occupied_cell.pk},
+        })
+        self.assertEqual(response.status_code, 200)
+        new_section = StorefrontSection.objects.get(page=self.home_page, section_key="trust_features")
+        occupied_cell.refresh_from_db()
+        self.assertEqual(list(container_service.get_cell_blocks(occupied_cell)), existing + [new_section])
+
+    def test_add_section_to_cell_rejects_locked_container(self):
+        container, _, empty_cell = self._grown_empty_cell()
+        container.is_locked = True
+        container.save(update_fields=["is_locked"])
+        starting_revision = self.draft.edit_revision
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {"type": "cell.add_section", "section_key": "trust_features", "cell_id": empty_cell.pk},
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "container_locked")
+        self.assertEqual(self._refresh_revision(), starting_revision)
+        self.assertFalse(StorefrontSection.objects.filter(page=self.home_page, section_key="trust_features").exists())
+
+    def test_add_section_to_cell_rejects_invalid_section_key(self):
+        _, _, empty_cell = self._grown_empty_cell()
+        starting_revision = self.draft.edit_revision
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {"type": "cell.add_section", "section_key": "nonexistent_section_key", "cell_id": empty_cell.pk},
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "invalid_section_key")
+        self.assertEqual(self._refresh_revision(), starting_revision)
+
+    def test_add_section_to_cell_rejects_hidden_from_library_section(self):
+        _, _, empty_cell = self._grown_empty_cell()
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {"type": "cell.add_section", "section_key": "announcement_bar", "cell_id": empty_cell.pk},
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "section_hidden_from_library")
+        self.assertFalse(StorefrontSection.objects.filter(page=self.home_page, section_key="announcement_bar").exists())
+
+    def test_add_section_to_cell_rejects_max_instances_exceeded(self):
+        _, _, empty_cell = self._grown_empty_cell()
+        StorefrontSection.objects.create(
+            page=self.home_page, section_key="newsletter", order=self.home_page.sections.count(),
+        )
+        starting_revision = self.draft.edit_revision
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {"type": "cell.add_section", "section_key": "newsletter", "cell_id": empty_cell.pk},
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "max_instances_exceeded")
+        self.assertEqual(self._refresh_revision(), starting_revision)
+        self.assertEqual(StorefrontSection.objects.filter(page=self.home_page, section_key="newsletter").count(), 1)
+
+    def test_add_section_to_cell_rejects_nonexistent_cell_id(self):
+        _, _, empty_cell = self._grown_empty_cell()
+        starting_revision = self.draft.edit_revision
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {"type": "cell.add_section", "section_key": "trust_features", "cell_id": empty_cell.pk + 999999},
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "cell_not_found")
+        self.assertEqual(self._refresh_revision(), starting_revision)
+
+    def test_add_section_to_cell_rejects_non_integer_cell_id(self):
+        starting_revision = self.draft.edit_revision
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {"type": "cell.add_section", "section_key": "trust_features", "cell_id": "not-an-int"},
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "invalid_cell_id")
+        self.assertEqual(self._refresh_revision(), starting_revision)
+
+    def test_foreign_store_cell_cannot_be_used(self):
+        other_store = Store.objects.create(
+            name="فروشگاه دیگر", slug="r4-task7-cell-add-other-store",
+            admin_subdomain="r4-task7-cell-add-other-store",
+        )
+        other_draft = layout_service.get_or_create_draft(other_store)
+        other_page = other_draft.get_page(StorefrontPage.PageType.HOME)
+        other_container = container_service.create_empty_container(other_page, "half")
+        other_cell = other_container.cells.order_by("order", "id").first()
+        before_other_count = StorefrontSection.objects.filter(page=other_page).count()
+        starting_revision = self.draft.edit_revision
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {"type": "cell.add_section", "section_key": "rich_text", "cell_id": other_cell.pk},
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "cell_not_found")
+        self.assertEqual(self._refresh_revision(), starting_revision)
+        self.assertEqual(StorefrontSection.objects.filter(page=other_page).count(), before_other_count)
+        self.assertFalse(other_cell.blocks.exists())
+
+    def test_stale_revision_rejected_for_cell_add_section(self):
+        _, _, empty_cell = self._grown_empty_cell()
+        self.draft.edit_revision += 5
+        self.draft.save(update_fields=["edit_revision"])
+        before_count = self._history_count()
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision - 1,
+            "mutation": {"type": "cell.add_section", "section_key": "trust_features", "cell_id": empty_cell.pk},
+        })
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["code"], "stale_revision")
+        self.assertEqual(self._history_count(), before_count)
+        self.assertFalse(StorefrontSection.objects.filter(page=self.home_page, section_key="trust_features").exists())
+
+
 # ---------------------------------------------------------------------------
 # R4 Task 7 (Batch 2) — granular baseline reset (in-place mutation types)
 # ---------------------------------------------------------------------------
