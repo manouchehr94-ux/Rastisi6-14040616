@@ -2044,6 +2044,34 @@ class ContainerUpdateSettingsTests(R4VerticalSliceTestCase):
         self.assertEqual(response.json()["code"], "container_locked")
         self.assertEqual(self._refresh_revision(), starting_revision)
 
+    def test_update_settings_persists_background_mode_and_color_together(self):
+        # Pre-Task-10 final remediation (independent review finding) — R4's
+        # editor.html now renders background_mode/background_color controls
+        # (previously accepted by this mutation but with no UI reachable
+        # from R4 at all); r4_editor.js's dedicated listener sends both keys
+        # together on any change to either, because a mode="color" patch
+        # with no color EVER set (or vice versa) is rejected by
+        # effective_container_settings's own validation and silently
+        # reverts to "transparent" — this proves the combined-patch shape
+        # that listener sends actually persists as color, not silently
+        # reverting.
+        _, container, _ = self._place_new_section("rich_text")
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {
+                "type": "container.update_settings",
+                "container_id": container.pk,
+                "patch": {
+                    "background_mode": "color", "background_color": "#F53247",
+                    "background_pattern": "commerce-doodle",
+                },
+            },
+        })
+        self.assertEqual(response.status_code, 200)
+        container.refresh_from_db()
+        self.assertEqual(container.settings["background_mode"], "color")
+        self.assertEqual(container.settings["background_color"], "#F53247")
+
     def test_foreign_store_container_settings_cannot_be_changed(self):
         other_store = Store.objects.create(
             name="فروشگاه دیگر", slug="r4-container-settings-other-store",

@@ -719,6 +719,36 @@ window.RastiSiR4 = {
           container_id: Number(settingsRow.getAttribute('data-r4-structure-container-id')),
           patch: settingsPatch,
         });
+        return;
+      }
+      // Pre-Task-10 final remediation (independent review finding) —
+      // Container background: mode + color are sent TOGETHER on any change
+      // to either (not the single-key patch the generic handler above
+      // sends), because the server partial-merges a patch onto the CURRENT
+      // saved settings and effective_container_settings() rejects
+      // mode="color" with no color yet set (or a color with mode still
+      // "transparent") by silently reverting to "transparent" — see the
+      // comment in r4/editor.html's own background markup. background_pattern
+      // is always sent as the same single fixed value the legacy form's own
+      // hidden field uses (never a merchant-facing pattern choice, never a
+      // new pattern registry UI); harmless when mode isn't "pattern" since
+      // the server only reads it in that case.
+      var backgroundField = evt.target.closest('[data-r4-container-background-field]');
+      if (backgroundField) {
+        var backgroundWrapper = backgroundField.closest('[data-r4-container-background]');
+        var backgroundRow = backgroundField.closest('[data-r4-structure-container-row]');
+        if (!backgroundWrapper || !backgroundRow) return;
+        var modeField = backgroundWrapper.querySelector('[data-r4-container-background-field="background_mode"]');
+        var colorField = backgroundWrapper.querySelector('[data-r4-container-background-field="background_color"]');
+        R4.enqueueStructuralMutation({
+          type: 'container.update_settings',
+          container_id: Number(backgroundRow.getAttribute('data-r4-structure-container-id')),
+          patch: {
+            background_mode: modeField ? modeField.value : 'transparent',
+            background_color: colorField ? colorField.value : '',
+            background_pattern: 'commerce-doodle',
+          },
+        });
       }
     });
   }

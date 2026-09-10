@@ -74,6 +74,32 @@
             <option value="natural" {% if item.container_settings.height_mode == "natural" %}selected{% endif %}>ارتفاع طبیعی</option>
             <option value="equal" {% if item.container_settings.height_mode == "equal" %}selected{% endif %}>ارتفاع برابر</option>
           </select>
+          {# Pre-Task-10 final remediation (independent review finding) — the
+             backend (container.update_settings) has always accepted
+             background_mode/background_color/background_pattern (matching
+             the legacy container_settings_form.html's own allowlist), but
+             R4 never rendered a control for any of them: a merchant on R4
+             genuinely had no way to set a Container's background. mode+color
+             are sent together (data-r4-container-background-field, a
+             dedicated listener below) because the server partial-merges a
+             patch onto the CURRENT saved settings, and setting mode="color"
+             alone before any color is ever chosen (or vice versa) fails
+             effective_container_settings's own validation and silently
+             reverts to "transparent" — sending both every time keeps them
+             consistent regardless of which control the merchant touched,
+             matching the legacy form's own whole-form-submit behavior. Only
+             ONE pattern exists in the legacy form too (a hidden
+             "commerce-doodle" value, never a merchant choice) — reused
+             verbatim, never a new pattern registry UI. #}
+          <label class="r4-field-sublabel">پس‌زمینه چیدمان</label>
+          <div data-r4-container-background>
+            <select class="r4-control" data-r4-container-background-field="background_mode" {% if item.container_is_locked %}disabled{% endif %}>
+              <option value="transparent" {% if item.container_settings.background_mode == "transparent" %}selected{% endif %}>بدون پس‌زمینه اختصاصی</option>
+              <option value="color" {% if item.container_settings.background_mode == "color" %}selected{% endif %}>رنگ ساده</option>
+              <option value="pattern" {% if item.container_settings.background_mode == "pattern" %}selected{% endif %}>رنگ + الگوی ظریف</option>
+            </select>
+            <input type="color" class="r4-control" data-r4-container-background-field="background_color" value="{{ item.container_settings.background_color|default:'#F53247' }}" {% if item.container_is_locked %}disabled{% endif %}>
+          </div>
         </div>
         {% endif %}
         {% endifchanged %}
