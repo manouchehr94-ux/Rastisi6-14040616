@@ -62,6 +62,7 @@ _MUTATION_HISTORY_LABELS = {
     "section.toggle_active": "نمایش/مخفی کردن بخش",
     "section.toggle_locked": "قفل/بازکردن بخش",
     "container.change_layout": "تغییر چیدمان",
+    "cell.add_section": "افزودن بخش به خانه",
     "section.reset_to_baseline": "بازنشانی بخش به قالب",
     "section.reset_setting_to_baseline": "بازنشانی فیلد بخش به قالب",
     "appearance.reset_setting_to_baseline": "بازنشانی تنظیم ظاهر به قالب",
@@ -98,6 +99,18 @@ def _validate_resource_source_ownership(*, store, source: "resource_source.Resou
         raise R4MutationError("invalid_resource_ownership") from None
 
 
+def _scoped_section(draft: StorefrontLayoutVersion, section_id) -> StorefrontSection:
+    """Strict Draft-scoping rule shared by every mutation applier in this
+    module — a crafted ``section_id`` belonging to another Store, page, or
+    non-active-Draft version is indistinguishable from "does not exist"."""
+    try:
+        return StorefrontSection.objects.select_for_update().get(
+            pk=section_id, page__version=draft,
+        )
+    except StorefrontSection.DoesNotExist:
+        raise R4MutationError("section_not_found") from None
+
+
 def _apply_section_update_settings(*, store, draft: StorefrontLayoutVersion, mutation: dict) -> None:
     section_id = mutation.get("section_id")
     patch = mutation.get("patch")
@@ -107,15 +120,7 @@ def _apply_section_update_settings(*, store, draft: StorefrontLayoutVersion, mut
     if not isinstance(patch, dict):
         raise R4MutationError("invalid_patch")
 
-    # Scoped through the locked, active Draft — never by bare pk — so a
-    # section belonging to another Store, or to a Published/non-active
-    # version of THIS Store, is indistinguishable from "does not exist".
-    try:
-        section = StorefrontSection.objects.select_for_update().get(
-            pk=section_id, page__version=draft,
-        )
-    except StorefrontSection.DoesNotExist:
-        raise R4MutationError("section_not_found") from None
+    section = _scoped_section(draft, section_id)
 
     try:
         definition = section_registry.get_definition(section.section_key)
@@ -218,23 +223,11 @@ def _reset_error_code(exc: "preset_service.BaselineResetError | preset_service.I
     return "baseline_reset_error"
 
 
-def _scoped_section_for_reset(draft: StorefrontLayoutVersion, section_id) -> StorefrontSection:
-    """Same strict Draft-scoping rule ``_apply_section_update_settings`` uses
-    above — a crafted ``section_id`` belonging to another Store, page, or
-    non-active-Draft version is indistinguishable from "does not exist"."""
-    try:
-        return StorefrontSection.objects.select_for_update().get(
-            pk=section_id, page__version=draft,
-        )
-    except StorefrontSection.DoesNotExist:
-        raise R4MutationError("section_not_found") from None
-
-
 def _apply_section_reset_to_baseline(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
     section_id = mutation.get("section_id")
     if not _is_strict_int(section_id):
         raise R4MutationError("invalid_section_id")
-    section = _scoped_section_for_reset(draft, section_id)
+    section = _scoped_section(draft, section_id)
     try:
         preset_service.reset_section_to_baseline(draft, section)
     except (preset_service.BaselineResetError, preset_service.InvalidPresetError) as exc:
@@ -248,7 +241,7 @@ def _apply_section_reset_setting_to_baseline(*, draft: StorefrontLayoutVersion, 
         raise R4MutationError("invalid_section_id")
     if not isinstance(key, str) or not key:
         raise R4MutationError("invalid_key")
-    section = _scoped_section_for_reset(draft, section_id)
+    section = _scoped_section(draft, section_id)
     try:
         preset_service.reset_section_setting_to_baseline(draft, section, key)
     except (preset_service.BaselineResetError, preset_service.InvalidPresetError) as exc:
@@ -362,6 +355,19 @@ def _apply_container_change_layout(*, draft: StorefrontLayoutVersion, mutation: 
         section_structure_service.change_container_layout(
             draft=draft, container_id=container_id, layout_key=layout_key,
         )
+    except section_structure_service.SectionStructureError as exc:
+        raise R4MutationError(exc.code) from exc
+
+
+def _apply_cell_add_section(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    section_key = mutation.get("section_key")
+    cell_id = mutation.get("cell_id")
+    if not isinstance(section_key, str) or not section_key:
+        raise R4MutationError("invalid_section_key")
+    if not _is_strict_int(cell_id):
+        raise R4MutationError("invalid_cell_id")
+    try:
+        section_structure_service.add_section_to_cell(draft=draft, section_key=section_key, cell_id=cell_id)
     except section_structure_service.SectionStructureError as exc:
         raise R4MutationError(exc.code) from exc
 
@@ -705,6 +711,9 @@ def _dispatch_mutation(*, store, draft: StorefrontLayoutVersion, mutation: dict)
         return
     if mutation_type == "container.change_layout":
         _apply_container_change_layout(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "cell.add_section":
+        _apply_cell_add_section(draft=draft, mutation=mutation)
         return
     if mutation_type == "section.reset_to_baseline":
         _apply_section_reset_to_baseline(draft=draft, mutation=mutation)

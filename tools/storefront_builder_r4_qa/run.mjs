@@ -2754,6 +2754,16 @@ async function scenario14CompositionAndRecoveryGate() {
     (e) => !isExpectedStale409Response(e) && !isExpectedBrokenImageNoise(e.url),
   );
 
+  // Task-7 final-review fix, MINOR-2 — this scenario's own screenshot is
+  // NOT in REQUIRED_SCREENSHOTS (it is produced after
+  // final-screenshot-verification already ran, so that shared list/check
+  // cannot cover it without reordering every other scenario's own
+  // contract) — delete any stale copy now and verify the fresh one below,
+  // entirely self-contained, so a failed run can never leave a stale file
+  // that looks like fresh evidence.
+  const task7ScreenshotPath = shot('11_task7_composition_and_recovery.png');
+  try { fs.unlinkSync(task7ScreenshotPath); } catch (_error) { /* did not exist — fine */ }
+
   await withExpectedNavigation(() => page.goto(manifest.builder_url, { waitUntil: 'domcontentloaded' }));
   await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
 
@@ -2795,6 +2805,37 @@ async function scenario14CompositionAndRecoveryGate() {
   const persistedLayout = await page.locator(`[data-r4-structure-container-row][data-r4-structure-container-id="${heroContainerId}"] [data-r4-structure-layout-select]`).inputValue();
   assert(persistedLayout === 'half', `container.change_layout: expected persisted layout_key "half", got: ${persistedLayout}`);
 
+  // ---- cell.add_section (Task-7 final-review fix, IMPORTANT-2): the
+  // "half" reshape above grows the container with a brand-new EMPTY Cell —
+  // before this fix, no R4 mutation could ever place a section into it.
+  // Prove the fix end-to-end: the empty-cells picker must list it, adding
+  // a section through it must be exactly 1 successful cell.add_section
+  // mutation, and the placed section must actually render in Preview.
+  const emptyCellRow = page.locator('[data-r4-structure-empty-cell]').first();
+  await emptyCellRow.waitFor({ state: 'visible', timeout: 5000 });
+  const emptyCellId = await emptyCellRow.getAttribute('data-r4-structure-cell-id');
+  assert(emptyCellId, 'container.change_layout\'s grow-with-empty-cells must surface a picker for the new empty Cell');
+
+  const emptyCellSelect = emptyCellRow.locator('[data-r4-structure-empty-cell-select]');
+  await emptyCellSelect.selectOption('rich_text');
+  const beforeCellAddMutateCount = result.mutation_posts.length;
+  await emptyCellRow.locator('[data-r4-structure-empty-cell-add]').click();
+  await waitSaved();
+  assert(result.mutation_posts.length - beforeCellAddMutateCount === 1, `Expected exactly 1 cell.add_section mutation, got ${result.mutation_posts.length - beforeCellAddMutateCount}`);
+  assert(result.mutation_posts[result.mutation_posts.length - 1].status === 200, 'cell.add_section must return 200');
+
+  let frame = await previewFrame();
+  await frame.locator(`[data-r4-structure-container-id="${heroContainerId}"] [data-section-key="rich_text"], [data-section-key="rich_text"]`).first().waitFor({ state: 'visible', timeout: 10000 });
+
+  await withExpectedNavigation(() => page.reload({ waitUntil: 'domcontentloaded' }));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });
+  if ((await page.evaluate(() => document.querySelector('[data-r4-shell]').dataset.r4StructureOpen)) !== 'true') {
+    await page.click('#r4StructureToggle');
+    await page.locator('#r4Structure').waitFor({ state: 'visible', timeout: 5000 });
+  }
+  const emptyCellStillListed = await page.locator(`[data-r4-structure-empty-cell][data-r4-structure-cell-id="${emptyCellId}"]`).count();
+  assert(emptyCellStillListed === 0, 'cell.add_section: the now-filled Cell must no longer appear in the empty-cells picker after reload');
+
   // ---- Enable/disable: brand_carousel disappears from Preview when
   // toggled inactive (build_page_render_items filters is_active=True), and
   // reappears when toggled back — real effect, not just a class flip.
@@ -2802,7 +2843,7 @@ async function scenario14CompositionAndRecoveryGate() {
   await closeInspectorIfOpen();
   await page.click(`[data-r4-structure-row][data-r4-structure-section-id="${brandSectionId}"] [data-r4-structure-toggle-active]`);
   await waitSaved();
-  let frame = await previewFrame();
+  frame = await previewFrame();
   await frame.locator('[data-section-key="brand_carousel"]').waitFor({ state: 'detached', timeout: 10000 });
 
   await page.click(`[data-r4-structure-row][data-r4-structure-section-id="${brandSectionId}"] [data-r4-structure-toggle-active]`);
@@ -2914,6 +2955,8 @@ async function scenario14CompositionAndRecoveryGate() {
   );
 
   await capture('11_task7_composition_and_recovery.png');
+  assert(fs.existsSync(task7ScreenshotPath), 'Missing scenario 14 screenshot: 11_task7_composition_and_recovery.png');
+  assert(fs.statSync(task7ScreenshotPath).size > 0, 'Empty scenario 14 screenshot: 11_task7_composition_and_recovery.png');
 }
 
 async function main() {

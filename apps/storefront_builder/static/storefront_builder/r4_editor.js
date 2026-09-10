@@ -35,7 +35,6 @@ window.RastiSiR4 = {
   var redoButton = document.getElementById('r4RedoButton');
   var publishButton = document.getElementById('r4PublishButton');
   var discardButton = document.getElementById('r4DiscardButton');
-  var resetStorefrontButton = document.getElementById('r4ResetStorefrontButton');
 
   // ---- Admin sidebar: R4-page-only, defaults to collapsed on every fresh
   // load (nothing persisted between page loads) — driven purely by a data
@@ -621,6 +620,25 @@ window.RastiSiR4 = {
         if (addSelect) addSelect.value = '';
         return;
       }
+      // R4 Task 7 (final-review fix, IMPORTANT-2) — one "add section" row
+      // per EMPTY Cell (see editor.html), so a Cell created by
+      // container.change_layout's grow branch is never a permanent dead
+      // end. Same delegated-click shape as #r4StructureAddButton above.
+      var emptyCellAddBtn = evt.target.closest('[data-r4-structure-empty-cell-add]');
+      if (emptyCellAddBtn) {
+        var emptyCellRow = emptyCellAddBtn.closest('[data-r4-structure-empty-cell]');
+        if (!emptyCellRow) return;
+        var emptyCellSelect = emptyCellRow.querySelector('[data-r4-structure-empty-cell-select]');
+        var emptyCellSectionKey = emptyCellSelect ? emptyCellSelect.value : '';
+        if (!emptyCellSectionKey) return;
+        R4.enqueueStructuralMutation({
+          type: 'cell.add_section',
+          section_key: emptyCellSectionKey,
+          cell_id: Number(emptyCellRow.getAttribute('data-r4-structure-cell-id')),
+        });
+        if (emptyCellSelect) emptyCellSelect.value = '';
+        return;
+      }
       var label = evt.target.closest('.r4-structure-label');
       if (label) {
         var labelRow = label.closest('[data-r4-structure-row]');
@@ -1077,6 +1095,25 @@ window.RastiSiR4 = {
         R4.enqueueMutation({ type: 'footer.reset_to_baseline' }).then(function (result) {
           if (result && result.ok) refreshGlobalDesignAndPreview();
         });
+        return;
+      }
+      // R4 Task 7 (final-review fix, IMPORTANT-1) — MUST be delegated
+      // (evt.target.closest, not a direct listener bound once at load):
+      // #r4ResetStorefrontButton lives inside #r4GlobalDesign, whose
+      // innerHTML refreshGlobalDesignAndPreview() replaces on every OTHER
+      // successful Global Design edit above — a directly-bound listener
+      // on the original node would silently stop firing after the very
+      // first such edit. Reset-storefront REPLACES the Draft's identity
+      // (like Discard/Publish), so it still needs its own confirm +
+      // sendReplaceDraftAction + reload, unlike the in-place resets above.
+      if (evt.target.closest('#r4ResetStorefrontButton')) {
+        if (!window.confirm('کل ظاهر فروشگاه (همه‌یِ صفحاتِ پوشش‌داده‌شده، هدر، فوتر، ظاهر) به قالب بازنشانی می‌شود. ادامه می‌دهید؟')) return;
+        R4.queue = (R4.queue || Promise.resolve()).then(function () {
+          return sendReplaceDraftAction('reset-storefront/');
+        });
+        R4.queue.then(function (result) {
+          if (result && result.ok) window.location.reload();
+        });
       }
     });
 
@@ -1262,15 +1299,4 @@ window.RastiSiR4 = {
     });
   }
 
-  if (resetStorefrontButton) {
-    resetStorefrontButton.addEventListener('click', function () {
-      if (!window.confirm('کل ظاهر فروشگاه (همه‌یِ صفحاتِ پوشش‌داده‌شده، هدر، فوتر، ظاهر) به قالب بازنشانی می‌شود. ادامه می‌دهید؟')) return;
-      R4.queue = (R4.queue || Promise.resolve()).then(function () {
-        return sendReplaceDraftAction('reset-storefront/');
-      });
-      R4.queue.then(function (result) {
-        if (result && result.ok) window.location.reload();
-      });
-    });
-  }
 })();

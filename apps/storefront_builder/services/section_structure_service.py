@@ -115,6 +115,60 @@ def add_section(*, draft, section_key: str, page_type: str) -> StorefrontSection
     return new_section
 
 
+def _scoped_cell(draft, cell_id) -> StorefrontCell:
+    """Same strict scoping rule as ``_scoped_section`` above, for a Cell
+    id instead of a Section id."""
+    try:
+        return StorefrontCell.objects.select_for_update().select_related("container", "container__page").get(
+            pk=cell_id, container__page__version=draft,
+        )
+    except StorefrontCell.DoesNotExist:
+        raise SectionStructureError("cell_not_found") from None
+
+
+def add_section_to_cell(*, draft, section_key: str, cell_id: int) -> StorefrontSection:
+    """R4 Task 7 (final-review fix, IMPORTANT-2) — place a NEW section into
+    a specific, possibly-EMPTY Cell, exactly mirroring the legacy
+    ``storefront_cell_add_section`` view's own logic (``views.py``): same
+    validation order (section_key -> allowed-on-page -> hidden_from_library
+    -> max_instances), same canonical placement call
+    (``container_service.place_section`` for a truly empty Cell,
+    ``add_block`` for a Cell that already holds a Block). Without this,
+    ``container.change_layout``'s grow branch can create an empty Cell that
+    no other R4 mutation could ever fill — the exact gap the second
+    independent Task-7 reviewer found."""
+    if not isinstance(section_key, str) or not section_key:
+        raise SectionStructureError("invalid_section_key")
+
+    definition = _get_definition(section_key)
+    if definition is None:
+        raise SectionStructureError("invalid_section_key")
+
+    cell = _scoped_cell(draft, cell_id)
+    if cell.container.is_locked:
+        raise SectionStructureError("container_locked")
+    page = cell.container.page
+
+    if not section_registry.is_section_allowed_on_page(section_key, page.page_type):
+        raise SectionStructureError("section_not_allowed_on_page")
+    if definition.hidden_from_library:
+        raise SectionStructureError("section_hidden_from_library")
+    if definition.max_instances is not None:
+        existing_count = page.sections.filter(section_key=section_key).count()
+        if existing_count >= definition.max_instances:
+            raise SectionStructureError("max_instances_exceeded")
+
+    new_section = StorefrontSection.objects.create(
+        page=page, section_key=section_key, order=_next_page_order(page),
+        settings=definition.default_settings(),
+    )
+    if container_service.get_cell_blocks(cell):
+        container_service.add_block(cell, new_section)
+    else:
+        container_service.place_section(cell, new_section)
+    return new_section
+
+
 def remove_section(*, draft, section_id: int) -> None:
     section = _scoped_section(draft, section_id)
 

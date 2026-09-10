@@ -88,6 +88,21 @@ LAYOUT_PRESETS: dict[str, tuple[int, ...]] = {
     "quarters": (3, 3, 3, 3),
 }
 
+#: R4 Task 7 (final-review fix, MINOR-7) — the SAME Persian ratio labels
+#: the legacy editor's own layout picker already shows
+#: (``templates/dashboard/storefront_builder/editor.html``'s inline
+#: layout_key if/elif chain), never a second translation to keep in sync.
+LAYOUT_PRESET_LABELS_FA: dict[str, str] = {
+    "single": "۱۰۰٪",
+    "half": "۵۰/۵۰",
+    "quarter_left": "۲۵/۷۵",
+    "quarter_right": "۷۵/۲۵",
+    "third_left": "۳۳/۶۷",
+    "third_right": "۶۷/۳۳",
+    "thirds": "سه‌ستونه",
+    "quarters": "چهارستونه",
+}
+
 CONTAINER_SETTINGS_DEFAULTS = {
     "gap": 14,
     "mobile_mode": "stack",   # stack | same

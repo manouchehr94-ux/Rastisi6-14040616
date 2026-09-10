@@ -121,6 +121,14 @@ def media_kind_for_section_key(section_key: str) -> str | None:
     return None
 
 
+def media_label_for_kind(kind: str) -> str:
+    """R4 Task 7 (final-review fix, MINOR-6) — the same public-accessor
+    reasoning as ``media_kind_for_section_key`` above: R4's Inspector needs
+    this kind's plural Persian label without reaching into ``_MEDIA_KINDS``
+    directly from another module."""
+    return _MEDIA_KINDS[kind]["label_plural"]
+
+
 def _media_config(kind: str, section) -> dict:
     config = _MEDIA_KINDS.get(kind)
     if config is None:

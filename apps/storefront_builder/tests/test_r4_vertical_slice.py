@@ -51,10 +51,6 @@ class R4VerticalSliceTestCase(R4MutationApiTestCase):
         container_service.place_section(cell, section)
         return section, container, cell
 
-    def _refresh_revision(self):
-        self.draft.refresh_from_db()
-        return self.draft.edit_revision
-
 
 class AddSectionTests(R4VerticalSliceTestCase):
     def test_add_succeeds_and_increments_revision_once(self):
@@ -784,9 +780,7 @@ class TenantAndScopeSecurityTests(R4VerticalSliceTestCase):
 
 
 class R4GlobalDesignTestCase(R4MutationApiTestCase):
-    def _refresh_revision(self):
-        self.draft.refresh_from_db()
-        return self.draft.edit_revision
+    pass
 
 
 class GlobalMutationTests(R4GlobalDesignTestCase):

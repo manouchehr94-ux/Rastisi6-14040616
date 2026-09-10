@@ -316,6 +316,20 @@ def storefront_r4_editor(request):
         )
     ]
 
+    # R4 Task 7 (final-review fix, IMPORTANT-2) — an empty Cell (e.g. a
+    # freshly-grown container.change_layout column) has no Block, so
+    # ``build_structure_projection`` above never emits a row for it —
+    # without this, such a Cell would be permanently unreachable from R4.
+    # A pure read, same "prefetch once, never re-query per Cell" shape as
+    # ``build_structure_projection`` itself.
+    empty_cells = []
+    for container_obj in page.containers.order_by("order", "id").prefetch_related("cells__section", "cells__blocks"):
+        if container_obj.is_locked:
+            continue
+        for cell_obj in sorted(container_obj.cells.all(), key=lambda c: (c.order, c.id)):
+            if not container_service.blocks_from_prefetched_cell(cell_obj):
+                empty_cells.append({"container_id": container_obj.pk, "cell_id": cell_obj.pk})
+
     # The shell has no <form>/{% csrf_token %} of its own, so the browser
     # mutation client (r4_editor.js) has no other trigger to guarantee a
     # csrftoken cookie exists before its first POST to the Task 5 endpoint.
@@ -339,10 +353,15 @@ def storefront_r4_editor(request):
             "r4_edit_revision": draft.edit_revision,
             "structure_items": structure_items,
             "structure_library": structure_library,
-            # R4 Task 7 (Batch 1) — the SAME preset registry the legacy
-            # editor's layout-preset picker already uses
-            # (``container_service.LAYOUT_PRESETS``), never a second list.
-            "container_layout_presets": list(container_service.LAYOUT_PRESETS.keys()),
+            "empty_cells": empty_cells,
+            # R4 Task 7 (Batch 1; final-review fix, MINOR-7) — the SAME
+            # preset registry AND the SAME Persian ratio labels the legacy
+            # editor's layout-preset picker already uses, never a second
+            # list/translation.
+            "container_layout_presets": [
+                (key, container_service.LAYOUT_PRESET_LABELS_FA.get(key, key))
+                for key in container_service.LAYOUT_PRESETS
+            ],
             # R4 Task 7 (Batch 2) — same gating condition the legacy editor's
             # own "Reset page/storefront to Template" buttons already use
             # (``editor.html``: ``draft.template_baseline_snapshot.pages|
@@ -469,7 +488,7 @@ def storefront_r4_section_inspector(request, pk):
             "dashboard:storefront-builder-section-media-list",
             kwargs={"pk": section.pk, "kind": media_kind},
         )
-        media_label_plural = media_views._MEDIA_KINDS[media_kind]["label_plural"]
+        media_label_plural = media_views.media_label_for_kind(media_kind)
     else:
         media_label_plural = None
 

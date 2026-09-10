@@ -53,8 +53,8 @@
         <div class="r4-structure-container-row" data-r4-structure-container-row data-r4-structure-container-id="{{ item.container_id }}">
           <select class="r4-control r4-structure-layout-select" data-r4-structure-layout-select
                   aria-label="چیدمان ردیف" {% if item.container_is_locked %}disabled{% endif %}>
-            {% for preset_key in container_layout_presets %}
-            <option value="{{ preset_key }}" {% if preset_key == item.container_layout_key %}selected{% endif %}>{{ preset_key }}</option>
+            {% for preset_key, preset_label in container_layout_presets %}
+            <option value="{{ preset_key }}" {% if preset_key == item.container_layout_key %}selected{% endif %}>{{ preset_label }}</option>
             {% endfor %}
           </select>
         </div>
@@ -90,6 +90,26 @@
       {% if page_has_baseline %}
       <div class="r4-structure-add">
         <button type="button" id="r4ResetPageButton">⟲ بازنشانی این صفحه به قالب</button>
+      </div>
+      {% endif %}
+      {% if empty_cells %}
+      <div class="r4-structure-empty-cells">
+        <div class="r4-structure-header">خانه‌های خالی</div>
+        {% for empty_cell in empty_cells %}
+        <div class="r4-structure-add" data-r4-structure-empty-cell data-r4-structure-cell-id="{{ empty_cell.cell_id }}">
+          <select class="r4-control" data-r4-structure-empty-cell-select>
+            <option value="">افزودن بخش به این خانه…</option>
+            {% for group in structure_library %}
+            <optgroup label="{{ group.category }}">
+              {% for entry in group.items %}
+              <option value="{{ entry.key }}">{{ entry.label }}</option>
+              {% endfor %}
+            </optgroup>
+            {% endfor %}
+          </select>
+          <button type="button" data-r4-structure-empty-cell-add>افزودن</button>
+        </div>
+        {% endfor %}
       </div>
       {% endif %}
     </aside>
