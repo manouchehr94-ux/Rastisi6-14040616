@@ -606,7 +606,90 @@ class Command(BaseCommand):
         # exercise. Placed alongside everything above (additive, phase3-only;
         # the default R3 run never reaches this method either).
         gate["task6_families"] = self._prepare_phase3_task6_family_gate(draft)
+        # Pre-Task-10 final remediation (Gap 2) — the remaining 15 MIGRATE
+        # families family_certification_matrix.md tracked as NOT YET
+        # CERTIFIED. Placed alongside everything above (additive, phase3-only;
+        # the default R3 run never reaches this method either).
+        gate["final_remediation_families"] = self._prepare_phase3_final_remediation_family_gate(draft)
         return gate
+
+    def _prepare_phase3_final_remediation_family_gate(self, draft) -> dict:
+        """Pre-Task-10 final remediation (Gap 2) — one representative section
+        per each of the 15 remaining MIGRATE families, all placed with their
+        own default settings (the browser scenario itself edits and proves
+        each family's own real schema field — see
+        ``FINAL_REMEDIATION_SCALAR_EDITS``/``FINAL_REMEDIATION_REPEATER_EDITS``
+        in ``run.mjs``). Deliberately no bound media (HeroSlide/
+        PromotionalBanner/StoryRailItem) for any of these: none of the 15
+        families' own certified field is media-dependent, and
+        ``_prepare_phase3_task6_family_gate``'s own hero_banner/image_slider
+        entries above already record why binding legacy-file-field media
+        here would not even survive this same gate's Publish→new-Draft clone
+        (``layout_service._clone_section_scoped_media`` only carries rows
+        already migrated to the MediaAsset FK).
+
+        Deliberately EXCLUDES ``hero_banner`` and ``product_section``: both
+        already have exactly one instance on this same Home page from
+        ``bootstrap_service`` (scenarios 02/03/15 and 04-07/12/13
+        respectively each discover it via
+        ``openSectionViaPreview(sectionKey)``'s own ``.first()`` semantics).
+        Placing a SECOND section under either key here would silently make
+        those earlier scenarios' discovery ambiguous — reproduced live while
+        building this gate: scenario 12 failed reading a stale/wrong
+        ``product_section`` title once a second one existed. R4's own
+        Inspector mechanism for both families is already exercised
+        end-to-end by those scenarios; this gate's own
+        FINAL_REMEDIATION_SCALAR_EDITS entries for them (run.mjs) reuse that
+        SAME existing section via the same dynamic discovery, never a
+        second placement."""
+        from apps.storefront_builder.models import StorefrontSection
+
+        home_page = draft.get_page("home")
+
+        def place(section_key: str, settings_overrides: dict | None = None) -> int:
+            definition = section_registry.get_definition(section_key)
+            settings = definition.default_settings()
+            if settings_overrides:
+                settings.update(settings_overrides)
+            order = home_page.sections.count()
+            section = StorefrontSection.objects.create(
+                page=home_page, section_key=section_key, order=order, settings=settings,
+            )
+            container = container_service.create_empty_container(home_page, "single")
+            cell = container.cells.order_by("order", "id").first()
+            container_service.place_section(cell, section)
+            return section.pk
+
+        section_ids = {}
+        for section_key in (
+            "newest_products", "best_sellers", "discounted_products", "promo_cards",
+            "amazing_offers", "blog_posts", "image_slider",
+            "video_section", "quick_links",
+            "trust_features", "faq", "testimonials",
+        ):
+            section_ids[f"{section_key}_section_id"] = place(section_key)
+        # rich_text.html renders NOTHING at all ({% if body %}) with its
+        # default empty body_html — like image_text's own title override
+        # above (Task 6), an empty section is just the generic placeholder
+        # wrapper preview.html always emits, whose floating Container
+        # toolbar overlay covers its entire (near-zero-height) click target
+        # — reproduced live while building this gate:
+        # openSectionViaPreview('rich_text') timed out retrying a click that
+        # was always intercepted. A real starting body_html gives it actual
+        # height to click, exactly the same fix Task 6 already applied to
+        # image_text/story_rail/single_banner for the identical reason.
+        section_ids["rich_text_section_id"] = place(
+            "rich_text",
+            {
+                "body_html": (
+                    "<p>متن اولیه QA تسک نهایی برای بخش متن — این پاراگراف عمداً بلند "
+                    "است تا بخش ارتفاع واقعی داشته باشد و کلیک روی آن با نوار ابزار "
+                    "شناور Container برخورد نکند.</p>"
+                    "<p>پاراگراف دوم برای اطمینان از ارتفاع کافی.</p>"
+                ),
+            },
+        )
+        return section_ids
 
     def _prepare_phase3_task6_family_gate(self, draft) -> dict:
         """Phase 4 Task 6 — representative browser certification for the

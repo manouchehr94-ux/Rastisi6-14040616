@@ -234,6 +234,27 @@ async function launchSystemBrowser() {
 }
 
 // ---- Section 10 — save helper ---------------------------------------------
+// Pre-Task-10 final remediation (Gap 2) — waitSaved() below polls the
+// #r4SaveState DOM text, which can already read "saved" from a PRIOR,
+// already-settled edit at the moment a new one is dispatched (the resting
+// state and the terminal state are the same text). In a dense sequential
+// loop of many field edits (this gate's own 11-family scalar loop; the
+// original 4-family task6FamilyFieldEditScenario loop was short enough to
+// rarely expose this), that first waitForFunction poll can resolve on the
+// STALE text before the CURRENT action's own fetch has even started,
+// racing the "expected exactly 1 mutate POST" assertion right after it —
+// reproduced live while building this gate, not a theoretical concern.
+// Polling the actual mutation_posts array this Node process already
+// collects (attachNetworkInstrumentation) is a direct, unambiguous signal
+// with no such staleness window.
+async function waitForMutationPostCount(minCount, { timeout = 10000 } = {}) {
+  const started = Date.now();
+  while (result.mutation_posts.length < minCount) {
+    if (Date.now() - started > timeout) break;
+    await page.waitForTimeout(50);
+  }
+}
+
 async function waitSaved({ expectConflict = false, expectError = false, timeout = 10000 } = {}) {
   await page.waitForFunction(
     (labels) => {
@@ -2587,18 +2608,51 @@ function task6FamilyFixture() {
   return fx;
 }
 
-async function task6FamilyFieldEditScenario(cfg, sectionId) {
-  // Task 6 (final-review fix, M2) — open by the fixture's own known id
-  // rather than re-discovering it via the Preview DOM: the id already comes
-  // back from the Python fixture (``manifest.phase3_fixture.task6_families``)
-  // and re-deriving the same fact by scanning the DOM was dead redundancy,
-  // not an independent check.
+async function task6FamilyFieldEditScenario(cfg) {
+  // Pre-Task-10 final remediation (Gap 2) — was ``openSectionById(sectionId)``
+  // using the id captured ONCE by the Python fixture before the browser
+  // session even starts (Task 6 final-review fix, M2's rationale: avoid
+  // "dead redundancy" of re-deriving a fact the fixture already knows).
+  // That reasoning silently assumed this scenario always runs against the
+  // SAME StorefrontLayoutVersion the Python fixture placed the section on.
+  // It does not: when this gate is registered after scenario 10 (Publish)
+  // and scenario 12 (which calls get_or_create_draft, and
+  // layout_service._clone_version_content deep-clones every Page/Section/
+  // Container into BRAND NEW rows for the new Draft — see layout_service.py)
+  // in the SAME run, the fixture's captured id now belongs to the now-
+  // PUBLISHED version, not the active Draft, and ``R4.openSection`` 404s
+  // fetching an Inspector for a section id outside the current Draft —
+  // reproduced via a real ``--phase3`` run of the full 01-15 sequence, not
+  // a theoretical concern. ``openSectionViaPreview(sectionKey)`` (the same
+  // proven mechanism ``phase3PublicMatrix``'s Brand/Collection gates already
+  // use) re-discovers the CURRENT Draft's own section id from the live
+  // Preview DOM every time, so it is correct regardless of how many Drafts
+  // have been cloned since the fixture was placed — a real bug fix, not a
+  // weakened assertion.
   await closeInspectorIfOpen();
-  await openSectionById(sectionId);
+  await openSectionViaPreview(cfg.sectionKey);
   if (cfg.advanced) await activateAdvancedTab();
 
   const control = fieldControl(cfg.fieldKey);
   await control.waitFor({ state: 'visible', timeout: 10000 });
+  // Pre-Task-10 final remediation (Gap 2) — openSectionViaPreview's own
+  // "visible" wait only proves the Inspector DOM (including this control)
+  // has been inserted; it does NOT prove hydrateFieldValues() (r4_editor.js)
+  // has finished writing the server-authoritative current value into every
+  // control yet, nor that this gate's OWN dense back-to-back open/fill/
+  // reload loop has let the browser's event loop flush the click's
+  // Preview→postMessage→R4.openSection() round trip. A fill()+blur() that
+  // lands inside that window is silently overwritten by the in-flight
+  // hydration (or races it outright) with no error — reproduced live and
+  // deterministically caught by the temporary matchCount/currentValue probe
+  // used to diagnose it: the control's value was still the untouched
+  // default after a "successful" fill()+blur(), for a different family on
+  // every reproduction, confirming a timing race rather than a per-family
+  // bug. A short explicit settle here (real user interaction is never
+  // sub-100ms after a panel opens either) is the direct fix; the ORIGINAL
+  // 4-family loop this function already served never hit it only because it
+  // was short enough to rarely land in the window.
+  await page.waitForTimeout(200);
 
   const beforeMutateCount = result.mutation_posts.length;
   const beforeNavCount = result.main_frame_navigations.length;
@@ -2612,6 +2666,7 @@ async function task6FamilyFieldEditScenario(cfg, sectionId) {
     await control.fill(cfg.value);
     await control.blur();
   }
+  await waitForMutationPostCount(beforeMutateCount + 1);
   await waitSaved();
   assert(
     result.mutation_posts.length - beforeMutateCount === 1,
@@ -2624,7 +2679,7 @@ async function task6FamilyFieldEditScenario(cfg, sectionId) {
   // scenario02's own pattern (the one existing, already-proven mechanism).
   await withExpectedNavigation(() => page.reload({ waitUntil: 'domcontentloaded' }));
   await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });
-  await openSectionById(sectionId);
+  await openSectionViaPreview(cfg.sectionKey);
   if (cfg.advanced) await activateAdvancedTab();
   const persisted = await fieldControl(cfg.fieldKey).inputValue();
   assert(persisted === cfg.value, `${cfg.sectionKey}.${cfg.fieldKey}: expected persisted value ${cfg.value}, got ${persisted}`);
@@ -2693,14 +2748,8 @@ async function phase3Task6FamilyGate() {
   await withExpectedNavigation(() => page.goto(manifest.builder_url, { waitUntil: 'domcontentloaded' }));
   await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
 
-  const sectionIdByKey = {
-    category_grid: fx.category_grid_section_id,
-    multi_banner: fx.multi_banner_section_id,
-    image_text: fx.image_text_section_id,
-    newsletter: fx.newsletter_section_id,
-  };
   for (const cfg of TASK6_FAMILY_FIELD_EDITS) {
-    await task6FamilyFieldEditScenario(cfg, sectionIdByKey[cfg.sectionKey]);
+    await task6FamilyFieldEditScenario(cfg);
   }
   await task6FamilyPresenceScenario('story_rail', async (frame, sectionKey) => {
     const label = frame.locator(`[data-section-key="${sectionKey}"] .story-item .story-label`);
@@ -2740,6 +2789,303 @@ async function phase3Task6FamilyGate() {
   assert(
     httpErrorResponsesAfter.length === httpErrorResponsesBefore.length,
     `phase3-task6-family-gate: unexpected new HTTP error responses: ${JSON.stringify(httpErrorResponsesAfter.slice(httpErrorResponsesBefore.length))}`,
+  );
+}
+
+// =============================================================================
+// Pre-Task-10 final remediation (Gap 2) — browser certification for the 15
+// MIGRATE families family_certification_matrix.md tracked as NOT YET
+// CERTIFIED pending "a dedicated Task-4 QA-harness browser scenario". Same
+// data/config-driven design as TASK6_FAMILY_FIELD_EDITS/
+// task6FamilyFieldEditScenario above (never 15 bespoke harnesses): families
+// sharing the exact same Inspector control + mutation + persistence +
+// Preview-reflection contract share task6FamilyFieldEditScenario unchanged,
+// keyed only by their own SettingsSchema field. Two more families share a
+// mutation/render contract with EACH OTHER but not with the scalar-field
+// group — repeater (trust_features/faq/testimonials) and rich_text
+// (its own family only, exactly like image_text's docstring already
+// explains rich_text is a genuinely different Inspector CONTROL type, not a
+// sharing case) — so each gets exactly one new shared scenario function.
+const FINAL_REMEDIATION_SCALAR_EDITS = [
+  // integer item_limit — identical mechanism/assertion shape to the already-
+  // certified category_grid (Task 6) above; persisted-value-after-reload is
+  // the proof (no cheap visible-count assertion — each family's own real
+  // rendered item count is bounded by real catalog data already seeded on
+  // the QA store, not solely by item_limit).
+  { sectionKey: 'newest_products', fieldKey: 'item_limit', fieldType: 'integer', value: '5', assertReflected: async () => {} },
+  { sectionKey: 'best_sellers', fieldKey: 'item_limit', fieldType: 'integer', value: '5', assertReflected: async () => {} },
+  { sectionKey: 'discounted_products', fieldKey: 'item_limit', fieldType: 'integer', value: '5', assertReflected: async () => {} },
+  { sectionKey: 'promo_cards', fieldKey: 'item_limit', fieldType: 'integer', value: '3', assertReflected: async () => {} },
+  { sectionKey: 'amazing_offers', fieldKey: 'item_limit', fieldType: 'integer', value: '4', assertReflected: async () => {} },
+  // blog_posts.html's own title IS a real <h2>, but the whole section is
+  // gated on real blog Post rows existing (`{% if posts %}`), which this QA
+  // fixture deliberately does not create (no blog Post model anywhere else
+  // in this harness). item_limit (advanced tab) is R4-reachable and persists
+  // regardless — this family's own real, honest, non-content-dependent proof.
+  { sectionKey: 'blog_posts', fieldKey: 'item_limit', fieldType: 'integer', value: '4', advanced: true, assertReflected: async () => {} },
+  // hero_banner/image_slider both render via the shared
+  // hero_slider_body.html partial, which — like story_rail/single_banner/
+  // multi_banner before Task 6's own fix above — needs a real bound
+  // HeroSlide row to show anything, and HeroSlide is exactly the legacy-
+  // file-field media type layout_service._clone_section_scoped_media cannot
+  // carry across the Publish→new-Draft clone this gate runs after (see
+  // task6FamilyFieldEditScenario's comment above — reproduced live while
+  // building this gate: a QA-fixture-created PromotionalBanner using the
+  // legacy desktop_image field silently did not survive scenario 12's
+  // get_or_create_draft clone, because _clone_section_scoped_media only
+  // carries rows already migrated to the MediaAsset FK). Their own real,
+  // schema-declared fields (a choice enum / an advanced integer) are R4-
+  // reachable and persist regardless of slide content — the honest proof.
+  { sectionKey: 'hero_banner', fieldKey: 'hero_style', fieldType: 'choice', value: 'split', assertReflected: async () => {} },
+  { sectionKey: 'image_slider', fieldKey: 'interval_ms', fieldType: 'integer', value: '4000', advanced: true, assertReflected: async () => {} },
+  // video_section's title (a real h2) is gated behind a VALID video_url
+  // resolving to a real embed provider (`{% if video_embed_url or
+  // video_is_instagram %}`). An Instagram URL (not YouTube) is used
+  // deliberately: Instagram always renders as a safe opens-in-new-tab link,
+  // never an <iframe> (product_video_service.py's own documented policy) —
+  // a real embed provider WOULD render a live third-party <iframe> inside
+  // Preview, tripping previewFrame()'s own "no nested iframe" invariant for
+  // the rest of this browser session (reproduced live while building this
+  // gate: a YouTube video_url broke scenarios 14/15 too, since Home keeps
+  // this section for the whole run). video_url is the family's own real,
+  // schema-declared, non-media field either way — the honest field to prove
+  // persisted, without a live third-party network-dependent embed.
+  { sectionKey: 'video_section', fieldKey: 'video_url', fieldType: 'text', value: 'https://www.instagram.com/p/CqaQAtaSTe/', assertReflected: async () => {} },
+  // quick_links' title (a real h2) is gated behind quick_link_items, which
+  // requires a real Menu selection — menu_id has no Inspector field at all
+  // (family_certification_matrix.md: "menu_id stays legacy-form-managed, no
+  // matching Inspector field type"), so title alone can never make anything
+  // else appear. title is still this family's one real R4-reachable field;
+  // persisted-value-after-reload is its own honest proof.
+  { sectionKey: 'quick_links', fieldKey: 'title', fieldType: 'text', value: 'دسترسی سریع QA', assertReflected: async () => {} },
+  // product_section's own title h2 (product_section.html) is OUTSIDE any
+  // products-exist gate — a real DOM assertion, matching newsletter's own
+  // proven pattern above.
+  {
+    sectionKey: 'product_section', fieldKey: 'title', fieldType: 'text', value: 'محصولات ویژه QA تسک نهایی',
+    assertReflected: async (frame, sectionKey) => {
+      const heading = frame.locator(`[data-section-key="${sectionKey}"] h2`);
+      await heading.first().waitFor({ state: 'visible', timeout: 10000 });
+      const text = await heading.first().textContent();
+      assert(text && text.includes('محصولات ویژه QA تسک نهایی'), `product_section: expected the edited title in Preview, got: ${text}`);
+    },
+  },
+];
+
+const FINAL_REMEDIATION_REPEATER_EDITS = [
+  {
+    sectionKey: 'trust_features',
+    // ``title`` filled FIRST deliberately: filling a SECOND subfield blurs
+    // (and autosaves) the first one, submitting the row's CURRENT partial
+    // state — the legacy per-family validator (section_registry.py, not
+    // SettingsSchema's own per-field `required`, which is False here)
+    // rejects a trust_features item with an empty title, exactly the
+    // "would predictably fail" case addRepeaterRow()'s own comment in
+    // r4_editor.js already documents. Reproduced live while building this
+    // gate (a 400 on the intermediate icon-only save, caught by the gate's
+    // own end-of-run console-error guard, not by the per-field assertions);
+    // filling title first means every intermediate partial state from then
+    // on already has it.
+    subfieldValues: { title: 'ارسال QA تسک نهایی', icon: '🚚', subtitle: 'زیرنویس QA' },
+    assertReflected: async (frame, sectionKey) => {
+      const feat = frame.locator(`[data-section-key="${sectionKey}"] .feat b`);
+      await feat.first().waitFor({ state: 'visible', timeout: 10000 });
+      const texts = await feat.allTextContents();
+      assert(texts.some((t) => t.includes('ارسال QA تسک نهایی')), `trust_features: expected the added item's title in Preview, got: ${JSON.stringify(texts)}`);
+    },
+  },
+  {
+    sectionKey: 'faq',
+    subfieldValues: { question: 'سوال QA تسک نهایی؟', answer: 'پاسخ QA تسک نهایی' },
+    assertReflected: async (frame, sectionKey) => {
+      const item = frame.locator(`[data-section-key="${sectionKey}"] .faq-item summary`);
+      await item.first().waitFor({ state: 'visible', timeout: 10000 });
+      const texts = await item.allTextContents();
+      assert(texts.some((t) => t.includes('سوال QA تسک نهایی؟')), `faq: expected the added item's question in Preview, got: ${JSON.stringify(texts)}`);
+    },
+  },
+  {
+    sectionKey: 'testimonials',
+    subfieldValues: { name: 'مشتری QA', quote: 'نظر QA تسک نهایی', role: 'خریدار' },
+    assertReflected: async (frame, sectionKey) => {
+      const item = frame.locator(`[data-section-key="${sectionKey}"] .testimonial-card .quote`);
+      await item.first().waitFor({ state: 'visible', timeout: 10000 });
+      const texts = await item.allTextContents();
+      assert(texts.some((t) => t.includes('نظر QA تسک نهایی')), `testimonials: expected the added item's quote in Preview, got: ${JSON.stringify(texts)}`);
+    },
+  },
+];
+
+async function finalRemediationRepeaterEditScenario(cfg) {
+  await closeInspectorIfOpen();
+  await openSectionViaPreview(cfg.sectionKey);
+
+  // Same generic-row-wrapper-vs-actual-control ambiguity fieldControl()
+  // already excludes above (settings_field.html: every field type renders
+  // BOTH a generic data-r4-field-row wrapper AND the real control, both
+  // carrying the same data-r4-field-key/type) — repeater is no exception.
+  const wrapper = page.locator('[data-r4-field-key="items"][data-r4-field-type="repeater"]:not([data-r4-field-row])');
+  await wrapper.waitFor({ state: 'visible', timeout: 10000 });
+  // Same settle rationale as task6FamilyFieldEditScenario above.
+  await page.waitForTimeout(200);
+
+  const beforeMutateCount = result.mutation_posts.length;
+  await wrapper.locator('[data-r4-repeater-add]').click();
+  const newRow = wrapper.locator('[data-r4-repeater-row]').last();
+  const subfieldKeys = Object.keys(cfg.subfieldValues);
+  for (const key of subfieldKeys) {
+    await newRow.locator(`[data-r4-repeater-subfield="${key}"]`).fill(cfg.subfieldValues[key]);
+  }
+  // Filling a SECOND subfield moves real focus there first (Playwright's
+  // .fill() itself clicks/focuses the element) — which blurs the PREVIOUS
+  // subfield and fires ITS OWN change/save, exactly like a real merchant
+  // tabbing between fields would. So a 3-subfield row (trust_features)
+  // legitimately produces up to 3 sequential saves, not 1 — reproduced live
+  // while building this gate ("got 3", not a bug: each intermediate save
+  // already re-collects and persists the WHOLE row's CURRENT state, so the
+  // end result is correct regardless of how many fired). The explicit blur
+  // on the LAST subfield below just guarantees at least one save covers
+  // every subfield's final value; the persisted-value-after-reload check a
+  // few lines down is the real proof, not the post count.
+  await newRow.locator(`[data-r4-repeater-subfield="${subfieldKeys[subfieldKeys.length - 1]}"]`).blur();
+  await waitForMutationPostCount(beforeMutateCount + 1);
+  await waitSaved();
+  assert(
+    result.mutation_posts.length > beforeMutateCount,
+    `${cfg.sectionKey}.items: expected at least 1 mutate POST, got ${result.mutation_posts.length - beforeMutateCount}`,
+  );
+  assert(result.mutation_posts[result.mutation_posts.length - 1].status === 200, `${cfg.sectionKey}.items: edit must return 200`);
+
+  // Server-authoritative persistence proof — reload and re-read, exactly
+  // task6FamilyFieldEditScenario's own pattern above.
+  await withExpectedNavigation(() => page.reload({ waitUntil: 'domcontentloaded' }));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });
+  await openSectionViaPreview(cfg.sectionKey);
+  const persistedRow = page.locator('[data-r4-field-key="items"][data-r4-field-type="repeater"] [data-r4-repeater-row]').last();
+  for (const key of subfieldKeys) {
+    const persisted = await persistedRow.locator(`[data-r4-repeater-subfield="${key}"]`).inputValue();
+    assert(persisted === cfg.subfieldValues[key], `${cfg.sectionKey}.items.${key}: expected persisted value ${cfg.subfieldValues[key]}, got ${persisted}`);
+  }
+  await closeInspectorIfOpen();
+
+  const frame = await previewFrame();
+  await frame.locator(`[data-section-key="${cfg.sectionKey}"]`).first().waitFor({ state: 'visible', timeout: 10000 });
+  await cfg.assertReflected(frame, cfg.sectionKey);
+}
+
+async function finalRemediationRichTextEditScenario() {
+  // rich_text (field type ``rich_text``, a CKEditor5-managed control) is a
+  // genuinely different Inspector mechanism from a plain text input or a
+  // <select> — see image_text's own docstring comment above, which already
+  // records why it is not grouped with a shared scalar mechanism.
+  await closeInspectorIfOpen();
+  const richTextSectionId = await openSectionViaPreview('rich_text');
+
+  const editable = page.locator('.sfb-rich-editor .ck-content');
+  await editable.waitFor({ state: 'visible', timeout: 10000 });
+  // Same settle rationale as task6FamilyFieldEditScenario above — CKEditor's
+  // own async mount (Alpine x-init="mount()") needs it even more than a
+  // plain control does.
+  await page.waitForTimeout(200);
+
+  const beforeMutateCount = result.mutation_posts.length;
+  const value = 'متن ویرایش‌شده QA تسک نهایی';
+  await editable.click();
+  await page.keyboard.press('Control+A');
+  await page.keyboard.type(value);
+  // The Inspector's save path for rich_text is 'focusout' on the WHOLE
+  // .sfb-rich-editor wrapper (r4_editor.js) — not a native 'change' event a
+  // plain .fill()+.blur() would dispatch on an ordinary control.
+  await editable.blur();
+  await waitForMutationPostCount(beforeMutateCount + 1);
+  await waitSaved();
+  assert(
+    result.mutation_posts.length - beforeMutateCount === 1,
+    `rich_text.body_html: expected exactly 1 mutate POST, got ${result.mutation_posts.length - beforeMutateCount}`,
+  );
+  assert(result.mutation_posts[result.mutation_posts.length - 1].status === 200, 'rich_text.body_html: edit must return 200');
+
+  // Server-authoritative persistence proof — reload and re-read the hidden
+  // source textarea CKEditor mirrors into (hydrateFieldValues() populates it
+  // BEFORE CKEditor mounts — see r4_editor.js — so its raw value IS the
+  // persisted value, the same server-authoritative source scenario02/
+  // task6FamilyFieldEditScenario already trust for their own text fields).
+  // Re-open by the id captured above (openSectionById), NOT a second
+  // openSectionViaPreview click-through-Preview — exactly scenario12's own
+  // established pattern (freshProductSectionId) — reproduced live while
+  // building this gate: a real click on rich_text's re-rendered (now text-
+  // bearing) Preview box was reliably intercepted by the Container's own
+  // floating layout toolbar on this second attempt (this Draft's home page
+  // stacks dozens of QA-fixture containers, unlike any real merchant
+  // layout, so a toolbar from an adjacent container can end up overlapping
+  // it) — a plain reload never changes section ids (only a Publish + new-
+  // Draft clone does, which task6FamilyFieldEditScenario's own comment
+  // above already covers), so the id from the FIRST open is still valid.
+  await withExpectedNavigation(() => page.reload({ waitUntil: 'domcontentloaded' }));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });
+  await openSectionById(richTextSectionId);
+  await page.locator('.sfb-rich-editor .ck-content').waitFor({ state: 'visible', timeout: 10000 });
+  const persistedSource = await page.locator('.sfb-rich-text-source[data-r4-field-key="body_html"]').inputValue();
+  assert(persistedSource.includes(value), `rich_text.body_html: expected persisted value to include "${value}", got: ${persistedSource}`);
+  await closeInspectorIfOpen();
+
+  const frame = await previewFrame();
+  const body = frame.locator('[data-section-key="rich_text"]');
+  await body.first().waitFor({ state: 'visible', timeout: 10000 });
+  const text = await body.first().textContent();
+  assert(text && text.includes(value), `rich_text: expected the edited body in Preview, got: ${text}`);
+}
+
+async function phase3FinalRemediationFamilyGate() {
+  const consoleErrorsBefore = result.console_errors.filter(
+    (e) => !isExpectedStaleConflictNoise(e) && !FAVICON_URL_PATTERN.test(e?.location?.url || '') && !isExpectedBrokenImageNoise(e?.location?.url),
+  );
+  const pageErrorsBefore = result.page_errors.slice();
+  const requestFailuresBefore = result.request_failures.filter(
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url),
+  );
+  const httpErrorResponsesBefore = result.http_error_responses.filter(
+    (e) => !isExpectedStale409Response(e) && !isExpectedBrokenImageNoise(e.url),
+  );
+
+  // A known, clean starting point — same rationale as phase3Task6FamilyGate
+  // above.
+  await withExpectedNavigation(() => page.goto(manifest.builder_url, { waitUntil: 'domcontentloaded' }));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
+
+  for (const cfg of FINAL_REMEDIATION_SCALAR_EDITS) {
+    await task6FamilyFieldEditScenario(cfg);
+  }
+  for (const cfg of FINAL_REMEDIATION_REPEATER_EDITS) {
+    await finalRemediationRepeaterEditScenario(cfg);
+  }
+  await finalRemediationRichTextEditScenario();
+  await closeInspectorIfOpen();
+
+  const consoleErrorsAfter = result.console_errors.filter(
+    (e) => !isExpectedStaleConflictNoise(e) && !FAVICON_URL_PATTERN.test(e?.location?.url || '') && !isExpectedBrokenImageNoise(e?.location?.url),
+  );
+  assert(
+    consoleErrorsAfter.length === consoleErrorsBefore.length,
+    `phase3-final-remediation-family-gate: unexpected new console errors: ${JSON.stringify(consoleErrorsAfter.slice(consoleErrorsBefore.length))}`,
+  );
+  assert(
+    result.page_errors.length === pageErrorsBefore.length,
+    `phase3-final-remediation-family-gate: unexpected new page errors: ${JSON.stringify(result.page_errors.slice(pageErrorsBefore.length))}`,
+  );
+  const requestFailuresAfter = result.request_failures.filter(
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url),
+  );
+  assert(
+    requestFailuresAfter.length === requestFailuresBefore.length,
+    `phase3-final-remediation-family-gate: unexpected new failed requests: ${JSON.stringify(requestFailuresAfter.slice(requestFailuresBefore.length))}`,
+  );
+  const httpErrorResponsesAfter = result.http_error_responses.filter(
+    (e) => !isExpectedStale409Response(e) && !isExpectedBrokenImageNoise(e.url),
+  );
+  assert(
+    httpErrorResponsesAfter.length === httpErrorResponsesBefore.length,
+    `phase3-final-remediation-family-gate: unexpected new HTTP error responses: ${JSON.stringify(httpErrorResponsesAfter.slice(httpErrorResponsesBefore.length))}`,
   );
 }
 
@@ -3353,6 +3699,10 @@ async function main() {
   if (manifest.phase3) {
     await scenario('phase3-brand-gate', phase3BrandGate);
     await scenario('phase3-task6-family-gate', phase3Task6FamilyGate);
+    // Pre-Task-10 final remediation (Gap 2) — additive only, same opt-in
+    // flag; scenarios 01-13/phase3-brand-gate/phase3-task6-family-gate are
+    // completely unchanged.
+    await scenario('phase3-final-remediation-family-gate', phase3FinalRemediationFamilyGate);
   }
 
   // R4 Task 7 — always runs (not phase3-gated: composition/enable-disable/
