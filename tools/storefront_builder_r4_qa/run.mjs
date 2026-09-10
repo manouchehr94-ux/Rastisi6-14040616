@@ -88,6 +88,7 @@ const result = {
   history_posts: [],
   publish_posts: [],
   discard_posts: [],
+  switch_template_posts: [],
   http_error_responses: [],
   console_errors: [],
   page_errors: [],
@@ -132,6 +133,17 @@ let draftOnlyProductTitleSentinel = null;
 // a narrow timestamp window — so no unrelated console error can hide behind
 // a generic "contains 409" text match.
 let staleConflictExpected = null;
+// R4 Task 8 (scenario 15) — a SECOND, independent deliberate stale request
+// (switch-template, not mutate). Kept as its own variable rather than
+// overwriting staleConflictExpected above: finalInstrumentationAssertions
+// runs BEFORE scenario 15 and asserts specifically against Scenario 9's
+// own single recorded stale request — reassigning the shared variable
+// would silently break that already-completed correlation for any
+// scenario running after this one, and would also stop re-filtering
+// Scenario 9's own already-recorded 409 noise in every later before/after
+// diff. Same three-way correlation contract (exact URL + narrow timestamp
+// window), just a second, independently-tracked instance of it.
+let staleSwitchConflictExpected = null;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -157,7 +169,20 @@ function deleteStaleScreenshots() {
   }
 }
 
+// Debug-only scenario selector (R4_QA_ONLY_SCENARIO env var) — lets a
+// single scenario be re-run in isolation while iterating on it, without
+// paying for the full ~15-scenario campaign on every small assertion fix.
+// Never set in the real CI/QA gate invocation; omitted entirely, every
+// scenario runs exactly as before. Substring match against the scenario
+// name (e.g. "15" or "task8" both select scenario 15).
+const onlyScenarioFilter = process.env.R4_QA_ONLY_SCENARIO || null;
+
 async function scenario(name, fn) {
+  if (onlyScenarioFilter && !name.includes(onlyScenarioFilter)) {
+    result.scenarios.push({ name, status: 'SKIP', ms: 0 });
+    console.log(`SKIP  ${name}`);
+    return;
+  }
   const started = Date.now();
   try {
     await fn();
@@ -1006,17 +1031,12 @@ function isExpectedStaleConflictNoise(entry) {
   // Scenario 9's own deliberate attempt, and (3) the expected Chromium
   // message shape. No other console error, however its text is worded, can
   // satisfy all three at once — so nothing can "hide" behind this exception.
-  if (!staleConflictExpected) return false;
   const text = entry?.text || '';
   const url = entry?.location?.url || '';
   const at = typeof entry?.at === 'number' ? entry.at : null;
-  return (
-    /Failed to load resource/i.test(text) &&
-    /409/.test(text) &&
-    url === staleConflictExpected.url &&
-    at !== null &&
-    at >= staleConflictExpected.windowStart &&
-    at <= staleConflictExpected.windowEnd
+  if (at === null || !/Failed to load resource/i.test(text) || !/409/.test(text)) return false;
+  return [staleConflictExpected, staleSwitchConflictExpected].some(
+    (expected) => expected && url === expected.url && at >= expected.windowStart && at <= expected.windowEnd,
   );
 }
 
@@ -1027,13 +1047,9 @@ function isExpectedStaleConflictNoise(entry) {
 // from the otherwise-total HTTP error gate below without opening a hole
 // any other error could hide in.
 function isExpectedStale409Response(entry) {
-  if (!staleConflictExpected) return false;
-  return (
-    entry.status === 409 &&
-    entry.url === staleConflictExpected.url &&
-    typeof entry.at === 'number' &&
-    entry.at >= staleConflictExpected.windowStart &&
-    entry.at <= staleConflictExpected.windowEnd
+  if (entry.status !== 409 || typeof entry.at !== 'number') return false;
+  return [staleConflictExpected, staleSwitchConflictExpected].some(
+    (expected) => expected && entry.url === expected.url && entry.at >= expected.windowStart && entry.at <= expected.windowEnd,
   );
 }
 
@@ -1086,6 +1102,7 @@ function attachNetworkInstrumentation(targetPage, { source } = {}) {
     else if (url.includes('/r4/history/')) bucket = 'history_posts';
     else if (url.includes('/r4/publish/')) bucket = 'publish_posts';
     else if (url.includes('/r4/discard/')) bucket = 'discard_posts';
+    else if (url.includes('/r4/switch-template/')) bucket = 'switch_template_posts';
     if (bucket) result[bucket].push({ url, status, source });
 
     if (status >= 400 && !FAVICON_URL_PATTERN.test(url)) {
@@ -2966,6 +2983,339 @@ async function scenario14CompositionAndRecoveryGate() {
   assert(fs.statSync(task7ScreenshotPath).size > 0, 'Empty scenario 14 screenshot: 11_task7_composition_and_recovery.png');
 }
 
+// =============================================================================
+// R4 Task 8 — Scenario 15: content-preserving Template Switch + lifecycle
+// =============================================================================
+//
+// Template A -> merchant content -> switch to Template B -> merchant
+// content remains -> Draft Preview reflects B -> Public remains A until
+// Publish -> Publish B -> Public reflects B + preserved content. Registered
+// AFTER scenario 14 (whose own Discard destroys the Draft this scenario
+// would otherwise want to build on) — Django-level tenant isolation for
+// the new switch-template endpoint is certified separately
+// (test_r4_vertical_slice.py's TemplateSwitchPreservingContentTests), same
+// precedent as every other cross-store check in this harness.
+async function openTask8ProductSection(expectedText) {
+  // R4 Task 8 — by this point in the run, several EARLIER scenarios
+  // (04-add-product-and-reorder, 08-undo-redo) have already added their
+  // own product_section instances to this same long-lived Home page, and
+  // those instances survive every subsequent Draft-replacing operation
+  // (Publish/switch-template clone content forward). openSectionViaPreview's
+  // generic `[data-section-key="..."]` `.first()` match is therefore
+  // AMBIGUOUS for "product_section" specifically — it can silently open
+  // one of those older sections instead of this scenario's own. Scope to
+  // the element whose rendered text actually contains this scenario's own
+  // sentinel, which is unique across the whole page.
+  const frame = await previewFrame();
+  const locator = frame.locator('[data-section-key="product_section"]').filter({ hasText: expectedText }).first();
+  await locator.waitFor({ state: 'visible', timeout: 10000 });
+  await locator.scrollIntoViewIfNeeded();
+  const box = await locator.boundingBox();
+  assert(box, `Could not resolve a bounding box for the product_section containing "${expectedText}"`);
+  await locator.click({ position: { x: box.width / 2, y: Math.max(box.height - 6, 1) } });
+  await page.locator('[data-r4-section-inspector]').waitFor({ state: 'visible', timeout: 10000 });
+  return page.getAttribute('[data-r4-section-inspector]', 'data-r4-section-id');
+}
+
+async function openGlobalDesignPanel() {
+  // The panel's open/closed state is client-side UI state (an Alpine/DOM
+  // flag), never persisted server-side — every full page reload/navigation
+  // resets it to hidden, so this must be called again after EVERY
+  // navigation in this scenario (Publish, switch-template, the stale-
+  // rejection recovery reload), not just once at the top.
+  const hidden = await page.getAttribute('#r4GlobalDesign', 'hidden');
+  if (hidden !== null) {
+    await page.click('#r4GlobalDesignToggle');
+    await page.locator('#r4GlobalDesign').waitFor({ state: 'visible', timeout: 5000 });
+  }
+}
+
+async function closeGlobalDesignPanel() {
+  // An OPEN Global Design panel visually overlaps part of the Preview
+  // iframe's screen area — a Preview-targeted click (openSectionViaPreview/
+  // openTask8ProductSection do a real mouse-position click, not a
+  // programmatic DOM click) can silently hit-test the panel instead of the
+  // Preview content underneath it. Must be closed before any further
+  // Preview interaction once opened.
+  const hidden = await page.getAttribute('#r4GlobalDesign', 'hidden');
+  if (hidden === null) {
+    await page.click('[data-r4-global-design-close]');
+    await page.locator('#r4GlobalDesign').waitFor({ state: 'hidden', timeout: 5000 });
+  }
+}
+
+async function scenario15TemplateSwitchLifecycleGate() {
+  const consoleErrorsBefore = result.console_errors.filter(
+    (e) => !isExpectedStaleConflictNoise(e) && !FAVICON_URL_PATTERN.test(e?.location?.url || '') && !isExpectedBrokenImageNoise(e?.location?.url),
+  );
+  const pageErrorsBefore = result.page_errors.slice();
+  const requestFailuresBefore = result.request_failures.filter(
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url),
+  );
+  const httpErrorResponsesBefore = result.http_error_responses.filter(
+    (e) => !isExpectedStale409Response(e) && !isExpectedBrokenImageNoise(e.url),
+  );
+
+  const task8ScreenshotPath = shot('13_task8_template_switch_lifecycle.png');
+  try { fs.unlinkSync(task8ScreenshotPath); } catch (_error) { /* did not exist — fine */ }
+
+  await withExpectedNavigation(() => page.goto(manifest.builder_url, { waitUntil: 'domcontentloaded' }));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
+
+  await openGlobalDesignPanel();
+
+  // ---- Step 1: start from Template A ----
+  await page.selectOption('#r4TemplateSwitchSelect', 'dense_marketplace');
+  page.once('dialog', (dialog) => dialog.accept());
+  const beforeSwitchToACount = result.switch_template_posts.length;
+  await withExpectedNavigation(() => Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
+    page.click('#r4SwitchTemplateButton'),
+  ]));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
+  assert(result.switch_template_posts.length - beforeSwitchToACount === 1, `Expected exactly 1 switch-template POST for Template A, got ${result.switch_template_posts.length - beforeSwitchToACount}`);
+  assert(result.switch_template_posts[result.switch_template_posts.length - 1].status === 200, 'Switch to Template A must return 200');
+
+  // Capture Template A's actual rendered header class from the Preview —
+  // never hardcoded, since a Ready Template's `header` kwarg (e.g.
+  // "dense_marketplace"'s "marketplace_search_first") is a COMPONENT KEY,
+  // not necessarily the legacy selector/CSS class the registry's own
+  // alias-resolution chain ultimately renders (several component keys are
+  // pure marketing aliases for an already-shared underlying variant — see
+  // the Phase-4 architecture audit's ~29-alias finding). Comparing THIS
+  // captured class against Template B's later, also-captured class is the
+  // real 1-to-1 correct comparison, not another guess at either one's name.
+  const frameForA = await previewFrame();
+  const headerClassA = await frameForA.locator('header.gh').getAttribute('class');
+  const headerVariantClassA = (headerClassA || '').split(/\s+/).find((cls) => cls.startsWith('gh--'));
+  assert(headerVariantClassA, 'Could not resolve Template A\'s gh--* header variant class in Preview');
+
+  // ---- Step 2: add identifiable merchant content — a NEW product_section
+  // (this QA fixture's bootstrap Home has none by default) with a unique
+  // sentinel `title`, the exact same add-section technique scenario04
+  // already uses. Its title renders directly
+  // (`{{ settings.title|default:... }}`, no media/HeroSlide dependency
+  // the way hero_banner's structural variants have), and Ready Template
+  // application only ever touches appearance/header/footer/manifest DNA,
+  // never section settings — so this is genuine, reliably-visible
+  // merchant-authored content.
+  const task8Sentinel = `R4 Task 8 QA ${Date.now()}`;
+  const structureOpenForTask8 = await page.evaluate(() => document.querySelector('[data-r4-shell]').dataset.r4StructureOpen);
+  if (structureOpenForTask8 !== 'true') {
+    await page.click('#r4StructureToggle');
+    await page.locator('#r4Structure').waitFor({ state: 'visible', timeout: 5000 });
+  }
+  const task8SectionIdsBefore = await page.locator('[data-r4-structure-row]').evaluateAll((els) => els.map((el) => el.getAttribute('data-r4-structure-section-id')));
+  await page.selectOption('#r4StructureAddSelect', 'product_section');
+  await page.click('#r4StructureAddButton');
+  await waitSaved();
+  await page.waitForFunction((n) => document.querySelectorAll('[data-r4-structure-row]').length === n, task8SectionIdsBefore.length + 1, { timeout: 10000 });
+  const task8SectionIdsAfter = await page.locator('[data-r4-structure-row]').evaluateAll((els) => els.map((el) => el.getAttribute('data-r4-structure-section-id')));
+  const task8NewIds = task8SectionIdsAfter.filter((id) => !task8SectionIdsBefore.includes(id));
+  assert(task8NewIds.length === 1, `Expected exactly one newly-added product_section id, found ${task8NewIds.length}`);
+  await openSectionById(task8NewIds[0]);
+  await fieldControl('title').fill(task8Sentinel);
+  await fieldControl('title').press('Tab');
+  await waitSaved();
+  await closeInspectorIfOpen();
+
+  // ---- Step 3: Publish (Template A + merchant content becomes Public) ----
+  const beforePublishCount = result.publish_posts.length;
+  await withExpectedNavigation(() => Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
+    page.click('#r4PublishButton'),
+  ]));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });
+  assert(result.publish_posts.length - beforePublishCount === 1, `Expected exactly 1 publish POST, got ${result.publish_posts.length - beforePublishCount}`);
+  assert(result.publish_posts[result.publish_posts.length - 1].status === 200, 'Publish must return 200');
+
+  const task8PublicPage = await context.newPage();
+  attachNetworkInstrumentation(task8PublicPage, { source: 'public-task8' });
+  await task8PublicPage.goto(manifest.public_url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+  let publicHtml = await task8PublicPage.content();
+  assert(publicHtml.includes(headerVariantClassA), `Public must render Template A's header (${headerVariantClassA}) right after publishing A`);
+  assert(publicHtml.includes(task8Sentinel), 'Public must render the merchant\'s new product_section title right after publishing A');
+
+  // ---- Step 4: a fresh Draft is automatically active (cloned FORWARD
+  // from the just-published version — layout_service.get_or_create_draft's
+  // own documented behavior), so it still carries the merchant content.
+  // Switch to Template B on THIS Draft. ----
+  await openGlobalDesignPanel();
+  const templateSelectBeforeB = page.locator('#r4TemplateSwitchSelect');
+  await templateSelectBeforeB.waitFor({ state: 'visible', timeout: 10000 });
+  assert(await templateSelectBeforeB.inputValue() === 'dense_marketplace', 'The fresh post-publish Draft must still declare Template A as current');
+
+  await page.selectOption('#r4TemplateSwitchSelect', 'premium_leather');
+  page.once('dialog', (dialog) => dialog.accept());
+  const beforeSwitchToBCount = result.switch_template_posts.length;
+  await withExpectedNavigation(() => Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
+    page.click('#r4SwitchTemplateButton'),
+  ]));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
+  assert(result.switch_template_posts.length - beforeSwitchToBCount === 1, `Expected exactly 1 switch-template POST for Template B, got ${result.switch_template_posts.length - beforeSwitchToBCount}`);
+  assert(result.switch_template_posts[result.switch_template_posts.length - 1].status === 200, 'Switch to Template B must return 200');
+
+  // ---- Step 5: merchant content survives on the NEW post-switch Draft.
+  // Re-discovered fresh via the Preview (not a remembered section pk) —
+  // switch-template's checkpoint clones content into brand-new
+  // StorefrontSection rows (same stable_id, new pk), exactly like every
+  // other Draft-replacing operation (Publish/Discard/Reset) already does. ----
+  await openTask8ProductSection(task8Sentinel);
+  const titleAfterSwitch = await fieldControl('title').inputValue();
+  assert(titleAfterSwitch === task8Sentinel, `Content-preserving switch must not touch section settings — expected title="${task8Sentinel}", got "${titleAfterSwitch}"`);
+  await closeInspectorIfOpen();
+
+  // ---- Step 6: Draft Preview reflects Template B's DNA — a real
+  // rendered-class difference in the Preview iframe, not just the
+  // <select>'s own reported value. ----
+  await openGlobalDesignPanel();
+  const templateSelectAfterB = page.locator('#r4TemplateSwitchSelect');
+  assert(await templateSelectAfterB.inputValue() === 'premium_leather', 'The Draft must now declare Template B as current');
+  const frameAfterSwitch = await previewFrame();
+  const headerClassB = await frameAfterSwitch.locator('header.gh').getAttribute('class');
+  const headerVariantClassB = (headerClassB || '').split(/\s+/).find((cls) => cls.startsWith('gh--'));
+  assert(headerVariantClassB, 'Could not resolve Template B\'s gh--* header variant class in Preview');
+  assert(headerVariantClassB !== headerVariantClassA, `Expected a DIFFERENT gh--* header variant after switching to Template B, still got "${headerVariantClassB}"`);
+  assert((await frameAfterSwitch.locator(`header.${headerVariantClassA}`).count()) === 0, 'Draft Preview must no longer render Template A\'s header after switching to B');
+
+  // ---- Step 7: Draft/Public separation — Public must STILL show
+  // Template A + the merchant content, entirely unaffected by the
+  // unpublished Draft-level switch. ----
+  await task8PublicPage.reload({ waitUntil: 'domcontentloaded' });
+  publicHtml = await task8PublicPage.content();
+  assert(publicHtml.includes(headerVariantClassA), 'Public must still render Template A after an UNPUBLISHED Draft-level switch');
+  assert(!publicHtml.includes(headerVariantClassB), 'Public must not leak Template B before Publish');
+  assert(publicHtml.includes(task8Sentinel), 'Public must still render the preserved merchant content before Publish');
+
+  // ---- Step 8: a stale switch-template attempt is rejected — same
+  // real-409 contract every other R4 Draft-replacing endpoint already
+  // has (Publish/Discard/Reset-page/Reset-storefront), proven directly
+  // against the new endpoint rather than assumed from the shared
+  // _lock_active_draft boundary. ----
+  const realRevision = await page.evaluate(() => window.RastiSiR4.revision);
+  const staleSwitchWindowStart = Date.now();
+  const staleSwitchResult = await page.evaluate(async (revision) => {
+    const csrftoken = document.cookie.split('; ').find((c) => c.startsWith('csrftoken='))?.split('=')[1];
+    const url = new URL('switch-template/', window.location.href).toString();
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+      // revision+1 (never revision-1): this fresh post-switch-B Draft's
+      // edit_revision starts at 0 (same "fresh Draft starts at 0" contract
+      // scenario10Publish already asserts), so a naive "-1" would go
+      // negative and get rejected as invalid_base_revision (400) before
+      // ever reaching the stale-revision check this step actually wants
+      // to exercise. Any mismatch — too high or too low — triggers the
+      // same real 409, so +1 is exercises the identical contract safely.
+      body: JSON.stringify({ base_revision: revision + 1, template_key: 'dense_marketplace', template_version: '2' }),
+    });
+    return { status: response.status, body: await response.json(), url };
+  }, realRevision);
+  const staleSwitchWindowEnd = Date.now();
+  assert(staleSwitchResult.status === 409, `Expected a stale switch-template attempt to return 409, got ${staleSwitchResult.status}`);
+  assert(staleSwitchResult.body?.code === 'stale_revision', `Expected stale_revision code, got ${JSON.stringify(staleSwitchResult.body)}`);
+  // Same allowlisting mechanism scenario09's deliberate stale mutation
+  // already uses (isExpectedStale409Response) — a SECOND, independent
+  // deliberate 409 in the same run, tracked in its own variable
+  // (staleSwitchConflictExpected) rather than overwriting scenario09's.
+  staleSwitchConflictExpected = { url: staleSwitchResult.url, windowStart: staleSwitchWindowStart, windowEnd: staleSwitchWindowEnd };
+  await withExpectedNavigation(() => page.reload({ waitUntil: 'domcontentloaded' }));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });
+  await openGlobalDesignPanel();
+  assert(await page.locator('#r4TemplateSwitchSelect').inputValue() === 'premium_leather', 'The rejected stale switch-template attempt must not have changed the Draft\'s declared Template');
+  await closeGlobalDesignPanel();
+
+  // ---- Step 9: history/undo remains coherent on the NEW post-switch
+  // Draft. Its edit history starts genuinely empty (Draft-replacing
+  // operations — checkpoint/Publish/Discard/Reset/switch-template — never
+  // carry the OLD Draft's undo stack forward, same as every one of them
+  // already established; nothing to prove there). What DOES need proving:
+  // a real edit on this fresh Draft is itself correctly undoable — the
+  // generic history/revision machinery still works after a Draft-identity
+  // replacement, not just before one. ----
+  await openTask8ProductSection(task8Sentinel);
+  const revisionBeforeUndoProbe = await page.evaluate(() => window.RastiSiR4.revision);
+  await fieldControl('title').fill(`${task8Sentinel} EDITED`);
+  await fieldControl('title').press('Tab');
+  await waitSaved();
+  await closeInspectorIfOpen();
+  const revisionAfterUndoProbeEdit = await page.evaluate(() => window.RastiSiR4.revision);
+  assert(revisionAfterUndoProbeEdit === revisionBeforeUndoProbe + 1, `Expected revision to advance by 1 for the post-switch probe edit, got ${revisionAfterUndoProbeEdit - revisionBeforeUndoProbe}`);
+
+  // #r4UndoButton's disabled attribute is set ONLY from server-rendered
+  // history.can_undo at page-LOAD time (r4_editor.js never toggles it
+  // client-side after a mutation) — this fresh post-switch Draft loaded
+  // with genuinely empty history, so the button is still carrying its
+  // original `disabled` attribute even though the edit above just made
+  // Undo real server-side. A reload re-renders it correctly (matches
+  // every other server-authoritative-state pattern this harness already
+  // relies on, e.g. edit_revision itself).
+  await withExpectedNavigation(() => page.reload({ waitUntil: 'domcontentloaded' }));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });
+  assert(await page.locator('#r4UndoButton').isEnabled(), 'Undo must be enabled (after a reload) following a real edit on the new post-switch Draft');
+
+  await withExpectedNavigation(() => Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
+    page.click('#r4UndoButton'),
+  ]));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });
+  const revisionAfterUndoProbe = await page.evaluate(() => window.RastiSiR4.revision);
+  assert(revisionAfterUndoProbe === revisionBeforeUndoProbe + 2, `Expected revision to advance by 2 (edit+undo) for the post-switch probe, got ${revisionAfterUndoProbe - revisionBeforeUndoProbe}`);
+  await openTask8ProductSection(task8Sentinel);
+  const titleAfterUndoProbe = await fieldControl('title').inputValue();
+  assert(titleAfterUndoProbe === task8Sentinel, `Expected title restored to "${task8Sentinel}" (the merchant content) after Undo, got "${titleAfterUndoProbe}"`);
+  await closeInspectorIfOpen();
+
+  // ---- Step 10: Publish Template B — Public now reflects B + the
+  // still-preserved merchant content. ----
+  const beforeSecondPublishCount = result.publish_posts.length;
+  await withExpectedNavigation(() => Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
+    page.click('#r4PublishButton'),
+  ]));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });
+  assert(result.publish_posts.length - beforeSecondPublishCount === 1, `Expected exactly 1 publish POST for Template B, got ${result.publish_posts.length - beforeSecondPublishCount}`);
+  assert(result.publish_posts[result.publish_posts.length - 1].status === 200, 'Publish of Template B must return 200');
+
+  await task8PublicPage.reload({ waitUntil: 'domcontentloaded' });
+  publicHtml = await task8PublicPage.content();
+  assert(publicHtml.includes(headerVariantClassB), `Public must render Template B's header (${headerVariantClassB}) after publishing B`);
+  assert(!publicHtml.includes(headerVariantClassA), 'Public must no longer render Template A\'s header after publishing B');
+  assert(publicHtml.includes(task8Sentinel), 'Public must still render the preserved merchant content after publishing B');
+  await task8PublicPage.close();
+
+  await capture('13_task8_template_switch_lifecycle.png');
+  assert(fs.existsSync(task8ScreenshotPath), 'Missing scenario 15 screenshot: 13_task8_template_switch_lifecycle.png');
+  assert(fs.statSync(task8ScreenshotPath).size > 0, 'Empty scenario 15 screenshot: 13_task8_template_switch_lifecycle.png');
+
+  const consoleErrorsAfter = result.console_errors.filter(
+    (e) => !isExpectedStaleConflictNoise(e) && !FAVICON_URL_PATTERN.test(e?.location?.url || '') && !isExpectedBrokenImageNoise(e?.location?.url),
+  );
+  assert(
+    consoleErrorsAfter.length === consoleErrorsBefore.length,
+    `scenario15-template-switch-lifecycle: unexpected new console errors: ${JSON.stringify(consoleErrorsAfter.slice(consoleErrorsBefore.length))}`,
+  );
+  assert(
+    result.page_errors.length === pageErrorsBefore.length,
+    `scenario15-template-switch-lifecycle: unexpected new page errors: ${JSON.stringify(result.page_errors.slice(pageErrorsBefore.length))}`,
+  );
+  const requestFailuresAfter = result.request_failures.filter(
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url),
+  );
+  assert(
+    requestFailuresAfter.length === requestFailuresBefore.length,
+    `scenario15-template-switch-lifecycle: unexpected new failed requests: ${JSON.stringify(requestFailuresAfter.slice(requestFailuresBefore.length))}`,
+  );
+  const httpErrorResponsesAfter = result.http_error_responses.filter(
+    (e) => !isExpectedStale409Response(e) && !isExpectedBrokenImageNoise(e.url),
+  );
+  assert(
+    httpErrorResponsesAfter.length === httpErrorResponsesBefore.length,
+    `scenario15-template-switch-lifecycle: unexpected new HTTP error responses: ${JSON.stringify(httpErrorResponsesAfter.slice(httpErrorResponsesBefore.length))}`,
+  );
+}
+
 async function main() {
   deleteStaleScreenshots();
 
@@ -3011,6 +3361,13 @@ async function main() {
   // block, because Discard would otherwise destroy the Draft phase3BrandGate/
   // phase3Task6FamilyGate's own Python-side fixtures depend on.
   await scenario('14-task7-composition-and-recovery', scenario14CompositionAndRecoveryGate);
+
+  // R4 Task 8 — content-preserving Template Switch + lifecycle hardening.
+  // Registered LAST, after scenario 14, for the same reason scenario 14
+  // itself is registered after the phase3 block: this scenario publishes
+  // twice and switches Ready Templates twice, which would otherwise
+  // disturb every earlier scenario's own fixture assumptions.
+  await scenario('15-task8-template-switch-lifecycle', scenario15TemplateSwitchLifecycleGate);
 }
 
 try {
