@@ -24,7 +24,9 @@ from . import (
     variant_contract,
 )
 from .models import (
+    FOOTER_RESPONSIVE_AWARE_KEYS,
     FOOTER_TOGGLE_FIELDS,
+    HEADER_RESPONSIVE_AWARE_KEYS,
     HEADER_TOGGLE_FIELDS,
     StorefrontLayoutVersion,
     StorefrontPage,
@@ -37,6 +39,7 @@ from .services import (
     r4_mutation_service,
     section_structure_service,
 )
+from .services.layout_service import FOOTER_EXTRA_BLOCK_TYPES, HEADER_EXTRA_BLOCK_TYPES
 
 #: Phase 0/1 R4 Inspector renderer capability — deliberately narrower than
 #: SettingsSchema's own ALLOWED_FIELD_TYPES. A schema field of another
@@ -261,6 +264,25 @@ _FOOTER_TOGGLE_LABELS_FA = {
     "show_copyright": "کپی‌رایت",
 }
 
+#: Pre-Task-10 final remediation (Gap 1) — labels for the two remaining
+#: compound Header/Footer fields (extra_blocks' allowed ``type`` values).
+#: ``responsive`` needs no new label dict: HEADER_RESPONSIVE_AWARE_KEYS is a
+#: subset of HEADER_TOGGLE_FIELDS and FOOTER_RESPONSIVE_AWARE_KEYS equals
+#: FOOTER_TOGGLE_FIELDS exactly (see models.py) — the existing toggle label
+#: dicts above already cover every key.
+_HEADER_EXTRA_BLOCK_TYPE_LABELS_FA = {
+    "phone": "شماره تلفن",
+    "social": "شبکه‌های اجتماعی",
+    "cta": "دکمه فراخوان (متن + لینک)",
+    "spacer": "فاصله‌گذار",
+    "tagline": "شعار/تگ‌لاین",
+}
+_FOOTER_EXTRA_BLOCK_TYPE_LABELS_FA = {
+    "custom_text": "متن دلخواه (عنوان + متن)",
+    "link": "لینک تکی (برچسب + آدرس)",
+    "social": "شبکه‌های اجتماعی",
+}
+
 
 def _build_global_design_context(draft: StorefrontLayoutVersion) -> dict:
     """R4 Task 11 (Section 23) — the Global Design panel's ENTIRE read
@@ -322,6 +344,25 @@ def _build_global_design_context(draft: StorefrontLayoutVersion) -> dict:
         ],
         "footer_toggle_fields": [
             (key, _FOOTER_TOGGLE_LABELS_FA[key]) for key in FOOTER_TOGGLE_FIELDS
+        ],
+        #: Pre-Task-10 final remediation (Gap 1) — REQUIRED EXISTING
+        #: CAPABILITY closure: announcement_links/extra_blocks (repeater) and
+        #: responsive hide-on-tablet/hide-on-mobile (per-component toggle
+        #: pair) for both Header and Footer. Values themselves already live
+        #: in ``header``/``footer`` above (effective_header_config()/
+        #: effective_footer_config() always return the full canonical shape,
+        #: see models.py) — only the label/choice metadata is new here.
+        "header_responsive_fields": [
+            (key, _HEADER_TOGGLE_LABELS_FA[key]) for key in HEADER_RESPONSIVE_AWARE_KEYS
+        ],
+        "footer_responsive_fields": [
+            (key, _FOOTER_TOGGLE_LABELS_FA[key]) for key in FOOTER_RESPONSIVE_AWARE_KEYS
+        ],
+        "header_extra_block_type_choices": [
+            (block_type, _HEADER_EXTRA_BLOCK_TYPE_LABELS_FA[block_type]) for block_type in HEADER_EXTRA_BLOCK_TYPES
+        ],
+        "footer_extra_block_type_choices": [
+            (block_type, _FOOTER_EXTRA_BLOCK_TYPE_LABELS_FA[block_type]) for block_type in FOOTER_EXTRA_BLOCK_TYPES
         ],
     }
 

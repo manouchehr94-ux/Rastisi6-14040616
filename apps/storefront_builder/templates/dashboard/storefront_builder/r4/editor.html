@@ -321,6 +321,113 @@
           <input type="text" id="r4GlobalAnnouncementText" class="r4-control" maxlength="300" data-r4-global-field="announcement_text" value="{{ global_design.header.announcement_text }}">
 
           <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="announcement_show_phone" {% if global_design.header.announcement_show_phone %}checked{% endif %}> <span>نمایش تلفن در نوار اعلان</span></label>
+
+          <h5>لینک‌های نوار اعلان</h5>
+          <div class="r4-repeater" data-r4-global-repeater-field="announcement_links">
+            <div data-r4-repeater-rows>
+              {% for link in global_design.header.announcement_links %}
+              <div class="r4-repeater-row" data-r4-repeater-row>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">برچسب</label>
+                  <input type="text" class="r4-control" data-r4-repeater-subfield="label" maxlength="50" value="{{ link.label }}">
+                </div>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">لینک</label>
+                  <input type="text" class="r4-control" data-r4-repeater-subfield="url" maxlength="500" value="{{ link.url }}">
+                </div>
+                <div class="r4-repeater-row-actions">
+                  <button type="button" data-r4-repeater-move-up aria-label="انتقال به بالا">↑</button>
+                  <button type="button" data-r4-repeater-move-down aria-label="انتقال به پایین">↓</button>
+                  <button type="button" class="danger" data-r4-repeater-remove aria-label="حذف">×</button>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            <template data-r4-repeater-row-template>
+              <div class="r4-repeater-row" data-r4-repeater-row>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">برچسب</label>
+                  <input type="text" class="r4-control" data-r4-repeater-subfield="label" maxlength="50">
+                </div>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">لینک</label>
+                  <input type="text" class="r4-control" data-r4-repeater-subfield="url" maxlength="500">
+                </div>
+                <div class="r4-repeater-row-actions">
+                  <button type="button" data-r4-repeater-move-up aria-label="انتقال به بالا">↑</button>
+                  <button type="button" data-r4-repeater-move-down aria-label="انتقال به پایین">↓</button>
+                  <button type="button" class="danger" data-r4-repeater-remove aria-label="حذف">×</button>
+                </div>
+              </div>
+            </template>
+            <button type="button" class="r4-repeater-add" data-r4-repeater-add>+ افزودن لینک</button>
+          </div>
+
+          <h5>بلوک‌های اضافی هدر</h5>
+          <div class="r4-repeater" data-r4-global-repeater-field="extra_blocks">
+            <div data-r4-repeater-rows>
+              {% for block in global_design.header.extra_blocks %}
+              <div class="r4-repeater-row" data-r4-repeater-row>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">نوع بلوک</label>
+                  <select class="r4-control" data-r4-repeater-subfield="type">
+                    {% for value, label in global_design.header_extra_block_type_choices %}
+                    <option value="{{ value }}" {% if block.type == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">برچسب (فقط برای دکمه فراخوان)</label>
+                  <input type="text" class="r4-control" data-r4-repeater-subfield="label" maxlength="30" value="{{ block.label }}">
+                </div>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">لینک (فقط برای دکمه فراخوان)</label>
+                  <input type="text" class="r4-control" data-r4-repeater-subfield="url" value="{{ block.url }}">
+                </div>
+                <div class="r4-repeater-row-actions">
+                  <button type="button" data-r4-repeater-move-up aria-label="انتقال به بالا">↑</button>
+                  <button type="button" data-r4-repeater-move-down aria-label="انتقال به پایین">↓</button>
+                  <button type="button" class="danger" data-r4-repeater-remove aria-label="حذف">×</button>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            <template data-r4-repeater-row-template>
+              <div class="r4-repeater-row" data-r4-repeater-row>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">نوع بلوک</label>
+                  <select class="r4-control" data-r4-repeater-subfield="type">
+                    {% for value, label in global_design.header_extra_block_type_choices %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">برچسب (فقط برای دکمه فراخوان)</label>
+                  <input type="text" class="r4-control" data-r4-repeater-subfield="label" maxlength="30">
+                </div>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">لینک (فقط برای دکمه فراخوان)</label>
+                  <input type="text" class="r4-control" data-r4-repeater-subfield="url">
+                </div>
+                <div class="r4-repeater-row-actions">
+                  <button type="button" data-r4-repeater-move-up aria-label="انتقال به بالا">↑</button>
+                  <button type="button" data-r4-repeater-move-down aria-label="انتقال به پایین">↓</button>
+                  <button type="button" class="danger" data-r4-repeater-remove aria-label="حذف">×</button>
+                </div>
+              </div>
+            </template>
+            <button type="button" class="r4-repeater-add" data-r4-repeater-add>+ افزودن بلوک</button>
+          </div>
+
+          <h5>نمایش در دستگاه‌ها</h5>
+          {% for key, label in global_design.header_responsive_fields %}
+          <div class="r4-responsive-row">
+            <span class="r4-field-sublabel">{{ label }}</span>
+            <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-responsive-toggle data-r4-global-responsive-key="{{ key }}" data-r4-global-responsive-prop="hide_on_tablet" {% if global_design.header.responsive|dictget:key|dictget:"hide_on_tablet" %}checked{% endif %}> <span>پنهان در تبلت</span></label>
+            <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-responsive-toggle data-r4-global-responsive-key="{{ key }}" data-r4-global-responsive-prop="hide_on_mobile" {% if global_design.header.responsive|dictget:key|dictget:"hide_on_mobile" %}checked{% endif %}> <span>پنهان در موبایل</span></label>
+          </div>
+          {% endfor %}
         </section>
 
         <section class="r4-global-design-group" data-r4-global-mutation="footer.update">
@@ -335,6 +442,76 @@
 
           {% for key, label in global_design.footer_toggle_fields %}
           <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="{{ key }}" {% if global_design.footer|dictget:key %}checked{% endif %}> <span>{{ label }}</span></label>
+          {% endfor %}
+
+          <h5>ستون‌های اضافی فوتر</h5>
+          <div class="r4-repeater" data-r4-global-repeater-field="extra_blocks">
+            <div data-r4-repeater-rows>
+              {% for block in global_design.footer.extra_blocks %}
+              <div class="r4-repeater-row" data-r4-repeater-row>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">نوع ستون</label>
+                  <select class="r4-control" data-r4-repeater-subfield="type">
+                    {% for value, label in global_design.footer_extra_block_type_choices %}
+                    <option value="{{ value }}" {% if block.type == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">عنوان/برچسب</label>
+                  <input type="text" class="r4-control" placeholder="عنوان (متن دلخواه)" data-r4-repeater-subfield="title" maxlength="40" value="{{ block.title }}">
+                  <input type="text" class="r4-control" placeholder="برچسب (لینک تکی)" data-r4-repeater-subfield="label" maxlength="40" value="{{ block.label }}">
+                </div>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">متن/لینک</label>
+                  <input type="text" class="r4-control" placeholder="متن (متن دلخواه)" data-r4-repeater-subfield="text" maxlength="400" value="{{ block.text }}">
+                  <input type="text" class="r4-control" placeholder="آدرس لینک (لینک تکی)" data-r4-repeater-subfield="url" value="{{ block.url }}">
+                </div>
+                <div class="r4-repeater-row-actions">
+                  <button type="button" data-r4-repeater-move-up aria-label="انتقال به بالا">↑</button>
+                  <button type="button" data-r4-repeater-move-down aria-label="انتقال به پایین">↓</button>
+                  <button type="button" class="danger" data-r4-repeater-remove aria-label="حذف">×</button>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            <template data-r4-repeater-row-template>
+              <div class="r4-repeater-row" data-r4-repeater-row>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">نوع ستون</label>
+                  <select class="r4-control" data-r4-repeater-subfield="type">
+                    {% for value, label in global_design.footer_extra_block_type_choices %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">عنوان/برچسب</label>
+                  <input type="text" class="r4-control" placeholder="عنوان (متن دلخواه)" data-r4-repeater-subfield="title" maxlength="40">
+                  <input type="text" class="r4-control" placeholder="برچسب (لینک تکی)" data-r4-repeater-subfield="label" maxlength="40">
+                </div>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">متن/لینک</label>
+                  <input type="text" class="r4-control" placeholder="متن (متن دلخواه)" data-r4-repeater-subfield="text" maxlength="400">
+                  <input type="text" class="r4-control" placeholder="آدرس لینک (لینک تکی)" data-r4-repeater-subfield="url">
+                </div>
+                <div class="r4-repeater-row-actions">
+                  <button type="button" data-r4-repeater-move-up aria-label="انتقال به بالا">↑</button>
+                  <button type="button" data-r4-repeater-move-down aria-label="انتقال به پایین">↓</button>
+                  <button type="button" class="danger" data-r4-repeater-remove aria-label="حذف">×</button>
+                </div>
+              </div>
+            </template>
+            <button type="button" class="r4-repeater-add" data-r4-repeater-add>+ افزودن ستون</button>
+          </div>
+
+          <h5>نمایش در دستگاه‌ها</h5>
+          {% for key, label in global_design.footer_responsive_fields %}
+          <div class="r4-responsive-row">
+            <span class="r4-field-sublabel">{{ label }}</span>
+            <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-responsive-toggle data-r4-global-responsive-key="{{ key }}" data-r4-global-responsive-prop="hide_on_tablet" {% if global_design.footer.responsive|dictget:key|dictget:"hide_on_tablet" %}checked{% endif %}> <span>پنهان در تبلت</span></label>
+            <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-responsive-toggle data-r4-global-responsive-key="{{ key }}" data-r4-global-responsive-prop="hide_on_mobile" {% if global_design.footer.responsive|dictget:key|dictget:"hide_on_mobile" %}checked{% endif %}> <span>پنهان در موبایل</span></label>
+          </div>
           {% endfor %}
         </section>
       </div>

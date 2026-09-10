@@ -743,14 +743,39 @@ def _apply_appearance_update(*, draft: StorefrontLayoutVersion, mutation: dict) 
         _sync_manifest_from_live_selectors(draft=draft)
 
 
+#: Pre-Task-10 final remediation (Gap 1) — merges a per-component partial
+#: ``responsive`` patch (ONE checkbox's change: one component key, one of
+#: ``hide_on_tablet``/``hide_on_mobile``) onto the CURRENT stored responsive
+#: dict, exactly like ``_apply_appearance_update``'s color/theme override
+#: merge above: a single Global Design control still fires exactly one
+#: change event and must never clobber the sibling prop/component it didn't
+#: touch. Unknown component keys or malformed sub-patches are silently
+#: dropped here — ``layout_service._validate_shell_component_responsive``
+#: performs the real allowlist + type validation afterwards.
+def _merge_shell_responsive_patch(current: dict, posted) -> dict:
+    if not isinstance(posted, dict):
+        return dict(current) if isinstance(current, dict) else {}
+    merged = {key: dict(value) for key, value in (current or {}).items() if isinstance(value, dict)}
+    for component_key, component_patch in posted.items():
+        if not isinstance(component_patch, dict):
+            continue
+        merged[component_key] = {**merged.get(component_key, {}), **component_patch}
+    return merged
+
+
 #: Pre-Task-10 remediation — widened from ``header_variant``-only to cover
 #: every REQUIRED EXISTING CAPABILITY toggle/text field the legacy header
 #: form exposes with no prior R4 equivalent (see headline finding #3).
-#: ``announcement_links``/``extra_blocks``/``responsive`` remain legacy-only
-#: (documented, deferred — compound repeater/per-device UI, not a flat
-#: scalar patch key) so the legacy header form is not yet fully retirable.
+#: Pre-Task-10 final remediation (Gap 1) — further widened to
+#: ``announcement_links``/``extra_blocks``/``responsive`` (previously
+#: deliberately deferred as legacy-only compound repeater/per-device UI);
+#: the legacy header form no longer has any field R4 lacks.
 _HEADER_UPDATE_ALLOWED_PATCH_KEYS = frozenset(
-    {"header_variant", "announcement_text", "announcement_show_phone"} | set(HEADER_TOGGLE_FIELDS)
+    {
+        "header_variant", "announcement_text", "announcement_show_phone",
+        "announcement_links", "extra_blocks", "responsive",
+    }
+    | set(HEADER_TOGGLE_FIELDS)
 )
 
 
@@ -771,6 +796,12 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
         candidate["announcement_text"] = patch["announcement_text"]
     if "announcement_show_phone" in patch:
         candidate["announcement_show_phone"] = patch["announcement_show_phone"]
+    if "announcement_links" in patch:
+        candidate["announcement_links"] = patch["announcement_links"]
+    if "extra_blocks" in patch:
+        candidate["extra_blocks"] = patch["extra_blocks"]
+    if "responsive" in patch:
+        candidate["responsive"] = _merge_shell_responsive_patch(candidate.get("responsive"), patch["responsive"])
 
     try:
         cleaned = layout_service.validate_header_config(candidate)
@@ -792,10 +823,13 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
 
 #: Pre-Task-10 remediation — widened from ``footer_variant``-only to cover
 #: every REQUIRED EXISTING CAPABILITY toggle the legacy footer form exposes
-#: with no prior R4 equivalent (see headline finding #3). ``extra_blocks``/
-#: ``responsive`` remain legacy-only (documented, deferred — compound
-#: repeater/per-device UI, not a flat scalar patch key).
-_FOOTER_UPDATE_ALLOWED_PATCH_KEYS = frozenset({"footer_variant"} | set(FOOTER_TOGGLE_FIELDS))
+#: with no prior R4 equivalent (see headline finding #3). Pre-Task-10 final
+#: remediation (Gap 1) — further widened to ``extra_blocks``/``responsive``
+#: (previously deliberately deferred as legacy-only compound repeater/
+#: per-device UI); the legacy footer form no longer has any field R4 lacks.
+_FOOTER_UPDATE_ALLOWED_PATCH_KEYS = frozenset(
+    {"footer_variant", "extra_blocks", "responsive"} | set(FOOTER_TOGGLE_FIELDS)
+)
 
 
 def _apply_footer_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
@@ -811,6 +845,10 @@ def _apply_footer_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
     for field in FOOTER_TOGGLE_FIELDS:
         if field in patch:
             candidate[field] = patch[field]
+    if "extra_blocks" in patch:
+        candidate["extra_blocks"] = patch["extra_blocks"]
+    if "responsive" in patch:
+        candidate["responsive"] = _merge_shell_responsive_patch(candidate.get("responsive"), patch["responsive"])
 
     try:
         cleaned = layout_service.validate_footer_config(candidate)

@@ -317,6 +317,27 @@ window.RastiSiR4 = {
     // template row.
   }
 
+  // Pre-Task-10 final remediation (Gap 1) — the Global Design panel's own
+  // repeater patch sender: same collectRepeaterRows()/addRepeaterRow() the
+  // Section Inspector's repeater field type already uses above (R4 Task 6
+  // Group D) — only the mutation destination differs (header.update/
+  // footer.update instead of section.update_settings, and no section_id),
+  // so header announcement_links/extra_blocks and footer extra_blocks are
+  // the SAME compound repeater concept, never a second implementation.
+  function patchGlobalRepeaterField(wrapper) {
+    var group = wrapper.closest('[data-r4-global-mutation]');
+    if (!group) return;
+    var key = wrapper.getAttribute('data-r4-global-repeater-field');
+    var patch = {};
+    patch[key] = collectRepeaterRows(wrapper);
+    R4.enqueueMutation({
+      type: group.getAttribute('data-r4-global-mutation'),
+      patch: patch,
+    }).then(function (result) {
+      if (result && result.ok) refreshGlobalDesignAndPreview();
+    });
+  }
+
   R4.openSection = function (sectionId) {
     if (!inspector || !sectionId) return Promise.resolve();
     // Opening a Section Inspector always closes Global Design — the two
@@ -1216,6 +1237,89 @@ window.RastiSiR4 = {
       R4.enqueueMutation({
         type: group.getAttribute('data-r4-global-mutation'),
         patch: patch,
+      }).then(function (result) {
+        if (result && result.ok) refreshGlobalDesignAndPreview();
+      });
+    });
+
+    // Pre-Task-10 final remediation (Gap 1) — header announcement_links/
+    // extra_blocks and footer extra_blocks repeaters: distinct
+    // ``data-r4-global-repeater-field`` (not ``data-r4-global-field``) so a
+    // row's own subfield inputs never get misread by the generic single-
+    // scalar-field listener above, exactly like the Inspector's own
+    // exclusion of fieldType 'repeater' from its generic listener.
+    globalDesignPanel.addEventListener('click', function (evt) {
+      var addButton = evt.target.closest('[data-r4-repeater-add]');
+      if (addButton) {
+        var addWrapper = addButton.closest('[data-r4-global-repeater-field]');
+        if (addWrapper) addRepeaterRow(addWrapper);
+        return;
+      }
+      var removeButton = evt.target.closest('[data-r4-repeater-remove]');
+      if (removeButton) {
+        var removeWrapper = removeButton.closest('[data-r4-global-repeater-field]');
+        var removeRow = removeButton.closest('[data-r4-repeater-row]');
+        if (removeWrapper && removeRow) {
+          removeRow.remove();
+          patchGlobalRepeaterField(removeWrapper);
+        }
+        return;
+      }
+      var moveUpButton = evt.target.closest('[data-r4-repeater-move-up]');
+      if (moveUpButton) {
+        var moveUpWrapper = moveUpButton.closest('[data-r4-global-repeater-field]');
+        var moveUpRow = moveUpButton.closest('[data-r4-repeater-row]');
+        var prevRow = moveUpRow && moveUpRow.previousElementSibling;
+        if (moveUpWrapper && moveUpRow && prevRow) {
+          moveUpRow.parentNode.insertBefore(moveUpRow, prevRow);
+          patchGlobalRepeaterField(moveUpWrapper);
+        }
+        return;
+      }
+      var moveDownButton = evt.target.closest('[data-r4-repeater-move-down]');
+      if (moveDownButton) {
+        var moveDownWrapper = moveDownButton.closest('[data-r4-global-repeater-field]');
+        var moveDownRow = moveDownButton.closest('[data-r4-repeater-row]');
+        var nextRow = moveDownRow && moveDownRow.nextElementSibling;
+        if (moveDownWrapper && moveDownRow && nextRow) {
+          moveDownRow.parentNode.insertBefore(nextRow, moveDownRow);
+          patchGlobalRepeaterField(moveDownWrapper);
+        }
+        return;
+      }
+    });
+
+    globalDesignPanel.addEventListener('change', function (evt) {
+      var repeaterWrapper = evt.target.closest('[data-r4-global-repeater-field]');
+      if (repeaterWrapper && evt.target.closest('[data-r4-repeater-subfield]')) {
+        patchGlobalRepeaterField(repeaterWrapper);
+      }
+    });
+
+    // Pre-Task-10 final remediation (Gap 1) — header/footer responsive
+    // hide-on-tablet/hide-on-mobile per-component toggles: a distinct
+    // ``data-r4-global-responsive-toggle`` marker (not ``data-r4-global-
+    // field``) because ONE checkbox only ever carries ONE of the two
+    // ``responsive[key]`` sub-props — the server merges it onto the
+    // CURRENT stored value (``_merge_shell_responsive_patch``), exactly
+    // like color_overrides/theme_overrides' own one-key partial merge
+    // above, so toggling tablet visibility can never silently reset the
+    // sibling mobile visibility prop back to its default.
+    globalDesignPanel.addEventListener('change', function (evt) {
+      var responsiveToggle = evt.target.closest('[data-r4-global-responsive-toggle]');
+      if (!responsiveToggle) return;
+      var responsiveGroup = responsiveToggle.closest('[data-r4-global-mutation]');
+      if (!responsiveGroup) return;
+      var responsiveKey = responsiveToggle.getAttribute('data-r4-global-responsive-key');
+      var responsiveProp = responsiveToggle.getAttribute('data-r4-global-responsive-prop');
+      if (!responsiveKey || !responsiveProp) return;
+      var nestedProp = {};
+      nestedProp[responsiveProp] = responsiveToggle.checked;
+      var responsivePatch = {};
+      responsivePatch[responsiveKey] = nestedProp;
+      R4.enqueueMutation({
+        type: responsiveGroup.getAttribute('data-r4-global-mutation'),
+        patch: { responsive: responsivePatch },
       }).then(function (result) {
         if (result && result.ok) refreshGlobalDesignAndPreview();
       });

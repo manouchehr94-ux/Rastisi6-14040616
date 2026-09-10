@@ -989,12 +989,14 @@ class HeaderDomainValidatorReuseTests(R4GlobalDesignTestCase):
         # Pre-Task-10 remediation widened the header.update allowlist to
         # cover show_search/show_account/show_cart/show_wishlist/sticky/
         # announcement_enabled/announcement_text/announcement_show_phone
-        # (all now legitimate — see FieldParityUpdateTests). extra_blocks
-        # remains deliberately deferred (compound repeater UI, not a flat
-        # scalar patch key), so it is still the representative unknown key.
+        # (all now legitimate — see FieldParityUpdateTests). Pre-Task-10
+        # FINAL remediation (Gap 1) further widened it to
+        # announcement_links/extra_blocks/responsive (previously the
+        # representative unknown key here) — a genuinely unrecognized key
+        # is required to still exercise the allowlist rejection path.
         response = self._post_json({
             "base_revision": self.draft.edit_revision,
-            "mutation": {"type": "header.update", "patch": {"extra_blocks": []}},
+            "mutation": {"type": "header.update", "patch": {"not_a_real_field": "x"}},
         })
         self.assertEqual(response.status_code, 400)
 
@@ -1033,12 +1035,13 @@ class FooterDomainValidatorReuseTests(R4GlobalDesignTestCase):
     def test_unknown_footer_patch_key_is_rejected(self):
         # Pre-Task-10 remediation widened the footer.update allowlist to
         # cover all 9 FOOTER_TOGGLE_FIELDS (now legitimate — see
-        # FieldParityUpdateTests). extra_blocks remains deliberately
-        # deferred (compound repeater UI, not a flat scalar patch key), so
-        # it is still the representative unknown key.
+        # FieldParityUpdateTests). Pre-Task-10 FINAL remediation (Gap 1)
+        # further widened it to extra_blocks/responsive (previously the
+        # representative unknown key here) — a genuinely unrecognized key
+        # is required to still exercise the allowlist rejection path.
         response = self._post_json({
             "base_revision": self.draft.edit_revision,
-            "mutation": {"type": "footer.update", "patch": {"extra_blocks": []}},
+            "mutation": {"type": "footer.update", "patch": {"not_a_real_field": "x"}},
         })
         self.assertEqual(response.status_code, 400)
 

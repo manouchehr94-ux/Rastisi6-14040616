@@ -562,9 +562,75 @@ class FieldParityUpdateTests(R4StoreAppearanceMutationTestCase):
     def test_header_update_unknown_key_rejected(self):
         response = self._post_mutation({
             "type": "header.update",
-            "patch": {"extra_blocks": []},
+            "patch": {"not_a_real_field": "x"},
         })
         self.assertEqual(response.status_code, 400)
+
+    def test_header_update_sets_announcement_links(self):
+        response = self._post_mutation({
+            "type": "header.update",
+            "patch": {"announcement_links": [{"label": "ارسال رایگان", "url": "/shipping"}]},
+        })
+        self.assertEqual(response.status_code, 200)
+        self.draft.refresh_from_db()
+        config = self.draft.effective_header_config()
+        self.assertEqual(config["announcement_links"], [{"label": "ارسال رایگان", "url": "/shipping"}])
+
+    def test_header_update_sets_extra_blocks(self):
+        response = self._post_mutation({
+            "type": "header.update",
+            "patch": {"extra_blocks": [{"type": "cta", "label": "خرید کنید", "url": "https://example.com"}]},
+        })
+        self.assertEqual(response.status_code, 200)
+        self.draft.refresh_from_db()
+        config = self.draft.effective_header_config()
+        self.assertEqual(
+            config["extra_blocks"], [{"type": "cta", "label": "خرید کنید", "url": "https://example.com"}],
+        )
+
+    def test_header_update_extra_blocks_invalid_type_rejected(self):
+        response = self._post_mutation({
+            "type": "header.update",
+            "patch": {"extra_blocks": [{"type": "not_a_real_type"}]},
+        })
+        self.assertEqual(response.status_code, 400)
+
+    def test_header_update_sets_one_responsive_component_without_clobbering_others(self):
+        first = self._post_mutation({
+            "type": "header.update",
+            "patch": {"responsive": {"show_search": {"hide_on_mobile": True}}},
+        })
+        self.assertEqual(first.status_code, 200)
+        second = self._post_mutation({
+            "type": "header.update",
+            "patch": {"responsive": {"show_account": {"hide_on_tablet": True}}},
+        })
+        self.assertEqual(second.status_code, 200)
+        self.draft.refresh_from_db()
+        responsive = self.draft.effective_header_config()["responsive"]
+        self.assertEqual(
+            responsive["show_search"], {"hide_on_tablet": False, "hide_on_mobile": True},
+        )
+        self.assertEqual(
+            responsive["show_account"], {"hide_on_tablet": True, "hide_on_mobile": False},
+        )
+
+    def test_header_update_responsive_merge_preserves_sibling_prop_on_same_component(self):
+        first = self._post_mutation({
+            "type": "header.update",
+            "patch": {"responsive": {"show_search": {"hide_on_tablet": True}}},
+        })
+        self.assertEqual(first.status_code, 200)
+        second = self._post_mutation({
+            "type": "header.update",
+            "patch": {"responsive": {"show_search": {"hide_on_mobile": True}}},
+        })
+        self.assertEqual(second.status_code, 200)
+        self.draft.refresh_from_db()
+        self.assertEqual(
+            self.draft.effective_header_config()["responsive"]["show_search"],
+            {"hide_on_tablet": True, "hide_on_mobile": True},
+        )
 
     def test_footer_update_sets_toggles(self):
         response = self._post_mutation({
@@ -592,9 +658,45 @@ class FieldParityUpdateTests(R4StoreAppearanceMutationTestCase):
     def test_footer_update_unknown_key_rejected(self):
         response = self._post_mutation({
             "type": "footer.update",
-            "patch": {"extra_blocks": []},
+            "patch": {"not_a_real_field": "x"},
         })
         self.assertEqual(response.status_code, 400)
+
+    def test_footer_update_sets_extra_blocks(self):
+        response = self._post_mutation({
+            "type": "footer.update",
+            "patch": {"extra_blocks": [{"type": "custom_text", "title": "نماد اعتماد", "text": "متن دلخواه"}]},
+        })
+        self.assertEqual(response.status_code, 200)
+        self.draft.refresh_from_db()
+        config = self.draft.effective_footer_config()
+        self.assertEqual(
+            config["extra_blocks"], [{"type": "custom_text", "title": "نماد اعتماد", "text": "متن دلخواه"}],
+        )
+
+    def test_footer_update_extra_blocks_invalid_type_rejected(self):
+        response = self._post_mutation({
+            "type": "footer.update",
+            "patch": {"extra_blocks": [{"type": "not_a_real_type"}]},
+        })
+        self.assertEqual(response.status_code, 400)
+
+    def test_footer_update_responsive_merge_preserves_sibling_prop(self):
+        first = self._post_mutation({
+            "type": "footer.update",
+            "patch": {"responsive": {"show_about": {"hide_on_tablet": True}}},
+        })
+        self.assertEqual(first.status_code, 200)
+        second = self._post_mutation({
+            "type": "footer.update",
+            "patch": {"responsive": {"show_about": {"hide_on_mobile": True}}},
+        })
+        self.assertEqual(second.status_code, 200)
+        self.draft.refresh_from_db()
+        self.assertEqual(
+            self.draft.effective_footer_config()["responsive"]["show_about"],
+            {"hide_on_tablet": True, "hide_on_mobile": True},
+        )
 
 
 class TemplateUndoRedoIdentityTests(R4StoreAppearanceMutationTestCase):
