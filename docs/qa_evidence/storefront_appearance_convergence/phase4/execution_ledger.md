@@ -351,3 +351,58 @@ commit-by-commit summary.
   `test_phase4_task6_group_f_reconciliation` (15/15), `manage.py check`/`makemigrations --check
   --dry-run`/`git diff --check` clean, `run.mjs`/`section_registry.py` both `node --check`/
   `py_compile` clean. **CRITICAL 0 / IMPORTANT 0 after this round's fixes — Task 6 is now CLOSED.**
+
+- **Full `apps.storefront_builder` regression gate + browser certification campaign (Task 7 B4/B5)**
+  (continuation session, 2026-09-10). Full suite (2833 tests) compared failure/error test names
+  against the frozen baseline (30 failures/2 errors/4 skips) — exact match, zero new regressions.
+  One consolidated browser scenario (`scenario14CompositionAndRecoveryGate` in
+  `tools/storefront_builder_r4_qa/run.mjs`, registered as the absolute last scenario since Discard
+  destroys the Draft's identity) built to exercise composition, multi-column placement,
+  enable/disable, lock, granular-reset gating, media Inspector link, non-Home page switch, and
+  Discard in one run against the shared `akhlaghi`/`task6_qa_owner` QA fixture — clean on first run.
+
+- **Fourth independent review (Task 7)** (continuation session, 2026-09-10; agent
+  `a753cb49608d991a6`, fresh isolated worktree against the full Task-7 diff since the Task-6
+  baseline `559af59`). Verdict: CRITICAL 0, IMPORTANT 2, MINOR 8. IMPORTANT-1:
+  `#r4ResetStorefrontButton`'s directly-bound click handler silently stopped firing after any other
+  Global Design edit (its container's `innerHTML` gets replaced) — moved into the existing
+  delegated click listener. IMPORTANT-2: `container.change_layout`'s grow branch could create a
+  Cell no R4 mutation could ever fill — fixed with a new `section_structure_service.
+  add_section_to_cell`/`_scoped_cell`, a new `cell.add_section` mutation type, and a new
+  "empty cells" picker UI, mirroring the legacy `storefront_cell_add_section` view's own logic.
+  4 of 8 MINORs fixed (stale-screenshot handling, triplicated test helper, a private-dict
+  reach-across-module, raw-English layout-preset labels); 1 verified fixed as a side effect
+  (an entirely empty container); 2 accepted as disclosed/defensible per the reviewer's own framing;
+  1 (duplicated Draft-section-scoping across 3 call sites) also fixed, consolidated into one
+  `_scoped_section` helper in `r4_mutation_service.py`. Also strengthened the browser scenario with
+  a real click-through proving `cell.add_section` end-to-end. Re-verified: targeted suite (236
+  tests, only the one frozen-baseline failure), full 16-scenario browser harness, sanity checks —
+  all clean. Committed and pushed as `49929e1`. See `task7_r4_composition_media_parity.md`'s
+  "Batch 4" section for the full per-finding record.
+
+- **Fifth independent review (Task 7)** (continuation session, 2026-09-10; fresh isolated worktree,
+  diff scoped to `559af59..49929e1`). Verdict: CRITICAL 0, IMPORTANT 1, MINOR 1. IMPORTANT-1: the
+  brand-new `cell.add_section` mutation type — writing through a brand-new Draft-scoping helper —
+  had zero Django-level regression tests for its negative paths, unlike every sibling Task-7
+  mutation type; the browser scenario alone only proved the same-tenant happy path. Fixed with a
+  new `CellAddSectionTests` class (10 tests: empty-cell success, occupied-cell success, locked-
+  container/invalid-key/hidden-from-library/max-instances/nonexistent-cell/non-integer-cell/
+  foreign-store-cell/stale-revision rejection). MINOR-1 (a docstring overstating byte-identical
+  label reuse with the legacy layout picker) reworded for accuracy. Re-verified: new tests (10/10),
+  full targeted re-run (246 tests, only the one frozen-baseline failure), sanity checks clean.
+  Committed and pushed as `b6605d4`.
+
+- **Sixth independent review (Task 7 — final)** (continuation session, 2026-09-10; fresh isolated
+  worktree, full diff `559af59..b6605d4`, including actually running the new `CellAddSectionTests`
+  and confirming by inspection that each guard is load-bearing). **Verdict: CRITICAL 0, IMPORTANT 0,
+  MINOR 2 — required bar cleared.** MINOR-1: the `cell.add_section` browser assertion's DOM-presence
+  selector referenced an admin-only Structure-panel attribute that never appears in Preview's own
+  storefront-rendered markup, silently weakening the check to "does this section-key exist
+  anywhere on the page" — fixed to use Preview's real per-section `data-container-id` attribute,
+  genuinely scoping the check to the target Container. MINOR-2: `add_section_to_cell`'s docstring
+  overstated "same validation order" as the legacy view (the checks match, plus one this function
+  additionally enforces; only the order differs, and only because this entry point must resolve
+  the Cell first) — reworded for accuracy. Both mechanical, non-functional fixes; re-verified via a
+  full 16-scenario browser harness re-run (not a fourth review round, since neither fix touches
+  mutation/scoping logic) plus `py_compile`/`node --check`/sanity checks — all clean. Committed and
+  pushed as `ab22e3d`. **Task 7 is now CLOSED.**

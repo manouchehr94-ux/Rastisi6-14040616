@@ -221,3 +221,111 @@ inside the R4 Preview/Inspector rather than a new-tab link to the legacy
 page. The current fix satisfies "reachable from R4, zero new media
 authority" — a fully inline experience is a UI-polish increment on top of
 this, not a missing capability.
+
+## Batch 4 — Final independent review cycle (Task 7 closure)
+
+Per the closure requirement, the final Task-7 state (Batches 1-3 above,
+plus the full 16-scenario `qa_storefront_builder_r4` browser certification
+campaign and a full `apps.storefront_builder` regression run — both
+clean) was put through three successive fresh, isolated-worktree
+independent reviewers, each fixing forward from the last, until the
+required bar (CRITICAL 0, IMPORTANT 0) was reached and confirmed twice
+in a row.
+
+**Fourth independent review** (agent `a753cb49608d991a6`): CRITICAL 0,
+IMPORTANT 2, MINOR 8.
+
+- IMPORTANT-1: `#r4ResetStorefrontButton`'s click handler was bound
+  directly, once, at page load — but the button lives inside
+  `#r4GlobalDesign`, whose `innerHTML` `refreshGlobalDesignAndPreview()`
+  replaces on every OTHER successful Global Design edit, so the handler
+  silently stopped firing after the first such edit. Fixed by moving the
+  logic into the existing delegated `globalDesignPanel` click listener
+  (`r4_editor.js`).
+- IMPORTANT-2: `container.change_layout`'s grow-with-empty-cells branch
+  could create a Cell no R4 mutation could ever fill (`build_structure_
+  projection` only emits a row per placed Block, so an empty Cell is
+  invisible to every existing mutation type). Fixed with
+  `section_structure_service.add_section_to_cell`/`_scoped_cell`
+  (mirroring the legacy `storefront_cell_add_section` view), a new
+  `cell.add_section` mutation type, an `empty_cells` context list in
+  `storefront_r4_editor`, and a new "خانه‌های خالی" (empty cells) picker
+  UI in the Structure panel.
+- MINOR-2/3/6/7 fixed (stale-screenshot handling in the browser harness;
+  a triplicated `_refresh_revision` test helper; `r4_views.py` reaching
+  into `media_views._MEDIA_KINDS` directly instead of through a public
+  accessor; the layout-preset `<select>` showing raw English keys instead
+  of the legacy editor's own Persian ratio labels). MINOR-8 (an entirely
+  empty container, zero sections) verified fixed as a side effect of the
+  `empty_cells` computation, which already covers it. MINOR-1/5 accepted
+  as disclosed/defensible per the reviewer's own framing (partial browser
+  revert-sensitivity; a narrowed pre-existing test whose actual contract
+  was always narrower than its name implied).
+- Also strengthened `scenario14CompositionAndRecoveryGate` with a real
+  click-through: place a section into the empty Cell the "half" reshape
+  creates, assert exactly one `cell.add_section` mutation, assert it
+  renders in Preview, survives reload, and is no longer listed as empty —
+  proving the IMPORTANT-2 fix end-to-end, not just at the Django level.
+- Verified: targeted re-run (236 tests, only the one frozen-baseline
+  pre-existing failure); full 16-scenario browser harness clean;
+  `manage.py check`/`makemigrations --check --dry-run`/`git diff --check`
+  clean. Committed and pushed as `49929e1`.
+
+**Fifth independent review** (fresh isolated worktree, diff-scoped to
+`559af59..49929e1`): CRITICAL 0, IMPORTANT 1, MINOR 1.
+
+- IMPORTANT-1: `cell.add_section`/`add_section_to_cell` — a brand-new
+  mutation type writing through a brand-new Draft-scoping helper
+  (`_scoped_cell`) — had ZERO Django-level regression tests, unlike every
+  sibling Task-7 mutation type (`container.change_layout` has
+  `ChangeContainerLayoutTests`; Discard/Reset-page/Reset-storefront have
+  `DraftReplacingEndpointTests`). The browser scenario alone only proved
+  the same-tenant happy path. Fixed with a new `CellAddSectionTests`
+  class (10 tests): empty-cell success, occupied-cell success (the
+  `add_block` branch), locked-container rejection, invalid/hidden-from-
+  library/max-instances-exceeded section_key rejection, nonexistent/
+  non-integer/foreign-store cell_id rejection, stale-revision rejection.
+- MINOR-2 (the new `LAYOUT_PRESET_LABELS_FA` docstring overstated
+  byte-identical reuse with the legacy picker's labels, when in fact the
+  ratios/order match but the digit-glyph convention differs) — reworded
+  to state this precisely.
+- Verified: new `CellAddSectionTests` (10/10); full targeted re-run (246
+  tests, only the one frozen-baseline pre-existing failure); sanity
+  checks clean. Committed and pushed as `b6605d4`.
+
+**Sixth independent review** (fresh isolated worktree, full diff
+`559af59..b6605d4`, including actually running `CellAddSectionTests` and
+confirming by inspection that each of its guards is load-bearing — e.g.
+that `container_service.place_section` has no `is_locked` check of its
+own, so `add_section_to_cell`'s explicit `container_locked` guard is the
+only thing preventing a locked container from accepting a new section via
+the empty-cell path): **CRITICAL 0, IMPORTANT 0, MINOR 2.** Required bar
+cleared.
+
+- MINOR-1: the `cell.add_section` browser assertion's DOM-presence check
+  used `[data-r4-structure-container-id="..."]` as part of its selector —
+  an attribute that only exists in the admin Structure panel template,
+  never in Preview's own storefront-rendered markup, so that half of the
+  selector could never match and the check silently degraded to "does
+  this section-key exist anywhere on the page". Fixed to use the real
+  per-section `data-container-id` attribute Preview's own
+  `responsive_section_wrapper.html` renders, genuinely scoping the check
+  to the Container the empty Cell belongs to.
+- MINOR-2: `add_section_to_cell`'s docstring claimed the "same validation
+  order" as the legacy view; the CHECKS match (plus `container_locked`,
+  which this function additionally enforces and the legacy view has no
+  equivalent of) but the ORDER differs, since this Draft-scoped entry
+  point must resolve the Cell before any section-level check can run.
+  Reworded to state this precisely — stricter, never looser.
+- Both fixed and re-verified (`py_compile`/`node --check` clean; full
+  16-scenario browser harness re-run clean, exercising the corrected
+  selector; sanity checks clean). Committed and pushed as `ab22e3d`.
+
+**Task 7 is now CLOSED.** Final state: `ab22e3d` on
+`feature/phase4-builder-legacy-convergence`, three independent review
+rounds since the Task-6 certified baseline (`559af59`), the last of which
+returned CRITICAL 0/IMPORTANT 0 against the pre-MINOR-fix state and was
+not re-run after the two subsequent MINOR-only fixes (mechanical,
+non-functional: a test-assertion selector and a docstring, both
+independently re-verified by re-running the full test suite and browser
+harness rather than by a fourth review round).
