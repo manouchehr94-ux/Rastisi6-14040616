@@ -49,17 +49,24 @@ class EditorAccessTests(StorefrontBuilderViewsTestCase):
         # نوارِ اعلانِ section نباید در کتابخانه ظاهر شود (چکپوینتِ ۹)
         self.assertNotContains(resp, 'section_key": "announcement_bar"')
 
-    def test_r4_editor_link_hidden_when_gate_disabled(self):
-        # Phase 4 (Task 3A) — StorefrontLayout.r4_editor_enabled defaults
-        # False; the legacy editor must not offer a link into a route that
-        # would 404.
+    def test_r4_editor_link_hidden_when_gate_explicitly_disabled(self):
+        # Pre-Task-10 remediation (R4 live cutover) —
+        # StorefrontLayout.r4_editor_enabled now defaults True (R4 is the
+        # canonical merchant editor); the flag is a non-blocking
+        # compatibility mechanism only, for a Store explicitly pinned back
+        # to the legacy editor. The legacy editor must not offer a link
+        # into a route that would 404 for such a Store.
+        layout = svc.get_or_create_layout(self.store)
+        layout.r4_editor_enabled = False
+        layout.save(update_fields=["r4_editor_enabled"])
         resp = self.client.get(reverse("dashboard:storefront-builder-editor"))
         self.assertNotContains(resp, "ادیتور جدید (R4)")
 
-    def test_r4_editor_link_shown_when_gate_enabled(self):
-        layout = svc.get_or_create_layout(self.store)
-        layout.r4_editor_enabled = True
-        layout.save(update_fields=["r4_editor_enabled"])
+    def test_r4_editor_link_shown_by_default(self):
+        # Pre-Task-10 remediation (R4 live cutover) — the default is now
+        # enabled, so a Store that never touched the flag still sees the
+        # link (and the dashboard nav itself, per base_admin.html, now
+        # routes straight to R4 rather than needing this link at all).
         resp = self.client.get(reverse("dashboard:storefront-builder-editor"))
         self.assertContains(resp, "ادیتور جدید (R4)")
         self.assertContains(resp, reverse("dashboard:storefront-builder-r4-editor"))

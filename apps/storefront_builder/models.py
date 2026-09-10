@@ -209,8 +209,14 @@ class StorefrontLayout(TimeStampedModel):
         on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
     )
     r4_editor_enabled = models.BooleanField(
-        default=False,
-        help_text="Feature gate for the R4 storefront-builder editor shell.",
+        default=True,
+        help_text=(
+            "Non-blocking compatibility flag for the R4 storefront-builder editor "
+            "shell. Pre-Task-10 remediation: R4 is now the default canonical "
+            "merchant editor (dashboard nav routes here); this flag exists only "
+            "so an individual Store can be pinned back to the legacy editor if a "
+            "regression is found, never to gate normal access."
+        ),
     )
 
     class Meta:

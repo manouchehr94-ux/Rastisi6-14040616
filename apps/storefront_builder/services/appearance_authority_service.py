@@ -48,7 +48,24 @@ from . import layout_service
 # Anything outside this set (e.g. the reserved ``store_appearance`` typed
 # manifest, or future canonical/provenance state) is OPAQUE to this
 # transformation and must survive a managed-field patch untouched.
-_MANAGED_APPEARANCE_KEYS = frozenset(APPEARANCE_CONFIG_DEFAULTS)
+#
+# Pre-Task-10 remediation — bug fix: this set previously omitted
+# ``layout_service.PAGE_APPEARANCE_KEYS`` (content_width/grid_density/
+# card_shadow/card_hover/hero_style), the 5 Phase 8 P0-7 structural fields.
+# ``validate_appearance_config`` has always cleaned/returned them when
+# posted (they are deliberately sparse-by-design, not part of
+# ``APPEARANCE_CONFIG_DEFAULTS``), and the legacy ``storefront_appearance_
+# editor`` view has always read and posted them — but this merge loop only
+# ever copied keys already in ``APPEARANCE_CONFIG_DEFAULTS`` back onto the
+# saved config, so a Store-global (non-Template, non-Page-override) edit of
+# any of these 5 fields was silently discarded by both the legacy editor and
+# every caller of ``apply_appearance_patch``, R4 included. Reproduced
+# directly against this function before the fix (a bare ``content_width``
+# patch left the saved config completely untouched); fixed by including the
+# same 5-key set ``layout_service.validate_page_appearance_overrides``
+# already uses as its own canonical allowlist — no new field, no schema
+# change, single source of truth.
+_MANAGED_APPEARANCE_KEYS = frozenset(APPEARANCE_CONFIG_DEFAULTS) | layout_service.PAGE_APPEARANCE_KEYS
 
 # Legacy-selector registry-reference prefixes, reused from the persistence
 # adapter's own conventions. We do not maintain a second component-key map.

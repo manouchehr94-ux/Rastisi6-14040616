@@ -4,6 +4,17 @@ Tracks Phase-4 certification state for every section family and every global non
 Updated by Task 6 (product-facing families) and Task 5 (CSS completeness). No row may remain
 "unknown" at the Phase-4 final gate (Task 10).
 
+**Pre-Task-10 remediation note** (see
+`pre_task10_r4_cutover.md`'s "Step 1D" section for the full record):
+re-read fresh this session. The 15 `MIGRATE` rows still marked `NOT YET
+CERTIFIED` each have `SettingsSchema`/CSS-completeness already closed
+(Task 5/6) — the only outstanding item for each is a dedicated Task-4
+QA-harness browser scenario, which this session did not write. This is a
+justified, explicitly-tracked remaining gap (real Playwright browser-
+automation work, not a rubber-stamp), not an unjustified or stale row —
+none of these 15 are miscategorized as MIGRATE when they should be
+media-only/fixed/context-owned/domain-owned.
+
 Columns: disposition (from the plan's §0 recount) · CSS completeness (Task 5) · SettingsSchema ·
 ResourceSource · browser certification (Task 4 harness) · status.
 

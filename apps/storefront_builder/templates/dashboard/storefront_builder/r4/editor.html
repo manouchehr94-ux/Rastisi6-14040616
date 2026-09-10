@@ -1,5 +1,6 @@
 {% extends "dashboard/base_admin.html" %}
 {% load static %}
+{% load storefront_builder_extras %}
 {% block title %}راستی‌سی — سازنده ظاهر R4{% endblock %}
 {% block page_title %}سازنده ظاهر (R4){% endblock %}
 {% block page_sub %}ویرایشگر جدید — در حال ساخت{% endblock %}
@@ -57,6 +58,22 @@
             <option value="{{ preset_key }}" {% if preset_key == item.container_layout_key %}selected{% endif %}>{{ preset_label }}</option>
             {% endfor %}
           </select>
+          {# Pre-Task-10 remediation (composition parity closure) — Container-level merchant settings, Task 7 B1 audit item #1. #}
+          <label class="r4-field-sublabel">فاصله</label>
+          <input type="number" min="0" max="64" class="r4-control r4-structure-container-settings-input" data-r4-container-settings-field="gap" value="{{ item.container_settings.gap }}" {% if item.container_is_locked %}disabled{% endif %}>
+          <select class="r4-control r4-structure-container-settings-input" data-r4-container-settings-field="mobile_mode" {% if item.container_is_locked %}disabled{% endif %}>
+            <option value="stack" {% if item.container_settings.mobile_mode == "stack" %}selected{% endif %}>پشت‌سرهم در موبایل</option>
+            <option value="same" {% if item.container_settings.mobile_mode == "same" %}selected{% endif %}>همان چیدمان در موبایل</option>
+          </select>
+          <select class="r4-control r4-structure-container-settings-input" data-r4-container-settings-field="vertical_align" {% if item.container_is_locked %}disabled{% endif %}>
+            <option value="start" {% if item.container_settings.vertical_align == "start" %}selected{% endif %}>بالا</option>
+            <option value="center" {% if item.container_settings.vertical_align == "center" %}selected{% endif %}>وسط</option>
+            <option value="end" {% if item.container_settings.vertical_align == "end" %}selected{% endif %}>پایین</option>
+          </select>
+          <select class="r4-control r4-structure-container-settings-input" data-r4-container-settings-field="height_mode" {% if item.container_is_locked %}disabled{% endif %}>
+            <option value="natural" {% if item.container_settings.height_mode == "natural" %}selected{% endif %}>ارتفاع طبیعی</option>
+            <option value="equal" {% if item.container_settings.height_mode == "equal" %}selected{% endif %}>ارتفاع برابر</option>
+          </select>
         </div>
         {% endif %}
         {% endifchanged %}
@@ -71,6 +88,18 @@
             <button type="button" data-r4-structure-reset-to-baseline aria-label="بازنشانی بخش به قالب" {% if not item.has_baseline %}disabled{% endif %}>↺</button>
             {% if item.removable %}<button type="button" data-r4-structure-remove aria-label="حذف بخش" {% if item.is_locked %}disabled{% endif %}>🗑</button>{% endif %}
           </div>
+          {% if empty_cells %}
+          {# Pre-Task-10 remediation (composition parity closure) — arbitrary/non-adjacent placement, Task 7 B1 audit item #5: move THIS existing section into any empty Cell, not just an adjacent-swap. #}
+          <div class="r4-structure-move-to-cell">
+            <select class="r4-control" data-r4-structure-move-to-cell-select {% if item.is_locked %}disabled{% endif %}>
+              <option value="">انتقال به خانه خالی…</option>
+              {% for empty_cell in empty_cells %}
+              <option value="{{ empty_cell.cell_id }}">چیدمان #{{ empty_cell.container_id }} — خانه #{{ empty_cell.cell_id }}</option>
+              {% endfor %}
+            </select>
+            <button type="button" data-r4-structure-move-to-cell {% if item.is_locked %}disabled{% endif %}>انتقال</button>
+          </div>
+          {% endif %}
         </div>
         {% endfor %}
       </div>
@@ -195,6 +224,83 @@
             {% endfor %}
           </select>
           {% if storefront_has_baseline %}<button type="button" data-r4-global-reset-field="button_style" aria-label="بازنشانی سبک دکمه به قالب" class="r4-icon-btn">↺</button>{% endif %}
+
+          <label class="r4-field-sublabel" for="r4GlobalRadius">گردی گوشه‌ها</label>
+          <input type="number" min="0" max="32" id="r4GlobalRadius" class="r4-control" data-r4-global-field="radius" value="{{ global_design.appearance.radius }}">
+
+          <label class="r4-field-sublabel" for="r4GlobalButtonRadius">گردی گوشه‌ی دکمه‌ها</label>
+          <input type="number" min="0" max="32" id="r4GlobalButtonRadius" class="r4-control" data-r4-global-field="button_radius" value="{{ global_design.appearance.button_radius }}">
+
+          <label class="r4-field-sublabel" for="r4GlobalDensity">تراکم</label>
+          <select id="r4GlobalDensity" class="r4-control" data-r4-global-field="density">
+            {% for d in global_design.density_choices %}
+            <option value="{{ d }}" {% if d == global_design.appearance.density %}selected{% endif %}>{{ d }}</option>
+            {% endfor %}
+          </select>
+
+          <label class="r4-field-sublabel" for="r4GlobalImageFit">نوع نمایش تصویر</label>
+          <select id="r4GlobalImageFit" class="r4-control" data-r4-global-field="image_fit">
+            {% for c in global_design.image_fit_choices %}
+            <option value="{{ c }}" {% if c == global_design.appearance.image_fit %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+
+          <label class="r4-field-sublabel" for="r4GlobalImageHover">افکت هاور تصویر</label>
+          <select id="r4GlobalImageHover" class="r4-control" data-r4-global-field="image_hover">
+            {% for c in global_design.image_hover_choices %}
+            <option value="{{ c }}" {% if c == global_design.appearance.image_hover %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+
+          <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="card_image_crossfade" {% if global_design.appearance.card_image_crossfade %}checked{% endif %}> <span>کراس‌فید تصویر کارت</span></label>
+          <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="card_image_zoom" {% if global_design.appearance.card_image_zoom %}checked{% endif %}> <span>زوم تصویر کارت روی هاور</span></label>
+
+          <label class="r4-field-sublabel" for="r4GlobalContentWidth">عرض محتوای سایت</label>
+          <select id="r4GlobalContentWidth" class="r4-control" data-r4-global-field="content_width">
+            {% for w in global_design.site_content_width_choices %}
+            <option value="{{ w }}" {% if w == global_design.appearance.content_width %}selected{% endif %}>{{ w }}px</option>
+            {% endfor %}
+          </select>
+
+          <label class="r4-field-sublabel" for="r4GlobalGridDensity">تعداد ستون گرید محصول</label>
+          <select id="r4GlobalGridDensity" class="r4-control" data-r4-global-field="grid_density">
+            {% for n in global_design.site_grid_density_choices %}
+            <option value="{{ n }}" {% if n == global_design.appearance.grid_density %}selected{% endif %}>{{ n }}</option>
+            {% endfor %}
+          </select>
+
+          <label class="r4-field-sublabel" for="r4GlobalCardShadow">سایه کارت</label>
+          <select id="r4GlobalCardShadow" class="r4-control" data-r4-global-field="card_shadow">
+            {% for c in global_design.site_card_shadow_choices %}
+            <option value="{{ c }}" {% if c == global_design.appearance.card_shadow %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+
+          <label class="r4-field-sublabel" for="r4GlobalCardHover">هاور کارت</label>
+          <select id="r4GlobalCardHover" class="r4-control" data-r4-global-field="card_hover">
+            {% for c in global_design.site_card_hover_choices %}
+            <option value="{{ c }}" {% if c == global_design.appearance.card_hover %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+
+          <label class="r4-field-sublabel" for="r4GlobalHeroStyle">سبک هیرو</label>
+          <select id="r4GlobalHeroStyle" class="r4-control" data-r4-global-field="hero_style">
+            {% for c in global_design.site_hero_style_choices %}
+            <option value="{{ c }}" {% if c == global_design.appearance.hero_style %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+
+          <h5>رنگ‌های سفارشی</h5>
+          {% for key, label in global_design.color_field_labels %}
+          <label class="r4-field-sublabel" for="r4GlobalColor-{{ key }}">{{ label }}</label>
+          <input type="color" id="r4GlobalColor-{{ key }}" class="r4-control" data-r4-global-field="color_overrides" data-r4-global-color-key="{{ key }}" value="{{ global_design.resolved_colors|dictget:key }}">
+          {% endfor %}
+
+          <h5>رنگ‌های ناحیه‌ای سفارشی</h5>
+          {% for key, label in global_design.theme_field_labels %}
+          <label class="r4-field-sublabel" for="r4GlobalTheme-{{ key }}">{{ label }}</label>
+          <input type="color" id="r4GlobalTheme-{{ key }}" class="r4-control" data-r4-global-field="theme_overrides" data-r4-global-theme-key="{{ key }}" value="{{ global_design.resolved_theme_roles|dictget:key }}">
+          {% endfor %}
         </section>
 
         <section class="r4-global-design-group" data-r4-global-mutation="header.update">
@@ -206,6 +312,15 @@
             {% endfor %}
           </select>
           {% if storefront_has_baseline %}<button type="button" id="r4ResetHeaderButton">⟲ بازنشانی هدر به قالب</button>{% endif %}
+
+          {% for key, label in global_design.header_toggle_fields %}
+          <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="{{ key }}" {% if global_design.header|dictget:key %}checked{% endif %}> <span>{{ label }}</span></label>
+          {% endfor %}
+
+          <label class="r4-field-sublabel" for="r4GlobalAnnouncementText">متن نوار اعلان</label>
+          <input type="text" id="r4GlobalAnnouncementText" class="r4-control" maxlength="300" data-r4-global-field="announcement_text" value="{{ global_design.header.announcement_text }}">
+
+          <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="announcement_show_phone" {% if global_design.header.announcement_show_phone %}checked{% endif %}> <span>نمایش تلفن در نوار اعلان</span></label>
         </section>
 
         <section class="r4-global-design-group" data-r4-global-mutation="footer.update">
@@ -217,6 +332,10 @@
             {% endfor %}
           </select>
           {% if storefront_has_baseline %}<button type="button" id="r4ResetFooterButton">⟲ بازنشانی فوتر به قالب</button>{% endif %}
+
+          {% for key, label in global_design.footer_toggle_fields %}
+          <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="{{ key }}" {% if global_design.footer|dictget:key %}checked{% endif %}> <span>{{ label }}</span></label>
+          {% endfor %}
         </section>
       </div>
     </aside>

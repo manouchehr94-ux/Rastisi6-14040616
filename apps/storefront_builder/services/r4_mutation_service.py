@@ -18,9 +18,18 @@ from apps.storefront_builder import (
     resource_source,
     section_registry,
 )
-from apps.storefront_builder.models import StorefrontLayout, StorefrontLayoutVersion, StorefrontSection
+from apps.storefront_builder.models import (
+    APPEARANCE_COLOR_KEYS,
+    FOOTER_TOGGLE_FIELDS,
+    HEADER_TOGGLE_FIELDS,
+    StorefrontContainer,
+    StorefrontLayout,
+    StorefrontLayoutVersion,
+    StorefrontSection,
+)
 from apps.storefront_builder.services import (
     appearance_authority_service,
+    container_service,
     edit_history_service,
     layout_service,
     preset_service,
@@ -63,6 +72,8 @@ _MUTATION_HISTORY_LABELS = {
     "section.toggle_locked": "قفل/بازکردن بخش",
     "container.change_layout": "تغییر چیدمان",
     "cell.add_section": "افزودن بخش به خانه",
+    "section.move_to_cell": "انتقال بخش به خانه دیگر",
+    "container.update_settings": "ویرایش تنظیمات چیدمان",
     "section.reset_to_baseline": "بازنشانی بخش به قالب",
     "section.reset_setting_to_baseline": "بازنشانی فیلد بخش به قالب",
     "appearance.reset_setting_to_baseline": "بازنشانی تنظیم ظاهر به قالب",
@@ -372,13 +383,82 @@ def _apply_cell_add_section(*, draft: StorefrontLayoutVersion, mutation: dict) -
         raise R4MutationError(exc.code) from exc
 
 
-#: R4 Task 11 (Section 6) — Phase 1's narrow Global Design allowlist. Never
-#: raw CSS/JSON, never an arbitrary color/template path — every other
-#: appearance_config key (radius/button_radius/density/content_width/...)
-#: only ever changes as a side effect of a Template switch (see
-#: _TEMPLATE_OWNED_FIELDS below), exactly like R3's own editor (views.py).
+def _apply_section_move_to_cell(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    section_id = mutation.get("section_id")
+    cell_id = mutation.get("cell_id")
+    at_index = mutation.get("at_index")
+    if not _is_strict_int(section_id):
+        raise R4MutationError("invalid_section_id")
+    if not _is_strict_int(cell_id):
+        raise R4MutationError("invalid_cell_id")
+    if at_index is not None and not _is_strict_int(at_index):
+        raise R4MutationError("invalid_at_index")
+    try:
+        section_structure_service.move_section_to_cell(
+            draft=draft, section_id=section_id, cell_id=cell_id, at_index=at_index,
+        )
+    except section_structure_service.SectionStructureError as exc:
+        raise R4MutationError(exc.code) from exc
+
+
+#: Pre-Task-10 remediation (composition parity closure) — Container-level
+#: merchant settings the legacy ``storefront_container_settings`` view
+#: exposes (``views.py``) with no prior R4 equivalent (Task-7 B1 audit
+#: item #1: "R4 never exposes container-level merchant controls"). Matches
+#: the legacy view's own allowlist exactly — ``content_width`` is
+#: deliberately excluded there too ("not exposed until the renderer has a
+#: family-safe implementation"), so it stays INTERNAL/NOT MERCHANT-FACING
+#: here as well, never a new capability invented beyond legacy parity.
+_CONTAINER_SETTINGS_ALLOWED_PATCH_KEYS = frozenset({
+    "gap", "mobile_mode", "vertical_align", "height_mode",
+    "background_mode", "background_color", "background_pattern",
+})
+
+
+def _apply_container_update_settings(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    container_id = mutation.get("container_id")
+    patch = mutation.get("patch")
+    if not _is_strict_int(container_id):
+        raise R4MutationError("invalid_container_id")
+    if not isinstance(patch, dict):
+        raise R4MutationError("invalid_patch")
+    if set(patch) - _CONTAINER_SETTINGS_ALLOWED_PATCH_KEYS:
+        raise R4MutationError("invalid_container_settings_patch")
+    try:
+        container = StorefrontContainer.objects.select_for_update().get(
+            pk=container_id, page__version=draft,
+        )
+    except StorefrontContainer.DoesNotExist:
+        raise R4MutationError("container_not_found") from None
+    if container.is_locked:
+        raise R4MutationError("container_locked")
+
+    current = container_service.effective_container_settings(container.settings)
+    candidate = dict(current)
+    candidate.update(patch)
+    # content_width is preserved unconditionally — same restraint as the
+    # legacy view, never settable via this patch even if posted (the
+    # allowlist above already rejects an unknown key, but this guards the
+    # one already-known key that must never move here either).
+    candidate["content_width"] = current["content_width"]
+    container.settings = container_service.effective_container_settings(candidate)
+    container.save(update_fields=["settings", "updated_at"])
+
+
+#: Pre-Task-10 remediation (field-parity closure) — widened from the
+#: original Phase 1 Section 6 allowlist (template_slug/palette_slug/font/
+#: type_scale/motion/button_style) to cover every REQUIRED EXISTING
+#: CAPABILITY the field-by-field parity matrix
+#: (docs/qa_evidence/.../task9_legacy_retirement.md, headline finding #3)
+#: found missing from R4 — never raw CSS/JSON, never an arbitrary/unknown
+#: key: every one of these is validated by the SAME canonical
+#: ``layout_service.validate_appearance_config`` the legacy form uses.
 _APPEARANCE_UPDATE_ALLOWED_PATCH_KEYS = frozenset({
     "template_slug", "palette_slug", "font", "type_scale", "motion", "button_style",
+    "radius", "button_radius", "density",
+    "image_fit", "image_hover", "card_image_crossfade", "card_image_zoom",
+    "content_width", "grid_density", "card_shadow", "card_hover", "hero_style",
+    "color_overrides", "theme_overrides",
 })
 
 #: The fields a Template selection owns on transition — verified against
@@ -594,14 +674,56 @@ def _apply_appearance_update(*, draft: StorefrontLayoutVersion, mutation: dict) 
     # Switching Palette starts fresh — old color/theme overrides made no
     # sense against the new palette (same rule R3's editor already applies).
     new_palette_slug = patch.get("palette_slug", current.get("palette_slug"))
-    if new_palette_slug != current.get("palette_slug"):
+    palette_changed = new_palette_slug != current.get("palette_slug")
+    if palette_changed:
         candidate["color_overrides"] = {}
         candidate["theme_overrides"] = {}
     candidate["palette_slug"] = new_palette_slug
 
-    for field in ("font", "type_scale", "motion", "button_style"):
+    # Exact R3 precedence for every one of the 7 real Template-owned fields
+    # (_TEMPLATE_OWNED_FIELDS) — a Template switch in the SAME patch always
+    # wins over an explicitly posted value.
+    for field in ("font", "type_scale", "motion", "button_style", "radius", "button_radius", "density"):
         if new_template is None and field in patch:
             candidate[field] = patch[field]
+
+    # These never belong to any Template (image behavior + the Phase 8
+    # P0-7 structural page fields) — always read straight from the patch
+    # when present, exactly like R3's ``_field()`` never gates them on
+    # ``new_template is None`` either.
+    for field in (
+        "image_fit", "image_hover", "card_image_crossfade", "card_image_zoom",
+        "content_width", "grid_density", "card_shadow", "card_hover", "hero_style",
+    ):
+        if field in patch:
+            candidate[field] = patch[field]
+
+    # Partial color/theme override patch — merge onto the current set (a
+    # single Global Design field change posts ONE key, never the whole
+    # dict), dropping any key whose posted value now matches the resolved
+    # base (no-override) color, exactly like the legacy per-key logic in
+    # ``storefront_appearance_editor``.
+    if not palette_changed:
+        for overrides_key, base_resolver, valid_keys in (
+            ("color_overrides", appearance_registry.resolve_colors, APPEARANCE_COLOR_KEYS),
+            ("theme_overrides", appearance_registry.resolve_theme_roles, appearance_registry.THEME_ROLE_KEYS),
+        ):
+            posted = patch.get(overrides_key)
+            if not isinstance(posted, dict):
+                continue
+            merged = dict(candidate.get(overrides_key) or {})
+            base_config = {**candidate, overrides_key: {}}
+            base_values = base_resolver(base_config)
+            for key, value in posted.items():
+                if key not in valid_keys or not isinstance(value, str):
+                    continue
+                if value.upper() == base_values.get(key, "").upper():
+                    merged.pop(key, None)
+                else:
+                    merged[key] = value
+            candidate[overrides_key] = merged
+        if candidate.get("color_overrides"):
+            candidate["color_overrides_customized"] = True
 
     try:
         cleaned = layout_service.validate_appearance_config(candidate)
@@ -621,16 +743,34 @@ def _apply_appearance_update(*, draft: StorefrontLayoutVersion, mutation: dict) 
         _sync_manifest_from_live_selectors(draft=draft)
 
 
+#: Pre-Task-10 remediation — widened from ``header_variant``-only to cover
+#: every REQUIRED EXISTING CAPABILITY toggle/text field the legacy header
+#: form exposes with no prior R4 equivalent (see headline finding #3).
+#: ``announcement_links``/``extra_blocks``/``responsive`` remain legacy-only
+#: (documented, deferred — compound repeater/per-device UI, not a flat
+#: scalar patch key) so the legacy header form is not yet fully retirable.
+_HEADER_UPDATE_ALLOWED_PATCH_KEYS = frozenset(
+    {"header_variant", "announcement_text", "announcement_show_phone"} | set(HEADER_TOGGLE_FIELDS)
+)
+
+
 def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
     patch = mutation.get("patch")
     if not isinstance(patch, dict):
         raise R4MutationError("invalid_patch")
-    if set(patch) - {"header_variant"}:
+    if set(patch) - _HEADER_UPDATE_ALLOWED_PATCH_KEYS:
         raise R4MutationError("invalid_header_patch")
 
     candidate = dict(draft.effective_header_config())
     if "header_variant" in patch:
         candidate["header_variant"] = patch["header_variant"]
+    for field in HEADER_TOGGLE_FIELDS:
+        if field in patch:
+            candidate[field] = patch[field]
+    if "announcement_text" in patch:
+        candidate["announcement_text"] = patch["announcement_text"]
+    if "announcement_show_phone" in patch:
+        candidate["announcement_show_phone"] = patch["announcement_show_phone"]
 
     try:
         cleaned = layout_service.validate_header_config(candidate)
@@ -650,16 +790,27 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
         raise R4MutationError("invalid_store_appearance_manifest") from exc
 
 
+#: Pre-Task-10 remediation — widened from ``footer_variant``-only to cover
+#: every REQUIRED EXISTING CAPABILITY toggle the legacy footer form exposes
+#: with no prior R4 equivalent (see headline finding #3). ``extra_blocks``/
+#: ``responsive`` remain legacy-only (documented, deferred — compound
+#: repeater/per-device UI, not a flat scalar patch key).
+_FOOTER_UPDATE_ALLOWED_PATCH_KEYS = frozenset({"footer_variant"} | set(FOOTER_TOGGLE_FIELDS))
+
+
 def _apply_footer_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
     patch = mutation.get("patch")
     if not isinstance(patch, dict):
         raise R4MutationError("invalid_patch")
-    if set(patch) - {"footer_variant"}:
+    if set(patch) - _FOOTER_UPDATE_ALLOWED_PATCH_KEYS:
         raise R4MutationError("invalid_footer_patch")
 
     candidate = dict(draft.effective_footer_config())
     if "footer_variant" in patch:
         candidate["footer_variant"] = patch["footer_variant"]
+    for field in FOOTER_TOGGLE_FIELDS:
+        if field in patch:
+            candidate[field] = patch[field]
 
     try:
         cleaned = layout_service.validate_footer_config(candidate)
@@ -714,6 +865,12 @@ def _dispatch_mutation(*, store, draft: StorefrontLayoutVersion, mutation: dict)
         return
     if mutation_type == "cell.add_section":
         _apply_cell_add_section(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "section.move_to_cell":
+        _apply_section_move_to_cell(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "container.update_settings":
+        _apply_container_update_settings(draft=draft, mutation=mutation)
         return
     if mutation_type == "section.reset_to_baseline":
         _apply_section_reset_to_baseline(draft=draft, mutation=mutation)

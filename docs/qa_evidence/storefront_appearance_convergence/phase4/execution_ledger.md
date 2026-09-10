@@ -549,3 +549,81 @@ commit-by-commit summary.
   this ledger entry. `backup/rastisi6-phase4-task9-final-20260910` created pointing at the final
   Task-9 SHA. Task 10 (final Phase-4 certification, including the full `apps.storefront_builder`
   regression deferred from Task 8) explicitly **NOT STARTED** in this session.
+
+## Pre-Task-10 Remediation — R4 live cutover + real remaining-gap closure
+
+- **START** 2026-09-10. Preconditions verified: local HEAD == origin feature branch ==
+  `origin/backup/rastisi6-phase4-task9-final-20260910` == `75ede8ab82c6e53090b04eadc7ea9cf9f8691480`;
+  `origin/main` == `973c1dc00bacb6f2f7d2604fa3880bb4d6250579` (unchanged); working tree clean.
+  `backup/rastisi6-phase4-pre-final-remediation-20260910` created pointing at the same SHA, pushed
+  and verified before the first production change. Task 9 not redone; its evidence re-used as the
+  factual starting point for this remediation's own short audit (Step 1A-E).
+- Field-by-field Appearance/Header/Footer parity matrix built from current code (not from Task 9's
+  prose alone — re-verified against `views.py`/`layout_service.py`/`models.py` directly). Wired the
+  REQUIRED EXISTING CAPABILITY majority (~40 fields: all 8 color overrides, all 8 theme overrides,
+  every structural appearance field, all 6 header toggles + announcement text/phone, all 9 footer
+  toggles) into `r4_mutation_service.py`'s `appearance.update`/`header.update`/`footer.update`,
+  reusing the exact same canonical validators (`layout_service.validate_appearance_config`/
+  `validate_header_config`/`validate_footer_config`) the legacy forms already use — never a second
+  validation authority. Found and fixed a genuine pre-existing bug in the canonical authority layer
+  along the way: `appearance_authority_service._merge_appearance_config`'s managed-key set never
+  included the 5 Phase-8 P0-7 structural fields, so a Store-global edit of any of them was silently
+  discarded by both the legacy editor and any R4 caller — reproduced directly against the unmodified
+  function before fixing. 3 repeater-shaped fields (announcement_links, header/footer extra_blocks)
+  and the per-field responsive hide-on-tablet/mobile toggles deliberately deferred (compound
+  multi-row/per-device UI, not a flat scalar patch key) — real, explicitly-tracked remaining gap, not
+  scope creep. New Global Design panel UI for every wired field; `r4_editor.js`'s single-field
+  change handler extended to handle checkboxes and the color/theme override's nested-dict patch
+  shape. New tests: `FieldParityUpdateTests` (11 tests); 2 pre-existing tests updated to use a
+  still-genuinely-unknown patch key (`extra_blocks`) instead of a now-legitimate one, same precedent
+  as Task 7's own representative-test swaps.
+- Composition parity: closed Task 7's B1 audit items #1/#2/#5 (Container-level settings, arbitrary
+  non-adjacent placement) with two new mutation types — `section.move_to_cell`
+  (`section_structure_service.move_section_to_cell`, reusing `container_service.move_block`) and
+  `container.update_settings` (reusing `container_service.effective_container_settings`, matching
+  the legacy view's own restraint of never exposing `content_width`). New Structure panel UI: a
+  "move to empty cell" picker per section row, inline Container settings controls per Container row
+  — a simple explicit target-cell operation, not a drag/drop framework. New tests:
+  `SectionMoveToCellTests` (7), `ContainerUpdateSettingsTests` (4) — same negative-path coverage
+  shape as every sibling Task-7 mutation type.
+- Family certification (Step 1D): re-read `family_certification_matrix.md` fresh. The 15 remaining
+  `NOT YET CERTIFIED` `MIGRATE` rows all have `SettingsSchema`/CSS already closed by Task 5/6 — the
+  only outstanding item is a dedicated Task-4 QA-harness Playwright scenario per family, which this
+  session did not write (real UI-automation effort comparable in size to Task 6's own dedicated
+  browser-certification work; not something to rush inside a 3-batch-capped remediation). Left
+  `NOT YET CERTIFIED` with the disposition formally re-affirmed against current code rather than
+  silently carried over stale — a justified, not unjustified, remaining gap.
+- Ready Template orchestration (Step 1E): re-confirmed unchanged from Task 8's own ruling — no new
+  merchant-facing duplicate authority found or introduced. No code change needed.
+- R4 live cutover (Step 2): `StorefrontLayout.r4_editor_enabled` default flipped `False` -> `True`
+  (migration `0020_r4_editor_enabled_default_true`, `AlterField` + a `RunPython` data migration
+  flipping every existing Store's layout — no important production data to preserve, per the
+  remediation's own instruction; migration history preserved, no squash/reset/rewrite). Dashboard
+  nav (`base_admin.html`) — every primary storefront-appearance nav entry and global-search shortcut
+  now routes to `storefront-builder-r4-editor` instead of the legacy route; a new, clearly
+  secondary-labeled "ادیتور قدیمی (تنظیمات پیشرفته)" entry keeps the legacy editor reachable as the
+  compatibility escape hatch for the Step 1B field gap — one primary editor, not two co-equal ones.
+  `r4_editor.js` extended so the nav's existing `?panel=appearance/header/footer` deep links still
+  auto-open R4's Global Design panel. New tests: `R4FoundationModelTests.test_r4_editor_is_enabled_
+  by_default`, `R4EditorRouteGateTests.test_r4_route_is_reachable_by_default_without_opting_in`,
+  `DashboardNavRoutesToR4Tests`; 2 pre-existing tests in `test_views.py` updated (behavior genuinely
+  changed, not patched to keep a stale contract green).
+- Second legacy-retirement pass (Step 3): **not attempted.** The legacy editor remains genuinely
+  needed as the reachable path for the Step 1B field gap and the still-open Task-9
+  `NOT SAFE TO REMOVE YET` rows this remediation did not close (settings writer for ~23 non-schema
+  section types, granular reset family, discard/restore/history UI) — retiring any of them now would
+  remove real merchant capability, the same principle Task 9 itself established. Deferred, not
+  skipped, to a future task once the remaining Step 1B/1D gaps close.
+- Targeted regression: 330+ tests across `test_r4_vertical_slice`/`test_r4_inspector`/
+  `test_r4_store_appearance_mutations`/`test_phase2b_multiblock_cell_runtime`/
+  `test_phase31_container_cell_builder`/`test_r4_appearance_overrides`/`test_r4_mutation_api`/
+  `test_phase4_task3c_page_appearance`/`test_phase1_appearance_authority`/`test_preset_service`/
+  `test_r4_foundation`/`test_views` — zero new regressions beyond the one pre-existing
+  frozen-baseline failure already documented in `task9_legacy_retirement.md` (re-confirmed
+  reproducing identically on the unmodified `75ede8a` checkpoint via `git stash`). `manage.py check`,
+  `makemigrations --check --dry-run`, `git diff --check` all clean.
+- `legacy_disposition.md` and `family_certification_matrix.md` updated in place (not just this
+  ledger) — every row this remediation actually touched re-verified and given its real current
+  disposition; `pre_task10_r4_cutover.md` created with the full evidence record.
+- Task 10 (full Phase-4 certification, including the 15 families' browser-harness certification and
+  the second legacy-retirement pass deferred above) explicitly **NOT STARTED** in this session.

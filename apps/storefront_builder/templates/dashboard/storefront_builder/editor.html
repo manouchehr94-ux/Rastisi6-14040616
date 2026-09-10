@@ -96,12 +96,15 @@
       <a class="sfb-v3-ghost-btn" href="{% url 'dashboard:storefront-builder-templates' %}">▦ <span>قالب‌های آماده</span></a>
       <a class="sfb-v3-ghost-btn" href="{% url 'dashboard:storefront-builder-preview' %}?page={{ page_type }}" target="_blank" rel="noopener">◎ <span>پیش‌نمایش</span></a>
       {% if layout.r4_editor_enabled %}
-      {# Phase 4 (Task 3A) — R4's real dashboard entry point. Deliberately #}
-      {# gated on the existing r4_editor_enabled per-Store flag (unchanged #}
-      {# authorization: same STOREFRONT_LAYOUT_MANAGE-permitted page already #}
-      {# resolves `layout` — no new query, no weakened authorization) so a #}
-      {# store can be rolled back to the legacy editor during the R4 #}
-      {# migration without any code change, until R4 reaches full parity. #}
+      {# Pre-Task-10 remediation (R4 live cutover) — R4 is now the default #}
+      {# canonical merchant editor (dashboard nav already routes there); #}
+      {# this legacy-editor-side link is a convenience for a merchant who #}
+      {# is on this page directly. Still gated on the existing #}
+      {# r4_editor_enabled per-Store flag (unchanged authorization: same #}
+      {# STOREFRONT_LAYOUT_MANAGE-permitted page already resolves `layout` #}
+      {# — no new query, no weakened authorization), now a non-blocking #}
+      {# compatibility flag rather than a rollout gate — only False for a #}
+      {# Store explicitly pinned back to the legacy editor. #}
       <a class="sfb-v3-ghost-btn" href="{% url 'dashboard:storefront-builder-r4-editor' %}?page={{ page_type }}">✦ <span>ادیتور جدید (R4)</span></a>
       {% endif %}
       <form method="post" action="{% url 'dashboard:storefront-builder-publish' %}" class="sfb-prototype-publish-form"

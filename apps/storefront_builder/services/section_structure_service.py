@@ -401,3 +401,48 @@ def move_section(*, draft, section_id: int, direction: str) -> None:
 
     StorefrontSection.objects.filter(pk=section.pk).update(order=sim_source.order)
     StorefrontSection.objects.filter(pk=target_section.pk).update(order=sim_target.order)
+
+
+def move_section_to_cell(*, draft, section_id: int, cell_id: int, at_index: int | None = None) -> StorefrontSection:
+    """Pre-Task-10 remediation (composition parity closure) — arbitrary/
+    non-adjacent valid section placement, the gap Task 7's own B1 audit
+    (item #5) explicitly left open: ``move_section`` above only ever swaps
+    a section with its immediately-ADJACENT slot in the structure
+    projection. This is the same "place section X into cell Y at index Z"
+    primitive ``add_section_to_cell`` already established for a brand-new
+    section (Task 7 final-review fix, IMPORTANT-2), applied here to an
+    EXISTING section instead — reusing the exact same canonical
+    ``container_service.move_block`` the adjacent-swap path above already
+    calls, never a second placement authority.
+
+    A locked source/target Container, or a legacy row member (whose linear
+    adjacency the row-compat system depends on — the same guard
+    ``remove_section`` already enforces), is rejected rather than silently
+    breaking that other system."""
+    section = _scoped_section(draft, section_id)
+    if section.is_locked:
+        raise SectionStructureError("section_locked")
+    if row_service.is_row_member(section):
+        raise SectionStructureError("row_member")
+
+    page = section.page
+    container_service.ensure_page_containers(page)
+    section.refresh_from_db()
+
+    source_cell = find_placement_cell(section)
+    if source_cell is not None and source_cell.container.is_locked:
+        raise SectionStructureError("container_locked")
+
+    target_cell = _scoped_cell(draft, cell_id)
+    if target_cell.container.page_id != page.pk:
+        raise SectionStructureError("cell_not_found")
+    if target_cell.container.is_locked:
+        raise SectionStructureError("target_container_locked")
+
+    try:
+        container_service.move_block(section, target_cell, at_index=at_index)
+    except container_service.ContainerLayoutError as exc:
+        raise SectionStructureError("invalid_placement") from exc
+    StorefrontSection.objects.filter(pk=section.pk).update(order=_next_page_order(page))
+    section.refresh_from_db()
+    return section

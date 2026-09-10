@@ -7,6 +7,7 @@ from django.urls import reverse
 from apps.storefront_builder import layout_preset_registry
 from apps.storefront_builder.models import (
     APPEARANCE_CONFIG_DEFAULTS,
+    FOOTER_TOGGLE_FIELDS,
     StorefrontEditHistoryEntry,
     StorefrontLayoutVersion,
 )
@@ -443,6 +444,157 @@ class LegacySelectorManifestSynchronizationTests(R4StoreAppearanceMutationTestCa
         })
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self._manifest()["selections"]["motion"], "motion.none.v1")
+
+
+class FieldParityUpdateTests(R4StoreAppearanceMutationTestCase):
+    """Pre-Task-10 remediation — the widened ``appearance.update``/
+    ``header.update``/``footer.update`` allowlists now cover every REQUIRED
+    EXISTING CAPABILITY field the field-by-field parity matrix
+    (docs/qa_evidence/.../task9_legacy_retirement.md) found missing."""
+
+    def test_appearance_update_sets_structural_and_image_fields(self):
+        response = self._post_mutation({
+            "type": "appearance.update",
+            "patch": {
+                "radius": 4,
+                "button_radius": 2,
+                "density": "compact",
+                "image_fit": "contain",
+                "image_hover": "none",
+                "card_image_crossfade": True,
+                "card_image_zoom": False,
+                "content_width": 1200,
+                "grid_density": 3,
+                "card_shadow": "none",
+                "card_hover": "lift",
+                "hero_style": "wide",
+            },
+        })
+        self.assertEqual(response.status_code, 200)
+        self.draft.refresh_from_db()
+        config = self.draft.effective_appearance_config()
+        self.assertEqual(config["radius"], 4)
+        self.assertEqual(config["button_radius"], 2)
+        self.assertEqual(config["density"], "compact")
+        self.assertEqual(config["image_fit"], "contain")
+        self.assertEqual(config["image_hover"], "none")
+        self.assertTrue(config["card_image_crossfade"])
+        self.assertFalse(config["card_image_zoom"])
+        self.assertEqual(config["content_width"], 1200)
+        self.assertEqual(config["grid_density"], 3)
+        self.assertEqual(config["card_shadow"], "none")
+        self.assertEqual(config["card_hover"], "lift")
+        self.assertEqual(config["hero_style"], "wide")
+
+    def test_appearance_update_sets_a_color_override(self):
+        response = self._post_mutation({
+            "type": "appearance.update",
+            "patch": {"color_overrides": {"primary": "#123456"}},
+        })
+        self.assertEqual(response.status_code, 200)
+        self.draft.refresh_from_db()
+        config = self.draft.effective_appearance_config()
+        self.assertEqual(config["color_overrides"].get("primary"), "#123456")
+        self.assertTrue(config["color_overrides_customized"])
+
+    def test_appearance_update_color_override_matching_base_is_dropped_not_stored(self):
+        from apps.storefront_builder import appearance_registry
+
+        base = appearance_registry.resolve_colors(self.draft.effective_appearance_config())
+        response = self._post_mutation({
+            "type": "appearance.update",
+            "patch": {"color_overrides": {"primary": base["primary"]}},
+        })
+        self.assertEqual(response.status_code, 200)
+        self.draft.refresh_from_db()
+        self.assertNotIn("primary", self.draft.effective_appearance_config()["color_overrides"])
+
+    def test_appearance_update_sets_a_theme_override(self):
+        response = self._post_mutation({
+            "type": "appearance.update",
+            "patch": {"theme_overrides": {"header_bg": "#000000"}},
+        })
+        self.assertEqual(response.status_code, 200)
+        self.draft.refresh_from_db()
+        self.assertEqual(
+            self.draft.effective_appearance_config()["theme_overrides"].get("header_bg"),
+            "#000000",
+        )
+
+    def test_appearance_update_unknown_key_rejected(self):
+        response = self._post_mutation({
+            "type": "appearance.update",
+            "patch": {"not_a_real_field": "x"},
+        })
+        self.assertEqual(response.status_code, 400)
+
+    def test_header_update_sets_toggles_and_announcement_text(self):
+        response = self._post_mutation({
+            "type": "header.update",
+            "patch": {
+                "show_search": False,
+                "show_account": False,
+                "show_wishlist": False,
+                "sticky": False,
+                "announcement_enabled": False,
+                "announcement_text": "تخفیف ویژه",
+                "announcement_show_phone": False,
+            },
+        })
+        self.assertEqual(response.status_code, 200)
+        self.draft.refresh_from_db()
+        config = self.draft.effective_header_config()
+        self.assertFalse(config["show_search"])
+        self.assertFalse(config["show_account"])
+        self.assertFalse(config["show_wishlist"])
+        self.assertFalse(config["sticky"])
+        self.assertFalse(config["announcement_enabled"])
+        self.assertEqual(config["announcement_text"], "تخفیف ویژه")
+        self.assertFalse(config["announcement_show_phone"])
+
+    def test_header_update_still_rejects_disabling_cart(self):
+        response = self._post_mutation({
+            "type": "header.update",
+            "patch": {"show_cart": False},
+        })
+        self.assertEqual(response.status_code, 400)
+
+    def test_header_update_unknown_key_rejected(self):
+        response = self._post_mutation({
+            "type": "header.update",
+            "patch": {"extra_blocks": []},
+        })
+        self.assertEqual(response.status_code, 400)
+
+    def test_footer_update_sets_toggles(self):
+        response = self._post_mutation({
+            "type": "footer.update",
+            "patch": {
+                "show_about": False,
+                "show_contact": False,
+                "show_social": False,
+            },
+        })
+        self.assertEqual(response.status_code, 200)
+        self.draft.refresh_from_db()
+        config = self.draft.effective_footer_config()
+        self.assertFalse(config["show_about"])
+        self.assertFalse(config["show_contact"])
+        self.assertFalse(config["show_social"])
+
+    def test_footer_update_rejects_disabling_every_section(self):
+        response = self._post_mutation({
+            "type": "footer.update",
+            "patch": {field: False for field in FOOTER_TOGGLE_FIELDS},
+        })
+        self.assertEqual(response.status_code, 400)
+
+    def test_footer_update_unknown_key_rejected(self):
+        response = self._post_mutation({
+            "type": "footer.update",
+            "patch": {"extra_blocks": []},
+        })
+        self.assertEqual(response.status_code, 400)
 
 
 class TemplateUndoRedoIdentityTests(R4StoreAppearanceMutationTestCase):

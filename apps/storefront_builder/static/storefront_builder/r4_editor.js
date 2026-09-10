@@ -639,6 +639,24 @@ window.RastiSiR4 = {
         if (emptyCellSelect) emptyCellSelect.value = '';
         return;
       }
+      // Pre-Task-10 remediation (composition parity closure) — move an
+      // EXISTING section into any empty Cell (not just an adjacent swap),
+      // same delegated-click shape as the empty-cell "add" button above.
+      var moveToCellBtn = evt.target.closest('[data-r4-structure-move-to-cell]');
+      if (moveToCellBtn) {
+        var moveRow = moveToCellBtn.closest('[data-r4-structure-row]');
+        if (!moveRow) return;
+        var moveSelect = moveRow.querySelector('[data-r4-structure-move-to-cell-select]');
+        var targetCellId = moveSelect ? moveSelect.value : '';
+        if (!targetCellId) return;
+        R4.enqueueStructuralMutation({
+          type: 'section.move_to_cell',
+          section_id: Number(moveRow.getAttribute('data-r4-structure-section-id')),
+          cell_id: Number(targetCellId),
+        });
+        if (moveSelect) moveSelect.value = '';
+        return;
+      }
       var label = evt.target.closest('.r4-structure-label');
       if (label) {
         var labelRow = label.closest('[data-r4-structure-row]');
@@ -655,14 +673,32 @@ window.RastiSiR4 = {
     // refreshStructureAndPreview() replaces the panel's innerHTML.
     structurePanel.addEventListener('change', function (evt) {
       var layoutSelect = evt.target.closest('[data-r4-structure-layout-select]');
-      if (!layoutSelect) return;
-      var containerRow = layoutSelect.closest('[data-r4-structure-container-row]');
-      if (!containerRow) return;
-      R4.enqueueStructuralMutation({
-        type: 'container.change_layout',
-        container_id: Number(containerRow.getAttribute('data-r4-structure-container-id')),
-        layout_key: layoutSelect.value,
-      });
+      if (layoutSelect) {
+        var containerRow = layoutSelect.closest('[data-r4-structure-container-row]');
+        if (!containerRow) return;
+        R4.enqueueStructuralMutation({
+          type: 'container.change_layout',
+          container_id: Number(containerRow.getAttribute('data-r4-structure-container-id')),
+          layout_key: layoutSelect.value,
+        });
+        return;
+      }
+      // Pre-Task-10 remediation (composition parity closure) — one Container
+      // settings field change posts ONE key, same shape as the Global
+      // Design panel's per-field change handler above.
+      var settingsField = evt.target.closest('[data-r4-container-settings-field]');
+      if (settingsField) {
+        var settingsRow = settingsField.closest('[data-r4-structure-container-row]');
+        if (!settingsRow) return;
+        var settingsKey = settingsField.getAttribute('data-r4-container-settings-field');
+        var settingsPatch = {};
+        settingsPatch[settingsKey] = settingsField.value;
+        R4.enqueueStructuralMutation({
+          type: 'container.update_settings',
+          container_id: Number(settingsRow.getAttribute('data-r4-structure-container-id')),
+          patch: settingsPatch,
+        });
+      }
     });
   }
 
@@ -1152,10 +1188,31 @@ window.RastiSiR4 = {
       var group = field.closest('[data-r4-global-mutation]');
       if (!group) return;
       var key = field.getAttribute('data-r4-global-field');
-      var value = field.value;
+      // Pre-Task-10 remediation — a checkbox's own ``.value`` is always the
+      // string "on" regardless of checked state; every new boolean toggle
+      // field (header/footer show_*, sticky, announcement_enabled/
+      // show_phone, card_image_crossfade/zoom) needs the real ``.checked``
+      // state instead, exactly like the section Inspector's own generic
+      // boolean field handling.
+      var value = field.type === 'checkbox' ? field.checked : field.value;
       if (key === 'palette_slug' && value === '') value = null;
       var patch = {};
-      patch[key] = value;
+      // Pre-Task-10 remediation — color_overrides/theme_overrides are
+      // compound (dict-shaped) appearance_config keys: one color/theme
+      // input still fires exactly one change event, but must post a
+      // ONE-KEY PARTIAL patch of the dict (never the whole 8-key set),
+      // matching ``_apply_appearance_update``'s merge-onto-current
+      // semantics server-side.
+      if (key === 'color_overrides' || key === 'theme_overrides') {
+        var subKeyAttr = key === 'color_overrides' ? 'data-r4-global-color-key' : 'data-r4-global-theme-key';
+        var subKey = field.getAttribute(subKeyAttr);
+        if (!subKey) return;
+        var nested = {};
+        nested[subKey] = value;
+        patch[key] = nested;
+      } else {
+        patch[key] = value;
+      }
       R4.enqueueMutation({
         type: group.getAttribute('data-r4-global-mutation'),
         patch: patch,
@@ -1322,6 +1379,19 @@ window.RastiSiR4 = {
         if (result && result.ok) window.location.reload();
       });
     });
+  }
+
+  // Pre-Task-10 remediation (R4 live cutover) — the dashboard nav's
+  // ``?panel=appearance``/``?panel=header``/``?panel=footer`` deep links
+  // (base_admin.html, unchanged by the cutover) now point at R4 instead of
+  // the legacy editor; open the Global Design panel automatically so that
+  // link still lands the merchant on the right screen instead of the bare
+  // Preview.
+  if (globalDesignPanel) {
+    var deepLinkPanel = new URLSearchParams(window.location.search).get('panel');
+    if (deepLinkPanel === 'appearance' || deepLinkPanel === 'header' || deepLinkPanel === 'footer') {
+      openGlobalDesign();
+    }
   }
 
 })();

@@ -23,7 +23,13 @@ from . import (
     section_registry,
     variant_contract,
 )
-from .models import StorefrontLayoutVersion, StorefrontPage, StorefrontSection
+from .models import (
+    FOOTER_TOGGLE_FIELDS,
+    HEADER_TOGGLE_FIELDS,
+    StorefrontLayoutVersion,
+    StorefrontPage,
+    StorefrontSection,
+)
 from .services import (
     container_service,
     edit_history_service,
@@ -211,16 +217,71 @@ def _resolve_selected_items(store, kind, ordered_ids):
     return [found[value] for value in ordered_ids if value in found]
 
 
+#: Pre-Task-10 remediation — the same Persian labels the legacy Appearance
+#: form uses (``storefront_appearance_editor``'s ``color_field_labels``/
+#: ``theme_field_labels``), reused verbatim rather than re-invented, so a
+#: merchant sees the identical wording in either editor.
+_COLOR_FIELD_LABELS_FA = (
+    ("primary", "رنگ اصلی و دکمه‌ها"),
+    ("secondary", "رنگ مکمل"),
+    ("accent", "رنگ تأکیدی و تخفیف"),
+    ("background", "پس‌زمینه کل سایت"),
+    ("surface", "سطح عمومی و پنل‌ها"),
+    ("text", "رنگ متن اصلی کل سایت"),
+    ("muted", "متن کم‌رنگ"),
+    ("border", "خطوط و حاشیه‌ها"),
+)
+_THEME_FIELD_LABELS_FA = (
+    ("header_bg", "پس‌زمینه هدر"),
+    ("header_text", "متن هدر"),
+    ("nav_bg", "پس‌زمینه منو"),
+    ("nav_text", "متن منو"),
+    ("card_bg", "پس‌زمینه کارت محصول"),
+    ("footer_bg", "پس‌زمینه فوتر"),
+    ("footer_text", "متن فوتر"),
+    ("price", "رنگ قیمت"),
+)
+_HEADER_TOGGLE_LABELS_FA = {
+    "show_search": "نمایش جستجو",
+    "show_account": "نمایش حساب کاربری",
+    "show_cart": "نمایش سبد خرید",
+    "show_wishlist": "نمایش علاقه‌مندی‌ها",
+    "sticky": "هدر چسبان",
+    "announcement_enabled": "نمایش نوار اعلان",
+}
+_FOOTER_TOGGLE_LABELS_FA = {
+    "show_about": "درباره فروشگاه",
+    "show_contact": "تماس با ما",
+    "show_quick_links": "لینک‌های مفید",
+    "show_categories": "دسته‌بندی‌ها",
+    "show_social": "شبکه‌های اجتماعی",
+    "show_trust_badges": "نشان‌های اعتماد",
+    "show_payment_logos": "لوگوهای پرداخت",
+    "show_newsletter": "خبرنامه",
+    "show_copyright": "کپی‌رایت",
+}
+
+
 def _build_global_design_context(draft: StorefrontLayoutVersion) -> dict:
     """R4 Task 11 (Section 23) — the Global Design panel's ENTIRE read
     projection: server-authoritative current config + registry-driven
     choice lists. No DB-backed duplicate design-option table; Templates/
     Palettes come from appearance_registry, Header/Footer variants from
-    global_region_registry — never a hardcoded list here or in JS/HTML."""
+    global_region_registry — never a hardcoded list here or in JS/HTML.
+
+    Pre-Task-10 remediation — extended with the field-parity closure's
+    REQUIRED EXISTING CAPABILITY fields (colors/theme overrides, structural
+    appearance fields, header/footer toggles) so the Global Design panel can
+    render controls for them; resolved current colors reuse the exact same
+    ``appearance_registry.resolve_colors``/``resolve_theme_roles`` the public
+    storefront render already uses, never a second color-resolution path."""
+    appearance = draft.effective_appearance_config()
+    header = draft.effective_header_config()
+    footer = draft.effective_footer_config()
     return {
-        "appearance": draft.effective_appearance_config(),
-        "header": draft.effective_header_config(),
-        "footer": draft.effective_footer_config(),
+        "appearance": appearance,
+        "header": header,
+        "footer": footer,
         "templates": [
             {"slug": t.slug, "label_fa": t.name_fa, "group_fa": t.group_fa}
             for t in appearance_registry.list_templates()
@@ -243,6 +304,24 @@ def _build_global_design_context(draft: StorefrontLayoutVersion) -> dict:
         "footer_variants": [
             {"key": v.key, "label_fa": v.label_fa}
             for v in global_region_registry.list_global_variants(global_region_registry.GLOBAL_FOOTER_REGION)
+        ],
+        "density_choices": appearance_registry.DENSITY_CHOICES,
+        "image_fit_choices": appearance_registry.IMAGE_FIT_CHOICES,
+        "image_hover_choices": appearance_registry.IMAGE_HOVER_CHOICES,
+        "site_content_width_choices": appearance_registry.SITE_CONTENT_WIDTH_CHOICES,
+        "site_grid_density_choices": appearance_registry.SITE_GRID_DENSITY_CHOICES,
+        "site_card_shadow_choices": appearance_registry.SITE_CARD_SHADOW_CHOICES,
+        "site_card_hover_choices": appearance_registry.SITE_CARD_HOVER_CHOICES,
+        "site_hero_style_choices": appearance_registry.SITE_HERO_STYLE_CHOICES,
+        "resolved_colors": appearance_registry.resolve_colors(appearance),
+        "resolved_theme_roles": appearance_registry.resolve_theme_roles(appearance),
+        "color_field_labels": _COLOR_FIELD_LABELS_FA,
+        "theme_field_labels": _THEME_FIELD_LABELS_FA,
+        "header_toggle_fields": [
+            (key, _HEADER_TOGGLE_LABELS_FA[key]) for key in HEADER_TOGGLE_FIELDS
+        ],
+        "footer_toggle_fields": [
+            (key, _FOOTER_TOGGLE_LABELS_FA[key]) for key in FOOTER_TOGGLE_FIELDS
         ],
     }
 
@@ -301,6 +380,15 @@ def storefront_r4_editor(request):
             "container_id": container_obj.pk if container_obj is not None else None,
             "container_layout_key": container_obj.layout_key if container_obj is not None else None,
             "container_is_locked": bool(container_obj.is_locked) if container_obj is not None else False,
+            # Pre-Task-10 remediation (composition parity closure) — the
+            # Structure panel's per-Container settings controls read
+            # projection, reusing the exact same
+            # ``container_service.effective_container_settings`` the legacy
+            # ``storefront_container_settings`` view already uses.
+            "container_settings": (
+                container_service.effective_container_settings(container_obj.settings)
+                if container_obj is not None else None
+            ),
         })
 
     # The safe "Add Section" library projection: only definitions allowed on
