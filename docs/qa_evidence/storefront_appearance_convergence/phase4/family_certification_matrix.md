@@ -14,9 +14,9 @@ ResourceSource · browser certification (Task 4 harness) · status.
 | `hero_banner` | MIGRATE | **yes (Task 5 Group A)** | yes (pre-existing) | no | no | NOT YET CERTIFIED |
 | `fashion_lifestyle_hero` | HOME-ONLY | n/a (Home-only) | no | no | no | NO ACTION REQUIRED |
 | `image_slider` | MIGRATE | **yes (Task 5 Group A)** | **yes (Task 6 Group A)** | no | no | NOT YET CERTIFIED |
-| `single_banner` | MIGRATE | **yes (Task 5 Group B)** | **no — explicit FIXED/STATIC disposition (Task 6 Group C): no settings-driven field at all** | no | no | NOT YET CERTIFIED |
-| `multi_banner` | MIGRATE | **yes (Task 5 Group B)** | **yes (Task 6 Group C — real closed-enum validator + schema, replacing `_passthrough_dict`)** | no | no | NOT YET CERTIFIED |
-| `category_grid` | MIGRATE | **yes (Task 5 Group C, all 11 display_modes)** | **yes (Task 6 Group C)** | **yes (Task 6 — category kind wired into the shared Resource Picker)** | no | NOT YET CERTIFIED |
+| `single_banner` | MIGRATE | **yes (Task 5 Group B)** | **no — explicit FIXED/STATIC disposition (Task 6 Group C): no settings-driven field at all** | no | **yes (Task 6 A1 — presence/rendering; Task 7 Batch 3 — R4 Inspector now links to its media management screen instead of 404ing, since it has no schema)** | CERTIFIED |
+| `multi_banner` | MIGRATE | **yes (Task 5 Group B)** | **yes (Task 6 Group C — real closed-enum validator + schema, replacing `_passthrough_dict`)** | no | **yes (Task 6 A1 — `layout_variant` edit + real `.promo-grid--promo-4` DOM assertion, backed by real fixture banners)** | CERTIFIED |
+| `category_grid` | MIGRATE | **yes (Task 5 Group C, all 11 display_modes)** | **yes (Task 6 Group C)** | **yes (Task 6 — category kind wired into the shared Resource Picker)** | **yes (Task 6 A1 — `item_limit` edit, persisted-value proof)** | CERTIFIED |
 | `featured_products` | MARKETING-ALIAS | n/a | no | no | no | DOCUMENTED AS ALIAS |
 | `newest_products` | MIGRATE | already safe | **yes (Task 6 Group B — item_limit)** | no | no | NOT YET CERTIFIED |
 | `best_sellers` | MIGRATE | already safe | **yes (Task 6 Group B — item_limit)** | no | no | NOT YET CERTIFIED |
@@ -26,7 +26,7 @@ ResourceSource · browser certification (Task 4 harness) · status.
 | `collection_tiles` | CERTIFY-ONLY | already safe | yes | yes | **yes (Phase-3, 36/36)** | CERTIFIED (Phase 3) — regression sentinel |
 | `promo_cards` | MIGRATE | **yes (Task 5 Group D — reuses Group C1 CSS)** | **yes (Task 6 Group B — item_limit)** | no | no | NOT YET CERTIFIED |
 | `rich_text` | MIGRATE | already safe (inline) | yes (legacy) | no | no | NOT YET CERTIFIED |
-| `image_text` | MIGRATE | **yes (Task 5 Group D)** | **yes (Task 6 Group C)** | no | no | NOT YET CERTIFIED |
+| `image_text` | MIGRATE | **yes (Task 5 Group D)** | **yes (Task 6 Group C)** | no | **yes (Task 6 A1 — `image_position` edit + real `row-reverse` CSS assertion)** | CERTIFIED |
 | `blog_posts` | MIGRATE | **yes (Task 5 Group D)** | **yes (Task 6 Group C)** | no | no | NOT YET CERTIFIED |
 | `product_section` | MIGRATE | **yes (Task 5 Group A)** | yes | yes | no | NOT YET CERTIFIED |
 | `catalog_product_wall` | HOME-ONLY | n/a | no | no | no | NO ACTION REQUIRED |
@@ -35,8 +35,8 @@ ResourceSource · browser certification (Task 4 harness) · status.
 | `faq` | MIGRATE | **yes (Task 5 Group E)** | **yes (Task 6 Group D — `repeater` field type; browser-verified end to end)** | no | no | NOT YET CERTIFIED |
 | `testimonials` | MIGRATE | **yes (Task 5 Group E)** | **yes (Task 6 Group D — `repeater` field type)** | no | no | NOT YET CERTIFIED |
 | `video_section` | MIGRATE | **yes (Task 5 Group E)** | **yes (Task 6 Group D)** | no | no | NOT YET CERTIFIED |
-| `story_rail` | MIGRATE | already safe | **n/a — no section-level settings to schematize (media-only family, `_passthrough_dict`/`_empty_defaults`); real gap was the media-form/model rework (Task 6), now closed** | no | no | **media-form/model rework CLOSED (Task 6) — real `AttributeError` on every story-item edit fixed, plus a duplicate-`title`-input data-loss bug and a missing-thumbnail bug found by independent review, also fixed; 56/56 targeted GREEN**; Browser cert still pending (Batch 3) |
-| `newsletter` | MIGRATE | already safe (inline) | **yes (Task 6 Group D)** | no | no | NOT YET CERTIFIED |
+| `story_rail` | MIGRATE | already safe | **n/a — no section-level settings to schematize (media-only family, `_passthrough_dict`/`_empty_defaults`); real gap was the media-form/model rework (Task 6), now closed** | no | **yes (Task 6 A1 — real `StoryRailItem` fixture + `.story-item .story-label` text assertion; Task 7 Batch 3 — R4 Inspector now links to its media management screen instead of 404ing, since it has no schema)** | **CERTIFIED — media-form/model rework CLOSED (Task 6): real `AttributeError` on every story-item edit fixed, plus a duplicate-`title`-input data-loss bug and a missing-thumbnail bug found by independent review, also fixed; 56/56 targeted GREEN** |
+| `newsletter` | MIGRATE | already safe (inline) | **yes (Task 6 Group D)** | no | **yes (Task 6 A1 — `title` edit + real `<h2>` text assertion)** | CERTIFIED |
 | `announcement_bar` | LEGACY-RETIRE | n/a | no | no | no | RETIREMENT CANDIDATE (see legacy_disposition.md) |
 | `product_main` | CONTEXT-AWARE-DOMAIN-OWNED | n/a | no | no | no | SAFE BY CONSTRUCTION |
 | `product_description` | CONTEXT-AWARE-DOMAIN-OWNED | n/a | no | no | no | SAFE BY CONSTRUCTION |

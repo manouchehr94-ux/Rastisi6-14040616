@@ -28,6 +28,7 @@ from .settings_schema import (
     SettingsSchema,
     validate_appearance_overrides,
 )
+from .variant_contract import VariantDefinition, validate_variant_selection, validate_variants
 
 #: Task 6 (final-review fix, C1/I1) — every internal, server-owned
 #: explicit-local-override marker ``_with_appearance_overrides`` must carry
@@ -39,7 +40,6 @@ _TRUSTED_APPEARANCE_OVERRIDE_MARKER_KEYS = (
     VARIANT_EXPLICIT_OVERRIDE_KEY,
     CARD_STYLE_EXPLICIT_OVERRIDE_KEY,
 )
-from .variant_contract import VariantDefinition, validate_variant_selection, validate_variants
 
 #: شش نوعِ صفحه — دقیقاً همان رشته‌های ``StorefrontPage.PageType.values``
 #: (``apps/storefront_builder/models.py``)، اینجا به‌شکلِ ثابتِ رشته‌ای
@@ -1215,6 +1215,25 @@ def _with_spacing(section_key: str, validate_fn, default_fn):
 #: R4 Task 7 — Phase 1 slice: only ``hero_banner`` gets a local typography
 #: override. An explicit allowlist, not a default-for-all-types — the same
 #: pattern as ``DESTINATION_AWARE_SECTION_KEYS``/``MOTION_AWARE_SECTION_KEYS``.
+#:
+#: Task 6 (final-review fix, C1/I1) — every ``product_view``/``card``
+#: TEMPORARY-ADAPTER family carrier needs the SAME allowlist membership as
+#: hero_banner/brand_carousel/collection_tiles (unioned in via
+#: ``CARD_AWARE_SECTION_KEYS``, which already includes ``product_section``
+#: — listing it again here would be redundant), or its own explicit-local
+#: marker (``variant_explicit`` for ``product_section``,
+#: ``card_style_explicit`` for every ``CARD_AWARE_SECTION_KEYS`` member) is
+#: silently dropped by ``validate_settings`` on the very next unrelated
+#: save — reproduced empirically by the independent Task-6 reviewer for
+#: both.
+#:
+#: Membership here is only half the contract: every member must ALSO have
+#: ``preserve_unmanaged=True`` on its ``SettingsSchema`` (all current
+#: members do) — that is what lets ``clean_schema_patch`` carry the
+#: undeclared ``appearance_overrides`` key into the merged patch the R4
+#: mutation path validates; a future member with ``preserve_unmanaged=False``
+#: would silently lose its marker on the R4 path before
+#: ``_with_appearance_overrides`` below ever ran.
 APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS = frozenset({
     "hero_banner",
     # Phase 3 (V01) — brand_carousel joins the allowlist so its validator
@@ -1228,15 +1247,6 @@ APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS = frozenset({
     # explicit-local-variant preservation contract for tile_style.
     "collection_tiles",
 } | CARD_AWARE_SECTION_KEYS)
-#: Task 6 (final-review fix, C1/I1) — every ``product_view``/``card``
-#: TEMPORARY-ADAPTER family carrier needs the SAME allowlist membership as
-#: hero_banner/brand_carousel/collection_tiles, or its own explicit-local
-#: marker (``variant_explicit`` for ``product_section``,
-#: ``card_style_explicit`` for every ``CARD_AWARE_SECTION_KEYS`` member) is
-#: silently dropped by ``validate_settings`` on the very next unrelated
-#: save — reproduced empirically by the independent Task-6 reviewer for
-#: both. ``CARD_AWARE_SECTION_KEYS`` already includes ``product_section``,
-#: so listing it again here would be redundant.
 
 
 def _with_appearance_overrides(section_key: str, validate_fn, default_fn):

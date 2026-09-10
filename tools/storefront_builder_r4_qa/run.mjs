@@ -2643,21 +2643,30 @@ async function phase3Task6FamilyGate() {
   assert(typeof fx.story_rail_section_id === 'number', 'task6_families.story_rail_section_id missing');
   assert(typeof fx.single_banner_section_id === 'number', 'task6_families.single_banner_section_id missing');
 
-  // Task 6 (final-review fix, M3) — this gate ran after
+  // Task 6 (final-review fix, M3; corrected by the SECOND final-review,
+  // IMPORTANT-1/MINOR-1) — this gate ran after
   // ``finalInstrumentationAssertions`` (see ``main()``'s scenario order),
   // so a console/page/HTTP error caused by anything below it was never
-  // checked by anything. Snapshot the same instrumentation arrays that
-  // scenario checks, then assert nothing NEW appeared by the end of this
-  // gate — mirroring (at gate scope, not global scope) the same filters
-  // ``finalInstrumentationAssertions`` already applies.
+  // checked by anything. Snapshot the SAME FILTERED ARRAYS (not just their
+  // lengths — a length-only snapshot makes the failure message below slice
+  // the wrong, unfiltered array at a filtered-count offset) that
+  // ``finalInstrumentationAssertions`` itself checks, using the EXACT SAME
+  // filter predicates (``http_error_responses`` was missing
+  // ``isExpectedBrokenImageNoise``/``isExpectedStale409Response`` in the
+  // first version of this guard — the Collection gate's own deliberately
+  // broken-image collection tile, placed on Home alongside this gate,
+  // otherwise makes every page reload below record a new "unexpected" 404
+  // and fail this gate spuriously), then assert nothing NEW appeared.
   const consoleErrorsBefore = result.console_errors.filter(
-    (e) => !FAVICON_URL_PATTERN.test(e?.location?.url || '') && !isExpectedBrokenImageNoise(e?.location?.url),
-  ).length;
-  const pageErrorsBefore = result.page_errors.length;
+    (e) => !isExpectedStaleConflictNoise(e) && !FAVICON_URL_PATTERN.test(e?.location?.url || '') && !isExpectedBrokenImageNoise(e?.location?.url),
+  );
+  const pageErrorsBefore = result.page_errors.slice();
   const requestFailuresBefore = result.request_failures.filter(
     (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url),
-  ).length;
-  const httpErrorResponsesBefore = result.http_error_responses.length;
+  );
+  const httpErrorResponsesBefore = result.http_error_responses.filter(
+    (e) => !isExpectedStale409Response(e) && !isExpectedBrokenImageNoise(e.url),
+  );
 
   // A known, clean starting point regardless of what phase3BrandGate left
   // the shared admin `page` on (that gate operates on separate public-page
@@ -2689,26 +2698,29 @@ async function phase3Task6FamilyGate() {
   await closeInspectorIfOpen();
 
   const consoleErrorsAfter = result.console_errors.filter(
-    (e) => !FAVICON_URL_PATTERN.test(e?.location?.url || '') && !isExpectedBrokenImageNoise(e?.location?.url),
-  ).length;
-  assert(
-    consoleErrorsAfter === consoleErrorsBefore,
-    `phase3-task6-family-gate: unexpected new console errors: ${JSON.stringify(result.console_errors.slice(consoleErrorsBefore))}`,
+    (e) => !isExpectedStaleConflictNoise(e) && !FAVICON_URL_PATTERN.test(e?.location?.url || '') && !isExpectedBrokenImageNoise(e?.location?.url),
   );
   assert(
-    result.page_errors.length === pageErrorsBefore,
-    `phase3-task6-family-gate: unexpected new page errors: ${JSON.stringify(result.page_errors.slice(pageErrorsBefore))}`,
+    consoleErrorsAfter.length === consoleErrorsBefore.length,
+    `phase3-task6-family-gate: unexpected new console errors: ${JSON.stringify(consoleErrorsAfter.slice(consoleErrorsBefore.length))}`,
+  );
+  assert(
+    result.page_errors.length === pageErrorsBefore.length,
+    `phase3-task6-family-gate: unexpected new page errors: ${JSON.stringify(result.page_errors.slice(pageErrorsBefore.length))}`,
   );
   const requestFailuresAfter = result.request_failures.filter(
     (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url),
-  ).length;
-  assert(
-    requestFailuresAfter === requestFailuresBefore,
-    `phase3-task6-family-gate: unexpected new failed requests: ${JSON.stringify(result.request_failures.slice(requestFailuresBefore))}`,
   );
   assert(
-    result.http_error_responses.length === httpErrorResponsesBefore,
-    `phase3-task6-family-gate: unexpected new HTTP error responses: ${JSON.stringify(result.http_error_responses.slice(httpErrorResponsesBefore))}`,
+    requestFailuresAfter.length === requestFailuresBefore.length,
+    `phase3-task6-family-gate: unexpected new failed requests: ${JSON.stringify(requestFailuresAfter.slice(requestFailuresBefore.length))}`,
+  );
+  const httpErrorResponsesAfter = result.http_error_responses.filter(
+    (e) => !isExpectedStale409Response(e) && !isExpectedBrokenImageNoise(e.url),
+  );
+  assert(
+    httpErrorResponsesAfter.length === httpErrorResponsesBefore.length,
+    `phase3-task6-family-gate: unexpected new HTTP error responses: ${JSON.stringify(httpErrorResponsesAfter.slice(httpErrorResponsesBefore.length))}`,
   );
 }
 

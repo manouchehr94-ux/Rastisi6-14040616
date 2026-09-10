@@ -263,4 +263,91 @@ commit-by-commit summary.
   Matrix corrected: `card`'s CERTIFIED status now reflects the actual (fixed) contract rather than
   the disproven claim; `story_rail`'s CLOSED status now also covers the two defects the review
   found in that same commit. No second review round required — every finding was concrete and
-  fixed; no new finding surfaced during fix verification. **Task 6 is now CLOSED.**
+  fixed; no new finding surfaced during fix verification.
+
+- **A1/A2 — genuine browser certification for 6 more Task-6 families** (continuation session,
+  2026-09-10). The prior session's "Task 6 is now CLOSED" note above was this session's own
+  starting state, not yet meeting the stricter closure bar this session's own instructions set (a
+  second, harder round of browser certification plus one more independent review). Extended the
+  EXISTING Task-4 harness (never a second harness): `category_grid`/`multi_banner`/`image_text`/
+  `newsletter` each get one representative Inspector field edit with a real persisted-value and/or
+  DOM assertion (one per remaining SettingsSchema field TYPE, not one registration per family);
+  `story_rail`/`single_banner` get a presence-through-Preview proof matching their actual FIXED/
+  STATIC or media-only disposition. 6 iterations of real debugging against actual template
+  rendering behavior (advanced-tab activation, `change`-not-`input` event firing, real
+  `ResourceSource` shape, empty-banner-pool rendering) — see `task6_family_convergence.md` for the
+  full reasoning per family. Additive-only: `git show --stat` on the commit shows zero deleted
+  lines. Committed and pushed as `d8489c4`.
+
+- **A3 — second independent Task-6 review** (continuation session, 2026-09-10). A second fresh
+  isolated-worktree reviewer, reviewing `d8489c4` for (a) whether the first reviewer's four fixes
+  still hold and (b) whether the new harness commit is sound. Verdict: CRITICAL 1, IMPORTANT 2,
+  MINOR 3 — the `card_style_explicit`/`variant_explicit` markers were durable across exactly ONE
+  save, then silently dropped again by the next unrelated one (neither `CARD_AWARE_SECTION_KEYS`
+  nor `product_section` were actually in `APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS`); the
+  `story_rail`/`single_banner`/`multi_banner` browser-cert fixture placed sections with no backing
+  media row, so the harness's visibility check was passing on the generic empty-Section placeholder
+  alone; plus three MINOR docs/coverage/instrumentation nits. All six fixed — see
+  `task6_family_convergence.md`'s "Second independent review" section for the full record,
+  including exact fix descriptions. Targeted re-verification: `test_phase4_task6_group_f_
+  reconciliation` (15/15, 3 new marker-durability regression tests), `manage.py check`/
+  `makemigrations --check --dry-run`/`git diff --check` clean. Full `apps.storefront_builder` suite
+  re-run once (the fix touches the shared `section_registry.py` validator wrapper every
+  schema-enabled section goes through): 2807 tests, 30 failures/2 errors/4 skips — the exact same
+  three counts as the frozen baseline despite ~16 more tests running and passing; spot-verified two
+  of the visible failures reproduce identically via `git stash` (pre-existing, unrelated).
+  Committed and pushed as `77b0cf3`.
+
+- **Batch 1/2 — R4 Task 7 composition + recovery parity** (continuation session, 2026-09-10, in
+  parallel with the Task-6 re-review above). B1 gap audit classified all 20 required Task-7
+  capabilities by reading the actual current implementation first (never assuming missing because
+  the R4 UI doesn't obviously expose something) — 9 already complete, 2 not applicable (superseded/
+  compat-only), 9 real gaps. Batch 1 (composition): `section.toggle_active`/`section.toggle_locked`
+  (the Preview toolbar already sent these commands; R4 Task 8 had deliberately left them
+  unhandled) and `container.change_layout` (multi-column reshape, reusing
+  `container_service.change_container_layout` unchanged) wired as new R4 mutation types. Batch 2
+  (recovery): the six `preset_service` baseline-reset granularities wired in (section/section-
+  setting/appearance-setting/header/footer as in-place mutation types; page/storefront as dedicated
+  endpoints since they replace the Draft's identity via a checkpoint, exactly like Publish); a
+  dedicated Discard endpoint (the service existed but had no UI entry point in either editor). See
+  `task7_r4_composition_media_parity.md` for the full per-capability record. Committed and pushed
+  as `2bd3c77`.
+
+- **Batch 2 bugfix + Batch 3 media reachability** (continuation session, 2026-09-10). Running the
+  previously-untested Batch 2 test classes (deferred earlier while the full-suite run above was
+  using the shared test DB) found two real bugs: the five in-place reset mutation types only caught
+  `preset_service.BaselineResetError`, missing that `NoTemplateBaselineError` (a Draft with no
+  Ready Template baseline — exactly the case these mutations must reject cleanly) is actually an
+  `InvalidPresetError` subclass, so resetting anything on such a Draft raised an unhandled 500; and
+  a new test class called a `_refresh_revision()` helper that only existed on a sibling base class.
+  Both fixed; `test_r4_vertical_slice.py` re-run clean (135/135, only the one confirmed
+  pre-existing failure). Batch 3 (media + cross-page parity): the R4 Inspector had no path to the
+  existing media CRUD screens at all, and 404'd outright for schema-less media-only families
+  (`story_rail`/`single_banner`) — a merchant could not even open an Inspector panel for them.
+  Fixed with `media_views.media_kind_for_section_key` (reverse lookup, no new registry) threaded
+  into the Inspector view: a link to the existing legacy media screen for schema-enabled
+  media-owning sections, and a new minimal media-only Inspector partial (same
+  `data-r4-section-inspector` contract) for schema-less ones — never a new media UI/authority.
+  `test_r4_inspector.py` (55/55, including 4 new tests + 2 existing tests corrected to the new
+  intended contract) and `test_media_views.py`+`test_r4_resource_picker.py` (100/100) both clean.
+  Committed and pushed as `7347b8b`, evidence doc update as `b5a38c6`.
+
+- **Third independent review (re-review after the second review's fix cycle)** (continuation
+  session, 2026-09-10). Per the closure requirement's own "re-review the final state" step, a
+  third fresh isolated-worktree reviewer verified the six C1/I1/I2/M1/M2/M3 findings above were
+  genuinely fixed (including by deliberately reverting each half of the C1/I1 fix in isolation and
+  confirming the corresponding regression test fails for exactly the right reason — proving the
+  tests are not vacuous) and checked the fix itself for new defects. Verdict: CRITICAL 0, IMPORTANT
+  1, MINOR 3. The IMPORTANT finding: the new M3 instrumentation guard's `http_error_responses`
+  snapshot was missing the same broken-image/stale-409 filters its sibling arrays already applied,
+  so the Collection gate's own deliberately-broken-image fixture (placed on Home, from an earlier
+  Task-5 fixture) would make the Task-6 family gate fail spuriously on every page reload —
+  precisely the opposite of what the M3 fix was meant to achieve. Fixed, along with three MINOR
+  nits (misaligned diagnostic-message slicing, a stray module-level constant mid-import-block, a
+  misplaced Sphinx doc-comment). Also raised as a non-blocking observation (pre-existing since
+  Phase 1, not introduced by this task, and explicitly not treated as an in-scope defect): now that
+  the override markers are durable, there is no merchant-facing way to clear one — recorded as a
+  product-level question for a future task, not a Task 6 defect. Re-verification:
+  `test_phase4_task6_group_f_reconciliation` (15/15), `manage.py check`/`makemigrations --check
+  --dry-run`/`git diff --check` clean, `run.mjs`/`section_registry.py` both `node --check`/
+  `py_compile` clean. **CRITICAL 0 / IMPORTANT 0 after this round's fixes — Task 6 is now CLOSED.**

@@ -427,5 +427,124 @@ the full gate was re-run, not just the touched modules):
 - `manage.py check` / `makemigrations --check --dry-run` / `git diff --check`: all clean, both
   before and after the fix.
 
-No second review round was required — every finding was concrete, reproducible, and fixed; no new
-finding surfaced during fix verification.
+No second review round was required for the FIRST reviewer's own findings — every finding was
+concrete, reproducible, and fixed; no new finding surfaced during that fix verification. A SECOND,
+separate independent reviewer was still dispatched afterward per the closure requirement's own
+"re-review the final state" step (see below) — its findings are about the browser-harness commit
+that came after the first reviewer's pass, not a reopening of the first reviewer's own findings.
+
+### Second independent review (post browser-harness-extension commit `d8489c4`)
+
+A second fresh, isolated-worktree reviewer (no prior context) reviewed `d8489c4` (the browser
+harness extension giving 6 more Task-6 families genuine coverage) against two questions: (a) do
+the FIRST reviewer's four fixes still hold, and (b) is the new harness commit itself sound. Verdict:
+
+```
+CRITICAL: 1
+IMPORTANT: 2
+MINOR: 3
+```
+
+- **CRITICAL (C1)** — the `card_style_explicit`/`variant_explicit` markers were durable across
+  exactly ONE save (the first reviewer's own fix), then silently dropped again by the very next
+  UNRELATED save: no `CARD_AWARE_SECTION_KEYS` member (nor `product_section`) was actually in
+  `APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS`, so `validate_settings` kept discarding the whole
+  `appearance_overrides` block for those section types. Fixed by unioning
+  `APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS` with `CARD_AWARE_SECTION_KEYS` and generalizing the
+  marker-preservation logic (`section_registry.py`'s `_with_appearance_overrides`) to a trusted-key
+  tuple (`_TRUSTED_APPEARANCE_OVERRIDE_MARKER_KEYS`) instead of a single hardcoded key, plus
+  widening the legacy form's `appearance_overrides` carry-forward (`views.py`) beyond
+  `brand_carousel` to every section in the (now-widened) allowlist.
+- **IMPORTANT (I1)** — same root cause, specifically breaking `product_section`'s `variant_explicit`
+  marker — already fixed by the same C1 change (`product_section` is a member of
+  `CARD_AWARE_SECTION_KEYS`).
+- **IMPORTANT (I2)** — `story_rail`/`single_banner`/`multi_banner`'s browser-cert fixture placed
+  sections with no backing media row, so their templates rendered nothing and the harness's
+  visibility check passed on the empty-placeholder wrapper alone, not the family's own markup.
+  Fixed: the fixture now creates a real `StoryRailItem`/`PromotionalBanner` row per section, and
+  the harness asserts real family-specific DOM (`.story-item .story-label`, `.promo-dark h3`,
+  `.promo-grid--promo-4`).
+- **MINOR (M1)** — corrected a docstring that incorrectly claimed `rich_text` shares `image_text`'s
+  browser-coverage mechanism (a shared validator SHAPE is not a shared Inspector CONTROL type —
+  `rich_text` uses a genuinely different CKEditor5 widget); now recorded as a deliberate,
+  unexercised coverage gap instead.
+- **MINOR (M2)** — the harness threaded 6 fixture section ids through the manifest but never used
+  them (every scenario re-discovered its section by CSS selector). Fixed: `run.mjs` now opens each
+  Task-6-family section by its known fixture id (`openSectionById`), not by re-deriving it.
+- **MINOR (M3)** — the new browser scenario ran after the one check that asserts zero unexpected
+  console/page/network errors for the whole run, so an error it caused would never be caught. Fixed
+  with a before/after instrumentation snapshot local to the scenario.
+
+**Fix verification** (targeted + one full-suite re-run, matching the same "cross-cutting contract"
+policy as the first round):
+- Targeted: `test_phase4_task6_group_f_reconciliation` (15/15, including 3 new regression tests
+  proving both markers survive an UNRELATED resave through both the legacy form and the R4
+  mutation endpoint), `manage.py check` / `makemigrations --check --dry-run` / `git diff --check`:
+  all clean.
+- **Full `apps.storefront_builder` suite re-run once** (the fix touches the same cross-cutting
+  `section_registry.py` validator wrapper every schema-enabled section goes through): 2807 tests
+  (16 more than the prior 2791 — this session's new Task-7 Batch 1/2 tests, run for the first
+  time), 30 failures / 2 errors / 4 skips — **exactly the same three counts as the frozen
+  baseline**, despite ~16 more tests running and passing. Spot-verified two of the visible
+  failures (`FullscreenEditorTests` pair, `test_validate_appearance_config_is_the_validator_boundary`)
+  reproduce byte-for-byte identically on `git stash` (i.e. without any of this session's changes),
+  confirming they are pre-existing and unrelated, not something this fix or the new Task-7 work
+  introduced.
+
+#### Third-party re-verification (re-review after the C1/I1/I2/M1/M2/M3 fix)
+
+A THIRD independent reviewer (isolated worktree, no prior context) was dispatched to verify the six
+findings above were genuinely fixed and to check the fix itself for new defects, per the closure
+requirement's "re-review the final state" step. It confirmed C1/I1/I2/M1/M2/M3 all genuinely fixed
+— including by deliberately REVERTING each half of the C1/I1 fix in isolation and re-running the
+three new regression tests, confirming each one fails for exactly the right reason when its
+corresponding code change is reverted (not vacuous), and by re-deriving the render-time card/badge
+precedence and the "no third missed write-path" search independently. It found the M3 fix itself
+introduced one new IMPORTANT-severity defect plus three MINOR ones:
+
+```
+CRITICAL: 0
+IMPORTANT: 1
+MINOR: 3
+```
+
+- **IMPORTANT** — the new instrumentation guard's `http_error_responses` snapshot was missing the
+  same `isExpectedBrokenImageNoise`/`isExpectedStale409Response` filters its sibling arrays
+  (console/request errors) already applied, so the Collection gate's own deliberately-broken-image
+  collection tile (placed on Home, alongside this same gate, by an earlier Task-5 fixture) would
+  make every page reload below record a "new" 404 and fail the gate spuriously — the opposite of
+  the fix's own intent. Fixed: `http_error_responses` now filtered the same way, both before and
+  after.
+- **MINOR** — the guard's failure messages sliced the raw (unfiltered) arrays at filtered-count
+  offsets, misaligning the diagnostic window. Fixed: the guard now snapshots the FILTERED arrays
+  themselves (not just their lengths) before and after, and diffs those directly.
+- **MINOR** — `_TRUSTED_APPEARANCE_OVERRIDE_MARKER_KEYS` was defined between two `from .x import y`
+  statements (a stray module-level constant mid-import-block); moved below the imports.
+- **MINOR** — the `#:` doc-comment explaining why `product_view`/`card` families joined the
+  allowlist was placed AFTER the `APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS = frozenset(...)`
+  statement it was meant to document (Sphinx `#:` comments document the FOLLOWING attribute, so it
+  would have been attributed to the next function instead); moved above the assignment, merged with
+  the existing docstring-style comment already there, and one more line added documenting the
+  `preserve_unmanaged=True` dependency the reviewer flagged as load-bearing-but-undocumented.
+
+Also raised, as an observation rather than a code-level finding requiring a fix in this batch: now
+that the explicit-override markers are durable (the whole point of the C1 fix), there is no
+merchant-facing way to CLEAR one once set — `reset_section_setting_to_baseline(draft, section,
+"card")` restores the card block's values to the Ready Template baseline but leaves
+`card_style_explicit` (or `variant_explicit`) set, so the section stays permanently opted out of
+future Store Appearance selections for that axis. This is pre-existing behavior (identical for
+`variant_explicit` since Phase 1), not introduced by any commit in this task — the C1 fix only made
+it durable enough to actually matter. Recorded here as a known product-level question for a future
+task, not an in-scope Task 6 defect: whether resetting a component should also clear its own
+explicit-override marker is a merchant-experience decision, not a bug fix.
+
+**Re-verification after this third round's fixes**: `test_phase4_task6_group_f_reconciliation`
+(15/15), `manage.py check` / `makemigrations --check --dry-run` / `git diff --check`: all clean.
+`run.mjs`/`section_registry.py` both `node --check`/`py_compile` clean. The harness itself was not
+re-run in this round (no browser/dev-server available in this environment) — the fix is verified
+by static trace of the exact failure chain (the Collection gate's broken-image fixture -> HTTP 404
+-> recorded into the SAME `result.http_error_responses` array the Task-6 gate's guard reads) and by
+confirming the fixed filter predicates are byte-for-byte identical to `finalInstrumentationAssertions`'s
+own, already-proven-correct predicates.
+
+No further review round was required: CRITICAL 0 / IMPORTANT 0 after this round's fixes.
