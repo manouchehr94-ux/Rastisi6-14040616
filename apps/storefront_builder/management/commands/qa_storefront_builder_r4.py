@@ -601,7 +601,81 @@ class Command(BaseCommand):
         # are untouched. The runner reads ``phase3_fixture.collection`` only for
         # the Collection matrix; the default R3 run never reaches this method.
         gate["collection"] = self._prepare_phase3_collection_gate(store, user, draft)
+        # Phase 4 Task 6 — a SMALL representative set of Task-6 MIGRATE
+        # families that scenarios 01-13/the Brand+Collection matrix never
+        # exercise. Placed alongside everything above (additive, phase3-only;
+        # the default R3 run never reaches this method either).
+        gate["task6_families"] = self._prepare_phase3_task6_family_gate(draft)
         return gate
+
+    def _prepare_phase3_task6_family_gate(self, draft) -> dict:
+        """Phase 4 Task 6 — representative browser certification for the
+        Task-6 MIGRATE families the existing scenarios never touch.
+
+        Deliberately NOT one registration per family (~20 of them): every
+        schema-driven family shares the exact same R4 mechanism scenario 02
+        already proves generically (Inspector field -> section.update_settings
+        mutation -> Draft autosave -> persists across reload -> visible in
+        Preview) — what is genuinely family-specific is only (a) whether
+        *this* family's own field is really wired into the Inspector at all,
+        and (b) its own distinct field TYPE. So this places exactly one
+        representative per remaining field TYPE (integer: ``category_grid``;
+        choice, two different enums: ``multi_banner``/``image_text``; text:
+        ``newsletter``) plus the two non-schema dispositions with no
+        equivalent proof anywhere (``story_rail`` — media CRUD; and
+        ``single_banner`` — FIXED/STATIC, certified by rendering with no
+        selector at all). Every family sharing an already-registered field
+        TYPE and mechanism (``newest_products``/``best_sellers``/
+        ``discounted_products``/``promo_cards``/``amazing_offers`` share
+        ``category_grid``'s integer item_limit; ``blog_posts``/
+        ``quick_links``/``video_section`` share ``newsletter``'s text title;
+        ``rich_text`` shares ``image_text``'s partial-schema-plus-unmanaged-
+        key shape) is certified via that shared mechanism, not re-registered
+        here — see ``phase4/task6_family_convergence.md`` for the reasoning
+        recorded per family. Returns the discovered ids the runner threads
+        through the manifest. NEVER runs on the default R3 path."""
+        from apps.storefront_builder.models import StorefrontSection
+
+        home_page = draft.get_page("home")
+
+        def place(section_key: str, settings_overrides: dict | None = None) -> int:
+            definition = section_registry.get_definition(section_key)
+            settings = definition.default_settings()
+            if settings_overrides:
+                settings.update(settings_overrides)
+            order = home_page.sections.count()
+            section = StorefrontSection.objects.create(
+                page=home_page, section_key=section_key, order=order, settings=settings,
+            )
+            container = container_service.create_empty_container(home_page, "single")
+            cell = container.cells.order_by("order", "id").first()
+            container_service.place_section(cell, section)
+            return section.pk
+
+        # No "source" override: the schema's own default (auto/all_active) is
+        # guaranteed valid, and ResourceSource itself is already certified
+        # thoroughly at the Django-test level plus via the shared Resource
+        # Picker in scenarios 05-07 — this registration only needs to prove
+        # category_grid's OWN item_limit field is R4-reachable.
+        category_grid_section_id = place("category_grid")
+        multi_banner_section_id = place("multi_banner")
+        # image_text renders NOTHING at all ({% if title or body or image_url %})
+        # with every one of those three empty, as default_settings() leaves
+        # them — a real title is the cheapest way to give the
+        # image_position CSS check something to actually assert against.
+        image_text_section_id = place("image_text", {"title": "متن تسک ۶"})
+        newsletter_section_id = place("newsletter")
+        story_rail_section_id = place("story_rail")
+        single_banner_section_id = place("single_banner")
+
+        return {
+            "category_grid_section_id": category_grid_section_id,
+            "multi_banner_section_id": multi_banner_section_id,
+            "image_text_section_id": image_text_section_id,
+            "newsletter_section_id": newsletter_section_id,
+            "story_rail_section_id": story_rail_section_id,
+            "single_banner_section_id": single_banner_section_id,
+        }
 
     def _prepare_phase3_collection_gate(self, store: Store, user, draft) -> dict:
         """Task 5 — a deterministic Collection matrix on the SAME Draft the

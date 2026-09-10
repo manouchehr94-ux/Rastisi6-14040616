@@ -2513,6 +2513,135 @@ async function phase3BrandGate() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Phase 4 Task 6 — representative browser certification for the remaining
+// Task-6 MIGRATE families (scenarios 01-13 and the Brand/Collection matrix
+// above never touch these). See
+// Command._prepare_phase3_task6_family_gate's own docstring (the Python
+// fixture builder) for why exactly these families/fields were chosen as
+// representative rather than one registration per family.
+// ---------------------------------------------------------------------------
+
+// { sectionKey, fieldKey, fieldType: 'text'|'integer'|'choice', value,
+//   assertReflected(frame, sectionKey) -> Promise<void> }
+const TASK6_FAMILY_FIELD_EDITS = [
+  {
+    sectionKey: 'category_grid', fieldKey: 'item_limit', fieldType: 'integer', value: '6', advanced: true,
+    // No cheap visible-count assertion (bounded by the single fixture
+    // category, not item_limit) — persisted-value-after-reload is the proof
+    // for this one; see the loop below.
+    assertReflected: async () => {},
+  },
+  {
+    sectionKey: 'multi_banner', fieldKey: 'layout_variant', fieldType: 'choice', value: 'promo-4',
+    // No cheap visible assertion — multi_banner's own template renders
+    // nothing at all ({% if banners %}) without a real PromotionalBanner
+    // row, which this fixture deliberately does not create (out of scope:
+    // banner CRUD is its own, already-certified media surface —
+    // HeroSlideCrudTests/BannerCrudTests). Persisted-value-after-reload is
+    // the proof for this one; see the loop below.
+    assertReflected: async () => {},
+  },
+  {
+    sectionKey: 'image_text', fieldKey: 'image_position', fieldType: 'choice', value: 'left', advanced: true,
+    assertReflected: async (frame, sectionKey) => {
+      const style = await frame.locator(`[data-section-key="${sectionKey}"] .cream`).first().getAttribute('style');
+      assert(style && style.includes('row-reverse'), `image_text: expected row-reverse style after image_position=left, got: ${style}`);
+    },
+  },
+  {
+    sectionKey: 'newsletter', fieldKey: 'title', fieldType: 'text', value: 'خبرنامه QA تسک 6',
+    assertReflected: async (frame, sectionKey) => {
+      const text = await frame.locator(`[data-section-key="${sectionKey}"] h2`).first().textContent();
+      assert(text && text.includes('خبرنامه QA تسک 6'), `newsletter: expected the edited title in Preview, got: ${text}`);
+    },
+  },
+];
+
+function task6FamilyFixture() {
+  const fx = manifest.phase3_fixture && manifest.phase3_fixture.task6_families;
+  assert(fx && typeof fx === 'object', 'manifest.phase3_fixture.task6_families is missing');
+  return fx;
+}
+
+async function task6FamilyFieldEditScenario(cfg) {
+  await closeInspectorIfOpen();
+  const sectionId = await openSectionViaPreview(cfg.sectionKey);
+  assert(sectionId, `Could not discover the ${cfg.sectionKey} section id`);
+  if (cfg.advanced) await activateAdvancedTab();
+
+  const control = fieldControl(cfg.fieldKey);
+  await control.waitFor({ state: 'visible', timeout: 10000 });
+
+  const beforeMutateCount = result.mutation_posts.length;
+  const beforeNavCount = result.main_frame_navigations.length;
+  if (cfg.fieldType === 'choice') {
+    await control.selectOption(cfg.value);
+  } else {
+    // text/integer fields autosave on the Inspector's delegated `change`
+    // listener (r4_editor.js) — `.fill()` alone only dispatches `input`;
+    // `.blur()` is what actually fires `change` for a real merchant
+    // tabbing/clicking away, exactly what needs to happen here too.
+    await control.fill(cfg.value);
+    await control.blur();
+  }
+  await waitSaved();
+  assert(
+    result.mutation_posts.length - beforeMutateCount === 1,
+    `${cfg.sectionKey}.${cfg.fieldKey}: expected exactly 1 mutate POST, got ${result.mutation_posts.length - beforeMutateCount}`,
+  );
+  assert(result.mutation_posts[result.mutation_posts.length - 1].status === 200, `${cfg.sectionKey}.${cfg.fieldKey}: edit must return 200`);
+  assert(result.main_frame_navigations.length === beforeNavCount, `${cfg.sectionKey}.${cfg.fieldKey}: inline Inspector autosave must not navigate the main page`);
+
+  // Server-authoritative persistence proof — reload and re-read, exactly
+  // scenario02's own pattern (the one existing, already-proven mechanism).
+  await withExpectedNavigation(() => page.reload({ waitUntil: 'domcontentloaded' }));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });
+  await openSectionById(sectionId);
+  if (cfg.advanced) await activateAdvancedTab();
+  const persisted = await fieldControl(cfg.fieldKey).inputValue();
+  assert(persisted === cfg.value, `${cfg.sectionKey}.${cfg.fieldKey}: expected persisted value ${cfg.value}, got ${persisted}`);
+  await closeInspectorIfOpen();
+
+  // Draft Preview reflects it — the same iframe every other scenario reads.
+  const frame = await previewFrame();
+  await frame.locator(`[data-section-key="${cfg.sectionKey}"]`).first().waitFor({ state: 'visible', timeout: 10000 });
+  await cfg.assertReflected(frame, cfg.sectionKey);
+}
+
+async function task6FamilyPresenceScenario(sectionKey) {
+  // FIXED/STATIC (single_banner) and media-only (story_rail) families have
+  // no Inspector schema field to edit at all — per their own actual
+  // contract, the representative browser proof is that the component
+  // renders through R4/Preview with no error, not a forced control edit.
+  await closeInspectorIfOpen();
+  const frame = await previewFrame();
+  await frame.locator(`[data-section-key="${sectionKey}"]`).first().waitFor({ state: 'visible', timeout: 10000 });
+}
+
+async function phase3Task6FamilyGate() {
+  const fx = task6FamilyFixture();
+  assert(typeof fx.category_grid_section_id === 'number', 'task6_families.category_grid_section_id missing');
+  assert(typeof fx.multi_banner_section_id === 'number', 'task6_families.multi_banner_section_id missing');
+  assert(typeof fx.image_text_section_id === 'number', 'task6_families.image_text_section_id missing');
+  assert(typeof fx.newsletter_section_id === 'number', 'task6_families.newsletter_section_id missing');
+  assert(typeof fx.story_rail_section_id === 'number', 'task6_families.story_rail_section_id missing');
+  assert(typeof fx.single_banner_section_id === 'number', 'task6_families.single_banner_section_id missing');
+
+  // A known, clean starting point regardless of what phase3BrandGate left
+  // the shared admin `page` on (that gate operates on separate public-page
+  // contexts, never the admin R4 editor SPA itself).
+  await withExpectedNavigation(() => page.goto(manifest.builder_url, { waitUntil: 'domcontentloaded' }));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
+
+  for (const cfg of TASK6_FAMILY_FIELD_EDITS) {
+    await task6FamilyFieldEditScenario(cfg);
+  }
+  await task6FamilyPresenceScenario('story_rail');
+  await task6FamilyPresenceScenario('single_banner');
+  await closeInspectorIfOpen();
+}
+
 async function main() {
   deleteStaleScreenshots();
 
@@ -2549,6 +2678,7 @@ async function main() {
   // completely unchanged.
   if (manifest.phase3) {
     await scenario('phase3-brand-gate', phase3BrandGate);
+    await scenario('phase3-task6-family-gate', phase3Task6FamilyGate);
   }
 }
 
