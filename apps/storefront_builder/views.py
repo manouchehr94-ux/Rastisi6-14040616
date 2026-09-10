@@ -2450,16 +2450,6 @@ def storefront_apply_industry_layout(request):
     return redirect("dashboard:storefront-builder-editor")
 
 
-@require_POST
-@staff_required
-@permission_required(STOREFRONT_LAYOUT_MANAGE)
-def storefront_discard(request):
-    store = _resolve_store(request)
-    layout_service.discard_draft(store)
-    messages.success(request, "پیش‌نویس رد شد")
-    return redirect("dashboard:storefront-builder-editor")
-
-
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
 @_record_edit_history("ویرایش ظاهر سایت")

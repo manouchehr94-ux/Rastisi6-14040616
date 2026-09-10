@@ -1398,17 +1398,6 @@ class PublishDiscardRestoreViewTests(StorefrontBuilderViewsTestCase):
         self.assertFalse(layout.uses_visual_storefront_layout)
         self.assertTrue(StorefrontLayoutVersion.objects.filter(pk=draft.pk, status=StorefrontLayoutVersion.Status.DRAFT).exists())
 
-    def test_discard_redirects(self):
-        svc.get_or_create_draft(self.store)
-        resp = self.client.post(reverse("dashboard:storefront-builder-discard"))
-        # fetch_redirect_response=False: the editor page itself lazily
-        # re-creates a draft (get_or_create_draft) — following the redirect
-        # here would create a fresh draft as a side effect and defeat the
-        # "draft was actually discarded" assertion below.
-        self.assertRedirects(resp, reverse("dashboard:storefront-builder-editor"), fetch_redirect_response=False)
-        layout = svc.get_or_create_layout(self.store)
-        self.assertIsNone(layout.draft_version_id)
-
     def test_history_lists_versions(self):
         svc.get_or_create_draft(self.store)
         svc.publish(self.store)

@@ -1196,19 +1196,6 @@ class LegacyLifecycleAppearanceManifestRoundTripTests(StorefrontBuilderViewsTest
         restored_draft = svc.get_or_create_draft(self.store, user=self.staff)
         self.assertEqual(self._manifest_primitive(restored_draft), expected_manifest)
 
-    def test_discard_is_atomic_and_removes_only_the_draft(self):
-        draft = svc.get_or_create_draft(self.store, user=self.staff)
-        draft_pk = draft.pk
-
-        resp = self.client.post(reverse("dashboard:storefront-builder-discard"))
-        self.assertEqual(resp.status_code, 302)
-
-        # The Draft row is gone and the layout no longer points at it.
-        self.assertFalse(StorefrontLayoutVersion.objects.filter(pk=draft_pk).exists())
-        layout = svc.get_or_create_layout(self.store)
-        layout.refresh_from_db()
-        self.assertNotEqual(layout.draft_version_id, draft_pk)
-
 
 
 # ---------------------------------------------------------------------------
