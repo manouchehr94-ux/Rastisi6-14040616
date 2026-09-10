@@ -152,3 +152,72 @@ findings were fixed in the same working session (see
 `task6_family_convergence.md`'s "Second independent review" section for the
 full record) before Task-6 closure and before this batch's own full-suite
 re-verification.
+
+**Correction (found by running the previously-untested Batch 2 test
+classes)**: `section.reset_to_baseline` / `section.reset_setting_to_baseline`
+/ `appearance.reset_setting_to_baseline` / `header.reset_to_baseline` /
+`footer.reset_to_baseline` only caught `preset_service.BaselineResetError`,
+missing that `NoTemplateBaselineError` (raised for a Draft that never had a
+Ready Template applied — exactly the "no baseline yet" case these mutations
+must reject cleanly) is actually an `InvalidPresetError` subclass, a
+separate hierarchy. Fixed by catching both exception families everywhere
+(matching how `reset_page`/`reset_storefront` already did). Also fixed a
+test bug (`_refresh_revision` called on a class that didn't have it — moved
+onto the shared `R4MutationApiTestCase` base). Full `test_r4_vertical_slice.py`
+re-run clean after the fix: 135 tests, only the one confirmed pre-existing,
+unrelated failure.
+
+## Batch 3 — Media + cross-page parity (media CRUD reachability done)
+
+Gap: the R4 Inspector had **zero** path to the existing section media CRUD
+screens (`media_views.py`'s hero-slides/banners/story-items forms) for any
+family. Worse, for a schema-less media-only family (`story_rail`,
+`single_banner` — no `SettingsSchema` at all) the Inspector endpoint
+(`storefront_r4_section_inspector`) 404'd outright, so a merchant could not
+even open an Inspector panel for those sections in R4.
+
+Fix: `media_views.media_kind_for_section_key(section_key)` — a small,
+public reverse lookup over the existing `_MEDIA_KINDS` registry (no new
+registry, no new model). Threaded into `storefront_r4_section_inspector`:
+
+- A schema-enabled, media-owning section (`hero_banner`/`image_slider`/
+  `multi_banner`/`single_banner` — note `single_banner` itself has NO
+  schema, see below) gets a "Manage <kind>" link added into the existing
+  schema-driven Inspector partial.
+- A schema-less, media-owning section (`story_rail`, `single_banner`) now
+  returns 200 with a new minimal `section_inspector_media_only.html`
+  partial (same `data-r4-section-inspector` contract, just no schema
+  fields) instead of 404, carrying the same link.
+- A schema-less, non-media section (context-aware/domain-owned families
+  like `product_main`) still correctly 404s — genuinely nothing to show.
+
+Both paths link to the EXACT SAME unmodified legacy media management
+screens (`storefront-builder-section-media-list` and its add/edit/delete/
+reorder siblings) — no new media UI, no new persistence authority. The
+target opens in a new tab (`target="_blank"`) since it is a full legacy
+admin page, not an R4-native flow.
+
+Non-Home page parity / tenant isolation / stale-write protection: already
+certified generically in the B1 audit (`storefront_r4_section_inspector`
+scopes by `page__version=draft` unchanged by this batch, and section keys
+with media are equally valid on any page type that allows them) — no new
+code needed; this batch's own new tests (`MediaOnlySectionInspectorTests`
+in `test_r4_inspector.py`) exercise the same existing scoping path, not a
+new one.
+
+Targeted tests: `test_r4_inspector.py`'s `MediaOnlySectionInspectorTests`
+(4 tests) plus two existing tests updated to match the corrected contract
+(`NonSchemaSectionTests` — `single_banner` is no longer the "has no schema"
+representative since it now legitimately returns 200; replaced with
+`product_main`; `AppearanceOverrideWidgetTests.test_uses_no_r3_endpoint_and_no_new_endpoint`
+narrowed to the appearance_override widget's own HTML chunk, since its
+actual contract was always about that widget, not the whole Inspector
+response). Full `test_r4_inspector.py` (55 tests) and `test_media_views.py`
++ `test_r4_resource_picker.py` (100 tests) re-run clean.
+
+Still open for Batch 3 (deferred to B4/B7 if time allows, otherwise
+recorded as a known remaining gap): embedding media management directly
+inside the R4 Preview/Inspector rather than a new-tab link to the legacy
+page. The current fix satisfies "reachable from R4, zero new media
+authority" — a fully inline experience is a UI-polish increment on top of
+this, not a missing capability.
