@@ -2534,13 +2534,17 @@ const TASK6_FAMILY_FIELD_EDITS = [
   },
   {
     sectionKey: 'multi_banner', fieldKey: 'layout_variant', fieldType: 'choice', value: 'promo-4',
-    // No cheap visible assertion — multi_banner's own template renders
-    // nothing at all ({% if banners %}) without a real PromotionalBanner
-    // row, which this fixture deliberately does not create (out of scope:
-    // banner CRUD is its own, already-certified media surface —
-    // HeroSlideCrudTests/BannerCrudTests). Persisted-value-after-reload is
-    // the proof for this one; see the loop below.
-    assertReflected: async () => {},
+    // Task 6 (final-review fix, I2) — the Python fixture now creates two
+    // real PromotionalBanner rows bound to this section (previously it
+    // created none, so the template's own `{% if banners %}` rendered
+    // nothing and this assertion was a no-op that would have passed
+    // identically with the section deleted). `.promo-grid--promo-4` is the
+    // exact class `multi_banner.html` emits from `settings.layout_variant`.
+    assertReflected: async (frame, sectionKey) => {
+      const grid = frame.locator(`[data-section-key="${sectionKey}"] .promo-grid--promo-4`);
+      await grid.first().waitFor({ state: 'visible', timeout: 10000 });
+      assert(await grid.count() > 0, 'multi_banner: expected .promo-grid--promo-4 after layout_variant=promo-4');
+    },
   },
   {
     sectionKey: 'image_text', fieldKey: 'image_position', fieldType: 'choice', value: 'left', advanced: true,
@@ -2564,10 +2568,14 @@ function task6FamilyFixture() {
   return fx;
 }
 
-async function task6FamilyFieldEditScenario(cfg) {
+async function task6FamilyFieldEditScenario(cfg, sectionId) {
+  // Task 6 (final-review fix, M2) — open by the fixture's own known id
+  // rather than re-discovering it via the Preview DOM: the id already comes
+  // back from the Python fixture (``manifest.phase3_fixture.task6_families``)
+  // and re-deriving the same fact by scanning the DOM was dead redundancy,
+  // not an independent check.
   await closeInspectorIfOpen();
-  const sectionId = await openSectionViaPreview(cfg.sectionKey);
-  assert(sectionId, `Could not discover the ${cfg.sectionKey} section id`);
+  await openSectionById(sectionId);
   if (cfg.advanced) await activateAdvancedTab();
 
   const control = fieldControl(cfg.fieldKey);
@@ -2609,14 +2617,21 @@ async function task6FamilyFieldEditScenario(cfg) {
   await cfg.assertReflected(frame, cfg.sectionKey);
 }
 
-async function task6FamilyPresenceScenario(sectionKey) {
+async function task6FamilyPresenceScenario(sectionKey, assertRendered) {
   // FIXED/STATIC (single_banner) and media-only (story_rail) families have
   // no Inspector schema field to edit at all — per their own actual
   // contract, the representative browser proof is that the component
-  // renders through R4/Preview with no error, not a forced control edit.
+  // renders through R4/Preview with no error. Task 6 (final-review fix,
+  // I2): "renders" must mean the family's OWN real markup, not merely the
+  // generic empty-Section placeholder wrapper every Section gets when it
+  // has nothing to show — the Python fixture now backs both families with
+  // a real media row (a StoryRailItem / a PromotionalBanner), so
+  // `assertRendered` below checks the specific element only that row
+  // produces.
   await closeInspectorIfOpen();
   const frame = await previewFrame();
   await frame.locator(`[data-section-key="${sectionKey}"]`).first().waitFor({ state: 'visible', timeout: 10000 });
+  await assertRendered(frame, sectionKey);
 }
 
 async function phase3Task6FamilyGate() {
@@ -2628,18 +2643,73 @@ async function phase3Task6FamilyGate() {
   assert(typeof fx.story_rail_section_id === 'number', 'task6_families.story_rail_section_id missing');
   assert(typeof fx.single_banner_section_id === 'number', 'task6_families.single_banner_section_id missing');
 
+  // Task 6 (final-review fix, M3) — this gate ran after
+  // ``finalInstrumentationAssertions`` (see ``main()``'s scenario order),
+  // so a console/page/HTTP error caused by anything below it was never
+  // checked by anything. Snapshot the same instrumentation arrays that
+  // scenario checks, then assert nothing NEW appeared by the end of this
+  // gate — mirroring (at gate scope, not global scope) the same filters
+  // ``finalInstrumentationAssertions`` already applies.
+  const consoleErrorsBefore = result.console_errors.filter(
+    (e) => !FAVICON_URL_PATTERN.test(e?.location?.url || '') && !isExpectedBrokenImageNoise(e?.location?.url),
+  ).length;
+  const pageErrorsBefore = result.page_errors.length;
+  const requestFailuresBefore = result.request_failures.filter(
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url),
+  ).length;
+  const httpErrorResponsesBefore = result.http_error_responses.length;
+
   // A known, clean starting point regardless of what phase3BrandGate left
   // the shared admin `page` on (that gate operates on separate public-page
   // contexts, never the admin R4 editor SPA itself).
   await withExpectedNavigation(() => page.goto(manifest.builder_url, { waitUntil: 'domcontentloaded' }));
   await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
 
+  const sectionIdByKey = {
+    category_grid: fx.category_grid_section_id,
+    multi_banner: fx.multi_banner_section_id,
+    image_text: fx.image_text_section_id,
+    newsletter: fx.newsletter_section_id,
+  };
   for (const cfg of TASK6_FAMILY_FIELD_EDITS) {
-    await task6FamilyFieldEditScenario(cfg);
+    await task6FamilyFieldEditScenario(cfg, sectionIdByKey[cfg.sectionKey]);
   }
-  await task6FamilyPresenceScenario('story_rail');
-  await task6FamilyPresenceScenario('single_banner');
+  await task6FamilyPresenceScenario('story_rail', async (frame, sectionKey) => {
+    const label = frame.locator(`[data-section-key="${sectionKey}"] .story-item .story-label`);
+    await label.first().waitFor({ state: 'visible', timeout: 10000 });
+    const text = await label.first().textContent();
+    assert(text && text.includes('استوری تسک ۶'), `story_rail: expected the fixture StoryRailItem's title, got: ${text}`);
+  });
+  await task6FamilyPresenceScenario('single_banner', async (frame, sectionKey) => {
+    const banner = frame.locator(`[data-section-key="${sectionKey}"] .promo-dark h3`);
+    await banner.first().waitFor({ state: 'visible', timeout: 10000 });
+    const text = await banner.first().textContent();
+    assert(text && text.includes('بنر تک تسک ۶'), `single_banner: expected the fixture PromotionalBanner's title, got: ${text}`);
+  });
   await closeInspectorIfOpen();
+
+  const consoleErrorsAfter = result.console_errors.filter(
+    (e) => !FAVICON_URL_PATTERN.test(e?.location?.url || '') && !isExpectedBrokenImageNoise(e?.location?.url),
+  ).length;
+  assert(
+    consoleErrorsAfter === consoleErrorsBefore,
+    `phase3-task6-family-gate: unexpected new console errors: ${JSON.stringify(result.console_errors.slice(consoleErrorsBefore))}`,
+  );
+  assert(
+    result.page_errors.length === pageErrorsBefore,
+    `phase3-task6-family-gate: unexpected new page errors: ${JSON.stringify(result.page_errors.slice(pageErrorsBefore))}`,
+  );
+  const requestFailuresAfter = result.request_failures.filter(
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url),
+  ).length;
+  assert(
+    requestFailuresAfter === requestFailuresBefore,
+    `phase3-task6-family-gate: unexpected new failed requests: ${JSON.stringify(result.request_failures.slice(requestFailuresBefore))}`,
+  );
+  assert(
+    result.http_error_responses.length === httpErrorResponsesBefore,
+    `phase3-task6-family-gate: unexpected new HTTP error responses: ${JSON.stringify(result.http_error_responses.slice(httpErrorResponsesBefore))}`,
+  );
 }
 
 async function main() {

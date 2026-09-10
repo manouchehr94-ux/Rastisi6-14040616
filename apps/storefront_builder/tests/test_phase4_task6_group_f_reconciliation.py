@@ -183,6 +183,33 @@ class ProductViewFamilyReconciliationTests(GroupFReconciliationBase):
         item = self._item_for(self._render_items(), "product_section")
         self.assertEqual(item["active_variant"].key, "campaign_band")
 
+    def test_variant_explicit_marker_survives_unrelated_r4_resave(self):
+        # Task 6 (final-review fix, I1) — the independent reviewer found
+        # ``product_section`` was NOT in ``APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS``,
+        # so ``validate_settings`` silently dropped the just-stamped
+        # ``variant_explicit`` marker on the very next unrelated save (here,
+        # an R4 ``item_limit`` patch that never touches ``display_mode``).
+        r1 = self._settings_update(self.product_section, {"display_mode": "campaign_band"})
+        self.assertEqual(r1.status_code, 200)
+        self.product_section.refresh_from_db()
+        self.assertTrue(
+            self.product_section.settings.get("appearance_overrides", {}).get("variant_explicit")
+        )
+
+        r2 = self._settings_update(self.product_section, {"item_limit": 9})
+        self.assertEqual(r2.status_code, 200)
+        self.product_section.refresh_from_db()
+        self.assertTrue(
+            self.product_section.settings.get("appearance_overrides", {}).get("variant_explicit"),
+            "variant_explicit must survive an unrelated R4 settings patch",
+        )
+        self.assertEqual(self.product_section.settings.get("item_limit"), 9)
+
+        r3 = self._component_update("product_view", "product_view.editorial_grid.v1")
+        self.assertEqual(r3.status_code, 200)
+        item = self._item_for(self._render_items(), "product_section")
+        self.assertEqual(item["active_variant"].key, "campaign_band")
+
 
 class CardFamilyReconciliationTests(GroupFReconciliationBase):
     """`card` family — the Store Appearance manifest overlays an unmarked
@@ -235,6 +262,62 @@ class CardFamilyReconciliationTests(GroupFReconciliationBase):
         # An unrelated, unmarked section still inherits the Store default.
         wall_item = self._item_for(self._render_items(), "catalog_product_wall")
         self.assertEqual(self._card_style(wall_item), "luxury_dark")
+
+    def test_card_style_explicit_marker_survives_unrelated_legacy_resave(self):
+        # Task 6 (final-review fix, C1) — the independent reviewer proved the
+        # prior fix survived exactly one Save: no CARD_AWARE_SECTION_KEYS
+        # member was in APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS, so
+        # validate_settings silently dropped the whole appearance_overrides
+        # block (marker included) on the very next unrelated legacy save.
+        r1 = self._post_legacy_product_section_settings(self.product_section, card_style="minimal")
+        self.assertEqual(r1.status_code, 302)
+        self.product_section.refresh_from_db()
+        self.assertTrue(
+            self.product_section.settings.get("appearance_overrides", {}).get("card_style_explicit")
+        )
+
+        r2 = self.client.post(
+            reverse("dashboard:storefront-builder-section-settings", args=[self.product_section.pk]),
+            {
+                "data_source": "newest", "display_mode": "grid", "item_limit": "9",
+                "title": "", "card_style": "minimal",
+            },
+        )
+        self.assertEqual(r2.status_code, 302)
+        self.product_section.refresh_from_db()
+        self.assertTrue(
+            self.product_section.settings.get("appearance_overrides", {}).get("card_style_explicit"),
+            "card_style_explicit must survive an unrelated legacy resave (item_limit only)",
+        )
+        self.assertEqual(self.product_section.settings.get("item_limit"), 9)
+
+        r3 = self._component_update("card", "card.luxury_dark.v1")
+        self.assertEqual(r3.status_code, 200)
+        item = self._item_for(self._render_items(), "product_section")
+        self.assertEqual(self._card_style(item), "minimal")
+
+    def test_card_style_explicit_marker_survives_unrelated_r4_patch(self):
+        # Same durability contract, exercised through the R4 mutation
+        # endpoint (clean_section_schema_patch) instead of the legacy form.
+        r1 = self._post_legacy_product_section_settings(self.product_section, card_style="minimal")
+        self.assertEqual(r1.status_code, 302)
+        self.product_section.refresh_from_db()
+        self.assertTrue(
+            self.product_section.settings.get("appearance_overrides", {}).get("card_style_explicit")
+        )
+
+        r2 = self._settings_update(self.product_section, {"item_limit": 9})
+        self.assertEqual(r2.status_code, 200)
+        self.product_section.refresh_from_db()
+        self.assertTrue(
+            self.product_section.settings.get("appearance_overrides", {}).get("card_style_explicit"),
+            "card_style_explicit must survive an unrelated R4 settings patch",
+        )
+
+        r3 = self._component_update("card", "card.luxury_dark.v1")
+        self.assertEqual(r3.status_code, 200)
+        item = self._item_for(self._render_items(), "product_section")
+        self.assertEqual(self._card_style(item), "minimal")
 
     def test_legacy_resubmission_of_same_card_style_does_not_mark_explicit(self):
         # The legacy form always submits card_style on every POST; presence

@@ -623,20 +623,50 @@ class Command(BaseCommand):
         choice, two different enums: ``multi_banner``/``image_text``; text:
         ``newsletter``) plus the two non-schema dispositions with no
         equivalent proof anywhere (``story_rail`` — media CRUD; and
-        ``single_banner`` — FIXED/STATIC, certified by rendering with no
-        selector at all). Every family sharing an already-registered field
+        ``single_banner`` — FIXED/STATIC, no Inspector schema field at all,
+        certified by rendering its own real media-backed markup rather than
+        a control edit). Every family sharing an already-registered field
         TYPE and mechanism (``newest_products``/``best_sellers``/
         ``discounted_products``/``promo_cards``/``amazing_offers`` share
         ``category_grid``'s integer item_limit; ``blog_posts``/
         ``quick_links``/``video_section`` share ``newsletter``'s text title;
         ``rich_text`` shares ``image_text``'s partial-schema-plus-unmanaged-
         key shape) is certified via that shared mechanism, not re-registered
-        here — see ``phase4/task6_family_convergence.md`` for the reasoning
-        recorded per family. Returns the discovered ids the runner threads
-        through the manifest. NEVER runs on the default R3 path."""
+        here.
+
+        ``rich_text`` itself (field type ``rich_text``, a CKEditor5-managed
+        control — see ``r4/partials/settings_field.html``) is a GENUINELY
+        DIFFERENT Inspector mechanism from a plain text input or a
+        ``<select>``, not a sharing case (Task 6 final-review fix, M1 — an
+        earlier version of this docstring incorrectly grouped it with
+        ``image_text`` on the basis of a shared VALIDATOR shape, which is
+        not the same thing as a shared Inspector CONTROL type): it remains a
+        recorded, deliberate browser-coverage gap, not a certified-by-sharing
+        field type — see ``phase4/task6_family_convergence.md`` for the
+        reasoning recorded per family. Returns the discovered ids the runner
+        threads through the manifest. NEVER runs on the default R3 path.
+
+        Task 6 (final-review fix, I2) — the independent reviewer proved
+        ``story_rail``/``single_banner``/``multi_banner`` were placed with
+        NO backing media row: every one of their templates renders nothing
+        at all without one (``{% if story_items %}`` /
+        ``{% for banner in banners %}``), so the harness's own
+        ``waitFor({state: 'visible'})`` was passing only because the empty-
+        placeholder wrapper `preview.html`/`responsive_section_wrapper.html`
+        always emit is what it found — never the family's own real markup.
+        A real ``StoryRailItem``/``PromotionalBanner`` row bound to each
+        section (the same in-memory PNG technique the Collection gate below
+        already uses) is created here so the DOM assertions in ``run.mjs``
+        check the family's actual rendering."""
+        from io import BytesIO
+
+        from django.core.files.base import ContentFile
+
+        from apps.content.models import PromotionalBanner, StoryRailItem
         from apps.storefront_builder.models import StorefrontSection
 
         home_page = draft.get_page("home")
+        store = draft.layout.store
 
         def place(section_key: str, settings_overrides: dict | None = None) -> int:
             definition = section_registry.get_definition(section_key)
@@ -651,6 +681,15 @@ class Command(BaseCommand):
             cell = container.cells.order_by("order", "id").first()
             container_service.place_section(cell, section)
             return section.pk
+
+        def _png_swatch(color):
+            try:
+                from PIL import Image  # noqa: WPS433 (local import; project dep)
+            except Exception:  # pragma: no cover — PIL is a project dependency
+                return None
+            buf = BytesIO()
+            Image.new("RGB", (320, 180), color).save(buf, format="PNG")
+            return buf.getvalue()
 
         # No "source" override: the schema's own default (auto/all_active) is
         # guaranteed valid, and ResourceSource itself is already certified
@@ -667,6 +706,36 @@ class Command(BaseCommand):
         newsletter_section_id = place("newsletter")
         story_rail_section_id = place("story_rail")
         single_banner_section_id = place("single_banner")
+
+        story_rail_section = StorefrontSection.objects.get(pk=story_rail_section_id)
+        story_payload = _png_swatch("#c026d3")
+        if story_payload is not None:
+            item = StoryRailItem(
+                store=store, section=story_rail_section, title="استوری تسک ۶", is_active=True,
+            )
+            item.image.save("task6-story.png", ContentFile(story_payload), save=False)
+            item.save()
+
+        single_banner_section = StorefrontSection.objects.get(pk=single_banner_section_id)
+        single_banner_payload = _png_swatch("#0f766e")
+        if single_banner_payload is not None:
+            banner = PromotionalBanner(
+                store=store, section=single_banner_section, title="بنر تک تسک ۶", is_active=True,
+            )
+            banner.desktop_image.save("task6-single-banner.png", ContentFile(single_banner_payload), save=False)
+            banner.save()
+
+        multi_banner_section = StorefrontSection.objects.get(pk=multi_banner_section_id)
+        for index, color in enumerate(("#ea580c", "#2563eb")):
+            multi_banner_payload = _png_swatch(color)
+            if multi_banner_payload is None:
+                break
+            banner = PromotionalBanner(
+                store=store, section=multi_banner_section, title=f"بنر چندتایی تسک ۶ #{index + 1}",
+                is_active=True, display_order=index,
+            )
+            banner.desktop_image.save(f"task6-multi-banner-{index}.png", ContentFile(multi_banner_payload), save=False)
+            banner.save()
 
         return {
             "category_grid_section_id": category_grid_section_id,

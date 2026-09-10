@@ -22,10 +22,22 @@ from typing import Callable
 
 from . import resource_source as resource_source_module
 from .settings_schema import (
+    CARD_STYLE_EXPLICIT_OVERRIDE_KEY,
     VARIANT_EXPLICIT_OVERRIDE_KEY,
     SettingsField,
     SettingsSchema,
     validate_appearance_overrides,
+)
+
+#: Task 6 (final-review fix, C1/I1) — every internal, server-owned
+#: explicit-local-override marker ``_with_appearance_overrides`` must carry
+#: through an UNRELATED settings save, never just the first one it happens
+#: to be paired with. A tuple, not a single hardcoded key, so a future
+#: marker (mirroring this same "presence is not intent" pattern) only needs
+#: to be added here, not to a second bespoke carry-forward implementation.
+_TRUSTED_APPEARANCE_OVERRIDE_MARKER_KEYS = (
+    VARIANT_EXPLICIT_OVERRIDE_KEY,
+    CARD_STYLE_EXPLICIT_OVERRIDE_KEY,
 )
 from .variant_contract import VariantDefinition, validate_variant_selection, validate_variants
 
@@ -1215,7 +1227,16 @@ APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS = frozenset({
     # Phase 3 Task 6 -- Collection proves the same server-owned
     # explicit-local-variant preservation contract for tile_style.
     "collection_tiles",
-})
+} | CARD_AWARE_SECTION_KEYS)
+#: Task 6 (final-review fix, C1/I1) — every ``product_view``/``card``
+#: TEMPORARY-ADAPTER family carrier needs the SAME allowlist membership as
+#: hero_banner/brand_carousel/collection_tiles, or its own explicit-local
+#: marker (``variant_explicit`` for ``product_section``,
+#: ``card_style_explicit`` for every ``CARD_AWARE_SECTION_KEYS`` member) is
+#: silently dropped by ``validate_settings`` on the very next unrelated
+#: save — reproduced empirically by the independent Task-6 reviewer for
+#: both. ``CARD_AWARE_SECTION_KEYS`` already includes ``product_section``,
+#: so listing it again here would be redundant.
 
 
 def _with_appearance_overrides(section_key: str, validate_fn, default_fn):
@@ -1243,34 +1264,38 @@ def _with_appearance_overrides(section_key: str, validate_fn, default_fn):
         appearance_overrides_raw = raw.get("appearance_overrides")
         base_raw = {k: v for k, v in raw.items() if k != "appearance_overrides"}
         cleaned = validate_fn(base_raw)
-        # Phase 3 (V01) — carry through an already-present, TRUSTED
-        # explicit-local-variant marker. ``variant_explicit`` is NOT part of
-        # the client-writable ``appearance_overrides`` typography contract
-        # (``validate_appearance_overrides`` still rejects it as unknown), so
-        # it is extracted here BEFORE that validator runs and re-attached only
-        # when the INPUT settings already carried a ``True`` boolean for it.
-        # This preserves the marker across an ordinary non-variant edit (a
-        # merged dict already holding the trusted persisted marker) on BOTH
-        # the R4 schema-patch bridge and the legacy validate_settings path,
-        # while never letting a client manufacture the marker: a non-boolean
-        # or ``False``/absent value is simply not carried, and a historically
-        # unmarked section stays unmarked.
-        preserved_marker = False
+        # Phase 3 (V01) / Task 6 (final-review fix, C1/I1) — carry through
+        # every already-present, TRUSTED explicit-local-override marker
+        # (``_TRUSTED_APPEARANCE_OVERRIDE_MARKER_KEYS`` — currently
+        # ``variant_explicit`` and ``card_style_explicit``). Neither is part
+        # of the client-writable ``appearance_overrides`` typography contract
+        # (``validate_appearance_overrides`` still rejects them as unknown),
+        # so each is extracted here BEFORE that validator runs and
+        # re-attached only when the INPUT settings already carried a
+        # ``True`` boolean for it. This preserves a marker across an
+        # ordinary UNRELATED edit (a merged dict already holding the trusted
+        # persisted marker) on BOTH the R4 schema-patch bridge and the
+        # legacy validate_settings path, while never letting a client
+        # manufacture a marker: a non-boolean or ``False``/absent value is
+        # simply not carried, and a historically unmarked section stays
+        # unmarked.
+        preserved_markers = {}
         if isinstance(appearance_overrides_raw, dict):
-            existing = appearance_overrides_raw.get(VARIANT_EXPLICIT_OVERRIDE_KEY)
-            preserved_marker = existing is True
+            for marker_key in _TRUSTED_APPEARANCE_OVERRIDE_MARKER_KEYS:
+                if appearance_overrides_raw.get(marker_key) is True:
+                    preserved_markers[marker_key] = True
         if appearance_overrides_raw is not None:
             cleaned_overrides = validate_appearance_overrides(
                 {k: v for k, v in appearance_overrides_raw.items()
-                 if k != VARIANT_EXPLICIT_OVERRIDE_KEY}
+                 if k not in _TRUSTED_APPEARANCE_OVERRIDE_MARKER_KEYS}
                 if isinstance(appearance_overrides_raw, dict)
                 else appearance_overrides_raw
             )
             if cleaned_overrides:
                 cleaned["appearance_overrides"] = cleaned_overrides
-        if preserved_marker:
+        if preserved_markers:
             overrides = dict(cleaned.get("appearance_overrides") or {})
-            overrides[VARIANT_EXPLICIT_OVERRIDE_KEY] = True
+            overrides.update(preserved_markers)
             cleaned["appearance_overrides"] = overrides
         return cleaned
 

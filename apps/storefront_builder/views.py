@@ -957,15 +957,21 @@ def storefront_section_settings(request, pk):
             raw["card"] = _extract_card_raw(request, section)
         if definition.supports_capability("layout_width"):
             raw["layout"] = _extract_layout_raw(request)
-        # Phase 3 (V01) — the legacy Brand form builds ``raw`` fresh from named
-        # POST fields, so a trusted persisted ``appearance_overrides`` block
-        # (which carries the internal explicit-local-variant marker) would be
-        # lost on an ordinary non-variant edit. Carry the stored block forward
-        # so the appearance-override-aware validator can preserve the trusted
-        # marker — exactly like ``spacing`` above. The marker is NOT read from
-        # the client (this form never authors ``appearance_overrides``); it is
-        # copied only from the section's own persisted settings.
-        if section.section_key == "brand_carousel":
+        # Phase 3 (V01) / Task 6 (final-review fix, C1/I1) — every legacy
+        # settings form builds ``raw`` fresh from named POST fields, so a
+        # trusted persisted ``appearance_overrides`` block (which carries an
+        # internal explicit-local-override marker — ``variant_explicit`` or
+        # ``card_style_explicit``) would be lost on an ordinary unrelated
+        # edit. Carry the stored block forward for EVERY
+        # appearance-override-aware section (not just ``brand_carousel`` —
+        # the independent Task-6 reviewer found the marker for
+        # card-aware/product_section sections was being silently dropped by
+        # this same narrow check) so the validator can preserve the trusted
+        # marker — exactly like ``spacing`` above. The marker is NOT read
+        # from the client (this form never authors ``appearance_overrides``
+        # itself); it is copied only from the section's own persisted
+        # settings.
+        if section.section_key in section_registry.APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS:
             stored_overrides = (section.settings or {}).get("appearance_overrides")
             if stored_overrides:
                 raw["appearance_overrides"] = stored_overrides
