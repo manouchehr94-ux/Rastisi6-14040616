@@ -237,7 +237,7 @@ def _apply_section_reset_to_baseline(*, draft: StorefrontLayoutVersion, mutation
     section = _scoped_section_for_reset(draft, section_id)
     try:
         preset_service.reset_section_to_baseline(draft, section)
-    except preset_service.BaselineResetError as exc:
+    except (preset_service.BaselineResetError, preset_service.InvalidPresetError) as exc:
         raise R4MutationError(_reset_error_code(exc)) from exc
 
 
@@ -251,7 +251,7 @@ def _apply_section_reset_setting_to_baseline(*, draft: StorefrontLayoutVersion, 
     section = _scoped_section_for_reset(draft, section_id)
     try:
         preset_service.reset_section_setting_to_baseline(draft, section, key)
-    except preset_service.BaselineResetError as exc:
+    except (preset_service.BaselineResetError, preset_service.InvalidPresetError) as exc:
         raise R4MutationError(_reset_error_code(exc)) from exc
 
 
@@ -261,21 +261,21 @@ def _apply_appearance_reset_setting_to_baseline(*, draft: StorefrontLayoutVersio
         raise R4MutationError("invalid_key")
     try:
         preset_service.reset_appearance_setting_to_baseline(draft, key)
-    except preset_service.BaselineResetError as exc:
+    except (preset_service.BaselineResetError, preset_service.InvalidPresetError) as exc:
         raise R4MutationError(_reset_error_code(exc)) from exc
 
 
 def _apply_header_reset_to_baseline(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
     try:
         preset_service.reset_header_to_baseline(draft)
-    except preset_service.BaselineResetError as exc:
+    except (preset_service.BaselineResetError, preset_service.InvalidPresetError) as exc:
         raise R4MutationError(_reset_error_code(exc)) from exc
 
 
 def _apply_footer_reset_to_baseline(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
     try:
         preset_service.reset_footer_to_baseline(draft)
-    except preset_service.BaselineResetError as exc:
+    except (preset_service.BaselineResetError, preset_service.InvalidPresetError) as exc:
         raise R4MutationError(_reset_error_code(exc)) from exc
 
 
@@ -927,9 +927,7 @@ def reset_page(*, store, actor, base_revision: int, page_type: str) -> Storefron
     _lock_active_draft(store=store, base_revision=base_revision)
     try:
         return preset_service.reset_page_with_checkpoint(store, page_type, user=actor)
-    except preset_service.BaselineResetError as exc:
-        raise R4MutationError(_reset_error_code(exc)) from exc
-    except preset_service.InvalidPresetError as exc:
+    except (preset_service.BaselineResetError, preset_service.InvalidPresetError) as exc:
         raise R4MutationError(_reset_error_code(exc)) from exc
 
 
@@ -942,7 +940,5 @@ def reset_storefront(*, store, actor, base_revision: int) -> StorefrontLayoutVer
     _lock_active_draft(store=store, base_revision=base_revision)
     try:
         return preset_service.reset_storefront_with_checkpoint(store, user=actor)
-    except preset_service.BaselineResetError as exc:
-        raise R4MutationError(_reset_error_code(exc)) from exc
-    except preset_service.InvalidPresetError as exc:
+    except (preset_service.BaselineResetError, preset_service.InvalidPresetError) as exc:
         raise R4MutationError(_reset_error_code(exc)) from exc

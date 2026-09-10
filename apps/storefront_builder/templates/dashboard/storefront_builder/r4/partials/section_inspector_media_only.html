@@ -1,0 +1,24 @@
+{% comment %}
+R4 Task 7 (Batch 3) — the Inspector shell for a media-only family
+(story_rail/single_banner today: no SettingsSchema, so there is nothing for
+the normal schema-driven partial to render). Keeps the exact same
+data-r4-section-inspector contract the schema-driven partial uses (close
+button, section id) so the JS/QA-harness side needs no branching — only the
+body differs: a link to the existing, unmodified legacy media management
+screen instead of Inspector fields.
+{% endcomment %}
+<div class="r4-inspector-panel" data-r4-section-inspector data-r4-section-id="{{ section.pk }}">
+  <header class="r4-inspector-header">
+    <strong class="r4-inspector-title">{{ definition.label_fa }}</strong>
+    <button type="button" class="r4-icon-btn" data-r4-inspector-close aria-label="بستن تنظیمات">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  </header>
+
+  <div class="r4-inspector-body">
+    <p class="r4-inspector-media-only-note">این بخش تنظیمِ مستقیمی ندارد — محتوای آن از طریق مدیریتِ رسانه تعیین می‌شود.</p>
+    <div class="r4-inspector-media-link">
+      <a href="{{ media_manage_url }}" target="_blank" rel="noopener">مدیریت {{ media_label_plural }}</a>
+    </div>
+  </div>
+</div>

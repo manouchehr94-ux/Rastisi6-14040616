@@ -147,18 +147,86 @@ class FeatureGateTests(R4MutationApiTestCase):
 
 
 class NonSchemaSectionTests(R4MutationApiTestCase):
-    def test_single_banner_section_inspector_is_not_found(self):
+    def test_context_aware_domain_owned_section_inspector_is_not_found(self):
         # ``faq`` was this test's original representative — Task 6 Group D
         # later gave it a real schema (the new ``repeater`` field type's
-        # first user), so it no longer qualifies. ``single_banner`` is the
-        # correct representative now: it has an explicit FIXED/STATIC
-        # disposition and will never legitimately gain a schema (see its
-        # SectionDefinition comment in section_registry.py).
+        # first user), so it no longer qualifies. ``single_banner`` was the
+        # representative after that, but R4 Task 7 (Batch 3) intentionally
+        # made a schema-less section return 200 (a minimal media-only
+        # Inspector) whenever it owns a media kind — single_banner does
+        # (``banners``), so it no longer 404s either; see
+        # ``MediaOnlySectionInspectorTests`` below for its new contract.
+        # ``product_main`` is the correct representative now: it is
+        # CONTEXT-AWARE-DOMAIN-OWNED — no schema AND no media kind, so it
+        # genuinely has nothing for the Inspector to show.
+        product_main_section = StorefrontSection.objects.create(
+            version=self.draft, section_key="product_main", order=1,
+        )
+        response = self.client.get(_inspector_url(product_main_section.pk))
+        self.assertEqual(response.status_code, 404)
+
+
+class MediaOnlySectionInspectorTests(R4MutationApiTestCase):
+    """R4 Task 7 (Batch 3) — a schema-less section that DOES own a media
+    kind (story_rail/single_banner today) gets a minimal media-only
+    Inspector instead of a 404, linking to the existing, unmodified legacy
+    media management screen — never a new media UI/authority."""
+
+    def test_single_banner_inspector_links_to_existing_media_management(self):
         single_banner_section = StorefrontSection.objects.create(
             version=self.draft, section_key="single_banner", order=1,
         )
         response = self.client.get(_inspector_url(single_banner_section.pk))
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-r4-section-inspector")
+        self.assertContains(response, f'data-r4-section-id="{single_banner_section.pk}"')
+        self.assertContains(
+            response,
+            reverse(
+                "dashboard:storefront-builder-section-media-list",
+                kwargs={"pk": single_banner_section.pk, "kind": "banners"},
+            ),
+        )
+        self.assertNotContains(response, "<iframe")
+        self.assertNotContains(response, "sfb-modal")
+        self.assertNotContains(response, "<form")
+
+    def test_story_rail_inspector_links_to_existing_media_management(self):
+        story_rail_section = StorefrontSection.objects.create(
+            version=self.draft, section_key="story_rail", order=1,
+        )
+        response = self.client.get(_inspector_url(story_rail_section.pk))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            reverse(
+                "dashboard:storefront-builder-section-media-list",
+                kwargs={"pk": story_rail_section.pk, "kind": "story-items"},
+            ),
+        )
+
+    def test_hero_banner_inspector_also_links_to_media_management(self):
+        # hero_banner HAS a schema (unlike story_rail/single_banner) but is
+        # ALSO media-owning — the link is added to the normal schema-driven
+        # Inspector partial in this case, not a separate media-only shell.
+        response = self.client.get(_inspector_url(self.section.pk))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            reverse(
+                "dashboard:storefront-builder-section-media-list",
+                kwargs={"pk": self.section.pk, "kind": "hero-slides"},
+            ),
+        )
+
+    def test_rich_text_inspector_has_no_media_link(self):
+        # rich_text has neither a media kind — the link must not appear.
+        rich_text_section = StorefrontSection.objects.create(
+            version=self.draft, section_key="rich_text", order=1,
+        )
+        response = self.client.get(_inspector_url(rich_text_section.pk))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "r4-inspector-media-link")
 
 
 class MethodContractTests(R4MutationApiTestCase):
@@ -383,10 +451,22 @@ class AppearanceOverrideWidgetTests(R4MutationApiTestCase):
         self.assertNotIn('type="text"', appearance_chunk)
 
     def test_uses_no_r3_endpoint_and_no_new_endpoint(self):
+        # Scoped to the appearance_override widget's own chunk — same
+        # slicing ``test_no_json_or_css_free_text_input_for_appearance_override``
+        # above already uses. R4 Task 7 (Batch 3) added a genuine, unrelated
+        # link to the existing media management screen elsewhere in the
+        # Inspector (outside this widget) — this test's actual contract was
+        # always "the appearance_override widget itself never calls any
+        # backend endpoint (R3 or new)", never "the whole Inspector response
+        # contains no admin URL anywhere."
         response = self.client.get(_inspector_url(self.section.pk))
         content = response.content.decode()
-        self.assertNotIn("/admin-portal/", content)
-        self.assertNotIn("section-settings", content)
+        advanced_start = content.index('data-r4-tab-panel="advanced"')
+        advanced_chunk = content[advanced_start:]
+        appearance_start = advanced_chunk.index('data-r4-field-type="appearance_override"')
+        appearance_chunk = advanced_chunk[appearance_start:appearance_start + 1500]
+        self.assertNotIn("/admin-portal/", appearance_chunk)
+        self.assertNotIn("section-settings", appearance_chunk)
 
     def test_inherited_appearance_projection_is_typed_and_minimal(self):
         response = self.client.get(_inspector_url(self.section.pk))

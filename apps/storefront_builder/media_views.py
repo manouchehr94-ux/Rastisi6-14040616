@@ -108,6 +108,19 @@ _MEDIA_KINDS = {
 }
 
 
+def media_kind_for_section_key(section_key: str) -> str | None:
+    """R4 Task 7 (Batch 3) — the reverse lookup R4's Inspector needs: given
+    a section_key, which (if any) ``_MEDIA_KINDS`` entry owns its media.
+    Public (unlike ``_media_config``, which additionally needs a real
+    Section instance to validate against) because the R4 editor only has
+    the section_key at Inspector-render time, before it knows whether this
+    is a schema-enabled section, a media-only one, or neither."""
+    for kind, config in _MEDIA_KINDS.items():
+        if section_key in config["section_keys"]:
+            return kind
+    return None
+
+
 def _media_config(kind: str, section) -> dict:
     config = _MEDIA_KINDS.get(kind)
     if config is None:

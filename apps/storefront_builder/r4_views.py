@@ -5,6 +5,7 @@ from django.db.models import Q
 from django.http import Http404, JsonResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import render
+from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.catalog.models import Brand, Category, MerchantCollection
@@ -13,7 +14,14 @@ from apps.dashboard.decorators import permission_required, staff_required
 from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
 from apps.stores.resolution import resolve_store_for_service
 
-from . import appearance_registry, global_region_registry, resource_source, section_registry, variant_contract
+from . import (
+    appearance_registry,
+    global_region_registry,
+    media_views,
+    resource_source,
+    section_registry,
+    variant_contract,
+)
 from .models import StorefrontLayoutVersion, StorefrontPage, StorefrontSection
 from .services import (
     container_service,
@@ -446,9 +454,45 @@ def storefront_r4_section_inspector(request, pk):
     except ValueError:
         raise Http404
 
+    # R4 Task 7 (Batch 3) — section media CRUD reachability. The generic
+    # media system (``media_views.py``) is real, shared, and already
+    # canonical — the R4 Inspector previously had NO link to it anywhere,
+    # so a merchant editing hero_banner/image_slider/multi_banner/
+    # single_banner/story_rail in R4 had no way to manage the underlying
+    # slides/banners/story items without already knowing the legacy URL.
+    # Never a new media UI/authority — this only ever links to the
+    # existing, unmodified legacy management screens.
+    media_kind = media_views.media_kind_for_section_key(section.section_key)
+    media_manage_url = None
+    if media_kind is not None:
+        media_manage_url = reverse(
+            "dashboard:storefront-builder-section-media-list",
+            kwargs={"pk": section.pk, "kind": media_kind},
+        )
+        media_label_plural = media_views._MEDIA_KINDS[media_kind]["label_plural"]
+    else:
+        media_label_plural = None
+
     schema = definition.settings_schema
     if schema is None:
-        raise Http404
+        # A media-only family (story_rail/single_banner today) has nothing
+        # for the normal schema-driven Inspector to render at all — render
+        # the minimal media-only partial instead of 404ing the whole
+        # Inspector. A section with neither a schema NOR a media kind
+        # (context-aware/domain-owned families like product_main) still
+        # correctly 404s: there is genuinely nothing to show.
+        if media_manage_url is None:
+            raise Http404
+        return render(
+            request,
+            "dashboard/storefront_builder/r4/partials/section_inspector_media_only.html",
+            {
+                "section": section,
+                "definition": definition,
+                "media_manage_url": media_manage_url,
+                "media_label_plural": media_label_plural,
+            },
+        )
 
     for field in schema.fields:
         if field.field_type not in _INSPECTOR_SUPPORTED_FIELD_TYPES:
@@ -537,6 +581,8 @@ def storefront_r4_section_inspector(request, pk):
             ],
             "inherited_appearance_by_field": inherited_appearance_by_field,
             "resource_source_summary": resource_source_summary,
+            "media_manage_url": media_manage_url,
+            "media_label_plural": media_label_plural,
         },
     )
 

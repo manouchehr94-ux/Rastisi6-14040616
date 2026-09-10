@@ -41,6 +41,10 @@ class R4MutationApiTestCase(StorefrontBuilderViewsTestCase):
     def _history_count(self):
         return StorefrontEditHistoryEntry.objects.filter(draft_version=self.draft).count()
 
+    def _refresh_revision(self):
+        self.draft.refresh_from_db()
+        return self.draft.edit_revision
+
 
 class SuccessfulSchemaMutationTests(R4MutationApiTestCase):
     def test_autoplay_toggle_increments_revision_and_persists(self):

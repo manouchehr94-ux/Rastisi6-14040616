@@ -7,6 +7,12 @@
     </button>
   </header>
 
+  {% if media_manage_url %}
+  <div class="r4-inspector-media-link">
+    <a href="{{ media_manage_url }}" target="_blank" rel="noopener">مدیریت {{ media_label_plural }}</a>
+  </div>
+  {% endif %}
+
   <div class="r4-inspector-tabs" role="tablist">
     <button type="button" class="r4-inspector-tab" role="tab" data-r4-tab="basic" aria-selected="true">تنظیمات اصلی</button>
     <button type="button" class="r4-inspector-tab" role="tab" data-r4-tab="advanced" aria-selected="false">تنظیمات پیشرفته</button>
