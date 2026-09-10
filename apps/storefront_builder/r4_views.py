@@ -17,6 +17,7 @@ from apps.stores.resolution import resolve_store_for_service
 from . import (
     appearance_registry,
     global_region_registry,
+    layout_preset_registry,
     media_views,
     resource_source,
     section_registry,
@@ -372,6 +373,21 @@ def storefront_r4_editor(request):
             # — these flags just keep the button from always erroring.
             "page_has_baseline": bool((draft.template_baseline_snapshot or {}).get("pages", {}).get(page_type)),
             "storefront_has_baseline": bool(draft.template_baseline_snapshot),
+            # R4 Task 8 (Batch 1) — the content-preserving Template Switch
+            # picker's data source: the SAME Ready Template registry the
+            # legacy Template Gallery (``storefront_template_gallery``)
+            # already lists from, never a second catalog. Each entry
+            # carries key+version together (never a bare key) since
+            # ``switch_template`` validates both, exactly like
+            # ``appearance.template.apply`` already does for the same
+            # stale-definition-under-a-client reason.
+            "ready_templates": [
+                {"key": preset.key, "version": preset.version, "label": preset.label_fa}
+                for preset in layout_preset_registry.list_ready_templates()
+            ],
+            "current_template_key": variant_contract.validate_template_provenance(
+                draft.template_provenance,
+            )["template"]["key"],
             "global_design": _build_global_design_context(draft),
             "history": edit_history_service.history_state(draft),
         },
@@ -860,6 +876,56 @@ def storefront_r4_reset_storefront(request):
 
     try:
         r4_mutation_service.reset_storefront(store=store, actor=request.user, base_revision=base_revision)
+    except r4_mutation_service.R4StaleRevision as exc:
+        return JsonResponse(
+            {"ok": False, "code": "stale_revision", "current_revision": exc.current_revision},
+            status=409,
+        )
+    except r4_mutation_service.R4MutationError as exc:
+        return JsonResponse({"ok": False, "code": str(exc)}, status=400)
+
+    return JsonResponse({"ok": True})
+
+
+@require_POST
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
+def storefront_r4_switch_template(request):
+    """R4 Task 8 (Batch 1) — content-preserving Template Switch. Same
+    contract shape as Publish/Discard/Reset-page/Reset-storefront above
+    (base_revision-gated, ``{ok: true}`` on success, client reloads on
+    success since this replaces the Draft's identity); the target Ready
+    Template comes from the request body, validated the SAME way
+    ``appearance.template.apply`` already validates one (exact key+version
+    match against the live registry, never a bare key alone — a stale
+    client offering a Template whose definition has since changed under
+    it must be rejected, not silently applied against a mismatched
+    recipe)."""
+    store = resolve_store_for_service(request)
+    layout = layout_service.get_or_create_layout(store)
+    if not layout.r4_editor_enabled:
+        raise Http404
+
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({"ok": False, "code": "malformed_json"}, status=400)
+
+    if not isinstance(payload, dict):
+        return JsonResponse({"ok": False, "code": "invalid_request_shape"}, status=400)
+
+    base_revision = payload.get("base_revision")
+    if not _is_strict_int(base_revision) or base_revision < 0:
+        return JsonResponse({"ok": False, "code": "invalid_base_revision"}, status=400)
+
+    template_key = payload.get("template_key")
+    template_version = payload.get("template_version")
+
+    try:
+        r4_mutation_service.switch_template(
+            store=store, actor=request.user, base_revision=base_revision,
+            template_key=template_key, template_version=template_version,
+        )
     except r4_mutation_service.R4StaleRevision as exc:
         return JsonResponse(
             {"ok": False, "code": "stale_revision", "current_revision": exc.current_revision},

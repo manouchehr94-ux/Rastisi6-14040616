@@ -64,6 +64,16 @@ class EditorAccessTests(StorefrontBuilderViewsTestCase):
         self.assertContains(resp, "ادیتور جدید (R4)")
         self.assertContains(resp, reverse("dashboard:storefront-builder-r4-editor"))
 
+    def test_publish_form_carries_the_current_edit_revision(self):
+        """R4 Task 8 (Batch 2, lifecycle-hardening) — ``storefront_publish``'s
+        stale-aware path already existed but was unreachable in practice:
+        the real toolbar form never sent ``base_revision``, so a stale
+        legacy publish always silently "succeeded" as a bare publish
+        instead. Confirms the form now actually carries the token."""
+        draft = svc.get_or_create_draft(self.store)
+        resp = self.client.get(reverse("dashboard:storefront-builder-editor"))
+        self.assertContains(resp, f'name="base_revision" value="{draft.edit_revision}"')
+
     def test_anonymous_denied(self):
         self.client.logout()
         resp = self.client.get(reverse("dashboard:storefront-builder-editor"))
@@ -626,6 +636,83 @@ class LockSectionTests(StorefrontBuilderViewsTestCase):
         b = StorefrontSection.objects.create(
             version=self.draft, section_key="image_text", order=1, is_locked=True,
         )
+        self.client.post(reverse("dashboard:storefront-builder-section-move", args=[a.pk]), {"direction": "down"})
+        a.refresh_from_db()
+        b.refresh_from_db()
+        self.assertEqual(a.order, 0)
+        self.assertEqual(b.order, 1)
+
+    def test_section_in_locked_container_cannot_be_removed(self):
+        """R4 Task 8 (Batch 2, lifecycle-lock parity) — a Container's own
+        lock must ALSO protect the Sections placed in it, not just each
+        Section's own ``is_locked`` flag (already covered by
+        ``test_locked_section_cannot_be_removed`` above). Matches
+        ``section_structure_service.remove_section``'s own
+        ``container_locked`` guard, which this legacy view previously had
+        no equivalent of."""
+        from apps.storefront_builder.services import container_service
+
+        page = self.draft.get_page(StorefrontPage.PageType.HOME)
+        section = StorefrontSection.objects.create(page=page, section_key="rich_text", order=0)
+        container = container_service.create_empty_container(page, "single")
+        cell = container.cells.order_by("order", "id").first()
+        container_service.place_section(cell, section)
+        container.is_locked = True
+        container.save(update_fields=["is_locked"])
+
+        self.client.post(reverse("dashboard:storefront-builder-section-remove", args=[section.pk]))
+        self.assertTrue(StorefrontSection.objects.filter(pk=section.pk).exists())
+
+    def test_section_in_unlocked_container_still_removable(self):
+        from apps.storefront_builder.services import container_service
+
+        page = self.draft.get_page(StorefrontPage.PageType.HOME)
+        section = StorefrontSection.objects.create(page=page, section_key="rich_text", order=0)
+        container = container_service.create_empty_container(page, "single")
+        cell = container.cells.order_by("order", "id").first()
+        container_service.place_section(cell, section)
+
+        self.client.post(reverse("dashboard:storefront-builder-section-remove", args=[section.pk]))
+        self.assertFalse(StorefrontSection.objects.filter(pk=section.pk).exists())
+
+    def test_section_in_locked_container_cannot_be_moved(self):
+        """Same lock-parity gap as removal above, for
+        ``section_structure_service.move_section``'s own
+        ``container_locked``/``target_container_locked`` guards."""
+        from apps.storefront_builder.services import container_service
+
+        page = self.draft.get_page(StorefrontPage.PageType.HOME)
+        a = StorefrontSection.objects.create(page=page, section_key="rich_text", order=0)
+        b = StorefrontSection.objects.create(page=page, section_key="image_text", order=1)
+        container_a = container_service.create_empty_container(page, "single")
+        container_service.place_section(container_a.cells.order_by("order", "id").first(), a)
+        container_b = container_service.create_empty_container(page, "single")
+        container_service.place_section(container_b.cells.order_by("order", "id").first(), b)
+        container_a.is_locked = True
+        container_a.save(update_fields=["is_locked"])
+
+        self.client.post(reverse("dashboard:storefront-builder-section-move", args=[a.pk]), {"direction": "down"})
+        a.refresh_from_db()
+        b.refresh_from_db()
+        self.assertEqual(a.order, 0)
+        self.assertEqual(b.order, 1)
+
+    def test_moving_a_neighbor_whose_container_is_locked_is_blocked(self):
+        """Same lock-parity gap as above, for the SWAP TARGET's container —
+        mirrors ``test_moving_a_neighbor_into_a_locked_section_is_blocked``
+        above, with a locked Container instead of a locked Section."""
+        from apps.storefront_builder.services import container_service
+
+        page = self.draft.get_page(StorefrontPage.PageType.HOME)
+        a = StorefrontSection.objects.create(page=page, section_key="rich_text", order=0)
+        b = StorefrontSection.objects.create(page=page, section_key="image_text", order=1)
+        container_a = container_service.create_empty_container(page, "single")
+        container_service.place_section(container_a.cells.order_by("order", "id").first(), a)
+        container_b = container_service.create_empty_container(page, "single")
+        container_service.place_section(container_b.cells.order_by("order", "id").first(), b)
+        container_b.is_locked = True
+        container_b.save(update_fields=["is_locked"])
+
         self.client.post(reverse("dashboard:storefront-builder-section-move", args=[a.pk]), {"direction": "down"})
         a.refresh_from_db()
         b.refresh_from_db()
@@ -1280,6 +1367,36 @@ class PublishDiscardRestoreViewTests(StorefrontBuilderViewsTestCase):
         self.assertRedirects(resp, reverse("dashboard:storefront-builder-editor"))
         layout = svc.get_or_create_layout(self.store)
         self.assertTrue(layout.uses_visual_storefront_layout)
+
+    def test_publish_with_matching_base_revision_succeeds(self):
+        """R4 Task 8 (Batch 2) — end-to-end proof that the now-wired
+        ``base_revision`` form field (see ``test_publish_form_carries_the_
+        current_edit_revision`` above) actually reaches the already-correct
+        stale-aware server path, exactly as the real toolbar form now
+        submits it."""
+        draft = svc.get_or_create_draft(self.store)
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-publish"),
+            {"base_revision": str(draft.edit_revision)},
+        )
+        self.assertRedirects(resp, reverse("dashboard:storefront-builder-editor"))
+        layout = svc.get_or_create_layout(self.store)
+        self.assertTrue(layout.uses_visual_storefront_layout)
+
+    def test_publish_with_stale_base_revision_is_rejected(self):
+        draft = svc.get_or_create_draft(self.store)
+        draft.edit_revision += 1
+        draft.save(update_fields=["edit_revision"])
+        stale_revision = draft.edit_revision - 1
+
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-publish"),
+            {"base_revision": str(stale_revision)},
+        )
+        self.assertRedirects(resp, reverse("dashboard:storefront-builder-editor"))
+        layout = svc.get_or_create_layout(self.store)
+        self.assertFalse(layout.uses_visual_storefront_layout)
+        self.assertTrue(StorefrontLayoutVersion.objects.filter(pk=draft.pk, status=StorefrontLayoutVersion.Status.DRAFT).exists())
 
     def test_discard_redirects(self):
         svc.get_or_create_draft(self.store)

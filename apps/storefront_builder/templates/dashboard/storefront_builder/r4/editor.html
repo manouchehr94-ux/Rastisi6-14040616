@@ -132,6 +132,18 @@
         {% if storefront_has_baseline %}
         <button type="button" id="r4ResetStorefrontButton">⟲ بازنشانی کل ظاهر فروشگاه به قالب</button>
         {% endif %}
+        {% if ready_templates %}
+        <section class="r4-global-design-group r4-template-switch">
+          <h4>قالبِ آماده</h4>
+          <label class="r4-field-sublabel" for="r4TemplateSwitchSelect">تعویضِ قالب — محتوایِ فعلی حفظ می‌شود</label>
+          <select id="r4TemplateSwitchSelect" class="r4-control">
+            {% for template in ready_templates %}
+            <option value="{{ template.key }}" data-r4-template-version="{{ template.version }}" {% if template.key == current_template_key %}selected{% endif %}>{{ template.label }}{% if template.key == current_template_key %} (فعلی){% endif %}</option>
+            {% endfor %}
+          </select>
+          <button type="button" id="r4SwitchTemplateButton">تعویضِ قالب (حفظِ محتوا)</button>
+        </section>
+        {% endif %}
         <section class="r4-global-design-group" data-r4-global-mutation="appearance.update">
           <h4>ظاهر کلی</h4>
 

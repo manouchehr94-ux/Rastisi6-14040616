@@ -43,6 +43,7 @@ from .services import (
     r4_mutation_service,
     row_service,
     section_data_service,
+    section_structure_service,
 )
 from .services.layout_service import _clone_section_scoped_media
 from .services.render_service import (
@@ -1653,6 +1654,7 @@ def storefront_section_row_layout(request, pk):
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
 @_record_edit_history("حذف بخش")
+@transaction.atomic
 def storefront_section_remove(request, pk):
     section = _get_scoped_section(request, pk)
     page = section.page
@@ -1662,6 +1664,17 @@ def storefront_section_remove(request, pk):
     # قفل‌بودن را می‌بیند، چون آن یک تصمیمِ per-instance و آگاهانه‌تر است).
     if section.is_locked:
         messages.error(request, "این بخش قفل است — ابتدا قفل آن را باز کنید")
+        return storefront_section_list_partial(request, page_type=page_type)
+    # R4 Task 8 (Batch 2, lifecycle-lock parity) — a section can also be
+    # protected indirectly, via its CONTAINER's own lock (V3 Free Layout).
+    # ``section_structure_service.remove_section`` already rejects this
+    # (``container_locked``); this legacy view previously only checked the
+    # section's OWN lock, letting a merchant delete a section straight out
+    # of a Container they had explicitly locked. Same resolution helper as
+    # that canonical function, never a second lock-check implementation.
+    placement_cell = section_structure_service.find_placement_cell(section)
+    if placement_cell is not None and placement_cell.container.is_locked:
+        messages.error(request, "این چیدمان قفل است — ابتدا قفل آن را باز کنید")
         return storefront_section_list_partial(request, page_type=page_type)
     # Phase 1 correction: حذفِ یک عضوِ ردیف، آن ردیف را نامعتبر می‌کند
     # (کمتر از حداقلِ عضو یا مجموعِ عرضِ ناقص) — باید صریحاً رد شود، نه
@@ -1729,6 +1742,7 @@ def storefront_section_lock_toggle(request, pk):
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
 @_record_edit_history("تکرار بخش")
+@transaction.atomic
 def storefront_section_duplicate(request, pk):
     """تکرارِ یک بخش — یک بخشِ منطقیِ **جدید** می‌سازد.
 
@@ -1939,6 +1953,7 @@ def storefront_section_reorder(request):
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
 @_record_edit_history("جابه‌جایی بخش")
+@transaction.atomic
 def storefront_section_move(request, pk):
     """جابه‌جایی یک بخش به بالا/پایین — fallback برای موبایل/کیبورد وقتی
     drag-and-drop عملی نیست."""
@@ -1947,6 +1962,17 @@ def storefront_section_move(request, pk):
     # Phase 1 (spec §37 — Lock): «It cannot be moved».
     if section.is_locked:
         messages.error(request, "این بخش قفل است — ابتدا قفل آن را باز کنید")
+        return storefront_section_list_partial(request, page_type=section.page.page_type)
+    # R4 Task 8 (Batch 2, lifecycle-lock parity) — same reasoning as
+    # ``storefront_section_remove`` above: a locked CONTAINER must also
+    # block moving a section out of it, matching
+    # ``section_structure_service.move_section``'s own ``container_locked``
+    # guard. Checked for BOTH sides of the swap below (this same call
+    # covers the source side; the neighbor's own container is checked
+    # right before the swap itself).
+    source_cell = section_structure_service.find_placement_cell(section)
+    if source_cell is not None and source_cell.container.is_locked:
+        messages.error(request, "این چیدمان قفل است — ابتدا قفل آن را باز کنید")
         return storefront_section_list_partial(request, page_type=section.page.page_type)
     # Phase 1A: جابه‌جایی همیشه بینِ خواهر-وبرادرهایِ **همان صفحه** انجام
     # می‌شود (``section.page.sections``، نه ``section.version.sections``ی
@@ -1966,6 +1992,10 @@ def storefront_section_move(request, pk):
         # section مبدأ.
         if other.is_locked:
             messages.error(request, "بخشِ همسایه قفل است — ابتدا قفل آن را باز کنید")
+            return storefront_section_list_partial(request, page_type=section.page.page_type)
+        other_cell = section_structure_service.find_placement_cell(other)
+        if other_cell is not None and other_cell.container.is_locked:
+            messages.error(request, "چیدمانِ بخشِ همسایه قفل است — ابتدا قفل آن را باز کنید")
             return storefront_section_list_partial(request, page_type=section.page.page_type)
         section.order, other.order = other.order, section.order
         # ``section`` (از ``_get_scoped_section``) یک کوئریِ *جدا* از

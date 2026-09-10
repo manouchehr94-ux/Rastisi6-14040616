@@ -107,6 +107,14 @@
       <form method="post" action="{% url 'dashboard:storefront-builder-publish' %}" class="sfb-prototype-publish-form"
             onsubmit="return confirm('این پیش‌نویس روی فروشگاه عمومی منتشر شود؟')">
         {% csrf_token %}
+        {# R4 Task 8 (Batch 2, lifecycle-hardening) — storefront_publish's own
+           stale-aware path (r4_mutation_service.publish_draft) already existed
+           and is already correct; this form simply never sent the token that
+           would engage it. Without this, two browser tabs on the legacy
+           editor could publish over each other's changes with no conflict
+           detection at all, even though the exact same protection R4 already
+           gets was one hidden field away. #}
+        <input type="hidden" name="base_revision" value="{{ draft.edit_revision }}">
         <button type="submit" class="sfb-v3-primary-btn">انتشار <span aria-hidden="true">←</span></button>
       </form>
     </div>

@@ -745,6 +745,65 @@ def apply_preset_with_checkpoint(store, preset: LayoutPresetDefinition, *, user=
 
 
 @transaction.atomic
+def switch_template_preserving_content(store, preset: LayoutPresetDefinition, *, user=None) -> StorefrontLayoutVersion:
+    """R4 Task 8 — content-preserving Template Switch: apply a Ready
+    Template's appearance/DNA (ordinary appearance overlay, header/footer
+    config, and the COMPLETE typed Store-Appearance manifest) WITHOUT
+    replacing page composition at all.
+
+    This is a genuinely different operation from ``apply_preset_with_
+    checkpoint`` above (which replaces both DNA *and* composition for
+    every page the preset's recipe covers) — it exists because a merchant
+    who has already authored real content under one Template must be able
+    to switch to another Template's *visual identity* without losing that
+    work. It reuses, never re-implements, the two already-canonical
+    primitives this needs:
+
+    - ``layout_service.checkpoint_draft_before_replacement`` — same
+      recoverable-checkpoint machinery ``apply_preset_with_checkpoint``/
+      ``reset_page_with_checkpoint``/``reset_storefront_with_checkpoint``
+      already use. It returns a FULL CLONE of the current Draft's content
+      (all six pages, every Section/Container/Cell) as the new active
+      Draft — this is precisely the content-preservation mechanism: we
+      never touch composition, so the clone IS the preserved content.
+    - ``appearance_authority_service.apply_ready_template_appearance`` —
+      the canonical, already-tested Ready-Template DNA-application
+      primitive (Phase 1, Task 2) that had zero production callers before
+      this — explicitly documented as NOT replacing page composition,
+      provenance, or baseline snapshots, which is exactly the contract
+      this function needs.
+
+    ``template_provenance`` IS updated (so the Template Gallery/R4 UI
+    correctly shows the new Template as "current" and future switches
+    compare against it) — but ``template_baseline_snapshot`` is
+    deliberately left untouched: it is a record of which section-level
+    content was actually baseline-applied and can be granularly reset to,
+    and this function never applies Template B's composition, so writing
+    a snapshot claiming otherwise would be exactly the kind of dishonest
+    "fabricated baseline" ``apply_preset``'s own ``_record_baseline_
+    snapshot=False`` path already goes out of its way to avoid. The
+    practical consequence — granular reset-to-baseline after a content-
+    preserving switch still restores a page/section to Template A's
+    (still-accurate) recorded baseline, not Template B's — is a known,
+    deliberate limitation, not an oversight: it never destroys anything,
+    it only means "reset to baseline" continues to mean what it already
+    recorded."""
+    if not preset.is_ready_template:
+        raise InvalidPresetError(
+            f"«{preset.label_fa}» یک Ready Template نیست — تعویضِ محتوا-محفوظ فقط برایِ Ready Templateها معنادار است"
+        )
+    draft = layout_service.checkpoint_draft_before_replacement(
+        store, reason_label=f"پیش از تعویضِ محتوا-محفوظِ قالب «{preset.label_fa}»", user=user,
+    )
+    appearance_authority_service.apply_ready_template_appearance(version=draft, preset=preset)
+    draft.template_provenance = build_template_provenance(
+        template_key=preset.key, template_version=preset.version,
+    )
+    draft.save(update_fields=["template_provenance", "updated_at"])
+    return draft
+
+
+@transaction.atomic
 def reset_storefront_with_checkpoint(store, *, user=None) -> StorefrontLayoutVersion:
     """Acceptance Batch 2 (post-U11) — Issue 3، «RESET STOREFRONT» با
     یکپارچگیِ تاریخچه‌یِ الزامیِ همان بخش: پیش از بازنشانیِ کاملِ فروشگاه،

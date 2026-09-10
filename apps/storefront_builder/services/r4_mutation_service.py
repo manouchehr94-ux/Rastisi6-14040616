@@ -951,3 +951,45 @@ def reset_storefront(*, store, actor, base_revision: int) -> StorefrontLayoutVer
         return preset_service.reset_storefront_with_checkpoint(store, user=actor)
     except (preset_service.BaselineResetError, preset_service.InvalidPresetError) as exc:
         raise R4MutationError(_reset_error_code(exc)) from exc
+
+
+@transaction.atomic
+def switch_template(
+    *, store, actor, base_revision: int, template_key: str, template_version: str,
+) -> StorefrontLayoutVersion:
+    """R4 Task 8 (Batch 1) — content-preserving Template Switch, gated
+    through the same concurrency boundary as Publish/Discard/Reset-page/
+    Reset-storefront above, delegating the actual (checkpoint-then-apply-
+    DNA-only) operation to ``preset_service.switch_template_preserving_
+    content`` — never a second copy of its checkpoint/appearance-authority
+    logic. Replaces the active Draft with a NEW version (the old one
+    archived as a recoverable checkpoint, its FULL content cloned forward
+    untouched), so — like every other Draft-identity-replacing operation
+    above — this is deliberately NOT a normal ``_dispatch_mutation`` type.
+
+    Deliberately a SEPARATE capability from the pre-existing ``appearance.
+    template.apply`` mutation type (``_apply_appearance_template`` above):
+    that one is the already-tested, already-undo/redo-integrated FULL
+    recipe apply (composition + DNA, in-place on the same Draft — a
+    legitimate, different, already-shipped operation this task does not
+    touch). This one is the NEW capability Task 8 asks for: DNA only,
+    composition untouched, because it must survive a merchant's authored
+    content. Two genuinely different operations, each with exactly one
+    canonical implementation — not two competing orchestrations of the
+    same thing."""
+    _lock_active_draft(store=store, base_revision=base_revision)
+    if not isinstance(template_key, str) or not template_key:
+        raise R4MutationError("unknown_appearance_template")
+    if not isinstance(template_version, str) or not template_version:
+        raise R4MutationError("template_version_mismatch")
+
+    preset = layout_preset_registry.get_layout_preset(template_key)
+    if preset is None or not preset.is_ready_template:
+        raise R4MutationError("unknown_appearance_template")
+    if preset.version != template_version:
+        raise R4MutationError("template_version_mismatch")
+
+    try:
+        return preset_service.switch_template_preserving_content(store, preset, user=actor)
+    except preset_service.InvalidPresetError as exc:
+        raise R4MutationError("invalid_appearance_template") from exc

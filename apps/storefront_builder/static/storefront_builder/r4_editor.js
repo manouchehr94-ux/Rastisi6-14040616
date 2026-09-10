@@ -1114,6 +1114,31 @@ window.RastiSiR4 = {
         R4.queue.then(function (result) {
           if (result && result.ok) window.location.reload();
         });
+        return;
+      }
+      // R4 Task 8 (Batch 1) — same delegation requirement as
+      // #r4ResetStorefrontButton just above: #r4SwitchTemplateButton
+      // lives inside #r4GlobalDesign too. Content-preserving Template
+      // Switch REPLACES the Draft's identity (a fresh checkpoint clone —
+      // see preset_service.switch_template_preserving_content), so it
+      // needs the same confirm + sendReplaceDraftAction + reload shape,
+      // never an in-place R4.enqueueMutation.
+      if (evt.target.closest('#r4SwitchTemplateButton')) {
+        var templateSelect = document.getElementById('r4TemplateSwitchSelect');
+        if (!templateSelect || !templateSelect.value) return;
+        var selectedOption = templateSelect.options[templateSelect.selectedIndex];
+        var templateVersion = selectedOption ? selectedOption.getAttribute('data-r4-template-version') : null;
+        if (!templateVersion) return;
+        if (!window.confirm('ظاهرِ این قالب (پالت، هدر، فوتر، طراحیِ کلی) اعمال می‌شود — محتوایِ بخش‌های موجود دست‌نخورده می‌ماند. ادامه می‌دهید؟')) return;
+        R4.queue = (R4.queue || Promise.resolve()).then(function () {
+          return sendReplaceDraftAction('switch-template/', {
+            template_key: templateSelect.value,
+            template_version: templateVersion,
+          });
+        });
+        R4.queue.then(function (result) {
+          if (result && result.ok) window.location.reload();
+        });
       }
     });
 

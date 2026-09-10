@@ -52,10 +52,14 @@ def _scoped_section(draft, section_id) -> StorefrontSection:
         raise SectionStructureError("section_not_found") from None
 
 
-def _find_placement_cell(section: StorefrontSection):
+def find_placement_cell(section: StorefrontSection):
     """Same-Cell resolution the rest of the codebase already uses: prefer
     the new multi-block FK, fall back to the legacy single-block OneToOne
-    reverse pointer."""
+    reverse pointer. Public (R4 Task 8, Batch 2) — ``views.py``'s legacy
+    ``storefront_section_remove``/``storefront_section_move`` reuse this
+    SAME resolution to check container-level locks, matching what this
+    module's own ``remove_section``/``duplicate_section``/``move_section``
+    already enforce, rather than re-deriving cell placement a second way."""
     cell = section.cell
     if cell is None:
         cell = StorefrontCell.objects.filter(section=section).select_related("container").first()
@@ -199,7 +203,7 @@ def remove_section(*, draft, section_id: int) -> None:
     container_service.ensure_page_containers(page)
     section.refresh_from_db()
 
-    cell = _find_placement_cell(section)
+    cell = find_placement_cell(section)
     if cell is not None and cell.container.is_locked:
         raise SectionStructureError("container_locked")
 
@@ -222,7 +226,7 @@ def duplicate_section(*, draft, section_id: int) -> StorefrontSection:
     container_service.ensure_page_containers(page)
     section.refresh_from_db()
 
-    cell = _find_placement_cell(section)
+    cell = find_placement_cell(section)
     if cell is not None and cell.container.is_locked:
         raise SectionStructureError("container_locked")
 

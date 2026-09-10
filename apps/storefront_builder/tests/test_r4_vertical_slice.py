@@ -2165,3 +2165,152 @@ class DraftReplacingEndpointTests(R4MutationApiTestCase):
         response = self._post_discard(self.draft.edit_revision)
         self.assertEqual(response.status_code, 200)
         self.assertTrue(StorefrontLayoutVersion.objects.filter(pk=other_draft_id).exists())
+
+
+# ---------------------------------------------------------------------------
+# R4 Task 8 (Batch 1) — content-preserving Template Switch
+# ---------------------------------------------------------------------------
+
+
+class TemplateSwitchPreservingContentTests(R4MutationApiTestCase):
+    """Template A -> merchant content -> switch to Template B -> merchant
+    content remains, Template B's DNA applies. Same Draft-replacing
+    contract shape as ``DraftReplacingEndpointTests`` above (checkpoint +
+    new active Draft), but the assertions here are specifically about
+    content SURVIVING the switch — the whole point of this capability."""
+
+    def setUp(self):
+        super().setUp()
+        self.template_a = layout_preset_registry.get_layout_preset("dense_marketplace")
+        self.template_b = layout_preset_registry.get_layout_preset("premium_leather")
+        preset_service.apply_preset(self.draft, self.template_a)
+        self.draft.refresh_from_db()
+        self.template_a_header_variant = self.draft.header_config.get("header_variant")
+
+    def _post_switch(self, base_revision, *, template_key=None, template_version=None):
+        return self.client.post(
+            reverse("dashboard:storefront-builder-r4-switch-template"),
+            data=json.dumps({
+                "base_revision": base_revision,
+                "template_key": self.template_b.key if template_key is None else template_key,
+                "template_version": self.template_b.version if template_version is None else template_version,
+            }),
+            content_type="application/json",
+        )
+
+    def test_switch_preserves_merchant_content_and_applies_new_template_dna(self):
+        home = self.draft.get_page(StorefrontPage.PageType.HOME)
+        merchant_section = StorefrontSection.objects.create(
+            page=home, section_key="rich_text", order=home.sections.count(),
+            settings={"body_html": "<p>محتوایِ دست‌ساختِ مرچنت</p>"},
+        )
+        sections_before = list(home.sections.order_by("order", "id").values_list("section_key", "settings"))
+        old_draft_id = self.draft.pk
+        versions_before = self.layout.versions.count()
+
+        response = self._post_switch(self.draft.edit_revision)
+        self.assertEqual(response.status_code, 200)
+        self.assertIs(response.json()["ok"], True)
+
+        # Draft-identity-replacing, exactly like discard/reset-page/reset-storefront.
+        self.layout.refresh_from_db()
+        self.assertEqual(self.layout.versions.count(), versions_before + 1)
+        self.assertNotEqual(self.layout.draft_version_id, old_draft_id)
+        self.assertTrue(
+            StorefrontLayoutVersion.objects.filter(
+                pk=old_draft_id, status=StorefrontLayoutVersion.Status.ARCHIVED,
+            ).exists(),
+        )
+        new_draft = StorefrontLayoutVersion.objects.get(pk=self.layout.draft_version_id)
+
+        # Content preservation — every section, INCLUDING the merchant's own
+        # hand-authored one, survives with identical settings on the new Draft.
+        new_home = new_draft.get_page(StorefrontPage.PageType.HOME)
+        sections_after = list(new_home.sections.order_by("order", "id").values_list("section_key", "settings"))
+        self.assertEqual(sections_after, sections_before)
+        preserved_section = new_home.sections.get(section_key="rich_text")
+        self.assertEqual(preserved_section.settings.get("body_html"), "<p>محتوایِ دست‌ساختِ مرچنت</p>")
+
+        # Template B's DNA actually applied — compare against the legacy
+        # header selector a full (composition-replacing) ``apply_preset``
+        # of the SAME Template B would itself produce, on a throwaway
+        # Draft, rather than hardcoding knowledge of the component-key ->
+        # legacy-selector translation layer. This proves the
+        # content-preserving switch reaches the exact same DNA-authority
+        # result as the canonical full apply, for the fields it touches.
+        oracle_store = Store.objects.create(
+            name="فروشگاه شاهد", slug="r4-task8-switch-oracle-store",
+            admin_subdomain="r4-task8-switch-oracle-store",
+        )
+        oracle_draft = layout_service.get_or_create_draft(oracle_store)
+        preset_service.apply_preset(oracle_draft, self.template_b)
+        oracle_draft.refresh_from_db()
+        self.assertEqual(new_draft.header_config.get("header_variant"), oracle_draft.header_config.get("header_variant"))
+        self.assertNotEqual(new_draft.header_config.get("header_variant"), self.template_a_header_variant)
+        provenance = new_draft.template_provenance or {}
+        self.assertEqual(provenance.get("template", {}).get("key"), self.template_b.key)
+
+    def test_switch_rejects_non_ready_template(self):
+        structural_preset = layout_preset_registry.get_layout_preset("clean_minimal")
+        self.assertFalse(structural_preset.is_ready_template)
+        starting_revision = self.draft.edit_revision
+        response = self._post_switch(
+            starting_revision, template_key=structural_preset.key, template_version=structural_preset.version,
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "unknown_appearance_template")
+        self.layout.refresh_from_db()
+        self.assertEqual(self.layout.draft_version_id, self.draft.pk)
+
+    def test_switch_rejects_unknown_template_key(self):
+        response = self._post_switch(self.draft.edit_revision, template_key="not-a-real-template", template_version="1")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "unknown_appearance_template")
+
+    def test_switch_rejects_version_mismatch(self):
+        response = self._post_switch(self.draft.edit_revision, template_version="definitely-not-current")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "template_version_mismatch")
+
+    def test_switch_rejects_stale_revision(self):
+        response = self._post_switch(self.draft.edit_revision + 1)
+        self.assertEqual(response.status_code, 409)
+        self.layout.refresh_from_db()
+        self.assertEqual(self.layout.draft_version_id, self.draft.pk)
+
+    def test_switch_requires_gate_enabled(self):
+        self.layout.r4_editor_enabled = False
+        self.layout.save(update_fields=["r4_editor_enabled"])
+        response = self._post_switch(self.draft.edit_revision)
+        self.assertEqual(response.status_code, 404)
+
+    def test_switch_never_touches_the_published_version(self):
+        layout_service.publish(self.store, user=self.staff)
+        new_draft = layout_service.get_or_create_draft(self.store, user=self.staff)
+        preset_service.apply_preset(new_draft, self.template_a)
+        new_draft.refresh_from_db()
+        self.layout.refresh_from_db()
+        published_before = self.layout.published_version_id
+
+        response = self._post_switch(new_draft.edit_revision)
+        self.assertEqual(response.status_code, 200)
+        self.layout.refresh_from_db()
+        self.assertEqual(self.layout.published_version_id, published_before)
+
+    def test_foreign_store_draft_cannot_be_switched_via_own_session(self):
+        other_store = Store.objects.create(
+            name="فروشگاه دیگر", slug="r4-task8-switch-other-store",
+            admin_subdomain="r4-task8-switch-other-store",
+        )
+        other_draft = layout_service.get_or_create_draft(other_store)
+        preset_service.apply_preset(other_draft, self.template_a)
+        other_draft.refresh_from_db()
+        other_draft_id = other_draft.pk
+
+        response = self._post_switch(self.draft.edit_revision)
+        self.assertEqual(response.status_code, 200)
+        unchanged_other_draft = StorefrontLayoutVersion.objects.get(pk=other_draft_id)
+        self.assertEqual(
+            (unchanged_other_draft.template_provenance or {}).get("template", {}).get("key"),
+            self.template_a.key,
+        )
