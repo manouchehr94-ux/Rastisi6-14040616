@@ -268,6 +268,11 @@ urlpatterns = [
         name="storefront-builder-r4-switch-template",
     ),
     path("storefront-builder/templates/", storefront_builder_views.storefront_template_gallery, name="storefront-builder-templates"),
+    path(
+        "storefront-builder/templates/<slug:key>/preview/",
+        storefront_builder_views.storefront_template_live_preview,
+        name="storefront-builder-template-live-preview",
+    ),
     path("storefront-builder/preview/", storefront_builder_views.storefront_preview, name="storefront-builder-preview"),
     path("storefront-builder/sections/", storefront_builder_views.storefront_section_list_partial, name="storefront-builder-section-list"),
     path("storefront-builder/containers/", storefront_builder_views.storefront_container_state_partial, name="storefront-builder-container-state"),

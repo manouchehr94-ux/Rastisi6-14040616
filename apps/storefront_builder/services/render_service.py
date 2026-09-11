@@ -70,6 +70,33 @@ def _scoped_hero_slides(store, section):
         ).order_by("display_order", "id")
         if scoped.exists():
             return scoped
+    else:
+        # Phase 5, Task 2 (browser-QA finding) — the store-wide
+        # (``section=None``) fallback right below only helps a candidate
+        # preview if the store has genuinely UNSCOPED Hero content. Real
+        # seeded stores (e.g. the canonical ``rasti-mode-demo``) scope ALL
+        # their Hero content to whichever real section the currently-applied
+        # Ready Template actually created — there is no unscoped row to fall
+        # back to, so a candidate preview of a DIFFERENT template showed no
+        # Hero content at all, even though the store plainly owns some. This
+        # third tier reuses the store's own real Hero content from ANY of
+        # its non-archived ``hero_banner`` sections (Draft or Published —
+        # never a stale archived version) before giving up to the
+        # store-wide fallback — the same "show what the store really owns"
+        # principle the store-wide tier already embodies, just not blocked
+        # by an exact (impossible, for an unsaved section) pk match.
+        from ..models import StorefrontLayoutVersion
+
+        same_key_scoped = HeroSlide.objects.filter(
+            section__section_key=section.section_key,
+            section__page__version__layout__store=store,
+            section__page__version__status__in=(
+                StorefrontLayoutVersion.Status.DRAFT, StorefrontLayoutVersion.Status.PUBLISHED,
+            ),
+            is_active=True,
+        ).select_related(*_DESTINATION_SELECT_RELATED).order_by("display_order", "id")
+        if same_key_scoped.exists():
+            return same_key_scoped
     return HeroSlide.objects.filter(store=store, section__isnull=True, is_active=True).select_related(
         *_DESTINATION_SELECT_RELATED,
     ).order_by("display_order", "id")
@@ -102,6 +129,24 @@ def _scoped_banners(store, section):
         ).order_by("display_order", "id")
         if scoped.exists():
             return scoped
+    else:
+        # Phase 5, Task 2 (browser-QA finding) — same third fallback tier as
+        # ``_scoped_hero_slides`` above; identical reasoning (the Demo
+        # Store's real Banner content is scoped to whichever real section
+        # the currently-applied Ready Template created, not to
+        # ``section=None``).
+        from ..models import StorefrontLayoutVersion
+
+        same_key_scoped = PromotionalBanner.objects.filter(
+            section__section_key=section.section_key,
+            section__page__version__layout__store=store,
+            section__page__version__status__in=(
+                StorefrontLayoutVersion.Status.DRAFT, StorefrontLayoutVersion.Status.PUBLISHED,
+            ),
+            is_active=True,
+        ).select_related(*_DESTINATION_SELECT_RELATED).order_by("display_order", "id")
+        if same_key_scoped.exists():
+            return same_key_scoped
     return PromotionalBanner.objects.filter(store=store, section__isnull=True, is_active=True).select_related(
         *_DESTINATION_SELECT_RELATED,
     ).order_by("display_order", "id")
@@ -529,6 +574,24 @@ def _story_rail_context(store, section):
         scoped = StoryRailItem.objects.filter(section=section, is_active=True).order_by("display_order", "id")
         if scoped.exists():
             return {"story_items": scoped}
+    else:
+        # Phase 5, Task 2 (browser-QA finding) — same third fallback tier as
+        # ``_scoped_hero_slides``/``_scoped_banners`` above; identical
+        # reasoning (the Demo Store's real StoryRailItem content is scoped
+        # to whichever real section the currently-applied Ready Template
+        # created, not to ``section=None``).
+        from ..models import StorefrontLayoutVersion
+
+        same_key_scoped = StoryRailItem.objects.filter(
+            section__section_key=section.section_key,
+            section__page__version__layout__store=store,
+            section__page__version__status__in=(
+                StorefrontLayoutVersion.Status.DRAFT, StorefrontLayoutVersion.Status.PUBLISHED,
+            ),
+            is_active=True,
+        ).order_by("display_order", "id")
+        if same_key_scoped.exists():
+            return {"story_items": same_key_scoped}
     # Fallback: آیتم‌هایِ سراسریِ فروشگاه (section__isnull=True)
     return {"story_items": StoryRailItem.objects.filter(store=store, section__isnull=True, is_active=True).order_by("display_order", "id")}
 
@@ -955,6 +1018,37 @@ def build_candidate_render_items(
         global_appearance=global_appearance,
         store_appearance=store_appearance,
     )
+
+
+def build_candidate_container_rows(candidate_page, items: list[dict]) -> list[dict]:
+    """Phase 5, Task 2 — the smallest read-only candidate adapter for the
+    "container settings must not be ignored" parity requirement (Task-1
+    corrective's ``ResolvedPresetCandidatePage.container_settings``).
+
+    Reuses the existing, already-tested ``group_items_into_rows`` — the same
+    pure, no-persisted-Container row-grouping path ``preview.html`` already
+    falls back to today for any Draft/Published version with no real
+    ``StorefrontContainer`` rows yet (``render_rows.html``'s own
+    ``{% else %}`` branch). ``build_container_render_items`` (the full
+    Container/Cell renderer) genuinely requires persisted rows — see its own
+    ``page.containers``/``item["section"].pk`` lookups — so it cannot render
+    an unsaved candidate without persisting something, which Task 2 must not
+    do. This function does not replace or fork that renderer; it only
+    attaches ``candidate_page``'s already-computed per-row-run
+    ``container_settings`` onto ``group_items_into_rows``'s output, in the
+    same order, so callers receive rows *and* their settings together
+    instead of the settings being silently discarded.
+
+    Row/settings order correspondence is structural, not coincidental: both
+    ``group_items_into_rows`` (contiguous ``row_key`` adjacency over
+    ``items``) and ``candidate_page.container_settings``
+    (``preset_service._entry_runs`` over the same, identically-ordered
+    preset entries that produced ``items``) group by the same contiguous
+    ``row_key`` rule over the same section sequence."""
+    rows = group_items_into_rows(items)
+    for row, container_settings in zip(rows, candidate_page.container_settings):
+        row["container_settings"] = container_settings
+    return rows
 
 
 #: Acceptance Batch 1 (post-U11) — the registry-level distinction the QA

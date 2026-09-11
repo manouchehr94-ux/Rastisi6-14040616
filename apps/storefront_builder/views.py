@@ -47,6 +47,8 @@ from .services import (
 )
 from .services.layout_service import _clone_section_scoped_media
 from .services.render_service import (
+    build_candidate_container_rows,
+    build_candidate_render_items,
     build_container_render_items,
     build_page_render_items,
     group_items_into_rows,
@@ -172,6 +174,26 @@ class _CandidateAppearanceVersion:
                 for field in ("font", "radius", "button_radius", "density", "motion", "type_scale"):
                     config[field] = getattr(template, field)
         self._config = config
+
+    def effective_appearance_config(self):
+        return self._config
+
+
+class _ReadyTemplateCandidateAppearanceVersion:
+    """Phase 5, Task 2 — same idiom as ``_CandidateAppearanceVersion`` above
+    (a minimal read-only stand-in exposing only ``effective_appearance_config()``,
+    never touching the database), but backed directly by a Task-1
+    ``ResolvedPresetCandidate.appearance_config`` — the candidate's own fully
+    resolved appearance, not a ``template_slug``-derived overlay onto a base
+    config. Setting this as ``request.storefront_appearance_version`` makes
+    ``apps.core.context_processors``' global color/font tokens (consumed by
+    ``base.html`` site-wide, not just this view's own content block) reflect
+    the previewed Ready Template's own DNA, exactly like
+    ``storefront_preview()`` already does for its own candidate-appearance
+    case."""
+
+    def __init__(self, appearance_config: dict):
+        self._config = appearance_config
 
     def effective_appearance_config(self):
         return self._config
@@ -2209,6 +2231,152 @@ def storefront_template_gallery(request):
         "has_any_template_applied": bool(current_template_key),
     }
     return render(request, "dashboard/storefront_builder/template_gallery.html", context)
+
+
+#: Phase 5, Task 2 — the ONE canonical Demo Store this live-preview view is
+#: allowed to render against. A fixed, server-side, staff-only constant —
+#: never taken from a query parameter or any other request-controlled input
+#: (see the view's own docstring for the full security rationale). Mirrors
+#: the exact same literal every other canonical Demo Store consumer already
+#: uses (``capture_ready_template_previews.py``,
+#: ``seed_ready_template_fashion_demo.py``, ``golden_reference_service.py``)
+#: — this repo's established convention is one small local constant per
+#: consumer, not a shared config module; introducing one now would be a
+#: second, undiscovered source of truth for a single literal string.
+RASTI_MODE_DEMO_STORE_SLUG = "rasti-mode-demo"
+
+
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
+def storefront_template_live_preview(request, key):
+    """Phase 5, Task 2 — a REAL, live-rendered preview of one Ready Template
+    (``key``), composed from:
+
+      Task-1 non-mutating candidate resolution (``preset_service.
+      resolve_preset_candidate_by_key``)
+        +
+      the canonical Demo Store's real commerce/media context
+      (``RASTI_MODE_DEMO_STORE_SLUG`` — never any other Store)
+        +
+      the existing canonical Store Appearance resolution the candidate
+      already carries (header/footer/bottom_nav/hero/product_view/card/
+      badge/mega_menu/motion, all Task-1-resolved)
+        +
+      the ONE shared renderer (``render_service``) — the exact same
+      ``_build_items_from_sections``/``group_items_into_rows`` every other
+      render path (Preview, Public, the offline screenshot capture) already
+      uses.
+
+    Never mutates the Demo Store's Draft: this view only ever READS
+    ``layout_service.get_or_create_draft`` (the same idempotent Draft
+    accessor every Builder-aware view already calls — its own first-ever-visit
+    side effect, an empty Draft row, is pre-existing platform behavior, not
+    something this view introduces) and resolves ``key`` through the
+    read-only candidate primitive; it never calls ``apply_preset`` or any
+    other write path.
+
+    Security: the only Template input is ``key`` (a URL path segment,
+    resolved exclusively through the existing Ready Template registry — an
+    unknown key fails closed with ``Http404``, before any Draft/Store
+    access). The Demo Store is the fixed constant above, never derived from
+    request input. This is a staff-authenticated dashboard view
+    (``@staff_required``/``STOREFRONT_LAYOUT_MANAGE``, same as the Gallery
+    and ``storefront_preview``) — no cross-tenant Merchant data is read or
+    exposed; Task 3 will add Merchant-data preview separately."""
+    from apps.stores.models import Store
+
+    from . import layout_preset_registry
+    from .services import preset_service
+
+    preset = layout_preset_registry.get_layout_preset(key)
+    # Independent review, Task 2 — found CRITICAL/IMPORTANT here:
+    # ``get_layout_preset`` resolves over the ENTIRE preset registry, not
+    # only the 50 curated Ready Templates — a handful of registered,
+    # non-Ready presets (e.g. ``clean_minimal``) exist with
+    # ``is_ready_template=False`` and no complete Store Appearance
+    # (``store_appearance=None`` after ``resolve_preset_candidate``), which
+    # crashes deep in ``store_appearance_global_renderer_template`` with an
+    # unhandled ``AttributeError`` instead of the required fail-closed 404.
+    # This view's whole promise is "preview one of the 50 Ready Templates" —
+    # a key that resolves to a real but non-Ready preset is exactly as
+    # invalid an input here as one that resolves to nothing.
+    if preset is None or not preset.is_ready_template:
+        raise Http404(f"قالبِ آماده‌ی «{key}» یافت نشد.")
+
+    try:
+        demo_store = Store.objects.get(slug=RASTI_MODE_DEMO_STORE_SLUG)
+    except Store.DoesNotExist as exc:
+        raise Http404(
+            "فروشگاهِ نمایشیِ کانونیِ «rasti-mode-demo» در این محیط وجود ندارد — "
+            "ابتدا دستورِ مدیریتیِ seed_ready_template_fashion_demo (یا "
+            "apply_golden_reference_storefront) را اجرا کنید."
+        ) from exc
+
+    demo_draft = layout_service.get_or_create_draft(demo_store)
+    candidate = preset_service.resolve_preset_candidate(demo_draft, preset)
+
+    page_type = _resolve_page_type(request.GET.get("page"))
+    candidate_page = candidate.pages[page_type]
+    page_context = _preview_page_context(request, demo_store, page_type)
+    items = build_candidate_render_items(
+        candidate_page.sections,
+        demo_store,
+        page_context=page_context,
+        global_appearance=candidate.appearance_config,
+        store_appearance=candidate.store_appearance,
+    )
+    rows = build_candidate_container_rows(candidate_page, items)
+
+    header_variant_template = store_appearance_global_renderer_template(
+        candidate.store_appearance, "header", candidate.header_config,
+    )
+    footer_variant_template = store_appearance_global_renderer_template(
+        candidate.store_appearance, "footer", candidate.footer_config,
+    )
+    mobile_bottom_nav_template = store_appearance_global_renderer_template(
+        candidate.store_appearance, "bottom_nav", candidate.footer_config,
+    )
+
+    # Same established idiom as storefront_preview()'s own
+    # ``?preview_template=`` candidate-appearance path: this request
+    # attribute is read by ``apps.core.context_processors`` (global site
+    # chrome color/font tokens), never persisted, never read back by this
+    # view itself.
+    request.storefront_appearance_version = _ReadyTemplateCandidateAppearanceVersion(
+        candidate.appearance_config,
+    )
+
+    # Browser-QA (Task 2) IMPORTANT finding — ``apps.catalog.context_
+    # processors.nav_categories`` resolves ``resolve_store_for_service(
+    # request)``, i.e. this dashboard request's own ambient admin-host
+    # Store (the merchant currently logged in), never the Demo Store being
+    # previewed here. An explicit ``nav_categories`` key in THIS view's own
+    # context overrides that context-processor value for this render only
+    # (standard Django precedence — a view's own context always wins over a
+    # same-keyed context processor) — same query shape the processor itself
+    # already uses, just scoped to ``demo_store`` instead of the ambient
+    # Store. No new resolver, no second nav-categories mechanism.
+    from apps.catalog.models import Category
+
+    nav_categories = (
+        Category.objects.filter(store=demo_store, parent__isnull=True, is_active=True)
+        .prefetch_related("children")
+        .order_by("order", "name")
+    )
+
+    return render(request, "storefront_builder/ready_template_live_preview.html", {
+        "store": demo_store,
+        "preset": preset,
+        "page_type": page_type,
+        "header_config": candidate.header_config,
+        "footer_config": candidate.footer_config,
+        "header_variant_template": header_variant_template,
+        "footer_variant_template": footer_variant_template,
+        "mobile_bottom_nav_template": mobile_bottom_nav_template,
+        "store_appearance": candidate.store_appearance,
+        "rows": rows,
+        "nav_categories": nav_categories,
+    })
 
 
 @require_POST

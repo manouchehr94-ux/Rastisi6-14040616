@@ -65,6 +65,12 @@
           {% if card.footer_variant_label %}<span>فوتر: {{ card.footer_variant_label }}</span>{% endif %}
         </div>
         <div class="tpl-card-actions">
+          <a class="sfb-v3-ghost-btn" style="display:block;text-align:center;margin-bottom:8px"
+             href="{% url 'dashboard:storefront-builder-template-live-preview' key=preset.key %}"
+             target="_blank" rel="noopener"
+             title="پیش‌نمایشِ زنده و کاملِ این قالب با داده‌های نمایشیِ Rasti Mode Demo — بدونِ اعمال">
+            مشاهده‌ی قالب (زنده)
+          </a>
           {% if card.is_current %}
           <button type="button" class="btn" disabled>در حال استفاده</button>
           {% else %}

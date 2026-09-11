@@ -19,22 +19,48 @@ grid اضافه) — یعنی سوئیچِ ۷ تمپلیتِ عمومی از ح�
 (۱۲ واحدی، خودکار جمع‌شونده به تک‌ستون زیرِ ۱۰۰۰px) در storefront_builder.css
 تعریف شده (``.rsec-row``/``.rsec-row-item``)، نه اینجا.
 {% endcomment %}
+{% comment %}
+Phase 5, Task 2 (independent review CRITICAL finding) — ``row.container_settings``
+is an OPTIONAL key, populated only by ``render_service.build_candidate_container_rows``
+(the Task-1/Task-2 candidate-preview adapter); ``group_items_into_rows`` itself
+never sets it, so every OTHER existing caller of this shared partial sees
+``row.container_settings`` as absent/falsy and the two branches below behave
+byte-identically to before this checkpoint. Only when present (candidate
+preview rows) do gap/background/alignment actually apply — this is the
+"container settings must not be silently discarded" fix: previously these
+values were computed by Task 1 and attached by Task 2 but never read by any
+template, so a Ready Template's authored container settings never reached
+the rendered preview regardless of their value.
+{% endcomment %}
 {% if use_container_layout %}
 {% include "storefront_builder/partials/render_containers.html" %}
 {% else %}
 {% for row in rows %}
+{% with cs=row.container_settings %}
 {% if row.items|length > 1 %}
-<div class="rsec-row" data-row-key="{{ row.row_key }}">
+<div class="rsec-row" data-row-key="{{ row.row_key }}"
+     {% if cs %}style="gap:{{ cs.gap }}px;align-items:{% if cs.height_mode == "equal" %}stretch{% else %}{{ cs.vertical_align }}{% endif %}{% if cs.background_mode == "color" and cs.background_color %};background-color:{{ cs.background_color }};padding:10px{% endif %}"
+     {% if cs.background_mode == "pattern" %}data-container-bg="pattern"{% if cs.background_pattern %} data-container-pattern="{{ cs.background_pattern }}"{% endif %}{% endif %}
+     {% endif %}>
   {% for item in row.items %}
   <div class="rsec-row-item" style="--row-span:{{ item.section.row_span }}">
     {% include "storefront_builder/partials/responsive_section_wrapper.html" %}
   </div>
   {% endfor %}
 </div>
+{% elif cs and cs.background_mode != "transparent" %}
+<div class="rsec-row-single"
+     {% if cs.background_mode == "color" and cs.background_color %}style="background-color:{{ cs.background_color }};padding:10px"{% endif %}
+     {% if cs.background_mode == "pattern" %}data-container-bg="pattern"{% if cs.background_pattern %} data-container-pattern="{{ cs.background_pattern }}"{% endif %} style="padding:10px"{% endif %}>
+  {% with item=row.items.0 %}
+  {% include "storefront_builder/partials/responsive_section_wrapper.html" %}
+  {% endwith %}
+</div>
 {% else %}
 {% with item=row.items.0 %}
 {% include "storefront_builder/partials/responsive_section_wrapper.html" %}
 {% endwith %}
 {% endif %}
+{% endwith %}
 {% endfor %}
 {% endif %}

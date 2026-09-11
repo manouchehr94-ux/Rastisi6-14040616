@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}پیش‌نمایشِ قالبِ «{{ preset.label_fa }}» — داده‌های نمایشی{% endblock %}
+{% block robots_meta %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/product_card.css' %}">
+<link rel="stylesheet" href="{% static 'css/home.css' %}">
+<link rel="stylesheet" href="{% static 'css/storefront_builder.css' %}">
+<link rel="stylesheet" href="{% static 'css/storefront_builder_preview_v22.css' %}">
+<style>
+  .rtpl-demo-banner{background:#312e81;color:#fff;padding:10px 16px;text-align:center;font-size:13.5px;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap}
+  .rtpl-demo-banner a{color:#fff;text-decoration:underline}
+  .rtpl-demo-banner strong{font-weight:700}
+</style>
+{% endblock %}
+
+{% block header %}
+<div class="rtpl-demo-banner">
+  <span>این پیش‌نمایشِ زنده با <strong>داده‌های نمایشیِ Rasti Mode Demo</strong> ساخته شده — نه اطلاعاتِ واقعیِ فروشگاهِ شما.</span>
+  <span>قالب: <strong>{{ preset.label_fa }}</strong></span>
+  <a href="{% url 'dashboard:storefront-builder-templates' %}">← بازگشت به گالریِ قالب‌ها</a>
+</div>
+{% include header_variant_template with header_config=header_config is_live_storefront=False is_builder_preview=True %}
+{% endblock %}
+
+{% block content %}
+<div class="wrap sfb-preview-sections">
+  {% if rows %}
+  {% with is_builder_preview=True use_container_layout=False %}
+  {% include "storefront_builder/partials/render_rows.html" %}
+  {% endwith %}
+  {% else %}
+  <div class="sfb-empty-preview" style="padding:60px 20px;text-align:center;color:var(--muted)">
+    این قالب برایِ صفحه‌ی «{{ page_type }}» هیچ بخشِ فعالی تعریف نکرده است.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block footer %}
+{% include footer_variant_template with footer_config=footer_config is_live_storefront=False is_builder_preview=True %}
+{% if mobile_bottom_nav_template %}{% include mobile_bottom_nav_template with footer_config=footer_config is_live_storefront=False is_builder_preview=True %}{% endif %}
+{% endblock %}
