@@ -876,3 +876,97 @@ commit-by-commit summary.
 - **TASK 10: NOT RESUMED.** **PHASE 4: NOT CLOSED YET** — closure requires
   Task 10 to be rerun end-to-end against this corrected HEAD. **PHASE 5:
   NOT STARTED.**
+
+## Task 10 — FULL certification rerun (2026-09-11, this session)
+
+- **START.** A full rerun, not a continuation of the prior FAIL. Starting
+  HEAD mandated as `f3253b11950c99ecead42252a1d8ab757dbda9be` (== the
+  Task-8 corrective backup). Startup guard hit one genuine failure: the
+  local checkout was a **shallow clone**, making `git merge-base` report
+  no common ancestor between local HEAD (a stale, unrelated older commit)
+  and `origin/feature/phase4-builder-legacy-convergence`
+  (`f3253b119...`) — a false-positive "diverged history" reading, not
+  real divergence. Resolved with `git fetch --unshallow origin` (pure
+  additional-history fetch) then a plain `git merge --ff-only
+  origin/feature/phase4-builder-legacy-convergence` — a clean fast-forward,
+  no reset/rebase/force/history-rewrite, no `git stash` used anywhere this
+  session. Re-verified clean afterward: not shallow, local HEAD == origin
+  feature HEAD == `f3253b119...`, `main` unchanged
+  (`973c1dc00bacb6f2f7d2604fa3880bb4d6250579`), both named backups
+  unchanged, `backup/rastisi6-phase4-final-20260911` did not yet exist.
+- **Step 1 — corrective fix re-certified.**
+  `test_u7_ready_template_baseline` 12/12 OK including all three required
+  cases (A: `test_reset_from_exact_matching_snapshot_survives_registry_disappearance`;
+  B: `test_reset_rejects_stale_recorded_version` →
+  `TemplateBaselineVersionChangedError`; C:
+  `test_reset_rejects_unknown_template_key` → `UnknownPresetError`), plus
+  `TemplateSwitchPreservingContentTests.test_reset_storefront_after_switch_is_rejected_not_silently_destructive`
+  — OK.
+- **Step 2 — exhaustive regression.** Full `apps.storefront_builder` suite
+  at final HEAD: `Ran 2898 tests in 1693.279s — FAILED (failures=30,
+  errors=2, skipped=4)`. Versus the prior Task-10 baseline on `330cbe46`
+  (2897/30/3/4): +1 test is the new CASE-A guard test; errors dropped 3→2
+  because the previously-failing regression test now passes — the exact
+  expected delta, verified rather than assumed. All 32 current
+  failures/errors were extracted by exact test ID and re-run as one batch
+  against an **isolated git worktree** at immutable baseline `330cbe46` —
+  identical counts and a byte-for-byte identical failing-test-name set
+  (empty diff). **Zero new regressions.** `manage.py check` clean,
+  `makemigrations --check --dry-run` clean, `git diff --check` clean,
+  migration graph single-leaf/no conflicts.
+- **Step 3 — fresh architecture audit.** Independently re-traced (not
+  copied from prior PASS text): one shared renderer
+  (`render_service.build_page_render_items`, reached by both
+  `storefront_context_service.build_universal_storefront_context` —
+  called from catalog/cart/dashboard views — and directly by R4 Preview);
+  single ResourceSource/media/preset-service authority modules; single
+  persistence model (`StorefrontLayoutVersion`/`StorefrontSection`);
+  `edit_revision`/`R4StaleRevision` stale-write protection intact;
+  store-scoped queries by construction; legacy retirement physically
+  gated on `r4_editor_enabled` in template source (not just documented);
+  fresh section-registry recount = 36, matching
+  `family_certification_matrix.md` exactly, zero UNKNOWN/TBD dispositions
+  anywhere in that file or `legacy_disposition.md`.
+- **Step 4 — cumulative diff audit.** `330cbe46` → final HEAD: exactly 4
+  files, +309/-0 (the corrective fix + 2 doc files) — nothing else
+  changed. `185166a`/`969a9b4`/`75ede8a` → final HEAD all confirmed as
+  real ancestors and spot-checked: no duplicate renderer/writer/
+  persistence/registry, no ungated legacy write paths, no migration
+  anomalies (one reversible, documented data migration flipping the
+  R4-live-default flag), no Phase-5 scope creep (one "TEMPORARY-ADAPTER"
+  comment hit is pre-existing Task-6/7 terminology, not new scaffolding).
+- **Step 5 — fresh browser certification.** Used the existing extended R4
+  QA harness, no second harness created. Getting to a clean run surfaced
+  one **QA-fixture-setup artifact** (not a production defect): the
+  optional `seed_kianstock_qa_demo` demo catalog is not required by the
+  harness (it only needs an existing Store + staff user with active
+  membership) and, if seeded first, pollutes the
+  `discounted_products`/`amazing_offers` family-gate ranking (unrelated
+  demo discounts above 25% push the fixture's own 25%-discount product
+  out of the default `item_limit=6` slice) — reproduced deterministically
+  twice on the polluted fixture, and confirmed absent (along with one
+  incidental Playwright navigation-timing flake it happened to also show)
+  once re-run against a bare `akhlaghi` Store with no demo catalog.
+  Final clean run, canonical evidence committed under `browser_final/`
+  and `storefront_builder/r4/phase1/`, belonging to this HEAD's run:
+  **Browser PASS 20/20, FAIL 0**, DB restore SHA256 match=true, all three
+  required viewports (1440x900/768x1024/390x844), all required page
+  envelopes (Home/Product Detail/Listing/Search/Collection
+  Detail/Cart/Collection Index boundary), tenant-negative check
+  302/rejected=true (matches baseline exactly), 0 unexpected
+  console/network errors, no stale `FAILURE-*.png` left over.
+- **Step 6 — final independent review.** One fresh reviewer in an
+  isolated worktree, read-only in spirit: independently re-ran Cases A/B/C
+  plus 86 additional targeted tests (OK), independently confirmed the
+  `330cbe46`→HEAD diff is exactly the scoped corrective fix, independently
+  traced the one-shared-renderer and legacy-retirement-gating claims in
+  source rather than trusting this session's own account, and
+  independently read the committed browser evidence JSON to confirm it is
+  genuinely committed at HEAD. All 11 required verdicts PASS (SPEC
+  COMPLIANCE, ARCHITECTURE, CANONICAL AUTHORITY, NO PARALLEL ENGINE, NO
+  PARALLEL WRITER, R4 FINAL EDITOR, NON-HOME BUILDER, FAMILY CONVERGENCE,
+  LEGACY RETIREMENT, TENANT/LIFECYCLE SAFETY, BROWSER CERTIFICATION).
+  **CRITICAL 0, IMPORTANT 0, MINOR 0.**
+  Full detail: `phase4/final_gate.md`.
+- **TASK 10: PASS. PHASE 4: CLOSED.** No merge to `main`, no PR/main
+  promotion performed. **PHASE 5: NOT STARTED.**

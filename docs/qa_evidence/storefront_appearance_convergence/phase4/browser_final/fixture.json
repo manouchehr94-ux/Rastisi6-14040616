@@ -1,33 +1,33 @@
 {
-  "hero_section_id": 112,
-  "brand_carousel_section_id": 113,
+  "hero_section_id": 15,
+  "brand_carousel_section_id": 16,
   "draft_revision": 0,
   "phase3": {
     "brand_section_ids": {
       "home": {
-        "grid": 114,
-        "carousel": 115,
-        "beauty_tabs": 116
+        "grid": 17,
+        "carousel": 18,
+        "beauty_tabs": 19
       },
       "product_detail": {
-        "grid": 117,
-        "carousel": 118,
-        "beauty_tabs": 119
+        "grid": 20,
+        "carousel": 21,
+        "beauty_tabs": 22
       },
       "listing": {
-        "grid": 120,
-        "carousel": 121,
-        "beauty_tabs": 122
+        "grid": 23,
+        "carousel": 24,
+        "beauty_tabs": 25
       },
       "collection": {
-        "grid": 123,
-        "carousel": 124,
-        "beauty_tabs": 125
+        "grid": 26,
+        "carousel": 27,
+        "beauty_tabs": 28
       },
       "cart": {
-        "grid": 126,
-        "carousel": 127,
-        "beauty_tabs": 128
+        "grid": 29,
+        "carousel": 30,
+        "beauty_tabs": 31
       }
     },
     "product_slug": "t12-product-1",
@@ -58,28 +58,28 @@
     "collection": {
       "tiles_section_ids": {
         "home": {
-          "grid": 130,
-          "carousel": 131
+          "grid": 33,
+          "carousel": 34
         },
         "product_detail": {
-          "grid": 132,
-          "carousel": 133
+          "grid": 35,
+          "carousel": 36
         },
         "listing": {
-          "grid": 134,
-          "carousel": 135
+          "grid": 37,
+          "carousel": 38
         },
         "search": {
-          "grid": 136,
-          "carousel": 137
+          "grid": 39,
+          "carousel": 40
         },
         "collection": {
-          "grid": 138,
-          "carousel": 139
+          "grid": 41,
+          "carousel": 42
         },
         "cart": {
-          "grid": 140,
-          "carousel": 141
+          "grid": 43,
+          "carousel": 44
         }
       },
       "collection_slugs": [
@@ -106,27 +106,27 @@
       ]
     },
     "task6_families": {
-      "category_grid_section_id": 142,
-      "multi_banner_section_id": 143,
-      "image_text_section_id": 144,
-      "newsletter_section_id": 145,
-      "story_rail_section_id": 146,
-      "single_banner_section_id": 147
+      "category_grid_section_id": 45,
+      "multi_banner_section_id": 46,
+      "image_text_section_id": 47,
+      "newsletter_section_id": 48,
+      "story_rail_section_id": 49,
+      "single_banner_section_id": 50
     },
     "final_remediation_families": {
-      "newest_products_section_id": 148,
-      "best_sellers_section_id": 149,
-      "discounted_products_section_id": 150,
-      "promo_cards_section_id": 151,
-      "amazing_offers_section_id": 152,
-      "blog_posts_section_id": 153,
-      "image_slider_section_id": 154,
-      "video_section_section_id": 155,
-      "quick_links_section_id": 156,
-      "trust_features_section_id": 157,
-      "faq_section_id": 158,
-      "testimonials_section_id": 159,
-      "rich_text_section_id": 160,
+      "newest_products_section_id": 51,
+      "best_sellers_section_id": 52,
+      "discounted_products_section_id": 53,
+      "promo_cards_section_id": 54,
+      "amazing_offers_section_id": 55,
+      "blog_posts_section_id": 56,
+      "image_slider_section_id": 57,
+      "video_section_section_id": 58,
+      "quick_links_section_id": 59,
+      "trust_features_section_id": 60,
+      "faq_section_id": 61,
+      "testimonials_section_id": 62,
+      "rich_text_section_id": 63,
       "quick_links_menu_id": 1
     }
   }

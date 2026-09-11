@@ -1,5 +1,5 @@
 {
-  "started_at": "2026-09-10T23:47:53.672Z",
+  "started_at": "2026-09-11T10:13:25.200Z",
   "viewports": [
     "desktop",
     "mobile",
@@ -9,91 +9,91 @@
     {
       "envelope": "home",
       "viewport": "desktop",
-      "url": "http://127.0.0.1:8765/",
+      "url": "http://127.0.0.1:8768/",
       "status": 200
     },
     {
       "envelope": "product_detail",
       "viewport": "desktop",
-      "url": "http://127.0.0.1:8765/products/t12-product-1/",
+      "url": "http://127.0.0.1:8768/products/t12-product-1/",
       "status": 200
     },
     {
       "envelope": "listing",
       "viewport": "desktop",
-      "url": "http://127.0.0.1:8765/products/",
+      "url": "http://127.0.0.1:8768/products/",
       "status": 200
     },
     {
       "envelope": "collection",
       "viewport": "desktop",
-      "url": "http://127.0.0.1:8765/collections/p3-collection-1/",
+      "url": "http://127.0.0.1:8768/collections/p3-collection-1/",
       "status": 200
     },
     {
       "envelope": "cart",
       "viewport": "desktop",
-      "url": "http://127.0.0.1:8765/cart/",
+      "url": "http://127.0.0.1:8768/cart/",
       "status": 200
     },
     {
       "envelope": "home",
       "viewport": "mobile",
-      "url": "http://127.0.0.1:8765/",
+      "url": "http://127.0.0.1:8768/",
       "status": 200
     },
     {
       "envelope": "product_detail",
       "viewport": "mobile",
-      "url": "http://127.0.0.1:8765/products/t12-product-1/",
+      "url": "http://127.0.0.1:8768/products/t12-product-1/",
       "status": 200
     },
     {
       "envelope": "listing",
       "viewport": "mobile",
-      "url": "http://127.0.0.1:8765/products/",
+      "url": "http://127.0.0.1:8768/products/",
       "status": 200
     },
     {
       "envelope": "collection",
       "viewport": "mobile",
-      "url": "http://127.0.0.1:8765/collections/p3-collection-1/",
+      "url": "http://127.0.0.1:8768/collections/p3-collection-1/",
       "status": 200
     },
     {
       "envelope": "cart",
       "viewport": "mobile",
-      "url": "http://127.0.0.1:8765/cart/",
+      "url": "http://127.0.0.1:8768/cart/",
       "status": 200
     },
     {
       "envelope": "home",
       "viewport": "tablet",
-      "url": "http://127.0.0.1:8765/",
+      "url": "http://127.0.0.1:8768/",
       "status": 200
     },
     {
       "envelope": "product_detail",
       "viewport": "tablet",
-      "url": "http://127.0.0.1:8765/products/t12-product-1/",
+      "url": "http://127.0.0.1:8768/products/t12-product-1/",
       "status": 200
     },
     {
       "envelope": "listing",
       "viewport": "tablet",
-      "url": "http://127.0.0.1:8765/products/",
+      "url": "http://127.0.0.1:8768/products/",
       "status": 200
     },
     {
       "envelope": "collection",
       "viewport": "tablet",
-      "url": "http://127.0.0.1:8765/collections/p3-collection-1/",
+      "url": "http://127.0.0.1:8768/collections/p3-collection-1/",
       "status": 200
     },
     {
       "envelope": "cart",
       "viewport": "tablet",
-      "url": "http://127.0.0.1:8765/cart/",
+      "url": "http://127.0.0.1:8768/cart/",
       "status": 200
     }
   ],
@@ -2115,7 +2115,7 @@
   ],
   "wrapper_projection": [
     {
-      "section_id": "163",
+      "section_id": "66",
       "replacements": 3,
       "hrefs_before": [
         "/products/?brand=t12-brand-2",
@@ -2176,76 +2176,76 @@
     }
   ],
   "screenshots": [
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/desktop/home-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/desktop/home-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/desktop/home-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/desktop/product_detail-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/desktop/product_detail-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/desktop/product_detail-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/desktop/listing-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/desktop/listing-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/desktop/listing-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/desktop/collection-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/desktop/collection-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/desktop/collection-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/desktop/cart-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/desktop/cart-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/desktop/cart-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/mobile/home-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/mobile/home-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/mobile/home-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/mobile/product_detail-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/mobile/product_detail-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/mobile/product_detail-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/mobile/listing-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/mobile/listing-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/mobile/listing-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/mobile/collection-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/mobile/collection-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/mobile/collection-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/mobile/cart-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/mobile/cart-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/mobile/cart-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/tablet/home-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/tablet/home-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/tablet/home-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/tablet/product_detail-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/tablet/product_detail-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/tablet/product_detail-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/tablet/listing-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/tablet/listing-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/tablet/listing-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/tablet/collection-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/tablet/collection-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/tablet/collection-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/tablet/cart-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/tablet/cart-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/tablet/cart-public.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/wrapper_projection/preview-after-3x-replacement.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/desktop/before.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/desktop/update.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/desktop/remove.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/mobile/before.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/mobile/update.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/mobile/remove.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/tablet/before.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/tablet/update.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/tablet/remove.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/broken-image/search.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/desktop/before.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/desktop/update.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/desktop/remove.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/mobile/before.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/mobile/update.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/mobile/remove.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/tablet/before.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/tablet/update.png",
-    "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/tablet/remove.png"
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/grid/desktop/home-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/carousel/desktop/home-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/beauty_tabs/desktop/home-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/grid/desktop/product_detail-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/carousel/desktop/product_detail-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/beauty_tabs/desktop/product_detail-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/grid/desktop/listing-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/carousel/desktop/listing-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/beauty_tabs/desktop/listing-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/grid/desktop/collection-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/carousel/desktop/collection-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/beauty_tabs/desktop/collection-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/grid/desktop/cart-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/carousel/desktop/cart-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/beauty_tabs/desktop/cart-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/grid/mobile/home-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/carousel/mobile/home-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/beauty_tabs/mobile/home-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/grid/mobile/product_detail-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/carousel/mobile/product_detail-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/beauty_tabs/mobile/product_detail-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/grid/mobile/listing-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/carousel/mobile/listing-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/beauty_tabs/mobile/listing-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/grid/mobile/collection-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/carousel/mobile/collection-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/beauty_tabs/mobile/collection-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/grid/mobile/cart-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/carousel/mobile/cart-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/beauty_tabs/mobile/cart-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/grid/tablet/home-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/carousel/tablet/home-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/beauty_tabs/tablet/home-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/grid/tablet/product_detail-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/carousel/tablet/product_detail-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/beauty_tabs/tablet/product_detail-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/grid/tablet/listing-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/carousel/tablet/listing-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/beauty_tabs/tablet/listing-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/grid/tablet/collection-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/carousel/tablet/collection-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/beauty_tabs/tablet/collection-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/grid/tablet/cart-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/carousel/tablet/cart-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/beauty_tabs/tablet/cart-public.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/wrapper_projection/preview-after-3x-replacement.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/fragments/cart/desktop/before.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/fragments/cart/desktop/update.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/fragments/cart/desktop/remove.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/fragments/cart/mobile/before.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/fragments/cart/mobile/update.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/fragments/cart/mobile/remove.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/fragments/cart/tablet/before.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/fragments/cart/tablet/update.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/fragments/cart/tablet/remove.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/brand/broken-image/search.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/fragments/cart/desktop/before.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/fragments/cart/desktop/update.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/fragments/cart/desktop/remove.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/fragments/cart/mobile/before.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/fragments/cart/mobile/update.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/fragments/cart/mobile/remove.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/fragments/cart/tablet/before.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/fragments/cart/tablet/update.png",
+    "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/fragments/cart/tablet/remove.png"
   ],
   "errors": [],
   "broken_image": {
     "envelope": "search",
-    "url": "http://127.0.0.1:8765/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
+    "url": "http://127.0.0.1:8768/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
     "has_img_tag": true,
     "img_src": "/media/brand_logos/qa-broken-nonexistent.png",
     "img_complete": true,
@@ -2303,114 +2303,114 @@
     }
   },
   "collection": {
-    "started_at": "2026-09-10T23:47:53.672Z",
+    "started_at": "2026-09-11T10:13:25.200Z",
     "envelopes": [
       {
         "envelope": "home",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8765/",
+        "url": "http://127.0.0.1:8768/",
         "status": 200
       },
       {
         "envelope": "product_detail",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8765/products/t12-product-1/",
+        "url": "http://127.0.0.1:8768/products/t12-product-1/",
         "status": 200
       },
       {
         "envelope": "listing",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8765/products/",
+        "url": "http://127.0.0.1:8768/products/",
         "status": 200
       },
       {
         "envelope": "search",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8765/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
+        "url": "http://127.0.0.1:8768/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
         "status": 200
       },
       {
         "envelope": "collection",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8765/collections/p3-collection-2/",
+        "url": "http://127.0.0.1:8768/collections/p3-collection-2/",
         "status": 200
       },
       {
         "envelope": "cart",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8765/cart/",
+        "url": "http://127.0.0.1:8768/cart/",
         "status": 200
       },
       {
         "envelope": "home",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8765/",
+        "url": "http://127.0.0.1:8768/",
         "status": 200
       },
       {
         "envelope": "product_detail",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8765/products/t12-product-1/",
+        "url": "http://127.0.0.1:8768/products/t12-product-1/",
         "status": 200
       },
       {
         "envelope": "listing",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8765/products/",
+        "url": "http://127.0.0.1:8768/products/",
         "status": 200
       },
       {
         "envelope": "search",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8765/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
+        "url": "http://127.0.0.1:8768/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
         "status": 200
       },
       {
         "envelope": "collection",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8765/collections/p3-collection-2/",
+        "url": "http://127.0.0.1:8768/collections/p3-collection-2/",
         "status": 200
       },
       {
         "envelope": "cart",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8765/cart/",
+        "url": "http://127.0.0.1:8768/cart/",
         "status": 200
       },
       {
         "envelope": "home",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8765/",
+        "url": "http://127.0.0.1:8768/",
         "status": 200
       },
       {
         "envelope": "product_detail",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8765/products/t12-product-1/",
+        "url": "http://127.0.0.1:8768/products/t12-product-1/",
         "status": 200
       },
       {
         "envelope": "listing",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8765/products/",
+        "url": "http://127.0.0.1:8768/products/",
         "status": 200
       },
       {
         "envelope": "search",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8765/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
+        "url": "http://127.0.0.1:8768/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
         "status": 200
       },
       {
         "envelope": "collection",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8765/collections/p3-collection-2/",
+        "url": "http://127.0.0.1:8768/collections/p3-collection-2/",
         "status": 200
       },
       {
         "envelope": "cart",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8765/cart/",
+        "url": "http://127.0.0.1:8768/cart/",
         "status": 200
       }
     ],
@@ -3743,53 +3743,53 @@
       }
     ],
     "page2": {
-      "url": "http://127.0.0.1:8765/collections/p3-collection-page2/?page=2",
+      "url": "http://127.0.0.1:8768/collections/p3-collection-page2/?page=2",
       "product_card_count": 1,
       "current_page_text": "۲",
       "full_envelope": true,
       "hx_still_full_page": true
     },
     "screenshots": [
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/desktop/home-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/desktop/home-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/desktop/product_detail-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/desktop/product_detail-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/desktop/listing-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/desktop/listing-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/desktop/search-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/desktop/search-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/desktop/collection-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/desktop/collection-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/desktop/cart-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/desktop/cart-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/mobile/home-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/mobile/home-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/mobile/product_detail-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/mobile/product_detail-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/mobile/listing-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/mobile/listing-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/mobile/search-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/mobile/search-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/mobile/collection-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/mobile/collection-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/mobile/cart-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/mobile/cart-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/tablet/home-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/tablet/home-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/tablet/product_detail-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/tablet/product_detail-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/tablet/listing-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/tablet/listing-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/tablet/search-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/tablet/search-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/tablet/collection-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/tablet/collection-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/tablet/cart-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/tablet/cart-public.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/page2/page2.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/cart/before.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/cart/update.png",
-      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection-index/index-companion.png"
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/grid/desktop/home-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/carousel/desktop/home-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/grid/desktop/product_detail-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/carousel/desktop/product_detail-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/grid/desktop/listing-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/carousel/desktop/listing-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/grid/desktop/search-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/carousel/desktop/search-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/grid/desktop/collection-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/carousel/desktop/collection-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/grid/desktop/cart-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/carousel/desktop/cart-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/grid/mobile/home-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/carousel/mobile/home-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/grid/mobile/product_detail-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/carousel/mobile/product_detail-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/grid/mobile/listing-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/carousel/mobile/listing-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/grid/mobile/search-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/carousel/mobile/search-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/grid/mobile/collection-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/carousel/mobile/collection-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/grid/mobile/cart-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/carousel/mobile/cart-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/grid/tablet/home-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/carousel/tablet/home-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/grid/tablet/product_detail-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/carousel/tablet/product_detail-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/grid/tablet/listing-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/carousel/tablet/listing-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/grid/tablet/search-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/carousel/tablet/search-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/grid/tablet/collection-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/carousel/tablet/collection-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/grid/tablet/cart-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/carousel/tablet/cart-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/page2/page2.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/cart/before.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection/cart/update.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection-index/index-companion.png"
     ],
     "errors": [],
     "broken_image_records": [
@@ -4083,15 +4083,15 @@
       }
     ],
     "index_companion": {
-      "url": "http://127.0.0.1:8765/collections/",
+      "url": "http://127.0.0.1:8768/collections/",
       "status": 200,
       "sb_css": 0,
       "product_list_css": 1,
-      "screenshot": "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection-index/index-companion.png",
+      "screenshot": "/tmp/claude-0/-home-user-Rastisi6-14040616/a82ddf47-0972-5fd0-b038-884813c12654/scratchpad/browser_final_scratch3/collection-index/index-companion.png",
       "note": "E6 companion — no pilot placement; does not substitute for E4 Collection detail."
     },
     "known_red_findings": [],
-    "finished_at": "2026-09-10T23:49:50.528Z"
+    "finished_at": "2026-09-11T10:15:16.245Z"
   },
-  "finished_at": "2026-09-10T23:49:55.832Z"
+  "finished_at": "2026-09-11T10:15:21.109Z"
 }
