@@ -792,3 +792,29 @@ commit-by-commit summary.
   point above — each iteration's screenshots were superseded; only the final clean run's evidence is
   committed, no stale FAILURE screenshots left in
   `docs/qa_evidence/storefront_builder/r4/phase1/`.)
+
+## Pre-Task-10 evidence cleanup (2026-09-11)
+
+- Discovered after the corrective closure above that the canonical
+  `docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/`
+  directory (a SEPARATE location from `docs/qa_evidence/storefront_builder/
+  r4/phase1/`, which the corrective closure did refresh) still held the
+  machine-readable evidence and `FAILURE-*.png` screenshots from an earlier
+  18/20 run predating the corrective session, contradicting the clean 20/20
+  result the closure actually achieved and committed. This was an oversight
+  in which evidence directory got synchronized, not a production defect and
+  not a fabricated PASS claim — the corrective session's own local scratch
+  output from its final clean run (`r4-browser-result.json` showing
+  `{"passed": 20, "failed": 0}`, zero FAIL scenarios, matching
+  `db-restore-proof.json` with `"match": true`) still existed on disk and
+  was verified genuine before use.
+- Canonical `browser_final/` synchronized to that genuine 20/20 run's
+  complete output (all machine-readable evidence — `r4-browser-result.json`,
+  `metrics.json`, `db-restore-proof.json`, `fixture.json`,
+  `tenant_negatives.json`, logs — plus the per-viewport/per-variant
+  screenshot subdirectories, all from the same run). The two stale
+  `FAILURE-phase3-task6-family-gate.png`/`FAILURE-14-task7-composition-and-
+  recovery.png` screenshots were removed from the current tree (git history
+  still has them from the prior commit — not deleted there, only here).
+- No production code, R4 behavior, architecture, or QA harness changed.
+  `git diff --check` clean. This is an evidence-only correction.

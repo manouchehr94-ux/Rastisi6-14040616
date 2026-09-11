@@ -1,3 +1,3 @@
 If QA was interrupted and the automatic restore did not run, close every runserver process first, then:
-Copy-Item "/home/user/RastiSi4_r4_qa_backups/storefront-builder-r4-qa-20260910-212718.sqlite3" "/home/user/Rastisi6-14040616/db.sqlite3" -Force
-pre_run_sha256: ff62e6dc1a8a735d2492ffdb198f350f681261ed1bdfdc65f7a08d3cea558ba1
+Copy-Item "/home/user/RastiSi4_r4_qa_backups/storefront-builder-r4-qa-20260911-031751.sqlite3" "/home/user/Rastisi6-14040616/db.sqlite3" -Force
+pre_run_sha256: 36b9a7b3a7d8b1272b62310980c7ab0fadbe9daaefb29c395b12558ef6cfa7f2

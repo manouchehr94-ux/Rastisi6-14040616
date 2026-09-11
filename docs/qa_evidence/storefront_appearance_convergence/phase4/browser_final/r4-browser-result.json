@@ -1,72 +1,72 @@
 {
-  "started_at": "2026-09-10T17:57:20.875Z",
-  "builder_url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-  "public_url": "http://127.0.0.1:8790/",
+  "started_at": "2026-09-10T23:47:53.672Z",
+  "builder_url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+  "public_url": "http://127.0.0.1:8765/",
   "scenarios": [
     {
       "name": "01-initial-r4",
       "status": "PASS",
-      "ms": 167
+      "ms": 216
     },
     {
       "name": "02-hero-basic-autosave",
       "status": "PASS",
-      "ms": 2406
+      "ms": 2671
     },
     {
       "name": "03-hero-advanced-typography-override",
       "status": "PASS",
-      "ms": 3726
+      "ms": 4277
     },
     {
       "name": "04-add-product-and-reorder",
       "status": "PASS",
-      "ms": 2025
+      "ms": 2517
     },
     {
       "name": "05-product-auto-and-persian-digit-limit",
       "status": "PASS",
-      "ms": 3328
+      "ms": 3653
     },
     {
       "name": "06-product-manual-picker",
       "status": "PASS",
-      "ms": 13401
+      "ms": 13526
     },
     {
       "name": "07-brand-same-picker",
       "status": "PASS",
-      "ms": 13880
+      "ms": 13891
     },
     {
       "name": "08-undo-redo",
       "status": "PASS",
-      "ms": 4066
+      "ms": 4404
     },
     {
       "name": "09-real-stale-conflict",
       "status": "PASS",
-      "ms": 3232
+      "ms": 3641
     },
     {
       "name": "10-publish",
       "status": "PASS",
-      "ms": 2179
+      "ms": 2185
     },
     {
       "name": "11-public-storefront-parity",
       "status": "PASS",
-      "ms": 544
+      "ms": 784
     },
     {
       "name": "12-new-draft-only-change",
       "status": "PASS",
-      "ms": 2666
+      "ms": 2874
     },
     {
       "name": "13-public-must-remain-unchanged",
       "status": "PASS",
-      "ms": 346
+      "ms": 357
     },
     {
       "name": "final-instrumentation-assertions",
@@ -81,1788 +81,2173 @@
     {
       "name": "phase3-brand-gate",
       "status": "PASS",
-      "ms": 58935
+      "ms": 65187
     },
     {
       "name": "phase3-task6-family-gate",
-      "status": "FAIL",
-      "ms": 38197,
-      "error": "locator.waitFor: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[data-section-key=\"multi_banner\"] .promo-grid--promo-4').first() to be visible\u001b[22m\n\n    at Object.assertReflected (/home/user/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:2585:26)\n    at task6FamilyFieldEditScenario (/home/user/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:2691:13)\n    at async phase3Task6FamilyGate (/home/user/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:2752:5)\n    at async scenario (/home/user/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:5)\n    at async main (/home/user/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3701:5)\n    at async file:///home/user/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3724:3"
+      "status": "PASS",
+      "ms": 57164
     },
     {
       "name": "phase3-final-remediation-family-gate",
       "status": "PASS",
-      "ms": 201192
+      "ms": 220315
     },
     {
       "name": "14-task7-composition-and-recovery",
-      "status": "FAIL",
-      "ms": 50975,
-      "error": "locator.waitFor: Error: strict mode violation: locator('[data-section-key=\"brand_carousel\"]') resolved to 3 elements:\n    1) <div class=\"rsec\" tabindex=\"0\" role=\"region\" data-cell-id=\"219\" data-motion=\"none\" data-section-id=\"99\" data-section-locked=\"0\" data-container-id=\"219\" data-section-row-key=\"\" data-section-row-span=\"12\" data-section-key=\"brand_carousel\" data-section-label=\"کاروسل برندها\" aria-label=\"کاروسل برندها — بخش قابل ویرایش\">…</div> aka getByText('⋮⋮ ⚙ ↑ ↓ ⧉ 👁 🔒 🗑 برندهای home grid مشاهده همه › برند تی۱۲ شماره')\n    2) <div class=\"rsec\" tabindex=\"0\" role=\"region\" data-cell-id=\"220\" data-motion=\"none\" data-section-id=\"100\" data-section-locked=\"0\" data-container-id=\"220\" data-section-row-key=\"\" data-section-row-span=\"12\" data-section-key=\"brand_carousel\" data-section-label=\"کاروسل برندها\" aria-label=\"کاروسل برندها — بخش قابل ویرایش\">…</div> aka getByText('⋮⋮ ⚙ ↑ ↓ ⧉ 👁 🔒 🗑 برندهای home carousel مشاهده همه › برند تی۱۲ شماره')\n    3) <div class=\"rsec\" tabindex=\"0\" role=\"region\" data-cell-id=\"221\" data-motion=\"none\" data-section-id=\"101\" data-section-locked=\"0\" data-container-id=\"221\" data-section-row-key=\"\" data-section-row-span=\"12\" data-section-key=\"brand_carousel\" data-section-label=\"کاروسل برندها\" aria-label=\"کاروسل برندها — بخش قابل ویرایش\">…</div> aka getByText('⋮⋮ ⚙ ↑ ↓ ⧉ 👁 🔒 🗑 برندهای home beauty_tabs برند تی۱۲ شماره')\n\nCall log:\n\u001b[2m  - waiting for locator('[data-section-key=\"brand_carousel\"]') to be detached\u001b[22m\n\n    at scenario14CompositionAndRecoveryGate (/home/user/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3217:62)\n    at async scenario (/home/user/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:5)\n    at async main (/home/user/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3713:3)\n    at async file:///home/user/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3724:3"
+      "status": "PASS",
+      "ms": 70228
     },
     {
       "name": "15-task8-template-switch-lifecycle",
       "status": "PASS",
-      "ms": 69563
+      "ms": 58739
     }
   ],
   "mutation_posts": [
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 409,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
+      "status": 200,
+      "source": "admin"
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
+      "status": 200,
+      "source": "admin"
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
+      "status": 200,
+      "source": "admin"
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
+      "status": 200,
+      "source": "admin"
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
+      "status": 200,
+      "source": "admin"
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
+      "status": 200,
+      "source": "admin"
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
+      "status": 200,
+      "source": "admin"
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     }
   ],
   "history_posts": [
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/history/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/history/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/history/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/history/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/history/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/history/",
       "status": 200,
       "source": "admin"
     }
   ],
   "publish_posts": [
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/publish/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/publish/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/publish/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/publish/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/publish/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/publish/",
+      "status": 200,
+      "source": "admin"
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/publish/",
       "status": 200,
       "source": "admin"
     }
   ],
-  "discard_posts": [],
+  "discard_posts": [
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/discard/",
+      "status": 200,
+      "source": "admin"
+    }
+  ],
   "switch_template_posts": [
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/switch-template/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/switch-template/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/switch-template/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/switch-template/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/switch-template/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/switch-template/",
       "status": 409,
       "source": "admin"
     }
   ],
   "http_error_responses": [
     {
-      "url": "http://127.0.0.1:8790/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063041984
+      "at": 1789084075055
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063042040
+      "at": 1789084075105
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063044382
+      "at": 1789084077794
     },
     {
-      "url": "http://127.0.0.1:8790/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063044383
+      "at": 1789084077795
     },
     {
-      "url": "http://127.0.0.1:8790/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063047645
+      "at": 1789084081493
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063047679
+      "at": 1789084081494
     },
     {
-      "url": "http://127.0.0.1:8790/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063050043
+      "at": 1789084084117
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063050073
+      "at": 1789084084118
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063050850
+      "at": 1789084085198
     },
     {
-      "url": "http://127.0.0.1:8790/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063050881
+      "at": 1789084085198
     },
     {
-      "url": "http://127.0.0.1:8790/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063052074
+      "at": 1789084086861
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063052117
+      "at": 1789084086861
     },
     {
-      "url": "http://127.0.0.1:8790/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063053586
+      "at": 1789084088361
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063053592
+      "at": 1789084088361
     },
     {
-      "url": "http://127.0.0.1:8790/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063056070
+      "at": 1789084091080
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063056123
+      "at": 1789084091109
     },
     {
-      "url": "http://127.0.0.1:8790/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063066990
+      "at": 1789084101908
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063067030
+      "at": 1789084101908
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063069804
+      "at": 1789084104963
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063080864
+      "at": 1789084115733
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063083274
+      "at": 1789084118484
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063084966
+      "at": 1789084120200
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
       "status": 409,
       "source": "admin",
       "bucket": "mutation_posts",
-      "at": 1789063086359
+      "at": 1789084121778
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063087590
+      "at": 1789084123105
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063090364
+      "at": 1789084126015
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "public",
       "bucket": null,
-      "at": 1789063091329
+      "at": 1789084127184
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063093550
+      "at": 1789084129605
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "public",
       "bucket": null,
-      "at": 1789063094417
+      "at": 1789084130513
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063115365
+      "at": 1789084153417
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063154224
+      "at": 1789084196698
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063161886
+      "at": 1789084204560
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063175530
+      "at": 1789084219381
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063193599
+      "at": 1789084233118
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063199318
+      "at": 1789084247077
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063213082
+      "at": 1789084253953
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063225004
+      "at": 1789084260550
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063236633
+      "at": 1789084272621
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063248259
+      "at": 1789084286454
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063261969
+      "at": 1789084298321
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063277725
+      "at": 1789084310246
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063295446
+      "at": 1789084326095
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063309298
+      "at": 1789084339971
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063323090
+      "at": 1789084354078
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063334789
+      "at": 1789084368478
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063349450
+      "at": 1789084380356
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063364179
+      "at": 1789084392273
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063378798
+      "at": 1789084409086
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063392166
+      "at": 1789084423807
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063394771
+      "at": 1789084439486
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063405618
+      "at": 1789084453045
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063416533
+      "at": 1789084458830
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+      "status": 404,
+      "source": "public",
+      "bucket": null,
+      "at": 1789084459641
+    },
+    {
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063421063
+      "at": 1789084466446
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+      "status": 404,
+      "source": "public",
+      "bucket": null,
+      "at": 1789084467312
+    },
+    {
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063431998
+      "at": 1789084474190
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063444750
+      "at": 1789084483225
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063457740
+      "at": 1789084493949
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063462855
+      "at": 1789084498800
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063467599
+      "at": 1789084509687
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063473630
+      "at": 1789084520506
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+      "status": 404,
+      "source": "admin",
+      "bucket": null,
+      "at": 1789084523554
+    },
+    {
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+      "status": 404,
+      "source": "admin",
+      "bucket": null,
+      "at": 1789084526637
+    },
+    {
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+      "status": 404,
+      "source": "admin",
+      "bucket": null,
+      "at": 1789084529680
+    },
+    {
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+      "status": 404,
+      "source": "admin",
+      "bucket": null,
+      "at": 1789084536517
+    },
+    {
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+      "status": 404,
+      "source": "admin",
+      "bucket": null,
+      "at": 1789084537949
+    },
+    {
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+      "status": 404,
+      "source": "admin",
+      "bucket": null,
+      "at": 1789084541356
+    },
+    {
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+      "status": 404,
+      "source": "admin",
+      "bucket": null,
+      "at": 1789084544407
+    },
+    {
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+      "status": 404,
+      "source": "admin",
+      "bucket": null,
+      "at": 1789084549368
+    },
+    {
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+      "status": 404,
+      "source": "admin",
+      "bucket": null,
+      "at": 1789084554185
+    },
+    {
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+      "status": 404,
+      "source": "admin",
+      "bucket": null,
+      "at": 1789084560249
+    },
+    {
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "public-task8",
       "bucket": null,
-      "at": 1789063474471
+      "at": 1789084561162
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063479019
+      "at": 1789084565818
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "public-task8",
       "bucket": null,
-      "at": 1789063489113
+      "at": 1789084574891
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/switch-template/",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/switch-template/",
       "status": 409,
       "source": "admin",
       "bucket": "switch_template_posts",
-      "at": 1789063489187
+      "at": 1789084574904
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063489948
+      "at": 1789084575788
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063502035
+      "at": 1789084587836
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063505349
+      "at": 1789084591113
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789063514168
+      "at": 1789084600023
     },
     {
-      "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "public-task8",
       "bucket": null,
-      "at": 1789063514875
+      "at": 1789084600812
     }
   ],
   "console_errors": [
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063041984
+      "at": 1789084075055
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063042040
+      "at": 1789084075105
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063044382
+      "at": 1789084077794
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063044383
+      "at": 1789084077795
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063047645
+      "at": 1789084081493
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063047679
+      "at": 1789084081494
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063050043
+      "at": 1789084084117
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063050074
+      "at": 1789084084118
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063050850
+      "at": 1789084085198
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063050881
+      "at": 1789084085198
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063052074
+      "at": 1789084086861
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063052117
+      "at": 1789084086861
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063053586
+      "at": 1789084088361
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063053592
+      "at": 1789084088361
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063056070
+      "at": 1789084091109
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063056141
+      "at": 1789084091109
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063066990
+      "at": 1789084101908
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063067030
+      "at": 1789084101908
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063069804
+      "at": 1789084104963
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063080864
+      "at": 1789084115733
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063083274
+      "at": 1789084118484
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063084966
+      "at": 1789084120200
     },
     {
       "text": "Failed to load resource: the server responded with a status of 409 (Conflict)",
       "location": {
-        "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+        "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063086360
+      "at": 1789084121779
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063087590
+      "at": 1789084123106
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063090364
+      "at": 1789084126015
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "public",
-      "at": 1789063091329
+      "at": 1789084127184
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063093551
+      "at": 1789084129605
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "public",
-      "at": 1789063094417
+      "at": 1789084130513
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063115365
+      "at": 1789084153418
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063154224
+      "at": 1789084196699
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063161887
+      "at": 1789084204561
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063175530
+      "at": 1789084219381
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063193599
+      "at": 1789084233118
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063199318
+      "at": 1789084247077
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063213082
+      "at": 1789084253953
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063225004
+      "at": 1789084260550
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063236633
+      "at": 1789084272621
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063248259
+      "at": 1789084286454
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063261969
+      "at": 1789084298321
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063277725
+      "at": 1789084310246
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063295446
+      "at": 1789084326095
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063309298
+      "at": 1789084339971
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063323090
+      "at": 1789084354078
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063334789
+      "at": 1789084368478
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063349450
+      "at": 1789084380356
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063364179
+      "at": 1789084392273
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063378798
+      "at": 1789084409086
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063392166
+      "at": 1789084423807
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063394771
+      "at": 1789084439486
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063405618
+      "at": 1789084453045
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063416533
+      "at": 1789084458830
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "public",
+      "at": 1789084459641
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063421063
+      "at": 1789084466446
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "public",
+      "at": 1789084467312
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063431998
+      "at": 1789084474190
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063444750
+      "at": 1789084483225
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063457740
+      "at": 1789084493949
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063462855
+      "at": 1789084498800
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063467599
+      "at": 1789084509687
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063473630
+      "at": 1789084520506
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "admin",
+      "at": 1789084523554
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "admin",
+      "at": 1789084526637
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "admin",
+      "at": 1789084529680
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "admin",
+      "at": 1789084536517
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "admin",
+      "at": 1789084537949
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "admin",
+      "at": 1789084541357
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "admin",
+      "at": 1789084544407
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "admin",
+      "at": 1789084549368
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "admin",
+      "at": 1789084554185
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "admin",
+      "at": 1789084560249
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "public-task8",
-      "at": 1789063474471
+      "at": 1789084561162
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063479019
+      "at": 1789084565818
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "public-task8",
-      "at": 1789063489113
+      "at": 1789084574891
     },
     {
       "text": "Failed to load resource: the server responded with a status of 409 (Conflict)",
       "location": {
-        "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/switch-template/",
+        "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/switch-template/",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063489187
+      "at": 1789084574904
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063489948
+      "at": 1789084575789
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063502035
+      "at": 1789084587836
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063505349
+      "at": 1789084591113
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789063514168
+      "at": 1789084600023
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://127.0.0.1:8790/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://127.0.0.1:8765/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "public-task8",
-      "at": 1789063514875
+      "at": 1789084600812
     }
   ],
   "page_errors": [],
-  "request_failures": [],
+  "request_failures": [
+    {
+      "url": "https://www.youtube.com/embed/dQw4w9WgXcQ",
+      "method": "GET",
+      "error": "net::ERR_TUNNEL_CONNECTION_FAILED",
+      "source": "admin",
+      "at": 1789084371453
+    },
+    {
+      "url": "https://www.youtube.com/embed/dQw4w9WgXcQ",
+      "method": "GET",
+      "error": "net::ERR_TUNNEL_CONNECTION_FAILED",
+      "source": "admin",
+      "at": 1789084383398
+    },
+    {
+      "url": "https://www.youtube.com/embed/dQw4w9WgXcQ",
+      "method": "GET",
+      "error": "net::ERR_TUNNEL_CONNECTION_FAILED",
+      "source": "admin",
+      "at": 1789084395228
+    },
+    {
+      "url": "https://www.youtube.com/embed/dQw4w9WgXcQ",
+      "method": "GET",
+      "error": "net::ERR_TUNNEL_CONNECTION_FAILED",
+      "source": "admin",
+      "at": 1789084411931
+    },
+    {
+      "url": "https://www.youtube.com/embed/dQw4w9WgXcQ",
+      "method": "GET",
+      "error": "net::ERR_TUNNEL_CONNECTION_FAILED",
+      "source": "admin",
+      "at": 1789084426664
+    },
+    {
+      "url": "https://www.youtube.com/embed/dQw4w9WgXcQ",
+      "method": "GET",
+      "error": "net::ERR_TUNNEL_CONNECTION_FAILED",
+      "source": "admin",
+      "at": 1789084442403
+    },
+    {
+      "url": "https://www.youtube.com/embed/dQw4w9WgXcQ",
+      "method": "GET",
+      "error": "net::ERR_TUNNEL_CONNECTION_FAILED",
+      "source": "admin",
+      "at": 1789084463194
+    },
+    {
+      "url": "https://www.youtube.com/embed/dQw4w9WgXcQ",
+      "method": "GET",
+      "error": "net::ERR_TUNNEL_CONNECTION_FAILED",
+      "source": "admin",
+      "at": 1789084470414
+    },
+    {
+      "url": "https://www.youtube.com/embed/dQw4w9WgXcQ",
+      "method": "GET",
+      "error": "net::ERR_TUNNEL_CONNECTION_FAILED",
+      "source": "admin",
+      "at": 1789084569639
+    },
+    {
+      "url": "https://www.youtube.com/embed/dQw4w9WgXcQ",
+      "method": "GET",
+      "error": "net::ERR_TUNNEL_CONNECTION_FAILED",
+      "source": "admin",
+      "at": 1789084583044
+    },
+    {
+      "url": "https://www.youtube.com/embed/dQw4w9WgXcQ",
+      "method": "GET",
+      "error": "net::ERR_TUNNEL_CONNECTION_FAILED",
+      "source": "admin",
+      "at": 1789084594018
+    }
+  ],
   "main_frame_navigations": [
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T17:57:21.374Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:47:54.311Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T17:57:24.042Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:47:57.461Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T17:57:27.354Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:48:01.142Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T17:57:33.283Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:48:08.013Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T17:57:46.656Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:48:21.549Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T17:58:00.377Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:48:35.363Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T17:58:02.962Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:48:38.126Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T17:58:04.579Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:48:39.829Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T17:58:07.285Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:48:42.738Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T17:58:09.994Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:48:45.669Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T17:58:13.249Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:48:49.209Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T17:58:35.089Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:49:12.991Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T17:59:13.946Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:49:56.361Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T17:59:21.628Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:50:04.208Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T17:59:35.249Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:50:19.034Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T17:59:53.280Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:50:32.738Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T17:59:59.032Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:50:46.702Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:00:12.818Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:50:53.634Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:00:24.714Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:51:00.211Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:00:36.349Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:51:12.296Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:00:47.974Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:51:26.117Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:01:01.706Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:51:37.994Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:01:17.428Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:51:49.883Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:01:35.149Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:52:05.743Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:01:48.980Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:52:19.647Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:02:02.748Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:52:33.462Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:02:14.316Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:52:48.147Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:02:29.180Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:53:00.006Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:02:43.886Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:53:11.914Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:02:58.539Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:53:28.765Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:03:11.907Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:53:43.485Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:03:14.478Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:53:59.168Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:03:36.272Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:54:12.677Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:03:51.731Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:54:18.499Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:04:17.450Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:54:26.127Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:04:22.579Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:54:33.840Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:04:33.358Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:54:53.610Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:04:38.734Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:55:09.366Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:04:49.678Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/?page=cart",
+      "at": "2026-09-10T23:55:36.243Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:05:01.727Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/?page=home",
+      "at": "2026-09-10T23:55:37.588Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:05:05.066Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/?page=home",
+      "at": "2026-09-10T23:55:41.029Z",
       "expected": true
     },
     {
-      "url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-10T18:05:13.908Z",
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:55:44.064Z",
+      "expected": true
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:55:49.015Z",
+      "expected": true
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:55:59.892Z",
+      "expected": true
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:56:05.438Z",
+      "expected": true
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:56:15.430Z",
+      "expected": true
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:56:27.496Z",
+      "expected": true
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:56:30.761Z",
+      "expected": true
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-10T23:56:39.660Z",
       "expected": true
     }
   ],
@@ -1877,11 +2262,13 @@
     "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_builder/r4/phase1/08_publish_success.png",
     "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_builder/r4/phase1/09_public_storefront_after_publish.png",
     "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_builder/r4/phase1/10_draft_changed_public_unchanged.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_builder/r4/phase1/12_final_remediation_publish_public_parity.png",
+    "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_builder/r4/phase1/11_task7_composition_and_recovery.png",
     "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_builder/r4/phase1/13_task8_template_switch_lifecycle.png"
   ],
   "summary": {
-    "passed": 18,
-    "failed": 2
+    "passed": 20,
+    "failed": 0
   },
   "public_parity": {
     "product_label_hits": [
@@ -1897,7 +2284,7 @@
     "unexpected_console_errors": 0,
     "expected_stale_409_console_events": 1,
     "expected_stale_409_http": 1,
-    "expected_stale_409_url": "http://127.0.0.1:8790/admin-portal/storefront-builder/r4/mutate/",
+    "expected_stale_409_url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/mutate/",
     "unexpected_http_errors": 0,
     "unexpected_request_failures": 0,
     "page_errors": 0,
@@ -1905,7 +2292,7 @@
     "unexpected_main_frame_navigations": 0
   },
   "phase3_brand": {
-    "started_at": "2026-09-10T17:57:20.876Z",
+    "started_at": "2026-09-10T23:47:53.672Z",
     "viewports": [
       "desktop",
       "mobile",
@@ -1915,91 +2302,91 @@
       {
         "envelope": "home",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8790/",
+        "url": "http://127.0.0.1:8765/",
         "status": 200
       },
       {
         "envelope": "product_detail",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8790/products/t12-product-1/",
+        "url": "http://127.0.0.1:8765/products/t12-product-1/",
         "status": 200
       },
       {
         "envelope": "listing",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8790/products/",
+        "url": "http://127.0.0.1:8765/products/",
         "status": 200
       },
       {
         "envelope": "collection",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8790/collections/p3-collection-1/",
+        "url": "http://127.0.0.1:8765/collections/p3-collection-1/",
         "status": 200
       },
       {
         "envelope": "cart",
         "viewport": "desktop",
-        "url": "http://127.0.0.1:8790/cart/",
+        "url": "http://127.0.0.1:8765/cart/",
         "status": 200
       },
       {
         "envelope": "home",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8790/",
+        "url": "http://127.0.0.1:8765/",
         "status": 200
       },
       {
         "envelope": "product_detail",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8790/products/t12-product-1/",
+        "url": "http://127.0.0.1:8765/products/t12-product-1/",
         "status": 200
       },
       {
         "envelope": "listing",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8790/products/",
+        "url": "http://127.0.0.1:8765/products/",
         "status": 200
       },
       {
         "envelope": "collection",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8790/collections/p3-collection-1/",
+        "url": "http://127.0.0.1:8765/collections/p3-collection-1/",
         "status": 200
       },
       {
         "envelope": "cart",
         "viewport": "mobile",
-        "url": "http://127.0.0.1:8790/cart/",
+        "url": "http://127.0.0.1:8765/cart/",
         "status": 200
       },
       {
         "envelope": "home",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8790/",
+        "url": "http://127.0.0.1:8765/",
         "status": 200
       },
       {
         "envelope": "product_detail",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8790/products/t12-product-1/",
+        "url": "http://127.0.0.1:8765/products/t12-product-1/",
         "status": 200
       },
       {
         "envelope": "listing",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8790/products/",
+        "url": "http://127.0.0.1:8765/products/",
         "status": 200
       },
       {
         "envelope": "collection",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8790/collections/p3-collection-1/",
+        "url": "http://127.0.0.1:8765/collections/p3-collection-1/",
         "status": 200
       },
       {
         "envelope": "cart",
         "viewport": "tablet",
-        "url": "http://127.0.0.1:8790/cart/",
+        "url": "http://127.0.0.1:8765/cart/",
         "status": 200
       }
     ],
@@ -4021,7 +4408,7 @@
     ],
     "wrapper_projection": [
       {
-        "section_id": "98",
+        "section_id": "163",
         "replacements": 3,
         "hrefs_before": [
           "/products/?brand=t12-brand-2",
@@ -4082,76 +4469,76 @@
       }
     ],
     "screenshots": [
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/grid/desktop/home-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/carousel/desktop/home-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/beauty_tabs/desktop/home-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/grid/desktop/product_detail-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/carousel/desktop/product_detail-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/beauty_tabs/desktop/product_detail-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/grid/desktop/listing-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/carousel/desktop/listing-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/beauty_tabs/desktop/listing-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/grid/desktop/collection-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/carousel/desktop/collection-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/beauty_tabs/desktop/collection-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/grid/desktop/cart-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/carousel/desktop/cart-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/beauty_tabs/desktop/cart-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/grid/mobile/home-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/carousel/mobile/home-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/beauty_tabs/mobile/home-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/grid/mobile/product_detail-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/carousel/mobile/product_detail-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/beauty_tabs/mobile/product_detail-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/grid/mobile/listing-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/carousel/mobile/listing-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/beauty_tabs/mobile/listing-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/grid/mobile/collection-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/carousel/mobile/collection-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/beauty_tabs/mobile/collection-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/grid/mobile/cart-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/carousel/mobile/cart-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/beauty_tabs/mobile/cart-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/grid/tablet/home-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/carousel/tablet/home-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/beauty_tabs/tablet/home-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/grid/tablet/product_detail-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/carousel/tablet/product_detail-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/beauty_tabs/tablet/product_detail-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/grid/tablet/listing-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/carousel/tablet/listing-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/beauty_tabs/tablet/listing-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/grid/tablet/collection-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/carousel/tablet/collection-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/beauty_tabs/tablet/collection-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/grid/tablet/cart-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/carousel/tablet/cart-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/beauty_tabs/tablet/cart-public.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/wrapper_projection/preview-after-3x-replacement.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/fragments/cart/desktop/before.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/fragments/cart/desktop/update.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/fragments/cart/desktop/remove.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/fragments/cart/mobile/before.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/fragments/cart/mobile/update.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/fragments/cart/mobile/remove.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/fragments/cart/tablet/before.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/fragments/cart/tablet/update.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/fragments/cart/tablet/remove.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/brand/broken-image/search.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/fragments/cart/desktop/before.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/fragments/cart/desktop/update.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/fragments/cart/desktop/remove.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/fragments/cart/mobile/before.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/fragments/cart/mobile/update.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/fragments/cart/mobile/remove.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/fragments/cart/tablet/before.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/fragments/cart/tablet/update.png",
-      "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/fragments/cart/tablet/remove.png"
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/desktop/home-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/desktop/home-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/desktop/home-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/desktop/product_detail-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/desktop/product_detail-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/desktop/product_detail-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/desktop/listing-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/desktop/listing-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/desktop/listing-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/desktop/collection-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/desktop/collection-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/desktop/collection-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/desktop/cart-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/desktop/cart-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/desktop/cart-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/mobile/home-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/mobile/home-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/mobile/home-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/mobile/product_detail-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/mobile/product_detail-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/mobile/product_detail-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/mobile/listing-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/mobile/listing-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/mobile/listing-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/mobile/collection-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/mobile/collection-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/mobile/collection-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/mobile/cart-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/mobile/cart-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/mobile/cart-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/tablet/home-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/tablet/home-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/tablet/home-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/tablet/product_detail-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/tablet/product_detail-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/tablet/product_detail-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/tablet/listing-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/tablet/listing-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/tablet/listing-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/tablet/collection-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/tablet/collection-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/tablet/collection-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/grid/tablet/cart-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/carousel/tablet/cart-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/beauty_tabs/tablet/cart-public.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/wrapper_projection/preview-after-3x-replacement.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/desktop/before.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/desktop/update.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/desktop/remove.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/mobile/before.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/mobile/update.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/mobile/remove.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/tablet/before.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/tablet/update.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/tablet/remove.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/brand/broken-image/search.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/desktop/before.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/desktop/update.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/desktop/remove.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/mobile/before.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/mobile/update.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/mobile/remove.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/tablet/before.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/tablet/update.png",
+      "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/fragments/cart/tablet/remove.png"
     ],
     "errors": [],
     "broken_image": {
       "envelope": "search",
-      "url": "http://127.0.0.1:8790/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
+      "url": "http://127.0.0.1:8765/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
       "has_img_tag": true,
       "img_src": "/media/brand_logos/qa-broken-nonexistent.png",
       "img_complete": true,
@@ -4209,114 +4596,114 @@
       }
     },
     "collection": {
-      "started_at": "2026-09-10T17:57:20.876Z",
+      "started_at": "2026-09-10T23:47:53.672Z",
       "envelopes": [
         {
           "envelope": "home",
           "viewport": "desktop",
-          "url": "http://127.0.0.1:8790/",
+          "url": "http://127.0.0.1:8765/",
           "status": 200
         },
         {
           "envelope": "product_detail",
           "viewport": "desktop",
-          "url": "http://127.0.0.1:8790/products/t12-product-1/",
+          "url": "http://127.0.0.1:8765/products/t12-product-1/",
           "status": 200
         },
         {
           "envelope": "listing",
           "viewport": "desktop",
-          "url": "http://127.0.0.1:8790/products/",
+          "url": "http://127.0.0.1:8765/products/",
           "status": 200
         },
         {
           "envelope": "search",
           "viewport": "desktop",
-          "url": "http://127.0.0.1:8790/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
+          "url": "http://127.0.0.1:8765/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
           "status": 200
         },
         {
           "envelope": "collection",
           "viewport": "desktop",
-          "url": "http://127.0.0.1:8790/collections/p3-collection-2/",
+          "url": "http://127.0.0.1:8765/collections/p3-collection-2/",
           "status": 200
         },
         {
           "envelope": "cart",
           "viewport": "desktop",
-          "url": "http://127.0.0.1:8790/cart/",
+          "url": "http://127.0.0.1:8765/cart/",
           "status": 200
         },
         {
           "envelope": "home",
           "viewport": "mobile",
-          "url": "http://127.0.0.1:8790/",
+          "url": "http://127.0.0.1:8765/",
           "status": 200
         },
         {
           "envelope": "product_detail",
           "viewport": "mobile",
-          "url": "http://127.0.0.1:8790/products/t12-product-1/",
+          "url": "http://127.0.0.1:8765/products/t12-product-1/",
           "status": 200
         },
         {
           "envelope": "listing",
           "viewport": "mobile",
-          "url": "http://127.0.0.1:8790/products/",
+          "url": "http://127.0.0.1:8765/products/",
           "status": 200
         },
         {
           "envelope": "search",
           "viewport": "mobile",
-          "url": "http://127.0.0.1:8790/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
+          "url": "http://127.0.0.1:8765/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
           "status": 200
         },
         {
           "envelope": "collection",
           "viewport": "mobile",
-          "url": "http://127.0.0.1:8790/collections/p3-collection-2/",
+          "url": "http://127.0.0.1:8765/collections/p3-collection-2/",
           "status": 200
         },
         {
           "envelope": "cart",
           "viewport": "mobile",
-          "url": "http://127.0.0.1:8790/cart/",
+          "url": "http://127.0.0.1:8765/cart/",
           "status": 200
         },
         {
           "envelope": "home",
           "viewport": "tablet",
-          "url": "http://127.0.0.1:8790/",
+          "url": "http://127.0.0.1:8765/",
           "status": 200
         },
         {
           "envelope": "product_detail",
           "viewport": "tablet",
-          "url": "http://127.0.0.1:8790/products/t12-product-1/",
+          "url": "http://127.0.0.1:8765/products/t12-product-1/",
           "status": 200
         },
         {
           "envelope": "listing",
           "viewport": "tablet",
-          "url": "http://127.0.0.1:8790/products/",
+          "url": "http://127.0.0.1:8765/products/",
           "status": 200
         },
         {
           "envelope": "search",
           "viewport": "tablet",
-          "url": "http://127.0.0.1:8790/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
+          "url": "http://127.0.0.1:8765/products/?q=%DA%A9%D8%A7%D9%84%D8%A7",
           "status": 200
         },
         {
           "envelope": "collection",
           "viewport": "tablet",
-          "url": "http://127.0.0.1:8790/collections/p3-collection-2/",
+          "url": "http://127.0.0.1:8765/collections/p3-collection-2/",
           "status": 200
         },
         {
           "envelope": "cart",
           "viewport": "tablet",
-          "url": "http://127.0.0.1:8790/cart/",
+          "url": "http://127.0.0.1:8765/cart/",
           "status": 200
         }
       ],
@@ -5649,53 +6036,53 @@
         }
       ],
       "page2": {
-        "url": "http://127.0.0.1:8790/collections/p3-collection-page2/?page=2",
+        "url": "http://127.0.0.1:8765/collections/p3-collection-page2/?page=2",
         "product_card_count": 1,
         "current_page_text": "۲",
         "full_envelope": true,
         "hx_still_full_page": true
       },
       "screenshots": [
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/grid/desktop/home-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/carousel/desktop/home-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/grid/desktop/product_detail-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/carousel/desktop/product_detail-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/grid/desktop/listing-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/carousel/desktop/listing-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/grid/desktop/search-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/carousel/desktop/search-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/grid/desktop/collection-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/carousel/desktop/collection-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/grid/desktop/cart-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/carousel/desktop/cart-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/grid/mobile/home-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/carousel/mobile/home-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/grid/mobile/product_detail-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/carousel/mobile/product_detail-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/grid/mobile/listing-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/carousel/mobile/listing-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/grid/mobile/search-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/carousel/mobile/search-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/grid/mobile/collection-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/carousel/mobile/collection-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/grid/mobile/cart-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/carousel/mobile/cart-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/grid/tablet/home-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/carousel/tablet/home-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/grid/tablet/product_detail-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/carousel/tablet/product_detail-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/grid/tablet/listing-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/carousel/tablet/listing-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/grid/tablet/search-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/carousel/tablet/search-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/grid/tablet/collection-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/carousel/tablet/collection-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/grid/tablet/cart-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/carousel/tablet/cart-public.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/page2/page2.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/cart/before.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection/cart/update.png",
-        "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection-index/index-companion.png"
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/desktop/home-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/desktop/home-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/desktop/product_detail-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/desktop/product_detail-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/desktop/listing-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/desktop/listing-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/desktop/search-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/desktop/search-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/desktop/collection-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/desktop/collection-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/desktop/cart-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/desktop/cart-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/mobile/home-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/mobile/home-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/mobile/product_detail-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/mobile/product_detail-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/mobile/listing-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/mobile/listing-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/mobile/search-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/mobile/search-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/mobile/collection-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/mobile/collection-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/mobile/cart-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/mobile/cart-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/tablet/home-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/tablet/home-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/tablet/product_detail-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/tablet/product_detail-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/tablet/listing-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/tablet/listing-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/tablet/search-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/tablet/search-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/tablet/collection-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/tablet/collection-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/grid/tablet/cart-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/carousel/tablet/cart-public.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/page2/page2.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/cart/before.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection/cart/update.png",
+        "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection-index/index-companion.png"
       ],
       "errors": [],
       "broken_image_records": [
@@ -5989,17 +6376,17 @@
         }
       ],
       "index_companion": {
-        "url": "http://127.0.0.1:8790/collections/",
+        "url": "http://127.0.0.1:8765/collections/",
         "status": 200,
         "sb_css": 0,
         "product_list_css": 1,
-        "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/collection-index/index-companion.png",
+        "screenshot": "/tmp/claude-0/-home-user-Rastisi6-14040616/4d4f4fcf-c96c-5510-9627-15d8d60a7d5e/scratchpad/r4qa/full_run_6/collection-index/index-companion.png",
         "note": "E6 companion — no pilot placement; does not substitute for E4 Collection detail."
       },
       "known_red_findings": [],
-      "finished_at": "2026-09-10T17:59:08.753Z"
+      "finished_at": "2026-09-10T23:49:50.528Z"
     },
-    "finished_at": "2026-09-10T17:59:13.445Z"
+    "finished_at": "2026-09-10T23:49:55.832Z"
   },
-  "finished_at": "2026-09-10T18:05:16.513Z"
+  "finished_at": "2026-09-10T23:56:42.280Z"
 }
