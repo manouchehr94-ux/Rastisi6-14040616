@@ -1056,6 +1056,22 @@ function isExpectedBrokenImageNoise(url) {
   return Boolean(manifest.phase3) && BROKEN_IMAGE_URL_PATTERN.test(url || '');
 }
 
+// Pre-Task-10 CORRECTIVE closure (Item 1) — the same real YouTube/Aparat
+// embed `isExpectedVideoEmbedIframeSrc` allowlists as a DOM element (so the
+// real embed proof isn't dodged) has no route to the public internet in
+// this sandboxed QA environment (outbound HTTPS is proxied per-tool, not
+// available to the launched browser itself) — reproduced live as
+// `net::ERR_TUNNEL_CONNECTION_FAILED` on every load of that exact URL, a
+// genuine QA-environment network-reachability gap, not a production defect
+// (a real merchant's real browser has real internet access to youtube.com).
+// Once video_section's real URL is saved on the Draft it persists across
+// every later scenario's own reloads, so this must be excluded from the
+// request-failure instrumentation guard everywhere `isExpectedBrokenImageNoise`
+// is, not only in the gate that first sets it.
+function isExpectedVideoEmbedNetworkFailure(url) {
+  return Boolean(manifest.phase3) && isExpectedVideoEmbedIframeSrc(url);
+}
+
 function isExpectedStaleConflictNoise(entry) {
   // Chromium's DevTools protocol unconditionally logs a console.error for
   // ANY non-2xx/3xx response, regardless of how correctly the application
@@ -1172,7 +1188,7 @@ async function finalInstrumentationAssertions() {
 
   assert(result.page_errors.length === 0, `Page errors: ${JSON.stringify(result.page_errors.slice(0, 5))}`);
 
-  const unexpectedRequestFailures = result.request_failures.filter((f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url));
+  const unexpectedRequestFailures = result.request_failures.filter((f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url));
   assert(unexpectedRequestFailures.length === 0, `Failed requests: ${JSON.stringify(unexpectedRequestFailures.slice(0, 5))}`);
 
   // Round-2 corrective Finding B — the full R4/Preview/Public HTTP-error
@@ -2752,7 +2768,7 @@ async function phase3Task6FamilyGate() {
   );
   const pageErrorsBefore = result.page_errors.slice();
   const requestFailuresBefore = result.request_failures.filter(
-    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url),
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url),
   );
   const httpErrorResponsesBefore = result.http_error_responses.filter(
     (e) => !isExpectedStale409Response(e) && !isExpectedBrokenImageNoise(e.url),
@@ -2793,7 +2809,7 @@ async function phase3Task6FamilyGate() {
     `phase3-task6-family-gate: unexpected new page errors: ${JSON.stringify(result.page_errors.slice(pageErrorsBefore.length))}`,
   );
   const requestFailuresAfter = result.request_failures.filter(
-    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url),
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url),
   );
   assert(
     requestFailuresAfter.length === requestFailuresBefore.length,
@@ -2901,16 +2917,22 @@ const FINAL_REMEDIATION_SCALAR_EDITS = [
       assert(texts.some((t) => t.includes('مطلب وبلاگ QA تسک نهایی')), `blog_posts: expected the real BlogPost title in Preview, got: ${JSON.stringify(texts)}`);
     },
   },
-  // hero_banner/image_slider both render via the shared
-  // hero_slider_body.html partial via a real MediaAsset-backed HeroSlide
-  // (qa_storefront_builder_r4.py's own _save_with_media_asset — the SAME
-  // canonical-media fix Corrective Item 3 applies to multi_banner's
-  // fixture). A single slide renders `<article class="hero-slide single">
-  // ... <h1>{{ slide.title }}</h1>`.
+  // hero_banner/image_slider both render via a real MediaAsset-backed
+  // HeroSlide (qa_storefront_builder_r4.py's own _save_with_media_asset —
+  // the SAME canonical-media fix Corrective Item 3 applies to multi_banner's
+  // fixture). hero_banner's own edit is `hero_style` (a real
+  // variant_setting_key, section_registry.py's own U4 structural-variant
+  // switch) — reproduced live: setting it to "split" genuinely switches the
+  // rendered TEMPLATE from the default hero_slider_body.html (`.hero-slide
+  // h1`) to hero_banner_split.html (`.hero-split-text h1`), a real,
+  // intentional product behavior, not a bug. A bare `h1` scoped to the
+  // section is the correct assertion here — it proves the real HeroSlide
+  // title renders through whichever real structural variant is selected,
+  // without coupling the test to one specific variant's wrapper markup.
   {
     sectionKey: 'hero_banner', fieldKey: 'hero_style', fieldType: 'choice', value: 'split',
     assertReflected: async (frame, sectionKey) => {
-      const heading = frame.locator(`[data-section-key="${sectionKey}"] .hero-slide h1`);
+      const heading = frame.locator(`[data-section-key="${sectionKey}"] h1`);
       await heading.first().waitFor({ state: 'visible', timeout: 10000 });
       const text = await heading.first().textContent();
       assert(text && text.includes('اسلاید هیرو QA تسک نهایی'), `hero_banner: expected the real HeroSlide title in Preview, got: ${text}`);
@@ -3139,7 +3161,7 @@ async function phase3FinalRemediationFamilyGate() {
   );
   const pageErrorsBefore = result.page_errors.slice();
   const requestFailuresBefore = result.request_failures.filter(
-    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url),
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url),
   );
   const httpErrorResponsesBefore = result.http_error_responses.filter(
     (e) => !isExpectedStale409Response(e) && !isExpectedBrokenImageNoise(e.url),
@@ -3278,7 +3300,7 @@ async function phase3FinalRemediationFamilyGate() {
     `phase3-final-remediation-family-gate: unexpected new page errors: ${JSON.stringify(result.page_errors.slice(pageErrorsBefore.length))}`,
   );
   const requestFailuresAfter = result.request_failures.filter(
-    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url),
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url),
   );
   assert(
     requestFailuresAfter.length === requestFailuresBefore.length,
@@ -3315,7 +3337,7 @@ async function scenario14CompositionAndRecoveryGate() {
   );
   const pageErrorsBefore = result.page_errors.slice();
   const requestFailuresBefore = result.request_failures.filter(
-    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url),
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url),
   );
   const httpErrorResponsesBefore = result.http_error_responses.filter(
     (e) => !isExpectedStale409Response(e) && !isExpectedBrokenImageNoise(e.url),
@@ -3525,7 +3547,7 @@ async function scenario14CompositionAndRecoveryGate() {
     `scenario14-composition-and-recovery: unexpected new page errors: ${JSON.stringify(result.page_errors.slice(pageErrorsBefore.length))}`,
   );
   const requestFailuresAfter = result.request_failures.filter(
-    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url),
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url),
   );
   assert(
     requestFailuresAfter.length === requestFailuresBefore.length,
@@ -3611,7 +3633,7 @@ async function scenario15TemplateSwitchLifecycleGate() {
   );
   const pageErrorsBefore = result.page_errors.slice();
   const requestFailuresBefore = result.request_failures.filter(
-    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url),
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url),
   );
   const httpErrorResponsesBefore = result.http_error_responses.filter(
     (e) => !isExpectedStale409Response(e) && !isExpectedBrokenImageNoise(e.url),
@@ -3862,7 +3884,7 @@ async function scenario15TemplateSwitchLifecycleGate() {
     `scenario15-template-switch-lifecycle: unexpected new page errors: ${JSON.stringify(result.page_errors.slice(pageErrorsBefore.length))}`,
   );
   const requestFailuresAfter = result.request_failures.filter(
-    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url),
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url),
   );
   assert(
     requestFailuresAfter.length === requestFailuresBefore.length,

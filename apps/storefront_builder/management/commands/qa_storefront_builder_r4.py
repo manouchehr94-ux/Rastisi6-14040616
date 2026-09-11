@@ -783,12 +783,54 @@ class Command(BaseCommand):
         category, _ = Category.objects.get_or_create(
             store=store, slug="t12-category", defaults=dict(name="دسته T12", is_active=True),
         )
-        Product.objects.get_or_create(
+        discounted_product, _ = Product.objects.get_or_create(
             store=store, slug="qa-final-discounted-product",
             defaults=dict(
                 name="کالای تخفیف‌دار QA تسک نهایی", vendor=vendor, category=category,
                 sku="SKU-QA-FINAL-DISCOUNTED", price=Decimal("500000"), discount_percent=25,
                 status=Product.Status.ACTIVE,
+            ),
+        )
+
+        # best_sellers: reproduced live — render_service._best_sellers_context
+        # is deliberately NEVER computed from Product.sold_count (see
+        # best_seller_service's own module docstring: that field has no
+        # writer anywhere in the codebase); it ranks LIVE from real OrderItem
+        # rows in the last 30 days. Reusing "existing catalog demo data"
+        # (this gate's original assumption for newest_products/best_sellers/
+        # promo_cards) is correct for newest_products (ordered by
+        # -created_at) but was genuinely insufficient for best_sellers —
+        # confirmed by a real browser run timing out on `.pcard`, not merely
+        # theorized. A minimal real Order + OrderItem against the discounted
+        # Product above is the actual, not-avoided real data path.
+        from apps.customers.models import Customer
+        from apps.orders.models import Order, OrderItem, PaymentGateway, ShippingMethod
+
+        order_user, _ = get_user_model().objects.get_or_create(
+            username="qa-final-best-seller-customer", defaults=dict(is_active=True),
+        )
+        customer, _ = Customer.objects.get_or_create(
+            user=order_user, defaults=dict(full_name="مشتری QA تسک نهایی", phone="09120000000"),
+        )
+        shipping_method, _ = ShippingMethod.objects.get_or_create(
+            store=store, slug="qa-final-shipping", defaults=dict(name="ارسال QA"),
+        )
+        payment_gateway, _ = PaymentGateway.objects.get_or_create(
+            store=store, slug="qa-final-gateway", defaults=dict(name="درگاه QA"),
+        )
+        order, _ = Order.objects.get_or_create(
+            code="QA-FINAL-BESTSELLER-1",
+            defaults=dict(
+                store=store, customer=customer, vendor=vendor, address={"receiver_name": "مشتری QA", "city": "تهران"},
+                shipping_method=shipping_method, payment_gateway=payment_gateway,
+                items_total=Decimal("500000"), grand_total=Decimal("500000"),
+            ),
+        )
+        OrderItem.objects.get_or_create(
+            order=order, product=discounted_product,
+            defaults=dict(
+                product_name=discounted_product.name, quantity=1,
+                unit_price=Decimal("500000"), line_total=Decimal("500000"),
             ),
         )
 
