@@ -28,6 +28,11 @@ from django.db import transaction
 from .. import global_region_registry, layout_preset_registry, section_registry
 from ..layout_preset_registry import LayoutPresetDefinition
 from ..models import StorefrontContainer, StorefrontLayoutVersion, StorefrontSection
+from ..storefront_appearance.rendering import (
+    ResolvedStoreAppearance,
+    resolve_store_appearance_manifest_state,
+)
+from ..storefront_appearance.validation import validate_store_appearance_manifest
 from ..variant_contract import build_template_provenance, validate_template_provenance
 from . import appearance_authority_service, container_service, layout_service
 
@@ -587,6 +592,22 @@ def apply_preset_by_key(draft: StorefrontLayoutVersion, key: str) -> LayoutPrese
 
 
 @dataclasses.dataclass(frozen=True)
+class ResolvedPresetCandidatePage:
+    """One page's worth of candidate section composition. ``sections`` are
+    unsaved (``pk=None``) ``StorefrontSection`` instances, in the same order
+    ``apply_preset()`` would build them in. ``container_settings`` is the
+    same per-contiguous-row-run settings list ``apply_preset()`` would
+    ``bulk_update`` onto the real ``StorefrontContainer`` rows after
+    ``container_service.rebuild_page_from_legacy_rows`` — exposed here
+    unmodified from ``_prepare_preset_application`` (Task-1 corrective,
+    independent review item 11: this was computed already and silently
+    discarded; exposing it is additive, not a new design)."""
+
+    sections: list
+    container_settings: list
+
+
+@dataclasses.dataclass(frozen=True)
 class ResolvedPresetCandidate:
     """Phase 5, Task 1 — a transient, read-only preview of exactly what
     ``apply_preset(draft, preset)`` WOULD write, without writing it. Built
@@ -595,27 +616,23 @@ class ResolvedPresetCandidate:
     candidate preview and real Apply can never validate/prepare a Ready
     Template differently.
 
-    Never persisted anywhere: ``pages`` holds unsaved (``pk=None``)
-    ``StorefrontSection`` instances, keyed by page_type — exactly the same
-    "unsaved in-memory Section" shape ``render_service.build_default_render_items``
-    already constructs today for stores that have never published a
-    Storefront V2. This is not a new in-memory-render pattern; it is the
-    existing one, reused, via the new ``render_service.build_candidate_render_items``
+    Never persisted anywhere: ``pages`` maps page_type to a
+    ``ResolvedPresetCandidatePage`` holding unsaved (``pk=None``)
+    ``StorefrontSection`` instances — exactly the same "unsaved in-memory
+    Section" shape ``render_service.build_default_render_items`` already
+    constructs today for stores that have never published a Storefront V2.
+    This is not a new in-memory-render pattern; it is the existing one,
+    reused, via the new ``render_service.build_candidate_render_items``
     wrapper.
 
-    Scope note (Task 1): this resolves appearance/header/footer/section
-    composition — the same declared-DNA surface ``apply_preset`` fully
-    consumes today. It deliberately does NOT resolve ``preset.store_appearance``
-    (the typed hero/product_view/card/badge/mega_menu/motion manifest) into a
-    ``ResolvedStoreAppearance``: that resolution is currently validate-and-
-    persist in one call (``appearance_authority_service.apply_store_appearance_manifest``
-    -> ``persist_store_appearance_manifest``), and safely splitting it into a
-    non-writing variant was judged a materially larger, separate change than
-    this task's minimal primitive needs. Every Ready Template's structural
-    identity — which sections, in what order, with what per-section settings
-    (including e.g. ``hero_style``) — is already fully captured by the
-    composition this dataclass DOES resolve. A later task may extend this
-    with a resolved manifest once that split is designed on its own merits."""
+    ``store_appearance`` (Task 1 corrective) — the typed hero/product_view/
+    card/badge/mega_menu/motion/header/footer/bottom_nav/layout manifest a
+    real Apply would make authoritative, resolved through the exact same
+    pure ``resolve_store_appearance_manifest_state`` the persisted-version
+    path (``resolve_store_appearance_render_state``) uses — one resolver, two
+    callers, never two implementations. ``None`` only for a (non-Ready)
+    preset that declares no ``store_appearance`` at all, mirroring
+    ``apply_preset``'s own ``if preset.store_appearance:`` guard."""
 
     preset_key: str
     preset_version: str
@@ -623,6 +640,7 @@ class ResolvedPresetCandidate:
     header_config: dict | None
     footer_config: dict | None
     pages: dict
+    store_appearance: ResolvedStoreAppearance | None
 
 
 def resolve_preset_candidate(
@@ -635,8 +653,23 @@ def resolve_preset_candidate(
     Appearance manifest write, no baseline snapshot, no new
     ``StorefrontLayoutVersion``. Raises the exact same ``InvalidPresetError``/
     ``LockedSectionsPresentError`` ``apply_preset`` would raise for an
-    invalid combination, since both call ``_prepare_preset_application``."""
+    invalid combination, since both call ``_prepare_preset_application``; a
+    ``preset.store_appearance`` that fails the canonical typed validator
+    raises ``InvalidStoreAppearanceContract`` — the exact same exception the
+    real (persisting) path raises for the same bad input, via the same
+    ``validate_store_appearance_manifest`` function — before anything is
+    written, since this whole function never writes."""
     prepared = _prepare_preset_application(draft, preset)
+
+    resolved_store_appearance = None
+    if preset.store_appearance:
+        validated = validate_store_appearance_manifest(
+            preset.store_appearance, require_complete=True,
+        )
+        resolved_store_appearance = resolve_store_appearance_manifest_state(
+            validated.manifest, version_id=draft.pk,
+        )
+
     return ResolvedPresetCandidate(
         preset_key=preset.key,
         preset_version=preset.version,
@@ -644,9 +677,12 @@ def resolve_preset_candidate(
         header_config=prepared.cleaned_header,
         footer_config=prepared.cleaned_footer,
         pages={
-            page.page_type: rows
-            for page, (rows, _container_settings) in prepared.pages_to_replace.items()
+            page.page_type: ResolvedPresetCandidatePage(
+                sections=rows, container_settings=container_settings,
+            )
+            for page, (rows, container_settings) in prepared.pages_to_replace.items()
         },
+        store_appearance=resolved_store_appearance,
     )
 
 

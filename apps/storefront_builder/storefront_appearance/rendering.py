@@ -64,6 +64,44 @@ class ResolvedStoreAppearance:
             ) from exc
 
 
+def resolve_store_appearance_manifest_state(
+    manifest: StoreAppearanceManifest, *, version_id: int,
+) -> ResolvedStoreAppearance:
+    """Phase 5, Task 1 corrective — the pure manifest-to-render-state core,
+    extracted out of ``resolve_store_appearance_render_state`` (behavior for
+    that function is unchanged; this is a pure extract, not a rewrite) so
+    BOTH the persisted-version path below AND a transient candidate-preview
+    path (``preset_service.resolve_preset_candidate``) resolve a
+    ``StoreAppearanceManifest`` into ``ResolvedStoreAppearance`` through
+    exactly one implementation. Takes an already-typed, already-validated
+    manifest directly — no I/O, no persistence lookup, no assumption that the
+    manifest is actually saved anywhere at ``version_id``. Registry
+    implementations are resolved only from platform-owned symbolic
+    references; no merchant-supplied renderer path is ever evaluated here."""
+
+    resolved: dict[str, ResolvedAppearanceComponent] = {}
+    for family_key, family in COMPONENT_FAMILIES.items():
+        component_key = manifest.selections[family_key]
+        component = COMPONENT_REGISTRY.get(component_key)
+        if component is None:
+            # Normalized/validated manifests make this unreachable, but
+            # retaining the explicit contract keeps a corrupted
+            # registry/state boundary loud.
+            raise InvalidStoreAppearanceContract(
+                f"unknown component key at render time: {component_key}"
+            )
+        resolved[family_key] = ResolvedAppearanceComponent(
+            family=family,
+            component=component,
+            implementation=resolve_component_implementation(component),
+        )
+    return ResolvedStoreAppearance(
+        version_id=version_id,
+        manifest=manifest,
+        components=resolved,
+    )
+
+
 def resolve_store_appearance_render_state(version) -> ResolvedStoreAppearance:
     """Resolve stable manifest identities for one concrete Draft/Published version.
 
@@ -80,26 +118,7 @@ def resolve_store_appearance_render_state(version) -> ResolvedStoreAppearance:
         raise ValueError("Store Appearance rendering requires a saved layout version")
 
     manifest = load_store_appearance_manifest(version)
-    resolved: dict[str, ResolvedAppearanceComponent] = {}
-    for family_key, family in COMPONENT_FAMILIES.items():
-        component_key = manifest.selections[family_key]
-        component = COMPONENT_REGISTRY.get(component_key)
-        if component is None:
-            # Normalized manifests make this unreachable, but retaining the
-            # explicit contract keeps a corrupted registry/state boundary loud.
-            raise InvalidStoreAppearanceContract(
-                f"unknown component key at render time: {component_key}"
-            )
-        resolved[family_key] = ResolvedAppearanceComponent(
-            family=family,
-            component=component,
-            implementation=resolve_component_implementation(component),
-        )
-    return ResolvedStoreAppearance(
-        version_id=version.pk,
-        manifest=manifest,
-        components=resolved,
-    )
+    return resolve_store_appearance_manifest_state(manifest, version_id=version.pk)
 
 
 def global_renderer_template(
