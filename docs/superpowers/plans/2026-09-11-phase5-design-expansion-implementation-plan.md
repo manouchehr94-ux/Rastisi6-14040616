@@ -38,7 +38,7 @@ Task 1 (candidate preview primitive)
 Task 4 (contextual editor repairs: device preview, media/background picker, scope labels, selection sync)
   -> feeds Task 6, Task 15 (every new section needs a working Inspector)
 
-Task 5 (high-impact primitive expansion: Header un-orphan, Mobile Nav Drawer, PDT/PDTX repair, STRANS, Modal)
+Task 5 (high-impact primitive expansion: Header R4 schema, Mobile Nav Drawer, PDT/PDTX repair, STRANS, Modal)
   -> feeds Task 6, 7, 8 (Showcase and browse/PDP work reuse these primitives)
 
 Task 6 (Storefront Showcase canonical section) — depends on Task 4, Task 5
@@ -52,10 +52,10 @@ Task 12 (Theme Overlay system) — depends on Task 4 (Advanced-tier UI pattern),
 Task 13 (Template-DNA component variant selections: write-time reconciliation for hero/product_view/card/badge) — depends on Task 4
 
 Task 14 (Random Mix / Randomize One / Locks / Remove Theme / Compare-with-Base) — depends on Task 1, Task 12, Task 13
-Task 15 (R4 merchant controls simplification pass) — depends on Task 4, Task 6, Task 12, Task 14
+Task 15 (R4 merchant controls simplification pass) — depends on Tasks 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 (every task that adds/touches a merchant-facing control)
 
 Task 16 (Cross-template QA: 50-template browser matrix, RTL, a11y, visual distinctness)
-  — depends on everything above that touches rendering (6, 7, 8, 9, 10, 12, 13)
+  — depends on everything above that touches rendering (6, 7, 8, 9, 10, 11, 12, 13)
 
 Task 17 (Product Owner gallery/review) — depends on Task 16
 Task 18 (Final Phase-5 closure checkpoint) — depends on Task 17
@@ -217,11 +217,13 @@ not prescribe which).
 
 **Goal:** close the 67-family "NEEDS REPAIR-EXPANSION" items that block multiple downstream Showcase/PDP
 tasks:
-- **HDR Header:** wire the 11 orphaned header partial files
-  (`templates/storefront_builder/partials/global_header/*.html`: category_tabs, centered_brand,
-  community_shortcuts, compact_drawer, compact_menu, editorial_masthead, editorial_row,
-  floating_compact, marketplace_search, overlay_transparent, playful_canopy, promo_bar) into
-  `GLOBAL_HEADER_REGION.variants` (`global_region_registry.py:184-259`) so they become merchant-selectable.
+- **HDR Header:** **correction from the Step-13 independent review** — all 22 header variants (10
+  named + 12 via `_A8_HEADER_VARIANTS`, `global_region_registry.py:267-300`) are already wired into
+  `GLOBAL_HEADER_REGION.variants` and merchant-selectable; none are orphaned. The real remaining gap is
+  that variant *selection* is still a legacy `header_variant` config key, not a dedicated R4
+  `SettingsSchema` — add a schema-validated R4 field for header-variant selection (following the same
+  pattern as the existing `header_config` extra-blocks schema, `layout_service.py:113`), do not touch
+  the variant registry itself.
 - **MDR Mobile Navigation Drawer:** build a real off-canvas primary-nav drawer (distinct from the
   already-built Bottom Nav, family #7) — genuinely missing, no existing markup to repair.
 - **PDT Product Tabs/Accordion:** make `product_description`'s content (description/specs/reviews)
@@ -236,10 +238,10 @@ tasks:
 
 **Depends on:** none (independent of Tasks 1-4, but Task 6/7/8 depend on this).
 
-**TDD RED per family:** e.g. for Header, a test asserting all 21 on-disk header partials are now
-resolvable via `GLOBAL_HEADER_REGION`; for MDR, a test asserting a drawer open/close mutation and its
-accessible-name/focus-trap behavior; for PDT, a test asserting tab-panel ARIA roles and keyboard
-operability.
+**TDD RED per family:** e.g. for Header, a test asserting the new R4 `SettingsSchema` field persists a
+selected `header_variant` and is reflected in a subsequent render; for MDR, a test asserting a drawer
+open/close mutation and its accessible-name/focus-trap behavior; for PDT, a test asserting tab-panel
+ARIA roles and keyboard operability.
 
 **Regression scope:** `global_region_registry` tests, `section_registry` tests, existing PDP template
 tests.
@@ -588,8 +590,12 @@ built in Tasks 4-14 to ensure: Basic tab is always the default, Advanced is coll
 JSON/registry-ID/model-name leaks into ordinary merchant UI, and every new control's scope (global vs
 section) is labeled per Task 4's pattern.
 
-**Depends on:** Task 4, Task 6, Task 12, Task 14 (this is a review/polish pass over their combined
-output, not new architecture).
+**Depends on:** Tasks 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 — **correction from the Step-13 independent
+review**: this task's stated goal is a pass over "everything built in Tasks 4-14," so its dependency
+list must actually include every task in that range that introduces a merchant-facing control (the
+original list omitted 5, 7, 8, 9, 10, 11, which each add or touch R4-visible settings). This is a
+review/polish pass over their combined output, not new architecture — do not start it until all of
+those tasks have landed.
 
 **Scope of actual work:** a UI/copy audit against the Onboarding Charter §11 table (Basic vs Advanced
 examples) for every new control surface introduced in this plan; fix any control that leaks
@@ -613,7 +619,10 @@ JSON/registry key is visible in normal merchant flows.
 convergence program) explicitly flagged as never yet done: a real browser/visual-distinctness
 certification across all 50 templates.
 
-**Depends on:** Tasks 6, 7, 8, 9, 10, 12, 13 (everything that changes rendered output).
+**Depends on:** Tasks 6, 7, 8, 9, 10, 11, 12, 13 (everything that changes rendered output —
+**correction from the Step-13 independent review**: Task 11 was missing from this list even though
+this task's own scope requires verifying `prefers-reduced-motion` for "any new transition/reveal
+primitives from Task 11").
 
 **Scope of actual work:**
 - Re-run the closure pack's declared-DNA fingerprint analysis (`final_closure_pack/04`) against the
