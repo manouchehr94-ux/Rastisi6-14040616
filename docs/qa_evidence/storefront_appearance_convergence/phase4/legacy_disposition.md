@@ -23,7 +23,7 @@ Full evidence for every row below: `docs/qa_evidence/storefront_appearance_conve
 | Full Appearance/Header/Footer editor forms (fields beyond R4's allowlist) | **Pre-Task-10 final remediation (Gap 1) CLOSED the remaining gap in full**: R4 now covers all 8 `color_overrides` keys, all 8 `theme_overrides` keys, every structural appearance field, all 6 header toggles + announcement_text/announcement_show_phone, all 9 footer toggles, AND (this session) `announcement_links`, header `extra_blocks`, footer `extra_blocks`, and every per-component responsive hide-on-tablet/hide-on-mobile toggle for both Header and Footer — reusing the existing canonical validators/persistence authority unchanged. **Zero remaining Header/Footer/Appearance fields are R4-unreachable.** | **THIN NON-AUTHORITATIVE ADAPTER** (reclassified from "KEEP AS CANONICAL" now that the field gap is fully closed, not narrowed) — the legacy Appearance/Header/Footer form (`storefront_appearance_editor`) is now fully redundant with R4's Global Design panel; it is not independently URL-reachable outside the `editor.html` shell (embedded via `appearance_panel.html`), so it stays live as part of that shell (kept for the two CANONICAL-KEEP capabilities above), not because it itself is still needed | Task 9, Pre-Task-10 remediation, Pre-Task-10 final remediation (Gap 1 — CLOSED) |
 | Section-scoped media CRUD (Hero slides/Banners/Story items via `media_views.py`) | Yes — Task 7 confirmed `media_views.py` is the single shared authority reachable from both legacy `editor.html` and R4's Inspector | **CANONICAL KEEP** | Task 7 |
 | Global Hero/Banner admin (`apps/dashboard/views.py` `hero_*`/`banner_*`, the "homepage" dashboard nav entry) | Full field parity confirmed with canonical `media_views.py` (superset, even) | **KEEP — legitimate compatibility mirror**, not a pure duplicate: still the primary/sole content-management path for any store not using the visual storefront layout, with its own full test suite | Task 9 |
-| Legacy editor shell (`editor.html`) | Yes for every field/composition/settings capability — Pre-Task-10 remediation made R4 the live default (`r4_editor_enabled` now defaults `True`; dashboard nav routes to R4) and Pre-Task-10 final remediation (Gap 1/Gap 2) closed the last remaining field/browser-certification gaps. No for exactly two capabilities: restore/history browser, industry-vertical layout presets (both re-verified above, both genuinely still legacy-only) | **THIN NON-AUTHORITATIVE ADAPTER** (final reclassification — not RETIRED, not CANONICAL KEEP as a co-equal editor) — R4 is the ONE primary merchant editor and sole write authority for composition/settings/appearance/header/footer; the legacy shell stays reachable, secondary-nav-only, solely as the compatibility path for the two CANONICAL-KEEP capabilities it hosts (restore/history, industry-layout-presets) — every OTHER capability it also happens to expose (settings save, composition, toggle/lock, reset family, appearance/header/footer forms) is redundant dead-weight UI, not a second write authority a merchant needs to reach it for | Task 3A precondition (met), Pre-Task-10 remediation (cutover done), Pre-Task-10 final remediation (final reclassification; physical removal of the now-redundant panels left to a future task — see note below) |
+| Legacy editor shell (`editor.html`) | Yes for every field/composition/settings capability — Pre-Task-10 remediation made R4 the live default (`r4_editor_enabled` now defaults `True`; dashboard nav routes to R4) and Pre-Task-10 final remediation (Gap 1/Gap 2) closed the last remaining field/browser-certification gaps. No for exactly two capabilities: restore/history browser, industry-vertical layout presets (both re-verified above, both genuinely still legacy-only) | **THIN NON-AUTHORITATIVE ADAPTER, redundant UI now PHYSICALLY conditional, not merely reclassified** — the full duplicate body (composition/settings/toggle-lock/reset/Appearance-Header-Footer, the entire `sfb-r3-shell` Alpine SPA + R3 modal) now renders ONLY when `r4_editor_enabled=False` (a Store explicitly pinned back — the documented rollback safety valve); the live R4 default renders a minimal compatibility surface exposing only the two CANONICAL-KEEP capabilities (restore/history, industry-layout-preset). The final result is not a second complete merchant editor with a secondary nav label for any Store on the live default | Task 3A precondition (met), Pre-Task-10 remediation (cutover done), Pre-Task-10 final remediation (field/browser-cert gaps closed), Pre-Task-10 CORRECTIVE closure (Item 2 — physical template conditional, not deferred) |
 | `announcement_bar` preset-application gate | N/A — bug fix, not a duplicate-authority migration | **FIXED** — `preset_service._build_sections_for_page` now shares the same `hidden_from_library` gate `section_structure_service.add_section`/`duplicate_section` already enforce; `golden_reference_service._rebuild_home_composition` given the same defensive guard | Task 9 |
 | `announcement_bar` section (registry entry / renderer) | `hidden_from_library`, superseded by header notification bar | **CANONICAL KEEP** — no live merchant-facing add path remains (Task 9 closed the last one, presets); existing/legacy instances still legitimately render | Task 9 |
 
@@ -35,7 +35,7 @@ storefront-appearance entries route to R4, and R4 gained the field/composition p
 in `pre_task10_r4_cutover.md`. **R4 is now the live default merchant editor — one primary editor,
 not two co-equal ones.**
 
-**Second retirement pass (Pre-Task-10 FINAL remediation, Gap 3 — this session):** the narrow field
+**Second retirement pass (Pre-Task-10 FINAL remediation, Gap 3):** the narrow field
 gap the first pass deferred (`announcement_links`, header/footer `extra_blocks`, responsive
 hide-on-tablet/mobile toggles) is now closed (Gap 1), and the browser-certification gap for the 15
 remaining MIGRATE families is now closed (Gap 2) — so this pass re-verified every row above against
@@ -45,15 +45,32 @@ Appearance/Header/Footer fields) is reclassified from "NOT SAFE TO REMOVE YET" t
 NON-AUTHORITATIVE ADAPTER** — R4 is their sole write authority now; the legacy views are redundant,
 not a second editor a merchant needs. Exactly TWO capabilities remain genuinely legacy-only with no
 R4 equivalent (restore/history browser; industry-vertical layout presets) — both re-verified live in
-current code, both **CANONICAL KEEP**. Because both live inside the same `editor.html` shell as the
-now-redundant panels, the shell itself cannot be physically deleted this pass; it is reclassified to
-**THIN NON-AUTHORITATIVE ADAPTER** as a whole (see its own row above) rather than RETIRED or
-CANONICAL KEEP as a co-equal editor. Physically removing the now-redundant panels from inside
-`editor.html` (composition/settings/toggle-lock/reset/appearance-header-footer UI), while keeping
-only the two still-needed panels, is real template-surgery work on a legacy shell this pass did not
-open — correctly scoped to a future task rather than attempted here under time pressure with
-insufficient regression coverage for a shell that still serves two live, required merchant paths.
-No row in this table is UNKNOWN.
+current code, both **CANONICAL KEEP**.
+
+**Pre-Task-10 CORRECTIVE closure — second retirement pass finished (physical removal, not deferred):**
+the prior pass above stopped at reclassification and explicitly deferred the actual template surgery.
+That was rejected as incomplete — "the redundant panels inside legacy editor.html are still physically
+present" does not satisfy Gap 3. `editor.html` now renders its full Alpine/R3-modal
+composition/settings/toggle-lock/reset/Appearance-Header-Footer body ONLY when
+`layout.r4_editor_enabled` is `False` — i.e., only for a Store explicitly pinned back to the legacy
+editor, the documented per-Store rollback safety valve (`StorefrontLayout.r4_editor_enabled`'s own
+field docstring: "so an individual Store can be pinned back to the legacy editor if a regression is
+found, never to gate normal access"). This is a real, necessary constraint, not a loophole left open:
+retiring the duplicate UI must never also retire the one remaining editor for a Store deliberately
+pinned back to it — that would be a genuine regression for that tenant, not a retirement. For the
+live R4 default (`r4_editor_enabled=True`, true for every Store that has not been explicitly pinned
+back), `editor.html` now renders only a minimal compatibility surface: a link to `R4`, a link to the
+restore/history browser (`storefront-builder-history` — already its own fully standalone page,
+independent of `editor.html`), and — only when the Store has an industry installation — the
+industry-vertical layout preset apply form (the ONLY UI for that capability; its own view is
+`require_POST`-only with no separate template). No other panel, control, or JS from the old shell
+renders in this branch. Test fixtures across `test_views.py` and every file sharing its base test case
+(`test_acceptance_batch2.py`, `test_r4_foundation.py`, `test_u8_template_gallery.py`) now explicitly
+pin `r4_editor_enabled` to whichever value matches what each test actually exercises (the still-required
+full legacy body for a pinned-back Store, or the new minimal surface for the live default), rather than
+silently relying on the flag's default. `EditorAccessTests.test_r4_editor_link_shown_by_default` now
+also asserts the retirement itself: none of `sfb-add-section-category`/`storefrontEditor()`/`sfbR3Modal`
+render for a Store on the live default. No row in this table is UNKNOWN.
 
 **Compatibility mirrors that are NOT retirement candidates** (legitimate shared logic, not
 duplication): `appearance_authority_service` writing both the typed manifest and the legacy

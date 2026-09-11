@@ -297,3 +297,23 @@ closes the remaining Step 1B/1D gaps.
 
 See the closure commit for the independent-review record covering this
 diff.
+
+## Later closure of items this document left open
+
+This document is a historical scoping record as of its own session — left
+unedited above per append-only discipline. Its two explicitly open items
+were later closed, in full, as follows (see the linked documents for the
+real evidence, not repeated here):
+
+- **Gap 2 (the 15 `NOT YET CERTIFIED` families)** — re-verified against
+  the real render contract (not persistence-only) and closed in the
+  Pre-Task-10 CORRECTIVE closure session; see
+  `family_certification_matrix.md`'s own corrective-closure note and
+  `execution_ledger.md`'s `## Pre-Task-10 CORRECTIVE closure` section.
+- **Step 3 (second legacy retirement pass), "Not attempted" above** —
+  attempted and finished in the Pre-Task-10 CORRECTIVE closure session:
+  `editor.html`'s full duplicate merchant-editing body now renders only
+  for a Store explicitly pinned back to the legacy editor
+  (`r4_editor_enabled=False`); the live R4 default renders a minimal
+  compatibility surface. See `legacy_disposition.md`'s own
+  corrective-closure note.

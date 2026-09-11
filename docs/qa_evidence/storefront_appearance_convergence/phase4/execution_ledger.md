@@ -720,3 +720,75 @@ commit-by-commit summary.
   PASS, including the new `phase3-final-remediation-family-gate`. The 2 failures are the two
   pre-existing, out-of-scope defects named above, reproduced identically, not new regressions. Evidence
   committed under `docs/qa_evidence/storefront_appearance_convergence/phase4/browser_final/`.
+
+## Pre-Task-10 CORRECTIVE closure (2026-09-10/11, continuation session)
+
+- **START** 2026-09-10. The prior session's PASS report above was rejected as premature. Preconditions
+  verified: local HEAD == `origin/feature/phase4-builder-legacy-convergence` ==
+  `61660daa90e4f10fa4f43db0c288f26ec4da5410`; `origin/main` unchanged at `973c1dc0`; the prior session's
+  own `backup/rastisi6-phase4-pre-task10-final-20260910` == `61660daa` (preserved as historical
+  evidence of the rejected checkpoint, never force-moved); working tree clean; no concurrent writer.
+- **Corrective Item 1 (real render certification)** — re-verified the 15 family certifications against
+  the real required contract rather than trusting the prior PASS. Classified per-family (not a blanket
+  rewrite): added the `menu_picker` SettingsField/Inspector field type so `quick_links.menu_id` is a
+  genuine R4-reachable setting (was previously flagged as a real parity gap, not a QA-only issue,
+  exactly as the corrective prompt required); backed `hero_banner`/`image_slider` with a real
+  MediaAsset-linked HeroSlide, `discounted_products`/`amazing_offers` with a real discounted Product,
+  `blog_posts` with a real global BlogPost, `quick_links` with a real Menu+MenuItem, `video_section`
+  with a real YouTube URL (not avoided); rewrote every weak assertion to a real DOM check instead of
+  persistence-only; added a consolidated Publish→Public-reflects-it→Draft-only-edit→Public-unchanged
+  proof (`quick_links` as the representative family) plus a mobile no-overflow check on the published
+  Home page. See `family_certification_matrix.md`'s own corrective-closure note for the full per-family
+  detail.
+- **Corrective Item 2 (second legacy retirement pass, finished)** — `editor.html`'s full duplicate
+  merchant-editing body (composition/settings/toggle-lock/reset/Appearance-Header-Footer, the entire
+  `sfb-r3-shell` Alpine SPA + R3 modal) now renders ONLY for a Store explicitly pinned back to the
+  legacy editor (`r4_editor_enabled=False`); the live R4 default renders a minimal compatibility
+  surface (restore/history link, industry-layout-preset form — the two genuinely still-legacy-only
+  capabilities, nothing else). Test fixtures across `test_views.py` and every file sharing its base
+  case updated to pin the flag to whichever value each test actually exercises. See
+  `legacy_disposition.md`'s own corrective-closure note.
+- **Corrective Item 3 (QA-harness defects closed)** — `multi_banner`'s QA fixture now uses the
+  canonical MediaAsset path (already fixed before this continuation began, re-verified); scenario 14's
+  `brand_carousel` Preview locator is now scoped to the specific `data-section-id` it opened, not the
+  ambiguous bare `[data-section-key="brand_carousel"]`.
+- **Two genuine PRODUCTION bugs found and fixed** while driving the complete browser harness to
+  green (neither a QA-fixture issue): `story_rail` (already `CERTIFIED` since Task 6) had silently
+  regressed — `responsive_section_wrapper.html`'s single shared `{% include item.template_name with
+  ... %}` (the one render path for BOTH editor Preview and the real public storefront) never forwarded
+  `story_items`, so every real StoryRailItem was unrenderable anywhere until fixed this session;
+  `best_sellers` deliberately ranks from real `OrderItem` history (`best_seller_service`, never
+  `Product.sold_count`), so the QA fixture now creates one real `Order`+`OrderItem`. Both reproduced
+  live via the complete `--phase3` harness, root-caused (not guessed), fixed, and re-verified.
+  Also fixed two QA-harness-only issues found in the same debugging pass: the `hero_banner` scalar-edit
+  assertion (`hero_style: 'split'`) was scoped to `.hero-slide h1`, which only matches the default
+  structural variant's markup — switching to `split` genuinely renders `hero_banner_split.html`'s own
+  `.hero-split-text h1` instead (real product behavior, not a bug) — broadened to a bare `h1`;
+  the real YouTube embed iframe has no path to the public internet from this sandboxed QA environment,
+  failing every load with `net::ERR_TUNNEL_CONNECTION_FAILED` (a QA-environment network-reachability
+  gap, not a production defect) — added `isExpectedVideoEmbedNetworkFailure()` alongside the existing
+  `isExpectedBrokenImageNoise()` request-failure exemption pattern.
+- Checkpoint committed `5cc0444` (Items 1-3, minus the story_rail/best_sellers/hero_banner/video-embed
+  fixes below, which were found while validating this checkpoint against the real browser harness),
+  then `54e41aa` (the two production bugs + two harness-assertion fixes), both pushed.
+- Targeted regression (this session): `test_r4_settings_schema`+`test_r4_vertical_slice.
+  QuickLinksMenuPickerR4Tests` (87/87 OK); the full editor-retirement-affected surface
+  (`test_views`+`test_desktop_canvas_viewport`+`test_phase27_qa_reliability`+
+  `test_phase28_canvas_first_ux`+`test_phase28c_direct_drawers`+`test_phase31_container_cell_builder`+
+  `test_phase32_builder_ux`+`test_phase33_builder_ux_completion`+
+  `test_phase34_natural_height_announcement`+`test_r4_foundation`+`test_acceptance_batch2`+
+  `test_u8_template_gallery`, 363 tests) — 2 failures, both the SAME already-documented pre-existing
+  signatures from the prior session's ledger entry above (`test_fullscreen_button_is_in_v3_topbar_...`/
+  `test_fullscreen_state_is_a_pure_css_toggle_...`), independently re-confirmed via `git stash` against
+  unmodified HEAD `61660daa` this session — zero new regressions; a story_rail/media/render-consistency
+  focused pass (`test_g22_on_g21_integration`+`test_g22_preview_media_render_consistency`+
+  `test_g2_1_media_editability_roundtrip`+`test_media_asset_lifecycle`+`test_media_views`+
+  `test_r4_inspector`+`test_section_registry`+`test_shared_capabilities`+`test_migration_graph`, 431
+  tests) — 431/431 OK. `manage.py check`, `makemigrations --check --dry-run`, `git diff --check` all
+  clean throughout.
+- ONE complete R4 browser harness run, clean (`--phase3`, full 01-15 sequence): **20/20 PASS**, local
+  SQLite pre/post-run restore verified byte-identical. (Getting to this point required several
+  fix-and-rerun iterations as each of the bugs above was found — see the "Two genuine PRODUCTION bugs"
+  point above — each iteration's screenshots were superseded; only the final clean run's evidence is
+  committed, no stale FAILURE screenshots left in
+  `docs/qa_evidence/storefront_builder/r4/phase1/`.)
