@@ -818,3 +818,61 @@ commit-by-commit summary.
   still has them from the prior commit — not deleted there, only here).
 - No production code, R4 behavior, architecture, or QA harness changed.
   `git diff --check` clean. This is an evidence-only correction.
+
+## Task-10 blocker corrective fix — Task-8 reset classification (2026-09-11)
+
+- **START.** Task 10 correctly FAILED and STOPPED after finding one genuine
+  new regression: `apps.storefront_builder.tests.test_u7_ready_template_baseline.
+  ResetToBaselineTests.test_reset_rejects_unknown_template_key` expected
+  `UnknownPresetError`, got `TemplateBaselineVersionChangedError` on
+  starting HEAD `330cbe46df6230e06c10328e96018a48cb8d79bd`. This session is a
+  narrowly scoped Task-8 corrective fix — NOT a resumption of Task 10.
+  Preconditions verified: local HEAD fast-forwarded to match
+  `origin/feature/phase4-builder-legacy-convergence` == `330cbe46...`;
+  `origin/main` unchanged at `973c1dc00bacb6f2f7d2604fa3880bb4d6250579`;
+  `backup/rastisi6-phase4-pre-task10-evidence-clean-20260911` unchanged at
+  `330cbe46...`; working tree clean.
+- Root cause: Task-8 review-fix commit `18bedd18026cbacebcb2433259c4d4617a502d9b`
+  correctly protected the content-preserving Template Switch case (a
+  mismatched `template_baseline_snapshot` refuses reset with
+  `TemplateBaselineVersionChangedError`) but did so unconditionally on any
+  mismatch (`if snapshot: raise ...`), without checking whether the
+  Draft's current provenance `template_key` was still registered at all —
+  collapsing the "real Template-Switch mismatch" case (CASE B) and the
+  "provenance key no longer exists" case (CASE C) into the same error.
+- Fix: `reset_storefront_to_baseline()`'s mismatched-snapshot branch now
+  checks `layout_preset_registry.get_layout_preset(template_key)` first —
+  missing key raises `UnknownPresetError` (CASE C), still-registered key
+  raises the original unchanged `TemplateBaselineVersionChangedError`
+  (CASE B). The exact-matching-snapshot branch (CASE A) was left
+  untouched — no Registry lookup was hoisted ahead of it. Added
+  `test_reset_from_exact_matching_snapshot_survives_registry_disappearance`
+  to lock CASE A's independence from the Registry (patches
+  `get_layout_preset` to return `None` for an exact-matching key and
+  confirms the snapshot restore still succeeds).
+- RED confirmed before the fix, GREEN after: originally-failing test now
+  passes (`test_u7_ready_template_baseline`, 12/12 OK), the Task-8 safety
+  test remains green and unweakened
+  (`test_reset_storefront_after_switch_is_rejected_not_silently_destructive`,
+  part of `TemplateSwitchPreservingContentTests`, 9/9 OK). Targeted
+  regression (`test_acceptance_batch2`+`test_preset_service`+
+  `test_r4_mutation_api`+`test_r4_vertical_slice`+
+  `test_u7_ready_template_baseline`+`test_u8_template_gallery`, 344 tests)
+  — 2 failures, both independently re-confirmed pre-existing (unrelated to
+  `reset_storefront_to_baseline`) via `git stash` against unmodified HEAD
+  `330cbe46...` — zero new regressions. `manage.py check`,
+  `makemigrations --check --dry-run`, `git diff --check` all clean.
+- One fresh reviewer dispatched in an isolated worktree against the fix
+  commit, independently re-ran 21 targeted tests (OK, 0 failures/errors).
+  Verdict: UNKNOWN KEY CLASSIFICATION PASS, TEMPLATE-SWITCH RESET SAFETY
+  PASS, IMMUTABLE SNAPSHOT INDEPENDENCE PASS, NO PARALLEL AUTHORITY PASS,
+  SCOPE DISCIPLINE PASS. CRITICAL 0, IMPORTANT 0.
+  Full detail: `phase4/task10_blocker_task8_reset_fix.md`.
+- Committed `7ebc402` (`fix(storefront_builder): restore unknown preset
+  reset classification`, 2 files, +47/-0), pushed to
+  `feature/phase4-builder-legacy-convergence`. Corrective backup
+  `backup/rastisi6-phase4-task8-reset-regression-fix-20260911` created at
+  the same SHA. No other backup moved; `main` unchanged.
+- **TASK 10: NOT RESUMED.** **PHASE 4: NOT CLOSED YET** — closure requires
+  Task 10 to be rerun end-to-end against this corrected HEAD. **PHASE 5:
+  NOT STARTED.**
