@@ -25,6 +25,8 @@ What this phase adds, closing the real remaining gaps:
   untouched — see Known limitations in the ledger).
 """
 
+from unittest import mock
+
 from apps.storefront_builder import layout_preset_registry as lpr
 from apps.storefront_builder.global_region_registry import GLOBAL_FOOTER_REGION, GLOBAL_HEADER_REGION
 from apps.storefront_builder.services import layout_service as svc
@@ -144,3 +146,35 @@ class ResetToBaselineTests(TestCase):
         draft.save(update_fields=["template_provenance"])
         with self.assertRaises(preset_service.UnknownPresetError):
             preset_service.reset_storefront_to_baseline(draft)
+
+    def test_reset_from_exact_matching_snapshot_survives_registry_disappearance(self):
+        """Task-10 blocker corrective fix — CASE A of the root-cause
+        contract. An EXACT matching snapshot (``snapshot["template_key"]``/
+        ``["template_version"]`` still equal to the Draft's current
+        ``template_provenance``) must keep restoring from the immutable
+        ``template_baseline_snapshot`` even if the live
+        ``layout_preset_registry`` can no longer resolve that key at all.
+        The saved historical snapshot — not the live Registry — is reset's
+        content source of truth for an exact match; only the (optional)
+        metadata return value may come back ``None`` when the Registry
+        entry is gone. This guards against an over-fix that hoists the
+        Registry lookup ahead of the exact-snapshot branch and makes it
+        depend on the Registry again."""
+        draft = svc.get_or_create_draft(self.store)
+        preset = lpr.get_layout_preset("dense_catalog")
+        preset_service.apply_preset(draft, preset)
+
+        home_page = draft.get_page("home")
+        home_page.sections.all().delete()
+        self.assertEqual(home_page.sections.count(), 0)
+
+        with mock.patch.object(preset_service.layout_preset_registry, "get_layout_preset", return_value=None):
+            returned = preset_service.reset_storefront_to_baseline(draft)
+
+        self.assertIsNone(returned)
+        draft.refresh_from_db()
+        home_page = draft.get_page("home")
+        self.assertEqual(
+            list(home_page.sections.order_by("order").values_list("section_key", flat=True)),
+            [entry.section_key for entry in preset.pages["home"]],
+        )

@@ -620,6 +620,19 @@ def reset_storefront_to_baseline(draft: StorefrontLayoutVersion) -> LayoutPreset
     # snapshot at all (``snapshot`` falsy) is unaffected by this check and
     # still takes the legacy best-effort path exactly as before.
     if snapshot:
+        # Task-10 blocker corrective fix — a mismatched snapshot is only
+        # the *safe* Template-Switch case (``TemplateBaselineVersionChangedError``,
+        # above) when the Draft's current provenance key is still a REAL,
+        # registered Template. If that key no longer exists in the Registry
+        # at all, this was never a legitimate content-preserving switch to
+        # protect — it is the same "unknown preset" situation the legacy
+        # fallback below handles, and must raise ``UnknownPresetError``
+        # exactly like that branch does. Checking existence here (before
+        # raising) is required, not optional: this is the classification
+        # ordering bug the Task-10 regression test caught (CASE C being
+        # misread as CASE B).
+        if layout_preset_registry.get_layout_preset(template_key) is None:
+            raise UnknownPresetError(f"Ready Templateِ «{template_key}» دیگر در Registry موجود نیست")
         raise TemplateBaselineVersionChangedError(
             f"عکسِ baselineِ ذخیره‌شده‌یِ این Draft برایِ «{snapshot.get('template_key')}» است، نه «{template_key}» — "
             f"بازنشانیِ خودکارِ کلِ فروشگاه برایِ این وضعیت (مثلاً پس از تعویضِ محتوا-محفوظِ قالب) پشتیبانی نمی‌شود"
