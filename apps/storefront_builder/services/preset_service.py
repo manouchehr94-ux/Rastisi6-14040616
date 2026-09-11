@@ -21,6 +21,8 @@
 
 from __future__ import annotations
 
+import dataclasses
+
 from django.db import transaction
 
 from .. import global_region_registry, layout_preset_registry, section_registry
@@ -271,36 +273,35 @@ def _build_sections_for_page(page, entries, *, preset: LayoutPresetDefinition, p
     return rows
 
 
-@transaction.atomic
-def apply_preset(
-    draft: StorefrontLayoutVersion, preset: LayoutPresetDefinition, *, _record_baseline_snapshot: bool = True,
-) -> None:
-    """Preset را روی ``draft`` اعمال می‌کند — Draft-only (فراخوان مسئولِ
-    عبورِ یک نسخه‌یِ واقعاً Draft است، دقیقاً همان قراردادِ
-    ``apply_family_default_sections``؛ این تابع خودش هرگز
-    ``layout.published_version`` را resolve/لمس نمی‌کند).
+@dataclasses.dataclass(frozen=True)
+class _PreparedPresetApplication:
+    """Phase 5, Task 1 — the pure, read-only result of validating and
+    building everything ``apply_preset()`` needs before its *first* write.
+    Extracted out of ``apply_preset()`` itself (behavior-preserving refactor
+    — the write phase below is unchanged) so the real (writing) Apply path
+    and the new read-only ``resolve_preset_candidate()`` share exactly one
+    validation/preparation implementation and can never drift into two
+    copies of it. Nothing in this dataclass, or in ``_prepare_preset_application``
+    below, ever calls ``.save()`` or otherwise touches the database for
+    writing purposes — every field is a plain in-memory value, and every
+    ``StorefrontSection`` row inside ``pages_to_replace`` is unsaved
+    (``pk=None``)."""
 
-    ترتیبِ عملیات عمداً «همه‌چیز را اول اعتبارسنجی کن، بعد بنویس» است —
-    اگر هرکدام از appearance/header/footer/هر صفحه نامعتبر باشد، هیچ
-    نوشتنی (نه روی Section، نه روی خودِ نسخه) اتفاق نمی‌افتد. علاوه‌براین
-    خودِ تابع در یک تراکنشِ دیتابیسی (``@transaction.atomic``) پیچیده شده
-    تا حتی یک خطایِ غیرمنتظره‌یِ سطحِ دیتابیس هم Draft را نیمه‌اعمال‌شده
-    رها نکند.
+    cleaned_appearance: dict
+    cleaned_header: dict | None
+    cleaned_footer: dict | None
+    pages_to_replace: dict
+    snapshot_pages: dict
 
-    ``_record_baseline_snapshot`` (فقط داخلی — هرگز از بیرونِ این ماژول
-    صدا زده نشود): پستِ‌دمو hardening pass، Issue 4. تنها فراخوانِ
-    مشروعِ ``False`` مسیرِ سازگاریِ عقب‌رویِ ``reset_storefront_to_baseline``
-    است — جایی که محتوایِ Registryِ *فعلی* صرفاً برایِ یک بازنشانیِ
-    best-effort روی Draftی بدونِ عکسِ baselineِ واقعی خوانده می‌شود، نه
-    به‌عنوانِ اعمالِ صریحِ یک Template. چون تطابقِ شماره‌یِ نسخه هرگز اثباتِ
-    قطعیِ «محتوایِ فعلیِ Registry دقیقاً همان چیزی است که آن‌زمان روی این
-    Draft اعمال شد» نیست (نگاه کنید به توضیحِ خودِ آن مسیر)، نوشتنِ آن
-    به‌عنوانِ یک عکسِ «دقیق» در ``template_baseline_snapshot`` یک تاریخِ
-    ساختگی می‌سازد که granular reset (که به یک عکسِ واقعاً دقیق نیاز دارد)
-    را برایِ چنین Draftی به‌اشتباه فعال می‌کند. با ``False``، این تابع
-    هم‌چنان appearance/header/footer/صفحات را می‌نویسد (خودِ رفتارِ
-    بازنشانی)، اما ``template_baseline_snapshot`` را دست‌نخورده
-    (خالی/غایب) رها می‌کند."""
+
+def _prepare_preset_application(
+    draft: StorefrontLayoutVersion, preset: LayoutPresetDefinition,
+) -> _PreparedPresetApplication:
+    """اعتبارسنجی/آماده‌سازیِ appearance/header/footer/صفحات — کاملاً
+    بدونِ نوشتن (نه ``draft.save()``، نه ساخت/حذفِ هیچ ردیفِ
+    Section/Container). این دقیقاً همان «۱» و «۲»یِ قبلیِ ``apply_preset``
+    است؛ استخراج‌شده تا Task 1 (پیش‌نمایشِ کاندیدِ بدونِ نوشتن) بتواند
+    همینجا را دوباره استفاده کند، بدونِ کپی‌کردنِ منطقِ اعتبارسنجی."""
     # --- ۱) اعتبارسنجی/آماده‌سازیِ appearance/header/footer (بدونِ نوشتن) ---
     current_appearance = draft.effective_appearance_config()
     overlay = dict(preset.appearance)
@@ -416,6 +417,53 @@ def apply_preset(
             }
             for row, container_settings in zip(rows, container_settings_per_section)
         ]
+
+    return _PreparedPresetApplication(
+        cleaned_appearance=cleaned_appearance,
+        cleaned_header=cleaned_header,
+        cleaned_footer=cleaned_footer,
+        pages_to_replace=pages_to_replace,
+        snapshot_pages=snapshot_pages,
+    )
+
+
+@transaction.atomic
+def apply_preset(
+    draft: StorefrontLayoutVersion, preset: LayoutPresetDefinition, *, _record_baseline_snapshot: bool = True,
+) -> None:
+    """Preset را روی ``draft`` اعمال می‌کند — Draft-only (فراخوان مسئولِ
+    عبورِ یک نسخه‌یِ واقعاً Draft است، دقیقاً همان قراردادِ
+    ``apply_family_default_sections``؛ این تابع خودش هرگز
+    ``layout.published_version`` را resolve/لمس نمی‌کند).
+
+    ترتیبِ عملیات عمداً «همه‌چیز را اول اعتبارسنجی کن، بعد بنویس» است —
+    اگر هرکدام از appearance/header/footer/هر صفحه نامعتبر باشد، هیچ
+    نوشتنی (نه روی Section، نه روی خودِ نسخه) اتفاق نمی‌افتد؛ این را اکنون
+    ``_prepare_preset_application`` (بالا) تضمین می‌کند. علاوه‌براین خودِ
+    تابع در یک تراکنشِ دیتابیسی (``@transaction.atomic``) پیچیده شده تا
+    حتی یک خطایِ غیرمنتظره‌یِ سطحِ دیتابیس هم Draft را نیمه‌اعمال‌شده
+    رها نکند.
+
+    ``_record_baseline_snapshot`` (فقط داخلی — هرگز از بیرونِ این ماژول
+    صدا زده نشود): پستِ‌دمو hardening pass، Issue 4. تنها فراخوانِ
+    مشروعِ ``False`` مسیرِ سازگاریِ عقب‌رویِ ``reset_storefront_to_baseline``
+    است — جایی که محتوایِ Registryِ *فعلی* صرفاً برایِ یک بازنشانیِ
+    best-effort روی Draftی بدونِ عکسِ baselineِ واقعی خوانده می‌شود، نه
+    به‌عنوانِ اعمالِ صریحِ یک Template. چون تطابقِ شماره‌یِ نسخه هرگز اثباتِ
+    قطعیِ «محتوایِ فعلیِ Registry دقیقاً همان چیزی است که آن‌زمان روی این
+    Draft اعمال شد» نیست (نگاه کنید به توضیحِ خودِ آن مسیر)، نوشتنِ آن
+    به‌عنوانِ یک عکسِ «دقیق» در ``template_baseline_snapshot`` یک تاریخِ
+    ساختگی می‌سازد که granular reset (که به یک عکسِ واقعاً دقیق نیاز دارد)
+    را برایِ چنین Draftی به‌اشتباه فعال می‌کند. با ``False``، این تابع
+    هم‌چنان appearance/header/footer/صفحات را می‌نویسد (خودِ رفتارِ
+    بازنشانی)، اما ``template_baseline_snapshot`` را دست‌نخورده
+    (خالی/غایب) رها می‌کند."""
+    prepared = _prepare_preset_application(draft, preset)
+    cleaned_appearance = prepared.cleaned_appearance
+    cleaned_header = prepared.cleaned_header
+    cleaned_footer = prepared.cleaned_footer
+    pages_to_replace = prepared.pages_to_replace
+    snapshot_pages = prepared.snapshot_pages
 
     # --- ۳) نوشتن — فقط پس از موفقیتِ کاملِ بخشِ اعتبارسنجی ---
     draft.appearance_config = cleaned_appearance
@@ -536,6 +584,81 @@ def apply_preset_by_key(draft: StorefrontLayoutVersion, key: str) -> LayoutPrese
         raise UnknownPresetError(f"پیش‌تنظیمِ «{key}» یافت نشد")
     apply_preset(draft, preset)
     return preset
+
+
+@dataclasses.dataclass(frozen=True)
+class ResolvedPresetCandidate:
+    """Phase 5, Task 1 — a transient, read-only preview of exactly what
+    ``apply_preset(draft, preset)`` WOULD write, without writing it. Built
+    from ``_prepare_preset_application`` (the same pure validation/
+    preparation ``apply_preset`` itself runs before its first write), so
+    candidate preview and real Apply can never validate/prepare a Ready
+    Template differently.
+
+    Never persisted anywhere: ``pages`` holds unsaved (``pk=None``)
+    ``StorefrontSection`` instances, keyed by page_type — exactly the same
+    "unsaved in-memory Section" shape ``render_service.build_default_render_items``
+    already constructs today for stores that have never published a
+    Storefront V2. This is not a new in-memory-render pattern; it is the
+    existing one, reused, via the new ``render_service.build_candidate_render_items``
+    wrapper.
+
+    Scope note (Task 1): this resolves appearance/header/footer/section
+    composition — the same declared-DNA surface ``apply_preset`` fully
+    consumes today. It deliberately does NOT resolve ``preset.store_appearance``
+    (the typed hero/product_view/card/badge/mega_menu/motion manifest) into a
+    ``ResolvedStoreAppearance``: that resolution is currently validate-and-
+    persist in one call (``appearance_authority_service.apply_store_appearance_manifest``
+    -> ``persist_store_appearance_manifest``), and safely splitting it into a
+    non-writing variant was judged a materially larger, separate change than
+    this task's minimal primitive needs. Every Ready Template's structural
+    identity — which sections, in what order, with what per-section settings
+    (including e.g. ``hero_style``) — is already fully captured by the
+    composition this dataclass DOES resolve. A later task may extend this
+    with a resolved manifest once that split is designed on its own merits."""
+
+    preset_key: str
+    preset_version: str
+    appearance_config: dict
+    header_config: dict | None
+    footer_config: dict | None
+    pages: dict
+
+
+def resolve_preset_candidate(
+    draft: StorefrontLayoutVersion, preset: LayoutPresetDefinition,
+) -> ResolvedPresetCandidate:
+    """Read-only counterpart to ``apply_preset()`` — resolves what applying
+    ``preset`` to ``draft`` would render, WITHOUT writing to ``draft``: no
+    ``draft.save()``, no ``StorefrontSection``/``StorefrontContainer`` row
+    created/deleted/updated, no ``StorefrontEditHistoryEntry``, no Store
+    Appearance manifest write, no baseline snapshot, no new
+    ``StorefrontLayoutVersion``. Raises the exact same ``InvalidPresetError``/
+    ``LockedSectionsPresentError`` ``apply_preset`` would raise for an
+    invalid combination, since both call ``_prepare_preset_application``."""
+    prepared = _prepare_preset_application(draft, preset)
+    return ResolvedPresetCandidate(
+        preset_key=preset.key,
+        preset_version=preset.version,
+        appearance_config=prepared.cleaned_appearance,
+        header_config=prepared.cleaned_header,
+        footer_config=prepared.cleaned_footer,
+        pages={
+            page.page_type: rows
+            for page, (rows, _container_settings) in prepared.pages_to_replace.items()
+        },
+    )
+
+
+def resolve_preset_candidate_by_key(
+    draft: StorefrontLayoutVersion, key: str,
+) -> ResolvedPresetCandidate:
+    """میان‌بُرِ خوانش‌محورِ ``apply_preset_by_key`` — کلیدِ ناشناخته را
+    قبل از هر آماده‌سازی‌ای fail-closed رد می‌کند؛ هرگز چیزی نمی‌نویسد."""
+    preset = layout_preset_registry.get_layout_preset(key)
+    if preset is None:
+        raise UnknownPresetError(f"پیش‌تنظیمِ «{key}» یافت نشد")
+    return resolve_preset_candidate(draft, preset)
 
 
 class NoTemplateBaselineError(InvalidPresetError):

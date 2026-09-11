@@ -57,11 +57,19 @@ def _scoped_hero_slides(store, section):
     اجازه می‌دهد دو نمونه‌ی اسلایدر مستقل (با اسلایدهای متفاوت) وجود
     داشته باشند، بدون این‌که فروشگاه‌های قدیمی که هرگز این ویژگی را لمس
     نکرده‌اند رفتارشان تغییر کند."""
-    scoped = HeroSlide.objects.filter(section=section, is_active=True).select_related(
-        *_DESTINATION_SELECT_RELATED,
-    ).order_by("display_order", "id")
-    if scoped.exists():
-        return scoped
+    # Phase 5, Task 1 — an unsaved (``pk=None``) candidate-preview section
+    # (``preset_service.resolve_preset_candidate``) can never have its own
+    # scoped slides yet (nothing merchant-authored can reference a row that
+    # was never persisted) — this is exactly the same "no scoped slides"
+    # case the store-wide fallback below already exists for, just reached
+    # without first attempting an FK filter Django rejects for an unsaved
+    # instance. Behavior for a real, saved section is completely unchanged.
+    if section.pk is not None:
+        scoped = HeroSlide.objects.filter(section=section, is_active=True).select_related(
+            *_DESTINATION_SELECT_RELATED,
+        ).order_by("display_order", "id")
+        if scoped.exists():
+            return scoped
     return HeroSlide.objects.filter(store=store, section__isnull=True, is_active=True).select_related(
         *_DESTINATION_SELECT_RELATED,
     ).order_by("display_order", "id")
@@ -86,11 +94,14 @@ def _image_slider_context(store, section):
 
 
 def _scoped_banners(store, section):
-    scoped = PromotionalBanner.objects.filter(section=section, is_active=True).select_related(
-        *_DESTINATION_SELECT_RELATED,
-    ).order_by("display_order", "id")
-    if scoped.exists():
-        return scoped
+    # Phase 5, Task 1 — same unsaved-candidate-section guard as
+    # ``_scoped_hero_slides`` above; identical reasoning.
+    if section.pk is not None:
+        scoped = PromotionalBanner.objects.filter(section=section, is_active=True).select_related(
+            *_DESTINATION_SELECT_RELATED,
+        ).order_by("display_order", "id")
+        if scoped.exists():
+            return scoped
     return PromotionalBanner.objects.filter(store=store, section__isnull=True, is_active=True).select_related(
         *_DESTINATION_SELECT_RELATED,
     ).order_by("display_order", "id")
@@ -508,9 +519,16 @@ def _story_rail_context(store, section):
     section-specific نداشته باشد). همان الگویِ hero_slides."""
     from apps.content.models import StoryRailItem
 
-    scoped = StoryRailItem.objects.filter(section=section, is_active=True).order_by("display_order", "id")
-    if scoped.exists():
-        return {"story_items": scoped}
+    # Phase 5, Task 1 — same unsaved-candidate-section guard as
+    # ``_scoped_hero_slides``/``_scoped_banners`` above; identical reasoning.
+    # (Independent review, Task 1 — found missing here: ``story_rail`` is a
+    # real registered section, used by the Ready Templates
+    # ``playful_lifestyle``/``premium_boutique``, so a candidate preview of
+    # either would otherwise raise on this exact FK filter.)
+    if section.pk is not None:
+        scoped = StoryRailItem.objects.filter(section=section, is_active=True).order_by("display_order", "id")
+        if scoped.exists():
+            return {"story_items": scoped}
     # Fallback: آیتم‌هایِ سراسریِ فروشگاه (section__isnull=True)
     return {"story_items": StoryRailItem.objects.filter(store=store, section__isnull=True, is_active=True).order_by("display_order", "id")}
 
@@ -910,6 +928,33 @@ def build_default_render_items(page_type: str, store, page_context: dict | None 
     ]
     return _build_items_from_sections(sections, store, page_context)
 
+
+def build_candidate_render_items(
+    sections,
+    store,
+    page_context: dict | None = None,
+    *,
+    global_appearance: dict | None = None,
+    store_appearance: ResolvedStoreAppearance | None = None,
+) -> list[dict]:
+    """Phase 5, Task 1 — render a page's worth of UNSAVED ``StorefrontSection``
+    instances (e.g. from ``preset_service.resolve_preset_candidate``) through
+    the exact same shared rendering path every other caller of
+    ``_build_items_from_sections`` already uses — not a second renderer.
+
+    ``_build_items_from_sections`` is already explicitly designed to accept
+    any iterable of StorefrontSection-*shaped* objects, saved or not — see
+    ``build_default_render_items`` above, the existing precedent this reuses
+    for stores that have never published a Storefront V2. This is a thin
+    public wrapper for the candidate-preview case so callers never need the
+    private function directly."""
+    return _build_items_from_sections(
+        sections,
+        store,
+        page_context or {},
+        global_appearance=global_appearance,
+        store_appearance=store_appearance,
+    )
 
 
 #: Acceptance Batch 1 (post-U11) — the registry-level distinction the QA
