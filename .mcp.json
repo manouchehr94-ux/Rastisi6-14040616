@@ -13,7 +13,10 @@
         "--chromeArg=--no-sandbox",
         "--no-usage-statistics",
         "--no-performance-crux"
-      ]
+      ],
+      "env": {
+        "CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS": "1"
+      }
     }
   }
 }
