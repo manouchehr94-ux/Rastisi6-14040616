@@ -68,8 +68,14 @@
           <a class="sfb-v3-ghost-btn" style="display:block;text-align:center;margin-bottom:8px"
              href="{% url 'dashboard:storefront-builder-template-live-preview' key=preset.key %}"
              target="_blank" rel="noopener"
-             title="پیش‌نمایشِ زنده و کاملِ این قالب با داده‌های نمایشیِ Rasti Mode Demo — بدونِ اعمال">
-            مشاهده‌ی قالب (زنده)
+             title="پیش‌نمایشِ زنده‌ی این قالب با داده‌های نمایشیِ Rasti Mode Demo — بدونِ اعمال">
+            مشاهده با اطلاعات نمایشی
+          </a>
+          <a class="sfb-v3-ghost-btn" style="display:block;text-align:center;margin-bottom:8px"
+             href="{% url 'dashboard:storefront-builder-template-live-preview' key=preset.key %}?data=merchant"
+             target="_blank" rel="noopener"
+             title="پیش‌نمایشِ زنده‌ی این قالب با اطلاعات واقعی فروشگاه شما — بدونِ اعمال">
+            مشاهده با اطلاعات فروشگاه من
           </a>
           {% if card.is_current %}
           <button type="button" class="btn" disabled>در حال استفاده</button>

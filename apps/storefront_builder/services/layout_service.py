@@ -584,6 +584,28 @@ def get_or_create_layout(store) -> StorefrontLayout:
     return StorefrontLayout.provision_for(store)
 
 
+def get_existing_draft(store) -> StorefrontLayoutVersion | None:
+    """Return the current Draft without provisioning or mutating lifecycle state.
+
+    This is the read-only counterpart needed by preview-only callers.  The
+    lifecycle service remains the sole owner of Draft lookup semantics: callers
+    pass a concrete Store and receive only an existing DRAFT version.  Missing
+    layout, missing Draft, or an inconsistent non-DRAFT pointer all fail closed
+    as ``None``; Published is never substituted for Draft here.
+    """
+    layout = (
+        StorefrontLayout.objects.select_related("draft_version")
+        .filter(store=store)
+        .first()
+    )
+    if layout is None:
+        return None
+    draft = layout.draft_version
+    if draft is None or draft.status != StorefrontLayoutVersion.Status.DRAFT:
+        return None
+    return draft
+
+
 def _next_version_number(layout: StorefrontLayout) -> int:
     last = layout.versions.order_by("-version_number").first()
     return (last.version_number + 1) if last else 1

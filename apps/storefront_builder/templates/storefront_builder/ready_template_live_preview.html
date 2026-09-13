@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}پیش‌نمایشِ قالبِ «{{ preset.label_fa }}» — داده‌های نمایشی{% endblock %}
+{% block title %}پیش‌نمایشِ قالبِ «{{ preset.label_fa }}» — {% if preview_uses_merchant_data %}اطلاعات فروشگاه شما{% else %}داده‌های نمایشی{% endif %}{% endblock %}
 {% block robots_meta %}<meta name="robots" content="noindex,nofollow">{% endblock %}
 
 {% block extra_css %}
@@ -18,7 +18,11 @@
 
 {% block header %}
 <div class="rtpl-demo-banner">
+  {% if preview_uses_merchant_data %}
+  <span>این قالب با <strong>اطلاعات فروشگاه شما</strong> نمایش داده می‌شود — پیش‌نمایش است و هنوز قالب اعمال نشده است.</span>
+  {% else %}
   <span>این پیش‌نمایشِ زنده با <strong>داده‌های نمایشیِ Rasti Mode Demo</strong> ساخته شده — نه اطلاعاتِ واقعیِ فروشگاهِ شما.</span>
+  {% endif %}
   <span>قالب: <strong>{{ preset.label_fa }}</strong></span>
   <a href="{% url 'dashboard:storefront-builder-templates' %}">← بازگشت به گالریِ قالب‌ها</a>
 </div>
