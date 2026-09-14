@@ -220,7 +220,7 @@
         {% endif %}
         {% if ready_templates %}
         <section class="r4-global-design-group r4-template-switch">
-          <h4>قالبِ آماده</h4>
+          <h4>قالبِ آماده <span class="r4-field-scope r4-field-scope--global" data-r4-scope="global-group">سراسری — کل فروشگاه</span></h4>
           <label class="r4-field-sublabel" for="r4TemplateSwitchSelect">تعویضِ قالب — محتوایِ فعلی حفظ می‌شود</label>
           <select id="r4TemplateSwitchSelect" class="r4-control">
             {% for template in ready_templates %}
@@ -231,7 +231,7 @@
         </section>
         {% endif %}
         <section class="r4-global-design-group" data-r4-global-mutation="appearance.update">
-          <h4>ظاهر کلی</h4>
+          <h4>ظاهر کلی <span class="r4-field-scope r4-field-scope--global" data-r4-scope="global-group">سراسری — کل فروشگاه</span></h4>
 
           <label class="r4-field-sublabel" for="r4GlobalTemplate">قالب</label>
           <select id="r4GlobalTemplate" class="r4-control" data-r4-global-field="template_slug">
@@ -361,7 +361,7 @@
         </section>
 
         <section class="r4-global-design-group" data-r4-global-mutation="header.update">
-          <h4>هدر</h4>
+          <h4>هدر <span class="r4-field-scope r4-field-scope--global" data-r4-scope="global-group">سراسری — کل فروشگاه</span></h4>
           <label class="r4-field-sublabel" for="r4GlobalHeaderVariant">نوع هدر</label>
           <select id="r4GlobalHeaderVariant" class="r4-control" data-r4-global-field="header_variant">
             {% for v in global_design.header_variants %}
@@ -488,7 +488,7 @@
         </section>
 
         <section class="r4-global-design-group" data-r4-global-mutation="footer.update">
-          <h4>فوتر</h4>
+          <h4>فوتر <span class="r4-field-scope r4-field-scope--global" data-r4-scope="global-group">سراسری — کل فروشگاه</span></h4>
           <label class="r4-field-sublabel" for="r4GlobalFooterVariant">نوع فوتر</label>
           <select id="r4GlobalFooterVariant" class="r4-control" data-r4-global-field="footer_variant">
             {% for v in global_design.footer_variants %}

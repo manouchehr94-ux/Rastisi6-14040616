@@ -1043,3 +1043,52 @@ class Task4ANoDuplicateMediaAuthorityTests(R4MutationApiTestCase):
         # The three canonical models stay the only media models the builder uses.
         kinds = set(mv._MEDIA_KINDS)
         self.assertEqual(kinds, {"hero-slides", "banners", "story-items"})
+
+
+
+# ------------------------------------------------------------------------
+# Phase 5 Task 4 remediation (R2) — Global Design scope must be unambiguous
+# PER editable group, not only a single panel-level chip. Every
+# .r4-global-design-group visibly carries the Global scope indicator, added
+# generically (one marker per group, never duplicated per concrete setting,
+# never a second settings renderer). Global Design / Section Inspector stay
+# mutually exclusive.
+# ------------------------------------------------------------------------
+
+
+class Task4R2GlobalGroupScopeLabelTests(R4MutationApiTestCase):
+    GLOBAL_SCOPE_LABEL = "سراسری — کل فروشگاه"
+
+    def _editor(self):
+        return self.client.get(reverse("dashboard:storefront-builder-r4-editor"))
+
+    def test_every_global_design_group_carries_a_global_scope_indicator(self):
+        response = self._editor()
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        # Count the editable Global Design groups and require one group-level
+        # scope marker per group.
+        group_count = content.count('class="r4-global-design-group')
+        self.assertGreaterEqual(group_count, 3)
+        group_scope_count = content.count('data-r4-scope="global-group"')
+        self.assertEqual(group_scope_count, group_count)
+
+    def test_group_scope_indicator_uses_the_merchant_global_wording(self):
+        response = self._editor()
+        content = response.content.decode()
+        # Each group-level marker carries the merchant-facing Persian wording.
+        idx = content.index('data-r4-scope="global-group"')
+        chunk = content[idx:idx + 120]
+        self.assertIn(self.GLOBAL_SCOPE_LABEL, chunk)
+
+    def test_group_scope_is_generic_not_per_setting(self):
+        # The marker count equals the number of GROUPS, never the (much larger)
+        # number of individual global controls — proving it is not duplicated
+        # per concrete setting.
+        response = self._editor()
+        content = response.content.decode()
+        group_count = content.count('class="r4-global-design-group')
+        control_count = content.count("data-r4-global-field")
+        group_scope_count = content.count('data-r4-scope="global-group"')
+        self.assertEqual(group_scope_count, group_count)
+        self.assertLess(group_scope_count, control_count)
