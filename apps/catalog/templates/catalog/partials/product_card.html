@@ -117,7 +117,7 @@ here — so every future visual variant reads identical business semantics.
             aria-haspopup="dialog" :aria-controls="$id('sfb-quick-view')"
             :aria-expanded="overlayOpen ? 'true' : 'false'"
             aria-label="نمای سریع {{ card.name }}"
-            @click="event.preventDefault();event.stopPropagation();openOverlay()">
+            @click="event.preventDefault();event.stopPropagation();openOverlay($event.currentTarget)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
       <span class="pcard-qv-trigger-label">نمای سریع</span>
     </button>

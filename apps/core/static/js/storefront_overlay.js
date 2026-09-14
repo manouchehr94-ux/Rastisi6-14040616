@@ -17,9 +17,11 @@ document.addEventListener('alpine:init', () => {
     overlayOpen: false,
     _returnFocusEl: null,
 
-    openOverlay() {
-      // Remember what was focused so we can restore it on close.
-      this._returnFocusEl = document.activeElement;
+    openOverlay(returnFocusEl) {
+      // Remember what to restore focus to on close. Prefer an explicit trigger
+      // element (a mouse click with preventDefault may not focus the button),
+      // falling back to whatever is currently focused.
+      this._returnFocusEl = returnFocusEl || document.activeElement;
       this.overlayOpen = true;
       // Body scroll lock while the overlay is open.
       document.documentElement.style.overflow = 'hidden';
