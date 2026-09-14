@@ -13,10 +13,15 @@ evidence documents exist.
 | Certified base SHA | `0d16b6aeda7974b7454beb844ebbdb292840e034` |
 | Official branch | `feature/phase5-design-expansion` (untouched) |
 | Working branch | `kiro/phase5-task5-fast-track` (from the certified SHA) |
-| Final HEAD | _updated at completion_ |
-| Remote branch HEAD | _updated at completion_ |
-| Migrations added | **ZERO (expected)** |
+| Evidence HEAD (before this report's own commit) | `e061d714098cef13123c79305d8a8c11a4342a66` |
+| Final HEAD | see the report-commit SHA in the PR / `git log` (this doc is committed last; its own commit SHA is necessarily created after this line is written) |
+| Migrations added | **ZERO** (`makemigrations --check` → "No changes detected"; no migration files changed vs base) |
 | Task 6 started | **NO** |
+
+> All test counts, the browser-QA result, and the changed-file list in this
+> report are the state at evidence HEAD `e061d71` (the last code/evidence commit
+> before this report commit). The final PR head SHA is reported in the delivery
+> response and visible on the Draft PR.
 
 ## 2. Approved Fast-Track Architecture (Product-Owner override)
 
@@ -30,7 +35,7 @@ Final classifications:
 | PDT — Product detail tabs/accordion | **C — clean a11y UI rewrite over existing data** | S–M |
 | MDR — Mobile Navigation Drawer | **D — new presentation primitive (reuses canonical Menu/NAV_MOBILE + shared overlay)** | M |
 | MODAL — Product Quick View | **D — new presentation primitive (reuses product_card_service + cart:add + shared overlay)** | M–L |
-| PDTX — PDP trust/delivery | **C — clean UI/config repair, GATED on a Draft-aware canonical owner** | M |
+| PDTX — PDP trust/delivery | **C — merchant-editable via the existing Draft-aware `trust_features` owner (implemented; no new model)** | M |
 
 Legend: A reuse-as-is · B small repair · C clean UI rewrite/reuse core · D new presentation primitive.
 
@@ -299,14 +304,51 @@ MODAL → PDTX → HDR) with strict RED→GREEN TDD, reusing canonical owners, w
 - **Tests (RED→GREEN):** `apps/catalog/tests/test_product_quick_view.py` (6 tests: dialog semantics, unique id per product, canonical card truth reuse, `cart:add` reuse, `sfbOverlay` reuse, OOS has no cart action).
 - **Commit:** `ed60030`.
 
-## 7. PDTX — PDP trust/delivery owner GATE (Classification C / M, GATED) — DONE ✅ (verification; owner exists)
+## 7. PDTX — merchant-editable PDP trust/delivery (Classification C / M) — DONE ✅ (IMPLEMENTED)
 
-- **Gate outcome:** a Draft-aware canonical owner for PDP trust/guarantee content **ALREADY EXISTS** → PDTX is **NOT blocked**, and **no new model / no new schema was created**.
-- **The owner:** the existing **`trust_features`** section — a first-class `StorefrontSection` with a real validating schema (`TRUST_FEATURES_SCHEMA` / `validate_trust_features_settings`, `has_settings_form=True`). Because it declares no `page_types` it inherits `ALL_PAGE_TYPES`, which **includes `product_detail`**; its `settings.items` flow through the full storefront Draft → validate → publish → render lifecycle.
-- **Why NOT ShopSettings:** `ShopSettings.free_shipping_threshold` is **IMMEDIATE-LIVE** (read live by `core.context_processors.shop_settings` and `cart.services.pricing`, edited via the dashboard finance form with no draft/publish) — per the gate it is explicitly **NOT acceptable** as the Draft-aware owner. The hard-coded `.guarantee` strip lives in `product_main.html`, which is a deliberate passthrough (setting-less) context-aware section.
-- **What shipped:** verification-only tests locking the gate contract (owner is Draft-aware, allowed on the PDP, settings survive draft→publish→render, ShopSettings has no draft/version linkage). No production model/schema change — the hard-coded honest `.guarantee` strip was intentionally left untouched (a truthful, product-accurate fallback; replacing its placement/styling is out-of-scope architectural work, not required by the gate).
-- **Files:** `apps/storefront_builder/tests/test_pdp_trust_owner_gate.py` (6 tests).
-- **Commit:** `4f57a16`.
+> **Remediation update (evidence HEAD `e061d71`).** The first pass only *proved
+> the owner exists* (gate/verification). Independent review correctly flagged
+> that this did NOT complete PDTX. PDTX is now **actually implemented**: the PDP
+> trust experience is editable through the existing R4/Draft system, and the
+> hard-coded strip is now a suppressed fallback.
+
+- **Gate outcome (still true):** the Draft-aware canonical owner for PDP trust
+  content is the existing **`trust_features`** section — a first-class
+  `StorefrontSection` with a real validating schema (`TRUST_FEATURES_SCHEMA` /
+  `validate_trust_features_settings`, `has_settings_form=True`). It declares no
+  `page_types` so it inherits `ALL_PAGE_TYPES` (incl. `product_detail`); its
+  `settings.items` ride the full Draft → validate → publish → render lifecycle.
+  `ShopSettings.free_shipping_threshold` is IMMEDIATE-LIVE and was correctly
+  **rejected** as the owner. **No new model, no new schema, no second authority.**
+- **What shipped (implementation):**
+  1. A `product_detail` `trust_features` section is the canonical, merchant-
+     editable PDP trust block. Merchants edit its items through the existing R4
+     mutation path (`r4_mutation_service.apply_mutation` →
+     `section.update_settings`); Draft Preview shows the edit; the public
+     storefront keeps the Published state until publish.
+  2. **Backward-compatible suppression** so the two trust modules never both
+     show: `render_service._build_items_from_sections` computes a single
+     `has_sibling_trust_features` flag over the in-scope page sections and
+     threads `suppress_guarantee_strip` onto the `product_main` render context
+     (also added to the `responsive_section_wrapper.html` `{% include … with %}`
+     allowlist so the flag reaches the template). `product_main.html` guards its
+     hard-coded `.guarantee` strip with `{% if not suppress_guarantee_strip %}`.
+  3. **Fallback preserved:** stores with NO PDP `trust_features` section keep the
+     original hard-coded guarantee strip exactly as before — no existing store
+     loses trust content, no visual flip.
+- **Files:** `apps/storefront_builder/services/render_service.py`,
+  `apps/storefront_builder/templates/storefront_builder/sections/product_main.html`,
+  `apps/storefront_builder/templates/storefront_builder/partials/responsive_section_wrapper.html`,
+  `apps/storefront_builder/tests/test_pdp_trust_editable.py` (NEW),
+  `apps/storefront_builder/tests/test_pdp_trust_owner_gate.py` (the earlier gate proof, retained).
+- **Tests (RED→GREEN):** `test_pdp_trust_editable.py` (9 acceptance proofs:
+  R4 edit; Draft preview shows edit; Published unchanged before publish;
+  Published shows edit after publish; no Home dependency; Home trust content
+  never leaks to the PDP; hard-coded fallback preserved when no PDP section;
+  hard-coded strip suppressed when the canonical section exists; no second
+  authority/model; tenant isolation) + the 6 gate tests. Browser QA additionally
+  asserts published-trust-visible + hard-coded-strip-suppressed on the live PDP.
+- **Commits:** `4f57a16` (gate proof), `f3f59c1` (implementation + suppression + 9 tests).
 
 ## 8. HDR — Header (Classification A — canonical reuse, verify only) — DONE ✅ (NO-OP)
 
@@ -321,39 +363,48 @@ MODAL → PDTX → HDR) with strict RED→GREEN TDD, reusing canonical owners, w
 ## 10. Architecture Gate — **PASS**
 
 - ONE concept = ONE owner upheld: **no** second renderer, menu authority, product/card data path, cart path, header settings authority, or persistence model was introduced.
-- Only additive, closed-enum / presentation / verification changes; the sole genuinely new persistence surface anticipated (a PDP trust schema) was **avoided** — PDTX resolved to reusing the existing Draft-aware `trust_features` owner.
+- Only additive, closed-enum / presentation / render-time changes. PDTX added **no new persistence**: it reuses the existing Draft-aware `trust_features` owner and its schema, plus one render-time boolean (`suppress_guarantee_strip`) computed from sibling sections — not a new field, model, or settings authority. MODAL uses Alpine `x-id` (client-side ids) — no data-model change.
 - **Zero DB migrations** (`makemigrations --check` → "No changes detected"; no migration files changed vs base).
 - Official branch `feature/phase5-design-expansion` untouched.
 
 ## 11. Changed files (vs `0d16b6a`)
 
-Production / templates / assets:
-- `apps/storefront_builder/section_registry.py` (STRANS enum)
-- `apps/storefront_builder/templates/storefront_builder/partials/hero_slider_body.html` (STRANS)
-- `apps/storefront_builder/templates/storefront_builder/sections/product_description.html` (PDT)
-- `apps/storefront_builder/templates/storefront_builder/partials/page_shell_header.html` (MDR canonical-shell wiring)
-- `apps/catalog/templates/catalog/partials/product_card.html` (MODAL)
-- `templates/base.html` (MDR burger + shared-partial include)
-- `templates/partials/mobile_nav_drawer.html` (MDR shared drawer — NEW)
-- `apps/core/static/js/storefront_overlay.js` (shared overlay primitive — NEW)
-- `apps/catalog/static/css/home.css` (STRANS presets)
-- `apps/catalog/static/css/product_detail.css` (PDT accordion)
-- `apps/catalog/static/css/product_card.css` (MODAL dialog)
-- `apps/core/static/css/layout.css` (MDR off-canvas drawer)
+Exact `git diff --name-status 0d16b6a..e061d71` (excluding the 10 browser-QA
+`*.png` screenshots under `task5_browser_qa/`):
+
+Production / templates / assets (M = modified, A = added):
+- M `apps/catalog/static/css/home.css` (STRANS presets)
+- M `apps/catalog/static/css/product_card.css` (MODAL dialog)
+- M `apps/catalog/static/css/product_detail.css` (PDT desktop tabs + real mobile accordion)
+- M `apps/catalog/templates/catalog/partials/product_card.html` (MODAL quick view + instance-safe `x-id` ids + focus-return trigger)
+- M `apps/core/static/css/layout.css` (MDR off-canvas drawer)
+- M `apps/core/static/css/theme_palette.css` (PDT `.pdp-acc-header.active` theme-primary color, moved off `.tabline`)
+- A `apps/core/static/js/storefront_overlay.js` (shared overlay primitive — NEW; focus-return now accepts an explicit trigger)
+- M `apps/storefront_builder/section_registry.py` (STRANS closed enum)
+- M `apps/storefront_builder/services/render_service.py` (PDTX `suppress_guarantee_strip` sibling flag)
+- M `apps/storefront_builder/templates/storefront_builder/partials/hero_slider_body.html` (STRANS runtime)
+- M `apps/storefront_builder/templates/storefront_builder/partials/page_shell_header.html` (MDR canonical-shell wiring)
+- M `apps/storefront_builder/templates/storefront_builder/partials/responsive_section_wrapper.html` (PDTX: thread `suppress_guarantee_strip` through the include allowlist)
+- M `apps/storefront_builder/templates/storefront_builder/sections/product_description.html` (PDT accordion-native rewrite + Persian ZWNJ fixes)
+- M `apps/storefront_builder/templates/storefront_builder/sections/product_main.html` (PDTX guard the hard-coded guarantee strip)
+- M `templates/base.html` (MDR burger + shared-partial include)
+- A `templates/partials/mobile_nav_drawer.html` (MDR shared drawer — NEW)
 
 Tests:
-- `apps/catalog/tests/test_product_quick_view.py` (MODAL — NEW)
-- `apps/content/tests/test_mobile_nav_drawer.py` (MDR — NEW)
-- `apps/storefront_builder/tests/test_pdp_trust_owner_gate.py` (PDTX — NEW)
-- `apps/storefront_builder/tests/test_r4_settings_schema.py` (STRANS)
-- `apps/storefront_builder/tests/test_render_service.py` (STRANS)
-- `apps/storefront_builder/tests/test_views.py` (PDT)
+- A `apps/catalog/tests/test_product_quick_view.py` (MODAL — NEW; incl. instance-safe id proofs)
+- A `apps/content/tests/test_mobile_nav_drawer.py` (MDR — NEW)
+- A `apps/storefront_builder/tests/test_pdp_trust_owner_gate.py` (PDTX gate — NEW)
+- A `apps/storefront_builder/tests/test_pdp_trust_editable.py` (PDTX acceptance — NEW)
+- M `apps/storefront_builder/tests/test_r4_settings_schema.py` (STRANS)
+- M `apps/storefront_builder/tests/test_render_service.py` (STRANS incl. image_slider proof)
+- M `apps/storefront_builder/tests/test_views.py` (PDT incl. real-accordion proofs)
 
 Docs / QA harness / evidence:
-- `docs/qa_evidence/storefront_design_engine/phase5/task5_implementation_report.md` (this report)
-- `docs/qa_evidence/storefront_design_engine/phase5/task5_browser_qa/` (report.json + 10 screenshots)
-- `tools/storefront_builder_qa/public_task5_qa.mjs` (public-storefront QA runner — NEW)
-- `docs/superpowers/plans/2026-09-11-phase5-design-expansion-implementation-plan.md` (Task-5 fast-track override note)
+- A `docs/qa_evidence/storefront_design_engine/phase5/task5_implementation_report.md` (this report)
+- A `docs/qa_evidence/storefront_design_engine/phase5/task5_browser_qa/report.json` + 10 `*.png` screenshots
+- A `tools/storefront_builder_qa/public_task5_qa.mjs` (deepened public-storefront QA runner — NEW)
+- A `tools/storefront_builder_qa/_pdtx_seed.py` (PDTX QA seed/revert helper — NEW)
+- M `docs/superpowers/plans/2026-09-11-phase5-design-expansion-implementation-plan.md` (Task-5 fast-track override note)
 
 ## 12. Commits
 
@@ -364,16 +415,42 @@ Docs / QA harness / evidence:
 | `1f9b3a9` | PDT | make product detail panels accessible and responsive |
 | `79f812f` | MDR | add canonical mobile navigation drawer |
 | `ed60030` | MODAL | add storefront product quick view |
-| `4f57a16` | PDTX | prove draft-aware canonical owner for PDP trust content |
+| `4f57a16` | PDTX | prove draft-aware canonical owner for PDP trust content (gate) |
 | `4d3daaa` | MDR | render mobile nav drawer on canonical storefront shell |
+| `896c069` | docs | finalize task5 implementation report (first pass) |
+| `f3f59c1` | PDTX | **make PDP trust content merchant-editable via trust_features (remediation)** |
+| `96e6604` | MODAL | **make quick view IDs instance-safe with Alpine x-id (remediation)** |
+| `6b5dbdb` | STRANS | **prove image_slider transition reaches the shared slider runtime (remediation)** |
+| `50cf399` | PDT | **make PDP mobile a real accordion + fix Persian ZWNJ (remediation)** |
+| `e061d71` | QA | **deepen public Task-5 browser QA + fix quick-view focus return (remediation)** |
 
-Final HEAD: `4d3daaa01c49df855962257923100ac3b0e93897`.
+Evidence HEAD (last commit before this report commit): `e061d71`. The report's
+own commit SHA is created after this table and is visible on the Draft PR.
 
-## 13. Test evidence (focused + regression)
+## 13. Test evidence (focused + regression, at evidence HEAD `e061d71`)
 
-- **Focused Task-5 + core (batch 1):** 411 tests OK (`test_product_quick_view`, `test_pdp_trust_owner_gate`, `test_mobile_nav_drawer`, `test_r4_settings_schema`, `test_render_service`, `test_a8_product_card_presentations`, `test_product_card_service`, `test_product_card_cover_image`, `test_product_detail_view`, `test_page_shell`, `test_navigation`).
-- **R4 + header/footer + cart (batch 2):** 417 tests, 3 pre-existing errors only — `apps.cart.tests.test_cart_views.CartItemUpdateUsesComposedCartSectionsTests` (3). **These 3 were reproduced identically on the certified base `0d16b6a`** (a test-ordering/isolation quirk in `apps.cart`, independent of Task 5). All R4 modules (`test_r4_inspector`, `test_r4_appearance_overrides`, `test_r4_foundation`) and header suites green.
-- **HDR verification:** 246 header/appearance tests OK.
+- **Focused Task-5 + core (batch 1): 420 tests OK** —
+  `test_pdp_trust_owner_gate` (6), `test_pdp_trust_editable` (9),
+  `test_product_quick_view` (7), `test_mobile_nav_drawer` (12),
+  `test_r4_settings_schema`, `test_render_service` (incl. STRANS +
+  image_slider proofs), `test_views.ProductDetailContextAwareSectionsPreviewTests`
+  (15, incl. real-accordion + Persian-ZWNJ proofs), `test_a8_product_card_presentations`,
+  `test_product_card_service`, `test_product_card_cover_image`,
+  `test_product_detail_view`, `test_product_detail_videos`, `test_navigation`.
+- **R4 + header/footer + page_shell (batch 2): 325 tests OK** —
+  `test_r4_inspector`, `test_r4_appearance_overrides`, `test_r4_foundation`,
+  `test_u2a_global_header_system`, `test_u2b_global_footer_system`,
+  `test_page_shell`.
+- **cart + product_list (batch 3): 147 tests OK** in isolation.
+- **Known PRE-EXISTING failures (NOT introduced here):** running the R4 header
+  suites together with `apps.cart` in one process yields exactly 3 errors in
+  `apps.cart.tests.test_cart_views.CartItemUpdateUsesComposedCartSectionsTests`
+  (a test-ordering/isolation quirk). This was **reproduced identically on the
+  certified base `0d16b6a`** via a clean `git worktree` with the exact same
+  module combination during this remediation — same 3 tests, same `errors=3`.
+  They are pre-existing and independent of Task 5; they are not new failures
+  relabelled as pre-existing.
+- **HDR:** 246 header/appearance tests OK (no defect; NO-OP).
 
 ## 14. Django / static gates
 
@@ -385,28 +462,35 @@ Final HEAD: `4d3daaa01c49df855962257923100ac3b0e93897`.
 
 Ran against the live published storefront (`rastisi-fashion-test`, 94 active products) via headless Chrome at three viewports (1440×900, 768×1024, 390×844), RTL confirmed (`dir="rtl"`). Runner: `tools/storefront_builder_qa/public_task5_qa.mjs`; evidence: `task5_browser_qa/report.json` + 10 screenshots.
 
-**Result: 30/30 PASS, 0 warnings, 0 failures, 0 console errors.**
+**Result (deepened harness, evidence HEAD `e061d71`): 92/92 PASS, 0 warnings,
+0 failures, 0 console errors.**
 
-- STRANS: `data-hero-transition` present on the hero at every viewport.
-- MODAL: quick-view trigger + dialog present on every product card (52/52); dialog **opens** and **Escape-closes** at all 3 viewports; RTL-correct centered modal (screenshot).
-- MDR: burger present, drawer **opens** and **Escape-closes** at 390px; RTL-correct off-canvas panel rendering the canonical `NAV_MOBILE` menu (screenshot).
-- PDT: PDP `role=tablist`/`tab`/`tabpanel` present (3 tabs, 3 panels) at all viewports.
-- HDR/PDTX render health: home + PDP return 200, **no root horizontal overflow** at any viewport.
+- **STRANS:** `data-hero-transition` present AND carries a valid closed-enum value (`cut`/`fade`/`slide`) at every viewport (proves the setting reaches the real runtime).
+- **MODAL:** quick-view trigger + dialog on every card (52/52); **unique** dialog + title ids across the whole page (52/52 unique — instance-safe); trigger `aria-controls` resolves to the opened dialog; PDP link present; cart-affordance consistent with card settings; **opens**, **focus enters overlay**, **Tab stays trapped**, **body scroll-locked**, **backdrop/explicit/Escape all close**, **focus returns to the trigger**.
+- **MDR (390px):** burger opens the drawer; **canonical `NAV_MOBILE` links present** (13); focus enters + Tab trapped; scroll-locked; **explicit/backdrop/Escape close**; **focus returns to the burger**.
+- **PDT:** 3 tabs / 3 panels; exactly one active panel; selected tab ↔ shown panel `aria-controls`/`aria-labelledby` paired; desktop **Arrow/Home/End keyboard nav** works; mobile **real accordion** verified (DOM source order = header,panel,header,panel,header,panel AND the open panel sits directly under its own header); RTL + no overflow.
+- **PDTX:** with a seeded+published PDP `trust_features` edit, the public PDP **shows the edited trust content** and the **hard-coded strip is suppressed** (no double trust module) at all 3 viewports. The seed was reverted after QA, restoring the tenant's default PDP.
 
 ## 16. Deferred scope (explicitly NOT done)
 
-- **PDTX PDP in-column strip migration:** the hard-coded `.guarantee` strip in `product_main.html` was intentionally left as-is. The Draft-aware owner (`trust_features`) exists and is proven, but re-homing the PDP in-column strip onto it (placement/styling inside `.pinfo`) is out-of-scope architectural work not required by the gate.
 - **HDR:** no schema-validated header-variant field was added (the discovery's "B" idea) — the approved override made HDR verify-only. Legacy full-page header editor retirement also deferred.
+- **PDTX further placement polish:** the canonical editable PDP trust block renders via the `trust_features` section (page-level features strip). Visually re-homing it *inside* the `product_main` `.pinfo` column is a styling refinement, not required for the editable-trust acceptance, and is left for a later visual pass.
 - Configurable Mega Menu family, Showcase (Task 6), Theme Overlay (Task 12), full 50-template QA (Task 16) — out of Task-5 scope.
 - **Task 6 was NOT started.**
 
 ## 17. Final verdict
 
-Task 5 is **COMPLETE**: all six areas (STRANS, PDT, MDR, MODAL, PDTX-gate, HDR)
-delivered via strict TDD, reusing every canonical owner, with **zero DB
-migrations**, the Architecture Gate **PASS**, and a clean public-storefront
-browser QA pass (30/30) at three RTL viewports. One shared overlay primitive
-was built once and reused by MDR + MODAL. The PDTX gate resolved to an existing
-Draft-aware owner (no new model). HDR is a verified NO-OP (no new header setting
-authority). The official branch is untouched; delivery is a Draft PR into
-`feature/phase5-design-expansion`.
+Task 5 (with the independent-review remediation) is **COMPLETE**:
+
+- **STRANS** — closed-enum transition, live on BOTH hero_banner and image_slider (shared runtime; no dead control).
+- **PDT** — accessible desktop tablist + **real** mobile accordion from one accordion-native DOM; Persian ZWNJ fixed.
+- **MDR** — one shared accessible drawer on the canonical storefront shell.
+- **MODAL** — quick view with **instance-safe `x-id` ids** (no duplicate ids when a product repeats on a page) + focus return.
+- **PDTX** — **actually implemented**: PDP trust is merchant-editable through the existing R4/Draft `trust_features` owner (Draft preview shows edits, public uses Published until publish), with a backward-compatible suppression of the hard-coded fallback so the two never both show. No new model, no second authority.
+- **HDR** — verified NO-OP; **NEW HEADER SETTING AUTHORITY CREATED: NO**.
+
+Architecture Gate **PASS**; **ZERO DB migrations**; one shared overlay primitive
+reused by MDR + MODAL; deepened browser QA **92/92** at three RTL viewports, 0
+console errors; the 3 cart-isolation errors are proven pre-existing on the
+certified base. The official branch `feature/phase5-design-expansion` is
+untouched; delivery is Draft PR #2 into it (not merged).
