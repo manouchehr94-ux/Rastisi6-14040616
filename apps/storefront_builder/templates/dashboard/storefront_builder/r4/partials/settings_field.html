@@ -7,6 +7,14 @@ the R4 Inspector's Phase 0 renderer allowlist (r4_views.py); this partial
 must never silently fall back to a plain text input for an unsupported type.
 {% endcomment %}
 <div class="r4-field r4-field--{{ field.field_type }}" data-r4-field-row data-r4-field-key="{{ field.key }}" data-r4-field-type="{{ field.field_type }}">
+  {% comment %}
+  Phase 5 Task 4A — generic scope indicator. Every control the Section
+  Inspector renders affects ONLY the selected section, so the marker is
+  emitted once here, in the ONE shared field renderer, for every field type —
+  never by branching on a concrete section type. The storefront-wide
+  counterpart lives on the Global Design rendering path.
+  {% endcomment %}
+  <span class="r4-field-scope" data-r4-scope="section">فقط این بخش</span>
   <label class="r4-field-label" for="r4Field-{{ field.key }}">{{ field.label }}</label>
 
   {% if field.field_type == "text" %}

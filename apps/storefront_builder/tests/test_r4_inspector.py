@@ -644,3 +644,115 @@ class BrandCarouselV02InspectorFilteringTests(R4MutationApiTestCase):
         section.refresh_from_db()
         self.assertEqual(section.settings, before)
         self.assertTrue(section.settings["show_view_all"])  # dormant, intact
+
+
+
+# ------------------------------------------------------------------------
+# Phase 5 Task 4A — Global-vs-section scope labeling. A merchant must always
+# know whether a control affects the whole storefront or only the selected
+# section. The Section indicator is added GENERICALLY to the one shared
+# schema-driven field renderer (settings_field.html), never by branching on
+# a specific section_key; the Global indicator is added to the Global Design
+# rendering path (r4/editor.html). Also pins the canonical contextual rule
+# (Section Inspector and Global Design never show as one mixed panel).
+# ------------------------------------------------------------------------
+
+
+class Task4ASectionScopeLabelTests(R4MutationApiTestCase):
+    SECTION_SCOPE_LABEL = "فقط این بخش"
+
+    def test_every_section_field_row_carries_a_section_scope_indicator(self):
+        response = self.client.get(_inspector_url(self.section.pk))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        # One machine-readable marker per rendered field row, plus the
+        # merchant-facing Persian wording.
+        field_row_count = content.count("data-r4-field-row")
+        self.assertGreater(field_row_count, 0)
+        self.assertEqual(content.count('data-r4-scope="section"'), field_row_count)
+        self.assertIn(self.SECTION_SCOPE_LABEL, content)
+
+    def test_scope_indicator_is_generic_not_section_name_branched(self):
+        template_source = Path(
+            settings.BASE_DIR,
+            "apps/storefront_builder/templates/dashboard/storefront_builder/r4/partials/settings_field.html",
+        ).read_text(encoding="utf-8")
+        # The scope indicator lives in the generic renderer and must never
+        # branch on a concrete section type. (``rich_text`` is intentionally
+        # NOT checked here — it is a generic field_type this renderer already
+        # branches on, not a section-name branch.)
+        self.assertIn('data-r4-scope="section"', template_source)
+        for section_name in ("hero_banner", "product_section", "brand_carousel", "single_banner"):
+            self.assertNotIn(section_name, template_source)
+
+    def test_scope_indicator_exposes_no_implementation_terminology(self):
+        response = self.client.get(_inspector_url(self.section.pk))
+        content = response.content.decode()
+        # Assert on the VISIBLE chip element only (its rendered inner text),
+        # not surrounding HTML — merchants only ever see the chip text.
+        import re
+        chips = re.findall(r'<span class="r4-field-scope"[^>]*>(.*?)</span>', content)
+        self.assertTrue(chips)
+        for chip_text in chips:
+            self.assertEqual(chip_text, self.SECTION_SCOPE_LABEL)
+            for forbidden in ("field_type", "section_key", "registry", "JSON", "settings_schema"):
+                self.assertNotIn(forbidden, chip_text)
+
+    def test_rich_text_section_also_gets_generic_section_scope(self):
+        rich_text_section = StorefrontSection.objects.create(
+            version=self.draft, section_key="rich_text", order=1,
+        )
+        response = self.client.get(_inspector_url(rich_text_section.pk))
+        content = response.content.decode()
+        self.assertIn('data-r4-scope="section"', content)
+        self.assertIn(self.SECTION_SCOPE_LABEL, content)
+
+
+class Task4AGlobalScopeLabelTests(R4MutationApiTestCase):
+    GLOBAL_SCOPE_LABEL = "سراسری — کل فروشگاه"
+
+    def _editor(self):
+        return self.client.get(reverse("dashboard:storefront-builder-r4-editor"))
+
+    def test_global_design_panel_carries_a_global_scope_indicator(self):
+        response = self._editor()
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        # The Global Design panel is the global-scope rendering path.
+        global_idx = content.index('id="r4GlobalDesign"')
+        global_chunk = content[global_idx:]
+        self.assertIn('data-r4-scope="global"', global_chunk)
+        self.assertIn(self.GLOBAL_SCOPE_LABEL, global_chunk)
+
+    def test_section_scope_wording_never_appears_inside_global_design(self):
+        response = self._editor()
+        content = response.content.decode()
+        global_idx = content.index('id="r4GlobalDesign"')
+        global_chunk = content[global_idx:]
+        self.assertNotIn("فقط این بخش", global_chunk)
+
+
+class Task4AContextualExclusivityContractTests(R4MutationApiTestCase):
+    """Product Owner rule: ONE SELECTION -> ONE CONTEXT. Opening a Section
+    Inspector must close Global Design (and vice-versa) so the two are never
+    shown as one mixed panel. This pins the existing canonical behavior with
+    regression coverage (Task 4A requirement)."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.js_source = Path(
+            settings.BASE_DIR,
+            "apps/storefront_builder/static/storefront_builder/r4_editor.js",
+        ).read_text(encoding="utf-8")
+
+    def test_open_section_closes_global_design(self):
+        open_idx = self.js_source.index("openSection = function")
+        open_chunk = self.js_source[open_idx:open_idx + 400]
+        self.assertIn("closeGlobalDesign()", open_chunk)
+
+    def test_open_global_design_closes_the_section_inspector(self):
+        self.assertIn("openGlobalDesign", self.js_source)
+        open_global_idx = self.js_source.index("function openGlobalDesign")
+        open_global_chunk = self.js_source[open_global_idx:open_global_idx + 400]
+        self.assertIn("closeInspector()", open_global_chunk)

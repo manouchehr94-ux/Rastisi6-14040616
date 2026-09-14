@@ -179,6 +179,14 @@
     <aside id="r4GlobalDesign" hidden aria-label="طراحی کلی">
       <div class="r4-global-design-header">
         <strong>طراحی کلی</strong>
+        {% comment %}
+        Phase 5 Task 4A — global-scope indicator. Everything inside the
+        Global Design panel affects the WHOLE storefront, the counterpart to
+        the per-field section marker the Section Inspector emits. One
+        panel-level marker (the panel is never shown mixed with the Section
+        Inspector — see R4.openSection/openGlobalDesign).
+        {% endcomment %}
+        <span class="r4-field-scope r4-field-scope--global" data-r4-scope="global">سراسری — کل فروشگاه</span>
         <button type="button" class="r4-icon-btn" data-r4-global-design-close aria-label="بستن طراحی کلی">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </button>

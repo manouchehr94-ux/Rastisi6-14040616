@@ -878,3 +878,24 @@ button.r4-picker-row--result:hover {
   opacity: .5;
   cursor: not-allowed;
 }
+
+
+/* Phase 5 Task 4A — scope indicators. A compact, low-emphasis chip that
+   tells the merchant whether a control affects only the selected section
+   ("فقط این بخش") or the whole storefront ("سراسری — کل فروشگاه"). */
+.r4-field-scope {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--r4-line);
+  background: var(--r4-surface);
+  color: var(--r4-muted, #6b7280);
+  margin-bottom: 4px;
+}
+.r4-field-scope--global {
+  border-color: var(--r4-accent);
+  color: var(--r4-accent);
+}
