@@ -924,3 +924,122 @@ class Task4DPreviewStillOwnsHighlightTests(R4MutationApiTestCase):
         self.assertIn("sfb:setSelection", preview_source)
         self.assertIn("applyBuilderSelection", preview_source)
         self.assertIn("sfb-rsec-selected", preview_source)
+
+
+
+# ------------------------------------------------------------------------
+# Phase 5 Task 4 remediation (R1a) — media editing is R4-NATIVE. A merchant
+# manages a media-bearing section's items (slides/banners/story items) inside
+# the R4 Inspector, reusing the canonical media_views CRUD/authority — never a
+# passive target="_blank" link to the legacy full-page screen as the normal
+# workflow, and never a second media model/view/service.
+# ------------------------------------------------------------------------
+
+
+class Task4AR4NativeMediaSchemaSectionTests(R4MutationApiTestCase):
+    """hero_banner is schema-enabled AND media-bearing (hero-slides)."""
+
+    def test_inspector_embeds_the_canonical_media_manager_inline(self):
+        response = self.client.get(_inspector_url(self.section.pk))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        # The canonical media list body is embedded inline (its stable id).
+        self.assertIn('id="mediaList"', content)
+        # An R4-native "manage media" region wraps it (in-panel, not a page).
+        self.assertIn("data-r4-media-manager", content)
+
+    def test_inspector_media_is_not_a_passive_blank_link_workflow(self):
+        response = self.client.get(_inspector_url(self.section.pk))
+        content = response.content.decode()
+        # The old passive out-link must no longer be the media workflow.
+        self.assertNotIn('target="_blank"', content)
+
+    def test_inspector_media_manager_uses_canonical_media_endpoints(self):
+        response = self.client.get(_inspector_url(self.section.pk))
+        content = response.content.decode()
+        # Add + list endpoints are the existing canonical media URLs.
+        add_url = reverse(
+            "dashboard:storefront-builder-section-media-add",
+            kwargs={"pk": self.section.pk, "kind": "hero-slides"},
+        )
+        self.assertIn(add_url, content)
+
+    def test_existing_slide_appears_in_the_inline_manager(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from apps.content.models import HeroSlide
+
+        png = SimpleUploadedFile("s.png", b"\x89PNG\r\n\x1a\n", content_type="image/png")
+        HeroSlide.objects.create(
+            store=self.store, section=self.section, title="اسلاید تستی", desktop_image=png, is_active=True,
+        )
+        response = self.client.get(_inspector_url(self.section.pk))
+        content = response.content.decode()
+        self.assertIn("اسلاید تستی", content)
+
+
+class Task4AR4NativeMediaOnlySectionTests(R4MutationApiTestCase):
+    """single_banner / story_rail are media-only (no schema) but media-bearing —
+    they get the same R4-native inline manager, not a legacy out-link."""
+
+    def test_single_banner_media_is_r4_native_inline(self):
+        single_banner = StorefrontSection.objects.create(
+            version=self.draft, section_key="single_banner", order=1,
+        )
+        response = self.client.get(_inspector_url(single_banner.pk))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("data-r4-media-manager", content)
+        self.assertIn('id="mediaList"', content)
+        self.assertNotIn('target="_blank"', content)
+
+    def test_story_rail_media_is_r4_native_inline(self):
+        story_rail = StorefrontSection.objects.create(
+            version=self.draft, section_key="story_rail", order=1,
+        )
+        response = self.client.get(_inspector_url(story_rail.pk))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("data-r4-media-manager", content)
+        self.assertNotIn('target="_blank"', content)
+
+
+class Task4ANoMediaLinkForNonMediaSectionTests(R4MutationApiTestCase):
+    def test_rich_text_inspector_has_no_media_manager(self):
+        rich_text = StorefrontSection.objects.create(
+            version=self.draft, section_key="rich_text", order=1,
+        )
+        response = self.client.get(_inspector_url(rich_text.pk))
+        content = response.content.decode()
+        self.assertNotIn("data-r4-media-manager", content)
+
+
+class Task4ANoDuplicateMediaAuthorityTests(R4MutationApiTestCase):
+    def test_no_new_media_urls_were_added(self):
+        from apps.dashboard import urls as dashboard_urls
+
+        url_names = {p.name for p in dashboard_urls.urlpatterns if getattr(p, "name", None)}
+        # Only the existing canonical media URLs may exist — no R4-specific
+        # media CRUD endpoint.
+        for forbidden in (
+            "storefront-builder-r4-media-list",
+            "storefront-builder-r4-media-add",
+            "storefront-builder-r4-media-edit",
+            "storefront-builder-r4-section-media",
+        ):
+            self.assertNotIn(forbidden, url_names)
+        # The canonical ones remain present.
+        for canonical in (
+            "storefront-builder-section-media-list",
+            "storefront-builder-section-media-add",
+            "storefront-builder-section-media-delete",
+        ):
+            self.assertIn(canonical, url_names)
+
+    def test_media_views_remains_the_single_media_model_owner(self):
+        # No second media library module was introduced.
+        import apps.storefront_builder.media_views as mv
+
+        self.assertTrue(hasattr(mv, "_MEDIA_KINDS"))
+        # The three canonical models stay the only media models the builder uses.
+        kinds = set(mv._MEDIA_KINDS)
+        self.assertEqual(kinds, {"hero-slides", "banners", "story-items"})

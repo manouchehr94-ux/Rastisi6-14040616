@@ -34,7 +34,9 @@
         {% if item.show_button %} • دکمه: {{ item.button_label }}{% endif %}
       </div>
     </div>
-    <a href="{% url 'dashboard:storefront-builder-section-media-edit' pk=section.pk kind=kind item_pk=item.pk %}" class="btn btn-sm">ویرایش</a>
+    <a href="{% url 'dashboard:storefront-builder-section-media-edit' pk=section.pk kind=kind item_pk=item.pk %}" class="btn btn-sm"
+       {% if inline_media %}hx-get="{% url 'dashboard:storefront-builder-section-media-edit' pk=section.pk kind=kind item_pk=item.pk %}"
+       hx-target="closest [data-r4-media-manager]" hx-swap="innerHTML"{% endif %}>ویرایش</a>
     <button type="button" class="btn btn-sm"
             hx-post="{% url 'dashboard:storefront-builder-section-media-toggle' pk=section.pk kind=kind item_pk=item.pk %}"
             hx-target="#mediaList" hx-swap="outerHTML">{% if item.is_active %}غیرفعال‌سازی{% else %}فعال‌سازی{% endif %}</button>

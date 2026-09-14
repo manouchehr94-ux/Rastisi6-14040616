@@ -8,8 +8,15 @@
   </header>
 
   {% if media_manage_url %}
-  <div class="r4-inspector-media-link">
-    <a href="{{ media_manage_url }}" target="_blank" rel="noopener">مدیریت {{ media_label_plural }}</a>
+  {% comment %}
+  Phase 5 Task 4 (remediation R1a) — R4-NATIVE media editing embedded inline.
+  Reuses the canonical media manager body (media_views models/CRUD/authority)
+  via htmx; never a passive target="_blank" out-link workflow, never a second
+  media system.
+  {% endcomment %}
+  <div class="r4-inspector-media" data-r4-media-manager>
+    <div class="r4-inspector-media-heading">مدیریت {{ media_label_plural }}</div>
+    {% include "dashboard/storefront_builder/partials/section_media_manager_body.html" with config=media_config items=media_items kind=media_kind %}
   </div>
   {% endif %}
 

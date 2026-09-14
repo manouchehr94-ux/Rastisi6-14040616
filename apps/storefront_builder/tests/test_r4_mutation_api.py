@@ -934,3 +934,70 @@ class Task4BBackgroundOwnershipSingleAuthorityTests(R4MutationApiTestCase):
         # Legacy path routes background ownership through the shared service,
         # not its own inline MediaAsset query.
         self.assertIn("validate_background_asset_ownership", views_source)
+
+
+
+class Task4AR4NativeMediaHtmxTests(R4MutationApiTestCase):
+    """R1a — the canonical media list/form views return BODY-ONLY partials
+    under HX-Request so add/edit happen INLINE inside the R4 Inspector (the
+    same HX-Request -> partial pattern the header/footer editors use), while a
+    normal (non-HX) GET still returns the full legacy page unchanged."""
+
+    def _media_list_url(self, section):
+        return reverse(
+            "dashboard:storefront-builder-section-media-list",
+            kwargs={"pk": section.pk, "kind": "hero-slides"},
+        )
+
+    def _media_add_url(self, section):
+        return reverse(
+            "dashboard:storefront-builder-section-media-add",
+            kwargs={"pk": section.pk, "kind": "hero-slides"},
+        )
+
+    def test_media_list_hx_request_returns_body_only_partial(self):
+        response = self.client.get(self._media_list_url(self.section), HTTP_HX_REQUEST="true")
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn('id="mediaList"', content)
+        # Body-only: no full base_admin chrome.
+        self.assertNotIn("<html", content.lower())
+
+    def test_media_list_normal_request_still_returns_full_page(self):
+        response = self.client.get(self._media_list_url(self.section))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("<html", content.lower())
+
+    def test_media_form_hx_request_returns_body_only_partial(self):
+        response = self.client.get(self._media_add_url(self.section), HTTP_HX_REQUEST="true")
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("<form", content)
+        self.assertNotIn("<html", content.lower())
+
+
+class Task4AR4NativeMediaTenantIsolationTests(R4MutationApiTestCase):
+    """Media reachability stays tenant-scoped exactly as before (via the
+    canonical _get_scoped_section double guard) — a foreign-store section is
+    a 404, whether the request is HX or not."""
+
+    def setUp(self):
+        super().setUp()
+        self.other_store = Store.objects.create(
+            name="فروشگاه دیگر رسانه R4", slug="r4-media-other",
+            admin_subdomain="r4-media-other",
+        )
+        from apps.storefront_builder.services import layout_service as svc2
+        self.other_draft = svc2.get_or_create_draft(self.other_store)
+        self.foreign_section = StorefrontSection.objects.create(
+            version=self.other_draft, section_key="hero_banner", order=0,
+        )
+
+    def test_foreign_section_media_list_is_404(self):
+        url = reverse(
+            "dashboard:storefront-builder-section-media-list",
+            kwargs={"pk": self.foreign_section.pk, "kind": "hero-slides"},
+        )
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.assertEqual(self.client.get(url, HTTP_HX_REQUEST="true").status_code, 404)

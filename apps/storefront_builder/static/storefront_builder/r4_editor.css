@@ -947,3 +947,20 @@ button.r4-picker-row--result:hover {
 .r4-background-picker .r4-control {
   width: 100%;
 }
+
+
+/* Phase 5 Task 4 (remediation R1a) — R4-native inline media manager embedded
+   in the Inspector (reuses the canonical media manager body). */
+.r4-inspector-media {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--r4-line);
+}
+.r4-inspector-media-heading {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--r4-muted, #6b7280);
+  margin-bottom: 8px;
+}
+.r4-media-manager-toolbar {
+  margin-bottom: 10px;
+}

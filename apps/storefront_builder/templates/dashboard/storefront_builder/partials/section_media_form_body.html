@@ -1,0 +1,157 @@
+{% load storefront_builder_extras %}
+{% comment %}
+Phase 5 Task 4 (remediation R1a) — body-only media add/edit form, shared by
+the full-page legacy screen (section_media_form.html includes this) AND the
+R4 Inspector's inline media manager (loaded via HX-Request). Same canonical
+media_views form view / persistence; no second form. When embedded in R4 the
+form submits via htmx back into the inline manager container so the merchant
+never leaves R4; the full-page host submits normally.
+{% endcomment %}
+<div class="panel" style="max-width:640px">
+  <a href="{% url 'dashboard:storefront-builder-section-media-list' pk=section.pk kind=kind %}"
+     class="btn btn-sm" style="margin-bottom:16px;display:inline-block"
+     {% if inline_media %}hx-get="{% url 'dashboard:storefront-builder-section-media-list' pk=section.pk kind=kind %}"
+     hx-target="closest [data-r4-media-manager]" hx-swap="innerHTML"{% endif %}>← بازگشت به {{ config.label_plural }}</a>
+
+  <form method="post" enctype="multipart/form-data"
+        {% if inline_media %}{% if item %}hx-post="{% url 'dashboard:storefront-builder-section-media-edit' pk=section.pk kind=kind item_pk=item.pk %}"{% else %}hx-post="{% url 'dashboard:storefront-builder-section-media-add' pk=section.pk kind=kind %}"{% endif %}
+        hx-target="closest [data-r4-media-manager]" hx-swap="innerHTML" hx-encoding="multipart/form-data"{% endif %}
+        x-data="destinationPicker(
+          '{{ item.destination_type|default:"none" }}',
+          {% if item.destination_type == "category" %}{{ item.destination_category_id }}{% elif item.destination_type == "product" %}{{ item.destination_product_id }}{% elif item.destination_type == "brand" %}{{ item.destination_brand_id }}{% elif item.destination_type == "collection" %}{{ item.destination_collection_id }}{% else %}null{% endif %},
+          '{% if item.destination_type == "product" %}{{ item.destination_product.name|default:""|escapejs }}{% endif %}')">
+    {% csrf_token %}
+
+    {% if config.text_field != "title" %}
+    <div class="form-group">
+      <label for="id_title">عنوان</label>
+      <input type="text" name="title" id="id_title" class="form-input" maxlength="200" value="{{ item.title|default:'' }}">
+    </div>
+    {% endif %}
+
+    <div class="form-group">
+      <label for="id_text_field">{{ config.text_label }}</label>
+      <input type="text" name="{{ config.text_field }}" id="id_text_field" class="form-input" maxlength="300"
+             value="{% if item %}{{ item|getattribute:config.text_field|default:'' }}{% endif %}">
+    </div>
+
+    {% for f in config.file_fields %}
+    <div class="form-group">
+      <label for="id_{{ f.name }}">{{ f.label }}{% if f.required and not item %} (الزامی){% endif %}</label>
+      <input type="file" name="{{ f.name }}" id="id_{{ f.name }}" accept="image/png,image/jpeg,image/webp">
+      {% if item and item|getattribute:f.name %}
+        {% if f.remove_field %}
+        <label style="display:flex;align-items:center;gap:6px;font-weight:normal;margin-top:6px">
+          <input type="checkbox" name="{{ f.remove_field }}"> {{ f.remove_label }}
+        </label>
+        {% else %}
+        <p style="font-size:12px;color:var(--muted);margin:6px 0 0">تصویر فعلی حفظ می‌شود مگر فایل جدیدی انتخاب کنید.</p>
+        {% endif %}
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:6px;font-weight:normal">
+        <input type="checkbox" name="show_button" {% if item.show_button %}checked{% endif %}>
+        نمایش دکمه
+      </label>
+    </div>
+    <div class="form-group">
+      <label for="id_button_label">متن دکمه</label>
+      <input type="text" name="button_label" id="id_button_label" class="form-input" maxlength="60" value="{{ item.button_label|default:'' }}">
+    </div>
+
+    <details style="margin-top:6px" {% if item.destination_type and item.destination_type != "none" %}open{% endif %}>
+      <summary style="cursor:pointer;font-size:13px;color:var(--muted)">لینک مقصد (وقتی روی تصویر/دکمه کلیک شود)</summary>
+      <div style="margin-top:10px">
+        <div class="form-group">
+          <label>لینک به</label>
+          <select name="destination_type" class="form-select" x-model="type">
+            <option value="none">بدون لینک</option>
+            <option value="category">دسته‌بندی</option>
+            <option value="brand">برند</option>
+            <option value="collection">کالکشن</option>
+            <option value="product">محصول</option>
+            <option value="search">صفحه جستجو</option>
+            <option value="cart">سبد خرید</option>
+            <option value="external">آدرس خارجی</option>
+          </select>
+        </div>
+        <div class="form-group" x-show="type === 'category'" x-cloak>
+          <label>انتخاب دسته‌بندی</label>
+          <select name="destination_category" class="form-select">
+            <option value="">— انتخاب کنید —</option>
+            {% for category in categories %}
+            <option value="{{ category.pk }}" {% if item.destination_type == "category" and item.destination_category_id == category.pk %}selected{% endif %}>{{ category.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group" x-show="type === 'brand'" x-cloak>
+          <label>انتخاب برند</label>
+          <select name="destination_brand" class="form-select">
+            <option value="">— انتخاب کنید —</option>
+            {% for brand in brands %}
+            <option value="{{ brand.pk }}" {% if item.destination_type == "brand" and item.destination_brand_id == brand.pk %}selected{% endif %}>{{ brand.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group" x-show="type === 'collection'" x-cloak>
+          <label>انتخاب کالکشن</label>
+          <select name="destination_collection" class="form-select">
+            <option value="">— انتخاب کنید —</option>
+            {% for collection in collections %}
+            <option value="{{ collection.pk }}" {% if item.destination_type == "collection" and item.destination_collection_id == collection.pk %}selected{% endif %}>{{ collection.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group" x-show="type === 'product'" x-cloak>
+          <label>جست‌وجوی محصول</label>
+          <input type="text" class="form-input" autocomplete="off" placeholder="نام یا کد کالا را تایپ کنید..."
+                 hx-get="{% url 'dashboard:storefront-builder-section-product-search' section.pk %}"
+                 hx-vals='{"mode": "destination"}'
+                 hx-trigger="keyup changed delay:300ms" hx-target="next .dest-product-results" hx-swap="innerHTML" name="q_dest_product">
+          <div class="dest-product-results"></div>
+          <input type="hidden" name="destination_product" :value="productId">
+          <p x-show="productId" style="font-size:12.5px;margin:6px 0 0">محصولِ انتخاب‌شده: <strong x-text="productName"></strong></p>
+        </div>
+        <div class="form-group" x-show="type === 'external'" x-cloak>
+          <label>آدرس خارجی</label>
+          <input type="url" name="destination_external_url" class="form-input" dir="ltr"
+                 value="{% if item.destination_type == 'external' %}{{ item.destination_external_url|default:'' }}{% endif %}" placeholder="https://...">
+        </div>
+        <div class="form-group" x-show="type !== 'none'" x-cloak>
+          <label style="display:flex;align-items:center;gap:6px;font-weight:normal">
+            <input type="checkbox" name="open_in_new_tab" {% if item.open_in_new_tab %}checked{% endif %}>
+            باز شدن در تب جدید
+          </label>
+        </div>
+      </div>
+    </details>
+
+    <div class="form-group" style="margin-top:10px">
+      <label style="display:flex;align-items:center;gap:6px;font-weight:normal">
+        <input type="checkbox" name="is_active" {% if item.is_active|default:True %}checked{% endif %}>
+        فعال (نمایش در فروشگاه)
+      </label>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button type="submit" class="btn btn-primary">ذخیره</button>
+      <a href="{% url 'dashboard:storefront-builder-section-media-list' pk=section.pk kind=kind %}" class="btn"
+         {% if inline_media %}hx-get="{% url 'dashboard:storefront-builder-section-media-list' pk=section.pk kind=kind %}"
+         hx-target="closest [data-r4-media-manager]" hx-swap="innerHTML"{% endif %}>انصراف</a>
+    </div>
+  </form>
+</div>
+<script>
+if (typeof window.destinationPicker !== 'function') {
+  window.destinationPicker = function (initialType, initialId, initialName) {
+    return {
+      type: initialType || 'none',
+      productId: initialType === 'product' ? initialId : null,
+      productName: initialType === 'product' ? initialName : '',
+    };
+  };
+}
+</script>

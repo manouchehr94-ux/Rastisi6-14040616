@@ -656,12 +656,24 @@ def storefront_r4_section_inspector(request, pk):
     # existing, unmodified legacy management screens.
     media_kind = media_views.media_kind_for_section_key(section.section_key)
     media_manage_url = None
+    media_config = None
+    media_items = None
     if media_kind is not None:
         media_manage_url = reverse(
             "dashboard:storefront-builder-section-media-list",
             kwargs={"pk": section.pk, "kind": media_kind},
         )
         media_label_plural = media_views.media_label_for_kind(media_kind)
+        # Phase 5 Task 4 (remediation R1a) — R4-native media editing. Instead of
+        # only linking out to the legacy screen, the Inspector embeds the
+        # canonical media manager inline (the same media_views models/CRUD/
+        # authority; never a second media system). The add/edit form and every
+        # CRUD reswap happen through the existing media endpoints via htmx,
+        # staying inside R4.
+        media_config = media_views.media_config_for_kind(media_kind)
+        media_items = list(
+            media_config["model"].objects.filter(section=section).order_by("display_order", "id")
+        )
     else:
         media_label_plural = None
 
@@ -683,6 +695,10 @@ def storefront_r4_section_inspector(request, pk):
                 "definition": definition,
                 "media_manage_url": media_manage_url,
                 "media_label_plural": media_label_plural,
+                # Names the shared media manager body partial expects directly.
+                "kind": media_kind,
+                "config": media_config,
+                "items": media_items,
             },
         )
 
@@ -820,6 +836,9 @@ def storefront_r4_section_inspector(request, pk):
             "resource_source_summary": resource_source_summary,
             "media_manage_url": media_manage_url,
             "media_label_plural": media_label_plural,
+            "media_kind": media_kind,
+            "media_config": media_config,
+            "media_items": media_items,
             "menu_choices": menu_choices,
             "background_context": background_context,
         },

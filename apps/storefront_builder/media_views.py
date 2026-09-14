@@ -129,6 +129,19 @@ def media_label_for_kind(kind: str) -> str:
     return _MEDIA_KINDS[kind]["label_plural"]
 
 
+def media_config_for_kind(kind: str) -> dict:
+    """Phase 5 Task 4 (remediation R1a) — the same public-accessor reasoning as
+    the two accessors above: the R4 Inspector needs this kind's config (model +
+    labels + thumb field) to render the canonical media list body inline,
+    without importing the private ``_MEDIA_KINDS`` mapping. The caller has
+    already resolved ``kind`` from the section's own key via
+    ``media_kind_for_section_key`` (so section↔kind ownership is guaranteed);
+    unlike ``_media_config`` this needs no section instance. The media list/
+    CRUD endpoints still re-scope every request through ``_get_scoped_section``
+    — this accessor never bypasses that authority."""
+    return _MEDIA_KINDS[kind]
+
+
 def _media_config(kind: str, section) -> dict:
     config = _MEDIA_KINDS.get(kind)
     if config is None:
@@ -142,10 +155,17 @@ def _media_list_body(request, section, kind, config):
     """پارشیالِ فهرستِ آیتم‌ها — یک بار نوشته شده، هم توسطِ صفحه‌ی کامل و هم
     توسطِ هر endpointِ htmx (toggle/delete/reorder/move) برایِ reswap
     استفاده می‌شود؛ دقیقاً همان الگویِ ``storefront_section_list_partial``
-    برایِ خودِ section."""
+    برایِ خودِ section.
+
+    Phase 5 Task 4 (remediation R1a): every reswap endpoint that calls this is
+    an HX request coming from INSIDE the R4 inline manager, so ``inline_media``
+    is set from HX-Request — this only toggles whether the list body's per-row
+    "edit" link loads inline (htmx) or navigates the full page; the rows/CRUD
+    endpoints themselves are identical either way."""
     items = config["model"].objects.filter(section=section).order_by("display_order", "id")
     return render(request, "dashboard/storefront_builder/partials/section_media_list_body.html", {
         "section": section, "items": items, "kind": kind, "config": config,
+        "inline_media": request.headers.get("HX-Request") == "true",
     })
 
 
@@ -155,7 +175,18 @@ def storefront_section_media_list(request, pk, kind):
     section = _get_scoped_section(request, pk)
     config = _media_config(kind, section)
     items = config["model"].objects.filter(section=section).order_by("display_order", "id")
-    return render(request, "dashboard/storefront_builder/section_media_list.html", {
+    # Phase 5 Task 4 (remediation R1a) — R4-native media editing. Under an
+    # HX-Request this returns the body-only media manager (add control + list),
+    # so the R4 Inspector embeds/refreshes it INLINE (the same HX-Request ->
+    # partial pattern the header/footer editors use); a normal GET still
+    # returns the unchanged full legacy page. Same canonical view, no second
+    # media CRUD path.
+    template_name = (
+        "dashboard/storefront_builder/partials/section_media_manager_body.html"
+        if request.headers.get("HX-Request") == "true"
+        else "dashboard/storefront_builder/section_media_list.html"
+    )
+    return render(request, template_name, {
         "section": section, "items": items, "kind": kind, "config": config,
     })
 
@@ -274,9 +305,21 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
     categories = Category.objects.filter(store=store, is_active=True).order_by("order", "name")
     brands = Brand.objects.filter(store=store, is_active=True).order_by("name")
     collections = MerchantCollection.objects.filter(store=store, is_active=True).order_by("name")
-    return render(request, "dashboard/storefront_builder/partials/section_media_form.html", {
+    # Phase 5 Task 4 (remediation R1a) — body-only form under HX-Request so the
+    # add/edit form loads INLINE in the R4 Inspector; unchanged full page
+    # otherwise. Same canonical view/persistence, no second form.
+    is_hx = request.headers.get("HX-Request") == "true"
+    template_name = (
+        "dashboard/storefront_builder/partials/section_media_form_body.html"
+        if is_hx
+        else "dashboard/storefront_builder/partials/section_media_form.html"
+    )
+    return render(request, template_name, {
         "section": section, "item": item, "kind": kind, "config": config,
         "categories": categories, "brands": brands, "collections": collections,
+        # Only the R4-embedded (HX) form wires htmx submit/cancel back into the
+        # inline manager; the full page submits normally.
+        "inline_media": is_hx,
     })
 
 
