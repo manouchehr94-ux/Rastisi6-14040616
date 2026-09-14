@@ -38,10 +38,15 @@
 theme every storefront page without per-page forks.{% endcomment %}
 <link rel="stylesheet" href="{% static 'css/theme_palette.css' %}">
 <script src="{% static 'js/htmx.min.js' %}" defer></script>
+{% comment %}Phase 5 Task 5 — shared storefront overlay-mechanics primitive
+(sfbOverlay). Loaded (defer) BEFORE Alpine so its alpine:init listener is
+registered before Alpine initializes. Reused by the mobile nav drawer (MDR) and
+the product quick view (MODAL).{% endcomment %}
+<script src="{% static 'js/storefront_overlay.js' %}" defer></script>
 <script src="{% static 'js/alpine.min.js' %}" defer></script>
 {% block structured_data %}{% endblock %}
 </head>
-<body x-data="{ loginOpen: false, mobileNavOpen: true, catMenuOpen: false }" @open-login.window="loginOpen = true">
+<body x-data="{ loginOpen: false, mobileNavOpen: true, catMenuOpen: false, mobileDrawerOpen: false }" @open-login.window="loginOpen = true">
 {% csrf_token %}
 
 {% block header %}
@@ -55,7 +60,14 @@ theme every storefront page without per-page forks.{% endcomment %}
 </div></div>
 
 <header class="header"><div class="wrap">
-  <button class="h-btn burger" @click="mobileNavOpen = !mobileNavOpen" aria-label="منو">
+  {% comment %}Phase 5 Task 5 (MDR) — the burger now opens the accessible
+  off-canvas mobile nav drawer (below) via a window event, exposing
+  aria-expanded/aria-controls. mobileNavOpen is kept only as the legacy
+  desktop <nav> collapse state (unchanged).{% endcomment %}
+  <button class="h-btn burger" type="button"
+          @click="mobileDrawerOpen = true"
+          :aria-expanded="mobileDrawerOpen ? 'true' : 'false'"
+          aria-controls="mobile-nav-drawer" aria-label="باز کردن منوی موبایل">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
   </button>
   <a class="logo" href="/">
@@ -165,6 +177,11 @@ theme every storefront page without per-page forks.{% endcomment %}
     </div>
   </div>
 </nav>
+
+{% comment %}Phase 5 Task 5 (MDR) — accessible off-canvas mobile navigation
+drawer, extracted into ONE shared partial so the canonical storefront shell
+(page_shell_header.html) reuses the exact same implementation.{% endcomment %}
+{% include "partials/mobile_nav_drawer.html" %}
 {% endblock %}
 
 <main>

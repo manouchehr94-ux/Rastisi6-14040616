@@ -1704,3 +1704,108 @@ class BrandCarouselViewAllAnchorTests(TestCase):
         ctx = self._context(display_mode="grid", show_view_all=True, destination=self._SEARCH_DEST)
         html = self._html(ctx, display_mode="grid")
         self.assertIn(f'href="{reverse("catalog:product-list")}"', html)
+
+
+
+class SliderTransitionRenderTests(TestCase):
+    """Phase 5 Task 5 — STRANS: the slider ``transition`` reaches the render
+    context via the SAME slider_settings path as every other slider field, and
+    an existing section with no explicit transition renders as the historical
+    hard cut (default 'cut')."""
+
+    def setUp(self):
+        cache.clear()
+
+    def _items_for(self, draft, store, section_key):
+        items = build_render_items(draft, store)
+        return next(i for i in items if i["section"].section_key == section_key)
+
+    def test_transition_default_is_cut_when_unset(self):
+        store = _akhlaghi()
+        draft = svc.get_or_create_draft(store)
+        draft.sections.filter(section_key="hero_banner").delete()
+        StorefrontSection.objects.create(version=draft, section_key="hero_banner", order=900, settings={})
+        item = self._items_for(draft, store, "hero_banner")
+        self.assertEqual(item["context"]["slider_settings"]["transition"], "cut")
+
+    def test_explicit_transition_reaches_render_context(self):
+        store = _akhlaghi()
+        draft = svc.get_or_create_draft(store)
+        draft.sections.filter(section_key="hero_banner").delete()
+        StorefrontSection.objects.create(
+            version=draft, section_key="hero_banner", order=900,
+            settings={"transition": "fade"},
+        )
+        item = self._items_for(draft, store, "hero_banner")
+        self.assertEqual(item["context"]["slider_settings"]["transition"], "fade")
+
+    def test_image_slider_transition_reaches_the_same_runtime(self):
+        # STRANS remediation (CASE A): image_slider is NOT a dead control — it
+        # reuses the exact same slider runtime as hero_banner
+        # (``_image_slider_context`` delegates to ``_hero_banner_context``),
+        # so ``transition`` flows through ``slider_settings`` identically.
+        store = _akhlaghi()
+        draft = svc.get_or_create_draft(store)
+        draft.sections.filter(section_key="image_slider").delete()
+        StorefrontSection.objects.create(
+            version=draft, section_key="image_slider", order=901,
+            settings={"transition": "slide"},
+        )
+        item = self._items_for(draft, store, "image_slider")
+        self.assertEqual(item["context"]["slider_settings"]["transition"], "slide")
+
+    def test_image_slider_transition_default_is_cut_when_unset(self):
+        store = _akhlaghi()
+        draft = svc.get_or_create_draft(store)
+        draft.sections.filter(section_key="image_slider").delete()
+        StorefrontSection.objects.create(version=draft, section_key="image_slider", order=901, settings={})
+        item = self._items_for(draft, store, "image_slider")
+        self.assertEqual(item["context"]["slider_settings"]["transition"], "cut")
+
+
+
+class SliderTransitionRuntimeContractTests(TestCase):
+    """Phase 5 Task 5 (STRANS) — the hero slider runtime consumes the canonical
+    ``slider_settings.transition`` (no second slider / no animation library),
+    and the CSS provides a reduced-motion-safe preset. Source-contract style,
+    matching the repo's existing template/JS source assertions."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        cls.hero_tmpl = Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/templates/storefront_builder/partials/hero_slider_body.html",
+        ).read_text(encoding="utf-8")
+        cls.home_css = Path(
+            dj_settings.BASE_DIR, "apps/catalog/static/css/home.css",
+        ).read_text(encoding="utf-8")
+
+    def test_hero_template_wires_transition_from_slider_settings(self):
+        self.assertIn('data-hero-transition="{{ slider_settings.transition', self.hero_tmpl)
+        # cut keeps the historical x-show hard cut.
+        self.assertIn("transition === 'cut'", self.hero_tmpl)
+
+    def test_css_has_fade_slide_presets_and_reduced_motion(self):
+        self.assertIn('[data-hero-transition="fade"]', self.home_css)
+        self.assertIn('[data-hero-transition="slide"]', self.home_css)
+        self.assertIn("prefers-reduced-motion: reduce", self.home_css)
+
+    def test_no_second_slider_or_animation_library_introduced(self):
+        # No external animation library import sneaked into the hero template.
+        for banned in ("swiper", "slick", "gsap", "aos.js", "cdn"):
+            self.assertNotIn(banned, self.hero_tmpl.lower())
+
+    def test_hero_banner_and_image_slider_share_the_same_transition_aware_body(self):
+        # STRANS remediation (CASE A): image_slider's transition control is
+        # genuinely live because both section templates include the SAME
+        # transition-aware body partial — one runtime, no second slider.
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        base = Path(dj_settings.BASE_DIR, "apps/storefront_builder/templates/storefront_builder/sections")
+        hero = (base / "hero_banner.html").read_text(encoding="utf-8")
+        image_slider = (base / "image_slider.html").read_text(encoding="utf-8")
+        self.assertIn("storefront_builder/partials/hero_slider_body.html", hero)
+        self.assertIn("storefront_builder/partials/hero_slider_body.html", image_slider)

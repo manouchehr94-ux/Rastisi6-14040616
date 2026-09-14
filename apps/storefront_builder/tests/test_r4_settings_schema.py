@@ -391,6 +391,8 @@ class HeroBannerSchemaRegistrationTests(SimpleTestCase):
                 "show_dots",
                 "loop",
                 "text_position",
+                # Phase 5 Task 5 (STRANS) — between-slide transition style.
+                "transition",
                 "appearance_overrides",
                 # Phase 5 Task 4B — the per-section background picker field.
                 "background",
@@ -1141,3 +1143,74 @@ class BackgroundCapabilityProjectionTests(SimpleTestCase):
             definition = section_registry.get_definition(key)
             self.assertIn(key, section_registry.BACKGROUND_AWARE_SECTION_KEYS, key)
             self.assertIsNone(definition.settings_schema, key)
+
+
+
+# ------------------------------------------------------------------------
+# Phase 5 Task 5 — STRANS: hero/image slider between-slide transition control.
+# A single CLOSED enum field ``transition`` (cut/fade/slide) on the EXISTING
+# shared slider validator + hero/image slider schema. Backward-compatible
+# default = "cut" (the historical hard-cut behavior). No second slider, no
+# free-text animation field.
+# ------------------------------------------------------------------------
+
+
+class SliderTransitionValidatorTests(SimpleTestCase):
+    def test_transition_default_is_cut(self):
+        cleaned = section_registry._validate_slider_settings({})
+        self.assertEqual(cleaned["transition"], "cut")
+        self.assertEqual(section_registry.default_slider_settings()["transition"], "cut")
+
+    def test_transition_accepts_cut_fade_slide(self):
+        for value in ("cut", "fade", "slide"):
+            cleaned = section_registry._validate_slider_settings({"transition": value})
+            self.assertEqual(cleaned["transition"], value)
+
+    def test_invalid_transition_normalizes_to_cut(self):
+        # Same closed-enum discipline as hero_style/text_position: an
+        # unknown/legacy value never round-trips into storage.
+        for bad in ("zoom", "", None, 5, "FADE ", "arbitrary-css"):
+            cleaned = section_registry._validate_slider_settings({"transition": bad})
+            self.assertEqual(cleaned["transition"], "cut", bad)
+
+    def test_transition_choices_constant_is_closed_enum(self):
+        self.assertEqual(section_registry.SLIDER_TRANSITION_CHOICES, ("cut", "fade", "slide"))
+
+    def test_other_slider_settings_unchanged_by_transition(self):
+        cleaned = section_registry._validate_slider_settings(
+            {"autoplay": False, "interval_ms": 3000, "transition": "fade"}
+        )
+        self.assertIs(cleaned["autoplay"], False)
+        self.assertEqual(cleaned["interval_ms"], 3000)
+        self.assertEqual(cleaned["transition"], "fade")
+        # All the historical keys still present.
+        for key in ("autoplay", "interval_ms", "show_arrows", "show_dots", "loop", "text_position", "hero_style"):
+            self.assertIn(key, cleaned)
+
+
+class SliderTransitionSchemaFieldTests(SimpleTestCase):
+    def test_hero_banner_schema_has_transition_choice_field(self):
+        hero = section_registry.get_definition("hero_banner")
+        field = hero.settings_schema.get_field("transition")
+        self.assertIsNotNone(field)
+        self.assertEqual(field.field_type, "choice")
+        self.assertEqual(field.default, "cut")
+        self.assertEqual(field.group, "advanced")
+        self.assertEqual(
+            {value for value, _label in field.choices},
+            {"cut", "fade", "slide"},
+        )
+
+    def test_image_slider_schema_has_transition_choice_field(self):
+        image_slider = section_registry.get_definition("image_slider")
+        field = image_slider.settings_schema.get_field("transition")
+        self.assertIsNotNone(field)
+        self.assertEqual(field.field_type, "choice")
+        self.assertEqual(field.default, "cut")
+
+    def test_transition_clean_through_schema_patch(self):
+        hero = section_registry.get_definition("hero_banner")
+        cleaned = clean_schema_patch(hero.settings_schema, {"transition": "slide"}, {})
+        self.assertEqual(cleaned["transition"], "slide")
+        with self.assertRaises(SettingsSchemaError):
+            clean_schema_patch(hero.settings_schema, {"transition": "zoom"}, {})

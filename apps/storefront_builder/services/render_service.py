@@ -821,7 +821,20 @@ def _build_items_from_sections(
 
     items = []
     context_cache: dict = {}
-    for section in sections:
+    # PDTX (Phase 5 Task 5) — the canonical editable PDP trust owner is a
+    # ``trust_features`` section placed on the page. When one exists as a
+    # sibling here, ``product_main``'s hard-coded ``.guarantee`` strip must
+    # NOT also render (never two competing trust modules on one PDP). The
+    # sibling list is already fully in scope, so this is a free O(n) check —
+    # no DB query — and it is identical for the published path and the
+    # unsaved-default path, so backward compatibility (stores without the new
+    # section keep the hard-coded strip) is preserved automatically.
+    _sections_list = list(sections)
+    has_sibling_trust_features = any(
+        s.section_key == "trust_features" and getattr(s, "is_active", True)
+        for s in _sections_list
+    )
+    for section in _sections_list:
         try:
             definition = get_definition(section.section_key)
         except UnknownSectionTypeError:
@@ -896,6 +909,10 @@ def _build_items_from_sections(
         context = dict(context_cache[cache_key])
         context["section"] = render_section
         context["settings"] = effective_settings
+        # PDTX — only meaningful for product_main (its template guards the
+        # hard-coded guarantee strip on this flag); harmless elsewhere.
+        if section.section_key == "product_main":
+            context["suppress_guarantee_strip"] = has_sibling_trust_features
         if store_appearance is not None:
             context["store_appearance"] = store_appearance
         # R4 Task 7 — computed AFTER copying the (possibly shared/cached)

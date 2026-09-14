@@ -62,12 +62,36 @@
 .guarantee .g{border:1px solid var(--line);border-radius:13px;padding:12px;text-align:center;font-size:11.5px;font-weight:600;color:#4b4560}
 .guarantee .g .ic{font-size:20px;display:block;margin-bottom:5px}
 
-/* tabs */
-.pdp-tabs{margin:34px 0}
-.tabline{display:flex;gap:6px;border-bottom:2px solid var(--line);margin-bottom:22px;overflow-x:auto}
-.tabline .t{padding:12px 20px;font-size:14px;font-weight:700;color:var(--muted);border-bottom:2.5px solid transparent;margin-bottom:-2px;white-space:nowrap}
-.tabline .t.active{color:var(--violet);border-color:var(--violet)}
-.tabpane{display:none}.tabpane.active{display:block;animation:fade .3s}
+/* Phase 5 Task 5 (PDT) — tabs (desktop) / real accordion (mobile) from ONE
+   accordion-native DOM. Markup is header→panel, header→panel, header→panel as
+   direct children of .pdp-tabs. On DESKTOP the container is a wrapping flexbox
+   and CSS ``order`` lifts the three headers into a single top tablist row
+   (order:0) with the panels full-width below (order:2) — the classic
+   accordion-markup → CSS-tabs pattern. */
+.pdp-tabs{margin:34px 0;display:flex;flex-wrap:wrap;gap:6px 6px}
+.pdp-acc-header{
+  order:0;
+  padding:12px 20px;font-size:14px;font-weight:700;color:var(--muted);
+  border:0;border-bottom:2.5px solid transparent;white-space:nowrap;
+  background:transparent;cursor:pointer;
+}
+.pdp-acc-header.active{color:var(--violet);border-color:var(--violet)}
+/* The shared tablist underline: a full-width row rule under the header row. */
+.pdp-tabs::after{content:"";order:1;flex:0 0 100%;height:0;border-bottom:2px solid var(--line);margin-bottom:20px}
+.pdp-tab-panel{order:2;flex:0 0 100%}
+/* Phase 5 Task 5 (PDT) — visible keyboard focus on the accessible tabs/panels. */
+.pdp-acc-header:focus-visible,.pdp-tab-panel:focus-visible{outline:2px solid var(--violet);outline-offset:2px}
+/* Progressive enhancement (no-JS safety): PDP panels are VISIBLE BY DEFAULT so
+   every description/spec/review area is reachable with JavaScript disabled.
+   The panels carry `class="tabpane pdp-tab-panel"` and have NO static `active`
+   class, so there must be NO blanket `.tabpane{display:none}` here — that
+   equal-specificity rule previously won and hid ALL content with JS off.
+   Once Alpine initializes, its `x-show` sets an inline `display:none` on the
+   inactive panels (only the active one stays shown); with JS off no inline
+   style is ever applied, so all three panels remain visible. The active tab's
+   fade is applied via the JS-driven `.active` class (harmless when absent). */
+.pdp-tab-panel{display:block}
+.tabpane.active{animation:fade .3s}
 @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .desc-text{font-size:13.5px;color:#4b4560;line-height:2.2;max-width:820px}
 .desc-text ul{margin:14px 0;padding-right:20px}
@@ -153,4 +177,31 @@
 }
 @media(max-width:480px){
   .pdp-video-grid--multi{grid-template-columns:1fr}
+}
+
+/* Phase 5 Task 5 (PDT) — REAL mobile accordion. At the storefront mobile
+   breakpoint the SAME tabs/panels (one content source, one DOM) present as a
+   genuine accordion: because the markup is header→panel, header→panel,
+   header→panel, resetting the desktop ``order`` restores natural flow so each
+   full-width header sits DIRECTLY above its OWN panel (not all headers grouped
+   then one panel). Single-open, driven by the same Alpine active key as the
+   desktop tablist. RTL-safe (logical properties). */
+@media(max-width:680px){
+  .pdp-tabs{flex-direction:column;gap:8px;margin:24px 0}
+  /* Drop the desktop tablist underline row entirely. */
+  .pdp-tabs::after{display:none}
+  .pdp-acc-header{
+    order:0;width:100%;text-align:start;
+    border:1px solid var(--line);border-radius:8px;
+    padding:14px 16px;display:flex;align-items:center;justify-content:space-between;
+    margin:0;
+  }
+  .pdp-acc-header.active{background:var(--violet-softer);border-color:var(--violet)}
+  .pdp-acc-header::after{content:"▾";margin-inline-start:auto;transition:transform .2s ease}
+  .pdp-acc-header.active::after{transform:rotate(180deg)}
+  /* Each panel keeps natural document order — directly after its own header. */
+  .pdp-tab-panel{order:0;flex:0 0 auto;padding:4px 4px 8px}
+  @media (prefers-reduced-motion: reduce){
+    .pdp-acc-header::after{transition:none}
+  }
 }

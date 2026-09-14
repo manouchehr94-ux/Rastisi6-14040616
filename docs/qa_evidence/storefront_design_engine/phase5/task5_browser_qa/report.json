@@ -1,0 +1,712 @@
+{
+  "host": "rastisi-fashion-test.rastisi.localhost",
+  "base": "http://rastisi-fashion-test.rastisi.localhost:8843",
+  "started_at": "2026-09-14T10:58:04.651Z",
+  "checks": [
+    {
+      "name": "home:status:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "home:rtl:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "home:no-overflow:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl",
+        "scrollWidth": 1440,
+        "clientWidth": 1440
+      }
+    },
+    {
+      "name": "strans:transition-reaches-runtime:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "value": "cut"
+      }
+    },
+    {
+      "name": "modal:triggers-present:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "count": 52
+      }
+    },
+    {
+      "name": "modal:unique-dialog-ids:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "dialogCount": 52,
+        "uniqueDialogIds": 52,
+        "dialogIdCount": 52,
+        "uniqueTitleIds": 52,
+        "titleIdCount": 52
+      }
+    },
+    {
+      "name": "modal:unique-title-ids:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "unique": 52,
+        "total": 52
+      }
+    },
+    {
+      "name": "modal:opens:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "opened": true
+      }
+    },
+    {
+      "name": "modal:trigger-aria-controls-correct:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "wired": true
+      }
+    },
+    {
+      "name": "modal:pdp-link-present:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "pdpLink": 1
+      }
+    },
+    {
+      "name": "modal:cart-affordance-consistent:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "oos": false,
+        "hasAdd": false
+      }
+    },
+    {
+      "name": "modal:focus-enters-overlay:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "focusInside": true
+      }
+    },
+    {
+      "name": "modal:focus-trap-holds:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "stillInside": true
+      }
+    },
+    {
+      "name": "modal:scroll-lock:desktop-1440",
+      "status": "PASS",
+      "detail": {}
+    },
+    {
+      "name": "modal:backdrop-closes:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "stillVisible": false
+      }
+    },
+    {
+      "name": "modal:explicit-close:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "stillVisible": false
+      }
+    },
+    {
+      "name": "modal:focus-returns-to-trigger:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "focusReturned": true
+      }
+    },
+    {
+      "name": "modal:escape-closes:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "stillVisible": false
+      }
+    },
+    {
+      "name": "pdp:status:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "pdp:rtl:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "pdp:no-overflow:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl",
+        "scrollWidth": 1440,
+        "clientWidth": 1440
+      }
+    },
+    {
+      "name": "pdp:tabs-present:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "tabCount": 3,
+        "panelCount": 3
+      }
+    },
+    {
+      "name": "pdp:one-active-panel:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "visibleCount": 1,
+        "controlsOK": true
+      }
+    },
+    {
+      "name": "pdp:tab-panel-relationship:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "visibleCount": 1,
+        "controlsOK": true
+      }
+    },
+    {
+      "name": "pdp:keyboard-arrow-nav:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "afterArrow": "pdp-tab-spec-99",
+        "afterEnd": "pdp-tab-review-99",
+        "afterHome": "pdp-tab-desc-99"
+      }
+    },
+    {
+      "name": "pdtx:published-trust-visible:desktop-1440",
+      "status": "PASS",
+      "detail": {}
+    },
+    {
+      "name": "pdtx:hardcoded-strip-suppressed:desktop-1440",
+      "status": "PASS",
+      "detail": {}
+    },
+    {
+      "name": "home:status:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "home:rtl:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "home:no-overflow:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl",
+        "scrollWidth": 768,
+        "clientWidth": 768
+      }
+    },
+    {
+      "name": "strans:transition-reaches-runtime:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "value": "cut"
+      }
+    },
+    {
+      "name": "modal:triggers-present:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "count": 52
+      }
+    },
+    {
+      "name": "modal:unique-dialog-ids:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "dialogCount": 52,
+        "uniqueDialogIds": 52,
+        "dialogIdCount": 52,
+        "uniqueTitleIds": 52,
+        "titleIdCount": 52
+      }
+    },
+    {
+      "name": "modal:unique-title-ids:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "unique": 52,
+        "total": 52
+      }
+    },
+    {
+      "name": "modal:opens:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "opened": true
+      }
+    },
+    {
+      "name": "modal:trigger-aria-controls-correct:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "wired": true
+      }
+    },
+    {
+      "name": "modal:pdp-link-present:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "pdpLink": 1
+      }
+    },
+    {
+      "name": "modal:cart-affordance-consistent:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "oos": false,
+        "hasAdd": false
+      }
+    },
+    {
+      "name": "modal:focus-enters-overlay:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "focusInside": true
+      }
+    },
+    {
+      "name": "modal:focus-trap-holds:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "stillInside": true
+      }
+    },
+    {
+      "name": "modal:scroll-lock:tablet-768",
+      "status": "PASS",
+      "detail": {}
+    },
+    {
+      "name": "modal:backdrop-closes:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "stillVisible": false
+      }
+    },
+    {
+      "name": "modal:explicit-close:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "stillVisible": false
+      }
+    },
+    {
+      "name": "modal:focus-returns-to-trigger:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "focusReturned": true
+      }
+    },
+    {
+      "name": "modal:escape-closes:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "stillVisible": false
+      }
+    },
+    {
+      "name": "pdp:status:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "pdp:rtl:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "pdp:no-overflow:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl",
+        "scrollWidth": 768,
+        "clientWidth": 768
+      }
+    },
+    {
+      "name": "pdp:tabs-present:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "tabCount": 3,
+        "panelCount": 3
+      }
+    },
+    {
+      "name": "pdp:one-active-panel:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "visibleCount": 1,
+        "controlsOK": true
+      }
+    },
+    {
+      "name": "pdp:tab-panel-relationship:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "visibleCount": 1,
+        "controlsOK": true
+      }
+    },
+    {
+      "name": "pdp:keyboard-arrow-nav:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "afterArrow": "pdp-tab-spec-99",
+        "afterEnd": "pdp-tab-review-99",
+        "afterHome": "pdp-tab-desc-99"
+      }
+    },
+    {
+      "name": "pdtx:published-trust-visible:tablet-768",
+      "status": "PASS",
+      "detail": {}
+    },
+    {
+      "name": "pdtx:hardcoded-strip-suppressed:tablet-768",
+      "status": "PASS",
+      "detail": {}
+    },
+    {
+      "name": "home:status:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "home:rtl:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "home:no-overflow:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl",
+        "scrollWidth": 390,
+        "clientWidth": 390
+      }
+    },
+    {
+      "name": "strans:transition-reaches-runtime:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "value": "cut"
+      }
+    },
+    {
+      "name": "modal:triggers-present:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "count": 52
+      }
+    },
+    {
+      "name": "modal:unique-dialog-ids:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "dialogCount": 52,
+        "uniqueDialogIds": 52,
+        "dialogIdCount": 52,
+        "uniqueTitleIds": 52,
+        "titleIdCount": 52
+      }
+    },
+    {
+      "name": "modal:unique-title-ids:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "unique": 52,
+        "total": 52
+      }
+    },
+    {
+      "name": "modal:opens:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "opened": true
+      }
+    },
+    {
+      "name": "modal:trigger-aria-controls-correct:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "wired": true
+      }
+    },
+    {
+      "name": "modal:pdp-link-present:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "pdpLink": 1
+      }
+    },
+    {
+      "name": "modal:cart-affordance-consistent:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "oos": false,
+        "hasAdd": false
+      }
+    },
+    {
+      "name": "modal:focus-enters-overlay:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "focusInside": true
+      }
+    },
+    {
+      "name": "modal:focus-trap-holds:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "stillInside": true
+      }
+    },
+    {
+      "name": "modal:scroll-lock:mobile-390",
+      "status": "PASS",
+      "detail": {}
+    },
+    {
+      "name": "modal:backdrop-closes:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "stillVisible": false
+      }
+    },
+    {
+      "name": "modal:explicit-close:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "stillVisible": false
+      }
+    },
+    {
+      "name": "modal:focus-returns-to-trigger:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "focusReturned": true
+      }
+    },
+    {
+      "name": "modal:escape-closes:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "stillVisible": false
+      }
+    },
+    {
+      "name": "mdr:burger-present:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "count": 1
+      }
+    },
+    {
+      "name": "mdr:opens:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "opened": true
+      }
+    },
+    {
+      "name": "mdr:canonical-nav-links:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "navLinks": 13
+      }
+    },
+    {
+      "name": "mdr:focus-enters-overlay:mobile-390",
+      "status": "PASS",
+      "detail": {}
+    },
+    {
+      "name": "mdr:focus-trap-holds:mobile-390",
+      "status": "PASS",
+      "detail": {}
+    },
+    {
+      "name": "mdr:scroll-lock:mobile-390",
+      "status": "PASS",
+      "detail": {}
+    },
+    {
+      "name": "mdr:explicit-close:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "stillVisible": false
+      }
+    },
+    {
+      "name": "mdr:focus-returns-to-burger:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "returned": true
+      }
+    },
+    {
+      "name": "mdr:backdrop-closes:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "stillVisible": false
+      }
+    },
+    {
+      "name": "mdr:escape-closes:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "stillVisible": false
+      }
+    },
+    {
+      "name": "pdp:status:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "pdp:rtl:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "pdp:no-overflow:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl",
+        "scrollWidth": 390,
+        "clientWidth": 390
+      }
+    },
+    {
+      "name": "pdp:tabs-present:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "tabCount": 3,
+        "panelCount": 3
+      }
+    },
+    {
+      "name": "pdp:one-active-panel:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "visibleCount": 1,
+        "controlsOK": true
+      }
+    },
+    {
+      "name": "pdp:tab-panel-relationship:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "visibleCount": 1,
+        "controlsOK": true
+      }
+    },
+    {
+      "name": "pdp:real-accordion-source-order:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "domRoles": [
+          "tab",
+          "tabpanel",
+          "tab",
+          "tabpanel",
+          "tab",
+          "tabpanel"
+        ]
+      }
+    },
+    {
+      "name": "pdp:real-accordion-open-panel-under-header:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "adjacent": true
+      }
+    },
+    {
+      "name": "pdtx:published-trust-visible:mobile-390",
+      "status": "PASS",
+      "detail": {}
+    },
+    {
+      "name": "pdtx:hardcoded-strip-suppressed:mobile-390",
+      "status": "PASS",
+      "detail": {}
+    },
+    {
+      "name": "pdp:nojs:status",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "pdp:nojs:all-panels-visible",
+      "status": "PASS",
+      "detail": {
+        "panelCount": 3,
+        "visibleCount": 3,
+        "allVisible": true,
+        "descReachable": true,
+        "specReachable": true,
+        "reviewReachable": true
+      }
+    },
+    {
+      "name": "pdp:nojs:canonical-content-reachable",
+      "status": "PASS",
+      "detail": {
+        "contentPresent": true
+      }
+    }
+  ],
+  "console_errors": [],
+  "console_error_count": 0,
+  "finished_at": "2026-09-14T10:58:20.625Z",
+  "summary": {
+    "total": 95,
+    "passed": 95,
+    "warnings": 0,
+    "failed": 0
+  }
+}

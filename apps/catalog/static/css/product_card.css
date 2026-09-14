@@ -758,3 +758,74 @@ html[data-sfb-density="compact"] .pcarousel{--pcarousel-gap:8px}
 @media(prefers-reduced-motion:reduce){
   .pcard.style-bold_outline:hover{transform:none}
 }
+
+
+/* Public product quick view (MODAL). Trigger sits on the card; the dialog is a
+   fixed, centered overlay driven by the shared sfbOverlay primitive. RTL-safe:
+   uses logical inset properties and dir-agnostic centering. */
+.pcard-quickview{position:static}
+.pcard-qv-trigger{
+  position:absolute;inset-block-start:10px;inset-inline-start:10px;z-index:4;
+  display:inline-flex;align-items:center;gap:6px;
+  padding:6px 10px;border:0;border-radius:999px;cursor:pointer;
+  font:inherit;font-size:.78rem;line-height:1;
+  background:color-mix(in srgb,var(--theme-surface,#fff) 88%,transparent);
+  color:var(--theme-text,#161822);
+  box-shadow:0 2px 8px rgba(0,0,0,.14);
+  opacity:0;transform:translateY(-4px);
+  transition:opacity .18s ease,transform .18s ease;
+}
+.pcard:hover .pcard-qv-trigger,
+.pcard-qv-trigger:focus-visible{opacity:1;transform:none}
+.pcard-qv-trigger svg{width:16px;height:16px}
+.pcard-qv-trigger:focus-visible{outline:2px solid var(--theme-primary,var(--violet));outline-offset:2px}
+
+.pcard-qv-backdrop{
+  position:fixed;inset:0;z-index:1000;
+  background:rgba(15,17,26,.55);
+}
+.pcard-qv-dialog{
+  position:fixed;z-index:1001;
+  inset-block-start:50%;inset-inline-start:50%;
+  transform:translate(50%,-50%); /* RTL: inline-start origin, shift back on inline axis */
+  inset-inline-end:auto;
+  width:min(560px,92vw);max-height:88vh;overflow:auto;
+  display:grid;grid-template-columns:minmax(0,42%) 1fr;gap:18px;
+  padding:22px;border-radius:16px;
+  background:var(--theme-surface,#fff);color:var(--theme-text,#161822);
+  box-shadow:0 24px 60px rgba(0,0,0,.28);
+}
+html[dir="ltr"] .pcard-qv-dialog{transform:translate(-50%,-50%)}
+.pcard-qv-close{
+  position:absolute;inset-block-start:8px;inset-inline-end:12px;
+  border:0;background:transparent;cursor:pointer;
+  font-size:1.6rem;line-height:1;color:inherit;
+}
+.pcard-qv-close:focus-visible{outline:2px solid var(--theme-primary,var(--violet));outline-offset:2px}
+.pcard-qv-media{border-radius:12px;overflow:hidden;background:#f4f4f6;display:grid;place-items:center;min-height:160px}
+.pcard-qv-media img{width:100%;height:100%;object-fit:cover}
+.pcard-qv-media-placeholder{font-size:3rem}
+.pcard-qv-info{display:flex;flex-direction:column;gap:10px;min-width:0}
+.pcard-qv-brand{font-size:.82rem;opacity:.7}
+.pcard-qv-name{margin:0;font-size:1.12rem;font-weight:800}
+.pcard-qv-price{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-weight:800}
+.pcard-qv-price .old{opacity:.55;text-decoration:line-through;font-weight:500;font-size:.9em}
+.pcard-qv-actions{margin-block-start:auto;display:flex;flex-direction:column;gap:8px}
+.pcard-qv-add{
+  border:0;border-radius:10px;padding:12px 14px;cursor:pointer;font:inherit;font-weight:700;
+  background:var(--theme-primary,var(--violet));color:#fff;
+}
+.pcard-qv-detail{
+  text-align:center;text-decoration:none;padding:10px 14px;border-radius:10px;
+  border:1px solid color-mix(in srgb,var(--theme-text,#161822) 22%,transparent);
+  color:inherit;font-weight:600;
+}
+.pcard-qv-oos{font-weight:700;opacity:.7}
+
+@media(max-width:680px){
+  .pcard-qv-trigger{opacity:1;transform:none}
+  .pcard-qv-dialog{grid-template-columns:1fr;width:94vw}
+}
+@media(prefers-reduced-motion:reduce){
+  .pcard-qv-trigger{transition:none}
+}

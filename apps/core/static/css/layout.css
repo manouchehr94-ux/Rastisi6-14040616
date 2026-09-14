@@ -116,6 +116,39 @@ html[data-sfb-button-style="soft"] .btn-primary:hover{background:var(--violet-so
 .footer .copy .pay{display:flex;gap:8px}
 .footer .copy .pay span{background:var(--violet-softer);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;color:var(--violet)}
 
+/* ===== Phase 5 Task 5 (MDR) — off-canvas mobile navigation drawer =====
+   RTL-safe: uses logical `inset-inline-start` + a `translateX` that respects
+   the document direction, so the drawer slides in from the start edge (right
+   in RTL, left in LTR). Only shown at the mobile breakpoint; hidden on desktop
+   where the normal <nav> is used instead. Reduced-motion disables the slide. */
+.mobile-nav-drawer{display:none}
+.mobile-drawer-backdrop{display:none}
+@media(max-width:680px){
+  .mobile-drawer-backdrop{
+    display:block;position:fixed;inset:0;background:rgba(36,28,58,.5);
+    backdrop-filter:blur(3px);z-index:110;
+  }
+  .mobile-nav-drawer{
+    display:flex;flex-direction:column;position:fixed;inset-block:0;
+    inset-inline-start:0;width:82%;max-width:340px;background:#fff;z-index:120;
+    box-shadow:0 0 40px rgba(15,23,42,.25);overflow-y:auto;
+    transition:transform .25s ease;
+  }
+  .mobile-nav-drawer.mobile-nav-drawer--closed{transform:translateX(-105%)}
+  html[dir="rtl"] .mobile-nav-drawer.mobile-nav-drawer--closed{transform:translateX(105%)}
+  .mobile-nav-drawer__head{display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid var(--line)}
+  .mobile-nav-drawer__close{width:34px;height:34px;border-radius:9px;background:var(--violet-softer,#f3effc);font-size:16px;cursor:pointer}
+  .mobile-nav-drawer__nav{padding:8px 0}
+  .mobile-nav-drawer__list,.mobile-nav-drawer__sublist{list-style:none;margin:0;padding:0}
+  .mobile-nav-drawer__list > li > a,.mobile-nav-drawer__heading{display:block;padding:13px 18px;font-weight:700;font-size:14px}
+  .mobile-nav-drawer__sublist > li > a{display:block;padding:10px 30px;font-size:13px;color:var(--muted)}
+  .mobile-nav-drawer__empty{padding:18px;color:var(--muted);font-size:13px}
+  .mobile-nav-drawer a:focus-visible,.mobile-nav-drawer__close:focus-visible{outline:2px solid var(--violet);outline-offset:2px}
+  @media (prefers-reduced-motion: reduce){
+    .mobile-nav-drawer{transition:none}
+  }
+}
+
 /* ===== modal ===== */
 .overlay{position:fixed;inset:0;background:rgba(36,28,58,.5);backdrop-filter:blur(3px);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
 .overlay.open{display:flex}

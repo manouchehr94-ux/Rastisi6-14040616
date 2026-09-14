@@ -1488,6 +1488,16 @@ _SLIDER_DEFAULT_INTERVAL_MS = 4500
 #: reuse choice already made for every other slider-level field.
 HERO_STYLE_CHOICES = ("overlay", "split", "beauty_editorial", "chocolate_carousel", "atelier_triptych", "luxury_showcase")
 
+#: Phase 5 Task 5 (STRANS) — the CLOSED enum of between-slide transition styles
+#: for the shared hero/image slider. ``cut`` is the historical, byte-identical
+#: hard-cut behavior (an existing store with no explicit ``transition`` keeps
+#: rendering exactly as before). ``fade``/``slide`` are the only added motion
+#: styles — never a free-text animation value, never arbitrary CSS/JS. A
+#: transition style is orthogonal to ``hero_style`` (which is structural layout,
+#: not motion). ``prefers-reduced-motion: reduce`` collapses fade/slide to an
+#: effectively instant cut at the CSS layer without changing slide state.
+SLIDER_TRANSITION_CHOICES = ("cut", "fade", "slide")
+
 
 def _validate_slider_settings(raw: dict) -> dict:
     """قراردادِ تنظیماتِ سطحِ اسلایدر (نه تک‌تکِ اسلایدها — آن‌ها روی خودِ
@@ -1533,10 +1543,19 @@ def _validate_slider_settings(raw: dict) -> dict:
     if hero_style not in HERO_STYLE_CHOICES:
         hero_style = "overlay"
 
+    # Phase 5 Task 5 (STRANS) — between-slide transition style. Same closed-enum
+    # coercion discipline as ``hero_style``/``text_position``: an unknown/legacy/
+    # non-string value never round-trips into storage and falls back to the
+    # historical ``cut`` (hard cut), so existing stores are byte-identical.
+    transition = raw.get("transition", "cut")
+    if transition not in SLIDER_TRANSITION_CHOICES:
+        transition = "cut"
+
     return {
         "autoplay": autoplay, "interval_ms": interval_ms,
         "show_arrows": show_arrows, "show_dots": show_dots, "loop": loop,
         "text_position": text_position, "hero_style": hero_style,
+        "transition": transition,
     }
 
 
@@ -1550,6 +1569,8 @@ def default_slider_settings() -> dict:
         # an existing store with no ``hero_style`` written keeps rendering
         # byte-identically via this default.
         "hero_style": "overlay",
+        # ``cut`` = the historical hard-cut behavior (Task 5 STRANS).
+        "transition": "cut",
     }
 
 
@@ -1593,6 +1614,12 @@ HERO_BANNER_SCHEMA = SettingsSchema(fields=(
         "text_position", "جای متن", "choice", "advanced",
         default="end",
         choices=(("start", "ابتدا"), ("center", "وسط"), ("end", "انتها")),
+    ),
+    # Phase 5 Task 5 (STRANS) — between-slide transition style (closed enum).
+    SettingsField(
+        "transition", "جلوه‌ی جابه‌جایی اسلاید", "choice", "advanced",
+        default="cut",
+        choices=(("cut", "بدون جلوه (برش)"), ("fade", "محو تدریجی"), ("slide", "لغزش")),
     ),
     SettingsField(
         "appearance_overrides", "تایپوگرافی این بخش", "appearance_override", "advanced",
@@ -1649,6 +1676,12 @@ IMAGE_SLIDER_SCHEMA = SettingsSchema(fields=(
         "text_position", "جای متن", "choice", "advanced",
         default="end",
         choices=(("start", "ابتدا"), ("center", "وسط"), ("end", "انتها")),
+    ),
+    # Phase 5 Task 5 (STRANS) — same closed-enum transition field as hero_banner.
+    SettingsField(
+        "transition", "جلوه‌ی جابه‌جایی اسلاید", "choice", "advanced",
+        default="cut",
+        choices=(("cut", "بدون جلوه (برش)"), ("fade", "محو تدریجی"), ("slide", "لغزش")),
     ),
 ))
 

@@ -176,6 +176,9 @@ select,textarea{
 .size,.guarantee .g,.desc-text,.review p{color:var(--theme-text)!important}
 .tabline{border-color:var(--theme-border)!important}
 .tabline .t.active{color:var(--theme-primary)!important;border-color:var(--theme-primary)!important}
+/* Phase 5 Task 5 (PDT) — the PDP tabs/accordion moved off .tabline to the
+   accordion-native .pdp-acc-header; keep the same theme-primary active color. */
+.pdp-acc-header.active{color:var(--theme-primary)!important;border-color:var(--theme-primary)!important}
 
 /* Cart / checkout / account */
 .top,.stepper-bar{

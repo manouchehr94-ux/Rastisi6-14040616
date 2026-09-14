@@ -161,6 +161,12 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
         </div>
       </form>
 
+      {% comment %}PDTX (Phase 5 Task 5) — this hard-coded guarantee strip is
+      the backward-compatible FALLBACK. It renders only when the page has NO
+      canonical, merchant-editable ``trust_features`` section (render_service
+      sets ``suppress_guarantee_strip`` when a sibling trust_features exists),
+      so the two trust modules never both show on one PDP.{% endcomment %}
+      {% if not suppress_guarantee_strip %}
       <div class="guarantee">
         <div class="g"><span class="ic">{% include "storefront_builder/partials/global_header/_shared/icon.html" with name="shield-check" %}</span>ضمانت اصالت کالا</div>
         {% if product.requires_shipping %}
@@ -173,6 +179,7 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
         {% endif %}
         <div class="g"><span class="ic">{% include "storefront_builder/partials/global_header/_shared/icon.html" with name="return-policy" %}</span>۷ روز ضمانت بازگشت</div>
       </div>
+      {% endif %}
     </div>
   </div>
 </div>
