@@ -65,8 +65,13 @@
 /* tabs */
 .pdp-tabs{margin:34px 0}
 .tabline{display:flex;gap:6px;border-bottom:2px solid var(--line);margin-bottom:22px;overflow-x:auto}
-.tabline .t{padding:12px 20px;font-size:14px;font-weight:700;color:var(--muted);border-bottom:2.5px solid transparent;margin-bottom:-2px;white-space:nowrap}
+.tabline .t{padding:12px 20px;font-size:14px;font-weight:700;color:var(--muted);border-bottom:2.5px solid transparent;margin-bottom:-2px;white-space:nowrap;background:transparent;cursor:pointer}
 .tabline .t.active{color:var(--violet);border-color:var(--violet)}
+/* Phase 5 Task 5 (PDT) — visible keyboard focus on the accessible tabs/panels. */
+.tabline .t:focus-visible,.pdp-tab-panel:focus-visible{outline:2px solid var(--violet);outline-offset:2px}
+/* Progressive enhancement: panels are visible by default (no-JS reaches all
+   content); Alpine's x-show hides inactive panels once it initializes. */
+.pdp-tab-panel{display:block}
 .tabpane{display:none}.tabpane.active{display:block;animation:fade .3s}
 @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .desc-text{font-size:13.5px;color:#4b4560;line-height:2.2;max-width:820px}
@@ -153,4 +158,24 @@
 }
 @media(max-width:480px){
   .pdp-video-grid--multi{grid-template-columns:1fr}
+}
+
+/* Phase 5 Task 5 (PDT) — mobile accordion. At the storefront mobile breakpoint
+   the SAME tabs/panels (one content source, one DOM) present as a stacked
+   accordion: each tab becomes a full-width header, no horizontal overflow, and
+   the single active panel shows below the headers. Driven by the same Alpine
+   active-tab state as the desktop tablist. RTL-safe (logical properties). */
+@media(max-width:680px){
+  .pdp-tabs .tabline{flex-direction:column;gap:0;border-bottom:0;overflow-x:visible;margin-bottom:12px}
+  .pdp-tabs .tabline .t{
+    width:100%;text-align:start;margin-bottom:0;border:1px solid var(--line);border-radius:8px;
+    padding:14px 16px;display:flex;align-items:center;justify-content:space-between;
+  }
+  .pdp-tabs .tabline .t + .t{margin-top:8px}
+  .pdp-tabs .tabline .t.active{background:var(--violet-softer);border-color:var(--violet)}
+  .pdp-tabs .tabline .t::after{content:"▾";margin-inline-start:auto;transition:transform .2s ease}
+  .pdp-tabs .tabline .t.active::after{transform:rotate(180deg)}
+  @media (prefers-reduced-motion: reduce){
+    .pdp-tabs .tabline .t::after{transition:none}
+  }
 }

@@ -2280,6 +2280,68 @@ class ProductDetailContextAwareSectionsPreviewTests(StorefrontBuilderViewsTestCa
         self.assertContains(resp, "توضیحاتِ کاملِ کالای پیش‌نمایش")
         self.assertContains(resp, "مشخصات فنی")
 
+    # ---- Phase 5 Task 5 (PDT) — accessible desktop tabs + mobile accordion ----
+    def _one_product_description(self):
+        # product_description is max_instances=1; ensure exactly one for a
+        # deterministic single-section assertion (the page may be pre-seeded).
+        StorefrontSection.objects.filter(page=self.pd_page, section_key="product_description").delete()
+        return StorefrontSection.objects.create(page=self.pd_page, section_key="product_description", order=0)
+
+    def test_product_description_panels_are_accessible_tablist(self):
+        self._one_product_description()
+        resp = self._preview()
+        content = resp.content.decode()
+        # ARIA tab semantics present.
+        self.assertIn('role="tablist"', content)
+        self.assertEqual(content.count('role="tab"'), 3)
+        self.assertEqual(content.count('role="tabpanel"'), 3)
+        self.assertIn('aria-selected="true"', content)
+        self.assertIn("aria-controls=", content)
+        self.assertIn("aria-labelledby=", content)
+        # Real focusable buttons (not clickable div/span).
+        self.assertNotIn("<div class=\"t\"", content)
+
+    def test_product_description_panel_ids_are_deterministic_and_unique(self):
+        self._one_product_description()
+        resp = self._preview()
+        content = resp.content.decode()
+        import re
+        panel_ids = re.findall(r'id="(pdp-panel-[^"]+)"', content)
+        tab_ids = re.findall(r'id="(pdp-tab-[^"]+)"', content)
+        self.assertEqual(len(panel_ids), 3)
+        self.assertEqual(len(tab_ids), 3)
+        # unique
+        self.assertEqual(len(set(panel_ids)), 3)
+        self.assertEqual(len(set(tab_ids)), 3)
+        # deterministic: namespaced by the product pk so multiple PDPs never collide
+        self.assertTrue(all(str(self.product.pk) in pid for pid in panel_ids))
+
+    def test_product_description_all_three_panes_reachable_no_js(self):
+        # Progressive enhancement: every panel's content is present in the DOM
+        # (not removed) so a no-JS client still reaches all content.
+        self._one_product_description()
+        resp = self._preview()
+        content = resp.content.decode()
+        self.assertIn("توضیحاتِ کاملِ کالای پیش‌نمایش", content)  # desc
+        self.assertIn("مشخصات فنی", content)  # spec tab label
+        self.assertIn("نظرات کاربران", content)  # review tab label
+        # Keyboard handler wired (arrow-key roving).
+        self.assertIn("ArrowRight", content)
+        self.assertIn("ArrowLeft", content)
+
+    def test_product_description_source_owner_unchanged(self):
+        # The content still comes from the canonical PDP context (no second
+        # data source): the desc/spec/review data owners are unchanged.
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        tmpl = Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/templates/storefront_builder/sections/product_description.html",
+        ).read_text(encoding="utf-8")
+        self.assertIn("spec_variant_summary", tmpl)
+        self.assertIn("approved_reviews", tmpl)
+        self.assertIn("product.description", tmpl)
+
     def test_related_products_reaches_rendered_html_when_related_exist(self):
         from datetime import timedelta
         from decimal import Decimal
