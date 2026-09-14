@@ -307,6 +307,19 @@ def build_product_listing_context(request, store):
     paginator = Paginator(qs, PRODUCTS_PER_PAGE)
     page_obj = paginator.get_page(request.GET.get("page"))
 
+    # Phase 5 Task 7 (Browse hardening, Gap #2) — bounded, Django-native page
+    # window. The template previously iterated the FULL ``page_range`` (every
+    # page number), which at scale produced an unusable multi-row pagination
+    # control on mobile (discovery evidence). We keep the canonical Django
+    # ``Paginator`` and use its OWN ``get_elided_page_range`` — no custom
+    # windowing algorithm, no second pagination state. ``on_each_side=1`` /
+    # ``on_ends=1`` yields ``1 … n-1 n n+1 … last`` (browser-tuned in Task 7).
+    # ``pagination_ellipsis`` is Django's own sentinel so the template can
+    # render a non-link separator without duplicating pagination semantics.
+    pagination_range = list(
+        paginator.get_elided_page_range(page_obj.number, on_each_side=1, on_ends=1)
+    )
+
     filter_categories = Category.objects.filter(store=store, parent__isnull=True, is_active=True).prefetch_related(
         Prefetch("children", queryset=Category.objects.filter(store=store, is_active=True).order_by("order", "name"))
     ).order_by("order", "name")
@@ -330,6 +343,9 @@ def build_product_listing_context(request, store):
     return {
         "page_obj": page_obj,
         "products": page_obj.object_list,
+        # Task 7 Gap #2 — bounded page window + Django's own ellipsis sentinel.
+        "pagination_range": pagination_range,
+        "pagination_ellipsis": Paginator.ELLIPSIS,
         "query": query,
         "sort_key": sort_key,
         "sort_options": LIST_SORT_OPTIONS,
