@@ -2342,6 +2342,95 @@ class ProductDetailContextAwareSectionsPreviewTests(StorefrontBuilderViewsTestCa
         self.assertIn("approved_reviews", tmpl)
         self.assertIn("product.description", tmpl)
 
+    # ---- PDT remediation: REAL mobile accordion structure --------------
+
+    def _pdp_tmpl(self):
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        return Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/templates/storefront_builder/sections/product_description.html",
+        ).read_text(encoding="utf-8")
+
+    def test_markup_is_accordion_native_each_header_immediately_before_its_panel(self):
+        # A REAL accordion (not stacked tabs): every header button is
+        # IMMEDIATELY followed by its OWN panel in source order, so on mobile
+        # each control sits directly above its content. Verify the three
+        # header→panel pairs appear in this exact interleaved order.
+        self._one_product_description()
+        content = self._preview().content.decode()
+        pid = self.product.pk
+        order = []
+        for token in (
+            f'id="pdp-tab-desc-{pid}"', f'id="pdp-panel-desc-{pid}"',
+            f'id="pdp-tab-spec-{pid}"', f'id="pdp-panel-spec-{pid}"',
+            f'id="pdp-tab-review-{pid}"', f'id="pdp-panel-review-{pid}"',
+        ):
+            idx = content.find(token)
+            self.assertNotEqual(idx, -1, f"missing {token}")
+            order.append(idx)
+        # Strictly increasing => header, panel, header, panel, header, panel.
+        self.assertEqual(order, sorted(order),
+                         "headers and panels must interleave (accordion-native), not group")
+        # There is NO separate tabline wrapper grouping the headers away from
+        # their panels (the old stacked-tabs structure).
+        self.assertNotIn('class="tabline"', content)
+
+    def test_headers_expose_accordion_aria_expanded_state(self):
+        self._one_product_description()
+        content = self._preview().content.decode()
+        # Accordion semantics: each header conveys expanded/collapsed. The
+        # first (open) header is expanded; a dynamic binding keeps it in sync.
+        self.assertIn('aria-expanded="true"', content)
+        self.assertIn('aria-expanded="false"', content)
+        self.assertIn(":aria-expanded=", content)
+
+    def test_single_content_dom_no_duplicate_panels(self):
+        # ONE canonical content DOM shared by tabs + accordion: each panel id
+        # appears exactly once (no separate mobile copy of the content).
+        self._one_product_description()
+        content = self._preview().content.decode()
+        for key in ("desc", "spec", "review"):
+            self.assertEqual(
+                content.count(f'id="pdp-panel-{key}-{self.product.pk}"'), 1,
+                f"panel {key} must appear exactly once (no mobile duplicate)",
+            )
+
+    def test_accordion_css_resets_order_to_natural_flow_on_mobile(self):
+        # The mobile breakpoint restores natural document flow (order:0 on the
+        # panels) so each panel renders directly after its own header — the
+        # structural proof the mobile layout is a real accordion, not the
+        # desktop "all headers then one panel" tab row.
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        css = Path(
+            dj_settings.BASE_DIR, "apps/catalog/static/css/product_detail.css",
+        ).read_text(encoding="utf-8")
+        self.assertIn("@media(max-width:680px)", css)
+        # Desktop uses order to lift headers into a row; mobile drops that row.
+        self.assertIn("order:0", css)
+        self.assertIn(".pdp-tabs::after{display:none}", css)
+
+    def test_persian_copy_has_correct_zwnj(self):
+        # The rewrite must not regress Persian ZWNJ/spelling.
+        tmpl = self._pdp_tmpl()
+        self.assertIn("دسته\u200cبندی", tmpl)   # not the broken "دستهبندی"
+        self.assertNotIn("دستهبندی", tmpl)
+        self.assertIn("می\u200cدهد", tmpl)       # not the broken "میدهد"
+        self.assertNotIn("میدهد", tmpl)
+
+    def test_empty_optional_sections_still_render_valid_accordion(self):
+        # A product with NO description / NO reviews still renders all three
+        # accessible header→panel pairs (empty content is a valid state).
+        self._one_product_description()
+        self.product.description = ""
+        self.product.save(update_fields=["description"])
+        self.product.reviews.all().delete()
+        content = self._preview().content.decode()
+        self.assertEqual(content.count('role="tab"'), 3)
+        self.assertEqual(content.count('role="tabpanel"'), 3)
+        self.assertIn("توضیحاتی برای این کالا ثبت نشده است.", content)
+
     def test_related_products_reaches_rendered_html_when_related_exist(self):
         from datetime import timedelta
         from decimal import Decimal

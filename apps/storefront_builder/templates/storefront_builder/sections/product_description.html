@@ -1,23 +1,33 @@
 {% load persian catalog_extras %}
 {% comment %}
-Phase 5 Task 5 (PDT) — accessible Product-Detail tabs (desktop) / accordion
-(mobile) over the EXISTING canonical PDP content. Same three content sources as
-before — description (product.description), specifications (spec_variant_summary
-+ category/brand/sku/stock), reviews (approved_reviews/rating_breakdown) — fed by
-render_service._product_description_context; NO second data owner.
+Phase 5 Task 5 (PDT) — accessible Product-Detail tabs (desktop) / REAL
+accordion (mobile) over the EXISTING canonical PDP content. Same three content
+sources as before — description (product.description), specifications
+(spec_variant_summary + category/brand/sku/stock), reviews (approved_reviews/
+rating_breakdown) — fed by render_service._product_description_context; NO
+second data owner, and each panel appears exactly ONCE in the DOM (no desktop/
+mobile content duplication).
 
-One shared Alpine component owns the active-tab state used by BOTH the desktop
-tablist and the mobile accordion (same content nodes, no desktop/mobile content
-duplication). Progressive enhancement: without JS every panel is visible (the
-`.pdp-tab-panel` default is display:block; Alpine hides inactive panels once it
-initializes), so all content stays reachable with no JS. Desktop keyboard: roving
-tabindex + ArrowLeft/ArrowRight/Home/End/Enter/Space. IDs are namespaced by the
-product pk so multiple PDPs on a page can never collide. RTL-safe (logical CSS).
+Structure: the markup is accordion-native — each header button is IMMEDIATELY
+followed by its OWN panel (header→panel, header→panel, header→panel). On mobile
+this is a genuine accordion (each control sits directly above its content). On
+desktop, CSS ``order`` lifts the three headers into a single tablist row and the
+panels fill the width below — the classic accordion-markup → CSS-tabs pattern —
+so the desktop keeps real ARIA tablist semantics (roving tabindex + Arrow/Home/
+End keys) while the same DOM is a real accordion on mobile.
+
+One shared Alpine component owns the single active/open key used by BOTH modes.
+Single-open. Progressive enhancement: without JS every panel is visible (the
+``.pdp-tab-panel`` default is display:block; Alpine hides inactive panels once it
+initializes), so all content stays reachable with no JS. IDs are namespaced by
+the product pk so multiple PDPs on a page can never collide. RTL-safe (logical
+CSS).
 {% endcomment %}
 {% if product %}
 {% with pid=product.pk %}
 <div class="wrap">
   <div class="pdp-tabs"
+       role="tablist" aria-label="اطلاعات محصول"
        x-data="{
          tab: 'desc',
          tabs: ['desc', 'spec', 'review'],
@@ -35,29 +45,21 @@ product pk so multiple PDPs on a page can never collide. RTL-safe (logical CSS).
            this.$refs['tab_' + this.tabs[n]].focus();
          }
        }">
-    <div class="tabline" role="tablist" aria-label="اطلاعات محصول">
-      {% comment %}
-      Static aria-selected/tabindex give the correct deterministic INITIAL
-      (and no-JS) state — the first tab (desc) is selected. Alpine's dynamic
-      bindings then keep them in sync once it initializes.
-      {% endcomment %}
-      <button type="button" class="t active" role="tab" id="pdp-tab-desc-{{ pid }}"
-              x-ref="tab_desc" aria-controls="pdp-panel-desc-{{ pid }}"
-              aria-selected="true" tabindex="0"
-              :aria-selected="tab === 'desc' ? 'true' : 'false'" :tabindex="tab === 'desc' ? '0' : '-1'"
-              :class="{ active: tab === 'desc' }" @click="select('desc')" @keydown="onKey($event, 0)">توضیحات محصول</button>
-      <button type="button" class="t" role="tab" id="pdp-tab-spec-{{ pid }}"
-              x-ref="tab_spec" aria-controls="pdp-panel-spec-{{ pid }}"
-              aria-selected="false" tabindex="-1"
-              :aria-selected="tab === 'spec' ? 'true' : 'false'" :tabindex="tab === 'spec' ? '0' : '-1'"
-              :class="{ active: tab === 'spec' }" @click="select('spec')" @keydown="onKey($event, 1)">مشخصات فنی</button>
-      <button type="button" class="t" role="tab" id="pdp-tab-review-{{ pid }}"
-              x-ref="tab_review" aria-controls="pdp-panel-review-{{ pid }}"
-              aria-selected="false" tabindex="-1"
-              :aria-selected="tab === 'review' ? 'true' : 'false'" :tabindex="tab === 'review' ? '0' : '-1'"
-              :class="{ active: tab === 'review' }" @click="select('review')" @keydown="onKey($event, 2)">نظرات کاربران</button>
-    </div>
+    {% comment %}
+    Static aria-selected/aria-expanded/tabindex give the correct deterministic
+    INITIAL (and no-JS) state — the first control (desc) is selected/open.
+    Alpine's dynamic bindings then keep them in sync once it initializes. Each
+    header is a role="tab" (desktop tablist) AND carries aria-expanded so the
+    mobile accordion presentation is also correctly conveyed; every panel is
+    role="tabpanel", labelled by its own header, and sits directly after it.
+    {% endcomment %}
 
+    <button type="button" class="t pdp-acc-header active" role="tab" id="pdp-tab-desc-{{ pid }}"
+            x-ref="tab_desc" aria-controls="pdp-panel-desc-{{ pid }}"
+            aria-selected="true" aria-expanded="true" tabindex="0"
+            :aria-selected="tab === 'desc' ? 'true' : 'false'" :aria-expanded="tab === 'desc' ? 'true' : 'false'"
+            :tabindex="tab === 'desc' ? '0' : '-1'"
+            :class="{ active: tab === 'desc' }" @click="select('desc')" @keydown="onKey($event, 0)">توضیحات محصول</button>
     <div class="tabpane pdp-tab-panel" id="pdp-panel-desc-{{ pid }}" role="tabpanel"
          aria-labelledby="pdp-tab-desc-{{ pid }}" tabindex="0"
          :class="{ active: tab === 'desc' }" x-show="tab === 'desc'" x-cloak>
@@ -66,11 +68,17 @@ product pk so multiple PDPs on a page can never collide. RTL-safe (logical CSS).
       </div>
     </div>
 
+    <button type="button" class="t pdp-acc-header" role="tab" id="pdp-tab-spec-{{ pid }}"
+            x-ref="tab_spec" aria-controls="pdp-panel-spec-{{ pid }}"
+            aria-selected="false" aria-expanded="false" tabindex="-1"
+            :aria-selected="tab === 'spec' ? 'true' : 'false'" :aria-expanded="tab === 'spec' ? 'true' : 'false'"
+            :tabindex="tab === 'spec' ? '0' : '-1'"
+            :class="{ active: tab === 'spec' }" @click="select('spec')" @keydown="onKey($event, 1)">مشخصات فنی</button>
     <div class="tabpane pdp-tab-panel" id="pdp-panel-spec-{{ pid }}" role="tabpanel"
          aria-labelledby="pdp-tab-spec-{{ pid }}" tabindex="0"
          :class="{ active: tab === 'spec' }" x-show="tab === 'spec'" x-cloak>
       <table class="spec-table">
-        <tr><td>دستهبندی</td><td>{{ product.category.name }}</td></tr>
+        <tr><td>دسته‌بندی</td><td>{{ product.category.name }}</td></tr>
         {% if product.brand %}<tr><td>برند</td><td>{{ product.brand.name }}</td></tr>{% endif %}
         <tr><td>کد کالا (SKU)</td><td dir="ltr" style="text-align:left">{{ product.sku }}</td></tr>
         {% for attribute, values in spec_variant_summary.items %}
@@ -81,6 +89,12 @@ product pk so multiple PDPs on a page can never collide. RTL-safe (logical CSS).
       </table>
     </div>
 
+    <button type="button" class="t pdp-acc-header" role="tab" id="pdp-tab-review-{{ pid }}"
+            x-ref="tab_review" aria-controls="pdp-panel-review-{{ pid }}"
+            aria-selected="false" aria-expanded="false" tabindex="-1"
+            :aria-selected="tab === 'review' ? 'true' : 'false'" :aria-expanded="tab === 'review' ? 'true' : 'false'"
+            :tabindex="tab === 'review' ? '0' : '-1'"
+            :class="{ active: tab === 'review' }" @click="select('review')" @keydown="onKey($event, 2)">نظرات کاربران</button>
     <div class="tabpane pdp-tab-panel" id="pdp-panel-review-{{ pid }}" role="tabpanel"
          aria-labelledby="pdp-tab-review-{{ pid }}" tabindex="0"
          :class="{ active: tab === 'review' }" x-show="tab === 'review'" x-cloak>
@@ -111,7 +125,7 @@ product pk so multiple PDPs on a page can never collide. RTL-safe (logical CSS).
         <p>{{ review.text }}</p>
       </div>
       {% empty %}
-      <p style="color:var(--muted);font-size:13px;margin-bottom:16px">هنوز نظری برای این کالا ثبت نشده — اولین نفری باشید که نظر میدهد!</p>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:16px">هنوز نظری برای این کالا ثبت نشده — اولین نفری باشید که نظر می‌دهد!</p>
       {% endfor %}
 
       <div id="review-form-container">
