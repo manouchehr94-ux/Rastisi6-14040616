@@ -204,9 +204,22 @@ async function scenario(name, fn) {
 async function launchSystemBrowser() {
   const preferred = manifest.browser_channel === 'auto' ? ['chrome', 'msedge'] : [manifest.browser_channel];
   const errors = [];
+  // Phase 5 Task 6 (--showcase) — when the manifest routes the editor through
+  // a real (non-dev) StoreDomain host, map it to the local runserver so a
+  // multi-Store sandbox resolves the target Store. No-op for a normal run.
+  // When routing through a mapped host, also bypass any ambient HTTP proxy
+  // (this sandbox sets http_proxy/https_proxy) so the mapped host reaches the
+  // LOCAL runserver directly instead of an upstream proxy that denies it.
+  const launchArgs = manifest.resolver_host
+    ? [
+        `--host-resolver-rules=MAP ${manifest.resolver_host} 127.0.0.1`,
+        '--no-proxy-server',
+        '--no-sandbox',
+      ]
+    : [];
   for (const channel of preferred) {
     try {
-      return await chromium.launch({ channel, headless: !manifest.headed });
+      return await chromium.launch({ channel, headless: !manifest.headed, args: launchArgs });
     } catch (error) {
       errors.push(`${channel}: ${error.message}`);
     }
@@ -217,6 +230,7 @@ async function launchSystemBrowser() {
   const candidates = [
     process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
     '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+    '/opt/playwright/chromium-1232/chrome-linux64/chrome',
     '/usr/local/bin/chrome',
     '/usr/bin/google-chrome',
     '/usr/bin/chromium',
@@ -225,7 +239,7 @@ async function launchSystemBrowser() {
   for (const executablePath of candidates) {
     if (!fs.existsSync(executablePath)) continue;
     try {
-      return await chromium.launch({ executablePath, headless: !manifest.headed });
+      return await chromium.launch({ executablePath, headless: !manifest.headed, args: launchArgs });
     } catch (error) {
       errors.push(`${executablePath}: ${error.message}`);
     }
@@ -3899,6 +3913,119 @@ async function scenario15TemplateSwitchLifecycleGate() {
   );
 }
 
+// =============================================================================
+// Phase 5 Task 6 (opt-in --showcase) — Storefront Showcase creation FACADE.
+//
+// Proves the merchant-facing "ویترین فروشگاه" inline chooser creates one of the
+// four EXISTING canonical sections via the SAME section.add mutation, that the
+// created section is the canonical section (Structure + Preview), that its
+// normal Inspector opens, and that the chooser is reachable/usable at mobile
+// 390 RTL. No storefront_showcase key, no Task-6-specific card assertions
+// beyond proving canonical product-card reuse. Runs only when manifest.showcase.
+// =============================================================================
+const SHOWCASE_MAP = [
+  { contentType: 'products', sectionKey: 'product_section' },
+  { contentType: 'categories', sectionKey: 'category_grid' },
+  { contentType: 'collections', sectionKey: 'collection_tiles' },
+  { contentType: 'brands', sectionKey: 'brand_carousel' },
+];
+
+// Task-6 evidence lives in its own dedicated directory (not the phase1
+// REQUIRED_SCREENSHOTS set, so verifyScreenshots is unaffected).
+const TASK6_EVIDENCE_DIR = path.join(
+  REPO_ROOT, 'docs', 'qa_evidence', 'storefront_design_engine', 'phase5', 'task6_showcase',
+);
+async function captureTask6(filename) {
+  fs.mkdirSync(TASK6_EVIDENCE_DIR, { recursive: true });
+  const dest = path.join(TASK6_EVIDENCE_DIR, filename);
+  await page.screenshot({ path: dest });
+  result.screenshots.push(dest);
+}
+
+async function openShowcaseChooser() {
+  const structureOpen = await page.evaluate(() => document.querySelector('[data-r4-shell]').dataset.r4StructureOpen);
+  if (structureOpen !== 'true') {
+    await page.click('#r4StructureToggle');
+    await page.locator('#r4Structure').waitFor({ state: 'visible', timeout: 5000 });
+  }
+  const disclosure = page.locator('[data-r4-showcase]');
+  await disclosure.waitFor({ state: 'visible', timeout: 10000 });
+  await disclosure.evaluate((el) => { el.open = true; });
+  return disclosure;
+}
+
+async function scenario16ShowcaseFacade() {
+  // The page is already on the R4 editor (main() navigated there with the
+  // session cookie). 1440 desktop first (the run starts at desktop viewport).
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
+
+  const disclosure = await openShowcaseChooser();
+  const choiceButtons = disclosure.locator('[data-r4-showcase-choice]');
+  const choiceCount = await choiceButtons.count();
+  assert(choiceCount === 4, `Showcase chooser must present exactly 4 choices, found ${choiceCount}`);
+  const renderedKeys = await choiceButtons.evaluateAll((els) => els.map((el) => el.getAttribute('data-section-key')));
+  for (const { sectionKey } of SHOWCASE_MAP) {
+    assert(renderedKeys.includes(sectionKey), `Showcase chooser missing canonical key ${sectionKey}`);
+  }
+  // Never a pseudo key.
+  assert(!renderedKeys.includes('storefront_showcase'), 'Showcase chooser must never emit a pseudo storefront_showcase key');
+  await captureTask6("01_showcase_chooser_desktop.png");
+
+  // Add each of the four types; verify the canonical section + its Inspector.
+  for (const { contentType, sectionKey } of SHOWCASE_MAP) {
+    await openShowcaseChooser();
+    const countBefore = await page.locator('[data-r4-structure-row]').count();
+    const beforeMutate = result.mutation_posts.length;
+    await page.click(`[data-r4-showcase-choice][data-section-key="${sectionKey}"]`);
+    await waitSaved();
+    // waitForFunction tolerates the mid-mutation preview reload (unlike a
+    // mid-flight evaluateAll), and confirms exactly one new Structure row.
+    await page.waitForFunction((n) => document.querySelectorAll('[data-r4-structure-row]').length === n, countBefore + 1, { timeout: 10000 });
+    assert(result.mutation_posts.length - beforeMutate === 1, `${contentType}: expected exactly 1 section.add mutation`);
+
+    // The created canonical section is present in the Preview (proves it is a
+    // real canonical render, not a pseudo Showcase render).
+    const createdId = await discoverSectionIdFromPreview(sectionKey);
+    assert(createdId, `${contentType}: created ${sectionKey} not found in Preview`);
+
+    // Its OWN canonical Inspector opens (no Showcase inspector).
+    await openSectionById(createdId);
+    await page.locator('[data-r4-section-inspector]').waitFor({ state: 'visible', timeout: 10000 });
+    if (sectionKey === 'product_section') {
+      // Canonical product source + layout controls present.
+      assert(await fieldControl('source').count() > 0, 'product_section inspector missing canonical source field');
+      assert(await fieldControl('display_mode').count() > 0, 'product_section inspector missing canonical layout field');
+      // Canonical product cards render in Preview (Task-5 primitive reuse).
+      const frame = await previewFrame();
+      const cardCount = await frame.locator(`[data-section-id="${createdId}"] .pcard`).count();
+      assert(cardCount > 0, 'product Showcase must render canonical product cards (.pcard)');
+    }
+    await closeInspectorIfOpen();
+  }
+  await captureTask6("02_four_canonical_sections_desktop.png");
+
+  // Mobile 390 RTL — chooser reachable/usable, no horizontal overflow.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await withExpectedNavigation(() => page.goto(manifest.builder_url + '?page=home', { waitUntil: 'domcontentloaded', timeout: 20000 }));
+  await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
+  const dir = await page.evaluate(() => document.documentElement.getAttribute('dir'));
+  assert(dir === 'rtl', `expected RTL document, got dir=${dir}`);
+  await openShowcaseChooser();
+  assert(await page.locator('[data-r4-showcase-choice]').count() === 4, 'mobile: Showcase chooser must present 4 choices');
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 3);
+  assert(overflow, 'mobile: R4 editor must not have horizontal overflow with the Showcase chooser open');
+  // Add one representative Showcase on mobile.
+  const mCountBefore = await page.locator('[data-r4-structure-row]').count();
+  await page.click('[data-r4-showcase-choice][data-section-key="product_section"]');
+  await waitSaved();
+  await page.waitForFunction((n) => document.querySelectorAll('[data-r4-structure-row]').length === n, mCountBefore + 1, { timeout: 10000 });
+  await captureTask6("03_showcase_mobile_390_rtl.png");
+
+  // Restore desktop viewport for any subsequent scenario.
+  await page.setViewportSize({ width: 1440, height: 900 });
+}
+
 async function main() {
   deleteStaleScreenshots();
 
@@ -3929,6 +4056,13 @@ async function main() {
   await scenario('13-public-must-remain-unchanged', scenario13PublicUnchanged);
   await scenario('final-instrumentation-assertions', finalInstrumentationAssertions);
   await scenario('final-screenshot-verification', verifyScreenshots);
+
+  // Phase 5 Task 6 — opt-in Storefront Showcase creation-facade scenario.
+  // Additive only; never runs by default. Registered before scenario 14
+  // (which Discards the Draft) so it operates on an intact Draft.
+  if (manifest.showcase) {
+    await scenario('task6-showcase-facade', scenario16ShowcaseFacade);
+  }
 
   // Opt-in Phase 3 — Task 3 "Brand gate" browser certification. Additive
   // only; never runs by default, so scenarios 01-13 and their behavior are
