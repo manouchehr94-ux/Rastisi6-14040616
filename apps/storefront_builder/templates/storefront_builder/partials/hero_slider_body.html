@@ -9,16 +9,27 @@ banners without introducing a preset-specific template.
 {% if hero_slides %}
 <section class="section hero{% if hero_variant_class %} {{ hero_variant_class }}{% endif %}">
   {% if hero_slides|length > 1 %}
+  {% comment %}
+  Phase 5 Task 5 (STRANS) — between-slide transition style. ``data-hero-transition``
+  (cut/fade/slide, from the canonical slider_settings) selects a fixed CSS
+  transition preset on the slides below; there is NO free-text CSS/JS. ``cut``
+  keeps the historical hard-cut behavior byte-identically (display toggle via
+  x-show). For fade/slide the slides stay layered and their opacity/transform is
+  driven by the ``.is-active`` class in CSS. ``prefers-reduced-motion: reduce``
+  collapses fade/slide to an instant cut at the CSS layer (see home.css) without
+  changing slide state. No new slider, no new renderer, no animation library.
+  {% endcomment %}
   <div class="hero-inner" data-text-position="{{ slider_settings.text_position|default:'end' }}"
+       data-hero-transition="{{ slider_settings.transition|default:'cut' }}"
        {% if effective_section_typography %}style="--sfb-hero-heading-size:{{ effective_section_typography.heading }}px;--sfb-hero-body-size:{{ effective_section_typography.body }}px;--sfb-hero-font:'{{ effective_section_appearance.font }}';"{% endif %}
-       x-data="{ slide: 0, count: {{ hero_slides|length }}, autoplay: {{ slider_settings.autoplay|yesno:'true,false' }}, interval: {{ slider_settings.interval_ms|default:4500 }}, loop: {{ slider_settings.loop|yesno:'true,false' }}, _timer: null,
+       x-data="{ slide: 0, count: {{ hero_slides|length }}, autoplay: {{ slider_settings.autoplay|yesno:'true,false' }}, interval: {{ slider_settings.interval_ms|default:4500 }}, loop: {{ slider_settings.loop|yesno:'true,false' }}, transition: '{{ slider_settings.transition|default:'cut' }}', _timer: null,
                   next() { this.slide = (this.slide + 1) % this.count; },
                   prev() { this.slide = (this.slide - 1 + this.count) % this.count; } }"
        x-init="if (autoplay) { _timer = setInterval(() => next(), interval) }"
        @mouseenter="if (_timer) { clearInterval(_timer); _timer = null }"
        @mouseleave="if (autoplay && !_timer) { _timer = setInterval(() => next(), interval) }">
     {% for s in hero_slides %}
-    <article class="hero-slide" x-show="slide === {{ forloop.counter0 }}" x-cloak{% if is_builder_preview %} data-admin-edit-kind="media" data-admin-edit-id="{{ s.pk }}" data-admin-edit-title="{{ s.title|default:'اسلاید'|escape }}" data-admin-media-kind="hero-slides"{% endif %}>
+    <article class="hero-slide" :class="{ 'is-active': slide === {{ forloop.counter0 }} }" x-show="transition === 'cut' ? slide === {{ forloop.counter0 }} : true" x-cloak{% if is_builder_preview %} data-admin-edit-kind="media" data-admin-edit-id="{{ s.pk }}" data-admin-edit-title="{{ s.title|default:'اسلاید'|escape }}" data-admin-media-kind="hero-slides"{% endif %}>
       <picture class="hero-media">
         {% if s.mobile_image_url %}<source media="(max-width:680px)" srcset="{{ s.mobile_image_url }}">{% endif %}
         {% if s.desktop_image_url %}<img src="{{ s.desktop_image_url }}" alt="{{ s.title|default:'اسلاید' }}" loading="{% if forloop.first %}eager{% else %}lazy{% endif %}">{% endif %}

@@ -18,6 +18,22 @@
 }
 .hero-slide{position:absolute;inset:0;width:100%;height:100%}
 .hero-slide.single{display:block}
+
+/* ===== Phase 5 Task 5 (STRANS) — hero between-slide transition presets =====
+   Closed enum only (cut/fade/slide). "cut" is the historical hard cut: x-show
+   toggles display and this block adds nothing. For fade/slide every slide is
+   rendered (layered absolute) and the ".is-active" class (bound in the
+   template) drives opacity/transform. Uses logical properties so RTL is
+   correct. prefers-reduced-motion collapses fade/slide to an instant cut
+   without changing which slide is active. */
+.hero-inner[data-hero-transition="fade"] .hero-slide{opacity:0;transition:opacity .5s ease;pointer-events:none}
+.hero-inner[data-hero-transition="fade"] .hero-slide.is-active{opacity:1;pointer-events:auto}
+.hero-inner[data-hero-transition="slide"] .hero-slide{opacity:0;transform:translateX(6%);transition:opacity .45s ease,transform .45s ease;pointer-events:none}
+.hero-inner[data-hero-transition="slide"] .hero-slide.is-active{opacity:1;transform:translateX(0);pointer-events:auto}
+@media (prefers-reduced-motion: reduce){
+  .hero-inner[data-hero-transition="fade"] .hero-slide,
+  .hero-inner[data-hero-transition="slide"] .hero-slide{transition:none;transform:none}
+}
 .hero-media{display:block;width:100%;height:100%}
 .hero-media img{display:block;width:100%;height:100%;object-fit:cover}
 .hero-text{
