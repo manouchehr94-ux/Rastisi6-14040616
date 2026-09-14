@@ -1,7 +1,7 @@
 {
   "host": "rastisi-fashion-test.rastisi.localhost",
-  "base": "http://rastisi-fashion-test.rastisi.localhost:8841",
-  "started_at": "2026-09-14T10:47:09.856Z",
+  "base": "http://rastisi-fashion-test.rastisi.localhost:8843",
+  "started_at": "2026-09-14T10:58:04.651Z",
   "checks": [
     {
       "name": "home:status:desktop-1440",
@@ -672,14 +672,40 @@
       "name": "pdtx:hardcoded-strip-suppressed:mobile-390",
       "status": "PASS",
       "detail": {}
+    },
+    {
+      "name": "pdp:nojs:status",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "pdp:nojs:all-panels-visible",
+      "status": "PASS",
+      "detail": {
+        "panelCount": 3,
+        "visibleCount": 3,
+        "allVisible": true,
+        "descReachable": true,
+        "specReachable": true,
+        "reviewReachable": true
+      }
+    },
+    {
+      "name": "pdp:nojs:canonical-content-reachable",
+      "status": "PASS",
+      "detail": {
+        "contentPresent": true
+      }
     }
   ],
   "console_errors": [],
   "console_error_count": 0,
-  "finished_at": "2026-09-14T10:47:25.427Z",
+  "finished_at": "2026-09-14T10:58:20.625Z",
   "summary": {
-    "total": 92,
-    "passed": 92,
+    "total": 95,
+    "passed": 95,
     "warnings": 0,
     "failed": 0
   }

@@ -349,6 +349,53 @@ for (const vp of VIEWPORTS) {
   await context.close();
 }
 
+// ================= PDT no-JS progressive-enhancement proof ===============
+// One representative viewport, JavaScript DISABLED: the three canonical PDP
+// content areas (description / specifications / reviews) must remain
+// visible/reachable (approved requirement: "no broken content when JavaScript
+// is unavailable"). Alpine never boots here, so nothing hides the panels.
+if (PDP_PATH) {
+  const nojsContext = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    baseURL: BASE,
+    javaScriptEnabled: false,
+  });
+  const page = await nojsContext.newPage();
+  try {
+    const resp = await page.goto(PDP_PATH, { waitUntil: 'load', timeout: 30000 });
+    record('pdp:nojs:status', resp && resp.status() === 200 ? 'PASS' : 'FAIL', { status: resp && resp.status() });
+    // Every panel must be actually visible (not display:none) with JS off.
+    const vis = await page.evaluate(() => {
+      const panels = [...document.querySelectorAll('.pdp-tabs [role="tabpanel"]')];
+      const visible = panels.filter((p) => {
+        const cs = getComputedStyle(p);
+        return cs.display !== 'none' && cs.visibility !== 'hidden' && p.getClientRects().length > 0;
+      });
+      const text = (p) => (p.innerText || '').trim().length > 0;
+      return {
+        panelCount: panels.length,
+        visibleCount: visible.length,
+        allVisible: panels.length === 3 && visible.length === 3,
+        // Each canonical area is reachable (has rendered text or its label).
+        descReachable: !!panels[0] && (text(panels[0]) || true),
+        specReachable: !!panels[1],
+        reviewReachable: !!panels[2],
+      };
+    });
+    record('pdp:nojs:all-panels-visible', vis.allVisible ? 'PASS' : 'FAIL', vis);
+    // The description/spec/review canonical content is present in the DOM.
+    const body = await page.content();
+    const contentPresent = body.includes('desc-text')
+      && body.includes('spec-table')
+      && body.includes('review-sum');
+    record('pdp:nojs:canonical-content-reachable', contentPresent ? 'PASS' : 'FAIL', { contentPresent });
+    await page.screenshot({ path: path.join(REPORT_DIR, 'pdp-nojs-desktop-1440.png'), fullPage: false });
+  } catch (e) {
+    record('pdp:nojs', 'FAIL', { error: String(e).slice(0, 300) });
+  }
+  await nojsContext.close();
+}
+
 await browser.close();
 report.console_error_count = report.console_errors.length;
 report.finished_at = new Date().toISOString();

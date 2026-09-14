@@ -2419,6 +2419,44 @@ class ProductDetailContextAwareSectionsPreviewTests(StorefrontBuilderViewsTestCa
         self.assertIn("می\u200cدهد", tmpl)       # not the broken "میدهد"
         self.assertNotIn("میدهد", tmpl)
 
+    def test_no_js_panels_are_visible_by_default(self):
+        # PROGRESSIVE ENHANCEMENT regression: without JavaScript every PDP
+        # panel (description/spec/reviews) MUST stay reachable. The panels carry
+        # BOTH classes `tabpane pdp-tab-panel` and have NO static `active`
+        # class (Alpine adds it), so a bare `.tabpane{display:none}` rule at
+        # equal-or-higher specificity would hide ALL content with JS off. Assert
+        # the CSS keeps `.pdp-tab-panel` visible by default (the no-JS state)
+        # and only hides panels when JS-driven `x-show`/state applies.
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        raw = Path(
+            dj_settings.BASE_DIR, "apps/catalog/static/css/product_detail.css",
+        ).read_text(encoding="utf-8")
+        # Strip CSS comments so we assert against REAL rules, not documentation.
+        css = re.sub(r"/\*.*?\*/", "", raw, flags=re.S)
+        compact = css.replace(" ", "")
+        # There must be NO unconditional `.tabpane{display:none}` rule that would
+        # override the default-visible `.pdp-tab-panel` (equal specificity, so
+        # source order + the shared selector both matter).
+        self.assertNotIn(".tabpane{display:none}", compact)
+        self.assertNotRegex(
+            css, r"\.tabpane\s*\{[^}]*display\s*:\s*none",
+            "blanket `.tabpane{display:none}` hides all PDP content with JS off",
+        )
+        # The panels are visible by default via the shared class.
+        self.assertIn(".pdp-tab-panel{display:block}", compact)
+
+    def test_no_js_panels_template_has_no_static_hidden_state(self):
+        # The template must not stamp a static hiding attribute/class on the
+        # panels (only Alpine x-show should hide them once JS runs). x-cloak on
+        # the panels is fine (it only hides until Alpine boots and is scoped by
+        # the [x-cloak] rule), but there must be no static `hidden`/`display:none`.
+        tmpl = self._pdp_tmpl()
+        # No inline display:none and no static hidden attribute on the panels.
+        self.assertNotIn("style=\"display:none", tmpl)
+        self.assertNotRegex(tmpl, r'pdp-tab-panel"[^>]*\shidden\b')
+
     def test_empty_optional_sections_still_render_valid_accordion(self):
         # A product with NO description / NO reviews still renders all three
         # accessible header→panel pairs (empty content is a valid state).

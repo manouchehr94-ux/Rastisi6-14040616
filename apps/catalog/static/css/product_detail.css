@@ -81,10 +81,17 @@
 .pdp-tab-panel{order:2;flex:0 0 100%}
 /* Phase 5 Task 5 (PDT) — visible keyboard focus on the accessible tabs/panels. */
 .pdp-acc-header:focus-visible,.pdp-tab-panel:focus-visible{outline:2px solid var(--violet);outline-offset:2px}
-/* Progressive enhancement: panels are visible by default (no-JS reaches all
-   content); Alpine's x-show hides inactive panels once it initializes. */
+/* Progressive enhancement (no-JS safety): PDP panels are VISIBLE BY DEFAULT so
+   every description/spec/review area is reachable with JavaScript disabled.
+   The panels carry `class="tabpane pdp-tab-panel"` and have NO static `active`
+   class, so there must be NO blanket `.tabpane{display:none}` here — that
+   equal-specificity rule previously won and hid ALL content with JS off.
+   Once Alpine initializes, its `x-show` sets an inline `display:none` on the
+   inactive panels (only the active one stays shown); with JS off no inline
+   style is ever applied, so all three panels remain visible. The active tab's
+   fade is applied via the JS-driven `.active` class (harmless when absent). */
 .pdp-tab-panel{display:block}
-.tabpane{display:none}.tabpane.active{display:block;animation:fade .3s}
+.tabpane.active{animation:fade .3s}
 @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .desc-text{font-size:13.5px;color:#4b4560;line-height:2.2;max-width:820px}
 .desc-text ul{margin:14px 0;padding-right:20px}

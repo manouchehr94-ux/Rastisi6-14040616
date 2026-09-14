@@ -291,8 +291,9 @@ MODAL → PDTX → HDR) with strict RED→GREEN TDD, reusing canonical owners, w
 - **Owner reused:** `render_service._product_description_context` (unchanged data owner); `product_description` stays a context-aware, schema-less section. No second data source.
 - **What shipped:** an accessible rewrite of `product_description.html` — desktop ARIA `role="tablist"/tab/tabpanel` with `aria-selected/controls/labelledby`, roving tabindex, Arrow/Home/End keyboard nav; mobile = the same tabs/panels stacked as a full-width accordion (one DOM, one Alpine state). IDs namespaced per `product.pk`. Static first-tab-active attributes give a working no-JS baseline (Alpine `:attr` bindings do not render statically). Added the missing mobile `@media` breakpoint + `:focus-visible`.
 - **Files:** `sections/product_description.html`, `apps/catalog/static/css/product_detail.css`.
-- **Tests (RED→GREEN):** `test_views.py::ProductDetailContextAwareSectionsPreviewTests` (+`_one_product_description()` helper; 4 PDT tests for ARIA roles + all three panes reachable).
-- **Commit:** `1f9b3a9`.
+- **Tests (RED→GREEN):** `test_views.py::ProductDetailContextAwareSectionsPreviewTests` (ARIA roles + all three panes reachable + real-accordion structure + Persian ZWNJ + no-JS visibility).
+- **No-JS progressive-enhancement fix (final micro-remediation).** A regression was found: the panels carry `class="tabpane pdp-tab-panel"` with no static `active` class, and a blanket `.tabpane{display:none}` rule (equal specificity, later in source) plus `x-cloak` hid ALL panels when JavaScript was disabled. **Fix (smallest):** removed the blanket `.tabpane{display:none}`/`.tabpane.active{display:block}` rules (kept only `.pdp-tab-panel{display:block}` visible-by-default + `.tabpane.active{animation}`), and removed `x-cloak` from the three panels. With JS off, all three panels stay visible/reachable; once Alpine boots, `x-show` sets an inline `display:none` on the inactive panels so only the active one shows. One DOM, no content duplication, no new JS component, PDP data ownership unchanged. Proven by two focused Django tests (`test_no_js_panels_are_visible_by_default`, `test_no_js_panels_template_has_no_static_hidden_state`) and a JS-disabled Playwright PDP check (all 3 panels computed-visible + canonical content reachable).
+- **Commits:** `1f9b3a9` (initial), `50cf399` (real accordion + ZWNJ), plus the no-JS fix commit in this final micro-remediation.
 
 ## 5. MDR — Mobile navigation drawer + shared overlay primitive (Classification D / M) — DONE ✅
 
@@ -493,8 +494,11 @@ QA section (recognised by its marker content), aborts (exit 3, changes nothing)
 if any non-QA `trust_features` already exists on the PDP, and restores the exact
 prior tenant state on revert.
 
-**Result (deepened harness, evidence HEAD `e061d71`): 92/92 PASS, 0 warnings,
-0 failures, 0 console errors.**
+**Result (deepened harness, after the final micro-remediation): 95/95 PASS,
+0 warnings, 0 failures, 0 console errors.** (92 JS-enabled checks + 3 new no-JS
+PDP checks.)
+
+- **PDT no-JS (JavaScript disabled context):** the PDP returns 200; **all 3 panels are computed-visible** (`display` ≠ none); the canonical `desc-text` / `spec-table` / `review-sum` content is reachable in the DOM. Screenshot: `pdp-nojs-desktop-1440.png`.
 
 - **STRANS:** `data-hero-transition` present AND carries a valid closed-enum value (`cut`/`fade`/`slide`) at every viewport (proves the setting reaches the real runtime).
 - **MODAL:** quick-view trigger + dialog on every card (52/52); **unique** dialog + title ids across the whole page (52/52 unique — instance-safe); trigger `aria-controls` resolves to the opened dialog; PDP link present; cart-affordance consistent with card settings; **opens**, **focus enters overlay**, **Tab stays trapped**, **body scroll-locked**, **backdrop/explicit/Escape all close**, **focus returns to the trigger**.

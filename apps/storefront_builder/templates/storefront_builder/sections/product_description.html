@@ -62,7 +62,7 @@ CSS).
             :class="{ active: tab === 'desc' }" @click="select('desc')" @keydown="onKey($event, 0)">توضیحات محصول</button>
     <div class="tabpane pdp-tab-panel" id="pdp-panel-desc-{{ pid }}" role="tabpanel"
          aria-labelledby="pdp-tab-desc-{{ pid }}" tabindex="0"
-         :class="{ active: tab === 'desc' }" x-show="tab === 'desc'" x-cloak>
+         :class="{ active: tab === 'desc' }" x-show="tab === 'desc'">
       <div class="desc-text">
         {% if product.description %}{{ product.description|product_description_html }}{% else %}<p>توضیحاتی برای این کالا ثبت نشده است.</p>{% endif %}
       </div>
@@ -76,7 +76,7 @@ CSS).
             :class="{ active: tab === 'spec' }" @click="select('spec')" @keydown="onKey($event, 1)">مشخصات فنی</button>
     <div class="tabpane pdp-tab-panel" id="pdp-panel-spec-{{ pid }}" role="tabpanel"
          aria-labelledby="pdp-tab-spec-{{ pid }}" tabindex="0"
-         :class="{ active: tab === 'spec' }" x-show="tab === 'spec'" x-cloak>
+         :class="{ active: tab === 'spec' }" x-show="tab === 'spec'">
       <table class="spec-table">
         <tr><td>دسته‌بندی</td><td>{{ product.category.name }}</td></tr>
         {% if product.brand %}<tr><td>برند</td><td>{{ product.brand.name }}</td></tr>{% endif %}
@@ -97,7 +97,7 @@ CSS).
             :class="{ active: tab === 'review' }" @click="select('review')" @keydown="onKey($event, 2)">نظرات کاربران</button>
     <div class="tabpane pdp-tab-panel" id="pdp-panel-review-{{ pid }}" role="tabpanel"
          aria-labelledby="pdp-tab-review-{{ pid }}" tabindex="0"
-         :class="{ active: tab === 'review' }" x-show="tab === 'review'" x-cloak>
+         :class="{ active: tab === 'review' }" x-show="tab === 'review'">
       <div class="review-sum">
         <div class="big">
           <b>{{ product.rating|floatformat:1|fa_number }}</b>
