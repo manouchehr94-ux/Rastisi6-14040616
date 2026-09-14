@@ -99,6 +99,64 @@ here — so every future visual variant reads identical business semantics.
     {% endif %}
   </div>
   {% endif %}
+  {% comment %}
+  Public product quick view (MODAL). Rendered server-side from the SAME
+  ``card`` (product_card_data) truth already resolved above — no second
+  endpoint, no client fetch, no second serializer. Open/close/escape/focus/
+  scroll-lock are delegated to the shared ``sfbOverlay`` primitive (MDR).
+  Add-to-cart reuses the canonical ``cart:add`` path.
+  {% endcomment %}
+  <div class="pcard-quickview" x-data="sfbOverlay()">
+    <button type="button" class="pcard-qv-trigger"
+            aria-haspopup="dialog" aria-controls="quick-view-{{ product.pk }}"
+            :aria-expanded="overlayOpen ? 'true' : 'false'"
+            aria-label="نمای سریع {{ card.name }}"
+            @click="event.preventDefault();event.stopPropagation();openOverlay()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <span class="pcard-qv-trigger-label">نمای سریع</span>
+    </button>
+    <div class="pcard-qv-backdrop" x-show="overlayOpen" x-transition.opacity
+         @click="closeOverlay()" x-cloak></div>
+    <div class="pcard-qv-dialog" id="quick-view-{{ product.pk }}"
+         role="dialog" aria-modal="true" aria-labelledby="quick-view-title-{{ product.pk }}"
+         x-ref="overlayPanel" x-show="overlayOpen" x-transition
+         @keydown="onOverlayKeydown($event)" x-cloak>
+      <button type="button" class="pcard-qv-close" aria-label="بستن نمای سریع" @click="closeOverlay()">×</button>
+      <div class="pcard-qv-media">
+        {% if card.image_url %}
+        <img src="{{ card.image_url }}" alt="{{ card.image_alt }}" loading="lazy">
+        {% else %}
+        <span class="pcard-qv-media-placeholder" aria-hidden="true">{{ product.icon|default:"🛍️" }}</span>
+        {% endif %}
+      </div>
+      <div class="pcard-qv-info">
+        {% if card.brand_name %}<div class="pcard-qv-brand">{{ card.brand_name }}</div>{% endif %}
+        <h2 class="pcard-qv-name" id="quick-view-title-{{ product.pk }}">{{ card.name }}</h2>
+        {% if card_settings.show_rating is not False %}
+        <div class="pcard-qv-rate">
+          <span class="stars">{{ card.rating|star_rating }}</span>{{ card.rating|fa_number }}
+          <span style="opacity:.6">({{ card.reviews_count|fa_number }})</span>
+        </div>
+        {% endif %}
+        <div class="pcard-qv-price">
+          <span class="now">{{ card.price|toman }}</span>
+          {% if card.compare_at_price %}<span class="old">{{ card.compare_at_price|toman }}</span>{% endif %}
+          {% if card.is_on_sale %}<span class="pill pill-disc">{{ card.discount_percent|fa_number }}٪</span>{% endif %}
+        </div>
+        <div class="pcard-qv-actions">
+          {% if card.is_out_of_stock %}
+          <span class="pcard-qv-oos">ناموجود</span>
+          {% elif card_settings.show_quick_add is not False and card.is_quick_add_eligible %}
+          <button type="button" class="pcard-qv-add"
+                  hx-post="{% url 'cart:add' product.slug %}" hx-vals='{"quantity": 1}' hx-swap="none">
+            افزودن به سبد خرید
+          </button>
+          {% endif %}
+          <a class="pcard-qv-detail" href="{{ card.url }}">مشاهده صفحه محصول</a>
+        </div>
+      </div>
+    </div>
+  </div>
   {% if not card.is_out_of_stock and card_settings.show_quick_add is not False and card.is_quick_add_eligible and card_settings.card_style == "compact" %}
   <div class="compact-actions">
     <button class="compact-cart" type="button" hx-post="{% url 'cart:add' product.slug %}" hx-vals='{"quantity": 1}' hx-swap="none" aria-label="افزودن به سبد خرید"

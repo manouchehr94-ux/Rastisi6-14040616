@@ -1,0 +1,98 @@
+"""Phase 5 Task 5 (MODAL) — public product quick view.
+
+The quick view is rendered SERVER-SIDE inside the canonical product card,
+reusing the SAME ``product_card_data`` (U3) truth already resolved for the
+card — no second product endpoint, no second serializer, no client fetch.
+It reuses the canonical ``cart:add`` path for add-to-cart and the shared
+``sfbOverlay`` overlay-mechanics primitive (MDR) for open/close/escape/
+focus/scroll-lock. Each card gets a unique dialog id so many cards on one
+page never collide.
+"""
+from decimal import Decimal
+
+from django.template.loader import render_to_string
+from django.test import TestCase
+from django.urls import reverse
+
+from apps.catalog.models import Category, Product, Vendor
+from apps.catalog.services.product_card_service import build_product_card_data
+from apps.storefront_builder.section_registry import default_card_settings
+from apps.stores.models import Store
+
+
+def _akhlaghi():
+    return Store.objects.get(slug="akhlaghi")
+
+
+class ProductQuickViewCardContractTests(TestCase):
+    def setUp(self):
+        self.store = _akhlaghi()
+        self.vendor = Vendor.objects.create(store=self.store, name="فروشگاه", slug="qv-shop")
+        self.category = Category.objects.create(store=self.store, name="دسته", slug="qv-category")
+
+    def _product(self, **kwargs):
+        count = Product.objects.count()
+        defaults = {
+            "store": self.store,
+            "vendor": self.vendor,
+            "category": self.category,
+            "name": "کالای واقعی",
+            "slug": f"qv-{count}",
+            "sku": f"QV-{count}",
+            "price": Decimal("250000"),
+            "stock": 5,
+            "status": Product.Status.ACTIVE,
+            "product_type": Product.ProductType.SIMPLE,
+        }
+        defaults.update(kwargs)
+        return Product.objects.create(**defaults)
+
+    def _render(self, product, **overrides):
+        settings = default_card_settings()
+        settings.update(overrides)
+        return render_to_string(
+            "catalog/partials/product_card.html",
+            {"product": product, "card_settings": settings},
+        )
+
+    def test_card_exposes_quick_view_trigger_with_dialog_semantics(self):
+        product = self._product()
+        html = self._render(product)
+        # A quick view trigger with an accessible label.
+        self.assertIn("aria-haspopup=\"dialog\"", html)
+        # The dialog element itself with modal semantics.
+        self.assertIn('role="dialog"', html)
+        self.assertIn('aria-modal="true"', html)
+
+    def test_quick_view_dialog_id_is_unique_per_product(self):
+        product = self._product()
+        html = self._render(product)
+        expected_id = f"quick-view-{product.pk}"
+        self.assertIn(expected_id, html)
+        self.assertIn(f'aria-controls="{expected_id}"', html)
+
+    def test_quick_view_reuses_canonical_card_truth(self):
+        product = self._product(name="کالای کوییک", price=Decimal("180000"))
+        truth = build_product_card_data(product)
+        html = self._render(product)
+        # Name and PDP url come straight from the canonical card data.
+        self.assertIn(truth.name, html)
+        self.assertIn(truth.url, html)
+
+    def test_quick_view_reuses_canonical_cart_add_path(self):
+        product = self._product()
+        html = self._render(product)
+        cart_action = reverse("cart:add", args=[product.slug])
+        # cart:add appears; the quick view does not invent a second cart route.
+        self.assertIn(cart_action, html)
+
+    def test_quick_view_reuses_shared_overlay_primitive(self):
+        product = self._product()
+        html = self._render(product)
+        self.assertIn("sfbOverlay", html)
+
+    def test_out_of_stock_quick_view_has_no_add_to_cart(self):
+        product = self._product(name="ناموجود", stock=0)
+        html = self._render(product)
+        # Out of stock cards must not offer a cart action anywhere (card or QV).
+        self.assertNotIn(reverse("cart:add", args=[product.slug]), html)
