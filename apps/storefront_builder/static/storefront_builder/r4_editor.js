@@ -346,6 +346,20 @@ window.RastiSiR4 = {
     });
   }
 
+  // Phase 5 Task 4D — post the current R4 selection into the EXISTING
+  // preview iframe so the same Section highlights there. Never a second
+  // selection authority (reads R4.selected only) and never a reimplementation
+  // of the highlight — the preview template already owns applying it. The
+  // message shape/type mirror the legacy editor's own outbound selection
+  // sync exactly; origin-targeted, never "*".
+  function syncPreviewSelection() {
+    if (!previewFrame || !previewFrame.contentWindow || R4.selected == null) return;
+    previewFrame.contentWindow.postMessage({
+      type: 'sfb:setSelection',
+      sectionId: R4.selected,
+    }, window.location.origin);
+  }
+
   R4.openSection = function (sectionId) {
     if (!inspector || !sectionId) return Promise.resolve();
     // Opening a Section Inspector always closes Global Design — the two
@@ -364,6 +378,16 @@ window.RastiSiR4 = {
         if (shell) shell.dataset.r4InspectorOpen = 'true';
         R4.selected = sectionId;
         R4.inspectorOpen = true;
+        // Phase 5 Task 4D — sidebar/structure -> preview selection sync.
+        // openSection is the single selection entry point (a sidebar row
+        // click, and the preview-originated sfb:selectSection/
+        // sfb:openSectionSettings, all route through here), so posting the
+        // canonical selection into the EXISTING preview iframe once here
+        // covers every path without a second selected-section state. The
+        // preview template already applies this as its highlight — R4 never
+        // reimplements that logic. Uses the existing section identity;
+        // targeted to this window's origin.
+        syncPreviewSelection();
         activateTab('basic');
         // Hydrate the raw backing values (incl. the rich_text textarea)
         // BEFORE Alpine mounts CKEditor, so it initializes from the real

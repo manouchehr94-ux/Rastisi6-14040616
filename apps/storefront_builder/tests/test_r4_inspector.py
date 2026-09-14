@@ -851,3 +851,76 @@ class Task4BBackgroundJsContractTests(R4MutationApiTestCase):
         # (mutate/history/publish) stay exactly three.
         self.assertEqual(self.js_source.count("method: 'POST'"), 3)
         self.assertNotIn("modal", self.js_source.lower())
+
+
+
+# ------------------------------------------------------------------------
+# Phase 5 Task 4D — sidebar -> preview selection sync. When a Section is
+# selected from the R4 sidebar/structure UI, R4 must post the canonical
+# selection into the EXISTING preview iframe (sfb:setSelection), which
+# preview.html already applies as the highlight. R4 must NOT reimplement the
+# highlight logic and must NOT create a second selected-section state — it
+# uses the existing section identity and the existing openSection selection.
+# ------------------------------------------------------------------------
+
+
+class Task4DSelectionSyncJsContractTests(R4MutationApiTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.js_source = Path(
+            settings.BASE_DIR,
+            "apps/storefront_builder/static/storefront_builder/r4_editor.js",
+        ).read_text(encoding="utf-8")
+
+    def test_r4_posts_set_selection_into_the_preview_iframe(self):
+        # The missing outbound message R4 never sent before this task.
+        self.assertIn("sfb:setSelection", self.js_source)
+        self.assertIn("previewFrame.contentWindow.postMessage", self.js_source)
+
+    def test_set_selection_is_posted_with_the_canonical_origin(self):
+        idx = self.js_source.index("sfb:setSelection")
+        chunk = self.js_source[idx:idx + 300]
+        # Targeted to this window's origin, never "*".
+        self.assertIn("window.location.origin", chunk)
+        self.assertNotIn("postMessage(", chunk.replace("previewFrame.contentWindow.postMessage(", ""))
+
+    def test_open_section_carries_the_selected_section_id_into_the_preview(self):
+        # openSection is the single selection entry point (sidebar click,
+        # preview-originated selectSection/openSectionSettings all route to
+        # it) — it drives the preview selection through one shared helper.
+        open_idx = self.js_source.index("openSection = function")
+        open_chunk = self.js_source[open_idx:open_idx + 1800]
+        self.assertIn("syncPreviewSelection()", open_chunk)
+        # The helper posts setSelection carrying the current selected id.
+        helper_idx = self.js_source.index("function syncPreviewSelection")
+        helper_chunk = self.js_source[helper_idx:helper_idx + 400]
+        self.assertIn("sfb:setSelection", helper_chunk)
+        self.assertIn("sectionId: R4.selected", helper_chunk)
+
+    def test_no_second_selected_section_state_is_introduced(self):
+        # R4.selected stays the single selection authority — no parallel
+        # selection variable, and the preview highlight logic itself is not
+        # reimplemented here (that stays in preview.html).
+        self.assertIn("R4.selected", self.js_source)
+        self.assertNotIn("applyBuilderSelection", self.js_source)
+        self.assertNotIn("sfb-rsec-selected", self.js_source)
+
+    def test_preview_originated_selection_events_are_still_handled(self):
+        # The existing inbound contract (preview -> R4) must be preserved.
+        self.assertIn("sfb:selectSection", self.js_source)
+        self.assertIn("sfb:openSectionSettings", self.js_source)
+
+
+class Task4DPreviewStillOwnsHighlightTests(R4MutationApiTestCase):
+    """preview.html already owns the incoming sfb:setSelection -> highlight
+    application; Task 4D must reuse it, not duplicate it."""
+
+    def test_preview_template_still_handles_incoming_set_selection(self):
+        preview_source = Path(
+            settings.BASE_DIR,
+            "apps/storefront_builder/templates/storefront_builder/preview.html",
+        ).read_text(encoding="utf-8")
+        self.assertIn("sfb:setSelection", preview_source)
+        self.assertIn("applyBuilderSelection", preview_source)
+        self.assertIn("sfb-rsec-selected", preview_source)
