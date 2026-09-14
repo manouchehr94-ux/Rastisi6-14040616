@@ -31,6 +31,18 @@
             aria-label="نمایش/پنهان‌سازی ساختار صفحه" aria-expanded="false">ساختار</button>
     <button type="button" id="r4GlobalDesignToggle" class="r4-icon-btn r4-structure-toggle-btn"
             aria-label="طراحی کلی فروشگاه" aria-expanded="false">طراحی کلی</button>
+    {% comment %}
+    Phase 5 Task 4C — device preview switcher (Desktop / Tablet / Mobile).
+    Ported from the legacy sfb-v3-device-switcher; it only changes the
+    presentation width/scale of the EXISTING #r4PreviewFrame iframe below —
+    never a second renderer/preview URL/iframe/srcdoc. Accessible toggle
+    state via aria-pressed. UI-only: never persisted to Store/Draft/database.
+    {% endcomment %}
+    <div class="r4-device-switcher" role="group" aria-label="اندازه پیش‌نمایش" data-r4-device-switcher>
+      <button type="button" class="r4-icon-btn r4-device-btn" data-r4-device="desktop" aria-pressed="true" aria-label="دسکتاپ" title="دسکتاپ">🖥</button>
+      <button type="button" class="r4-icon-btn r4-device-btn" data-r4-device="tablet" aria-pressed="false" aria-label="تبلت" title="تبلت">📱</button>
+      <button type="button" class="r4-icon-btn r4-device-btn" data-r4-device="mobile" aria-pressed="false" aria-label="موبایل" title="موبایل">📱</button>
+    </div>
     <button type="button" id="r4UndoButton" class="r4-icon-btn" aria-label="واگرد آخرین تغییر"
             {% if not history.can_undo %}disabled{% endif %}>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/></svg>
@@ -169,11 +181,22 @@
       {% endif %}
     </aside>
     <section class="r4-preview-pane">
-      <iframe
-        id="r4PreviewFrame"
-        title="پیش‌نمایش فروشگاه"
-        src="{% url 'dashboard:storefront-builder-preview' %}?page={{ page_type }}">
-      </iframe>
+      {% comment %}
+      Phase 5 Task 4C — the canvas wrapper is a pure presentation container
+      the device switcher scales the SAME single iframe within; it is never a
+      second preview surface. The device pixel widths mirror the legacy
+      switcher (desktop 1200 / tablet 768 / mobile 390).
+      {% endcomment %}
+      <div class="r4-preview-canvas" data-r4-device="desktop">
+        <iframe
+          id="r4PreviewFrame"
+          title="پیش‌نمایش فروشگاه"
+          data-desktop-viewport-width="1200"
+          data-tablet-viewport-width="768"
+          data-mobile-viewport-width="390"
+          src="{% url 'dashboard:storefront-builder-preview' %}?page={{ page_type }}">
+        </iframe>
+      </div>
     </section>
     <aside id="r4Inspector" hidden aria-label="تنظیمات بخش"></aside>
     <aside id="r4GlobalDesign" hidden aria-label="طراحی کلی">

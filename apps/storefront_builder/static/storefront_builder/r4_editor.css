@@ -307,11 +307,42 @@ body:has(.r4-builder) {
   background: var(--r4-canvas);
 }
 
+/* Phase 5 Task 4C — the canvas fills the preview pane; the SAME
+   #r4PreviewFrame fills the canvas at desktop, and is width-clamped +
+   transform-scaled (inline styles from r4_editor.js) at tablet/mobile. */
+.r4-preview-pane .r4-preview-canvas {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: auto;
+  display: flex;
+}
+
 .r4-preview-pane #r4PreviewFrame {
   flex: 1 1 auto;
   width: 100%;
   height: 100%;
   border: 0;
+}
+/* Tablet/mobile: the iframe becomes a fixed-width, top-aligned box the JS
+   scales; drop flex so its inline width/height/transform take effect. */
+.r4-preview-canvas[data-r4-device="tablet"] #r4PreviewFrame,
+.r4-preview-canvas[data-r4-device="mobile"] #r4PreviewFrame {
+  flex: 0 0 auto;
+  height: auto;
+}
+
+/* Device switcher toggle group in the topbar. */
+.r4-device-switcher {
+  display: inline-flex;
+  gap: 2px;
+}
+.r4-device-btn[aria-pressed="true"] {
+  background: var(--r4-accent);
+  color: #fff;
+  border-color: var(--r4-accent);
 }
 
 #r4Inspector {

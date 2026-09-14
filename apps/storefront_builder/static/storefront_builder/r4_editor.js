@@ -31,6 +31,10 @@ window.RastiSiR4 = {
   // R4 Task 11 — Global Design + Undo/Redo + Publish topbar controls.
   var globalDesignToggle = document.getElementById('r4GlobalDesignToggle');
   var globalDesignPanel = document.getElementById('r4GlobalDesign');
+  // Phase 5 Task 4C — device preview switcher + the canvas the SAME
+  // #r4PreviewFrame iframe is scaled within. UI-only state, never persisted.
+  var deviceSwitcher = document.querySelector('[data-r4-device-switcher]');
+  var previewCanvas = document.querySelector('.r4-preview-canvas');
   var undoButton = document.getElementById('r4UndoButton');
   var redoButton = document.getElementById('r4RedoButton');
   var publishButton = document.getElementById('r4PublishButton');
@@ -1567,6 +1571,64 @@ window.RastiSiR4 = {
     var deepLinkPanel = new URLSearchParams(window.location.search).get('panel');
     if (deepLinkPanel === 'appearance' || deepLinkPanel === 'header' || deepLinkPanel === 'footer') {
       openGlobalDesign();
+    }
+  }
+
+  // ---- Phase 5 Task 4C — device preview (Desktop / Tablet / Mobile).
+  // Ported from the legacy editor's syncPreviewViewport transform-scale
+  // approach: the SAME #r4PreviewFrame iframe is rendered at the real device
+  // pixel width and CSS-transform-scaled to fit the canvas — it reuses the
+  // one existing preview surface, never a second one. UI-only state
+  // (currentDevice) held in memory only: never persisted to Store/Draft/
+  // browser storage, never sent through the mutation queue.
+  if (deviceSwitcher && previewFrame && previewCanvas) {
+    var currentDevice = 'desktop';
+
+    function syncPreviewViewport() {
+      var widths = {
+        desktop: parseInt(previewFrame.dataset.desktopViewportWidth, 10) || 1200,
+        tablet: parseInt(previewFrame.dataset.tabletViewportWidth, 10) || 768,
+        mobile: parseInt(previewFrame.dataset.mobileViewportWidth, 10) || 390,
+      };
+      if (currentDevice === 'desktop') {
+        // Desktop fills the canvas naturally — no fixed width / scaling.
+        previewFrame.style.width = '';
+        previewFrame.style.height = '';
+        previewFrame.style.transform = '';
+        previewFrame.style.margin = '';
+        return;
+      }
+      var requestedWidth = widths[currentDevice] || widths.desktop;
+      var availableWidth = Math.max(1, previewCanvas.clientWidth - 2);
+      var fitScale = Math.min(1, availableWidth / requestedWidth);
+      var scale = Math.max(0.35, fitScale);
+      previewFrame.style.width = requestedWidth + 'px';
+      previewFrame.style.height = Math.ceil(previewCanvas.clientHeight / scale) + 'px';
+      previewFrame.style.transform = 'scale(' + scale + ')';
+      previewFrame.style.transformOrigin = 'top center';
+      previewFrame.style.margin = '0 auto';
+    }
+
+    function setDevice(device) {
+      if (['desktop', 'tablet', 'mobile'].indexOf(device) === -1) return;
+      currentDevice = device;
+      previewCanvas.setAttribute('data-r4-device', device);
+      deviceSwitcher.querySelectorAll('[data-r4-device]').forEach(function (btn) {
+        btn.setAttribute('aria-pressed', btn.getAttribute('data-r4-device') === device ? 'true' : 'false');
+      });
+      syncPreviewViewport();
+    }
+
+    deviceSwitcher.addEventListener('click', function (evt) {
+      var btn = evt.target.closest('[data-r4-device]');
+      if (!btn) return;
+      setDevice(btn.getAttribute('data-r4-device'));
+    });
+
+    if (window.ResizeObserver) {
+      new ResizeObserver(function () { syncPreviewViewport(); }).observe(previewCanvas);
+    } else {
+      window.addEventListener('resize', syncPreviewViewport);
     }
   }
 
