@@ -964,3 +964,21 @@ button.r4-picker-row--result:hover {
 .r4-media-manager-toolbar {
   margin-bottom: 10px;
 }
+
+
+/* Phase 5 Task 6 — Storefront Showcase creation facade (inline disclosure).
+   A small, RTL-first inline chooser above the normal Add Section control. It
+   creates existing canonical sections; it has no rendering surface of its own. */
+.r4-showcase{margin-bottom:8px;border:1px solid var(--r4-line);border-radius:var(--r4-radius);background:var(--r4-surface)}
+.r4-showcase-summary{cursor:pointer;padding:9px 12px;font-weight:700;color:var(--r4-text);list-style:none}
+.r4-showcase-summary::-webkit-details-marker{display:none}
+.r4-showcase-summary::before{content:"▾";margin-inline-end:6px;color:var(--r4-muted);transition:transform .15s ease}
+.r4-showcase[open] .r4-showcase-summary::before{transform:rotate(180deg)}
+.r4-showcase-choices{display:flex;flex-direction:column;gap:6px;padding:0 10px 10px}
+.r4-showcase-choice{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:start;
+  width:100%;padding:9px 11px;border:1px solid var(--r4-line);border-radius:10px;background:var(--r4-canvas);
+  color:var(--r4-text);cursor:pointer}
+.r4-showcase-choice:hover,.r4-showcase-choice:focus-visible{border-color:var(--r4-accent);outline:none}
+.r4-showcase-choice-label{font-weight:700;font-size:13px}
+.r4-showcase-choice-desc{font-size:11.5px;color:var(--r4-muted);line-height:1.6}
+@media(prefers-reduced-motion:reduce){.r4-showcase-summary::before{transition:none}}
