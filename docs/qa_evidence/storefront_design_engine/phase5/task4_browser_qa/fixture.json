@@ -1,0 +1,133 @@
+{
+  "hero_section_id": 57,
+  "brand_carousel_section_id": 58,
+  "draft_revision": 0,
+  "phase3": {
+    "brand_section_ids": {
+      "home": {
+        "grid": 59,
+        "carousel": 60,
+        "beauty_tabs": 61
+      },
+      "product_detail": {
+        "grid": 62,
+        "carousel": 63,
+        "beauty_tabs": 64
+      },
+      "listing": {
+        "grid": 65,
+        "carousel": 66,
+        "beauty_tabs": 67
+      },
+      "collection": {
+        "grid": 68,
+        "carousel": 69,
+        "beauty_tabs": 70
+      },
+      "cart": {
+        "grid": 71,
+        "carousel": 72,
+        "beauty_tabs": 73
+      }
+    },
+    "product_slug": "t12-product-1",
+    "collection_slug": "p3-collection-1",
+    "brand_ids": [
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "brand_slugs": [
+      "t12-brand-1",
+      "t12-brand-2",
+      "t12-brand-3",
+      "t12-brand-4",
+      "t12-brand-5"
+    ],
+    "no_logo_brand_id": 11,
+    "no_logo_brand_name": "برند تی۱۲ شماره 5",
+    "view_all_url_path": "/collections/p3-collection-1/",
+    "variants": [
+      "grid",
+      "carousel",
+      "beauty_tabs"
+    ],
+    "broken_image_brand_id": 12,
+    "collection": {
+      "tiles_section_ids": {
+        "home": {
+          "grid": 75,
+          "carousel": 76
+        },
+        "product_detail": {
+          "grid": 77,
+          "carousel": 78
+        },
+        "listing": {
+          "grid": 79,
+          "carousel": 80
+        },
+        "search": {
+          "grid": 81,
+          "carousel": 82
+        },
+        "collection": {
+          "grid": 83,
+          "carousel": 84
+        },
+        "cart": {
+          "grid": 85,
+          "carousel": 86
+        }
+      },
+      "collection_slugs": [
+        "p3-collection-2",
+        "p3-collection-1",
+        "p3-collection-page2"
+      ],
+      "newest_collection_slug": "p3-collection-2",
+      "page2_collection_slug": "p3-collection-page2",
+      "collection_names": {
+        "p3-collection-1": "کالکشن پی۳ شماره ۱",
+        "p3-collection-2": "کالکشن پی۳ شماره ۲",
+        "p3-collection-page2": "کالکشن پی۳ صفحه‌بندی"
+      },
+      "image_collection_slug": "p3-collection-1",
+      "no_image_collection_slug": "p3-collection-2",
+      "broken_collection_slug": "p3-collection-broken",
+      "page2_total_members": 14,
+      "page2_visible_members": 13,
+      "product_slug": "t12-product-1",
+      "tile_variants": [
+        "grid",
+        "carousel"
+      ]
+    },
+    "task6_families": {
+      "category_grid_section_id": 87,
+      "multi_banner_section_id": 88,
+      "image_text_section_id": 89,
+      "newsletter_section_id": 90,
+      "story_rail_section_id": 91,
+      "single_banner_section_id": 92
+    },
+    "final_remediation_families": {
+      "newest_products_section_id": 93,
+      "best_sellers_section_id": 94,
+      "discounted_products_section_id": 95,
+      "promo_cards_section_id": 96,
+      "amazing_offers_section_id": 97,
+      "blog_posts_section_id": 98,
+      "image_slider_section_id": 99,
+      "video_section_section_id": 100,
+      "quick_links_section_id": 101,
+      "trust_features_section_id": 102,
+      "faq_section_id": 103,
+      "testimonials_section_id": 104,
+      "rich_text_section_id": 105,
+      "quick_links_menu_id": 1
+    }
+  }
+}

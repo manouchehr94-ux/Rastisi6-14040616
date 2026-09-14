@@ -1,0 +1,350 @@
+{
+  "started_at": "2026-09-14T06:19:13.010Z",
+  "builder_url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+  "public_url": "http://127.0.0.1:8765/",
+  "scenarios": [
+    {
+      "name": "01-initial-r4",
+      "status": "FAIL",
+      "ms": 15002,
+      "error": "locator.waitFor: Timeout 15000ms exceeded.\nCall log:\n  - waiting for locator('[data-r4-shell]') to be visible\n\n    at scenario01InitialR4 (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:469:41)\n    at scenario (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:11)\n    at main (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3917:9)\n    at async file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3961:3"
+    },
+    {
+      "name": "02-hero-basic-autosave",
+      "status": "FAIL",
+      "ms": 15001,
+      "error": "locator.waitFor: Timeout 15000ms exceeded.\nCall log:\n  - waiting for locator('#r4PreviewFrame') to be visible\n\n    at previewFrame (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:298:17)\n    at openSectionViaPreview (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:319:23)\n    at scenario02HeroBasic (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:492:25)\n    at scenario (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:11)\n    at main (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3918:9)\n    at async file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3961:3"
+    },
+    {
+      "name": "03-hero-advanced-typography-override",
+      "status": "FAIL",
+      "ms": 30001,
+      "error": "page.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('[data-r4-tab=\"advanced\"]')\n\n    at activateAdvancedTab (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:524:14)\n    at scenario03HeroAdvancedTypography (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:532:9)\n    at scenario (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:11)\n    at main (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3919:9)\n    at async file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3961:3"
+    },
+    {
+      "name": "04-add-product-and-reorder",
+      "status": "FAIL",
+      "ms": 8,
+      "error": "page.evaluate: TypeError: Cannot read properties of null (reading 'dataset')\n    at eval (eval at evaluate (:311:30), <anonymous>:1:48)\n    at UtilityScript.evaluate (<anonymous>:313:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\n    at scenario04AddProductAndReorder (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:584:36)\n    at scenario (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:11)\n    at main (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3920:9)\n    at async file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3961:3"
+    },
+    {
+      "name": "05-product-auto-and-persian-digit-limit",
+      "status": "FAIL",
+      "ms": 1,
+      "error": "page.evaluate: TypeError: Cannot read properties of undefined (reading 'openSection')\n    at eval (eval at evaluate (:311:30), <anonymous>:1:26)\n    at UtilityScript.evaluate (<anonymous>:313:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\n    at openSectionById (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:351:14)\n    at scenario05ProductAutoAndPersianDigits (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:633:9)\n    at scenario (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:11)\n    at main (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3921:9)\n    at async file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3961:3"
+    },
+    {
+      "name": "06-product-manual-picker",
+      "status": "FAIL",
+      "ms": 30000,
+      "error": "page.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('[data-r4-resource-picker-open]')\n\n    at scenario06ProductManualPicker (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:703:14)\n    at scenario (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:11)\n    at main (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3922:9)\n    at async file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3961:3"
+    },
+    {
+      "name": "07-brand-same-picker",
+      "status": "FAIL",
+      "ms": 15002,
+      "error": "locator.waitFor: Timeout 15000ms exceeded.\nCall log:\n  - waiting for locator('#r4PreviewFrame') to be visible\n\n    at previewFrame (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:298:17)\n    at openSectionViaPreview (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:319:23)\n    at scenario07BrandManualPicker (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:731:26)\n    at async scenario (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:5)\n    at async main (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3923:3)\n    at async file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3961:3"
+    },
+    {
+      "name": "08-undo-redo",
+      "status": "FAIL",
+      "ms": 6,
+      "error": "page.evaluate: TypeError: Cannot read properties of undefined (reading 'openSection')\n    at eval (eval at evaluate (:311:30), <anonymous>:1:26)\n    at UtilityScript.evaluate (<anonymous>:313:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\n    at openSectionById (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:351:14)\n    at scenario08UndoRedo (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:769:9)\n    at async scenario (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:5)\n    at async main (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3924:3)\n    at async file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3961:3"
+    },
+    {
+      "name": "09-real-stale-conflict",
+      "status": "FAIL",
+      "ms": 4,
+      "error": "page.evaluate: TypeError: Cannot read properties of undefined (reading 'openSection')\n    at eval (eval at evaluate (:311:30), <anonymous>:1:26)\n    at UtilityScript.evaluate (<anonymous>:313:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\n    at openSectionById (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:351:14)\n    at scenario09StaleConflict (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:820:9)\n    at async scenario (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:5)\n    at async main (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3925:3)\n    at async file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3961:3"
+    },
+    {
+      "name": "10-publish",
+      "status": "FAIL",
+      "ms": 15006,
+      "error": "page.waitForNavigation: Timeout 15000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation until \"domcontentloaded\"\n============================================================\n    at /projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:925:10\n    at withExpectedNavigation (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:383:9)\n    at async scenario10Publish (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:924:3)\n    at async scenario (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:5)\n    at async main (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3926:3)\n    at async file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3961:3"
+    },
+    {
+      "name": "11-public-storefront-parity",
+      "status": "FAIL",
+      "ms": 80,
+      "error": "Error: No published Product-title sentinel was recorded\n    at assert (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:149:25)\n    at scenario11PublicParity (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:958:3)\n    at async scenario (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:5)\n    at async main (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3927:3)\n    at async file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3961:3"
+    },
+    {
+      "name": "12-new-draft-only-change",
+      "status": "FAIL",
+      "ms": 30001,
+      "error": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('[data-r4-shell]') to be visible\n\n    at scenario12NewDraftOnlyChange (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:991:41)\n    at scenario (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:11)\n    at main (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3928:9)\n    at async file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3961:3"
+    },
+    {
+      "name": "13-public-must-remain-unchanged",
+      "status": "FAIL",
+      "ms": 36,
+      "error": "Error: Published sentinel \"null\" must still be present on the public storefront\n    at assert (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:149:25)\n    at scenario13PublicUnchanged (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:1028:3)\n    at async scenario (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:5)\n    at async main (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3929:3)\n    at async file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3961:3"
+    },
+    {
+      "name": "final-instrumentation-assertions",
+      "status": "FAIL",
+      "ms": 0,
+      "error": "Error: Scenario 9 must have recorded the identity of its one deliberate stale request before final assertions can run\n    at assert (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:149:25)\n    at finalInstrumentationAssertions (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:1168:3)\n    at scenario (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:11)\n    at main (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3930:9)\n    at async file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3961:3"
+    },
+    {
+      "name": "final-screenshot-verification",
+      "status": "FAIL",
+      "ms": 0,
+      "error": "Error: Missing required screenshot: 01_r4_initial.png\n    at assert (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:149:25)\n    at verifyScreenshots (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:1234:5)\n    at scenario (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:11)\n    at main (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3931:9)\n    at async file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3961:3"
+    },
+    {
+      "name": "phase3-brand-gate",
+      "status": "FAIL",
+      "ms": 590,
+      "error": "Error: E1-home public GET returned 404\n    at assert (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:149:25)\n    at phase3FamilyPublicMatrix (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:1403:9)\n    at async phase3PublicMatrix (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:1583:3)\n    at async Object.run (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:2528:7)\n    at async phase3BrandGate (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:2559:7)\n    at async scenario (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:5)\n    at async main (file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3937:5)\n    at async file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3961:3"
+    },
+    {
+      "name": "phase3-task6-family-gate",
+      "status": "FAIL",
+      "ms": 15050,
+      "error": "locator.waitFor: Timeout 15000ms exceeded.\nCall log:\n  - waiting for locator('[data-r4-shell]') to be visible\n\n    at phase3Task6FamilyGate (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:2781:41)\n    at async scenario (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:5)\n    at async main (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3938:5)\n    at async file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3961:3"
+    },
+    {
+      "name": "phase3-final-remediation-family-gate",
+      "status": "FAIL",
+      "ms": 15049,
+      "error": "locator.waitFor: Timeout 15000ms exceeded.\nCall log:\n  - waiting for locator('[data-r4-shell]') to be visible\n\n    at phase3FinalRemediationFamilyGate (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3173:41)\n    at async scenario (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:5)\n    at async main (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3942:5)\n    at async file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3961:3"
+    },
+    {
+      "name": "14-task7-composition-and-recovery",
+      "status": "FAIL",
+      "ms": 15052,
+      "error": "locator.waitFor: Timeout 15000ms exceeded.\nCall log:\n  - waiting for locator('[data-r4-shell]') to be visible\n\n    at scenario14CompositionAndRecoveryGate (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3357:41)\n    at async scenario (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:5)\n    at async main (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3950:3)\n    at async file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3961:3"
+    },
+    {
+      "name": "15-task8-template-switch-lifecycle",
+      "status": "FAIL",
+      "ms": 15051,
+      "error": "locator.waitFor: Timeout 15000ms exceeded.\nCall log:\n  - waiting for locator('[data-r4-shell]') to be visible\n\n    at scenario15TemplateSwitchLifecycleGate (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3646:41)\n    at async scenario (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:188:5)\n    at async main (/projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3957:3)\n    at async file:///projects/sandbox/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:3961:3"
+    }
+  ],
+  "mutation_posts": [],
+  "history_posts": [],
+  "publish_posts": [],
+  "discard_posts": [],
+  "switch_template_posts": [],
+  "http_error_responses": [
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "status": 404,
+      "source": "admin",
+      "bucket": null,
+      "at": 1789366753379
+    },
+    {
+      "url": "http://127.0.0.1:8765/",
+      "status": 404,
+      "source": "public",
+      "bucket": null,
+      "at": 1789366874054
+    },
+    {
+      "url": "http://127.0.0.1:8765/",
+      "status": 404,
+      "source": "public",
+      "bucket": null,
+      "at": 1789366904249
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "status": 404,
+      "source": "admin",
+      "bucket": null,
+      "at": 1789366905118
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "status": 404,
+      "source": "admin",
+      "bucket": null,
+      "at": 1789366920244
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "status": 404,
+      "source": "admin",
+      "bucket": null,
+      "at": 1789366935349
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "status": 404,
+      "source": "admin",
+      "bucket": null,
+      "at": 1789366950461
+    }
+  ],
+  "console_errors": [
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "admin",
+      "at": 1789366753392
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://127.0.0.1:8765/",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "public",
+      "at": 1789366874058
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://127.0.0.1:8765/",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "public",
+      "at": 1789366904253
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "admin",
+      "at": 1789366905122
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "admin",
+      "at": 1789366920249
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "admin",
+      "at": 1789366935353
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "admin",
+      "at": 1789366950465
+    }
+  ],
+  "page_errors": [],
+  "request_failures": [],
+  "main_frame_navigations": [
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-14T06:19:13.391Z",
+      "expected": true
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-14T06:21:45.122Z",
+      "expected": true
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-14T06:22:00.249Z",
+      "expected": true
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-14T06:22:15.353Z",
+      "expected": true
+    },
+    {
+      "url": "http://127.0.0.1:8765/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-14T06:22:30.465Z",
+      "expected": true
+    }
+  ],
+  "screenshots": [],
+  "summary": {
+    "passed": 0,
+    "failed": 20
+  },
+  "phase3_brand": {
+    "started_at": "2026-09-14T06:19:13.011Z",
+    "viewports": [
+      "desktop",
+      "mobile",
+      "tablet"
+    ],
+    "envelopes": [],
+    "variant_checks": [],
+    "asset_envelope": [],
+    "v02_anchor": [],
+    "wrapper_projection": [],
+    "cart_htmx": [],
+    "screenshots": [],
+    "errors": [
+      {
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "url": "http://127.0.0.1:8765/",
+        "source": "public:home:desktop"
+      }
+    ],
+    "broken_image": null,
+    "combined_cart_htmx": [],
+    "tenant_negatives": {
+      "anonymous_preview_get": {
+        "url": "/admin-portal/storefront-builder/preview/?page=home",
+        "status_code": 404,
+        "rejected": false,
+        "note": "Unauthenticated GET against the real Preview view/permission stack via Django's test Client (not the browser, not a skipped fixture) — expected 302 (redirect to login) or 403, never 200."
+      }
+    },
+    "collection": {
+      "started_at": "2026-09-14T06:19:13.011Z",
+      "envelopes": [],
+      "variant_checks": [],
+      "asset_envelope": [],
+      "cart_htmx": [],
+      "page2": null,
+      "screenshots": [],
+      "errors": [],
+      "broken_image_records": [],
+      "index_companion": null,
+      "known_red_findings": []
+    },
+    "finished_at": "2026-09-14T06:21:45.028Z"
+  },
+  "finished_at": "2026-09-14T06:22:45.544Z"
+}
