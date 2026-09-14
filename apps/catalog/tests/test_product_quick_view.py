@@ -127,3 +127,22 @@ class ProductQuickViewCardContractTests(TestCase):
         html = self._render(product)
         # Out of stock cards must not offer a cart action anywhere (card or QV).
         self.assertNotIn(reverse("cart:add", args=[product.slug]), html)
+
+    def test_quick_view_trigger_uses_alpine_event_object_not_global(self):
+        # The Alpine @click handler on the quick-view trigger must use the
+        # canonical Alpine event object ($event) consistently — never the bare
+        # global `event`. Extract the trigger's @click expression and assert.
+        product = self._product()
+        html = self._render(product)
+        import re
+        m = re.search(r'class="pcard-qv-trigger"[^>]*?@click="([^"]*)"', html, re.S)
+        self.assertIsNotNone(m, "quick-view trigger @click handler not found")
+        handler = m.group(1)
+        self.assertIn("openOverlay($event.currentTarget)", handler)
+        self.assertIn("$event.preventDefault()", handler)
+        self.assertIn("$event.stopPropagation()", handler)
+        # No bare/global `event.` (e.g. "event.preventDefault") in the handler.
+        self.assertNotRegex(
+            handler, r'(^|[^$])\bevent\.',
+            "quick-view @click must not use the bare/global `event`; use $event",
+        )

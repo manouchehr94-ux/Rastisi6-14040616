@@ -20,8 +20,16 @@ evidence documents exist.
 
 > All test counts, the browser-QA result, and the changed-file list in this
 > report are the state at evidence HEAD `e061d71` (the last code/evidence commit
-> before this report commit). The final PR head SHA is reported in the delivery
-> response and visible on the Draft PR.
+> before the first report commit). The final PR head SHA is reported in the
+> delivery response and visible on the Draft PR.
+>
+> **Micro-remediation follow-up.** Two more small changes landed after `e061d71`
+> (still zero migrations, browser QA re-run: still **92/92**, 0 console errors):
+> (a) the MODAL quick-view `@click` handler now uses Alpine `$event`
+> consistently (no bare/global `event`), with a source-contract test; (b) the
+> PDTX browser-QA seed helper (`tools/storefront_builder_qa/_pdtx_seed.py`) is
+> now non-destructive/fail-closed. These do not change any test count or the QA
+> result reported below.
 
 ## 2. Approved Fast-Track Architecture (Product-Owner override)
 
@@ -461,6 +469,29 @@ own commit SHA is created after this table and is visible on the Draft PR.
 ## 15. Browser QA (real published tenant, RTL)
 
 Ran against the live published storefront (`rastisi-fashion-test`, 94 active products) via headless Chrome at three viewports (1440×900, 768×1024, 390×844), RTL confirmed (`dir="rtl"`). Runner: `tools/storefront_builder_qa/public_task5_qa.mjs`; evidence: `task5_browser_qa/report.json` + 10 screenshots.
+
+### QA scope split (accepted for final acceptance)
+
+PDTX acceptance is verified across two complementary layers — we deliberately do
+NOT build a new authenticated browser-editing framework:
+
+- **Django integration tests** (`test_pdp_trust_editable.py`, `test_pdp_trust_owner_gate.py`) prove the full lifecycle logic:
+  - a merchant edit through the real R4 mutation path (`section.update_settings`),
+  - Draft Preview shows the edited trust content,
+  - the public Published PDP is **unchanged before publish**,
+  - the public Published PDP is **updated after publish**,
+  - **tenant isolation** (a foreign store's trust edit never appears on this PDP).
+- **Browser QA** (`public_task5_qa.mjs`, this section) proves the real public rendering:
+  - the editable trust marker is **visible on the public PDP after publish**,
+  - the hard-coded fallback strip is **suppressed** when the canonical section exists (no double trust module),
+  - RTL correctness + per-viewport render health.
+
+The browser QA seeds/reverts its PDTX fixture with
+`tools/storefront_builder_qa/_pdtx_seed.py` (`PDTX_QA_MODE=seed|revert`), which
+is **non-destructive and fail-closed**: it only ever touches its own helper-owned
+QA section (recognised by its marker content), aborts (exit 3, changes nothing)
+if any non-QA `trust_features` already exists on the PDP, and restores the exact
+prior tenant state on revert.
 
 **Result (deepened harness, evidence HEAD `e061d71`): 92/92 PASS, 0 warnings,
 0 failures, 0 console errors.**
