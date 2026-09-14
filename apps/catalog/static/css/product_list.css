@@ -31,6 +31,10 @@
 .pagination a:hover{border-color:var(--violet-3);color:var(--violet)}
 .pagination .current{background:var(--violet);color:#fff;border-color:var(--violet)}
 .pagination .disabled{opacity:.4;pointer-events:none}
+/* Task 7 (Browse hardening, Gap #2) — the elided-window separator is a plain,
+   non-interactive glyph (no border box, no pointer), distinct from real page
+   controls. Keeps the bounded control compact on mobile. */
+.pagination .ellipsis{border:0;background:none;min-width:auto;padding:0 4px;color:var(--muted);pointer-events:none}
 
 .htmx-indicator{visibility:hidden}
 .htmx-request .htmx-indicator{visibility:visible}

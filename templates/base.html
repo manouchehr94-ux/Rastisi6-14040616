@@ -180,8 +180,16 @@ the product quick view (MODAL).{% endcomment %}
 
 {% comment %}Phase 5 Task 5 (MDR) — accessible off-canvas mobile navigation
 drawer, extracted into ONE shared partial so the canonical storefront shell
-(page_shell_header.html) reuses the exact same implementation.{% endcomment %}
-{% include "partials/mobile_nav_drawer.html" %}
+(page_shell_header.html) reuses the exact same implementation.
+
+Phase 5 Task 7 (final-review remediation) — this header block is the PUBLIC
+legacy fallback the universal shell renders via {{ block.super }} when
+``uses_universal_shell`` is False. Pass the live-storefront context explicitly
+(mirroring what the universal shell passes to its own header include) so the
+canonical search partial the drawer now reuses renders its REAL enabled GET
+form here, not the disabled Builder Preview branch (no context processor
+supplies ``is_live_storefront``).{% endcomment %}
+{% include "partials/mobile_nav_drawer.html" with is_live_storefront=True is_builder_preview=False %}
 {% endblock %}
 
 <main>
