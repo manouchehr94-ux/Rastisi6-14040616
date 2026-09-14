@@ -22,7 +22,7 @@ screen instead of Inspector fields.
     media-only family, reusing the canonical media manager body (media_views
     models/CRUD/authority) via htmx. No passive target="_blank" out-link.
     {% endcomment %}
-    <div class="r4-inspector-media" data-r4-media-manager>
+    <div class="r4-inspector-media" data-r4-media-manager hx-headers='{"HX-R4-Inline": "1"}'>
       <div class="r4-inspector-media-heading">مدیریت {{ media_label_plural }}</div>
       {% include "dashboard/storefront_builder/partials/section_media_manager_body.html" %}
     </div>

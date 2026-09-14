@@ -955,13 +955,25 @@ class Task4AR4NativeMediaHtmxTests(R4MutationApiTestCase):
             kwargs={"pk": section.pk, "kind": "hero-slides"},
         )
 
-    def test_media_list_hx_request_returns_body_only_partial(self):
-        response = self.client.get(self._media_list_url(self.section), HTTP_HX_REQUEST="true")
+    def test_media_list_r4_inline_returns_body_only_manager(self):
+        # R4-inline context is explicit (HX-R4-Inline), not HX-Request alone.
+        response = self.client.get(
+            self._media_list_url(self.section), HTTP_HX_REQUEST="true", HTTP_HX_R4_INLINE="1",
+        )
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
         self.assertIn('id="mediaList"', content)
+        self.assertIn("data-r4-media-manager", content)
         # Body-only: no full base_admin chrome.
         self.assertNotIn("<html", content.lower())
+
+    def test_media_list_hx_request_without_r4_marker_stays_full_legacy_page(self):
+        # The regression guard: HX-Request WITHOUT the explicit R4 marker must
+        # NOT be treated as R4-inline — the legacy full page is returned.
+        response = self.client.get(self._media_list_url(self.section), HTTP_HX_REQUEST="true")
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("<html", content.lower())
 
     def test_media_list_normal_request_still_returns_full_page(self):
         response = self.client.get(self._media_list_url(self.section))
@@ -1001,3 +1013,82 @@ class Task4AR4NativeMediaTenantIsolationTests(R4MutationApiTestCase):
         )
         self.assertEqual(self.client.get(url).status_code, 404)
         self.assertEqual(self.client.get(url, HTTP_HX_REQUEST="true").status_code, 404)
+
+
+
+class Task4MediaContextBoundaryTests(R4MutationApiTestCase):
+    """Final review fix — R4-inline context must NOT be inferred from
+    HX-Request alone. The legacy full-page media screen ALSO uses htmx
+    (toggle/move/delete/reorder all reswap through _media_list_body), so those
+    responses must stay LEGACY context (no R4-only hx-target=closest
+    [data-r4-media-manager] on the Edit link). Only requests carrying the
+    explicit R4-inline marker preserve inline_media=True. Same canonical
+    media_views endpoints own everything — no new endpoint/service/CRUD path."""
+
+    R4_INLINE_HEADER = "HTTP_HX_R4_INLINE"  # -> request header "HX-R4-Inline"
+    R4_TARGET = 'closest [data-r4-media-manager]'
+
+    def setUp(self):
+        super().setUp()
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from apps.content.models import HeroSlide
+
+        png = SimpleUploadedFile("s.png", b"\x89PNG\r\n\x1a\n", content_type="image/png")
+        self.slide = HeroSlide.objects.create(
+            store=self.store, section=self.section, title="اسلاید", desktop_image=png, is_active=True,
+        )
+
+    def _toggle_url(self):
+        return reverse(
+            "dashboard:storefront-builder-section-media-toggle",
+            kwargs={"pk": self.section.pk, "kind": "hero-slides", "item_pk": self.slide.pk},
+        )
+
+    def _list_url(self):
+        return reverse(
+            "dashboard:storefront-builder-section-media-list",
+            kwargs={"pk": self.section.pk, "kind": "hero-slides"},
+        )
+
+    # ---- Legacy full-page context (htmx, but NOT R4-inline) ----
+    def test_legacy_full_page_htmx_toggle_stays_legacy_context(self):
+        response = self.client.post(self._toggle_url(), HTTP_HX_REQUEST="true")
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn('id="mediaList"', content)
+        # The Edit link must NOT gain the R4-only inline target.
+        self.assertNotIn(self.R4_TARGET, content)
+
+    def test_legacy_full_page_list_get_is_legacy_context(self):
+        response = self.client.get(self._list_url())  # normal full page
+        content = response.content.decode()
+        self.assertNotIn(self.R4_TARGET, content)
+
+    # ---- R4-inline context (explicit marker) ----
+    def test_r4_inline_htmx_toggle_preserves_inline_context(self):
+        response = self.client.post(
+            self._toggle_url(), HTTP_HX_REQUEST="true", **{self.R4_INLINE_HEADER: "1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn('id="mediaList"', content)
+        # The Edit link keeps loading inside the R4 inline manager.
+        self.assertIn(self.R4_TARGET, content)
+
+    def test_r4_inline_list_get_embeds_inline_manager(self):
+        response = self.client.get(
+            self._list_url(), HTTP_HX_REQUEST="true", **{self.R4_INLINE_HEADER: "1"},
+        )
+        content = response.content.decode()
+        self.assertIn("data-r4-media-manager", content)
+        self.assertIn(self.R4_TARGET, content)
+
+    def test_context_boundary_is_not_hx_request_alone(self):
+        # The exact regression: an HX request WITHOUT the R4 marker must never
+        # produce R4-inline markup, even though it is an HX request.
+        legacy = self.client.post(self._toggle_url(), HTTP_HX_REQUEST="true").content.decode()
+        r4 = self.client.post(
+            self._toggle_url(), HTTP_HX_REQUEST="true", **{self.R4_INLINE_HEADER: "1"},
+        ).content.decode()
+        self.assertNotIn(self.R4_TARGET, legacy)
+        self.assertIn(self.R4_TARGET, r4)

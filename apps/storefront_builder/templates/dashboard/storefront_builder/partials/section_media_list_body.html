@@ -11,7 +11,7 @@
            const from = list.querySelector('[data-id=\'' + dragId + '\']');
            list.insertBefore(from, from.compareDocumentPosition($el) & Node.DOCUMENT_POSITION_FOLLOWING ? $el.nextSibling : $el);
            const ids = [...list.children].filter(el => el.dataset && el.dataset.id).map(r => r.dataset.id);
-           htmx.ajax('POST', '{% url "dashboard:storefront-builder-section-media-reorder" pk=section.pk kind=kind %}', {values: {item_ids: ids}, target: '#mediaList', swap: 'outerHTML'});
+           htmx.ajax('POST', '{% url "dashboard:storefront-builder-section-media-reorder" pk=section.pk kind=kind %}', {values: {item_ids: ids}, target: '#mediaList', swap: 'outerHTML'{% if inline_media %}, headers: {'HX-R4-Inline': '1'}{% endif %}});
          }
          dragId = null;
        ">
