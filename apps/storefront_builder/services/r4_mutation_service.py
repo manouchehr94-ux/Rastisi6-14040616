@@ -110,6 +110,21 @@ def _validate_resource_source_ownership(*, store, source: "resource_source.Resou
         raise R4MutationError("invalid_resource_ownership") from None
 
 
+def _validate_background_asset_ownership(*, store, background: dict | None) -> None:
+    """Phase 5 Task 4B — delegates to the SAME canonical, DB-backed ownership
+    check (``section_data_service.validate_background_asset_ownership``) the
+    legacy settings-save view uses, translating its stable error into R4's own
+    external error-code contract. Write-time isolation: a Store-scoped media
+    Picker alone does not stop a client from POSTing an arbitrary foreign-Store
+    ``media_asset_id`` straight to this mutation endpoint, and render-time
+    fail-close does not stop it from being PERSISTED — so it is rejected here,
+    before save, never a second media authority."""
+    try:
+        section_data_service.validate_background_asset_ownership(store=store, background=background)
+    except section_data_service.BackgroundAssetOwnershipError:
+        raise R4MutationError("invalid_background_asset_ownership") from None
+
+
 def _scoped_section(draft: StorefrontLayoutVersion, section_id) -> StorefrontSection:
     """Strict Draft-scoping rule shared by every mutation applier in this
     module — a crafted ``section_id`` belonging to another Store, page, or
@@ -166,6 +181,17 @@ def _apply_section_update_settings(*, store, draft: StorefrontLayoutVersion, mut
             projected_source = None
         if projected_source is not None:
             _validate_resource_source_ownership(store=store, source=projected_source)
+
+    # Phase 5 Task 4B — write-time tenant isolation for a background image.
+    # Only ever validated when THIS patch touches "background" (an unrelated
+    # field edit must never fail on a stale legacy id), and only when the
+    # RESULTING (cleaned) background is image mode with an id — mirroring the
+    # "source" preflight above exactly. Checked AFTER schema cleaning (shape is
+    # already trustworthy) but BEFORE section.settings is assigned/saved, so a
+    # foreign id rolls back cleanly with no settings/revision/history change —
+    # it is never persisted even as a dangling id.
+    if "background" in patch:
+        _validate_background_asset_ownership(store=store, background=cleaned.get("background"))
 
     # Phase 3 (V02) — Brand "View-all" capability truth. A merchant may only
     # turn the "مشاهده همه" anchor ON when the RESULTING rendered state can

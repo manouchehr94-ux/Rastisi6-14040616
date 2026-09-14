@@ -206,5 +206,58 @@ must never silently fall back to a plain text input for an unsupported type.
     </template>
     <button type="button" class="r4-repeater-add" data-r4-repeater-add>+ افزودن ردیف</button>
   </div>
+
+  {% elif field.field_type == "background" %}
+  {% comment %}
+  Phase 5 Task 4B — a real in-R4 background/media picker, a compound widget
+  like appearance_override/repeater: ONE schema key ("background"), an object
+  value {mode,color,pattern_slug,palette_role,media_asset_id}. Nested controls
+  intentionally carry NO data-r4-field-key so the generic scalar change
+  handler never mistakes them for the field; a dedicated r4_editor.js listener
+  reads all of them and sends ONE compound section.update_settings patch
+  through the existing mutation queue. The media options come from the shared
+  Media Library (Store-scoped MediaAsset) and patterns from the existing
+  registry — never a second media/upload system, never a raw URL/JSON input.
+  {% endcomment %}
+  <div class="r4-background-picker"
+       id="r4Field-{{ field.key }}"
+       data-r4-field-key="{{ field.key }}"
+       data-r4-field-type="background">
+    <label class="r4-field-sublabel">نوع پس‌زمینه</label>
+    <select class="r4-control" data-r4-background-mode>
+      {% for value, label in background_context.mode_choices %}
+      <option value="{{ value }}" {% if current_field_value.mode == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+
+    <label class="r4-field-sublabel">رنگ دلخواه</label>
+    <input type="color" class="r4-control" data-r4-background-color value="{{ current_field_value.color|default:'#ffffff' }}">
+
+    <label class="r4-field-sublabel">طیف پالت</label>
+    <select class="r4-control" data-r4-background-palette-role>
+      {% for value, label in background_context.palette_role_choices %}
+      <option value="{{ value }}" {% if current_field_value.palette_role == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+
+    <label class="r4-field-sublabel">الگو</label>
+    <select class="r4-control" data-r4-background-pattern>
+      <option value="">— بدون الگو —</option>
+      {% for slug, pattern_label in background_context.patterns.items %}
+      <option value="{{ slug }}" {% if current_field_value.pattern_slug == slug %}selected{% endif %}>{{ pattern_label }}</option>
+      {% endfor %}
+    </select>
+
+    <label class="r4-field-sublabel">تصویر پس‌زمینه</label>
+    <select class="r4-control" data-r4-background-media>
+      <option value="">— بدون تصویر —</option>
+      {% for asset in background_context.media_assets %}
+      <option value="{{ asset.pk }}" {% if current_field_value.media_asset_id == asset.pk %}selected{% endif %}>{{ asset }}</option>
+      {% endfor %}
+    </select>
+    {% if not background_context.media_assets %}
+    <p class="r4-field-sublabel">هنوز تصویری در کتابخانه رسانه ندارید — از بخش رسانه‌ها یک تصویر بارگذاری کنید.</p>
+    {% endif %}
+  </div>
   {% endif %}
 </div>

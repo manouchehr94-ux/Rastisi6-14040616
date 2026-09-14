@@ -1568,6 +1568,17 @@ HERO_BANNER_SCHEMA = SettingsSchema(fields=(
         default={},
         widget_hint="typography_override",
     ),
+    #: Phase 5 Task 4B — expose the already-existing per-section background
+    #: block as a real R4 Inspector control. hero_banner is a
+    #: BACKGROUND_AWARE_SECTION_KEYS member, so ``_with_background`` already
+    #: validates/persists this block; declaring the schema field only makes
+    #: R4 render + accept it. Default is the canonical ``default_background_settings``
+    #: (mode="theme") so a fresh section projects correctly.
+    SettingsField(
+        "background", "پس‌زمینه این بخش", "background", "advanced",
+        default=default_background_settings(),
+        widget_hint="background_picker",
+    ),
 ))
 
 

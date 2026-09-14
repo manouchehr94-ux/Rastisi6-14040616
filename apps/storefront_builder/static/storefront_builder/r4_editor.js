@@ -255,7 +255,11 @@ window.RastiSiR4 = {
       // section_inspector.html's current_field_value) — its wrapper carries
       // data-r4-field-key for the compound patch listener below, but has no
       // .value of its own to hydrate.
-      if (fieldType === 'appearance_override' || fieldType === 'resource_source' || fieldType === 'repeater') return;
+      // Phase 5 Task 4B — background is a compound widget too, entirely
+      // server-rendered from the current value (its nested controls carry
+      // their own selected/value already), so it is excluded from this
+      // scalar loop exactly like the other compound field types.
+      if (fieldType === 'appearance_override' || fieldType === 'resource_source' || fieldType === 'repeater' || fieldType === 'background') return;
       var key = control.getAttribute('data-r4-field-key');
       if (!Object.prototype.hasOwnProperty.call(values, key)) return;
       var value = values[key];
@@ -460,7 +464,8 @@ window.RastiSiR4 = {
       // focusout handler below, not this native 'change' listener.
       // appearance_override is a compound field with its own dedicated
       // listener below too.
-      if (fieldType === 'rich_text' || fieldType === 'appearance_override' || fieldType === 'repeater') return;
+      // 'background' (Task 4B) is compound too — handled by its own listener.
+      if (fieldType === 'rich_text' || fieldType === 'appearance_override' || fieldType === 'repeater' || fieldType === 'background') return;
       var key = control.getAttribute('data-r4-field-key');
       var value = fieldType === 'boolean' ? control.checked : control.value;
       var patch = {};
@@ -535,6 +540,43 @@ window.RastiSiR4 = {
       var key = textarea.getAttribute('data-r4-field-key');
       var patch = {};
       patch[key] = textarea.value;
+      R4.enqueueMutation({
+        type: 'section.update_settings',
+        section_id: R4.selected,
+        patch: patch,
+      });
+    });
+
+    // Phase 5 Task 4B — background: a compound widget like
+    // appearance_override above. Any change to any of its nested controls
+    // (mode/color/palette-role/pattern/media) re-reads ALL of them and sends
+    // ONE compound {background:{...}} patch through the SAME enqueueMutation
+    // queue and the SAME section.update_settings mutation every other section
+    // edit uses — never a second save path and never a new endpoint. The
+    // media options come from the shared Store-scoped Media Library; ownership
+    // of a chosen media_asset_id stays enforced at render time
+    // (content.services.resolve_background_media_url), so the client only ever
+    // sends an id, never a raw URL.
+    inspector.addEventListener('change', function (evt) {
+      var wrapper = evt.target.closest('[data-r4-field-type="background"]');
+      if (!wrapper || R4.selected == null) return;
+      if (!evt.target.closest('[data-r4-background-mode],[data-r4-background-color],[data-r4-background-palette-role],[data-r4-background-pattern],[data-r4-background-media]')) return;
+      var key = wrapper.getAttribute('data-r4-field-key');
+      var modeSelect = wrapper.querySelector('[data-r4-background-mode]');
+      var colorInput = wrapper.querySelector('[data-r4-background-color]');
+      var paletteSelect = wrapper.querySelector('[data-r4-background-palette-role]');
+      var patternSelect = wrapper.querySelector('[data-r4-background-pattern]');
+      var mediaSelect = wrapper.querySelector('[data-r4-background-media]');
+
+      var background = { mode: modeSelect ? modeSelect.value : 'theme' };
+      if (colorInput) background.color = colorInput.value;
+      if (paletteSelect) background.palette_role = paletteSelect.value;
+      if (patternSelect) background.pattern_slug = patternSelect.value;
+      var mediaValue = mediaSelect ? mediaSelect.value : '';
+      background.media_asset_id = mediaValue ? Number(mediaValue) : null;
+
+      var patch = {};
+      patch[key] = background;
       R4.enqueueMutation({
         type: 'section.update_settings',
         section_id: R4.selected,

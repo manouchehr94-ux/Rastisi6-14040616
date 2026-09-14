@@ -382,6 +382,8 @@ class HeroBannerSchemaRegistrationTests(SimpleTestCase):
                 "loop",
                 "text_position",
                 "appearance_overrides",
+                # Phase 5 Task 4B — the per-section background picker field.
+                "background",
             ],
         )
 

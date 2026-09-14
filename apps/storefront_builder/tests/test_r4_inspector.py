@@ -756,3 +756,98 @@ class Task4AContextualExclusivityContractTests(R4MutationApiTestCase):
         open_global_idx = self.js_source.index("function openGlobalDesign")
         open_global_chunk = self.js_source[open_global_idx:open_global_idx + 400]
         self.assertIn("closeInspector()", open_global_chunk)
+
+
+
+# ------------------------------------------------------------------------
+# Phase 5 Task 4B — media/background editing ported INTO R4. A media/
+# background-capable section must render a real R4 picker control (a new
+# generic `background` schema field type), not only a legacy-link stub. The
+# picker reuses the existing Media Library (Store-scoped MediaAsset) and the
+# existing background pattern registry; it saves through the EXISTING Draft
+# mutation flow (section.update_settings) — no new media authority, no new
+# persistence model, no direct filesystem access.
+# ------------------------------------------------------------------------
+
+
+class Task4BBackgroundFieldInspectorTests(R4MutationApiTestCase):
+    def test_hero_banner_advanced_renders_a_real_background_picker_control(self):
+        response = self.client.get(_inspector_url(self.section.pk))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+
+        advanced_start = content.index('data-r4-tab-panel="advanced"')
+        advanced_chunk = content[advanced_start:]
+
+        # A real, interactive control — not merely the passive out-link stub.
+        self.assertIn('data-r4-field-key="background"', advanced_chunk)
+        self.assertIn('data-r4-field-type="background"', advanced_chunk)
+        self.assertIn("data-r4-background-mode", advanced_chunk)
+        self.assertIn("data-r4-background-color", advanced_chunk)
+        self.assertIn("data-r4-background-pattern", advanced_chunk)
+        self.assertIn("data-r4-background-media", advanced_chunk)
+
+    def test_background_picker_reuses_store_media_library_assets(self):
+        from apps.content.models import MediaAsset
+
+        own_asset = MediaAsset.objects.create(store=self.store, image="uploads/own-bg.jpg")
+        response = self.client.get(_inspector_url(self.section.pk))
+        content = response.content.decode()
+        # The merchant's own asset is offered as a selectable option.
+        self.assertIn(f'value="{own_asset.pk}"', content)
+
+    def test_background_picker_never_offers_a_foreign_store_asset(self):
+        from apps.content.models import MediaAsset
+
+        other_store = Store.objects.create(
+            name="فروشگاه دیگر پس‌زمینه", slug="r4-bg-other-store",
+            admin_subdomain="r4-bg-other-store",
+        )
+        foreign_asset = MediaAsset.objects.create(store=other_store, image="uploads/foreign-bg.jpg")
+        response = self.client.get(_inspector_url(self.section.pk))
+        content = response.content.decode()
+        self.assertNotIn(f'value="{foreign_asset.pk}"', content)
+
+    def test_background_control_is_generic_not_section_name_branched(self):
+        template_source = Path(
+            settings.BASE_DIR,
+            "apps/storefront_builder/templates/dashboard/storefront_builder/r4/partials/settings_field.html",
+        ).read_text(encoding="utf-8")
+        self.assertIn('field.field_type == "background"', template_source)
+        for section_name in ("hero_banner", "product_section", "single_banner"):
+            self.assertNotIn(section_name, template_source)
+
+    def test_background_control_shows_no_raw_url_or_json_input(self):
+        response = self.client.get(_inspector_url(self.section.pk))
+        content = response.content.decode()
+        bg_start = content.index('data-r4-field-type="background"')
+        bg_chunk = content[bg_start:bg_start + 2000]
+        # Never a free-text URL/JSON/CSS surface for backgrounds.
+        self.assertNotIn('data-r4-field-type="json"', bg_chunk)
+        self.assertNotIn("http://", bg_chunk)
+
+
+class Task4BBackgroundJsContractTests(R4MutationApiTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.js_source = Path(
+            settings.BASE_DIR,
+            "apps/storefront_builder/static/storefront_builder/r4_editor.js",
+        ).read_text(encoding="utf-8")
+
+    def test_background_widget_saves_through_the_single_enqueue_mutation_path(self):
+        # A dedicated compound-widget listener (like appearance_override /
+        # repeater) that routes through the ONE existing mutation queue —
+        # never a second save path, never a modal.
+        self.assertIn("data-r4-background-mode", self.js_source)
+        bg_idx = self.js_source.index("data-r4-background-mode")
+        bg_chunk = self.js_source[bg_idx:bg_idx + 1600]
+        self.assertIn("enqueueMutation", bg_chunk)
+        self.assertIn("section.update_settings", bg_chunk)
+
+    def test_background_widget_adds_no_new_write_endpoint(self):
+        # Task 4B must not add a 4th POST target — the sanctioned three
+        # (mutate/history/publish) stay exactly three.
+        self.assertEqual(self.js_source.count("method: 'POST'"), 3)
+        self.assertNotIn("modal", self.js_source.lower())

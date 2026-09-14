@@ -899,3 +899,20 @@ button.r4-picker-row--result:hover {
   border-color: var(--r4-accent);
   color: var(--r4-accent);
 }
+
+
+/* Phase 5 Task 4B — in-R4 background/media picker (a compound field widget,
+   like the appearance override). Plain stacked controls; the media options
+   come from the shared Store-scoped Media Library. */
+.r4-background-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--r4-line);
+  border-radius: 10px;
+  background: var(--r4-surface);
+}
+.r4-background-picker .r4-control {
+  width: 100%;
+}

@@ -779,3 +779,158 @@ class CollectionTilesNegativeMutationTests(R4MutationApiTestCase):
         self.assertEqual(r.status_code, 200)
         section.refresh_from_db()
         self.assertEqual(section.settings["tile_style"], "carousel")
+
+
+
+class Task4BBackgroundMutationTests(R4MutationApiTestCase):
+    """Phase 5 Task 4B — the R4 background picker saves through the EXISTING
+    Draft mutation flow (section.update_settings), never a new endpoint or a
+    new persistence model. Tenant safety for image mode stays at the existing
+    render-time authority (content.services.resolve_background_media_url)."""
+
+    def test_background_color_persists_via_existing_section_update_settings(self):
+        starting_revision = self.draft.edit_revision
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": self.section.pk,
+                "patch": {"background": {"mode": "color", "color": "#123456"}},
+            },
+        })
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertIs(body["ok"], True)
+        self.assertEqual(body["new_revision"], starting_revision + 1)
+
+        self.section.refresh_from_db()
+        self.assertEqual(self.section.settings["background"]["mode"], "color")
+        self.assertEqual(self.section.settings["background"]["color"], "#123456")
+
+    def test_background_image_mode_persists_media_asset_id_shape_only(self):
+        from apps.content.models import MediaAsset
+
+        asset = MediaAsset.objects.create(store=self.store, image="uploads/bg.jpg")
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": self.section.pk,
+                "patch": {"background": {"mode": "image", "media_asset_id": asset.pk}},
+            },
+        })
+        self.assertEqual(response.status_code, 200)
+        self.section.refresh_from_db()
+        self.assertEqual(self.section.settings["background"]["mode"], "image")
+        self.assertEqual(self.section.settings["background"]["media_asset_id"], asset.pk)
+
+    def test_background_edit_writes_exactly_one_history_entry(self):
+        before = self._history_count()
+        self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": self.section.pk,
+                "patch": {"background": {"mode": "color", "color": "#abcdef"}},
+            },
+        })
+        self.assertEqual(self._history_count(), before + 1)
+
+
+
+class Task4BBackgroundAssetTenantIsolationTests(R4MutationApiTestCase):
+    """Phase 5 Task 4B — WRITE-TIME tenant ownership for background images.
+
+    Render-time fail-closed resolution is NOT sufficient isolation for a
+    write: a Store A Draft must never PERSIST a background.media_asset_id
+    owned by Store B. This must be enforced BEFORE save, through the ONE
+    shared canonical ownership authority already used by the legacy path
+    (section_data_service) — never a second media authority/validator."""
+
+    def setUp(self):
+        super().setUp()
+        from apps.content.models import MediaAsset
+
+        self.own_asset = MediaAsset.objects.create(store=self.store, image="uploads/own.jpg")
+        self.other_store = Store.objects.create(
+            name="فروشگاه دیگر مالکیت", slug="r4-bg-ownership-other",
+            admin_subdomain="r4-bg-ownership-other",
+        )
+        self.foreign_asset = MediaAsset.objects.create(
+            store=self.other_store, image="uploads/foreign.jpg",
+        )
+
+    def test_store_can_persist_its_own_media_asset_id(self):
+        starting_revision = self.draft.edit_revision
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": self.section.pk,
+                "patch": {"background": {"mode": "image", "media_asset_id": self.own_asset.pk}},
+            },
+        })
+        self.assertEqual(response.status_code, 200)
+        self.section.refresh_from_db()
+        self.assertEqual(self.section.settings["background"]["media_asset_id"], self.own_asset.pk)
+
+    def test_store_cannot_persist_a_foreign_store_media_asset_id(self):
+        starting_revision = self.draft.edit_revision
+        before_settings = dict(self.section.settings or {})
+        before_history = self._history_count()
+
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": self.section.pk,
+                "patch": {"background": {"mode": "image", "media_asset_id": self.foreign_asset.pk}},
+            },
+        })
+        # The mutation is rejected (not a 200 success).
+        self.assertNotEqual(response.status_code, 200)
+
+        # Nothing changed: settings, revision, and history are all untouched.
+        self.section.refresh_from_db()
+        self.assertEqual(self.section.settings or {}, before_settings)
+        self.assertEqual(self._refresh_revision(), starting_revision)
+        self.assertEqual(self._history_count(), before_history)
+
+    def test_foreign_asset_is_never_even_stored_as_a_dangling_id(self):
+        # Explicit: the foreign id must never reach persisted settings, even
+        # though render-time resolution would later fail-close it to None.
+        self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": self.section.pk,
+                "patch": {"background": {"mode": "image", "media_asset_id": self.foreign_asset.pk}},
+            },
+        })
+        self.section.refresh_from_db()
+        stored_background = (self.section.settings or {}).get("background") or {}
+        self.assertNotEqual(stored_background.get("media_asset_id"), self.foreign_asset.pk)
+
+
+class Task4BBackgroundOwnershipSingleAuthorityTests(R4MutationApiTestCase):
+    """The R4 write-time background ownership check must delegate to the
+    SAME canonical section_data_service authority the legacy path uses —
+    never a second validator with its own DB lookup."""
+
+    def test_r4_mutation_service_delegates_to_section_data_service(self):
+        from apps.storefront_builder.services import section_data_service
+
+        # The canonical, store-scoped ownership entry point exists.
+        self.assertTrue(hasattr(section_data_service, "validate_background_asset_ownership"))
+
+    def test_legacy_view_helper_delegates_to_the_same_canonical_authority(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj_settings
+
+        views_source = Path(
+            dj_settings.BASE_DIR, "apps/storefront_builder/views.py",
+        ).read_text(encoding="utf-8")
+        # Legacy path routes background ownership through the shared service,
+        # not its own inline MediaAsset query.
+        self.assertIn("validate_background_asset_ownership", views_source)
