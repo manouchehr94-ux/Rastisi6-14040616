@@ -1,0 +1,371 @@
+{
+  "host": "rastisi-fashion-test.rastisi.localhost",
+  "base": "http://rastisi-fashion-test.rastisi.localhost:8817",
+  "pdp": "/products/accessory-scarf-%D8%A8%D8%B1%D8%AF%DB%8C%D8%A7-4/",
+  "nav_identity_expected": "hidden",
+  "started_at": "2026-09-14T21:11:13.670Z",
+  "checks": [
+    {
+      "name": "pdp:status:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "satc:hidden-on-desktop",
+      "status": "PASS",
+      "detail": {
+        "present": 1,
+        "visible": false
+      }
+    },
+    {
+      "name": "cta:visible-on-desktop",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "pdp:status:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "pdp:rtl:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "pdp:no-overflow:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl",
+        "scrollWidth": 390,
+        "clientWidth": 390
+      }
+    },
+    {
+      "name": "satc:visible-on-mobile:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "visible": true
+      }
+    },
+    {
+      "name": "cta:inflow-present:mobile-390",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "satc:inside-canonical-form:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "insideCartForm": true,
+        "hasFormAttr": false,
+        "cartAddFormCount": 1,
+        "quantityOwnerCount": 1,
+        "btnType": "submit"
+      }
+    },
+    {
+      "name": "satc:one-cart-add-form:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "count": 1
+      }
+    },
+    {
+      "name": "satc:one-quantity-owner:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "count": 1
+      }
+    },
+    {
+      "name": "satc:no-bottom-nav-overlap:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "note": "no bottom nav rendered",
+        "geo": {
+          "satc": {
+            "top": 775,
+            "bottom": 844,
+            "height": 69
+          },
+          "nav": null,
+          "navOrbTop": null,
+          "navIdentity": null,
+          "innerHeight": 844,
+          "satcZ": "90",
+          "clearance": "0px"
+        }
+      }
+    },
+    {
+      "name": "satc:hugs-bottom-when-nav-absent:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "gapFromBottom": 0
+      }
+    },
+    {
+      "name": "satc:z-below-overlays:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "z": "90"
+      }
+    },
+    {
+      "name": "satc:label-agrees-with-cta:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "cta": "افزودن به سبد خرید",
+        "satc": "افزودن به سبد خرید"
+      }
+    },
+    {
+      "name": "satc:disabled-agrees-with-cta:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "ctaDisabled": false,
+        "satcDisabled": false
+      }
+    },
+    {
+      "name": "satc:shares-single-quantity=3:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "quantity": "3"
+      }
+    },
+    {
+      "name": "content:final-reachable-above-satc:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "finalContent": {
+          "sel": ".guarantee",
+          "top": -1448,
+          "bottom": -1339
+        },
+        "satcTop": 775
+      }
+    },
+    {
+      "name": "overlay:drawer-covers-satc:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "drawerZ": 120,
+        "backdropZ": 110,
+        "satcZ": 90
+      }
+    },
+    {
+      "name": "pdp:status:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "pdp:rtl:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "pdp:no-overflow:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl",
+        "scrollWidth": 360,
+        "clientWidth": 360
+      }
+    },
+    {
+      "name": "satc:visible-on-mobile:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "visible": true
+      }
+    },
+    {
+      "name": "cta:inflow-present:mobile-360",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "satc:inside-canonical-form:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "insideCartForm": true,
+        "hasFormAttr": false,
+        "cartAddFormCount": 1,
+        "quantityOwnerCount": 1,
+        "btnType": "submit"
+      }
+    },
+    {
+      "name": "satc:one-cart-add-form:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "count": 1
+      }
+    },
+    {
+      "name": "satc:one-quantity-owner:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "count": 1
+      }
+    },
+    {
+      "name": "satc:no-bottom-nav-overlap:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "note": "no bottom nav rendered",
+        "geo": {
+          "satc": {
+            "top": 731,
+            "bottom": 800,
+            "height": 69
+          },
+          "nav": null,
+          "navOrbTop": null,
+          "navIdentity": null,
+          "innerHeight": 800,
+          "satcZ": "90",
+          "clearance": "0px"
+        }
+      }
+    },
+    {
+      "name": "satc:hugs-bottom-when-nav-absent:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "gapFromBottom": 0
+      }
+    },
+    {
+      "name": "satc:z-below-overlays:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "z": "90"
+      }
+    },
+    {
+      "name": "satc:label-agrees-with-cta:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "cta": "افزودن به سبد خرید",
+        "satc": "افزودن به سبد خرید"
+      }
+    },
+    {
+      "name": "satc:disabled-agrees-with-cta:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "ctaDisabled": false,
+        "satcDisabled": false
+      }
+    },
+    {
+      "name": "satc:shares-single-quantity=3:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "quantity": "3"
+      }
+    },
+    {
+      "name": "content:final-reachable-above-satc:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "finalContent": {
+          "sel": ".guarantee",
+          "top": -1512,
+          "bottom": -1383
+        },
+        "satcTop": 731
+      }
+    },
+    {
+      "name": "overlay:drawer-covers-satc:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "drawerZ": 120,
+        "backdropZ": 110,
+        "satcZ": 90
+      }
+    }
+  ],
+  "geometry": [
+    {
+      "viewport": "mobile-390",
+      "satc": {
+        "top": 775,
+        "bottom": 844,
+        "height": 69
+      },
+      "nav": null,
+      "navOrbTop": null,
+      "navIdentity": null,
+      "innerHeight": 844,
+      "satcZ": "90",
+      "clearance": "0px"
+    },
+    {
+      "viewport": "mobile-390",
+      "obscuration": {
+        "satcTop": 775,
+        "innerHeight": 844,
+        "finalContent": {
+          "sel": ".guarantee",
+          "top": -1448,
+          "bottom": -1339
+        },
+        "docScrollTop": 2495,
+        "maxScroll": 2495
+      }
+    },
+    {
+      "viewport": "mobile-360",
+      "satc": {
+        "top": 731,
+        "bottom": 800,
+        "height": 69
+      },
+      "nav": null,
+      "navOrbTop": null,
+      "navIdentity": null,
+      "innerHeight": 800,
+      "satcZ": "90",
+      "clearance": "0px"
+    },
+    {
+      "viewport": "mobile-360",
+      "obscuration": {
+        "satcTop": 731,
+        "innerHeight": 800,
+        "finalContent": {
+          "sel": ".guarantee",
+          "top": -1512,
+          "bottom": -1383
+        },
+        "docScrollTop": 2529,
+        "maxScroll": 2529
+      }
+    }
+  ],
+  "console_errors": [],
+  "finished_at": "2026-09-14T21:11:18.874Z",
+  "summary": {
+    "pass": 35,
+    "fail": 0,
+    "warn": 0,
+    "total": 35
+  }
+}

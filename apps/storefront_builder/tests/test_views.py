@@ -2538,32 +2538,33 @@ class ProductDetailContextAwareSectionsPreviewTests(StorefrontBuilderViewsTestCa
         self.assertIn("pdp-satc", content)
 
     def test_satc_submits_the_same_canonical_form_no_second_form(self):
-        # The canonical purchase form gets a deterministic id, and the sticky
-        # button submits THAT form via the HTML `form=` association — so it
-        # reuses the existing variant_id + quantity + cart:add flow. There is
-        # exactly ONE <form> in product_main (no duplicate purchase form).
+        # SATC lives PHYSICALLY INSIDE the one canonical Add-to-Cart form (the
+        # approved preferred design). Because it is position:fixed it does not
+        # disturb layout, and being a plain type="submit" of THAT form it reuses
+        # the existing variant_id + quantity + the single cart:add pipeline with
+        # NO `form=` coupling and NO second form. Assert: exactly ONE cart:add
+        # form on the page, the .pdp-satc block is inside it, and there is no
+        # `form=` attribute wiring on the sticky button.
         self._one_product_main()
         content = self._preview().content.decode()
         import re
-        # deterministic form id, namespaced by product pk
-        form_ids = re.findall(r'<form[^>]*\sid="(pdp-buy-form-[^"]+)"', content)
-        self.assertEqual(len(form_ids), 1, "exactly one canonical purchase form with a deterministic id")
-        form_id = form_ids[0]
-        self.assertIn(str(self.product.pk), form_id)
-        # the sticky submit button is associated with the SAME form via form=
-        self.assertRegex(
-            content,
-            r'<button[^>]*\bform="' + re.escape(form_id) + r'"[^>]*type="submit"'
-            r'|<button[^>]*type="submit"[^>]*\bform="' + re.escape(form_id) + r'"',
-        )
         # exactly ONE canonical purchase pipeline: one form posting to cart:add.
         # (The page has other unrelated forms — search / review / login — but
-        # there must be only a single hx-post to the cart-add endpoint, i.e. no
-        # second Add-to-Cart form was introduced for SATC.)
-        self.assertEqual(
-            len(re.findall(r'hx-post="[^"]*/cart/add/', content)), 1,
-            "no second purchase form / cart:add pipeline introduced",
+        # there must be only a single hx-post to the cart-add endpoint.)
+        cart_forms = re.findall(r'<form\b[^>]*hx-post="[^"]*/cart/add/[^"]*"[^>]*>', content)
+        self.assertEqual(len(cart_forms), 1, "exactly one canonical cart:add form (no second purchase form)")
+        # The .pdp-satc block sits INSIDE that form: it appears between the
+        # cart:add <form ...> open tag and the next </form>.
+        form_open = content.index(cart_forms[0])
+        form_close = content.index("</form>", form_open)
+        satc_at = content.find("pdp-satc", form_open)
+        self.assertTrue(
+            0 <= satc_at < form_close,
+            "SATC must be physically inside the canonical Add-to-Cart form",
         )
+        # No `form=` coupling was introduced (simpler inside-form design).
+        self.assertNotIn("pdp-buy-form-", content, "no deterministic-form-id coupling needed")
+        self.assertNotRegex(content, r'class="[^"]*pdp-satc-btn[^"]*"[^>]*\sform=', "sticky button uses no form= attr")
 
     def test_satc_has_no_second_quantity_owner(self):
         # SATC must NOT introduce its own quantity input/selector — the single
@@ -2618,6 +2619,12 @@ class ProductDetailContextAwareSectionsPreviewTests(StorefrontBuilderViewsTestCa
         # bottom offset derives from the canonical bottom-nav clearance token,
         # not a hard-coded magic number.
         self.assertIn("--gmn-clearance", css)
+        # IMPORTANT-3 repair: the PDP reserves bottom space (nav clearance +
+        # SATC's own height) so the fixed SATC never permanently obscures the
+        # final in-flow content — the reserve derives from canonical geometry,
+        # not a random per-template value.
+        self.assertRegex(css, r"\.pdp\s*\{[^}]*padding-bottom:calc\(")
+        self.assertIn("--satc-height", css)
 
     def test_bottom_nav_owner_exposes_presentation_clearance_token(self):
         # The canonical mobile bottom-nav CSS owner exposes a presentation-only
@@ -2630,6 +2637,30 @@ class ProductDetailContextAwareSectionsPreviewTests(StorefrontBuilderViewsTestCa
             "apps/storefront_builder/static/css/storefront_builder.css",
         ).read_text(encoding="utf-8")
         self.assertIn("--gmn-clearance", css)
+
+    def test_clearance_is_per_variant_and_zero_when_nav_absent(self):
+        # IMPORTANT-1 repair: --gmn-clearance is NOT a single global constant.
+        # It defaults to 0 (nav absent) and each registered nav variant
+        # publishes its OWN geometry off the nav identity class. This proves one
+        # canonical geometry source that distinguishes every active variant AND
+        # the hidden/absent case (so SATC never floats ~88px up with no nav).
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        css = Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/static/css/storefront_builder.css",
+        ).read_text(encoding="utf-8")
+        # default (absent) is 0
+        self.assertRegex(css, r":root\s*\{\s*--gmn-clearance:\s*0px\s*\}")
+        # every registered variant has its own clearance rule keyed off identity
+        for variant in [
+            "four_item", "five_item", "raised_cart", "floating_dock",
+            "glass_dock", "minimal_icons", "wide_cart",
+        ]:
+            self.assertIn(f":has(.gmn--{variant})", css,
+                          f"missing canonical clearance for nav variant {variant}")
+        # a generic .gmn rule covers default/luxury (which reuse default geometry)
+        self.assertRegex(css, r":root:has\(\.gmn\)\s*\{\s*--gmn-clearance:")
 
 
 class ProductListingContextAwareSectionPreviewTests(StorefrontBuilderViewsTestCase):

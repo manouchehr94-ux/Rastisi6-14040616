@@ -5236,18 +5236,41 @@ html[data-sfb-density="compact"] .feat small{font-size:9.5px}
 
 /* Mobile bottom-navigation system: hidden at desktop/tablet by default. */
 .gmn,.gmn-spacer{display:none}
-/* Phase 5 Task 8 (SATC) — presentation-only bottom-navigation CLEARANCE token,
-   published by the canonical mobile bottom-nav owner. It is the total vertical
-   space (bar height + its bottom offset + a small gap) that any bottom-anchored
-   mobile surface must sit ABOVE so it never collides with the bottom nav. This
-   is the SAME geometry the nav uses for its own ``.gmn-spacer`` content reserve
-   (bar min-height 72px + bottom offset 8px + gap), expressed once here as a
-   reusable custom property so features like the PDP Sticky Add-to-Cart consume
-   ONE canonical value instead of per-template ``bottom:`` overrides. It carries
-   no application state and creates no new owner. Overridden per nav-variant
-   below where a variant's geometry differs (e.g. edge-to-edge five_item). */
-:root{--gmn-clearance:calc(88px + env(safe-area-inset-bottom,0px))}
+/* Phase 5 Task 8 (SATC) — presentation-only bottom-navigation CLEARANCE, the
+   ONE canonical geometry source for "how much vertical space the active mobile
+   bottom nav occupies at the bottom of the viewport". Any bottom-anchored
+   mobile surface (e.g. the PDP Sticky Add-to-Cart) consumes ``--gmn-clearance``
+   instead of hard-coding per-template offsets.
+
+   Default is 0 (+ safe area handled by the consumer): when NO bottom nav
+   renders, ``.gmn`` is absent, no variant rule matches, and a consumer must
+   not sit ~88px up for a nav that isn't there. Each active nav variant then
+   publishes its OWN real clearance below, keyed off the nav's identity class
+   via ``:has()`` on a common ancestor (the nav ``.gmn--<id>`` and the consumer
+   are cousins under the page shell, not ancestor/descendant, so a plain
+   custom-property cascade cannot reach the consumer). The values mirror the
+   nav's own geometry — bottom offset + bar min-height (+ raised-cart upward
+   extension) + a small gap — matching the nav's existing ``.gmn-spacer``
+   content-reserve numbers where those already exist (default 100, five_item
+   78, minimal_icons 82). ONE owner, no new application state, no new authority;
+   ``:has()`` is already an established pattern in this codebase's storefront
+   CSS. Only active <=680px (where the nav itself exists). */
+:root{--gmn-clearance:0px}
 @media(max-width:680px){
+  /* Canonical per-variant clearance (bottom offset + bar height + gap, plus the
+     raised cart's upward orb extension where applicable), always + safe area. */
+  /* Default / luxury floating cart: 72px bar with a 62px cart orb translated
+     up 12px, so the orb crown is the highest painted point (~106px above the
+     viewport bottom at 8px offset). Clearance covers the ORB, not just the bar. */
+  :root:has(.gmn){--gmn-clearance:calc(114px + env(safe-area-inset-bottom,0px))}                /* default / luxury (orb crown) */
+  :root:has(.gmn--four_item){--gmn-clearance:calc(84px + env(safe-area-inset-bottom,0px))}      /* 8 + 64 bar + gap; flat cart (transform:none) */
+  :root:has(.gmn--five_item){--gmn-clearance:calc(78px + env(safe-area-inset-bottom,0px))}      /* edge-to-edge: 0 + 68 bar + gap (matches .gmn-spacer--five_item) */
+  :root:has(.gmn--raised_cart){--gmn-clearance:calc(114px + env(safe-area-inset-bottom,0px))}   /* 8 + 58 bar + 62 orb translated up 12 → orb crown; clears the raised orb */
+  :root:has(.gmn--floating_dock){--gmn-clearance:calc(88px + env(safe-area-inset-bottom,0px))}  /* 14 + 62 bar + gap; flat cart */
+  :root:has(.gmn--glass_dock){--gmn-clearance:calc(94px + env(safe-area-inset-bottom,0px))}     /* 12 + 70 bar + gap; flat cart */
+  :root:has(.gmn--minimal_icons){--gmn-clearance:calc(82px + env(safe-area-inset-bottom,0px))}  /* 12 + 56 bar + gap (matches .gmn-spacer--minimal_icons) */
+  :root:has(.gmn--wide_cart){--gmn-clearance:calc(86px + env(safe-area-inset-bottom,0px))}      /* 8 + 66 bar + gap; flat wide cart */
+  .gmn{display:block;position:fixed;z-index:850;inset-inline:10px;bottom:calc(8px + env(safe-area-inset-bottom,0px));pointer-events:none;direction:rtl}
   .gmn{display:block;position:fixed;z-index:850;inset-inline:10px;bottom:calc(8px + env(safe-area-inset-bottom,0px));pointer-events:none;direction:rtl}
   .gmn-bar{pointer-events:auto;position:relative;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:end;min-height:72px;padding:7px 6px 6px;border-radius:26px;border:1px solid color-mix(in srgb,var(--theme-primary,#d4af37) 36%,#242016);background:color-mix(in srgb,var(--theme-footer-bg,#050505) 89%,transparent);box-shadow:0 18px 45px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.04);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
   .gmn-item{appearance:none;border:0;background:transparent;color:color-mix(in srgb,var(--theme-footer-text,#eee) 75%,transparent);display:flex;min-width:0;min-height:58px;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:5px 2px;border-radius:16px;font-family:inherit;font-size:9.5px;font-weight:700;line-height:1.2;text-decoration:none;cursor:pointer}

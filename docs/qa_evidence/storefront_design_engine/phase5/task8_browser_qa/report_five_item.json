@@ -2,7 +2,8 @@
   "host": "rastisi-fashion-test.rastisi.localhost",
   "base": "http://rastisi-fashion-test.rastisi.localhost:8817",
   "pdp": "/products/accessory-scarf-%D8%A8%D8%B1%D8%AF%DB%8C%D8%A7-4/",
-  "started_at": "2026-09-14T20:48:22.954Z",
+  "nav_identity_expected": "five_item",
+  "started_at": "2026-09-14T21:10:29.282Z",
   "checks": [
     {
       "name": "pdp:status:desktop-1440",
@@ -60,11 +61,11 @@
       "detail": null
     },
     {
-      "name": "satc:submits-canonical-form:mobile-390",
+      "name": "satc:inside-canonical-form:mobile-390",
       "status": "PASS",
       "detail": {
-        "hasForm": true,
-        "formIsCartAdd": true,
+        "insideCartForm": true,
+        "hasFormAttr": false,
         "cartAddFormCount": 1,
         "quantityOwnerCount": 1,
         "btnType": "submit"
@@ -88,17 +89,9 @@
       "name": "satc:no-bottom-nav-overlap:mobile-390",
       "status": "PASS",
       "detail": {
-        "satc": {
-          "top": 687,
-          "bottom": 756
-        },
-        "nav": {
-          "top": 774,
-          "bottom": 844
-        },
-        "navIdentity": "five_item",
-        "innerHeight": 844,
-        "satcZ": "90"
+        "satcBottom": 766,
+        "navTop": 774,
+        "navIdentity": "five_item"
       }
     },
     {
@@ -132,19 +125,15 @@
       }
     },
     {
-      "name": "pdt:three-tabs-panels:mobile-390",
+      "name": "content:final-reachable-above-satc:mobile-390",
       "status": "PASS",
       "detail": {
-        "tabs": 3,
-        "panels": 3
-      }
-    },
-    {
-      "name": "pdtx:one-trust-surface:mobile-390",
-      "status": "PASS",
-      "detail": {
-        "fallback": 1,
-        "canonical": 0
+        "finalContent": {
+          "sel": ".guarantee",
+          "top": -1604,
+          "bottom": -1495
+        },
+        "satcTop": 697
       }
     },
     {
@@ -192,11 +181,11 @@
       "detail": null
     },
     {
-      "name": "satc:submits-canonical-form:mobile-360",
+      "name": "satc:inside-canonical-form:mobile-360",
       "status": "PASS",
       "detail": {
-        "hasForm": true,
-        "formIsCartAdd": true,
+        "insideCartForm": true,
+        "hasFormAttr": false,
         "cartAddFormCount": 1,
         "quantityOwnerCount": 1,
         "btnType": "submit"
@@ -220,17 +209,9 @@
       "name": "satc:no-bottom-nav-overlap:mobile-360",
       "status": "PASS",
       "detail": {
-        "satc": {
-          "top": 643,
-          "bottom": 712
-        },
-        "nav": {
-          "top": 730,
-          "bottom": 800
-        },
-        "navIdentity": "five_item",
-        "innerHeight": 800,
-        "satcZ": "90"
+        "satcBottom": 722,
+        "navTop": 730,
+        "navIdentity": "five_item"
       }
     },
     {
@@ -264,19 +245,15 @@
       }
     },
     {
-      "name": "pdt:three-tabs-panels:mobile-360",
+      "name": "content:final-reachable-above-satc:mobile-360",
       "status": "PASS",
       "detail": {
-        "tabs": 3,
-        "panels": 3
-      }
-    },
-    {
-      "name": "pdtx:one-trust-surface:mobile-360",
-      "status": "PASS",
-      "detail": {
-        "fallback": 1,
-        "canonical": 0
+        "finalContent": {
+          "sel": ".guarantee",
+          "top": -1668,
+          "bottom": -1539
+        },
+        "satcTop": 653
       }
     },
     {
@@ -289,12 +266,78 @@
       }
     }
   ],
+  "geometry": [
+    {
+      "viewport": "mobile-390",
+      "satc": {
+        "top": 697,
+        "bottom": 766,
+        "height": 69
+      },
+      "nav": {
+        "top": 774,
+        "bottom": 844,
+        "height": 70
+      },
+      "navOrbTop": null,
+      "navIdentity": "five_item",
+      "innerHeight": 844,
+      "satcZ": "90",
+      "clearance": "calc(78px + 0px)"
+    },
+    {
+      "viewport": "mobile-390",
+      "obscuration": {
+        "satcTop": 697,
+        "innerHeight": 844,
+        "finalContent": {
+          "sel": ".guarantee",
+          "top": -1604,
+          "bottom": -1495
+        },
+        "docScrollTop": 2651,
+        "maxScroll": 2651
+      }
+    },
+    {
+      "viewport": "mobile-360",
+      "satc": {
+        "top": 653,
+        "bottom": 722,
+        "height": 69
+      },
+      "nav": {
+        "top": 730,
+        "bottom": 800,
+        "height": 70
+      },
+      "navOrbTop": null,
+      "navIdentity": "five_item",
+      "innerHeight": 800,
+      "satcZ": "90",
+      "clearance": "calc(78px + 0px)"
+    },
+    {
+      "viewport": "mobile-360",
+      "obscuration": {
+        "satcTop": 653,
+        "innerHeight": 800,
+        "finalContent": {
+          "sel": ".guarantee",
+          "top": -1668,
+          "bottom": -1539
+        },
+        "docScrollTop": 2685,
+        "maxScroll": 2685
+      }
+    }
+  ],
   "console_errors": [],
-  "finished_at": "2026-09-14T20:48:27.624Z",
+  "finished_at": "2026-09-14T21:10:34.489Z",
   "summary": {
-    "pass": 35,
+    "pass": 33,
     "fail": 0,
     "warn": 0,
-    "total": 35
+    "total": 33
   }
 }

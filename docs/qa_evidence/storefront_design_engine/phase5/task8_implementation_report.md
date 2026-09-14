@@ -146,3 +146,81 @@ Production diff footprint: 3 production files (+218/−2 lines total across all 
 TASK 8 IMPLEMENTATION COMPLETE: YES
 TASK 8 ARCHITECTURE ESCALATION REQUIRED: NO
 PR MERGED: NO
+
+
+
+---
+
+# Task 8 — Independent Review Repair Gate (addendum)
+
+The first pass opened PR #5 with CRITICAL: 0, IMPORTANT: 3. All three IMPORTANT findings are now repaired on the same branch. PR #5 remains **unmerged**.
+
+## IMPORTANT 1 — Canonical per-variant nav geometry (PASS)
+
+The clearance is no longer a single global constant. `--gmn-clearance` is now owned and published by the canonical mobile bottom-nav CSS owner (`storefront_builder.css`) as ONE geometry source that distinguishes every active nav presentation and the absent case:
+
+- `:root{--gmn-clearance:0px}` — default when NO bottom nav renders (SATC then hugs the safe area; it does not float ~88px up).
+- Per active variant, keyed off the nav's own identity class via `:has()` on a common ancestor (the nav and SATC are cousins under the shell, so a plain custom-property cascade cannot reach SATC; `:has()` is an established pattern already used in this repo's `home.css`):
+  - `:root:has(.gmn)` → `114px` (default / **luxury** floating cart — covers the raised orb crown)
+  - `:root:has(.gmn--four_item)` → `84px`
+  - `:root:has(.gmn--five_item)` → `78px` (edge-to-edge; matches the nav's own `.gmn-spacer--five_item`)
+  - `:root:has(.gmn--raised_cart)` → `114px` (**covers the upward-extending cart orb**, per the review's specific warning)
+  - `:root:has(.gmn--floating_dock)` → `88px`
+  - `:root:has(.gmn--glass_dock)` → `94px`
+  - `:root:has(.gmn--minimal_icons)` → `82px` (matches `.gmn-spacer--minimal_icons`)
+  - `:root:has(.gmn--wide_cart)` → `86px`
+  - all `+ env(safe-area-inset-bottom)`.
+
+SATC consumes `var(--gmn-clearance, env(safe-area-inset-bottom,0px))`. No per-template offsets; no second geometry authority; no Ready Template edits. Values were tuned against real measured browser geometry (the raised-orb variants were corrected from 94/100 to 114 after QA measured the orb crown).
+
+## IMPORTANT 2 — All-variant browser QA (PASS)
+
+Fresh browser QA (playwright-core + chromium, real published tenant `rastisi-fashion-test`, RTL) was run for **every** registered presentation plus the luxury floating cart and the hidden/absent case, at **390×844** and **360×800**, plus a desktop absence check. Each run republishes the nav variant through the canonical layout draft→publish path and reads the live storefront.
+
+Result: **each of the 9 presentations PASS with 0 FAIL** (`four_item, five_item, raised_cart, floating_dock, glass_dock, minimal_icons, wide_cart, luxury_floating_cart, hidden`). Committed machine-readable evidence: `task8_browser_qa/report_<variant>.json` (9 files) + `pdp_<variant>_mobile-390.png` / `pdp_<variant>_mobile-360.png` (18 screenshots). Each report records, per variant and viewport, the actual geometry (SATC top/bottom, nav top/bottom, raised-orb top, identity, resolved clearance, z-index) and an explicit `satc:no-bottom-nav-overlap` PASS/FAIL. Measured examples at 390×844 (SATC bottom vs nav top / orb top):
+
+| Variant | clearance | SATC bottom | nav top (orb top) | overlap |
+|---|---|---|---|---|
+| four_item | 84px | 760 | 771 | PASS |
+| five_item | 78px | 766 | 774 | PASS |
+| raised_cart | 114px | 730 | 737 (orb 738) | PASS |
+| floating_dock | 88px | 756 | 765 | PASS |
+| glass_dock | 94px | 750 | 762 | PASS |
+| minimal_icons | 82px | 762 | 776 | PASS |
+| wide_cart | 86px | 758 | 769 | PASS |
+| luxury_floating_cart | 114px | 730 | 737 (orb 738) | PASS |
+| hidden | 0px | 844 | — (hugs bottom, gap 0) | PASS |
+
+The initial repair pass caught a **real** overlap on `raised_cart` and `luxury_floating_cart` (SATC bottom 750/744 vs orb top 738) — the QA's raised-orb-aware overlap check exposed it, and the clearance was corrected to 114px so SATC now clears the orb crown.
+
+## IMPORTANT 3 — No permanent content obscuration (PASS)
+
+`.pdp` reserves bottom space equal to `--gmn-clearance` + SATC's own height (`--satc-height`) + a small gap, and `html:has(.pdp-satc)` sets a matching `scroll-padding-bottom` — both derived from canonical geometry, not a random per-template value. The browser QA scrolls to maximum page scroll, captures bounding rectangles, and asserts the final PDP content (review form / tabs / trust strip) is reachable above the SATC top edge: `content:final-reachable-above-satc` is **PASS** on every variant at both viewports. Screenshots at max scroll are committed per variant.
+
+## Design simplification (SATC now inside the canonical form)
+
+The preferred approved design is restored: SATC now lives **physically inside** the one canonical `cart:add` `<form>` as a plain `type="submit"` button. Because it is `position:fixed` it is removed from normal flow, so its in-form DOM position does not disturb layout. The `form=` attribute and the deterministic `pdp-buy-form-<pk>` id were **removed** — the coupling is gone. Still: one form, one submitted `quantity` owner (the existing stepper), one `cart:add` pipeline, no second Alpine component. `test_satc_submits_the_same_canonical_form_no_second_form` now asserts the `.pdp-satc` block is inside the single cart:add form, uses no `form=` attribute, and that no `pdp-buy-form-` id exists.
+
+## Post-repair verification
+
+- Task 8 focused + PDP/cart/variant/PDT/PDTX: **162 tests OK** (added `test_clearance_is_per_variant_and_zero_when_nav_absent`).
+- Broader regression (render_service, section_registry, a8 ready-template contracts, a8 component coverage, universal renderer, qa harness, **r4_store_appearance_rendering**): **424 OK** (1 skipped).
+- `python manage.py check`: no issues. `makemigrations --check --dry-run`: No changes detected. `git diff --check`: clean.
+
+## Files changed by the repair (same branch)
+
+- `apps/storefront_builder/static/css/storefront_builder.css` — per-variant canonical `--gmn-clearance` (`:root` default 0 + `:has()` variant rules).
+- `apps/catalog/static/css/product_detail.css` — SATC bottom from `--gmn-clearance`; `--satc-height`; `.pdp` bottom reserve + `scroll-padding-bottom` (no-obscuration).
+- `apps/storefront_builder/templates/storefront_builder/sections/product_main.html` — SATC moved inside the canonical form; `form=`/id coupling removed.
+- `apps/storefront_builder/tests/test_views.py` — updated/added SATC tests.
+- `tools/storefront_builder_qa/public_task8_qa.mjs` — all-variant geometry + no-obscuration runner; `tools/storefront_builder_qa/_publish_nav.py` — dev-only QA nav publisher.
+- `docs/qa_evidence/storefront_design_engine/phase5/task8_browser_qa/` — per-variant reports + screenshots (regenerated).
+
+REPAIR — CRITICAL FIXES COMPLETED: YES (none were open; 3 IMPORTANT repaired)
+IMPORTANT 1 — CANONICAL NAV GEOMETRY: PASS
+IMPORTANT 2 — ALL NAV VARIANTS BROWSER QA: PASS
+IMPORTANT 3 — NO CONTENT OBSCURATION: PASS
+TASK 8 TESTS: PASS
+REGRESSION: PASS
+MIGRATIONS: 0
+PR MERGED: NO
