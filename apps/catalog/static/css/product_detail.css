@@ -205,3 +205,49 @@
     .pdp-acc-header::after{transition:none}
   }
 }
+
+
+/* ========================================================================
+   Phase 5 Task 8 (SATC) — mobile Sticky Add-to-Cart.
+   ------------------------------------------------------------------------
+   PRESENTATION-ONLY. The markup lives inside the canonical ``variantSelector``
+   Alpine scope in ``product_main.html`` and its button submits the SAME
+   canonical purchase form (``pdp-buy-form-<pk>``) via ``form=`` — one form,
+   one submitted quantity owner, one ``cart:add`` flow. This file only styles
+   it and gates it to mobile.
+
+   LAYERING (public storefront stacking, verified): the sticky bar sits at
+   ``z-index:90`` — ABOVE page content but BELOW every canonical overlay that
+   is meant to cover the page (login modal ``.overlay`` z-index:100, mobile nav
+   drawer backdrop 110 / panel 120, Quick View backdrop 1000 / dialog 1001) and
+   BELOW the mobile bottom nav (``.gmn`` z-index:850). So overlays correctly
+   cover SATC and SATC never covers the bottom nav — reusing the EXISTING
+   stacking order, not a new global overlay-state system.
+
+   POSITION: bottom offset consumes the canonical ``--gmn-clearance`` token
+   published by the bottom-nav owner, so it sits ABOVE whichever of the seven
+   registered nav variants is active. When NO bottom nav renders, the token's
+   own fallback keeps SATC clear of the device safe area. No per-template
+   ``bottom:`` overrides. Hidden on desktop; only shown at the storefront
+   mobile breakpoint (matching the bottom nav's own <=680px breakpoint). */
+.pdp-satc{display:none}
+@media(max-width:680px){
+  .pdp-satc{
+    display:flex;align-items:center;gap:12px;
+    position:fixed;z-index:90;inset-inline:0;
+    bottom:var(--gmn-clearance,calc(88px + env(safe-area-inset-bottom,0px)));
+    padding:10px 14px;
+    background:var(--card,#fff);border-top:1px solid var(--line);
+    box-shadow:0 -8px 24px rgba(15,23,42,.10);
+    direction:rtl;
+  }
+  .pdp-satc-price{display:flex;flex-direction:column;line-height:1.25;min-width:0;flex:0 0 auto}
+  .pdp-satc-now{font-size:16px;font-weight:900;color:var(--ink);white-space:nowrap}
+  .pdp-satc-old{font-size:11.5px;color:var(--muted);text-decoration:line-through;white-space:nowrap}
+  .pdp-satc-btn{flex:1;min-width:0;height:48px;font-size:15px}
+  .pdp-satc-btn:disabled{opacity:.5;cursor:not-allowed}
+  /* When the bottom nav uses the edge-to-edge ``five_item`` variant (which
+     removes the floating inset and sits flush at the safe area with a 68px
+     bar), the shared clearance already covers it; no per-variant SATC offset
+     is introduced here — SATC always derives from the single token. */
+}

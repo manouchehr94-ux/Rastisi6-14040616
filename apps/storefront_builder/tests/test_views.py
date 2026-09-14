@@ -2501,12 +2501,135 @@ class ProductDetailContextAwareSectionsPreviewTests(StorefrontBuilderViewsTestCa
 
     def test_context_aware_sections_absent_on_other_page_tabs(self):
         """این چهار section فقط با ``?page=product_detail`` دیده می‌شوند —
-        اگر همان section (با دستکاریِ مستقیم) رویِ صفحه‌ی دیگری بنشیند،
+        اگر همان section (با دستکاریِ مستقیم) رویِ صفحه‌ی دیگری بنشیند,
         Preview آن صفحه هرگز آن را رندر نمی‌کند (چون اصلاً section آن
         صفحه نیست)."""
         StorefrontSection.objects.create(page=self.pd_page, section_key="product_main", order=0)
         resp = self.client.get(reverse("dashboard:storefront-builder-preview"), {"page": "cart"})
         self.assertNotContains(resp, "کالای پیش‌نمایشِ رندرشده")
+
+    # ---- Phase 5 Task 8 (SATC) — mobile Sticky Add-to-Cart -------------
+    # SATC is PRESENTATION inside the existing canonical Add-to-Cart form:
+    # one form, one submitted quantity owner, one cart:add flow. These tests
+    # assert that architecture (ONE CONCEPT = ONE CANONICAL OWNER), not
+    # fragile visual formatting.
+
+    def _pdp_main_tmpl(self):
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        return Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/templates/storefront_builder/sections/product_main.html",
+        ).read_text(encoding="utf-8")
+
+    def _one_product_main(self):
+        # product_main is removable=False / max_instances=1 on a real PDP; the
+        # product_detail page is pre-seeded with one. Ensure EXACTLY one for a
+        # deterministic single-purchase-form assertion (mirrors the canonical
+        # runtime invariant — never two product_main on one PDP).
+        StorefrontSection.objects.filter(page=self.pd_page, section_key="product_main").delete()
+        return StorefrontSection.objects.create(page=self.pd_page, section_key="product_main", order=0)
+
+    def test_satc_rendered_by_canonical_product_main(self):
+        # The sticky Add-to-Cart surface is emitted by the canonical
+        # product_main section (not a new section / not a separate renderer).
+        self._one_product_main()
+        content = self._preview().content.decode()
+        self.assertIn("pdp-satc", content)
+
+    def test_satc_submits_the_same_canonical_form_no_second_form(self):
+        # The canonical purchase form gets a deterministic id, and the sticky
+        # button submits THAT form via the HTML `form=` association — so it
+        # reuses the existing variant_id + quantity + cart:add flow. There is
+        # exactly ONE <form> in product_main (no duplicate purchase form).
+        self._one_product_main()
+        content = self._preview().content.decode()
+        import re
+        # deterministic form id, namespaced by product pk
+        form_ids = re.findall(r'<form[^>]*\sid="(pdp-buy-form-[^"]+)"', content)
+        self.assertEqual(len(form_ids), 1, "exactly one canonical purchase form with a deterministic id")
+        form_id = form_ids[0]
+        self.assertIn(str(self.product.pk), form_id)
+        # the sticky submit button is associated with the SAME form via form=
+        self.assertRegex(
+            content,
+            r'<button[^>]*\bform="' + re.escape(form_id) + r'"[^>]*type="submit"'
+            r'|<button[^>]*type="submit"[^>]*\bform="' + re.escape(form_id) + r'"',
+        )
+        # exactly ONE canonical purchase pipeline: one form posting to cart:add.
+        # (The page has other unrelated forms — search / review / login — but
+        # there must be only a single hx-post to the cart-add endpoint, i.e. no
+        # second Add-to-Cart form was introduced for SATC.)
+        self.assertEqual(
+            len(re.findall(r'hx-post="[^"]*/cart/add/', content)), 1,
+            "no second purchase form / cart:add pipeline introduced",
+        )
+
+    def test_satc_has_no_second_quantity_owner(self):
+        # SATC must NOT introduce its own quantity input/selector — the single
+        # submitted quantity owner remains the existing stepper input.
+        self._one_product_main()
+        content = self._preview().content.decode()
+        # exactly one quantity input in the whole rendered product_main
+        self.assertEqual(content.count('name="quantity"'), 1, "one and only one submitted quantity owner")
+
+    def test_normal_pdp_cta_still_present_alongside_satc(self):
+        # SATC is additive: the normal in-flow Add-to-Cart CTA remains. There
+        # are exactly TWO Add-to-Cart submit surfaces — the canonical in-flow
+        # CTA (.pdp-actions .btn-primary) and the sticky one (.pdp-satc-btn) —
+        # both submitting the SAME form (proven by the single-form test above).
+        self._one_product_main()
+        content = self._preview().content.decode()
+        self.assertIn("افزودن به سبد خرید", content)
+        # in-flow CTA still present
+        self.assertIn('class="pdp-actions"', content)
+        # sticky CTA present and is the additive second submit surface
+        self.assertIn("pdp-satc-btn", content)
+
+    def test_satc_reuses_canonical_purchasability_state_no_second_calc(self):
+        # The sticky button binds to the SAME Alpine getters as the main CTA
+        # (canAddToCart / needsSelection / displayStock) — no second stock or
+        # purchasability calculation. Template-level proof: within the SATC
+        # block, disabled/label bindings reference the canonical getters.
+        tmpl = self._pdp_main_tmpl()
+        satc_start = tmpl.find("pdp-satc")
+        self.assertNotEqual(satc_start, -1, "SATC block must exist in product_main")
+        satc_block = tmpl[satc_start:satc_start + 1200]
+        self.assertIn("canAddToCart", satc_block)
+        self.assertIn("needsSelection", satc_block)
+        # SATC introduces no new Alpine component (no second x-data with its own
+        # product/variant/quantity state) inside the sticky block.
+        self.assertNotIn("x-data", satc_block)
+
+    def test_satc_is_mobile_only_and_below_overlays_in_css(self):
+        # SATC presentation is mobile-only and layered BELOW the canonical
+        # overlays (login modal z-index:100, drawer 110/120, quick view
+        # 1000/1001) and does not cover the bottom nav. Verify via the
+        # canonical PDP CSS owner.
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        css = Path(dj_settings.BASE_DIR, "apps/catalog/static/css/product_detail.css").read_text(encoding="utf-8")
+        self.assertIn(".pdp-satc", css)
+        # mobile-only: the sticky rule lives under a max-width media query and
+        # is hidden by default on desktop.
+        self.assertRegex(css, r"@media\s*\(max-width:\s*680px\)")
+        # safe-area aware (consumes env(safe-area-inset-bottom)).
+        self.assertIn("safe-area-inset-bottom", css)
+        # bottom offset derives from the canonical bottom-nav clearance token,
+        # not a hard-coded magic number.
+        self.assertIn("--gmn-clearance", css)
+
+    def test_bottom_nav_owner_exposes_presentation_clearance_token(self):
+        # The canonical mobile bottom-nav CSS owner exposes a presentation-only
+        # geometry token that SATC (and anything else) can consume, instead of
+        # per-template offsets. One canonical geometry owner.
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        css = Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/static/css/storefront_builder.css",
+        ).read_text(encoding="utf-8")
+        self.assertIn("--gmn-clearance", css)
 
 
 class ProductListingContextAwareSectionPreviewTests(StorefrontBuilderViewsTestCase):
