@@ -1,7 +1,7 @@
 {
-  "started_at": "2026-09-14T13:58:37.763Z",
-  "builder_url": "http://rastisi-fashion-test.rastisi.localhost:8785/admin-portal/storefront-builder/r4/",
-  "public_url": "http://rastisi-fashion-test.rastisi.localhost:8785/",
+  "started_at": "2026-09-14T14:16:22.375Z",
+  "builder_url": "http://rastisi-fashion-test.rastisi.localhost:8787/admin-portal/storefront-builder/r4/",
+  "public_url": "http://rastisi-fashion-test.rastisi.localhost:8787/",
   "scenarios": [
     {
       "name": "01-initial-r4",
@@ -81,7 +81,7 @@
     {
       "name": "task6-showcase-facade",
       "status": "PASS",
-      "ms": 6904
+      "ms": 18636
     },
     {
       "name": "phase3-brand-gate",
@@ -111,27 +111,27 @@
   ],
   "mutation_posts": [
     {
-      "url": "http://rastisi-fashion-test.rastisi.localhost:8785/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://rastisi-fashion-test.rastisi.localhost:8785/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://rastisi-fashion-test.rastisi.localhost:8785/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://rastisi-fashion-test.rastisi.localhost:8785/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     },
     {
-      "url": "http://rastisi-fashion-test.rastisi.localhost:8785/admin-portal/storefront-builder/r4/mutate/",
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/admin-portal/storefront-builder/r4/mutate/",
       "status": 200,
       "source": "admin"
     }
@@ -142,255 +142,285 @@
   "switch_template_posts": [],
   "http_error_responses": [
     {
-      "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789394318775
+      "at": 1789395383407
     },
     {
-      "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789394318886
+      "at": 1789395383546
     },
     {
-      "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789394320651
+      "at": 1789395385780
     },
     {
-      "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789394320691
+      "at": 1789395385820
     },
     {
-      "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789394321710
+      "at": 1789395386914
     },
     {
-      "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789394321729
+      "at": 1789395386960
     },
     {
-      "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789394322728
+      "at": 1789395387882
     },
     {
-      "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789394322770
+      "at": 1789395387927
     },
     {
-      "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789394323678
+      "at": 1789395388886
     },
     {
-      "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789394323720
+      "at": 1789395388932
     },
     {
-      "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/brand_logos/qa-broken-nonexistent.png",
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/brand_logos/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789394324984
+      "at": 1789395390618
     },
     {
-      "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/collection_images/qa-broken-nonexistent.png",
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/collection_images/qa-broken-nonexistent.png",
       "status": 404,
       "source": "admin",
       "bucket": null,
-      "at": 1789394325018
+      "at": 1789395390653
+    },
+    {
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/brand_logos/qa-broken-nonexistent.png",
+      "status": 404,
+      "source": "admin",
+      "bucket": null,
+      "at": 1789395392221
+    },
+    {
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/collection_images/qa-broken-nonexistent.png",
+      "status": 404,
+      "source": "admin",
+      "bucket": null,
+      "at": 1789395392221
     }
   ],
   "console_errors": [
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789394318775
+      "at": 1789395383407
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789394318886
+      "at": 1789395383546
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789394320651
+      "at": 1789395385780
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789394320691
+      "at": 1789395385821
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789394321710
+      "at": 1789395386914
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789394321729
+      "at": 1789395386960
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789394322728
+      "at": 1789395387882
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789394322771
+      "at": 1789395387927
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789394323678
+      "at": 1789395388886
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789394323720
+      "at": 1789395388932
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/brand_logos/qa-broken-nonexistent.png",
+        "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/brand_logos/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789394324984
+      "at": 1789395390618
     },
     {
       "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
       "location": {
-        "url": "http://rastisi-fashion-test.rastisi.localhost:8785/media/collection_images/qa-broken-nonexistent.png",
+        "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/collection_images/qa-broken-nonexistent.png",
         "line": 0,
         "column": 0,
         "lineNumber": 0,
         "columnNumber": 0
       },
       "source": "admin",
-      "at": 1789394325018
+      "at": 1789395390653
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/brand_logos/qa-broken-nonexistent.png",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "admin",
+      "at": 1789395392221
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://rastisi-fashion-test.rastisi.localhost:8787/media/collection_images/qa-broken-nonexistent.png",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "source": "admin",
+      "at": 1789395392221
     }
   ],
   "page_errors": [],
-  "request_failures": [
-    {
-      "url": "http://rastisi-fashion-test.rastisi.localhost:8785/admin-portal/storefront-builder/preview/?page=home",
-      "method": "GET",
-      "error": "net::ERR_ABORTED",
-      "source": "admin",
-      "at": 1789394326497
-    }
-  ],
+  "request_failures": [],
   "main_frame_navigations": [
     {
-      "url": "http://rastisi-fashion-test.rastisi.localhost:8785/admin-portal/storefront-builder/r4/",
-      "at": "2026-09-14T13:58:38.246Z",
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/admin-portal/storefront-builder/r4/",
+      "at": "2026-09-14T14:16:22.848Z",
       "expected": true
     },
     {
-      "url": "http://rastisi-fashion-test.rastisi.localhost:8785/admin-portal/storefront-builder/r4/?page=home",
-      "at": "2026-09-14T13:58:44.713Z",
+      "url": "http://rastisi-fashion-test.rastisi.localhost:8787/admin-portal/storefront-builder/r4/?page=home",
+      "at": "2026-09-14T14:16:30.326Z",
       "expected": true
     }
   ],
@@ -403,5 +433,15 @@
     "passed": 1,
     "failed": 0
   },
-  "finished_at": "2026-09-14T13:58:46.494Z"
+  "task6_diagnostics": {
+    "new_console_errors": 12,
+    "known_fixture_console_noise": 12,
+    "unexpected_console_errors": 0,
+    "unexpected_console_sample": [],
+    "page_errors": 0,
+    "new_request_failures": 0,
+    "unexpected_request_failures": 0,
+    "unexpected_request_failure_sample": []
+  },
+  "finished_at": "2026-09-14T14:16:42.905Z"
 }

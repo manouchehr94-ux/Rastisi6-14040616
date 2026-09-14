@@ -131,7 +131,11 @@ class Command(BaseCommand):
                 "browser scenario (desktop 1440 + mobile 390, RTL). Also seeds "
                 "one active MerchantCollection into the sandbox so the "
                 "Collections choice is legal. Off by default — existing "
-                "scenarios/behavior are unchanged."
+                "scenarios/behavior are unchanged. NOTE: currently REQUIRES "
+                "--phase3 as well (the runner eagerly bootstraps Phase-3 "
+                "fixtures at import); the command fails fast otherwise. Typical "
+                "Task-6-only run: R4_QA_ONLY_SCENARIO=task6-showcase "
+                "manage.py qa_storefront_builder_r4 --phase3 --showcase ..."
             ),
         )
         parser.add_argument(
@@ -157,6 +161,22 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if not settings.DEBUG:
             raise CommandError("This disposable browser QA is only permitted with DEBUG=True.")
+
+        # Phase 5 Task 6 — the current run.mjs eagerly builds phase3-only edit
+        # matrices at module import (FINAL_REMEDIATION_SCALAR_EDITS reads
+        # manifest.phase3_fixture.final_remediation_families), so the runner
+        # cannot even load without --phase3. Rather than a broad phase3
+        # refactor in Task 6, fail fast with a truthful message: the Showcase
+        # scenario must be run as `--phase3 --showcase`.
+        if options["showcase"] and not options["phase3"]:
+            raise CommandError(
+                "--showcase currently requires --phase3 as well: the R4 QA runner "
+                "(tools/storefront_builder_r4_qa/run.mjs) eagerly requires the "
+                "Phase-3 fixture bootstrap at import time. Re-run as: "
+                "manage.py qa_storefront_builder_r4 --phase3 --showcase ... "
+                "(optionally with R4_QA_ONLY_SCENARIO=task6-showcase to run only "
+                "the Task-6 scenario)."
+            )
 
         base_dir = Path(settings.BASE_DIR).resolve()
         shared_tool_dir = base_dir / "tools" / "storefront_builder_qa"
@@ -1245,11 +1265,13 @@ class Command(BaseCommand):
         }
 
     def _build_manifest(self, *, store, port, session_cookie, report_dir, headed, browser_channel, phase3=False, phase3_fixture=None, showcase=False):
-        # Phase 5 Task 6 (--showcase) — reach the editor via the seeded
-        # VERIFIED StoreDomain host (mapped to 127.0.0.1 by the runner's
-        # chromium --host-resolver-rules), so a multi-Store sandbox resolves
-        # the target Store instead of failing the 127.0.0.1 single-Store
-        # fallback. The default (non-showcase) run keeps the 127.0.0.1 origin
+        # Phase 5 Task 6 (--showcase) — reach the editor via the Store's
+        # ADMIN-SUBDOMAIN host (``<admin_subdomain>.rastisi.localhost``, mapped
+        # to 127.0.0.1 by the runner's chromium --host-resolver-rules), so a
+        # multi-Store sandbox resolves the target Store instead of failing the
+        # 127.0.0.1 single-Store compatibility fallback. The admin portal
+        # resolves the Store by its admin_subdomain — no StoreDomain seeding is
+        # involved. The default (non-showcase) run keeps the 127.0.0.1 origin
         # and cookie domain byte-for-byte unchanged.
         host = (
             f"{store.admin_subdomain}{self.SHOWCASE_QA_HOST_SUFFIX}"

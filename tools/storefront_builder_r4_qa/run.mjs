@@ -3955,16 +3955,31 @@ async function openShowcaseChooser() {
 }
 
 async function scenario16ShowcaseFacade() {
+  // Diagnostic baselines: record the instrumentation array lengths BEFORE the
+  // Task-6 scenario runs, so the gate at the end asserts on ONLY the events
+  // this scenario introduced (not any Phase-3 fixture noise recorded earlier).
+  const consoleBase = result.console_errors.length;
+  const pageErrBase = result.page_errors.length;
+  const reqFailBase = result.request_failures.length;
+
   // The page is already on the R4 editor (main() navigated there with the
   // session cookie). 1440 desktop first (the run starts at desktop viewport).
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
+  // Let the editor's own initial preview-iframe load fully settle before any
+  // DOM read, so a late init reload cannot destroy the execution context.
+  await settlePreviewFrame();
 
   const disclosure = await openShowcaseChooser();
   const choiceButtons = disclosure.locator('[data-r4-showcase-choice]');
   const choiceCount = await choiceButtons.count();
   assert(choiceCount === 4, `Showcase chooser must present exactly 4 choices, found ${choiceCount}`);
-  const renderedKeys = await choiceButtons.evaluateAll((els) => els.map((el) => el.getAttribute('data-section-key')));
+  // Read keys one-by-one (not a single evaluateAll) so a late reflow/reload
+  // cannot destroy the batched execution context mid-read.
+  const renderedKeys = [];
+  for (let i = 0; i < choiceCount; i += 1) {
+    renderedKeys.push(await choiceButtons.nth(i).getAttribute('data-section-key'));
+  }
   for (const { sectionKey } of SHOWCASE_MAP) {
     assert(renderedKeys.includes(sectionKey), `Showcase chooser missing canonical key ${sectionKey}`);
   }
@@ -4006,6 +4021,9 @@ async function scenario16ShowcaseFacade() {
   await captureTask6("02_four_canonical_sections_desktop.png");
 
   // Mobile 390 RTL — chooser reachable/usable, no horizontal overflow.
+  // Settle any in-flight preview reload from the last desktop add BEFORE the
+  // main-frame navigation, so it is not aborted mid-flight (net::ERR_ABORTED).
+  await settlePreviewFrame();
   await page.setViewportSize({ width: 390, height: 844 });
   await withExpectedNavigation(() => page.goto(manifest.builder_url + '?page=home', { waitUntil: 'domcontentloaded', timeout: 20000 }));
   await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
@@ -4021,6 +4039,49 @@ async function scenario16ShowcaseFacade() {
   await waitSaved();
   await page.waitForFunction((n) => document.querySelectorAll('[data-r4-structure-row]').length === n, mCountBefore + 1, { timeout: 10000 });
   await captureTask6("03_showcase_mobile_390_rtl.png");
+
+  // Settle before restoring the viewport so a trailing preview reload from the
+  // mobile add is not left in-flight for a later scenario's navigation.
+  await settlePreviewFrame();
+
+  // ---- Task-6 diagnostic gate (narrow, scoped to THIS scenario's events) ----
+  // The scenario must not pass merely because its UI assertions passed. Assert
+  // that Task-6 execution introduced NO unexpected console error, page error,
+  // or request failure. The only tolerated console/request noise is the exact,
+  // intentional Phase-3 broken-media fixtures (isExpectedBrokenImageNoise:
+  // qa-broken-nonexistent) and the browser favicon — never an arbitrary 404.
+  const newConsole = result.console_errors.slice(consoleBase);
+  const newPageErrors = result.page_errors.slice(pageErrBase);
+  const newRequestFailures = result.request_failures.slice(reqFailBase);
+
+  const unexpectedConsole = newConsole.filter(
+    (e) => !FAVICON_URL_PATTERN.test(e?.location?.url || '') && !isExpectedBrokenImageNoise(e?.location?.url),
+  );
+  const unexpectedRequestFailures = newRequestFailures.filter(
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url),
+  );
+
+  // Persist a compact, truthful Task-6 diagnostic summary alongside the run.
+  result.task6_diagnostics = {
+    new_console_errors: newConsole.length,
+    known_fixture_console_noise: newConsole.length - unexpectedConsole.length,
+    unexpected_console_errors: unexpectedConsole.length,
+    unexpected_console_sample: unexpectedConsole.slice(0, 5),
+    page_errors: newPageErrors.length,
+    new_request_failures: newRequestFailures.length,
+    unexpected_request_failures: unexpectedRequestFailures.length,
+    unexpected_request_failure_sample: unexpectedRequestFailures.slice(0, 5),
+  };
+  try {
+    fs.writeFileSync(
+      path.join(TASK6_EVIDENCE_DIR, 'task6_diagnostics.json'),
+      JSON.stringify(result.task6_diagnostics, null, 2),
+    );
+  } catch (_error) { /* evidence best-effort */ }
+
+  assert(newPageErrors.length === 0, `Task-6 introduced page errors: ${JSON.stringify(newPageErrors.slice(0, 5))}`);
+  assert(unexpectedConsole.length === 0, `Task-6 introduced unexpected console errors: ${JSON.stringify(unexpectedConsole.slice(0, 5))}`);
+  assert(unexpectedRequestFailures.length === 0, `Task-6 introduced unexpected request failures: ${JSON.stringify(unexpectedRequestFailures.slice(0, 5))}`);
 
   // Restore desktop viewport for any subsequent scenario.
   await page.setViewportSize({ width: 1440, height: 900 });
