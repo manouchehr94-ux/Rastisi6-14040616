@@ -261,4 +261,152 @@ sequence: STRANS → PDT → MDR(+overlay) → MODAL → PDTX → HDR.
 
 # Implementation log (sections 3–17)
 
-_Populated as each area reaches GREEN. See §2 for the approved classifications._
+All six areas were implemented in the approved order (STRANS → PDT → MDR →
+MODAL → PDTX → HDR) with strict RED→GREEN TDD, reusing canonical owners, with
+**zero database migrations**.
+
+## 3. STRANS — Hero slider transition (Classification B / S) — DONE ✅
+
+- **Owner reused:** the existing slider schema/validator (`_validate_slider_settings`, `default_slider_settings`, `HERO_BANNER_SCHEMA`, `IMAGE_SLIDER_SCHEMA`) in `section_registry.py` and the existing Alpine slider mechanic in `hero_slider_body.html`. No new field library, no JS carousel dependency.
+- **What shipped:** one closed enum `transition ∈ {cut, fade, slide}`, advanced field, **default `cut`** (byte-identical to the pre-existing instant hard cut → fully backward-compatible). `cut` keeps the exact existing `x-show` display toggle; `fade`/`slide` add a `.is-active` class + `data-hero-transition` attribute driving CSS presets. `prefers-reduced-motion` collapses `fade`/`slide` back to `cut`.
+- **Files:** `section_registry.py`, `partials/hero_slider_body.html`, `apps/catalog/static/css/home.css`.
+- **Tests (RED→GREEN):** `test_r4_settings_schema.py` (`SliderTransitionValidatorTests`, `SliderTransitionSchemaFieldTests`), `test_render_service.py` (`SliderTransitionRenderTests`, `SliderTransitionRuntimeContractTests`); hero field-order test updated to include `transition`.
+- **Commit:** `13dddc2`.
+
+## 4. PDT — Product detail tabs / accordion (Classification C / S–M) — DONE ✅
+
+- **Owner reused:** `render_service._product_description_context` (unchanged data owner); `product_description` stays a context-aware, schema-less section. No second data source.
+- **What shipped:** an accessible rewrite of `product_description.html` — desktop ARIA `role="tablist"/tab/tabpanel` with `aria-selected/controls/labelledby`, roving tabindex, Arrow/Home/End keyboard nav; mobile = the same tabs/panels stacked as a full-width accordion (one DOM, one Alpine state). IDs namespaced per `product.pk`. Static first-tab-active attributes give a working no-JS baseline (Alpine `:attr` bindings do not render statically). Added the missing mobile `@media` breakpoint + `:focus-visible`.
+- **Files:** `sections/product_description.html`, `apps/catalog/static/css/product_detail.css`.
+- **Tests (RED→GREEN):** `test_views.py::ProductDetailContextAwareSectionsPreviewTests` (+`_one_product_description()` helper; 4 PDT tests for ARIA roles + all three panes reachable).
+- **Commit:** `1f9b3a9`.
+
+## 5. MDR — Mobile navigation drawer + shared overlay primitive (Classification D / M) — DONE ✅
+
+- **Owners reused:** canonical `content.Menu` authority via the already-exposed `NAV_MOBILE` context var (falling back to `NAV_HEADER`) — no second menu source, no hard-coded links. Responsive breakpoints owned by `core/static/css/layout.css`.
+- **Shared overlay primitive (built once, used by MDR + MODAL):** `apps/core/static/js/storefront_overlay.js` registers `Alpine.data('sfbOverlay')` — generic mechanics ONLY (open/close/Escape/backdrop/focus-trap/focus-return/scroll-lock). It owns **no** domain data (enforced by a source-contract test banning `cart/product/price/menu/nav_/quantity`). Loaded before `alpine.min.js` so `alpine:init` sees it.
+- **What shipped:** one accessible off-canvas drawer, `role="dialog" aria-modal`, consuming `NAV_MOBILE|default:NAV_HEADER`, RTL-safe off-canvas CSS (logical `inset-inline`, dir-aware transform), reduced-motion safe. **Corrective fix (browser-QA-driven):** the live public storefront overrides `{% block header %}` with the canonical `page_shell_header.html` shell, so the drawer was extracted into **one shared partial** (`templates/partials/mobile_nav_drawer.html`) included by BOTH `base.html` and `page_shell_header.html` (live-storefront only; the read-only Builder Preview keeps the legacy desktop-nav toggle). Single drawer implementation across every header shell — no second copy.
+- **Files:** `apps/core/static/js/storefront_overlay.js`, `templates/base.html`, `templates/partials/mobile_nav_drawer.html`, `apps/storefront_builder/templates/storefront_builder/partials/page_shell_header.html`, `apps/core/static/css/layout.css`.
+- **Tests (RED→GREEN):** `apps/content/tests/test_mobile_nav_drawer.py` (12 source-contract tests incl. shared-partial single-owner + canonical-shell wiring).
+- **Commits:** `79f812f` (drawer + primitive), `4d3daaa` (canonical-shell corrective fix + browser QA evidence).
+
+## 6. MODAL — Public product quick view (Classification D / M–L) — DONE ✅
+
+- **STOP condition avoided:** the quick-view is rendered **server-side inside the existing product card** from the SAME `card` (`ProductCardData`) truth already resolved by `product_card_service` — **no new backend endpoint, no client fetch, no second serializer**. This is why the "STOP BEFORE CREATING a new product endpoint" condition never triggered.
+- **Owners reused:** `product_card_service.build_product_card_data` / `product_card_data` filter (card truth), `cart:add` (add-to-cart — verbatim, respecting the `show_quick_add` capability), the shared `sfbOverlay()` primitive (open/close/Escape/focus/scroll-lock).
+- **What shipped:** per-card quick-view trigger (`aria-haspopup="dialog"`, `aria-controls="quick-view-{{ pk }}"`) + a hidden in-card `role="dialog" aria-modal` panel (unique id per product) showing brand/name/rating/price/discount + add-to-cart (gated on `show_quick_add is not False and is_quick_add_eligible`, honoring the existing card contract) + PDP link. RTL-safe centered dialog CSS.
+- **Files:** `catalog/partials/product_card.html`, `apps/catalog/static/css/product_card.css`.
+- **Tests (RED→GREEN):** `apps/catalog/tests/test_product_quick_view.py` (6 tests: dialog semantics, unique id per product, canonical card truth reuse, `cart:add` reuse, `sfbOverlay` reuse, OOS has no cart action).
+- **Commit:** `ed60030`.
+
+## 7. PDTX — PDP trust/delivery owner GATE (Classification C / M, GATED) — DONE ✅ (verification; owner exists)
+
+- **Gate outcome:** a Draft-aware canonical owner for PDP trust/guarantee content **ALREADY EXISTS** → PDTX is **NOT blocked**, and **no new model / no new schema was created**.
+- **The owner:** the existing **`trust_features`** section — a first-class `StorefrontSection` with a real validating schema (`TRUST_FEATURES_SCHEMA` / `validate_trust_features_settings`, `has_settings_form=True`). Because it declares no `page_types` it inherits `ALL_PAGE_TYPES`, which **includes `product_detail`**; its `settings.items` flow through the full storefront Draft → validate → publish → render lifecycle.
+- **Why NOT ShopSettings:** `ShopSettings.free_shipping_threshold` is **IMMEDIATE-LIVE** (read live by `core.context_processors.shop_settings` and `cart.services.pricing`, edited via the dashboard finance form with no draft/publish) — per the gate it is explicitly **NOT acceptable** as the Draft-aware owner. The hard-coded `.guarantee` strip lives in `product_main.html`, which is a deliberate passthrough (setting-less) context-aware section.
+- **What shipped:** verification-only tests locking the gate contract (owner is Draft-aware, allowed on the PDP, settings survive draft→publish→render, ShopSettings has no draft/version linkage). No production model/schema change — the hard-coded honest `.guarantee` strip was intentionally left untouched (a truthful, product-accurate fallback; replacing its placement/styling is out-of-scope architectural work, not required by the gate).
+- **Files:** `apps/storefront_builder/tests/test_pdp_trust_owner_gate.py` (6 tests).
+- **Commit:** `4f57a16`.
+
+## 8. HDR — Header (Classification A — canonical reuse, verify only) — DONE ✅ (NO-OP)
+
+- **NEW HEADER SETTING AUTHORITY CREATED: NO.**
+- **Verification:** the canonical header authority is a **single owner** — `StorefrontLayoutVersion.header_config` (JSONField), validated once by `layout_service.validate_header_config`, applied via `r4_mutation_service._apply_header_update` → `appearance_authority_service.apply_header_variant`. `global_region_registry.py` documents explicitly that `header_config`'s shape is "one single schema, validated once"; variants only select a trusted renderer partial. No second header settings authority exists.
+- **Result:** 246 existing header/appearance tests pass (`test_u2a_global_header_system`, `test_u2b_global_footer_system`, `test_r4_store_appearance_mutations`, `test_phase1_appearance_authority`, `test_r4_store_appearance_rendering`) → **no defect**. Per the approved override (verification-only, NO-OP unless a test proves a real defect), **no production code and no new test file were added for HDR.**
+
+## 9. Shared overlay primitive (built once, reused)
+
+`Alpine.data('sfbOverlay')` in `apps/core/static/js/storefront_overlay.js` is the single accessible overlay-mechanics primitive, consumed by **MDR** (mobile nav drawer) and **MODAL** (product quick view). It owns only generic mechanics — a source-contract test forbids any domain data (cart/product/price/menu/nav_/quantity) leaking into it. This realized the single biggest reuse opportunity called out in discovery §"Shared primitives".
+
+## 10. Architecture Gate — **PASS**
+
+- ONE concept = ONE owner upheld: **no** second renderer, menu authority, product/card data path, cart path, header settings authority, or persistence model was introduced.
+- Only additive, closed-enum / presentation / verification changes; the sole genuinely new persistence surface anticipated (a PDP trust schema) was **avoided** — PDTX resolved to reusing the existing Draft-aware `trust_features` owner.
+- **Zero DB migrations** (`makemigrations --check` → "No changes detected"; no migration files changed vs base).
+- Official branch `feature/phase5-design-expansion` untouched.
+
+## 11. Changed files (vs `0d16b6a`)
+
+Production / templates / assets:
+- `apps/storefront_builder/section_registry.py` (STRANS enum)
+- `apps/storefront_builder/templates/storefront_builder/partials/hero_slider_body.html` (STRANS)
+- `apps/storefront_builder/templates/storefront_builder/sections/product_description.html` (PDT)
+- `apps/storefront_builder/templates/storefront_builder/partials/page_shell_header.html` (MDR canonical-shell wiring)
+- `apps/catalog/templates/catalog/partials/product_card.html` (MODAL)
+- `templates/base.html` (MDR burger + shared-partial include)
+- `templates/partials/mobile_nav_drawer.html` (MDR shared drawer — NEW)
+- `apps/core/static/js/storefront_overlay.js` (shared overlay primitive — NEW)
+- `apps/catalog/static/css/home.css` (STRANS presets)
+- `apps/catalog/static/css/product_detail.css` (PDT accordion)
+- `apps/catalog/static/css/product_card.css` (MODAL dialog)
+- `apps/core/static/css/layout.css` (MDR off-canvas drawer)
+
+Tests:
+- `apps/catalog/tests/test_product_quick_view.py` (MODAL — NEW)
+- `apps/content/tests/test_mobile_nav_drawer.py` (MDR — NEW)
+- `apps/storefront_builder/tests/test_pdp_trust_owner_gate.py` (PDTX — NEW)
+- `apps/storefront_builder/tests/test_r4_settings_schema.py` (STRANS)
+- `apps/storefront_builder/tests/test_render_service.py` (STRANS)
+- `apps/storefront_builder/tests/test_views.py` (PDT)
+
+Docs / QA harness / evidence:
+- `docs/qa_evidence/storefront_design_engine/phase5/task5_implementation_report.md` (this report)
+- `docs/qa_evidence/storefront_design_engine/phase5/task5_browser_qa/` (report.json + 10 screenshots)
+- `tools/storefront_builder_qa/public_task5_qa.mjs` (public-storefront QA runner — NEW)
+- `docs/superpowers/plans/2026-09-11-phase5-design-expansion-implementation-plan.md` (Task-5 fast-track override note)
+
+## 12. Commits
+
+| SHA | Area | Message |
+| --- | --- | --- |
+| `b6767ea` | docs | align task5 with approved fast track |
+| `13dddc2` | STRANS | add hero slider transition control |
+| `1f9b3a9` | PDT | make product detail panels accessible and responsive |
+| `79f812f` | MDR | add canonical mobile navigation drawer |
+| `ed60030` | MODAL | add storefront product quick view |
+| `4f57a16` | PDTX | prove draft-aware canonical owner for PDP trust content |
+| `4d3daaa` | MDR | render mobile nav drawer on canonical storefront shell |
+
+Final HEAD: `4d3daaa01c49df855962257923100ac3b0e93897`.
+
+## 13. Test evidence (focused + regression)
+
+- **Focused Task-5 + core (batch 1):** 411 tests OK (`test_product_quick_view`, `test_pdp_trust_owner_gate`, `test_mobile_nav_drawer`, `test_r4_settings_schema`, `test_render_service`, `test_a8_product_card_presentations`, `test_product_card_service`, `test_product_card_cover_image`, `test_product_detail_view`, `test_page_shell`, `test_navigation`).
+- **R4 + header/footer + cart (batch 2):** 417 tests, 3 pre-existing errors only — `apps.cart.tests.test_cart_views.CartItemUpdateUsesComposedCartSectionsTests` (3). **These 3 were reproduced identically on the certified base `0d16b6a`** (a test-ordering/isolation quirk in `apps.cart`, independent of Task 5). All R4 modules (`test_r4_inspector`, `test_r4_appearance_overrides`, `test_r4_foundation`) and header suites green.
+- **HDR verification:** 246 header/appearance tests OK.
+
+## 14. Django / static gates
+
+- `manage.py check` → no issues.
+- `makemigrations --check --dry-run` → **No changes detected** (ZERO migrations).
+- `git diff --check` → clean (no whitespace/conflict markers).
+
+## 15. Browser QA (real published tenant, RTL)
+
+Ran against the live published storefront (`rastisi-fashion-test`, 94 active products) via headless Chrome at three viewports (1440×900, 768×1024, 390×844), RTL confirmed (`dir="rtl"`). Runner: `tools/storefront_builder_qa/public_task5_qa.mjs`; evidence: `task5_browser_qa/report.json` + 10 screenshots.
+
+**Result: 30/30 PASS, 0 warnings, 0 failures, 0 console errors.**
+
+- STRANS: `data-hero-transition` present on the hero at every viewport.
+- MODAL: quick-view trigger + dialog present on every product card (52/52); dialog **opens** and **Escape-closes** at all 3 viewports; RTL-correct centered modal (screenshot).
+- MDR: burger present, drawer **opens** and **Escape-closes** at 390px; RTL-correct off-canvas panel rendering the canonical `NAV_MOBILE` menu (screenshot).
+- PDT: PDP `role=tablist`/`tab`/`tabpanel` present (3 tabs, 3 panels) at all viewports.
+- HDR/PDTX render health: home + PDP return 200, **no root horizontal overflow** at any viewport.
+
+## 16. Deferred scope (explicitly NOT done)
+
+- **PDTX PDP in-column strip migration:** the hard-coded `.guarantee` strip in `product_main.html` was intentionally left as-is. The Draft-aware owner (`trust_features`) exists and is proven, but re-homing the PDP in-column strip onto it (placement/styling inside `.pinfo`) is out-of-scope architectural work not required by the gate.
+- **HDR:** no schema-validated header-variant field was added (the discovery's "B" idea) — the approved override made HDR verify-only. Legacy full-page header editor retirement also deferred.
+- Configurable Mega Menu family, Showcase (Task 6), Theme Overlay (Task 12), full 50-template QA (Task 16) — out of Task-5 scope.
+- **Task 6 was NOT started.**
+
+## 17. Final verdict
+
+Task 5 is **COMPLETE**: all six areas (STRANS, PDT, MDR, MODAL, PDTX-gate, HDR)
+delivered via strict TDD, reusing every canonical owner, with **zero DB
+migrations**, the Architecture Gate **PASS**, and a clean public-storefront
+browser QA pass (30/30) at three RTL viewports. One shared overlay primitive
+was built once and reused by MDR + MODAL. The PDTX gate resolved to an existing
+Draft-aware owner (no new model). HDR is a verified NO-OP (no new header setting
+authority). The official branch is untouched; delivery is a Draft PR into
+`feature/phase5-design-expansion`.
