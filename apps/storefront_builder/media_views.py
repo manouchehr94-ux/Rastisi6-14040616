@@ -129,6 +129,19 @@ def media_label_for_kind(kind: str) -> str:
     return _MEDIA_KINDS[kind]["label_plural"]
 
 
+def media_config_for_kind(kind: str) -> dict:
+    """Phase 5 Task 4 (remediation R1a) — the same public-accessor reasoning as
+    the two accessors above: the R4 Inspector needs this kind's config (model +
+    labels + thumb field) to render the canonical media list body inline,
+    without importing the private ``_MEDIA_KINDS`` mapping. The caller has
+    already resolved ``kind`` from the section's own key via
+    ``media_kind_for_section_key`` (so section↔kind ownership is guaranteed);
+    unlike ``_media_config`` this needs no section instance. The media list/
+    CRUD endpoints still re-scope every request through ``_get_scoped_section``
+    — this accessor never bypasses that authority."""
+    return _MEDIA_KINDS[kind]
+
+
 def _media_config(kind: str, section) -> dict:
     config = _MEDIA_KINDS.get(kind)
     if config is None:
@@ -138,14 +151,41 @@ def _media_config(kind: str, section) -> dict:
     return config
 
 
+#: Phase 5 Task 4 (final review fix) — the EXPLICIT R4-inline context marker.
+#: R4-inline context must NOT be inferred from ``HX-Request`` alone: the LEGACY
+#: full-page media screen also drives toggle/delete/move/reorder over htmx and
+#: reswaps through ``_media_list_body`` — those responses must stay legacy
+#: context (never gain the R4-only ``hx-target="closest [data-r4-media-manager]"``
+#: on the Edit link, which has no ancestor to match on the legacy page). The R4
+#: embed sends this header on every htmx request it originates (inherited via
+#: the manager container's ``hx-headers``, and passed explicitly on the
+#: drag-reorder ``htmx.ajax`` call); the legacy page never sends it. Same
+#: canonical endpoints own everything — this is only a context flag.
+_R4_INLINE_HEADER = "HX-R4-Inline"
+
+
+def _is_r4_inline(request) -> bool:
+    """True only when the request explicitly declares R4-inline context via the
+    ``HX-R4-Inline`` header — never merely because it is an HX request."""
+    return request.headers.get(_R4_INLINE_HEADER) == "1"
+
+
 def _media_list_body(request, section, kind, config):
     """پارشیالِ فهرستِ آیتم‌ها — یک بار نوشته شده، هم توسطِ صفحه‌ی کامل و هم
     توسطِ هر endpointِ htmx (toggle/delete/reorder/move) برایِ reswap
     استفاده می‌شود؛ دقیقاً همان الگویِ ``storefront_section_list_partial``
-    برایِ خودِ section."""
+    برایِ خودِ section.
+
+    Phase 5 Task 4 (final review fix): ``inline_media`` is driven by the
+    EXPLICIT R4-inline marker (``_is_r4_inline``), NOT by HX-Request — because
+    the legacy full-page media screen reswaps through here over htmx too and
+    must remain legacy context. This flag only toggles whether the list body's
+    per-row "edit" link loads inline (into the R4 manager) or navigates the
+    full page; the rows/CRUD endpoints themselves are identical either way."""
     items = config["model"].objects.filter(section=section).order_by("display_order", "id")
     return render(request, "dashboard/storefront_builder/partials/section_media_list_body.html", {
         "section": section, "items": items, "kind": kind, "config": config,
+        "inline_media": _is_r4_inline(request),
     })
 
 
@@ -155,7 +195,19 @@ def storefront_section_media_list(request, pk, kind):
     section = _get_scoped_section(request, pk)
     config = _media_config(kind, section)
     items = config["model"].objects.filter(section=section).order_by("display_order", "id")
-    return render(request, "dashboard/storefront_builder/section_media_list.html", {
+    # Phase 5 Task 4 (remediation R1a + final review fix) — R4-native media
+    # editing. Only an EXPLICIT R4-inline request (``_is_r4_inline``) returns
+    # the body-only media manager (add control + list) that the R4 Inspector
+    # embeds/refreshes INLINE; a legacy full-page GET (with or without htmx)
+    # still returns the unchanged full legacy page. R4-inline context is never
+    # inferred from HX-Request alone. Same canonical view, no second media CRUD
+    # path.
+    template_name = (
+        "dashboard/storefront_builder/partials/section_media_manager_body.html"
+        if _is_r4_inline(request)
+        else "dashboard/storefront_builder/section_media_list.html"
+    )
+    return render(request, template_name, {
         "section": section, "items": items, "kind": kind, "config": config,
     })
 
@@ -263,6 +315,19 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
             if changed:
                 _sync_asset_references(obj, config, store, changed_fields=changed)
             messages.success(request, f"«{config['label']}» ذخیره شد")
+            # Phase 5 Task 4 (final review fix) — when the save came from the R4
+            # inline manager (explicit marker), return the refreshed manager
+            # body so the merchant stays inside R4; a redirect would be
+            # re-followed by htmx WITHOUT the R4-inline header and would render
+            # the legacy full page. The legacy full-page flow still redirects
+            # exactly as before. Same canonical list body either way.
+            if _is_r4_inline(request):
+                items = model.objects.filter(section=section).order_by("display_order", "id")
+                return render(
+                    request,
+                    "dashboard/storefront_builder/partials/section_media_manager_body.html",
+                    {"section": section, "items": items, "kind": kind, "config": config},
+                )
             return redirect("dashboard:storefront-builder-section-media-list", pk=section.pk, kind=kind)
         except (ValidationError, IntegrityError) as exc:
             error_message = str(exc.message_dict if hasattr(exc, "message_dict") else exc)
@@ -274,9 +339,23 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
     categories = Category.objects.filter(store=store, is_active=True).order_by("order", "name")
     brands = Brand.objects.filter(store=store, is_active=True).order_by("name")
     collections = MerchantCollection.objects.filter(store=store, is_active=True).order_by("name")
-    return render(request, "dashboard/storefront_builder/partials/section_media_form.html", {
+    # Phase 5 Task 4 (remediation R1a + final review fix) — body-only form
+    # under HX-Request so the add/edit form loads INLINE in the R4 Inspector;
+    # unchanged full page otherwise. The htmx submit/cancel wiring back into the
+    # inline manager is gated by the EXPLICIT R4-inline marker, never HX-Request
+    # alone (a legacy full page never sends the marker, so it submits normally).
+    # Same canonical view/persistence, no second form.
+    is_hx = request.headers.get("HX-Request") == "true"
+    is_r4_inline = _is_r4_inline(request)
+    template_name = (
+        "dashboard/storefront_builder/partials/section_media_form_body.html"
+        if is_hx
+        else "dashboard/storefront_builder/partials/section_media_form.html"
+    )
+    return render(request, template_name, {
         "section": section, "item": item, "kind": kind, "config": config,
         "categories": categories, "brands": brands, "collections": collections,
+        "inline_media": is_r4_inline,
     })
 
 

@@ -88,3 +88,84 @@ class DashboardNavRoutesToR4Tests(StorefrontBuilderViewsTestCase):
         # docs/qa_evidence/.../pre_task10_r4_cutover.md), just no longer
         # the priority-1/2 nav target.
         self.assertIn(legacy_url, content)
+
+
+
+# ------------------------------------------------------------------------
+# Phase 5 Task 4C — R4 device preview (Desktop / Tablet / Mobile). Ported
+# from the legacy sfb-v3-device-switcher pattern; it only changes the
+# presentation width/scale of the EXISTING #r4PreviewFrame iframe — never a
+# second renderer / preview URL / iframe / srcdoc. UI-only state, never
+# persisted to Store/Draft/database.
+# ------------------------------------------------------------------------
+
+from pathlib import Path
+
+from django.conf import settings as dj_settings
+
+
+class R4DevicePreviewMarkupTests(StorefrontBuilderViewsTestCase):
+    def setUp(self):
+        super().setUp()
+        self.layout = svc.get_or_create_layout(self.store)
+        self.layout.r4_editor_enabled = True
+        self.layout.save(update_fields=["r4_editor_enabled"])
+
+    def _editor(self):
+        return self.client.get(reverse("dashboard:storefront-builder-r4-editor"))
+
+    def test_editor_has_a_device_switcher_with_three_accessible_modes(self):
+        response = self._editor()
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn('data-r4-device-switcher', content)
+        # Three modes, each an accessible toggle with aria-pressed.
+        for device in ("desktop", "tablet", "mobile"):
+            self.assertIn(f'data-r4-device="{device}"', content)
+        self.assertGreaterEqual(content.count("aria-pressed"), 3)
+        # Desktop is the default selected state.
+        desktop_idx = content.index('data-r4-device="desktop"')
+        desktop_chunk = content[desktop_idx:desktop_idx + 120]
+        self.assertIn('aria-pressed="true"', desktop_chunk)
+
+    def test_device_switcher_does_not_introduce_a_second_preview_frame(self):
+        response = self._editor()
+        content = response.content.decode()
+        # Still exactly one preview iframe, the canonical #r4PreviewFrame.
+        self.assertEqual(content.count("<iframe"), 1)
+        self.assertIn('id="r4PreviewFrame"', content)
+        # No srcdoc / fake preview markup.
+        self.assertNotIn("srcdoc", content)
+
+
+class R4DevicePreviewJsContractTests(StorefrontBuilderViewsTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.js_source = Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/static/storefront_builder/r4_editor.js",
+        ).read_text(encoding="utf-8")
+
+    def test_device_switcher_resizes_the_existing_preview_frame_only(self):
+        self.assertIn("data-r4-device-switcher", self.js_source)
+        self.assertIn("data-r4-device", self.js_source)
+        # It manipulates the SAME canonical preview frame reference.
+        self.assertIn("previewFrame", self.js_source)
+
+    def test_device_switcher_uses_aria_pressed_for_selected_state(self):
+        self.assertIn("aria-pressed", self.js_source)
+
+    def test_device_state_is_never_persisted(self):
+        # UI-only preview state — never written to Store/Draft/localStorage,
+        # and never through the mutation queue.
+        self.assertNotIn("localStorage", self.js_source)
+        # The three sanctioned POST endpoints stay exactly three — device
+        # switching adds no write path.
+        self.assertEqual(self.js_source.count("method: 'POST'"), 3)
+
+    def test_device_switcher_adds_no_second_renderer_or_preview_url(self):
+        # No new iframe creation, no srcdoc, no second preview src.
+        self.assertNotIn("srcdoc", self.js_source)
+        self.assertNotIn("createElement('iframe')", self.js_source)
+        self.assertNotIn('createElement("iframe")', self.js_source)

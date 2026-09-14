@@ -56,6 +56,11 @@ _INSPECTOR_SUPPORTED_FIELD_TYPES = frozenset({
     "resource_source",
     "repeater",
     "menu_picker",
+    #: Phase 5 Task 4B — the generic per-section background picker widget
+    #: (mode/color/pattern/palette-role/media-asset). Rendered generically in
+    #: settings_field.html and saved through the existing section.update_settings
+    #: mutation; never a section-name branch, never a second media authority.
+    "background",
 })
 
 #: R4 Task 7 — merchant-facing Persian labels for the existing curated
@@ -90,6 +95,27 @@ _RESOURCE_SOURCE_AUTO_RULE_LABELS_FA = {
     "by_brand": "بر اساس برند",
     "by_collection": "بر اساس کالکشن",
     "all_active": "همه‌ی موارد فعال",
+}
+
+#: Phase 5 Task 4B — merchant-facing Persian labels for the existing
+#: background-mode / palette-role enums (section_registry.BACKGROUND_MODE_CHOICES
+#: / BACKGROUND_PALETTE_ROLE_CHOICES). Stored values remain the existing enum
+#: strings; only the label shown is translated. These never leave this
+#: presentation layer — section_registry stays UI-agnostic.
+_BACKGROUND_MODE_LABELS_FA = {
+    "theme": "پیش‌فرض قالب",
+    "palette": "رنگ از پالت فروشگاه",
+    "palette_pattern": "رنگ پالت + الگو",
+    "color": "رنگ دلخواه",
+    "image": "تصویر",
+    "pattern": "رنگ + الگو",
+}
+_BACKGROUND_PALETTE_ROLE_LABELS_FA = {
+    "tone-1": "طیف ۱",
+    "tone-2": "طیف ۲",
+    "tone-3": "طیف ۳",
+    "tone-4": "طیف ۴",
+    "tone-5": "طیف ۵",
 }
 
 #: R4 Task 10 — the ONE shared Resource Picker's UI-exposed kinds. Every
@@ -630,12 +656,24 @@ def storefront_r4_section_inspector(request, pk):
     # existing, unmodified legacy management screens.
     media_kind = media_views.media_kind_for_section_key(section.section_key)
     media_manage_url = None
+    media_config = None
+    media_items = None
     if media_kind is not None:
         media_manage_url = reverse(
             "dashboard:storefront-builder-section-media-list",
             kwargs={"pk": section.pk, "kind": media_kind},
         )
         media_label_plural = media_views.media_label_for_kind(media_kind)
+        # Phase 5 Task 4 (remediation R1a) — R4-native media editing. Instead of
+        # only linking out to the legacy screen, the Inspector embeds the
+        # canonical media manager inline (the same media_views models/CRUD/
+        # authority; never a second media system). The add/edit form and every
+        # CRUD reswap happen through the existing media endpoints via htmx,
+        # staying inside R4.
+        media_config = media_views.media_config_for_kind(media_kind)
+        media_items = list(
+            media_config["model"].objects.filter(section=section).order_by("display_order", "id")
+        )
     else:
         media_label_plural = None
 
@@ -657,6 +695,10 @@ def storefront_r4_section_inspector(request, pk):
                 "definition": definition,
                 "media_manage_url": media_manage_url,
                 "media_label_plural": media_label_plural,
+                # Names the shared media manager body partial expects directly.
+                "kind": media_kind,
+                "config": media_config,
+                "items": media_items,
             },
         )
 
@@ -746,6 +788,36 @@ def storefront_r4_section_inspector(request, pk):
             Menu.objects.filter(store=store, is_active=True).order_by("title")
         )
 
+    # Phase 5 Task 4B — a ``background`` field's picker needs the SAME
+    # Store-scoped substrate the legacy background control already used:
+    # the shared pattern registry and the merchant's own Media Library
+    # assets. Reuse the canonical ``views._background_picker_context`` (never
+    # a second media library / upload system); mode/palette-role choices come
+    # straight from ``section_registry`` with only the label translated. Built
+    # once, only when a background field is actually present — the same
+    # "only if this field type is present" pattern resource_source/menu_picker
+    # use above. The CURRENT value is projected the same way every other field
+    # is (``field_values`` above already resolved it from the section's
+    # validated settings, which always carry a ``background`` block via the
+    # ``_with_background`` wrapper).
+    background_context = None
+    if any(field.field_type == "background" for field in schema.fields):
+        from .views import _background_picker_context
+
+        picker_context = _background_picker_context(request, section)
+        background_context = {
+            "mode_choices": [
+                (value, _BACKGROUND_MODE_LABELS_FA.get(value, value))
+                for value in section_registry.BACKGROUND_MODE_CHOICES
+            ],
+            "palette_role_choices": [
+                (value, _BACKGROUND_PALETTE_ROLE_LABELS_FA.get(value, value))
+                for value in section_registry.BACKGROUND_PALETTE_ROLE_CHOICES
+            ],
+            "patterns": picker_context["background_patterns"],
+            "media_assets": picker_context["background_media_assets"],
+        }
+
     return render(
         request,
         "dashboard/storefront_builder/r4/partials/section_inspector.html",
@@ -764,7 +836,11 @@ def storefront_r4_section_inspector(request, pk):
             "resource_source_summary": resource_source_summary,
             "media_manage_url": media_manage_url,
             "media_label_plural": media_label_plural,
+            "media_kind": media_kind,
+            "media_config": media_config,
+            "media_items": media_items,
             "menu_choices": menu_choices,
+            "background_context": background_context,
         },
     )
 

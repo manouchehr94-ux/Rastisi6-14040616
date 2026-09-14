@@ -30,6 +30,14 @@ class ResourceSourceOwnershipError(ValueError):
     belong to the current Store — raised before anything is persisted."""
 
 
+class BackgroundAssetOwnershipError(ValueError):
+    """A section ``background.media_asset_id`` does not belong to the current
+    Store — raised BEFORE anything is persisted. Write-time isolation: a
+    Store A Draft must never persist a MediaAsset owned by Store B, even
+    though render-time resolution (``content.services.resolve_background_media_url``)
+    would later fail-close it to ``None``."""
+
+
 def _require_owned_resource(model, *, store, source_id: int) -> None:
     """Fail closed: a foreign-Store id and a nonexistent id both simply fail
     this single Store-scoped ``exists()`` check — never a second query
@@ -103,6 +111,32 @@ def validate_resource_source_ownership(*, store, source: "resource_source.Resour
                 raise ResourceSourceOwnershipError("invalid_resource_ownership")
         # auto_rule == "all_active" references no specific resource id.
         return
+
+
+def validate_background_asset_ownership(*, store, background: dict | None) -> None:
+    """Phase 5 Task 4B — the ONE shared, DB-backed Store-ownership check for a
+    section ``background`` block's ``media_asset_id``, used by BOTH the legacy
+    settings-save view (``views._validate_background_asset_ownership``) and the
+    R4 mutation service. Only ``mode="image"`` with a truthy id references a
+    concrete resource; everything else is a no-op (nothing to own-check).
+
+    Fail-closed with the same ``exists()`` shape ``_require_owned_resource``
+    uses for every other resource kind — a foreign-Store id and a nonexistent
+    id both simply fail this single Store-scoped check, never leaking which.
+    Section-registry stays UI/DB-agnostic for backgrounds (it only shape-checks
+    the id, see ``validate_background_settings``); the actual ownership truth
+    lives only here — exactly the same separation ``resource_source`` uses.
+    """
+    background = background or {}
+    if background.get("mode") != "image":
+        return
+    media_asset_id = background.get("media_asset_id")
+    if not media_asset_id:
+        return
+    from apps.content.models import MediaAsset
+
+    if not MediaAsset.objects.filter(store=store, pk=media_asset_id).exists():
+        raise BackgroundAssetOwnershipError("invalid_background_asset_ownership")
 
 
 def _reorder_by_ids(products_by_id: dict, ordered_ids: list) -> list:

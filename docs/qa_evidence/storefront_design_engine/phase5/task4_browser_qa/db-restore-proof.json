@@ -1,0 +1,6 @@
+{
+  "db_backup": "/projects/sandbox/RastiSi4_r4_qa_backups/storefront-builder-r4-qa-20260914-094909.sqlite3",
+  "pre_run_sha256": "6d219b559512eac8f89d7dfaed3bc73e6dbc38b9ab956561c45738da762ab541",
+  "post_restore_sha256": "6d219b559512eac8f89d7dfaed3bc73e6dbc38b9ab956561c45738da762ab541",
+  "match": true
+}

@@ -1182,15 +1182,22 @@ def _extract_background_raw(request, section) -> dict:
 
 
 def _validate_background_asset_ownership(request, background: dict | None) -> None:
-    """Fail closed if a tampered POST points at another Store's MediaAsset."""
-    background = background or {}
-    if background.get("mode") != "image" or not background.get("media_asset_id"):
-        return
-    from apps.content.models import MediaAsset
+    """Fail closed if a tampered POST points at another Store's MediaAsset.
 
+    Phase 5 Task 4B — the DB-backed ownership rule itself now lives in ONE
+    canonical place (``section_data_service.validate_background_asset_ownership``),
+    shared with the R4 mutation path so there is never a second background
+    ownership authority. This request-scoped wrapper only resolves the Store
+    and re-raises the service's error as the legacy view's merchant-facing
+    ``ValueError`` message (shown via ``django.contrib.messages``), exactly as
+    before — the same pattern ``_validate_universal_selection_ownership`` uses
+    for ``validate_resource_source_ownership``.
+    """
     store = _resolve_store(request)
-    if not MediaAsset.objects.filter(store=store, pk=background["media_asset_id"]).exists():
-        raise ValueError("تصویر پس‌زمینه‌ی انتخاب‌شده متعلق به این فروشگاه نیست")
+    try:
+        section_data_service.validate_background_asset_ownership(store=store, background=background)
+    except section_data_service.BackgroundAssetOwnershipError:
+        raise ValueError("تصویر پس‌زمینه‌ی انتخاب‌شده متعلق به این فروشگاه نیست") from None
 
 
 def _background_picker_context(request, section) -> dict:

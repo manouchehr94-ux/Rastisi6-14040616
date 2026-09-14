@@ -31,6 +31,10 @@ window.RastiSiR4 = {
   // R4 Task 11 — Global Design + Undo/Redo + Publish topbar controls.
   var globalDesignToggle = document.getElementById('r4GlobalDesignToggle');
   var globalDesignPanel = document.getElementById('r4GlobalDesign');
+  // Phase 5 Task 4C — device preview switcher + the canvas the SAME
+  // #r4PreviewFrame iframe is scaled within. UI-only state, never persisted.
+  var deviceSwitcher = document.querySelector('[data-r4-device-switcher]');
+  var previewCanvas = document.querySelector('.r4-preview-canvas');
   var undoButton = document.getElementById('r4UndoButton');
   var redoButton = document.getElementById('r4RedoButton');
   var publishButton = document.getElementById('r4PublishButton');
@@ -255,7 +259,11 @@ window.RastiSiR4 = {
       // section_inspector.html's current_field_value) — its wrapper carries
       // data-r4-field-key for the compound patch listener below, but has no
       // .value of its own to hydrate.
-      if (fieldType === 'appearance_override' || fieldType === 'resource_source' || fieldType === 'repeater') return;
+      // Phase 5 Task 4B — background is a compound widget too, entirely
+      // server-rendered from the current value (its nested controls carry
+      // their own selected/value already), so it is excluded from this
+      // scalar loop exactly like the other compound field types.
+      if (fieldType === 'appearance_override' || fieldType === 'resource_source' || fieldType === 'repeater' || fieldType === 'background') return;
       var key = control.getAttribute('data-r4-field-key');
       if (!Object.prototype.hasOwnProperty.call(values, key)) return;
       var value = values[key];
@@ -338,6 +346,20 @@ window.RastiSiR4 = {
     });
   }
 
+  // Phase 5 Task 4D — post the current R4 selection into the EXISTING
+  // preview iframe so the same Section highlights there. Never a second
+  // selection authority (reads R4.selected only) and never a reimplementation
+  // of the highlight — the preview template already owns applying it. The
+  // message shape/type mirror the legacy editor's own outbound selection
+  // sync exactly; origin-targeted, never "*".
+  function syncPreviewSelection() {
+    if (!previewFrame || !previewFrame.contentWindow || R4.selected == null) return;
+    previewFrame.contentWindow.postMessage({
+      type: 'sfb:setSelection',
+      sectionId: R4.selected,
+    }, window.location.origin);
+  }
+
   R4.openSection = function (sectionId) {
     if (!inspector || !sectionId) return Promise.resolve();
     // Opening a Section Inspector always closes Global Design — the two
@@ -353,9 +375,29 @@ window.RastiSiR4 = {
         if (html == null) return;
         inspector.innerHTML = html;
         inspector.hidden = false;
+        // Phase 5 Task 4 (remediation R1a) — the Inspector body can embed the
+        // canonical media manager, whose add/edit/toggle/delete/reorder
+        // controls are htmx-driven. htmx does NOT auto-bind content injected
+        // via innerHTML, so process the injected subtree once here to activate
+        // those existing endpoints inline (reuses the htmx already loaded by
+        // base_admin.html — never a second binding mechanism). Guarded so a
+        // build without htmx simply no-ops.
+        if (window.htmx && typeof window.htmx.process === 'function') {
+          window.htmx.process(inspector);
+        }
         if (shell) shell.dataset.r4InspectorOpen = 'true';
         R4.selected = sectionId;
         R4.inspectorOpen = true;
+        // Phase 5 Task 4D — sidebar/structure -> preview selection sync.
+        // openSection is the single selection entry point (a sidebar row
+        // click, and the preview-originated sfb:selectSection/
+        // sfb:openSectionSettings, all route through here), so posting the
+        // canonical selection into the EXISTING preview iframe once here
+        // covers every path without a second selected-section state. The
+        // preview template already applies this as its highlight — R4 never
+        // reimplements that logic. Uses the existing section identity;
+        // targeted to this window's origin.
+        syncPreviewSelection();
         activateTab('basic');
         // Hydrate the raw backing values (incl. the rich_text textarea)
         // BEFORE Alpine mounts CKEditor, so it initializes from the real
@@ -460,7 +502,8 @@ window.RastiSiR4 = {
       // focusout handler below, not this native 'change' listener.
       // appearance_override is a compound field with its own dedicated
       // listener below too.
-      if (fieldType === 'rich_text' || fieldType === 'appearance_override' || fieldType === 'repeater') return;
+      // 'background' (Task 4B) is compound too — handled by its own listener.
+      if (fieldType === 'rich_text' || fieldType === 'appearance_override' || fieldType === 'repeater' || fieldType === 'background') return;
       var key = control.getAttribute('data-r4-field-key');
       var value = fieldType === 'boolean' ? control.checked : control.value;
       var patch = {};
@@ -535,6 +578,43 @@ window.RastiSiR4 = {
       var key = textarea.getAttribute('data-r4-field-key');
       var patch = {};
       patch[key] = textarea.value;
+      R4.enqueueMutation({
+        type: 'section.update_settings',
+        section_id: R4.selected,
+        patch: patch,
+      });
+    });
+
+    // Phase 5 Task 4B — background: a compound widget like
+    // appearance_override above. Any change to any of its nested controls
+    // (mode/color/palette-role/pattern/media) re-reads ALL of them and sends
+    // ONE compound {background:{...}} patch through the SAME enqueueMutation
+    // queue and the SAME section.update_settings mutation every other section
+    // edit uses — never a second save path and never a new endpoint. The
+    // media options come from the shared Store-scoped Media Library; ownership
+    // of a chosen media_asset_id stays enforced at render time
+    // (content.services.resolve_background_media_url), so the client only ever
+    // sends an id, never a raw URL.
+    inspector.addEventListener('change', function (evt) {
+      var wrapper = evt.target.closest('[data-r4-field-type="background"]');
+      if (!wrapper || R4.selected == null) return;
+      if (!evt.target.closest('[data-r4-background-mode],[data-r4-background-color],[data-r4-background-palette-role],[data-r4-background-pattern],[data-r4-background-media]')) return;
+      var key = wrapper.getAttribute('data-r4-field-key');
+      var modeSelect = wrapper.querySelector('[data-r4-background-mode]');
+      var colorInput = wrapper.querySelector('[data-r4-background-color]');
+      var paletteSelect = wrapper.querySelector('[data-r4-background-palette-role]');
+      var patternSelect = wrapper.querySelector('[data-r4-background-pattern]');
+      var mediaSelect = wrapper.querySelector('[data-r4-background-media]');
+
+      var background = { mode: modeSelect ? modeSelect.value : 'theme' };
+      if (colorInput) background.color = colorInput.value;
+      if (paletteSelect) background.palette_role = paletteSelect.value;
+      if (patternSelect) background.pattern_slug = patternSelect.value;
+      var mediaValue = mediaSelect ? mediaSelect.value : '';
+      background.media_asset_id = mediaValue ? Number(mediaValue) : null;
+
+      var patch = {};
+      patch[key] = background;
       R4.enqueueMutation({
         type: 'section.update_settings',
         section_id: R4.selected,
@@ -1525,6 +1605,64 @@ window.RastiSiR4 = {
     var deepLinkPanel = new URLSearchParams(window.location.search).get('panel');
     if (deepLinkPanel === 'appearance' || deepLinkPanel === 'header' || deepLinkPanel === 'footer') {
       openGlobalDesign();
+    }
+  }
+
+  // ---- Phase 5 Task 4C — device preview (Desktop / Tablet / Mobile).
+  // Ported from the legacy editor's syncPreviewViewport transform-scale
+  // approach: the SAME #r4PreviewFrame iframe is rendered at the real device
+  // pixel width and CSS-transform-scaled to fit the canvas — it reuses the
+  // one existing preview surface, never a second one. UI-only state
+  // (currentDevice) held in memory only: never persisted to Store/Draft/
+  // browser storage, never sent through the mutation queue.
+  if (deviceSwitcher && previewFrame && previewCanvas) {
+    var currentDevice = 'desktop';
+
+    function syncPreviewViewport() {
+      var widths = {
+        desktop: parseInt(previewFrame.dataset.desktopViewportWidth, 10) || 1200,
+        tablet: parseInt(previewFrame.dataset.tabletViewportWidth, 10) || 768,
+        mobile: parseInt(previewFrame.dataset.mobileViewportWidth, 10) || 390,
+      };
+      if (currentDevice === 'desktop') {
+        // Desktop fills the canvas naturally — no fixed width / scaling.
+        previewFrame.style.width = '';
+        previewFrame.style.height = '';
+        previewFrame.style.transform = '';
+        previewFrame.style.margin = '';
+        return;
+      }
+      var requestedWidth = widths[currentDevice] || widths.desktop;
+      var availableWidth = Math.max(1, previewCanvas.clientWidth - 2);
+      var fitScale = Math.min(1, availableWidth / requestedWidth);
+      var scale = Math.max(0.35, fitScale);
+      previewFrame.style.width = requestedWidth + 'px';
+      previewFrame.style.height = Math.ceil(previewCanvas.clientHeight / scale) + 'px';
+      previewFrame.style.transform = 'scale(' + scale + ')';
+      previewFrame.style.transformOrigin = 'top center';
+      previewFrame.style.margin = '0 auto';
+    }
+
+    function setDevice(device) {
+      if (['desktop', 'tablet', 'mobile'].indexOf(device) === -1) return;
+      currentDevice = device;
+      previewCanvas.setAttribute('data-r4-device', device);
+      deviceSwitcher.querySelectorAll('[data-r4-device]').forEach(function (btn) {
+        btn.setAttribute('aria-pressed', btn.getAttribute('data-r4-device') === device ? 'true' : 'false');
+      });
+      syncPreviewViewport();
+    }
+
+    deviceSwitcher.addEventListener('click', function (evt) {
+      var btn = evt.target.closest('[data-r4-device]');
+      if (!btn) return;
+      setDevice(btn.getAttribute('data-r4-device'));
+    });
+
+    if (window.ResizeObserver) {
+      new ResizeObserver(function () { syncPreviewViewport(); }).observe(previewCanvas);
+    } else {
+      window.addEventListener('resize', syncPreviewViewport);
     }
   }
 

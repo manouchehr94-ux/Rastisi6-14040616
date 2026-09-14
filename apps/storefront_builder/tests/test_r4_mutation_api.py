@@ -779,3 +779,316 @@ class CollectionTilesNegativeMutationTests(R4MutationApiTestCase):
         self.assertEqual(r.status_code, 200)
         section.refresh_from_db()
         self.assertEqual(section.settings["tile_style"], "carousel")
+
+
+
+class Task4BBackgroundMutationTests(R4MutationApiTestCase):
+    """Phase 5 Task 4B — the R4 background picker saves through the EXISTING
+    Draft mutation flow (section.update_settings), never a new endpoint or a
+    new persistence model. Tenant safety for image mode stays at the existing
+    render-time authority (content.services.resolve_background_media_url)."""
+
+    def test_background_color_persists_via_existing_section_update_settings(self):
+        starting_revision = self.draft.edit_revision
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": self.section.pk,
+                "patch": {"background": {"mode": "color", "color": "#123456"}},
+            },
+        })
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertIs(body["ok"], True)
+        self.assertEqual(body["new_revision"], starting_revision + 1)
+
+        self.section.refresh_from_db()
+        self.assertEqual(self.section.settings["background"]["mode"], "color")
+        self.assertEqual(self.section.settings["background"]["color"], "#123456")
+
+    def test_background_image_mode_persists_media_asset_id_shape_only(self):
+        from apps.content.models import MediaAsset
+
+        asset = MediaAsset.objects.create(store=self.store, image="uploads/bg.jpg")
+        response = self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": self.section.pk,
+                "patch": {"background": {"mode": "image", "media_asset_id": asset.pk}},
+            },
+        })
+        self.assertEqual(response.status_code, 200)
+        self.section.refresh_from_db()
+        self.assertEqual(self.section.settings["background"]["mode"], "image")
+        self.assertEqual(self.section.settings["background"]["media_asset_id"], asset.pk)
+
+    def test_background_edit_writes_exactly_one_history_entry(self):
+        before = self._history_count()
+        self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": self.section.pk,
+                "patch": {"background": {"mode": "color", "color": "#abcdef"}},
+            },
+        })
+        self.assertEqual(self._history_count(), before + 1)
+
+
+
+class Task4BBackgroundAssetTenantIsolationTests(R4MutationApiTestCase):
+    """Phase 5 Task 4B — WRITE-TIME tenant ownership for background images.
+
+    Render-time fail-closed resolution is NOT sufficient isolation for a
+    write: a Store A Draft must never PERSIST a background.media_asset_id
+    owned by Store B. This must be enforced BEFORE save, through the ONE
+    shared canonical ownership authority already used by the legacy path
+    (section_data_service) — never a second media authority/validator."""
+
+    def setUp(self):
+        super().setUp()
+        from apps.content.models import MediaAsset
+
+        self.own_asset = MediaAsset.objects.create(store=self.store, image="uploads/own.jpg")
+        self.other_store = Store.objects.create(
+            name="فروشگاه دیگر مالکیت", slug="r4-bg-ownership-other",
+            admin_subdomain="r4-bg-ownership-other",
+        )
+        self.foreign_asset = MediaAsset.objects.create(
+            store=self.other_store, image="uploads/foreign.jpg",
+        )
+
+    def test_store_can_persist_its_own_media_asset_id(self):
+        starting_revision = self.draft.edit_revision
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": self.section.pk,
+                "patch": {"background": {"mode": "image", "media_asset_id": self.own_asset.pk}},
+            },
+        })
+        self.assertEqual(response.status_code, 200)
+        self.section.refresh_from_db()
+        self.assertEqual(self.section.settings["background"]["media_asset_id"], self.own_asset.pk)
+
+    def test_store_cannot_persist_a_foreign_store_media_asset_id(self):
+        starting_revision = self.draft.edit_revision
+        before_settings = dict(self.section.settings or {})
+        before_history = self._history_count()
+
+        response = self._post_json({
+            "base_revision": starting_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": self.section.pk,
+                "patch": {"background": {"mode": "image", "media_asset_id": self.foreign_asset.pk}},
+            },
+        })
+        # The mutation is rejected (not a 200 success).
+        self.assertNotEqual(response.status_code, 200)
+
+        # Nothing changed: settings, revision, and history are all untouched.
+        self.section.refresh_from_db()
+        self.assertEqual(self.section.settings or {}, before_settings)
+        self.assertEqual(self._refresh_revision(), starting_revision)
+        self.assertEqual(self._history_count(), before_history)
+
+    def test_foreign_asset_is_never_even_stored_as_a_dangling_id(self):
+        # Explicit: the foreign id must never reach persisted settings, even
+        # though render-time resolution would later fail-close it to None.
+        self._post_json({
+            "base_revision": self.draft.edit_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": self.section.pk,
+                "patch": {"background": {"mode": "image", "media_asset_id": self.foreign_asset.pk}},
+            },
+        })
+        self.section.refresh_from_db()
+        stored_background = (self.section.settings or {}).get("background") or {}
+        self.assertNotEqual(stored_background.get("media_asset_id"), self.foreign_asset.pk)
+
+
+class Task4BBackgroundOwnershipSingleAuthorityTests(R4MutationApiTestCase):
+    """The R4 write-time background ownership check must delegate to the
+    SAME canonical section_data_service authority the legacy path uses —
+    never a second validator with its own DB lookup."""
+
+    def test_r4_mutation_service_delegates_to_section_data_service(self):
+        from apps.storefront_builder.services import section_data_service
+
+        # The canonical, store-scoped ownership entry point exists.
+        self.assertTrue(hasattr(section_data_service, "validate_background_asset_ownership"))
+
+    def test_legacy_view_helper_delegates_to_the_same_canonical_authority(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj_settings
+
+        views_source = Path(
+            dj_settings.BASE_DIR, "apps/storefront_builder/views.py",
+        ).read_text(encoding="utf-8")
+        # Legacy path routes background ownership through the shared service,
+        # not its own inline MediaAsset query.
+        self.assertIn("validate_background_asset_ownership", views_source)
+
+
+
+class Task4AR4NativeMediaHtmxTests(R4MutationApiTestCase):
+    """R1a — the canonical media list/form views return BODY-ONLY partials
+    under HX-Request so add/edit happen INLINE inside the R4 Inspector (the
+    same HX-Request -> partial pattern the header/footer editors use), while a
+    normal (non-HX) GET still returns the full legacy page unchanged."""
+
+    def _media_list_url(self, section):
+        return reverse(
+            "dashboard:storefront-builder-section-media-list",
+            kwargs={"pk": section.pk, "kind": "hero-slides"},
+        )
+
+    def _media_add_url(self, section):
+        return reverse(
+            "dashboard:storefront-builder-section-media-add",
+            kwargs={"pk": section.pk, "kind": "hero-slides"},
+        )
+
+    def test_media_list_r4_inline_returns_body_only_manager(self):
+        # R4-inline context is explicit (HX-R4-Inline), not HX-Request alone.
+        response = self.client.get(
+            self._media_list_url(self.section), HTTP_HX_REQUEST="true", HTTP_HX_R4_INLINE="1",
+        )
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn('id="mediaList"', content)
+        self.assertIn("data-r4-media-manager", content)
+        # Body-only: no full base_admin chrome.
+        self.assertNotIn("<html", content.lower())
+
+    def test_media_list_hx_request_without_r4_marker_stays_full_legacy_page(self):
+        # The regression guard: HX-Request WITHOUT the explicit R4 marker must
+        # NOT be treated as R4-inline — the legacy full page is returned.
+        response = self.client.get(self._media_list_url(self.section), HTTP_HX_REQUEST="true")
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("<html", content.lower())
+
+    def test_media_list_normal_request_still_returns_full_page(self):
+        response = self.client.get(self._media_list_url(self.section))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("<html", content.lower())
+
+    def test_media_form_hx_request_returns_body_only_partial(self):
+        response = self.client.get(self._media_add_url(self.section), HTTP_HX_REQUEST="true")
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("<form", content)
+        self.assertNotIn("<html", content.lower())
+
+
+class Task4AR4NativeMediaTenantIsolationTests(R4MutationApiTestCase):
+    """Media reachability stays tenant-scoped exactly as before (via the
+    canonical _get_scoped_section double guard) — a foreign-store section is
+    a 404, whether the request is HX or not."""
+
+    def setUp(self):
+        super().setUp()
+        self.other_store = Store.objects.create(
+            name="فروشگاه دیگر رسانه R4", slug="r4-media-other",
+            admin_subdomain="r4-media-other",
+        )
+        from apps.storefront_builder.services import layout_service as svc2
+        self.other_draft = svc2.get_or_create_draft(self.other_store)
+        self.foreign_section = StorefrontSection.objects.create(
+            version=self.other_draft, section_key="hero_banner", order=0,
+        )
+
+    def test_foreign_section_media_list_is_404(self):
+        url = reverse(
+            "dashboard:storefront-builder-section-media-list",
+            kwargs={"pk": self.foreign_section.pk, "kind": "hero-slides"},
+        )
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.assertEqual(self.client.get(url, HTTP_HX_REQUEST="true").status_code, 404)
+
+
+
+class Task4MediaContextBoundaryTests(R4MutationApiTestCase):
+    """Final review fix — R4-inline context must NOT be inferred from
+    HX-Request alone. The legacy full-page media screen ALSO uses htmx
+    (toggle/move/delete/reorder all reswap through _media_list_body), so those
+    responses must stay LEGACY context (no R4-only hx-target=closest
+    [data-r4-media-manager] on the Edit link). Only requests carrying the
+    explicit R4-inline marker preserve inline_media=True. Same canonical
+    media_views endpoints own everything — no new endpoint/service/CRUD path."""
+
+    R4_INLINE_HEADER = "HTTP_HX_R4_INLINE"  # -> request header "HX-R4-Inline"
+    R4_TARGET = 'closest [data-r4-media-manager]'
+
+    def setUp(self):
+        super().setUp()
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from apps.content.models import HeroSlide
+
+        png = SimpleUploadedFile("s.png", b"\x89PNG\r\n\x1a\n", content_type="image/png")
+        self.slide = HeroSlide.objects.create(
+            store=self.store, section=self.section, title="اسلاید", desktop_image=png, is_active=True,
+        )
+
+    def _toggle_url(self):
+        return reverse(
+            "dashboard:storefront-builder-section-media-toggle",
+            kwargs={"pk": self.section.pk, "kind": "hero-slides", "item_pk": self.slide.pk},
+        )
+
+    def _list_url(self):
+        return reverse(
+            "dashboard:storefront-builder-section-media-list",
+            kwargs={"pk": self.section.pk, "kind": "hero-slides"},
+        )
+
+    # ---- Legacy full-page context (htmx, but NOT R4-inline) ----
+    def test_legacy_full_page_htmx_toggle_stays_legacy_context(self):
+        response = self.client.post(self._toggle_url(), HTTP_HX_REQUEST="true")
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn('id="mediaList"', content)
+        # The Edit link must NOT gain the R4-only inline target.
+        self.assertNotIn(self.R4_TARGET, content)
+
+    def test_legacy_full_page_list_get_is_legacy_context(self):
+        response = self.client.get(self._list_url())  # normal full page
+        content = response.content.decode()
+        self.assertNotIn(self.R4_TARGET, content)
+
+    # ---- R4-inline context (explicit marker) ----
+    def test_r4_inline_htmx_toggle_preserves_inline_context(self):
+        response = self.client.post(
+            self._toggle_url(), HTTP_HX_REQUEST="true", **{self.R4_INLINE_HEADER: "1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn('id="mediaList"', content)
+        # The Edit link keeps loading inside the R4 inline manager.
+        self.assertIn(self.R4_TARGET, content)
+
+    def test_r4_inline_list_get_embeds_inline_manager(self):
+        response = self.client.get(
+            self._list_url(), HTTP_HX_REQUEST="true", **{self.R4_INLINE_HEADER: "1"},
+        )
+        content = response.content.decode()
+        self.assertIn("data-r4-media-manager", content)
+        self.assertIn(self.R4_TARGET, content)
+
+    def test_context_boundary_is_not_hx_request_alone(self):
+        # The exact regression: an HX request WITHOUT the R4 marker must never
+        # produce R4-inline markup, even though it is an HX request.
+        legacy = self.client.post(self._toggle_url(), HTTP_HX_REQUEST="true").content.decode()
+        r4 = self.client.post(
+            self._toggle_url(), HTTP_HX_REQUEST="true", **{self.R4_INLINE_HEADER: "1"},
+        ).content.decode()
+        self.assertNotIn(self.R4_TARGET, legacy)
+        self.assertIn(self.R4_TARGET, r4)

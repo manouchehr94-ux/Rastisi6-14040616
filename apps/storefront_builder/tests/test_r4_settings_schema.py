@@ -346,11 +346,21 @@ class JsonSafeDefaultTests(SimpleTestCase):
 
 
 class RichTextSchemaRegistrationTests(SimpleTestCase):
-    def test_rich_text_is_schema_enabled_with_exactly_body_html(self):
+    def test_rich_text_is_schema_enabled_with_body_html_plus_projected_background(self):
+        # rich_text declares exactly ``body_html`` itself; it is also
+        # BACKGROUND_AWARE, so the canonical capability projection
+        # (_with_background_schema_field in _finalize_registry) appends the
+        # generic ``background`` picker field. This is the single canonical
+        # source of that field — never hand-added to the schema constant.
         rich_text = section_registry.get_definition("rich_text")
         self.assertIsNotNone(rich_text.settings_schema)
         self.assertEqual(
             [f.key for f in rich_text.settings_schema.fields],
+            ["body_html", "background"],
+        )
+        # The raw module-level constant still declares only its own field.
+        self.assertEqual(
+            [f.key for f in section_registry.RICH_TEXT_SCHEMA.fields],
             ["body_html"],
         )
 
@@ -382,6 +392,8 @@ class HeroBannerSchemaRegistrationTests(SimpleTestCase):
                 "loop",
                 "text_position",
                 "appearance_overrides",
+                # Phase 5 Task 4B — the per-section background picker field.
+                "background",
             ],
         )
 
@@ -1042,3 +1054,90 @@ class RepeaterSchemaEnabledFamilyTests(SimpleTestCase):
             "items": [{"name": "", "quote": "بدون نام", "role": ""}],
         }, current)
         self.assertEqual(cleaned["items"], [])
+
+
+
+# ------------------------------------------------------------------------
+# Phase 5 Task 4 remediation (R1b) — the generic `background` schema field is
+# projected CANONICALLY onto EVERY schema-enabled BACKGROUND_AWARE section
+# (capability-driven), not hand-added to hero_banner alone. Non-schema
+# background-aware sections (context/media-only) get no schema field — they
+# have no schema to attach to (documented exception, out of Task-4 scope).
+# ------------------------------------------------------------------------
+
+
+class BackgroundCapabilityProjectionTests(SimpleTestCase):
+    def _schema_enabled_background_aware_keys(self):
+        keys = []
+        for key in section_registry.BACKGROUND_AWARE_SECTION_KEYS:
+            definition = section_registry.get_definition(key)
+            if definition.settings_schema is not None:
+                keys.append(key)
+        return keys
+
+    def test_every_schema_enabled_background_aware_section_exposes_background_field(self):
+        projected = self._schema_enabled_background_aware_keys()
+        # Sanity: this set is broad, not just hero_banner.
+        self.assertIn("hero_banner", projected)
+        self.assertIn("image_slider", projected)
+        self.assertIn("multi_banner", projected)
+        self.assertGreater(len(projected), 5)
+        for key in projected:
+            definition = section_registry.get_definition(key)
+            field = definition.settings_schema.get_field("background")
+            self.assertIsNotNone(field, f"{key} is background-aware + schema-enabled but has no background field")
+            self.assertEqual(field.field_type, "background", key)
+            self.assertEqual(field.group, "advanced", key)
+
+    def test_background_field_default_is_canonical_default_background_settings(self):
+        for key in self._schema_enabled_background_aware_keys():
+            field = section_registry.get_definition(key).settings_schema.get_field("background")
+            self.assertEqual(field.default, section_registry.default_background_settings(), key)
+
+    def test_non_background_aware_schema_section_has_no_background_field(self):
+        # A schema-enabled section that is NOT background-aware must not get
+        # the field. cart_summary has no schema; use a schema-enabled section
+        # that is deliberately excluded from BACKGROUND_AWARE_SECTION_KEYS.
+        # (If none exist, this assertion is vacuously safe.)
+        for definition in section_registry.list_definitions():
+            if definition.settings_schema is None:
+                continue
+            if definition.key in section_registry.BACKGROUND_AWARE_SECTION_KEYS:
+                continue
+            self.assertIsNone(
+                definition.settings_schema.get_field("background"),
+                f"{definition.key} is NOT background-aware but exposes a background field",
+            )
+
+    def test_projection_is_not_manually_duplicated_in_hero_schema_constant(self):
+        # The base HERO_BANNER_SCHEMA constant must NOT carry a hand-added
+        # background field — the projection is the single canonical source,
+        # so the field is present on the finalized definition but absent from
+        # the raw module-level schema constant.
+        self.assertIsNone(section_registry.HERO_BANNER_SCHEMA.get_field("background"))
+        self.assertIsNotNone(
+            section_registry.get_definition("hero_banner").settings_schema.get_field("background")
+        )
+
+    def test_background_field_is_last_and_deduplicated(self):
+        # Projection appends exactly one background field (never a duplicate)
+        # and places it last in the finalized schema.
+        for key in self._schema_enabled_background_aware_keys():
+            fields = section_registry.get_definition(key).settings_schema.fields
+            bg_fields = [f for f in fields if f.key == "background"]
+            self.assertEqual(len(bg_fields), 1, key)
+            self.assertEqual(fields[-1].key, "background", key)
+
+    def test_documented_non_schema_background_aware_sections_have_no_schema(self):
+        # These 8 background-aware sections are context/media-only (no schema)
+        # — the documented exception. They must remain schema-less so the
+        # projection correctly skips them.
+        documented_non_schema = {
+            "catalog_product_wall", "collection_header", "featured_products",
+            "product_description", "product_video", "related_products",
+            "single_banner", "story_rail",
+        }
+        for key in documented_non_schema:
+            definition = section_registry.get_definition(key)
+            self.assertIn(key, section_registry.BACKGROUND_AWARE_SECTION_KEYS, key)
+            self.assertIsNone(definition.settings_schema, key)

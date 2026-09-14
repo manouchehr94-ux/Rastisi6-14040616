@@ -1138,6 +1138,37 @@ def _with_background(section_key: str, validate_fn, default_fn):
     return wrapped_validate, wrapped_default
 
 
+def _with_background_schema_field(section_key: str, schema):
+    """Phase 5 Task 4 (remediation R1b) — the R4-Inspector counterpart of
+    ``_with_background`` above.
+
+    ``_with_background`` already wraps every ``BACKGROUND_AWARE_SECTION_KEYS``
+    section's ``validate_settings``/``default_settings`` to carry a
+    ``background`` block. This projects the matching MERCHANT-FACING control
+    onto the section's ``SettingsSchema`` — a single generic ``background``
+    ``SettingsField`` (rendered by the one shared ``settings_field.html``
+    renderer, saved through the existing ``section.update_settings`` mutation)
+    — for EVERY schema-enabled background-aware section, uniformly. This is the
+    single canonical source of the field: it is never hand-added to individual
+    schema constants, so there is no per-section duplication.
+
+    No-op (returns the schema unchanged) when the section is not
+    background-aware or has no schema (``None``) — the 8 context/media-only
+    background-aware families have no schema to attach to, a documented,
+    out-of-Task-4-scope exception. Idempotent: never appends a second
+    ``background`` field if one is somehow already declared."""
+    if schema is None or section_key not in BACKGROUND_AWARE_SECTION_KEYS:
+        return schema
+    if schema.get_field("background") is not None:
+        return schema
+    background_field = SettingsField(
+        "background", "پس‌زمینه این بخش", "background", "advanced",
+        default=default_background_settings(),
+        widget_hint="background_picker",
+    )
+    return dataclasses.replace(schema, fields=(*schema.fields, background_field))
+
+
 #: بخشِ ۸ مشخصات: «Basic Mode: Small/Normal/Large» + «Advanced Mode: Padding
 #: Top/Bottom, Margin Top/Bottom». enum بستهٔ حالتِ ساده — Advanced اختیاری
 #: و فقط اگر تاجر صریحاً واردش شود مقدار می‌گیرد (``None`` یعنی «از حالتِ
@@ -1568,6 +1599,12 @@ HERO_BANNER_SCHEMA = SettingsSchema(fields=(
         default={},
         widget_hint="typography_override",
     ),
+    # Phase 5 Task 4B/4-remediation: the generic ``background`` picker field is
+    # NOT hand-added here. It is projected CANONICALLY onto every schema-enabled
+    # BACKGROUND_AWARE section by ``_with_background_schema_field`` in
+    # ``_finalize_registry`` (mirroring the ``_with_background`` validator
+    # wrapper), so there is exactly one source of the field, applied uniformly —
+    # no per-section duplication.
 ))
 
 
@@ -2995,9 +3032,15 @@ def _finalize_registry(base: dict[str, SectionDefinition]) -> dict[str, SectionD
         validate_fn, default_fn = _with_spacing(key, validate_fn, default_fn)
         validate_fn, default_fn = _with_appearance_overrides(key, validate_fn, default_fn)
         validate_fn = _with_variant_validation(definition, validate_fn)
+        # Phase 5 Task 4 (remediation R1b) — project the generic background
+        # picker field onto the schema for every schema-enabled background-aware
+        # section, the single canonical source (mirrors the _with_background
+        # validator wrapper applied above).
+        projected_schema = _with_background_schema_field(key, definition.settings_schema)
         finalized[key] = dataclasses.replace(
             definition, validate_settings=validate_fn, default_settings=default_fn, has_settings_form=True,
             capabilities=definition.capabilities | _derived_capabilities(key),
+            settings_schema=projected_schema,
         )
     return finalized
 

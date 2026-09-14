@@ -16,9 +16,15 @@ screen instead of Inspector fields.
   </header>
 
   <div class="r4-inspector-body">
-    <p class="r4-inspector-media-only-note">این بخش تنظیمِ مستقیمی ندارد — محتوای آن از طریق مدیریتِ رسانه تعیین می‌شود.</p>
-    <div class="r4-inspector-media-link">
-      <a href="{{ media_manage_url }}" target="_blank" rel="noopener">مدیریت {{ media_label_plural }}</a>
+    <p class="r4-inspector-media-only-note">این بخش تنظیمِ مستقیمی ندارد — محتوای آن از طریق مدیریتِ رسانه‌ی زیر تعیین می‌شود.</p>
+    {% comment %}
+    Phase 5 Task 4 (remediation R1a) — R4-native inline media manager for a
+    media-only family, reusing the canonical media manager body (media_views
+    models/CRUD/authority) via htmx. No passive target="_blank" out-link.
+    {% endcomment %}
+    <div class="r4-inspector-media" data-r4-media-manager hx-headers='{"HX-R4-Inline": "1"}'>
+      <div class="r4-inspector-media-heading">مدیریت {{ media_label_plural }}</div>
+      {% include "dashboard/storefront_builder/partials/section_media_manager_body.html" %}
     </div>
   </div>
 </div>

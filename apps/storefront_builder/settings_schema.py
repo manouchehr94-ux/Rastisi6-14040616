@@ -31,6 +31,17 @@ ALLOWED_FIELD_TYPES = frozenset({
     "resource_source",
     "appearance_override",
     "repeater",
+    #: Phase 5 Task 4B — the shared per-section "background" block
+    #: (mode/color/pattern/palette-role/media-asset) that already exists on
+    #: every BACKGROUND_AWARE_SECTION_KEYS section via the
+    #: ``_with_background`` legacy-validator wrapper. Declaring it as a schema
+    #: field only makes the R4 Inspector render + accept it; the AUTHORITY
+    #: for its shape stays ``section_registry.validate_background_settings``
+    #: (run afterward by ``clean_section_schema_patch``), and tenant safety
+    #: for ``media_asset_id`` stays the existing render-time
+    #: ``content.services.resolve_background_media_url`` (fail-closed,
+    #: Store-scoped) — never a second media authority or persistence model.
+    "background",
     #: Pre-Task-10 corrective closure — an FK picker into the existing
     #: Store-scoped Menu/MenuItem navigation infrastructure (the same model
     #: the legacy settings form's own Menu dropdown already uses — see
@@ -306,6 +317,23 @@ def _clean_field_value(field: SettingsField, raw_value: object) -> object:
                 f"Invalid menu_picker value for {field.key!r}: {raw_value!r}"
             ) from exc
         return cleaned if cleaned > 0 else None
+
+    if field.field_type == "background":
+        # Phase 5 Task 4B — shape guard ONLY (must be a JSON object), exactly
+        # like this module's contract for every compound type: THIS module
+        # has no request/store context and no notion of the section's own
+        # background rules, so it never validates mode/color/pattern/asset
+        # ownership here. The section's ``validate_background_settings``
+        # (invoked by the ``_with_background`` wrapper on its
+        # ``validate_settings``, run afterward by
+        # ``clean_section_schema_patch``) stays the sole authority; a
+        # tampered ``media_asset_id`` is fail-closed at render time by
+        # ``content.services.resolve_background_media_url``.
+        if not isinstance(raw_value, dict):
+            raise SettingsSchemaError(
+                f"{field.key!r} must be an object (got {type(raw_value).__name__})"
+            )
+        return raw_value
 
     if field.field_type == "resource_source":
         # R4 Task 9 — the generic typed shape only (kind/mode/auto_rule/

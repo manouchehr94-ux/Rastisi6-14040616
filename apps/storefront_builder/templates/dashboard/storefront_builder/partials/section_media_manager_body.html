@@ -1,0 +1,16 @@
+{% load storefront_builder_extras %}
+{% comment %}
+Phase 5 Task 4 (remediation R1a) — the R4-native inline media manager body:
+an "add" control plus the canonical media list body. Returned by the existing
+storefront_section_media_list view under HX-Request and embedded inline in the
+R4 Inspector, so add/edit/toggle/delete/reorder all happen INSIDE R4 through
+the existing canonical media endpoints — never a passive out-link, never a
+second media CRUD path. The add/edit form loads inline via htmx into the same
+[data-r4-media-manager] container.
+{% endcomment %}
+<div class="r4-media-manager-toolbar">
+  <button type="button" class="btn btn-sm btn-primary"
+          hx-get="{% url 'dashboard:storefront-builder-section-media-add' pk=section.pk kind=kind %}"
+          hx-target="closest [data-r4-media-manager]" hx-swap="innerHTML">+ افزودن {{ config.label }}</button>
+</div>
+{% include "dashboard/storefront_builder/partials/section_media_list_body.html" with inline_media=True %}
