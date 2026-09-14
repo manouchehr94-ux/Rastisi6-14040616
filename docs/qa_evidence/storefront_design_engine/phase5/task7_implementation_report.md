@@ -172,6 +172,56 @@ and docs/evidence. Explicitly:
 - Ready Template / registry / render_service / resource_source / models unchanged
 - Task 8 not started
 
-## 18. Task 8
+## 18. Final-review remediation — legacy base.html live-search context
+
+**Defect found in independent Architect review (one blocker).** The canonical
+search partial the drawer now reuses renders its REAL enabled GET form only when
+`is_live_storefront` is truthy; otherwise it renders the disabled Builder
+Preview branch. The universal shell passes `is_live_storefront=True` in its own
+header include, but the **public legacy fallback** (`uses_universal_shell == False`,
+where `templates/storefront_shell.html` renders `{{ block.super }}` → the
+`templates/base.html` header) included the shared drawer **without** that flag,
+and no context processor supplies it. So on the real legacy public path the
+drawer search silently rendered the disabled preview form. This path was not
+covered by the initial Task-7 browser QA.
+
+**Root cause confirmed:** `templates/base.html` drawer `{% include %}` lacked the
+live-storefront context; `grep is_live_storefront apps/*/context_processors.py`
+→ not supplied anywhere.
+
+**RED test (rendered-template):** `apps/content/tests/test_mobile_nav_drawer.py`
+`LegacyBaseHtmlDrawerSearchIsLiveTests` — (a) rendering the drawer partial WITHOUT
+the flag yields the disabled preview input (`...-preview`, `disabled`,
+`onsubmit="return false"`) — reproducing the defect; (b) WITH the flag it renders
+the live `role="search"` GET form to `/products/` with an enabled `name="q"`
+input; (c) `base.html`'s include must pass `is_live_storefront=True`. Test (c)
+failed RED before the fix.
+
+**Minimal fix:** `templates/base.html` — change the drawer include to
+`{% include "partials/mobile_nav_drawer.html" with is_live_storefront=True is_builder_preview=False %}`
+(mirrors exactly what the universal shell passes to its own header include).
+The canonical search partial was NOT modified; no duplicate markup; no context
+processor added; no second drawer.
+
+**Both public paths browser-verified at 390px (0 console errors):**
+- **A. Universal `legacy_default`** (`page_shell_header`, `uses_universal_shell=True`,
+  real fashion tenant) — drawer search live, `?q=تیشرت` → 5 results (§9/§12).
+- **B. Legacy fallback** (`uses_universal_shell=False`, base.html `block.super`) —
+  header search hidden; burger opens drawer; exactly one usable LIVE search form
+  (`name="q"`, accessible name, NOT disabled); typed `تیشرت` → URL
+  `/products/?q=%D8%AA%DB%8C%D8%B4%D8%B1%D8%AA` → 12 result cards; Task-5 Escape
+  still closes the drawer. Result: **30 PASS / 0 FAIL / 0 console errors**.
+  Evidence: `task7_browse_hardening/fallback/` (drawer-search + results screenshots +
+  `task7_browser_result.json`). (Path B exercised via a throwaway unpublished
+  store in the dev DB only — no seed/migration/committed fixture.)
+
+**Remediation scope:** only `templates/base.html` (one include) + the RED
+regression test + this report/evidence update. Pagination unchanged. No new
+route/backend/service; canonical search partial still reused; Django Paginator
+still canonical; no models/migrations; Ready Templates unchanged.
+
+Final HEAD after remediation is recorded in the PR and the final response.
+
+## 19. Task 8
 
 TASK 8 NOT STARTED.
