@@ -63,6 +63,52 @@ _INSPECTOR_SUPPORTED_FIELD_TYPES = frozenset({
     "background",
 })
 
+#: Phase 5 Task 6 — the "Storefront Showcase" R4 CREATION FACADE.
+#:
+#: Showcase is merchant-facing UX terminology ONLY. It is NOT a persisted
+#: section_key, renderer, schema, or resource-source contract. This is a small
+#: presentation-layer mapping from a merchant-facing content type to the ONE
+#: EXISTING canonical section it creates via the normal ``section.add`` mutation
+#: (ONE CONCEPT = ONE CANONICAL OWNER). The type is chosen at add time and is
+#: immutable afterward. Order is the approved merchant order.
+#:
+#: This constant defines the four approved choices and their canonical target
+#: only — it duplicates NO validator/schema/page_type/layout/resource rule.
+#: Page legality is NEVER decided here: ``_build_showcase_choices`` emits a
+#: choice only if its canonical section is already present in the current,
+#: server-owned, page-filtered ``structure_library`` — so future changes to a
+#: canonical section's ``page_types`` automatically govern Showcase too, with
+#: no second rule set. FORBIDDEN: a ``storefront_showcase`` section key.
+_SHOWCASE_FACADE = (
+    ("products", "product_section", "محصولات", "نمایش محصولات جدید، منتخب، پرفروش یا انتخابی"),
+    ("categories", "category_grid", "دسته‌بندی‌ها", "نمایش دسته‌های فروشگاه"),
+    ("collections", "collection_tiles", "کالکشن‌ها", "نمایش مجموعه‌های فروشگاه"),
+    ("brands", "brand_carousel", "برندها", "نمایش برندهای فروشگاه"),
+)
+
+
+def _build_showcase_choices(structure_library) -> list[dict]:
+    """Project the approved Showcase choices, keeping ONLY those whose canonical
+    section is already in the current legal ``structure_library`` (the existing
+    server-owned, page-filtered, hidden-aware projection). Never a second
+    legality authority; never emits a ``storefront_showcase`` key."""
+    legal_keys = {
+        item["key"]
+        for group in structure_library
+        for item in group["items"]
+    }
+    choices = []
+    for content_type, section_key, label, description in _SHOWCASE_FACADE:
+        if section_key in legal_keys:
+            choices.append({
+                "content_type": content_type,
+                "section_key": section_key,
+                "label": label,
+                "description": description,
+            })
+    return choices
+
+
 #: R4 Task 7 — merchant-facing Persian labels for the existing curated
 #: type-scale enum (appearance_registry.TYPE_SCALE_CHOICES). Stored values
 #: remain the existing enum strings; only the label shown is translated.
@@ -474,6 +520,12 @@ def storefront_r4_editor(request):
         )
     ]
 
+    # Phase 5 Task 6 — the "Storefront Showcase" creation facade choices,
+    # projected from the SAME legal structure_library above (never a second
+    # legality/registry authority). Each choice creates one EXISTING canonical
+    # section via the normal section.add mutation; no storefront_showcase key.
+    showcase_choices = _build_showcase_choices(structure_library)
+
     # R4 Task 7 (final-review fix, IMPORTANT-2) — an empty Cell (e.g. a
     # freshly-grown container.change_layout column) has no Block, so
     # ``build_structure_projection`` above never emits a row for it —
@@ -511,6 +563,10 @@ def storefront_r4_editor(request):
             "r4_edit_revision": draft.edit_revision,
             "structure_items": structure_items,
             "structure_library": structure_library,
+            # Phase 5 Task 6 — Storefront Showcase creation-facade choices
+            # (see _build_showcase_choices): merchant-facing UX over the four
+            # existing canonical sections, no new section_key.
+            "showcase_choices": showcase_choices,
             "empty_cells": empty_cells,
             # R4 Task 7 (Batch 1; final-review fix, MINOR-7) — the SAME
             # preset registry AND the SAME Persian ratio labels the legacy

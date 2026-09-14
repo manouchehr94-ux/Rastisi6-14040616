@@ -271,6 +271,43 @@ scope tight — six checkpoints, not one.
 
 ## Task 6 — Storefront Showcase canonical section
 
+> ### ⚠️ APPROVED ARCHITECTURE OVERRIDE (2026-09-14)
+>
+> The Product Owner + Architect reviewed the Task-6 discovery
+> (`docs/qa_evidence/storefront_design_engine/phase5/task6_discovery_report.md`)
+> and approved **Option B**. The original "new canonical `storefront_showcase`
+> section / thin dispatcher renderer" approach described in the rest of this
+> section below is **SUPERSEDED and MUST NOT be built.**
+>
+> **Approved architecture:** "Storefront Showcase" is an **R4 CREATION FACADE,
+> NOT A RENDERING AUTHORITY.** It is merchant-facing UX terminology only — a
+> small inline chooser in the R4 editor that, when the merchant picks a content
+> type, creates one of the four EXISTING canonical sections via the existing
+> `section.add` mutation:
+>
+> - Products → `product_section`
+> - Categories → `category_grid`
+> - Collections → `collection_tiles`
+> - Brands → `brand_carousel`
+>
+> The type is chosen at ADD time and is immutable afterward (no conversion; to
+> change type, remove and add again). After creation there is NO Showcase
+> inspector — the created section uses its own normal SettingsSchema/Inspector.
+>
+> **Forbidden (per the approved spec):** a persisted `storefront_showcase`
+> `section_key`; any new renderer, SettingsSchema, ResourceSource, conditional-
+> field framework, section-type conversion, Ready-Template rewrite, new
+> PageType, or DB migration. Expected migrations: **ZERO**. `ONE CONCEPT = ONE
+> CANONICAL OWNER`.
+>
+> **Authoritative documents:**
+> - Approved design spec: `docs/superpowers/specs/2026-09-14-phase5-task6-storefront-showcase-facade-design.md`
+> - Implementation plan: `docs/superpowers/plans/2026-09-14-phase5-task6-storefront-showcase-facade-implementation-plan.md`
+> - Discovery report: `docs/qa_evidence/storefront_design_engine/phase5/task6_discovery_report.md`
+>
+> Everything from here to the end of this Task-6 section is the **pre-override
+> historical plan**, retained only for traceability. Do not implement it.
+
 **Goal:** the Design Expansion Charter's headline capability (§4): one reusable section showing
 Categories/Products/Collections/Brands through multiple materially different layouts, with simple R4
 controls (content type, selection/source, layout, title, count, View All, essential mobile behavior).

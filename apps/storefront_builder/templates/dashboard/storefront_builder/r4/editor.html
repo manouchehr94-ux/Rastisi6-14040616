@@ -141,6 +141,28 @@
         </div>
         {% endfor %}
       </div>
+      {% comment %}
+      Phase 5 Task 6 — Storefront Showcase creation FACADE (Option B). An inline
+      accessible disclosure; each choice creates ONE EXISTING canonical section
+      (data-section-key) via the SAME section.add mutation the normal Add
+      Section control below uses. NOT a persisted section: there is no
+      pseudo Showcase key. Rendered only when the server projected legal
+      choices for this page. The normal Add Section control is preserved.
+      {% endcomment %}
+      {% if showcase_choices %}
+      <details class="r4-showcase" data-r4-showcase>
+        <summary class="r4-showcase-summary">ویترین فروشگاه</summary>
+        <div class="r4-showcase-choices" role="group" aria-label="ویترین فروشگاه">
+          {% for choice in showcase_choices %}
+          <button type="button" class="r4-showcase-choice" data-r4-showcase-choice
+                  data-section-key="{{ choice.section_key }}">
+            <span class="r4-showcase-choice-label">{{ choice.label }}</span>
+            {% if choice.description %}<span class="r4-showcase-choice-desc">{{ choice.description }}</span>{% endif %}
+          </button>
+          {% endfor %}
+        </div>
+      </details>
+      {% endif %}
       <div class="r4-structure-add">
         <select id="r4StructureAddSelect" class="r4-control">
           <option value="">افزودن بخش…</option>

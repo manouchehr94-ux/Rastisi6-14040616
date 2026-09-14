@@ -96,6 +96,16 @@ class Command(BaseCommand):
         "SQLite Store, with byte-for-byte DB backup/restore around the run."
     )
 
+    #: Phase 5 Task 6 (--showcase) — suffix for the merchant ADMIN host the
+    #: browser uses to reach the R4 editor. The admin portal resolves the Store
+    #: from its ``admin_subdomain`` (``<admin_subdomain>.rastisi.localhost``),
+    #: which works in a multi-Store sandbox (unlike the 127.0.0.1 single-Store
+    #: compatibility fallback the default run relies on). The full host is
+    #: computed per-Store in _build_manifest; mapped to 127.0.0.1 by the
+    #: runner's chromium --host-resolver-rules. ``.rastisi.localhost`` is in
+    #: DEBUG ALLOWED_HOSTS. No StoreDomain seeding needed.
+    SHOWCASE_QA_HOST_SUFFIX = ".rastisi.localhost"
+
     def add_arguments(self, parser):
         parser.add_argument("--store-slug", required=True)
         parser.add_argument("--username", required=True, help="Existing is_staff user with an active membership on the Store.")
@@ -113,6 +123,21 @@ class Command(BaseCommand):
             help="Run npm install in tools/storefront_builder_qa (the shared playwright-core dependency both R3 and R4 runners reuse) before the browser QA.",
         )
         parser.add_argument("--report-dir", default="")
+        parser.add_argument(
+            "--showcase",
+            action="store_true",
+            help=(
+                "Phase 5 Task 6 — opt-in Storefront Showcase creation-facade "
+                "browser scenario (desktop 1440 + mobile 390, RTL). Also seeds "
+                "one active MerchantCollection into the sandbox so the "
+                "Collections choice is legal. Off by default — existing "
+                "scenarios/behavior are unchanged. NOTE: currently REQUIRES "
+                "--phase3 as well (the runner eagerly bootstraps Phase-3 "
+                "fixtures at import); the command fails fast otherwise. Typical "
+                "Task-6-only run: R4_QA_ONLY_SCENARIO=task6-showcase "
+                "manage.py qa_storefront_builder_r4 --phase3 --showcase ..."
+            ),
+        )
         parser.add_argument(
             "--phase3",
             action="store_true",
@@ -136,6 +161,22 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if not settings.DEBUG:
             raise CommandError("This disposable browser QA is only permitted with DEBUG=True.")
+
+        # Phase 5 Task 6 — the current run.mjs eagerly builds phase3-only edit
+        # matrices at module import (FINAL_REMEDIATION_SCALAR_EDITS reads
+        # manifest.phase3_fixture.final_remediation_families), so the runner
+        # cannot even load without --phase3. Rather than a broad phase3
+        # refactor in Task 6, fail fast with a truthful message: the Showcase
+        # scenario must be run as `--phase3 --showcase`.
+        if options["showcase"] and not options["phase3"]:
+            raise CommandError(
+                "--showcase currently requires --phase3 as well: the R4 QA runner "
+                "(tools/storefront_builder_r4_qa/run.mjs) eagerly requires the "
+                "Phase-3 fixture bootstrap at import time. Re-run as: "
+                "manage.py qa_storefront_builder_r4 --phase3 --showcase ... "
+                "(optionally with R4_QA_ONLY_SCENARIO=task6-showcase to run only "
+                "the Task-6 scenario)."
+            )
 
         base_dir = Path(settings.BASE_DIR).resolve()
         shared_tool_dir = base_dir / "tools" / "storefront_builder_qa"
@@ -203,7 +244,9 @@ class Command(BaseCommand):
         runtime_manifest_path = None
         browser_exit = 1
         try:
-            fixture = self._prepare_r4_sandbox(store, user, phase3=options["phase3"])
+            fixture = self._prepare_r4_sandbox(
+                store, user, phase3=options["phase3"], showcase=options["showcase"],
+            )
 
             if options["phase3"]:
                 tenant_negatives = self._phase3_tenant_negatives(store)
@@ -231,6 +274,7 @@ class Command(BaseCommand):
                 browser_channel=options["browser_channel"],
                 phase3=options["phase3"],
                 phase3_fixture=fixture.get("phase3") if options["phase3"] else None,
+                showcase=options["showcase"],
             )
             fd, runtime_manifest_path = tempfile.mkstemp(prefix="rastisi-r4-qa-", suffix=".json")
             os.close(fd)
@@ -375,7 +419,7 @@ class Command(BaseCommand):
         shutil.copy2(backup, target)
 
     # -- R4-specific deterministic fixture -----------------------------------
-    def _prepare_r4_sandbox(self, store: Store, user, *, phase3: bool = False) -> dict:
+    def _prepare_r4_sandbox(self, store: Store, user, *, phase3: bool = False, showcase: bool = False) -> dict:
         layout = layout_service.get_or_create_layout(store)
         layout.r4_editor_enabled = True
         # Deterministic baseline: Publish must be a real, observable state
@@ -431,6 +475,27 @@ class Command(BaseCommand):
             )
         for i in range(1, 6):
             Brand.objects.get_or_create(store=store, slug=f"t12-brand-{i}", defaults=dict(name=f"برند تی۱۲ شماره {i}"))
+
+        # Phase 5 Task 6 (opt-in --showcase) — the default sandbox has Products/
+        # Categories/Brands but no MerchantCollection, so the Collections
+        # Showcase choice would (correctly) be filtered out as unavailable.
+        # Seed exactly one active collection so all four choices are legal.
+        # Guarded: a non-showcase run's fixture/Draft is byte-for-byte unchanged.
+        if showcase:
+            from apps.catalog.models import MerchantCollection, MerchantCollectionItem
+            collection, _ = MerchantCollection.objects.get_or_create(
+                store=store, slug="t6-showcase-collection",
+                defaults=dict(name="کالکشن ویترین T6", is_active=True),
+            )
+            for product in Product.objects.filter(store=store, slug__in=["t12-product-1", "t12-product-2"]):
+                MerchantCollectionItem.objects.get_or_create(collection=collection, product=product)
+            # The browser reaches the R4 editor via the Store's admin-subdomain
+            # host (see SHOWCASE_QA_HOST_SUFFIX / _build_manifest); ensure the
+            # Store actually has an admin_subdomain so that host resolves. No
+            # StoreDomain seeding needed (admin portal resolves by subdomain).
+            if not store.admin_subdomain:
+                store.admin_subdomain = store.slug
+                store.save(update_fields=["admin_subdomain"])
 
         fixture = {
             "hero_section_id": hero.pk,
@@ -1199,19 +1264,37 @@ class Command(BaseCommand):
             "tile_variants": list(tile_variants),
         }
 
-    def _build_manifest(self, *, store, port, session_cookie, report_dir, headed, browser_channel, phase3=False, phase3_fixture=None):
-        origin = f"http://127.0.0.1:{port}"
+    def _build_manifest(self, *, store, port, session_cookie, report_dir, headed, browser_channel, phase3=False, phase3_fixture=None, showcase=False):
+        # Phase 5 Task 6 (--showcase) — reach the editor via the Store's
+        # ADMIN-SUBDOMAIN host (``<admin_subdomain>.rastisi.localhost``, mapped
+        # to 127.0.0.1 by the runner's chromium --host-resolver-rules), so a
+        # multi-Store sandbox resolves the target Store instead of failing the
+        # 127.0.0.1 single-Store compatibility fallback. The admin portal
+        # resolves the Store by its admin_subdomain — no StoreDomain seeding is
+        # involved. The default (non-showcase) run keeps the 127.0.0.1 origin
+        # and cookie domain byte-for-byte unchanged.
+        host = (
+            f"{store.admin_subdomain}{self.SHOWCASE_QA_HOST_SUFFIX}"
+            if showcase else "127.0.0.1"
+        )
+        origin = f"http://{host}:{port}"
+        cookie_domain = host
         same_site = str(settings.SESSION_COOKIE_SAMESITE or "Lax").capitalize()
         if same_site not in {"Lax", "Strict", "None"}:
             same_site = "Lax"
         return {
             "origin": origin,
+            # The host the runner must map to 127.0.0.1 (None for a normal run).
+            "resolver_host": host if showcase else None,
             "builder_url": f"{origin}/admin-portal/storefront-builder/r4/",
             "public_url": f"{origin}/",
             "report_dir": str(report_dir),
             "headed": bool(headed),
             "browser_channel": browser_channel,
             "phase3": bool(phase3),
+            # Phase 5 Task 6 — opt-in Showcase creation-facade scenario. None/
+            # False-shaped by default, so the default run.mjs run is unchanged.
+            "showcase": bool(showcase),
             # Phase 3 (Task 3 "Brand gate") — the runner reads fixture ids
             # (per-page brand section ids, product slug, collection slug,
             # brand id lists) from the MANIFEST, not fixture.json. Only
@@ -1221,7 +1304,7 @@ class Command(BaseCommand):
             "session": {
                 "name": settings.SESSION_COOKIE_NAME,
                 "value": session_cookie,
-                "domain": "127.0.0.1",
+                "domain": cookie_domain,
                 "path": settings.SESSION_COOKIE_PATH or "/",
                 "httpOnly": bool(settings.SESSION_COOKIE_HTTPONLY),
                 "secure": bool(settings.SESSION_COOKIE_SECURE),

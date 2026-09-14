@@ -721,6 +721,25 @@ window.RastiSiR4 = {
         if (addSelect) addSelect.value = '';
         return;
       }
+      // Phase 5 Task 6 — Storefront Showcase creation FACADE. A Showcase choice
+      // carries ONLY a canonical section_key (data-section-key); it reuses the
+      // exact same section.add path as #r4StructureAddButton above — no new
+      // mutation type, no direct fetch, no pseudo Showcase section key, no
+      // auto-select heuristic (the merchant selects the new Structure row).
+      var showcaseChoice = evt.target.closest('[data-r4-showcase-choice]');
+      if (showcaseChoice) {
+        var showcaseKey = showcaseChoice.getAttribute('data-section-key');
+        if (!showcaseKey) return;
+        R4.enqueueStructuralMutation({
+          type: 'section.add',
+          section_key: showcaseKey,
+          page_type: shell ? shell.dataset.r4PageType : 'home',
+        });
+        // Collapse the inline chooser after a choice is made.
+        var showcaseDisclosure = showcaseChoice.closest('[data-r4-showcase]');
+        if (showcaseDisclosure) showcaseDisclosure.removeAttribute('open');
+        return;
+      }
       // R4 Task 7 (final-review fix, IMPORTANT-2) — one "add section" row
       // per EMPTY Cell (see editor.html), so a Cell created by
       // container.change_layout's grow branch is never a permanent dead
