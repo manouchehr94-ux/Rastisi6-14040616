@@ -64,12 +64,43 @@ class ProductQuickViewCardContractTests(TestCase):
         self.assertIn('role="dialog"', html)
         self.assertIn('aria-modal="true"', html)
 
-    def test_quick_view_dialog_id_is_unique_per_product(self):
+    def test_quick_view_ids_are_instance_safe_not_product_pk_based(self):
+        # The SAME product can appear many times on one page (Featured,
+        # Newest, Best Sellers, ...). IDs must be per-RENDER-INSTANCE unique,
+        # never a static product.pk (which would duplicate). We use Alpine's
+        # native x-id/$id() so each mounted card scope gets a unique id and
+        # the trigger + dialog + title cross-reference the SAME generated id.
         product = self._product()
         html = self._render(product)
-        expected_id = f"quick-view-{product.pk}"
-        self.assertIn(expected_id, html)
-        self.assertIn(f'aria-controls="{expected_id}"', html)
+        # No static product.pk-based IDs remain (the source of duplicates).
+        self.assertNotIn(f'id="quick-view-{product.pk}"', html)
+        self.assertNotIn(f'quick-view-title-{product.pk}', html)
+        # The instance-safe mechanism is present.
+        self.assertIn("x-id=", html)
+        self.assertIn("$id('sfb-quick-view')", html)
+        self.assertIn("$id('sfb-quick-view-title')", html)
+        # Trigger controls the dialog and the dialog is labelled by the title,
+        # all via the same $id() token (dynamic bindings).
+        self.assertIn(":aria-controls=\"$id('sfb-quick-view')\"", html)
+        self.assertIn(":id=\"$id('sfb-quick-view')\"", html)
+        self.assertIn(":aria-labelledby=\"$id('sfb-quick-view-title')\"", html)
+        self.assertIn(":id=\"$id('sfb-quick-view-title')\"", html)
+
+    def test_same_product_rendered_multiple_times_has_no_duplicate_static_ids(self):
+        # Simulate the real multi-carousel page: the same product rendered
+        # several times. With x-id there must be ZERO static id="quick-view*"
+        # attributes at all (Alpine generates unique ids at runtime), so the
+        # rendered page can never contain duplicate HTML ids for the dialog.
+        product = self._product()
+        page = "\n".join(self._render(product) for _ in range(4))
+        import re
+        static_dialog_ids = re.findall(r'\sid="quick-view[^"]*"', page)
+        self.assertEqual(
+            static_dialog_ids, [],
+            f"quick view must not emit static ids that can collide: {static_dialog_ids}",
+        )
+        # x-id scope appears once per rendered card (one per instance).
+        self.assertEqual(page.count("x-id="), 4)
 
     def test_quick_view_reuses_canonical_card_truth(self):
         product = self._product(name="کالای کوییک", price=Decimal("180000"))

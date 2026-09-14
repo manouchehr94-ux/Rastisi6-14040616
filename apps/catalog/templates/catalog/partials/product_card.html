@@ -106,9 +106,15 @@ here — so every future visual variant reads identical business semantics.
   scroll-lock are delegated to the shared ``sfbOverlay`` primitive (MDR).
   Add-to-cart reuses the canonical ``cart:add`` path.
   {% endcomment %}
-  <div class="pcard-quickview" x-data="sfbOverlay()">
+  {% comment %}Phase 5 Task 5 (MODAL) — IDs are per-render-instance unique via
+  Alpine's native x-id/$id() (NOT product.pk, which duplicates when the same
+  product appears in several carousels on one page). The trigger, dialog and
+  title all resolve the SAME $id() token because they share this one
+  ``sfbOverlay`` scope, so aria-controls/aria-labelledby stay correctly paired
+  per instance and no two dialogs ever collide on one page.{% endcomment %}
+  <div class="pcard-quickview" x-data="sfbOverlay()" x-id="['sfb-quick-view', 'sfb-quick-view-title']">
     <button type="button" class="pcard-qv-trigger"
-            aria-haspopup="dialog" aria-controls="quick-view-{{ product.pk }}"
+            aria-haspopup="dialog" :aria-controls="$id('sfb-quick-view')"
             :aria-expanded="overlayOpen ? 'true' : 'false'"
             aria-label="نمای سریع {{ card.name }}"
             @click="event.preventDefault();event.stopPropagation();openOverlay()">
@@ -117,8 +123,8 @@ here — so every future visual variant reads identical business semantics.
     </button>
     <div class="pcard-qv-backdrop" x-show="overlayOpen" x-transition.opacity
          @click="closeOverlay()" x-cloak></div>
-    <div class="pcard-qv-dialog" id="quick-view-{{ product.pk }}"
-         role="dialog" aria-modal="true" aria-labelledby="quick-view-title-{{ product.pk }}"
+    <div class="pcard-qv-dialog" :id="$id('sfb-quick-view')"
+         role="dialog" aria-modal="true" :aria-labelledby="$id('sfb-quick-view-title')"
          x-ref="overlayPanel" x-show="overlayOpen" x-transition
          @keydown="onOverlayKeydown($event)" x-cloak>
       <button type="button" class="pcard-qv-close" aria-label="بستن نمای سریع" @click="closeOverlay()">×</button>
@@ -131,7 +137,7 @@ here — so every future visual variant reads identical business semantics.
       </div>
       <div class="pcard-qv-info">
         {% if card.brand_name %}<div class="pcard-qv-brand">{{ card.brand_name }}</div>{% endif %}
-        <h2 class="pcard-qv-name" id="quick-view-title-{{ product.pk }}">{{ card.name }}</h2>
+        <h2 class="pcard-qv-name" :id="$id('sfb-quick-view-title')">{{ card.name }}</h2>
         {% if card_settings.show_rating is not False %}
         <div class="pcard-qv-rate">
           <span class="stars">{{ card.rating|star_rating }}</span>{{ card.rating|fa_number }}
