@@ -890,7 +890,7 @@ class Task4DSelectionSyncJsContractTests(R4MutationApiTestCase):
         # preview-originated selectSection/openSectionSettings all route to
         # it) — it drives the preview selection through one shared helper.
         open_idx = self.js_source.index("openSection = function")
-        open_chunk = self.js_source[open_idx:open_idx + 1800]
+        open_chunk = self.js_source[open_idx:open_idx + 2400]
         self.assertIn("syncPreviewSelection()", open_chunk)
         # The helper posts setSelection carrying the current selected id.
         helper_idx = self.js_source.index("function syncPreviewSelection")
@@ -1043,6 +1043,28 @@ class Task4ANoDuplicateMediaAuthorityTests(R4MutationApiTestCase):
         # The three canonical models stay the only media models the builder uses.
         kinds = set(mv._MEDIA_KINDS)
         self.assertEqual(kinds, {"hero-slides", "banners", "story-items"})
+
+
+class Task4AInspectorHtmxProcessedTests(R4MutationApiTestCase):
+    """R1a — the inline media manager relies on htmx-bound controls, but the
+    Inspector HTML is injected via innerHTML (which htmx does not auto-process).
+    openSection must call htmx.process() on the injected Inspector so the
+    embedded canonical media manager's add/edit/toggle/delete controls actually
+    work inline — reusing htmx (already loaded by base_admin), not a second
+    binding mechanism."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.js_source = Path(
+            settings.BASE_DIR,
+            "apps/storefront_builder/static/storefront_builder/r4_editor.js",
+        ).read_text(encoding="utf-8")
+
+    def test_open_section_processes_htmx_on_injected_inspector(self):
+        open_idx = self.js_source.index("openSection = function")
+        open_chunk = self.js_source[open_idx:open_idx + 1800]
+        self.assertIn("htmx.process", open_chunk)
 
 
 

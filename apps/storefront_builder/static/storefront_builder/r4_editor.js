@@ -375,6 +375,16 @@ window.RastiSiR4 = {
         if (html == null) return;
         inspector.innerHTML = html;
         inspector.hidden = false;
+        // Phase 5 Task 4 (remediation R1a) — the Inspector body can embed the
+        // canonical media manager, whose add/edit/toggle/delete/reorder
+        // controls are htmx-driven. htmx does NOT auto-bind content injected
+        // via innerHTML, so process the injected subtree once here to activate
+        // those existing endpoints inline (reuses the htmx already loaded by
+        // base_admin.html — never a second binding mechanism). Guarded so a
+        // build without htmx simply no-ops.
+        if (window.htmx && typeof window.htmx.process === 'function') {
+          window.htmx.process(inspector);
+        }
         if (shell) shell.dataset.r4InspectorOpen = 'true';
         R4.selected = sectionId;
         R4.inspectorOpen = true;
