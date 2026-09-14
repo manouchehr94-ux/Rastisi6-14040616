@@ -1739,6 +1739,29 @@ class SliderTransitionRenderTests(TestCase):
         item = self._items_for(draft, store, "hero_banner")
         self.assertEqual(item["context"]["slider_settings"]["transition"], "fade")
 
+    def test_image_slider_transition_reaches_the_same_runtime(self):
+        # STRANS remediation (CASE A): image_slider is NOT a dead control — it
+        # reuses the exact same slider runtime as hero_banner
+        # (``_image_slider_context`` delegates to ``_hero_banner_context``),
+        # so ``transition`` flows through ``slider_settings`` identically.
+        store = _akhlaghi()
+        draft = svc.get_or_create_draft(store)
+        draft.sections.filter(section_key="image_slider").delete()
+        StorefrontSection.objects.create(
+            version=draft, section_key="image_slider", order=901,
+            settings={"transition": "slide"},
+        )
+        item = self._items_for(draft, store, "image_slider")
+        self.assertEqual(item["context"]["slider_settings"]["transition"], "slide")
+
+    def test_image_slider_transition_default_is_cut_when_unset(self):
+        store = _akhlaghi()
+        draft = svc.get_or_create_draft(store)
+        draft.sections.filter(section_key="image_slider").delete()
+        StorefrontSection.objects.create(version=draft, section_key="image_slider", order=901, settings={})
+        item = self._items_for(draft, store, "image_slider")
+        self.assertEqual(item["context"]["slider_settings"]["transition"], "cut")
+
 
 
 class SliderTransitionRuntimeContractTests(TestCase):
@@ -1774,3 +1797,15 @@ class SliderTransitionRuntimeContractTests(TestCase):
         # No external animation library import sneaked into the hero template.
         for banned in ("swiper", "slick", "gsap", "aos.js", "cdn"):
             self.assertNotIn(banned, self.hero_tmpl.lower())
+
+    def test_hero_banner_and_image_slider_share_the_same_transition_aware_body(self):
+        # STRANS remediation (CASE A): image_slider's transition control is
+        # genuinely live because both section templates include the SAME
+        # transition-aware body partial — one runtime, no second slider.
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        base = Path(dj_settings.BASE_DIR, "apps/storefront_builder/templates/storefront_builder/sections")
+        hero = (base / "hero_banner.html").read_text(encoding="utf-8")
+        image_slider = (base / "image_slider.html").read_text(encoding="utf-8")
+        self.assertIn("storefront_builder/partials/hero_slider_body.html", hero)
+        self.assertIn("storefront_builder/partials/hero_slider_body.html", image_slider)
