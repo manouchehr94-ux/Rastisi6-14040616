@@ -10,7 +10,7 @@ remediation). This is the only Task-4 report; no competing report exists.
 | Certified base SHA | `d3b98f2c2637a115a59d77c84b9b5d870719f63f` |
 | Base commit subject | `feat(storefront_builder): merchant-data template preview without Draft mutation` |
 | Working branch | `kiro/phase5-task4-contextual-editor-repairs` (branched from exactly the certified base SHA) |
-| Final code/evidence HEAD | `7a0be83701f0d8e7d0d1b2c648ae87b5152e45a2` (last code+screenshot commit; this report commit is authored directly on top of it) |
+| Final code/evidence HEAD | `574310b34fa265269b83025dcd6c570738671db5` (last code+screenshot commit; this report commit is authored directly on top of it) |
 | Remote official branch | `feature/phase5-design-expansion` still at `d3b98f2c…` — never modified, never merged into |
 | Task 5 started | **NO** |
 
@@ -30,7 +30,10 @@ first parent of the branch history.
 | `8706065` | `feat(storefront_builder): make section media editing R4-native` (remediation R1a) |
 | `60b330b` | `fix(storefront_builder): per-group Global Design scope indicators` (remediation R2) |
 | `7a0be83` | `fix(storefront_builder): process htmx on injected R4 Inspector; refresh Task-4 browser evidence` (remediation) |
-| _(this doc commit)_ | `docs(phase5): regenerate Task 4 canonical report after remediation` — authored on top of `7a0be83`; its own SHA is the branch tip after this commit |
+| `843a8e6` | `docs(phase5): regenerate Task 4 canonical report after remediation` |
+| `29c0f6f` | `fix(storefront_builder): scope R4-inline media context to an explicit marker, not HX-Request` (final review fix) |
+| `574310b` | `docs(phase5): add media-context smoke screenshots (R4 inline + legacy full page)` |
+| _(this doc commit)_ | `docs(phase5): update Task 4 report after media-context final fix` — authored on top of `574310b`; its own SHA is the branch tip after this commit |
 
 ## 3. Scope Completed
 
@@ -85,6 +88,17 @@ story items) INSIDE the R4 Inspector, not via a passive `target="_blank"` link.
 - `openSection` calls `htmx.process()` on the injected Inspector so the embedded
   manager's add/edit/toggle/delete/reorder controls bind (htmx does not
   auto-process `innerHTML`), reusing the htmx already loaded by `base_admin`.
+- **Context boundary (final review fix).** R4-inline context is derived from an
+  EXPLICIT marker — the `HX-R4-Inline` request header (`_is_r4_inline`) — never
+  from `HX-Request` alone. The legacy full-page media screen also drives
+  toggle/delete/move/reorder over htmx (reswapping through the same
+  `_media_list_body`), so inferring R4 context from `HX-Request` would have
+  leaked the R4-only `hx-target="closest [data-r4-media-manager]"` onto the
+  legacy list's Edit link (which has no such ancestor). The R4 manager container
+  sets the header via inherited `hx-headers`; the drag-reorder `htmx.ajax` call
+  passes it explicitly; a successful R4-inline form POST returns the refreshed
+  manager body inline (a redirect would be re-followed without the marker and
+  render the legacy full page). The legacy full-page flow is unchanged.
 - New public accessor `media_views.media_config_for_kind` mirrors the existing
   `media_kind_for_section_key`/`media_label_for_kind` accessors. The media CRUD
   still re-scopes every request through `_get_scoped_section` (store+draft
@@ -177,14 +191,15 @@ docs/qa_evidence/storefront_design_engine/phase5/task4_browser_qa/fixture.json
 docs/qa_evidence/storefront_design_engine/phase5/task4_browser_qa/metrics.json
 docs/qa_evidence/storefront_design_engine/phase5/task4_browser_qa/r4-browser-result.json
 docs/qa_evidence/storefront_design_engine/phase5/task4_browser_qa/tenant_negatives.json
-docs/qa_evidence/storefront_design_engine/phase5/task4_browser_qa/shots/  (18 PNGs — 6 per viewport)
+docs/qa_evidence/storefront_design_engine/phase5/task4_browser_qa/shots/  (18 viewport PNGs + 2 media-context smoke PNGs)
 ```
 
-The 18 committed screenshots (6 per viewport × 3 viewports):
+The 18 viewport screenshots (6 per viewport × 3 viewports):
 `<vp>-4A-4D-section-inspector.png`, `<vp>-4A-R2-global-scope.png`,
 `<vp>-4B-background-picker.png`, `<vp>-4C-device-mobile.png`,
 `<vp>-4C-device-tablet.png`, `<vp>-R1a-media-inline.png`
-for `<vp>` ∈ {1440x900, 768x1024, 390x844}.
+for `<vp>` ∈ {1440x900, 768x1024, 390x844}. Plus the two media-context smoke
+screenshots `smoke-A-r4-media.png` and `smoke-B-legacy-media.png`.
 
 Note: `browser.log` and `runserver.log` exist locally under `task4_browser_qa/`
 but are **not committed** (matched by the repo's `*.log` gitignore rule) — they
@@ -217,6 +232,7 @@ are intentionally not part of the branch and are not claimed as evidence here.
 | R1a R4-native media | `Task4AR4NativeMedia*` inspector/htmx tests failed (target=_blank link; full-page-only form) | inspector + htmx + tenant tests **OK** |
 | R1a htmx binding | `Task4AInspectorHtmxProcessedTests` failed (`htmx.process` absent) | **OK** |
 | R2 per-group global scope | `Task4R2GlobalGroupScopeLabelTests` failed (only one panel chip) | **Ran 3, OK** |
+| Media context boundary (final fix) | `Task4MediaContextBoundaryTests` failed — a legacy full-page htmx toggle wrongly produced the R4-only `hx-target` (R4 context inferred from `HX-Request` alone) | **Ran 5, OK** — legacy htmx toggle stays legacy; only the explicit `HX-R4-Inline` marker preserves inline context |
 
 The original four repairs (4A/4B/4C/4D) RED→GREEN evidence from the initial
 implementation remains valid; the remediation only broadened 4A (per-group) and
@@ -228,8 +244,9 @@ Focused classes across `test_r4_inspector`, `test_r4_mutation_api`,
 `test_r4_foundation`, `test_r4_settings_schema` (4A scope, 4A exclusivity, R2
 group scope, 4B background inspector/js/mutation/tenant/single-authority,
 R1a R4-native media inspector/htmx/tenant/no-duplicate, R1a htmx-process,
-4C device, 4D selection sync, background capability projection):
-**Ran 57 tests … OK.**
+media-context boundary (legacy vs R4-inline), 4C device, 4D selection sync,
+background capability projection):
+**Ran 64 tests … OK.**
 
 Focused media/background subset (incl. all newly added R4-native media tests):
 **Ran 34 tests … OK.**
@@ -241,11 +258,11 @@ python manage.py test \
   apps.storefront_builder.tests.test_r4_inspector \
   apps.storefront_builder.tests.test_r4_appearance_overrides \
   apps.storefront_builder.tests.test_r4_foundation -v 2
-=> Ran 137 tests … OK
+=> Ran 138 tests … OK
 ```
 
 Combined with `test_r4_mutation_api` + `test_r4_settings_schema`:
-**Ran 286 tests … OK.**
+**Ran 292 tests … OK.**
 
 ## 9. Static / Django Gates
 
@@ -283,10 +300,24 @@ Per-viewport confirmation (RTL primary — `document dir = rtl` at all three):
 | Global Design / Section Inspector exclusivity (`globalDesignClosedWhenSectionOpen`) | ✅ | ✅ | ✅ |
 | RTL | ✅ | ✅ | ✅ |
 
+**Media-context smoke (final review fix).** Both media workflows verified live
+in the same browser infra:
+
+- **A — R4 inline** (`shots/smoke-A-r4-media.png`): open media → add (inline
+  form) → cancel back to inline list → toggle (stays inline) → Edit again
+  (inline form). Result: `addFormInline: true`, `toggledInline: true`,
+  `editInline: true`.
+- **B — legacy full page** (`shots/smoke-B-legacy-media.png`): open the
+  full-page media list → htmx toggle → click Edit. Result:
+  `legacyHasNoR4Target1: true`, `legacyHasNoR4TargetAfterToggle: true` (the
+  exact regression — after an htmx toggle the list stays legacy, no R4 target
+  leaks), `editNavigatedFullPage: true` (Edit navigates to the full-page form).
+
 Evidence: `docs/qa_evidence/storefront_design_engine/phase5/task4_browser_qa/`
-(18 screenshots under `shots/`, plus `r4-browser-result.json`,
-`db-restore-proof.json` (DB backup/restore `match: true`), `fixture.json`,
-`metrics.json`, `tenant_negatives.json`, `RECOVERY.txt`).
+(18 viewport screenshots + 2 media-context smoke screenshots under `shots/`,
+plus `r4-browser-result.json`, `db-restore-proof.json` (DB backup/restore
+`match: true`), `fixture.json`, `metrics.json`, `tenant_negatives.json`,
+`RECOVERY.txt`).
 
 ## 11. Known Issues / Deferred Scope
 
@@ -316,6 +347,7 @@ Overlay, Random Mix, final 50-template QA.
 
 ## 12. Final Verdict
 
-**TASK 4 STATUS: READY FOR INDEPENDENT REVIEW** — remediation complete.
+**TASK 4 STATUS: READY FOR INDEPENDENT REVIEW** — remediation + final
+media-context fix complete.
 
 Task 5 was **NOT** started.
