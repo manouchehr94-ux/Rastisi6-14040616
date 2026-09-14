@@ -23,6 +23,19 @@ Visible only at the mobile breakpoint (CSS).
       <strong>منو</strong>
       <button type="button" class="mobile-nav-drawer__close" @click="mobileDrawerOpen = false" aria-label="بستن منو">✕</button>
     </div>
+    {% comment %}Phase 5 Task 7 (Browse hardening, Gap #1) — the mobile search
+    entry point. On the ``legacy_default`` shell the header ``.search`` bar is
+    hidden at the mobile breakpoint, so this drawer is where a phone shopper
+    starts a search. It REUSES the ONE canonical accessible search partial
+    (same ``role="search"`` GET form, same ``catalog:product-list`` endpoint,
+    same ``q`` param, same icon/label contract) — no second search form, route
+    or backend. A UNIQUE ``field_id`` keeps its input id from colliding with the
+    header search input on the same page. It is CONTENT inside the existing
+    dialog, not a new overlay — Task-5 open/close/focus-trap/scroll-lock are
+    untouched.{% endcomment %}
+    <div class="mobile-nav-drawer__search">
+      {% include "storefront_builder/partials/global_header/_shared/search_form.html" with field_id="mobile-drawer-search-input" %}
+    </div>
     <nav class="mobile-nav-drawer__nav" aria-label="ناوبری موبایل">
       {% with mobile_menu=NAV_MOBILE|default:NAV_HEADER %}
       {% if mobile_menu %}

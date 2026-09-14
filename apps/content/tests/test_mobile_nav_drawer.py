@@ -128,3 +128,91 @@ class DrawerIsSharedBySingleOwnerAcrossHeaderShellsTests(SimpleTestCase):
         self.assertIn("mobileDrawerOpen", src)
         # And it reuses the SAME shared partial (single owner, no second copy).
         self.assertIn("partials/mobile_nav_drawer.html", src)
+
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 Task 7 (Browse hardening) — Gap #1: mobile search discoverability.
+#
+# Discovery proved that on the ``legacy_default`` header the desktop/header
+# ``.search`` bar is hidden at <=680px and the shared mobile drawer (which is
+# the mobile entry point for that shell) had NO search affordance — so a phone
+# shopper had no discoverable way to start a product search. The bounded repair
+# adds the CANONICAL shared search partial into the SAME drawer, posting to the
+# EXISTING ``catalog:product-list`` endpoint (no new route/backend/form
+# authority, no second drawer). Same source-contract test style as above.
+# ---------------------------------------------------------------------------
+
+_SHARED_SEARCH_PARTIAL = Path(
+    settings.BASE_DIR, "apps", "storefront_builder", "templates",
+    "storefront_builder", "partials", "global_header", "_shared", "search_form.html",
+)
+
+
+class MobileDrawerSearchAffordanceTests(SimpleTestCase):
+    """Task 7 Gap #1 — the shared mobile drawer must offer a discoverable,
+    accessible search that reuses the canonical search partial + endpoint."""
+
+    def setUp(self):
+        self.drawer = _DRAWER_PARTIAL.read_text(encoding="utf-8")
+
+    def test_drawer_includes_the_canonical_shared_search_partial(self):
+        # Reuse, do not re-author: the drawer must {% include %} the ONE
+        # canonical accessible search form partial, not hand-roll its own.
+        self.assertIn(
+            "storefront_builder/partials/global_header/_shared/search_form.html",
+            self.drawer,
+            "mobile drawer must reuse the canonical shared search_form partial",
+        )
+
+    def test_drawer_search_uses_a_unique_field_id(self):
+        # Prevent duplicate DOM ids with the header search input on the same
+        # page (the header search also uses the shared partial / gh-search-input).
+        self.assertIn("mobile-drawer-search-input", self.drawer)
+        # The default header field id must not be what the drawer passes.
+        self.assertNotIn('field_id="gh-search-input"', self.drawer)
+
+    def test_drawer_does_not_hand_roll_a_second_search_form(self):
+        # No bespoke search form copy inside the drawer — the q param / action /
+        # label / icon all come from the shared partial. The endpoint's {% url %}
+        # tag and the <form>'s action/name=q must NOT be authored in the drawer
+        # itself (prose mentioning the route name in a comment is fine).
+        self.assertNotIn("action=\"/products", self.drawer)
+        self.assertNotIn("{% url 'catalog:product-list' %}", self.drawer)
+        self.assertNotIn("{% url \"catalog:product-list\" %}", self.drawer)
+        self.assertNotIn('name="q"', self.drawer,
+                         "the q input lives in the shared partial, not inlined in the drawer")
+
+    def test_drawer_search_appears_before_the_navigation_list(self):
+        # UX: search sits near the top of the drawer (after the head), before
+        # the nav list, so it is the first affordance a shopper reaches.
+        search_pos = self.drawer.index("_shared/search_form.html")
+        nav_list_pos = self.drawer.index("mobile-nav-drawer__list")
+        self.assertLess(search_pos, nav_list_pos,
+                        "drawer search should render before the navigation list")
+
+    def test_drawer_search_is_inside_the_dialog_not_a_second_overlay(self):
+        # The search is CONTENT inside the existing dialog, not a new overlay:
+        # it appears after the drawer opens (#mobile-nav-drawer / role=dialog)
+        # and there is still exactly one dialog in the partial.
+        self.assertEqual(self.drawer.count('role="dialog"'), 1,
+                         "the drawer must remain a single dialog (no second overlay)")
+        dialog_pos = self.drawer.index('id="mobile-nav-drawer"')
+        search_pos = self.drawer.index("_shared/search_form.html")
+        self.assertGreater(search_pos, dialog_pos,
+                           "search must live inside the existing drawer dialog")
+
+    def test_canonical_search_partial_still_owns_the_q_param_and_endpoint(self):
+        # Defense-in-depth: prove the shared partial (the single authority the
+        # drawer now includes) resolves the catalog listing route + q input,
+        # so no new route/backend is introduced by this repair.
+        partial = _SHARED_SEARCH_PARTIAL.read_text(encoding="utf-8")
+        self.assertIn("catalog:product-list", partial)
+        self.assertIn('name="q"', partial)
+        self.assertIn('role="search"', partial)
+
+    def test_drawer_search_preserves_task5_nav_authority(self):
+        # Adding search must not remove/replace the canonical NAV authority.
+        self.assertIn("NAV_MOBILE", self.drawer)
+        self.assertIn("NAV_HEADER", self.drawer)
+        self.assertNotIn("Menu.objects", self.drawer)

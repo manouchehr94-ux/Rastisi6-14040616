@@ -138,6 +138,21 @@ html[data-sfb-button-style="soft"] .btn-primary:hover{background:var(--violet-so
   html[dir="rtl"] .mobile-nav-drawer.mobile-nav-drawer--closed{transform:translateX(105%)}
   .mobile-nav-drawer__head{display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid var(--line)}
   .mobile-nav-drawer__close{width:34px;height:34px;border-radius:9px;background:var(--violet-softer,#f3effc);font-size:16px;cursor:pointer}
+  /* Phase 5 Task 7 (Browse hardening, Gap #1) — the drawer's own scoped
+     styling for the reused canonical search form. Kept minimal and local to
+     the drawer so the shared search partial fits cleanly even on legacy
+     base.html pages that do not load storefront_builder.css. The input keeps
+     font-size:16px (iOS no-zoom) inherited from the shared partial. */
+  .mobile-nav-drawer__search{padding:14px 16px;border-bottom:1px solid var(--line)}
+  .mobile-nav-drawer__search .gh-search,
+  .mobile-nav-drawer__search form[role="search"]{
+    display:flex;align-items:center;gap:8px;width:100%;
+    background:var(--violet-softer,#f3effc);border:1.5px solid var(--line);
+    border-radius:12px;padding:0 6px 0 10px;height:44px;
+  }
+  .mobile-nav-drawer__search svg{width:18px;height:18px;color:var(--muted);flex:0 0 auto}
+  .mobile-nav-drawer__search input{flex:1;min-width:0;border:0;outline:0;background:transparent;font-size:16px;color:var(--ink)}
+  .mobile-nav-drawer__search button{flex:0 0 auto;background:var(--violet,#7c3aed);color:var(--brand-primary-fg,#fff);height:32px;padding:0 14px;border-radius:9px;font-size:13px;font-weight:700;white-space:nowrap}
   .mobile-nav-drawer__nav{padding:8px 0}
   .mobile-nav-drawer__list,.mobile-nav-drawer__sublist{list-style:none;margin:0;padding:0}
   .mobile-nav-drawer__list > li > a,.mobile-nav-drawer__heading{display:block;padding:13px 18px;font-weight:700;font-size:14px}
