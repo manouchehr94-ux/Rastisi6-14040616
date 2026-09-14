@@ -178,56 +178,10 @@ the product quick view (MODAL).{% endcomment %}
   </div>
 </nav>
 
-{% comment %}
-Phase 5 Task 5 (MDR) — accessible off-canvas mobile navigation drawer. Reuses
-the shared sfbOverlay() mechanics primitive (open/close/Escape/backdrop/
-focus-trap/focus-return/scroll-lock) and consumes the CANONICAL Menu authority
-(NAV_MOBILE, falling back to NAV_HEADER) — no second menu source, no client-side
-menu reconstruction, no hard-coded links. Visible only at the mobile breakpoint
-(CSS). The parent-scope `mobileDrawerOpen` boolean (shared with the burger for
-aria-expanded) is bridged into the overlay primitive via x-effect.
-{% endcomment %}
-<div x-data="sfbOverlay()"
-     x-effect="mobileDrawerOpen ? (overlayOpen || openOverlay()) : (overlayOpen && closeOverlay())"
-     @keydown.escape.window="if (overlayOpen) { mobileDrawerOpen = false }">
-  <div class="mobile-drawer-backdrop" x-show="overlayOpen" x-cloak x-transition.opacity
-       @click="mobileDrawerOpen = false" aria-hidden="true"></div>
-  <aside id="mobile-nav-drawer" class="mobile-nav-drawer" role="dialog" aria-modal="true"
-         aria-label="منوی موبایل" x-ref="overlayPanel" x-show="overlayOpen" x-cloak
-         x-transition:enter-start="mobile-nav-drawer--closed"
-         @keydown="onOverlayKeydown($event)" tabindex="-1">
-    <div class="mobile-nav-drawer__head">
-      <strong>منو</strong>
-      <button type="button" class="mobile-nav-drawer__close" @click="mobileDrawerOpen = false" aria-label="بستن منو">✕</button>
-    </div>
-    <nav class="mobile-nav-drawer__nav" aria-label="ناوبری موبایل">
-      {% with mobile_menu=NAV_MOBILE|default:NAV_HEADER %}
-      {% if mobile_menu %}
-      <ul class="mobile-nav-drawer__list">
-        {% for item in mobile_menu.items %}
-        <li>
-          {% if item.url %}
-          <a href="{{ item.url }}" {% if item.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.title }}</a>
-          {% else %}
-          <span class="mobile-nav-drawer__heading">{{ item.title }}</span>
-          {% endif %}
-          {% if item.children %}
-          <ul class="mobile-nav-drawer__sublist">
-            {% for child in item.children %}
-            <li><a href="{{ child.url }}" {% if child.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ child.title }}</a></li>
-            {% endfor %}
-          </ul>
-          {% endif %}
-        </li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <p class="mobile-nav-drawer__empty">منویی برای نمایش تنظیم نشده است.</p>
-      {% endif %}
-      {% endwith %}
-    </nav>
-  </aside>
-</div>
+{% comment %}Phase 5 Task 5 (MDR) — accessible off-canvas mobile navigation
+drawer, extracted into ONE shared partial so the canonical storefront shell
+(page_shell_header.html) reuses the exact same implementation.{% endcomment %}
+{% include "partials/mobile_nav_drawer.html" %}
 {% endblock %}
 
 <main>

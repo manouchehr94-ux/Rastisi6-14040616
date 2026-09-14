@@ -1,0 +1,244 @@
+{
+  "host": "rastisi-fashion-test.rastisi.localhost",
+  "base": "http://rastisi-fashion-test.rastisi.localhost:8825",
+  "started_at": "2026-09-14T09:19:54.202Z",
+  "checks": [
+    {
+      "name": "home:status:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "home:no-overflow:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl",
+        "scrollWidth": 1440,
+        "clientWidth": 1440
+      }
+    },
+    {
+      "name": "home:hero-transition-attr:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "count": 1
+      }
+    },
+    {
+      "name": "home:quickview-present:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "triggers": 52,
+        "dialogs": 52
+      }
+    },
+    {
+      "name": "home:quickview-opens:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "dialogVisible": true
+      }
+    },
+    {
+      "name": "home:quickview-escape-closes:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "stillVisible": false
+      }
+    },
+    {
+      "name": "pdp:status:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "pdp:no-overflow:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl",
+        "scrollWidth": 1440,
+        "clientWidth": 1440
+      }
+    },
+    {
+      "name": "pdp:tabs-present:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "tabs": 3,
+        "panels": 3
+      }
+    },
+    {
+      "name": "home:status:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "home:no-overflow:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl",
+        "scrollWidth": 768,
+        "clientWidth": 768
+      }
+    },
+    {
+      "name": "home:hero-transition-attr:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "count": 1
+      }
+    },
+    {
+      "name": "home:quickview-present:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "triggers": 52,
+        "dialogs": 52
+      }
+    },
+    {
+      "name": "home:quickview-opens:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "dialogVisible": true
+      }
+    },
+    {
+      "name": "home:quickview-escape-closes:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "stillVisible": false
+      }
+    },
+    {
+      "name": "pdp:status:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "pdp:no-overflow:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl",
+        "scrollWidth": 768,
+        "clientWidth": 768
+      }
+    },
+    {
+      "name": "pdp:tabs-present:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "tabs": 3,
+        "panels": 3
+      }
+    },
+    {
+      "name": "home:status:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "home:no-overflow:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl",
+        "scrollWidth": 390,
+        "clientWidth": 390
+      }
+    },
+    {
+      "name": "home:hero-transition-attr:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "count": 1
+      }
+    },
+    {
+      "name": "home:quickview-present:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "triggers": 52,
+        "dialogs": 52
+      }
+    },
+    {
+      "name": "home:quickview-opens:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "dialogVisible": true
+      }
+    },
+    {
+      "name": "home:quickview-escape-closes:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "stillVisible": false
+      }
+    },
+    {
+      "name": "mdr:burger-present:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "count": 1
+      }
+    },
+    {
+      "name": "mdr:drawer-opens:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "drawerVisible": true
+      }
+    },
+    {
+      "name": "mdr:drawer-escape-closes:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "stillVisible": false
+      }
+    },
+    {
+      "name": "pdp:status:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "pdp:no-overflow:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl",
+        "scrollWidth": 390,
+        "clientWidth": 390
+      }
+    },
+    {
+      "name": "pdp:tabs-present:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "tabs": 3,
+        "panels": 3
+      }
+    }
+  ],
+  "console_errors": [],
+  "console_error_count": 0,
+  "finished_at": "2026-09-14T09:20:04.580Z",
+  "summary": {
+    "total": 30,
+    "passed": 30,
+    "warnings": 0,
+    "failed": 0
+  }
+}

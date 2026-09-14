@@ -14,6 +14,11 @@ from django.conf import settings
 from django.test import SimpleTestCase
 
 _BASE_HTML = Path(settings.BASE_DIR, "templates", "base.html")
+_DRAWER_PARTIAL = Path(settings.BASE_DIR, "templates", "partials", "mobile_nav_drawer.html")
+_SHELL_HEADER = Path(
+    settings.BASE_DIR, "apps", "storefront_builder", "templates",
+    "storefront_builder", "partials", "page_shell_header.html",
+)
 _OVERLAY_JS = Path(settings.BASE_DIR, "apps", "core", "static", "js", "storefront_overlay.js")
 _LAYOUT_CSS = Path(settings.BASE_DIR, "apps", "core", "static", "css", "layout.css")
 
@@ -47,11 +52,15 @@ class SharedOverlayPrimitiveTests(SimpleTestCase):
 
 class MobileNavDrawerTests(SimpleTestCase):
     def setUp(self):
-        self.src = _BASE_HTML.read_text(encoding="utf-8")
+        # The drawer now lives in a shared partial included by base.html; the
+        # burger + body-scope wiring stay in base.html. Assert against both.
+        self.base = _BASE_HTML.read_text(encoding="utf-8")
+        self.drawer = _DRAWER_PARTIAL.read_text(encoding="utf-8")
+        self.src = self.base + "\n" + self.drawer
 
     def test_burger_exposes_accessible_expanded_state_and_controls_drawer(self):
-        self.assertIn("aria-expanded", self.src)
-        self.assertIn("aria-controls=\"mobile-nav-drawer\"", self.src)
+        self.assertIn("aria-expanded", self.base)
+        self.assertIn("aria-controls=\"mobile-nav-drawer\"", self.base)
 
     def test_drawer_element_exists_with_dialog_semantics(self):
         self.assertIn('id="mobile-nav-drawer"', self.src)
@@ -88,3 +97,34 @@ class MobileNavDrawerTests(SimpleTestCase):
             "inset-inline" in css or "inset-block" in css,
             "drawer should use logical CSS properties for RTL safety",
         )
+
+
+class DrawerIsSharedBySingleOwnerAcrossHeaderShellsTests(SimpleTestCase):
+    """The live public storefront overrides ``{% block header %}`` with the
+    canonical ``page_shell_header.html`` shell, so the drawer MUST render
+    there too — but as ONE shared implementation, not a second copy."""
+
+    def test_drawer_is_extracted_into_a_single_shared_partial(self):
+        self.assertTrue(_DRAWER_PARTIAL.exists(), "shared drawer partial is missing")
+        src = _DRAWER_PARTIAL.read_text(encoding="utf-8")
+        self.assertIn('id="mobile-nav-drawer"', src)
+        self.assertIn("sfbOverlay", src)
+        # Consumes the canonical menu authority, never a second source.
+        self.assertIn("NAV_MOBILE", src)
+        self.assertIn("NAV_HEADER", src)
+        self.assertNotIn("Menu.objects", src)
+
+    def test_base_html_includes_the_shared_drawer_partial(self):
+        src = _BASE_HTML.read_text(encoding="utf-8")
+        self.assertIn("partials/mobile_nav_drawer.html", src)
+        # The drawer markup is no longer inlined/duplicated in base.html.
+        self.assertNotIn('id="mobile-nav-drawer"', src)
+
+    def test_canonical_storefront_shell_wires_the_drawer(self):
+        src = _SHELL_HEADER.read_text(encoding="utf-8")
+        # The canonical shell burger opens the accessible drawer (not just the
+        # legacy desktop-nav toggle) and exposes aria-controls.
+        self.assertIn('aria-controls="mobile-nav-drawer"', src)
+        self.assertIn("mobileDrawerOpen", src)
+        # And it reuses the SAME shared partial (single owner, no second copy).
+        self.assertIn("partials/mobile_nav_drawer.html", src)
