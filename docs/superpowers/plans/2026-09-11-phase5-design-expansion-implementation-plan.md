@@ -215,15 +215,30 @@ not prescribe which).
 
 ## Task 5 — High-impact primitive expansion
 
-**Goal:** close the 67-family "NEEDS REPAIR-EXPANSION" items that block multiple downstream Showcase/PDP
-tasks:
-- **HDR Header:** **correction from the Step-13 independent review** — all 22 header variants (10
-  named + 12 via `_A8_HEADER_VARIANTS`, `global_region_registry.py:267-300`) are already wired into
-  `GLOBAL_HEADER_REGION.variants` and merchant-selectable; none are orphaned. The real remaining gap is
-  that variant *selection* is still a legacy `header_variant` config key, not a dedicated R4
-  `SettingsSchema` — add a schema-validated R4 field for header-variant selection (following the same
-  pattern as the existing `header_config` extra-blocks schema, `layout_service.py:113`), do not touch
-  the variant registry itself.
+**APPROVED FAST-TRACK OVERRIDE (Product Owner / Architect, supersedes the HDR
+sub-item below).** Task 5 is an actual-gaps-only fast track. Approved final
+classifications and order: (1) STRANS — small repair; (2) PDT — clean a11y UI
+rewrite over existing data; (3) MDR — new presentation primitive reusing the
+canonical `Menu`/`NAV_MOBILE` authority + a shared overlay-mechanics primitive;
+(4) MODAL — new presentation primitive reusing `product_card_service` + `cart:add`
++ the same shared overlay; (5) PDTX — merchant-editable PDP trust/delivery,
+GATED on proving an existing Draft-aware canonical owner (do NOT depend on the
+Home `trust_features` section instance; do NOT create a new model — BLOCK if no
+suitable Draft-aware owner exists); (6) HDR — **reuse the canonical
+implementation AS-IS; verification only. DO NOT create a new Header
+`SettingsSchema` authority.** Zero DB migrations expected. See
+`docs/qa_evidence/storefront_design_engine/phase5/task5_implementation_report.md`.
+
+- **HDR Header — REUSE AS-IS (override):** all 22 header variants (10 named + 12
+  via `_A8_HEADER_VARIANTS`) are already registered in `GLOBAL_HEADER_REGION.variants`
+  and merchant-selectable through the canonical R4 chain (R4 Global Design
+  `header.update` → `layout_service.validate_header_config` → Draft
+  `header_config` → `appearance_authority_service.apply_header_variant` →
+  manifest/render). **The earlier "add a new R4 `SettingsSchema` header-variant
+  field" recommendation is OVERRIDDEN and must NOT be implemented** — it would
+  create a second header settings authority. HDR is a verification task: prove
+  the canonical chain works; change production code only if a real defect is
+  proven, repaired inside the existing chain.
 - **MDR Mobile Navigation Drawer:** build a real off-canvas primary-nav drawer (distinct from the
   already-built Bottom Nav, family #7) — genuinely missing, no existing markup to repair.
 - **PDT Product Tabs/Accordion:** make `product_description`'s content (description/specs/reviews)
