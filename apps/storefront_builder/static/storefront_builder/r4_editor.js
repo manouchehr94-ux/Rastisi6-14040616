@@ -1736,4 +1736,217 @@ window.RastiSiR4 = {
     }
   }
 
+  // ---- P5-W3 — Design Lab / Random Mix.
+  // Transient experimentation surface. The merchant explores DNA combinations
+  // that are computed SERVER-SIDE (design_lab_service via the /design-lab/
+  // endpoint) and previewed in the SAME #r4PreviewFrame iframe through the
+  // EXISTING storefront_preview ?design_lab=<token> route. Nothing is saved
+  // until an explicit Apply, which enqueues the ONE canonical
+  // design_lab.apply_candidate mutation through the SAME R4.enqueueMutation
+  // queue as every other edit. The client holds only the opaque candidate
+  // token + the transient locked-family set — never a component key, seed,
+  // manifest, or any authority (localStorage is never used).
+  (function initDesignLab() {
+    if (!shell) return;
+    var DL = {
+      token: null,             // opaque candidate token (server-issued)
+      locked: [],              // transient locked family keys
+      draftId: Number(shell.dataset.r4DraftId) || null,
+      hasCandidate: false,
+    };
+
+    function panel() { return document.querySelector('[data-r4-design-lab-panel]'); }
+
+    function lockedFamiliesFromDom() {
+      var p = panel();
+      if (!p) return [];
+      return Array.prototype.slice
+        .call(p.querySelectorAll('[data-r4-design-lab-family-row]'))
+        .filter(function (row) {
+          var btn = row.querySelector('[data-r4-design-lab-lock]');
+          return btn && btn.getAttribute('aria-pressed') === 'true';
+        })
+        .map(function (row) { return row.getAttribute('data-r4-design-lab-family'); });
+    }
+
+    function setState(text) {
+      var el = panel() && panel().querySelector('[data-r4-design-lab-state]');
+      if (el) el.textContent = text;
+    }
+
+    function setApplyEnabled(enabled) {
+      var btn = panel() && panel().querySelector('[data-r4-design-lab-apply]');
+      if (btn) btn.disabled = !enabled;
+    }
+
+    // Preview the current candidate token in the EXISTING preview iframe.
+    function previewCandidate() {
+      if (!previewFrame) return;
+      var pageType = shell.dataset.r4PageType || 'home';
+      var url = new URL(previewFrame.src, window.location.href);
+      url.searchParams.set('page', pageType);
+      if (DL.token) url.searchParams.set('design_lab', DL.token);
+      else url.searchParams.delete('design_lab');
+      previewFrame.src = url.pathname + url.search;
+    }
+
+    function renderCompare(diffs) {
+      var p = panel();
+      if (!p) return;
+      var box = p.querySelector('[data-r4-design-lab-compare-output]');
+      var list = p.querySelector('[data-r4-design-lab-compare-list]');
+      if (!box || !list) return;
+      list.innerHTML = '';
+      if (!diffs || !diffs.length) {
+        var li = document.createElement('li');
+        li.textContent = 'تفاوتی با حالتِ پایه وجود ندارد.';
+        list.appendChild(li);
+      } else {
+        diffs.forEach(function (d) {
+          var li = document.createElement('li');
+          // Merchant-facing labels only (never raw keys).
+          li.textContent = d.family_label + '： ' + (d.base_label || '—') + ' ← ' + (d.candidate_label || '—');
+          list.appendChild(li);
+        });
+      }
+      box.hidden = false;
+    }
+
+    // Reflect the server's authoritative current-selection labels after an op.
+    function refreshFamilyCurrentLabels(diffs) {
+      var p = panel();
+      if (!p || !diffs) return;
+      diffs.forEach(function (d) {
+        var row = p.querySelector('[data-r4-design-lab-family-row][data-r4-design-lab-family="' + d.family + '"]');
+        if (row) {
+          var cur = row.querySelector('[data-r4-design-lab-current]');
+          if (cur && d.candidate_label) cur.textContent = d.candidate_label;
+        }
+      });
+    }
+
+    function callDesignLab(action, extra) {
+      var p = panel();
+      if (!p) return Promise.resolve();
+      var url = p.getAttribute('data-r4-design-lab-url');
+      var body = {
+        action: action,
+        candidate_token: DL.token,
+        locked_families: lockedFamiliesFromDom(),
+      };
+      if (extra) Object.keys(extra).forEach(function (k) { body[k] = extra[k]; });
+      setState('در حال محاسبه...');
+      return fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+        body: JSON.stringify(body),
+      })
+        .then(function (r) { return r.json().then(function (b) { return { status: r.status, body: b }; }); })
+        .then(function (result) {
+          if (result.status === 200 && result.body && result.body.ok) {
+            DL.token = result.body.token;
+            DL.draftId = result.body.draft_id || DL.draftId;
+            DL.hasCandidate = true;
+            renderCompare(result.body.diffs);
+            refreshFamilyCurrentLabels(result.body.diffs);
+            previewCandidate();
+            setApplyEnabled(true);
+            setState('این فقط پیش‌نمایش است — برای ذخیره «اعمال تغییرات» را بزنید');
+            return result.body;
+          }
+          setState('انجام نشد؛ دوباره تلاش کنید');
+          return result.body;
+        })
+        .catch(function () { setState('خطا در ارتباط'); });
+    }
+
+    // Delegated click handler on the shell (survives panel innerHTML refreshes).
+    shell.addEventListener('click', function (evt) {
+      if (evt.target.closest('[data-r4-design-lab-random-mix]')) {
+        callDesignLab('random_mix');
+        return;
+      }
+      if (evt.target.closest('[data-r4-design-lab-randomize-one]')) {
+        var row = evt.target.closest('[data-r4-design-lab-family-row]');
+        if (row) callDesignLab('randomize_one', { family: row.getAttribute('data-r4-design-lab-family') });
+        return;
+      }
+      var lockBtn = evt.target.closest('[data-r4-design-lab-lock]');
+      if (lockBtn) {
+        var pressed = lockBtn.getAttribute('aria-pressed') === 'true';
+        lockBtn.setAttribute('aria-pressed', pressed ? 'false' : 'true');
+        lockBtn.textContent = pressed ? '🔓' : '🔒';
+        return;
+      }
+      if (evt.target.closest('[data-r4-design-lab-compare]')) {
+        callDesignLab('compare');
+        return;
+      }
+      if (evt.target.closest('[data-r4-design-lab-return-dna]')) {
+        callDesignLab('return_to_dna');
+        return;
+      }
+      if (evt.target.closest('[data-r4-design-lab-remove-theme]')) {
+        callDesignLab('remove_theme');
+        return;
+      }
+      if (evt.target.closest('[data-r4-design-lab-reset]')) {
+        DL.token = null;
+        DL.hasCandidate = false;
+        callDesignLab('reset').then(function () {
+          // Reset returns to the real committed Draft; show that (no token).
+          DL.token = null;
+          setApplyEnabled(false);
+          previewCandidate();
+          setState('این فقط پیش‌نمایش است');
+        });
+        return;
+      }
+      if (evt.target.closest('[data-r4-design-lab-apply]')) {
+        if (!DL.hasCandidate || !DL.token || !DL.draftId) return;
+        if (!window.confirm('ترکیبِ فعلی روی طراحیِ فروشگاه اعمال می‌شود (قابلِ بازگشت با «واگرد» است). ادامه می‌دهید؟')) return;
+        // The ONE atomic canonical mutation. The server re-validates the
+        // candidate; the client sends only the opaque intent + draft id, plus
+        // the resolved selections/theme via the /design-lab/ compare payload.
+        // To keep the client free of component keys, we ask the server to
+        // materialise the apply mutation by re-deriving it from the token.
+        callDesignLab('compare').then(function () {
+          // The apply payload is built server-side from the token by a small
+          // round-trip: fetch the mutation via a dedicated apply action.
+          applyCandidate();
+        });
+        return;
+      }
+    });
+
+    // Apply: build the canonical mutation from the current token server-side,
+    // then enqueue it through the SAME single mutation queue as every edit.
+    function applyCandidate() {
+      var p = panel();
+      if (!p || !DL.token || !DL.draftId) return;
+      var url = p.getAttribute('data-r4-design-lab-url');
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+        body: JSON.stringify({ action: 'apply_payload', candidate_token: DL.token }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (body) {
+          if (!body || !body.ok || !body.mutation) { setState('اعمال نشد'); return; }
+          R4.enqueueMutation(body.mutation).then(function (result) {
+            if (result && result.ok) {
+              DL.token = null;
+              DL.hasCandidate = false;
+              setApplyEnabled(false);
+              setState('اعمال شد ✔');
+              refreshGlobalDesignAndPreview();
+            } else {
+              setState('اعمال نشد');
+            }
+          });
+        })
+        .catch(function () { setState('خطا در اعمال'); });
+    }
+  })();
+
 })();

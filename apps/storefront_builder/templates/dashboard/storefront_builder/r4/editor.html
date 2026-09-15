@@ -254,6 +254,55 @@
         </section>
         {% endif %}
         {% comment %}
+        P5-W3 — Design Lab / Random Mix. A safe experimentation surface: explore
+        radically different storefront DNA combinations without changing the real
+        Draft until the merchant explicitly presses "اعمال تغییرات" (Apply). All
+        candidate state is TRANSIENT (server-computed, previewed in the SAME
+        iframe via ?design_lab=<token>); nothing is saved until Apply, which
+        goes through the ONE canonical design_lab.apply_candidate mutation.
+        No technical vocabulary (keys/seeds/manifests) is exposed to the merchant.
+        {% endcomment %}
+        {% if design_lab.families %}
+        <section class="r4-global-design-group r4-design-lab" data-r4-design-lab-panel
+                 data-r4-design-lab-url="{{ design_lab.endpoint_url }}">
+          <h4>آزمایشگاه طراحی <span class="r4-field-scope r4-field-scope--global" data-r4-scope="global-group">سراسری — کل فروشگاه</span></h4>
+          <p class="r4-field-sublabel">ترکیب‌های تازه‌ای از ظاهرِ فروشگاه را آزمایش کنید. تا زمانی که «اعمال تغییرات» را نزنید، این فقط یک پیش‌نمایش است و چیزی ذخیره نمی‌شود.</p>
+
+          <div class="r4-design-lab-actions">
+            <button type="button" data-r4-design-lab-random-mix>🎲 ترکیب تصادفی</button>
+            <button type="button" data-r4-design-lab-reset>ریست آزمایش</button>
+          </div>
+
+          <p class="r4-field-sublabel">اجزای قابل تغییر — می‌توانید هرکدام را قفل کنید تا در ترکیب تصادفی ثابت بماند:</p>
+          <ul class="r4-design-lab-families" data-r4-design-lab-families>
+            {% for family in design_lab.families %}
+            <li class="r4-design-lab-family-row" data-r4-design-lab-family-row data-r4-design-lab-family="{{ family.family }}">
+              <button type="button" class="r4-design-lab-lock" data-r4-design-lab-lock aria-pressed="false" aria-label="قفل کردن {{ family.label_fa }}" title="قفل کردن {{ family.label_fa }}">🔓</button>
+              <span class="r4-design-lab-family-label">{{ family.label_fa }}</span>
+              <span class="r4-design-lab-family-current" data-r4-design-lab-current>{{ family.current_label }}</span>
+              <button type="button" class="r4-design-lab-randomize-one" data-r4-design-lab-randomize-one>تغییر فقط این</button>
+            </li>
+            {% endfor %}
+          </ul>
+
+          <div class="r4-design-lab-actions">
+            <button type="button" data-r4-design-lab-compare>مقایسه با حالت پایه</button>
+            <button type="button" data-r4-design-lab-return-dna>بازگشت به DNA اصلی</button>
+            <button type="button" data-r4-design-lab-remove-theme>حذف تم مناسبتی</button>
+          </div>
+
+          <div class="r4-design-lab-compare" data-r4-design-lab-compare-output hidden>
+            <h5>تفاوت با حالت پایه</h5>
+            <ul data-r4-design-lab-compare-list></ul>
+          </div>
+
+          <div class="r4-design-lab-apply-row">
+            <span class="r4-design-lab-state" data-r4-design-lab-state>این فقط پیش‌نمایش است</span>
+            <button type="button" class="r4-design-lab-apply" data-r4-design-lab-apply disabled>اعمال تغییرات</button>
+          </div>
+        </section>
+        {% endif %}
+        {% comment %}
         P5-W2 — reversible occasion Theme controls. An advanced appearance tier:
         select No Theme / an occasion, choose intensity, or clear. Persian
         merchant-friendly labels. Dedicated data-r4-theme-* markers (not the

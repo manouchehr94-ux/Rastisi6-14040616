@@ -824,6 +824,54 @@ class DesignLabPreviewPipelineTests(DesignLabBaseTestCase):
 # ===========================================================================
 # N/O. Registry safety + 50-template invariant
 # ===========================================================================
+class DesignLabR4UITests(DesignLabBaseTestCase):
+    def test_r4_editor_renders_design_lab_controls(self):
+        resp = self.client.get(reverse("dashboard:storefront-builder-r4-editor"))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode("utf-8")
+        self.assertIn("data-r4-design-lab-panel", body)
+        self.assertIn("data-r4-design-lab-random-mix", body)
+        self.assertIn("data-r4-design-lab-apply", body)
+        self.assertIn("آزمایشگاه طراحی", body)
+        self.assertIn("ترکیب تصادفی", body)
+
+    def test_design_lab_endpoint_random_mix_returns_token_no_write(self):
+        before = _draft_persistent_fingerprint(self.draft)
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-r4-design-lab"),
+            data=json.dumps({"action": "random_mix", "locked_families": ["header"]}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()
+        self.assertIs(data["ok"], True)
+        self.assertTrue(data["token"])
+        self.assertIn("header", data["locked_families"])
+        after = _draft_persistent_fingerprint(self.draft)
+        self.assertEqual(after, before, "design-lab endpoint wrote state")
+
+    def test_design_lab_apply_payload_builds_canonical_mutation(self):
+        from apps.storefront_builder.services import design_lab_service
+
+        candidate = design_lab_service.generate_candidate(
+            self.draft,
+            randomize_families={"header"},
+            locked_families=set(),
+            seed=3,
+        )
+        token = design_lab_service.encode_candidate_token(candidate)
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-r4-design-lab"),
+            data=json.dumps({"action": "apply_payload", "candidate_token": token}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        mutation = resp.json()["mutation"]
+        self.assertEqual(mutation["type"], "design_lab.apply_candidate")
+        self.assertEqual(mutation["draft_id"], self.draft.pk)
+        self.assertIn("header", mutation["selections"])
+
+
 class DesignLabRegistrySafetyTests(DesignLabBaseTestCase):
     def test_exactly_50_ready_templates_remain(self):
         self.assertEqual(len(layout_preset_registry.list_ready_templates()), 50)
