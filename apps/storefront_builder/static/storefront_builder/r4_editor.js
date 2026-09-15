@@ -1257,6 +1257,35 @@ window.RastiSiR4 = {
     globalDesignPanel.addEventListener('click', function (evt) {
       if (evt.target.closest('[data-r4-global-design-close]')) closeGlobalDesign();
 
+      // P5-W2 — reversible occasion Theme. A Theme change carries a component
+      // selection AND a bounded intensity, plus an explicit Clear, so it needs
+      // its own branch (the generic single-scalar data-r4-global-field handler
+      // cannot express it). Both routes go through the ONE mutation boundary
+      // (R4.enqueueMutation -> apply_mutation) exactly like every other edit.
+      if (evt.target.closest('[data-r4-theme-apply]')) {
+        var occasionSelect = document.getElementById('r4ThemeOccasion');
+        var intensitySelect = document.getElementById('r4ThemeIntensity');
+        var themeDraftId = Number(shell && shell.dataset.r4DraftId);
+        if (!occasionSelect || !themeDraftId) return;
+        R4.enqueueMutation({
+          type: 'theme.apply',
+          draft_id: themeDraftId,
+          component_key: occasionSelect.value,
+          intensity: intensitySelect ? intensitySelect.value : 'balanced',
+        }).then(function (result) {
+          if (result && result.ok) refreshGlobalDesignAndPreview();
+        });
+        return;
+      }
+      if (evt.target.closest('[data-r4-theme-clear]')) {
+        var clearDraftId = Number(shell && shell.dataset.r4DraftId);
+        if (!clearDraftId) return;
+        R4.enqueueMutation({ type: 'theme.clear', draft_id: clearDraftId }).then(function (result) {
+          if (result && result.ok) refreshGlobalDesignAndPreview();
+        });
+        return;
+      }
+
       // R4 Task 7 (Batch 2) — one reset icon per appearance field, keyed
       // off the SAME ``data-r4-global-reset-field`` attribute value as the
       // field's own patch key (``appearance.reset_setting_to_baseline``'s

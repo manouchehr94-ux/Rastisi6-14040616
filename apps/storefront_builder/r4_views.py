@@ -438,6 +438,43 @@ def _build_global_design_context(draft: StorefrontLayoutVersion) -> dict:
         "footer_extra_block_type_choices": [
             (block_type, _FOOTER_EXTRA_BLOCK_TYPE_LABELS_FA[block_type]) for block_type in FOOTER_EXTRA_BLOCK_TYPES
         ],
+        # P5-W2 — occasion Theme controls. Options come from the single
+        # ``theme_catalog`` authority; the current selection/intensity are read
+        # from the draft's canonical manifest (never a second source).
+        "theme": _build_theme_design_context(draft),
+    }
+
+
+def _build_theme_design_context(draft: StorefrontLayoutVersion) -> dict:
+    """P5-W2 — the Theme panel's read projection. Occasions come ONLY from
+    ``theme_catalog``; the active occasion/intensity come from the draft's
+    canonical Store-Appearance manifest."""
+    from apps.storefront_builder import theme_catalog
+    from apps.storefront_builder.storefront_appearance.persistence import (
+        load_store_appearance_manifest,
+    )
+
+    manifest = load_store_appearance_manifest(draft)
+    current_component = manifest.selections.get("theme", "theme.none.v1")
+    current_intensity = (
+        (manifest.settings.get("theme") or {}).get(
+            "intensity", theme_catalog.DEFAULT_THEME_INTENSITY
+        )
+    )
+    return {
+        "current_component": current_component,
+        "current_intensity": current_intensity,
+        "occasions": [
+            {
+                "occasion_key": entry.occasion_key,
+                "component_key": entry.component_key,
+                "label_fa": entry.label_fa,
+                "tone": entry.tone,
+                "is_noop": entry.is_noop,
+            }
+            for entry in theme_catalog.list_theme_occasions()
+        ],
+        "intensity_choices": list(theme_catalog.THEME_INTENSITY_CHOICES),
     }
 
 

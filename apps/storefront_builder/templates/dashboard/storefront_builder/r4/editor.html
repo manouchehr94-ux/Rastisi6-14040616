@@ -12,6 +12,7 @@
 {% block content %}
 <div class="r4-builder" data-r4-shell="true" data-r4-inspector-open="false"
      data-r4-sidebar-expanded="false" data-r4-structure-open="false" data-edit-revision="{{ r4_edit_revision }}"
+     data-r4-draft-id="{{ draft.pk }}"
      data-r4-page-type="{{ page_type }}">
   <header class="r4-topbar">
     <button type="button" id="r4SidebarToggle" class="r4-icon-btn"
@@ -250,6 +251,39 @@
             {% endfor %}
           </select>
           <button type="button" id="r4SwitchTemplateButton">تعویضِ قالب (حفظِ محتوا)</button>
+        </section>
+        {% endif %}
+        {% comment %}
+        P5-W2 — reversible occasion Theme controls. An advanced appearance tier:
+        select No Theme / an occasion, choose intensity, or clear. Persian
+        merchant-friendly labels. Dedicated data-r4-theme-* markers (not the
+        generic data-r4-global-field) because a Theme change carries BOTH a
+        component selection AND a bounded intensity, plus an explicit Clear —
+        the mutations are theme.apply / theme.clear (canonical, reversible).
+        {% endcomment %}
+        {% if global_design.theme %}
+        <section class="r4-global-design-group r4-theme-controls" data-r4-theme-panel>
+          <h4>تم مناسبتی <span class="r4-field-scope r4-field-scope--global" data-r4-scope="global-group">سراسری — کل فروشگاه</span></h4>
+          <p class="r4-field-sublabel">یک تمِ مناسبتی روی ظاهرِ فعلیِ فروشگاه اعمال می‌شود؛ با «حذف تم» همه‌چیز دقیقاً به حالتِ قبل بازمی‌گردد.</p>
+
+          <label class="r4-field-sublabel" for="r4ThemeOccasion">مناسبت</label>
+          <select id="r4ThemeOccasion" class="r4-control" data-r4-theme-occasion>
+            {% for occasion in global_design.theme.occasions %}
+            <option value="{{ occasion.component_key }}" data-occasion-tone="{{ occasion.tone }}" {% if occasion.component_key == global_design.theme.current_component %}selected{% endif %}>{{ occasion.label_fa }}</option>
+            {% endfor %}
+          </select>
+
+          <label class="r4-field-sublabel" for="r4ThemeIntensity">شدت</label>
+          <select id="r4ThemeIntensity" class="r4-control" data-r4-theme-intensity>
+            {% for value in global_design.theme.intensity_choices %}
+            <option value="{{ value }}" {% if value == global_design.theme.current_intensity %}selected{% endif %}>{% if value == "subtle" %}ملایم{% elif value == "balanced" %}متعادل{% else %}پررنگ{% endif %}</option>
+            {% endfor %}
+          </select>
+
+          <div class="r4-theme-actions">
+            <button type="button" id="r4ApplyThemeButton" data-r4-theme-apply>اعمال تم</button>
+            <button type="button" id="r4ClearThemeButton" data-r4-theme-clear>حذف تم (بازگشت به حالت قبل)</button>
+          </div>
         </section>
         {% endif %}
         <section class="r4-global-design-group" data-r4-global-mutation="appearance.update">
