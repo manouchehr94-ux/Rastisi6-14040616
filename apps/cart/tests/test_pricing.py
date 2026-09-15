@@ -350,3 +350,175 @@ class PricingTaxClassIntegrationTests(TestCase):
         after_coupon = totals["items_total"] - totals["coupon_discount"]
         expected_tax = (after_coupon * Decimal("9") / Decimal("100")).quantize(Decimal("1"))
         self.assertEqual(totals["tax"], expected_tax)
+
+
+
+class FreeShippingGoalTests(TestCase):
+    """P5-W1 — the Free-Shipping Goal presentation state is computed once,
+    canonically, inside ``cart_totals`` (pricing authority). All threshold /
+    remaining / progress / shippability math lives here — never in a view,
+    render_service, template, CSS, or JS. Uses the ``akhlaghi`` store whose
+    ``free_shipping_threshold`` default is 500,000."""
+
+    def setUp(self):
+        self.store = _akhlaghi()
+        self.vendor = Vendor.objects.create(store=self.store, name="فروشگاه", slug="shop-fsg")
+        self.category = Category.objects.create(store=self.store, name="پوشاک", slug="clothing-fsg")
+        self.cart = Cart.objects.create(session_key="guest-fsg")
+        # Deterministic threshold for the arithmetic assertions below.
+        shop = ShopSettings.load(store=self.store)
+        shop.free_shipping_threshold = Decimal("500000")
+        shop.save(update_fields=["free_shipping_threshold"])
+
+    def _add_item(self, price, *, quantity=1, sku="SKU-FSG", requires_shipping=True):
+        product = Product.objects.create(
+            store=self.store, vendor=self.vendor, category=self.category, name="کالای نمونه",
+            slug=f"{sku}-slug", sku=sku, price=Decimal(price), requires_shipping=requires_shipping,
+        )
+        return CartItem.objects.create(
+            cart=self.cart, product=product, quantity=quantity, unit_price=product.final_price
+        )
+
+    # ---- 1. below threshold (physical) ----
+    def test_physical_below_threshold(self):
+        self._add_item(price=200_000)  # items_total 200,000 < 500,000
+        t = cart_totals(self.cart, store=self.store)
+        self.assertFalse(t["free_shipping_by_threshold"])
+        self.assertEqual(t["free_shipping_threshold"], Decimal("500000"))
+        self.assertEqual(t["free_shipping_goal_remaining"], Decimal("300000"))
+        self.assertEqual(t["free_shipping_goal_progress_percent"], 40)
+        self.assertTrue(0 <= t["free_shipping_goal_progress_percent"] <= 100)
+        self.assertTrue(t["free_shipping_goal_applicable"])
+
+    # ---- 2. exactly at threshold ----
+    def test_exactly_at_threshold(self):
+        self._add_item(price=500_000)
+        t = cart_totals(self.cart, store=self.store)
+        self.assertTrue(t["free_shipping_by_threshold"])
+        self.assertEqual(t["free_shipping_goal_remaining"], Decimal("0"))
+        self.assertEqual(t["free_shipping_goal_progress_percent"], 100)
+
+    # ---- 3. above threshold ----
+    def test_above_threshold_progress_clamped(self):
+        self._add_item(price=800_000)
+        t = cart_totals(self.cart, store=self.store)
+        self.assertTrue(t["free_shipping_by_threshold"])
+        self.assertEqual(t["free_shipping_goal_remaining"], Decimal("0"))
+        self.assertEqual(t["free_shipping_goal_progress_percent"], 100)
+
+    # ---- 4. FREE_SHIP coupon while below threshold ----
+    def test_free_ship_coupon_below_threshold_not_reported_as_threshold(self):
+        self._add_item(price=100_000)  # below 500,000
+        coupon = Coupon.objects.create(
+            store=self.store, code="FREESHIP-FSG", type=Coupon.Type.FREE_SHIP, value=0
+        )
+        t = cart_totals(self.cart, store=self.store, coupon=coupon)
+        self.assertTrue(t["free_shipping"])
+        self.assertTrue(t["free_shipping_by_coupon"])
+        self.assertFalse(t["free_shipping_by_threshold"])  # must NOT claim threshold reached
+
+    # ---- 5. threshold reached without coupon ----
+    def test_threshold_reached_without_coupon(self):
+        self._add_item(price=600_000)
+        t = cart_totals(self.cart, store=self.store)
+        self.assertTrue(t["free_shipping_by_threshold"])
+        self.assertFalse(t["free_shipping_by_coupon"])
+
+    # ---- 6. empty cart ----
+    def test_empty_cart_goal_is_safe(self):
+        t = cart_totals(self.cart, store=self.store)
+        self.assertEqual(t["items_total"], Decimal("0"))
+        self.assertEqual(t["free_shipping_goal_remaining"], Decimal("500000"))
+        self.assertEqual(t["free_shipping_goal_progress_percent"], 0)
+        self.assertTrue(0 <= t["free_shipping_goal_progress_percent"] <= 100)
+        # An empty cart has no shippable item → the goal is not applicable.
+        self.assertFalse(t["free_shipping_goal_applicable"])
+
+    # ---- 8. arbitrarily high subtotal → progress clamped ----
+    def test_progress_never_exceeds_100(self):
+        self._add_item(price=50_000_000)
+        t = cart_totals(self.cart, store=self.store)
+        self.assertEqual(t["free_shipping_goal_progress_percent"], 100)
+        self.assertTrue(t["free_shipping_goal_progress_percent"] <= 100)
+
+    # ---- 9. all-digital / non-shippable cart ----
+    def test_all_digital_cart_goal_not_applicable(self):
+        self._add_item(price=200_000, sku="DIGI-1", requires_shipping=False)
+        self._add_item(price=150_000, sku="DIGI-2", requires_shipping=False)
+        t = cart_totals(self.cart, store=self.store)
+        self.assertFalse(t["free_shipping_goal_applicable"])
+
+    # ---- 10. mixed cart (one physical + one digital) ----
+    def test_mixed_cart_goal_applicable(self):
+        self._add_item(price=200_000, sku="PHYS-1", requires_shipping=True)
+        self._add_item(price=150_000, sku="DIGI-3", requires_shipping=False)
+        t = cart_totals(self.cart, store=self.store)
+        self.assertTrue(t["free_shipping_goal_applicable"])
+
+    # ---- 11. physical-only cart ----
+    def test_physical_only_cart_goal_applicable(self):
+        self._add_item(price=200_000, sku="PHYS-2", requires_shipping=True)
+        t = cart_totals(self.cart, store=self.store)
+        self.assertTrue(t["free_shipping_goal_applicable"])
+
+    # ---- 12. existing values remain unchanged (regression truth) ----
+    def test_existing_totals_unchanged_when_goal_added(self):
+        self._add_item(price=100_000, quantity=2)  # items_total 200,000
+        t = cart_totals(self.cart, store=self.store)
+        # Existing canonical outputs must be byte-identical to pre-W1 behavior.
+        self.assertEqual(t["items_total"], Decimal("200000"))
+        self.assertEqual(t["product_discount"], Decimal("0"))
+        self.assertEqual(t["coupon_discount"], Decimal("0"))
+        self.assertEqual(t["shipping_cost"], Decimal("0"))  # no shipping method passed
+        self.assertIn("tax", t)
+        self.assertIn("shipping_tax", t)
+        self.assertIn("grand_total", t)
+        self.assertFalse(t["free_shipping"])  # below threshold, no coupon
+        self.assertFalse(t["coupon_applied"])
+
+
+class FreeShippingGoalTwoStoreIsolationTests(TestCase):
+    """P5-W1 — the goal threshold/remaining/progress are Store-scoped: two real
+    Stores with different ``free_shipping_threshold`` yield different goal
+    results, with no cross-Store leakage (real two-Store architecture, not a
+    mocked ``ShopSettings.load``)."""
+
+    def setUp(self):
+        self.store_a = Store.objects.create(name="FSG Store A", slug="fsg-store-a", status=Store.Status.ACTIVE)
+        self.store_b = Store.objects.create(name="FSG Store B", slug="fsg-store-b", status=Store.Status.ACTIVE)
+        shop_a = ShopSettings.provision_for(self.store_a)
+        shop_a.free_shipping_threshold = Decimal("500000")
+        shop_a.save(update_fields=["free_shipping_threshold"])
+        shop_b = ShopSettings.provision_for(self.store_b)
+        shop_b.free_shipping_threshold = Decimal("100000")
+        shop_b.save(update_fields=["free_shipping_threshold"])
+        self.vendor_a = Vendor.objects.create(store=self.store_a, name="A", slug="fsg-vendor-a")
+        self.category_a = Category.objects.create(store=self.store_a, name="A", slug="fsg-cat-a")
+        self.vendor_b = Vendor.objects.create(store=self.store_b, name="B", slug="fsg-vendor-b")
+        self.category_b = Category.objects.create(store=self.store_b, name="B", slug="fsg-cat-b")
+        self.cart_a = Cart.objects.create(session_key="fsg-a")
+        self.cart_b = Cart.objects.create(session_key="fsg-b")
+
+    def _add(self, cart, price, sku, *, store):
+        vendor = self.vendor_a if store == self.store_a else self.vendor_b
+        category = self.category_a if store == self.store_a else self.category_b
+        product = Product.objects.create(
+            store=store, vendor=vendor, category=category, name="کالا",
+            slug=f"{sku}-slug", sku=sku, price=Decimal(price), requires_shipping=True,
+        )
+        CartItem.objects.create(cart=cart, product=product, quantity=1, unit_price=product.final_price)
+
+    def test_two_stores_have_distinct_goal_state(self):
+        self._add(self.cart_a, 200_000, "FSG-A", store=self.store_a)  # below 500k
+        self._add(self.cart_b, 200_000, "FSG-B", store=self.store_b)  # above 100k
+        ta = cart_totals(self.cart_a, store=self.store_a)
+        tb = cart_totals(self.cart_b, store=self.store_b)
+        self.assertEqual(ta["free_shipping_threshold"], Decimal("500000"))
+        self.assertEqual(tb["free_shipping_threshold"], Decimal("100000"))
+        self.assertFalse(ta["free_shipping_by_threshold"])
+        self.assertTrue(tb["free_shipping_by_threshold"])
+        self.assertEqual(ta["free_shipping_goal_remaining"], Decimal("300000"))
+        self.assertEqual(tb["free_shipping_goal_remaining"], Decimal("0"))
+        self.assertNotEqual(
+            ta["free_shipping_goal_progress_percent"], tb["free_shipping_goal_progress_percent"]
+        )

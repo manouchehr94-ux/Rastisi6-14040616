@@ -1,0 +1,108 @@
+Creating test database for alias 'default'...
+EEEE.EEEEEEE.....
+======================================================================
+ERROR: test_above_threshold_progress_clamped (apps.cart.tests.test_pricing.FreeShippingGoalTests.test_above_threshold_progress_clamped)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/projects/sandbox/Rastisi6-14040616/apps/cart/tests/test_pricing.py", line 405, in test_above_threshold_progress_clamped
+    self.assertTrue(t["free_shipping_by_threshold"])
+                    ~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'free_shipping_by_threshold'
+
+======================================================================
+ERROR: test_all_digital_cart_goal_not_applicable (apps.cart.tests.test_pricing.FreeShippingGoalTests.test_all_digital_cart_goal_not_applicable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/projects/sandbox/Rastisi6-14040616/apps/cart/tests/test_pricing.py", line 449, in test_all_digital_cart_goal_not_applicable
+    self.assertFalse(t["free_shipping_goal_applicable"])
+                     ~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'free_shipping_goal_applicable'
+
+======================================================================
+ERROR: test_empty_cart_goal_is_safe (apps.cart.tests.test_pricing.FreeShippingGoalTests.test_empty_cart_goal_is_safe)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/projects/sandbox/Rastisi6-14040616/apps/cart/tests/test_pricing.py", line 431, in test_empty_cart_goal_is_safe
+    self.assertEqual(t["free_shipping_goal_remaining"], Decimal("500000"))
+                     ~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'free_shipping_goal_remaining'
+
+======================================================================
+ERROR: test_exactly_at_threshold (apps.cart.tests.test_pricing.FreeShippingGoalTests.test_exactly_at_threshold)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/projects/sandbox/Rastisi6-14040616/apps/cart/tests/test_pricing.py", line 397, in test_exactly_at_threshold
+    self.assertTrue(t["free_shipping_by_threshold"])
+                    ~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'free_shipping_by_threshold'
+
+======================================================================
+ERROR: test_free_ship_coupon_below_threshold_not_reported_as_threshold (apps.cart.tests.test_pricing.FreeShippingGoalTests.test_free_ship_coupon_below_threshold_not_reported_as_threshold)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/projects/sandbox/Rastisi6-14040616/apps/cart/tests/test_pricing.py", line 417, in test_free_ship_coupon_below_threshold_not_reported_as_threshold
+    self.assertTrue(t["free_shipping_by_coupon"])
+                    ~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'free_shipping_by_coupon'
+
+======================================================================
+ERROR: test_mixed_cart_goal_applicable (apps.cart.tests.test_pricing.FreeShippingGoalTests.test_mixed_cart_goal_applicable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/projects/sandbox/Rastisi6-14040616/apps/cart/tests/test_pricing.py", line 456, in test_mixed_cart_goal_applicable
+    self.assertTrue(t["free_shipping_goal_applicable"])
+                    ~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'free_shipping_goal_applicable'
+
+======================================================================
+ERROR: test_physical_below_threshold (apps.cart.tests.test_pricing.FreeShippingGoalTests.test_physical_below_threshold)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/projects/sandbox/Rastisi6-14040616/apps/cart/tests/test_pricing.py", line 386, in test_physical_below_threshold
+    self.assertFalse(t["free_shipping_by_threshold"])
+                     ~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'free_shipping_by_threshold'
+
+======================================================================
+ERROR: test_physical_only_cart_goal_applicable (apps.cart.tests.test_pricing.FreeShippingGoalTests.test_physical_only_cart_goal_applicable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/projects/sandbox/Rastisi6-14040616/apps/cart/tests/test_pricing.py", line 462, in test_physical_only_cart_goal_applicable
+    self.assertTrue(t["free_shipping_goal_applicable"])
+                    ~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'free_shipping_goal_applicable'
+
+======================================================================
+ERROR: test_progress_never_exceeds_100 (apps.cart.tests.test_pricing.FreeShippingGoalTests.test_progress_never_exceeds_100)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/projects/sandbox/Rastisi6-14040616/apps/cart/tests/test_pricing.py", line 441, in test_progress_never_exceeds_100
+    self.assertEqual(t["free_shipping_goal_progress_percent"], 100)
+                     ~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'free_shipping_goal_progress_percent'
+
+======================================================================
+ERROR: test_threshold_reached_without_coupon (apps.cart.tests.test_pricing.FreeShippingGoalTests.test_threshold_reached_without_coupon)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/projects/sandbox/Rastisi6-14040616/apps/cart/tests/test_pricing.py", line 424, in test_threshold_reached_without_coupon
+    self.assertTrue(t["free_shipping_by_threshold"])
+                    ~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'free_shipping_by_threshold'
+
+======================================================================
+ERROR: test_two_stores_have_distinct_goal_state (apps.cart.tests.test_pricing.FreeShippingGoalTwoStoreIsolationTests.test_two_stores_have_distinct_goal_state)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/projects/sandbox/Rastisi6-14040616/apps/cart/tests/test_pricing.py", line 516, in test_two_stores_have_distinct_goal_state
+    self.assertEqual(ta["free_shipping_threshold"], Decimal("500000"))
+                     ~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'free_shipping_threshold'
+
+----------------------------------------------------------------------
+Ran 17 tests in 0.207s
+
+FAILED (errors=11)
+Destroying test database for alias 'default'...
+Found 17 test(s).
+System check identified no issues (0 silenced).

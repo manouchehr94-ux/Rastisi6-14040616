@@ -122,8 +122,29 @@ def cart_totals(
 
     after_coupon = items_total - coupon_discount
 
-    free_by_threshold = items_total >= _free_shipping_threshold(store)
+    # ارسالِ رایگان — همان محاسبه‌ی قبلی، فقط آستانه یک‌بار خوانده می‌شود و
+    # بازاستفاده می‌شود (P5-W1: منبعِ آستانه دوباره در view/template خوانده
+    # نمی‌شود).
+    free_shipping_threshold = _free_shipping_threshold(store)
+    free_by_threshold = items_total >= free_shipping_threshold
     free_shipping = free_by_threshold or free_shipping_by_coupon
+
+    # P5-W1 — «هدفِ ارسالِ رایگان»: مقادیرِ آماده‌یِ نمایش که *همین‌جا* (منبعِ
+    # کانونیِ قیمت‌گذاری) محاسبه می‌شوند؛ view/render_service/template/JS هیچ
+    # محاسبه‌ای انجام نمی‌دهند. مبلغِ واجدِ مقایسه همان ``items_total`` کانونی
+    # است. «باقی‌مانده» هرگز منفی نمی‌شود و «درصدِ پیشرفت» در بازه‌ی [۰،۱۰۰]
+    # مقیّد می‌شود. «applicable» فقط وقتی درست است که سبد حداقل یک کالای
+    # فیزیکیِ نیازمندِ ارسال داشته باشد — از همان مرجعِ کانونیِ
+    # ``shipping_service.cart_requires_shipping(items)`` (بدونِ قاعده‌ی
+    # جداگانه). سبدِ کاملاً دیجیتال هدفِ ارسالِ فیزیکی را نمایش نمی‌دهد.
+    free_shipping_goal_applicable = shipping_service.cart_requires_shipping(items)
+    free_shipping_goal_remaining = max(Decimal("0"), free_shipping_threshold - items_total)
+    if free_shipping_threshold <= 0 or items_total <= 0:
+        free_shipping_goal_progress_percent = 0
+    else:
+        free_shipping_goal_progress_percent = min(
+            100, int((items_total * 100 / free_shipping_threshold).to_integral_value(rounding=ROUND_HALF_UP))
+        )
 
     shipping_zone = None
     shipping_rate_rule = None
@@ -181,6 +202,13 @@ def cart_totals(
         "shipping_zone": shipping_zone,
         "shipping_rate_rule": shipping_rate_rule,
         "free_shipping": free_shipping,
+        # P5-W1 — presentation-ready Free-Shipping Goal state (all computed here).
+        "free_shipping_threshold": free_shipping_threshold,
+        "free_shipping_by_threshold": free_by_threshold,
+        "free_shipping_by_coupon": free_shipping_by_coupon,
+        "free_shipping_goal_applicable": free_shipping_goal_applicable,
+        "free_shipping_goal_remaining": free_shipping_goal_remaining,
+        "free_shipping_goal_progress_percent": free_shipping_goal_progress_percent,
         "tax": tax,
         "shipping_tax": shipping_tax,
         "tax_lines": tax_result["lines"],

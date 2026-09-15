@@ -22,6 +22,40 @@ Phase 5 — خلاصه‌ی سفارش (جمع/تخفیف/مالیات) + دکم
       {% if totals.product_discount > 0 %}
       <div class="save-note">🎁 شما در این سبد {{ totals.product_discount|toman }} صرفه‌جویی کردید!</div>
       {% endif %}
+
+      {% comment %}
+      P5-W1 — «هدفِ ارسالِ رایگان». نمایش‌محضِ مقادیرِ از پیش‌محاسبه‌شده‌یِ
+      ``totals`` (منبعِ کانونی: apps/cart/services/pricing.py::cart_totals).
+      اینجا هیچ تفریق/تقسیم/مقیّدسازی/خواندنِ ShopSettings انجام نمی‌شود.
+      - سبدِ کاملاً دیجیتال (free_shipping_goal_applicable=False): هیچ بلوکی
+        رندر نمی‌شود (هیچ وعده‌یِ ارسالِ فیزیکی).
+      - کد تخفیفِ ارسالِ رایگان زیرِ آستانه: موفقیتِ صادقانه‌یِ «با کد تخفیف»،
+        بدونِ ادعایِ رسیدن به آستانه (نوارِ آستانه پنهان می‌شود).
+      - رسیدن به آستانه: حالتِ موفقیتِ «ارسالِ رایگان فعال شد».
+      - زیرِ آستانه: پیامِ «X تومان دیگر تا ارسالِ رایگان» + نوارِ پیشرفتِ
+        سرورمحاسبه‌شده (عرض = free_shipping_goal_progress_percent).
+      {% endcomment %}
+      {% if totals.free_shipping_goal_applicable %}
+        {% if totals.free_shipping_by_coupon and not totals.free_shipping_by_threshold %}
+        <div class="fsg fsg--success" role="status">
+          <span class="fsg-ic" aria-hidden="true">🎉</span>
+          <span class="fsg-msg">ارسال رایگان با کد تخفیف فعال شد</span>
+        </div>
+        {% elif totals.free_shipping_by_threshold %}
+        <div class="fsg fsg--success" role="status">
+          <span class="fsg-ic" aria-hidden="true">🎉</span>
+          <span class="fsg-msg">ارسال رایگان فعال شد</span>
+        </div>
+        {% else %}
+        <div class="fsg fsg--goal" role="status">
+          <div class="fsg-msg">{{ totals.free_shipping_goal_remaining|toman }} دیگر تا ارسال رایگان</div>
+          <div class="fsg-track" aria-hidden="true">
+            <i class="fsg-fill" style="width:{{ totals.free_shipping_goal_progress_percent }}%"></i>
+          </div>
+        </div>
+        {% endif %}
+      {% endif %}
+
       <a href="{% url 'orders:checkout-step1' %}" class="btn btn-primary btn-block" style="margin-top:14px;height:52px;display:flex">ادامه و تسویه‌حساب</a>
       <div class="trust">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>

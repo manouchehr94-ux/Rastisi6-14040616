@@ -1,0 +1,15 @@
+P5-W1 ARCHITECTURE DUPLICATION GATE — ALL CLEAR
+
+- NO second pricing function: extended existing cart_totals() only.
+- NO second threshold source: _free_shipping_threshold(store) read ONCE and
+  reused; no ShopSettings.load / threshold read in view/render_service/template.
+- NO manual Product.requires_shipping rule: uses canonical
+  shipping_service.cart_requires_shipping(items) (only requires_shipping ref).
+- NO shipping model / schema / checkout redesign.
+- NO JS pricing math: template has no <script>, no widthratio, no arithmetic;
+  progress width uses the server-computed free_shipping_goal_progress_percent.
+- NO render_service pricing math: _cart_summary_context unchanged (passes totals).
+- NO Cross-Sell / recommendation implementation.
+- NO W2 Theme code.
+- NO unrelated template polish (only the .fsg goal block added).
+ONE CONCEPT = ONE CANONICAL OWNER holds.

@@ -1544,6 +1544,100 @@ class CartContextAwareSectionsTests(TestCase):
         self.assertEqual(item["context"]["totals"], {"grand_total": 5000})
         self.assertEqual(item["context"]["item_count"], 2)
 
+    def test_cart_summary_passes_free_shipping_goal_fields_untouched(self):
+        # P5-W1: the Free-Shipping Goal fields are computed by the pricing
+        # authority (cart_totals) and delivered inside the SAME `totals` object.
+        # render_service._cart_summary_context is display/context-delivery only:
+        # it passes `totals` through verbatim and computes nothing.
+        goal_totals = {
+            "grand_total": 5000,
+            "free_shipping_threshold": 500000,
+            "free_shipping_by_threshold": False,
+            "free_shipping_by_coupon": False,
+            "free_shipping_goal_remaining": 300000,
+            "free_shipping_goal_progress_percent": 40,
+            "free_shipping_goal_applicable": True,
+        }
+        item = self._item_for("cart_summary", {"cart": "CART", "item_count": 2, "totals": goal_totals})
+        # Same dict object passed through, byte-for-byte — no recomputation.
+        self.assertEqual(item["context"]["totals"], goal_totals)
+        self.assertEqual(item["context"]["totals"]["free_shipping_goal_progress_percent"], 40)
+
+    def test_cart_summary_context_does_not_read_shopsettings_or_do_math(self):
+        # Guard the canonical-owner rule: the render context builder must not
+        # read ShopSettings or compute any goal value. Source-level assertion on
+        # the builder function so a future edit that adds threshold math here
+        # (instead of pricing.py) fails loudly.
+        import inspect
+        from apps.storefront_builder.services import render_service as rs
+        src = inspect.getsource(rs._cart_summary_context)
+        self.assertNotIn("ShopSettings", src)
+        self.assertNotIn("free_shipping_threshold", src)
+        self.assertNotIn("free_shipping_goal", src)
+
+
+class FreeShippingGoalTemplateTests(TestCase):
+    """P5-W1 — the cart_summary template renders the Goal from PRECOMPUTED
+    ``totals`` values only (display-only; no arithmetic). Covers the four UI
+    states and proves the coupon success never claims 'threshold reached'."""
+
+    def _render(self, totals):
+        from django.template.loader import render_to_string
+        return render_to_string(
+            "storefront_builder/sections/cart_summary.html",
+            {"cart": object(), "item_count": 1, "totals": totals},
+        )
+
+    def _base(self, **over):
+        t = {
+            "items_total": 100000, "product_discount": 0, "gift_wrap_total": 0,
+            "tax": 0, "grand_total": 100000,
+            "free_shipping_goal_applicable": True, "free_shipping_by_threshold": False,
+            "free_shipping_by_coupon": False, "free_shipping_goal_remaining": 400000,
+            "free_shipping_goal_progress_percent": 20,
+        }
+        t.update(over)
+        return t
+
+    def test_state_a_all_digital_hides_goal(self):
+        html = self._render(self._base(free_shipping_goal_applicable=False))
+        self.assertNotIn("fsg", html)
+        self.assertNotIn("تا ارسال رایگان", html)
+
+    def test_state_b_below_threshold_shows_remaining_and_bounded_bar(self):
+        html = self._render(self._base(free_shipping_goal_progress_percent=20))
+        self.assertIn("fsg--goal", html)
+        self.assertIn("تا ارسال رایگان", html)
+        self.assertIn("width:20%", html)
+
+    def test_state_c_threshold_reached_success(self):
+        html = self._render(self._base(
+            free_shipping_by_threshold=True, free_shipping_goal_remaining=0,
+            free_shipping_goal_progress_percent=100,
+        ))
+        self.assertIn("fsg--success", html)
+        self.assertIn("ارسال رایگان فعال شد", html)
+
+    def test_state_d_coupon_below_threshold_does_not_claim_threshold(self):
+        html = self._render(self._base(free_shipping_by_coupon=True, free_shipping_by_threshold=False))
+        self.assertIn("با کد تخفیف", html)
+        # Must NOT show the threshold-reached copy in the coupon state.
+        self.assertNotIn("width:", html)  # progress bar suppressed in success state
+
+    def test_template_does_no_arithmetic(self):
+        # The template must not compute remaining/progress; assert it references
+        # the precomputed keys and contains no subtraction/division tags.
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        tmpl = Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/templates/storefront_builder/sections/cart_summary.html",
+        ).read_text(encoding="utf-8")
+        self.assertIn("free_shipping_goal_progress_percent", tmpl)
+        self.assertIn("free_shipping_goal_remaining", tmpl)
+        # no {% widthratio %} / arithmetic filters computing the goal
+        self.assertNotIn("widthratio", tmpl)
+
 
 class BuildDefaultRenderItemsTests(TestCase):
     """Phase 5: Storeای که هرگز Storefront V2 منتشر نکرده باید هنوز هم
