@@ -228,6 +228,11 @@ urlpatterns = [
         name="storefront-builder-r4-mutation",
     ),
     path(
+        "storefront-builder/r4/design-lab/",
+        storefront_builder_r4_views.storefront_r4_design_lab,
+        name="storefront-builder-r4-design-lab",
+    ),
+    path(
         "storefront-builder/r4/sections/<int:pk>/inspector/",
         storefront_builder_r4_views.storefront_r4_section_inspector,
         name="storefront-builder-r4-section-inspector",

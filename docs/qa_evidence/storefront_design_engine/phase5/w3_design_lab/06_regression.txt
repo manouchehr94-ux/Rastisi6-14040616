@@ -1,0 +1,47 @@
+Creating test database for alias 'default'...
+..........................................................................[2026-09-15 18:19:39,661] WARNING django.security.csrf: Forbidden (CSRF cookie not set.): /admin-portal/storefront-builder/apply-preset/
+.....................................................................................................................................................................................................................................................................................s......................................................................................................................................................................
+----------------------------------------------------------------------
+Ran 518 tests in 421.981s
+
+OK (skipped=1)
+Destroying test database for alias 'default'...
+Found 518 test(s).
+System check identified no issues (0 silenced).
+
+
+
+==========================================================================
+P5-W3 FOCUSED + REGRESSION SUMMARY (Sections 26/27)
+==========================================================================
+Runtime: Python 3.12.13, Django 5.2.17 (verified). Settings: shop_core.settings.
+
+FOCUSED W3 (02_green_focused.txt):
+  apps.storefront_builder.tests.test_w3_design_lab
+  -> Ran 37 tests: OK
+
+W2 THEME REGRESSION (Section 27 — expected baseline 58):
+  apps.storefront_builder.tests.test_w2_theme_overlay
+  -> Ran 58 tests: OK   (W3 adds no tests to this module -> remains 58 as required)
+
+TARGETED APPEARANCE / PRESET / PREVIEW / MUTATION / HISTORY REGRESSION
+(this file, single combined run):
+  test_w2_theme_overlay, test_preset_service, test_preset_candidate_preview,
+  test_r4_store_appearance_contracts, _registry, _rendering, _validation,
+  _mutations, _persistence, _compatibility, test_r4_mutation_api,
+  test_task2_live_demo_template_preview, test_task3_merchant_template_preview,
+  test_phase27_history_identity, test_u1a_preset_edit_history_characterization,
+  test_render_service, test_appearance
+  -> Ran 518 tests: OK (skipped=1 pre-existing)
+
+CANDIDATE PREVIEW REGRESSION (Section 27):
+  NonDestructiveTemplatePreviewTests (test_appearance) -> Ran 4 tests: OK
+  test_task2_live_demo_template_preview / test_task3_merchant_template_preview
+  included in the 518 above -> OK
+
+W1 REGRESSION (Section 27 — cart / pricing) (06b_w1_cart_pricing.txt):
+  apps.cart.tests.test_cart_service, test_pricing, test_cart_preview,
+  test_cart_security, test_gift_wrap
+  -> Ran 105 tests: OK
+
+No W2 failure. No W1 failure. No candidate-preview regression.

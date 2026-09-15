@@ -1,0 +1,79 @@
+{
+  "started_at": "2026-09-15T19:07:09.285Z",
+  "origin": "http://127.0.0.1:8000",
+  "builder_url": "http://127.0.0.1:8000/admin-portal/storefront-builder/r4/",
+  "viewports": {
+    "desktop": {
+      "rtl": true,
+      "design_lab_panel_present": true,
+      "horizontal_overflow": false,
+      "candidate_preview_status": 200
+    },
+    "tablet": {
+      "rtl": true,
+      "design_lab_panel_present": true,
+      "horizontal_overflow": false
+    },
+    "mobile": {
+      "rtl": true,
+      "design_lab_panel_present": true,
+      "horizontal_overflow": false
+    }
+  },
+  "scenarios": [
+    {
+      "scenario": "A_full_random_mix_changes_candidate",
+      "ok": true,
+      "detail": "changed 7 families; draft NOT yet applied"
+    },
+    {
+      "scenario": "M_candidate_preview_renders_200",
+      "ok": true,
+      "detail": "preview HTTP 200, 52616 bytes via existing storefront_preview route"
+    },
+    {
+      "scenario": "D_compare_with_base_shows_diff",
+      "ok": true,
+      "detail": "compare panel visible"
+    },
+    {
+      "scenario": "C_lock_header_never_changes",
+      "ok": true,
+      "detail": "header locked stayed \"ردیف نشریه‌ای\""
+    },
+    {
+      "scenario": "C_other_family_still_changes",
+      "ok": true,
+      "detail": "a non-locked eligible family changed"
+    },
+    {
+      "scenario": "B_randomize_one_only_selected",
+      "ok": true,
+      "detail": "changed families: footer"
+    },
+    {
+      "scenario": "E_return_to_original_dna",
+      "ok": true,
+      "detail": "candidate returned to committed base"
+    },
+    {
+      "scenario": "F_reset_candidate",
+      "ok": true,
+      "detail": "candidate discarded, back to preview state"
+    },
+    {
+      "scenario": "G_remove_theme_transient",
+      "ok": true,
+      "detail": "remove-theme candidate previewed (no write yet)"
+    },
+    {
+      "scenario": "H_explicit_apply",
+      "ok": true,
+      "detail": "apply enabled before=true; state=\"اعمال شد ✔\""
+    }
+  ],
+  "console_errors": [],
+  "failed_requests": [],
+  "overall": "PASS",
+  "finished_at": "2026-09-15T19:07:36.105Z"
+}
