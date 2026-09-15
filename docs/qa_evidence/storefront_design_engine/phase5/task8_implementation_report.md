@@ -224,3 +224,65 @@ TASK 8 TESTS: PASS
 REGRESSION: PASS
 MIGRATIONS: 0
 PR MERGED: NO
+
+
+
+---
+
+# Task 8 — Review Repair Round 2 (addendum)
+
+Re-review of PR #5 accepted IMPORTANT-1/IMPORTANT-2 (per-variant geometry, hidden behavior, all-variant evidence, SATC inside the canonical form). It left **1 IMPORTANT** (invalid no-obscuration proof) + **1 MINOR** (duplicate `.gmn` rule). Both are now fixed on the same branch. PR #5 remains **unmerged**.
+
+## IMPORTANT — no-content-obscuration proof made valid (PASS)
+
+Three defects were behind the invalid proof; all fixed:
+
+1. **The QA check was not identifying the real final content.** It looped a fixed selector list and overwrote `last` for whichever selector existed, so `.guarantee` (mid-page) could be chosen, and it only asserted `finalContent.top < satcTop` — which can pass even when the element is >1000px above the viewport. The runner (`public_task8_qa.mjs`) now:
+   - identifies the **true final meaningful content by absolute document position** (max `rect.bottom + scrollY` across meaningful leaves in ALL PDP sections, filtering hidden/zero-size/giant-wrapper nodes, tagging it `data-qa-final`);
+   - **scrolls that element** so its bottom sits ~24px above the SATC top edge (the reachable position a user gets to via the bottom reserve);
+   - asserts **bottom ≤ satcTop AND bottom ≤ innerHeight AND on-screen** (`top < innerHeight`, `bottom > 0`) — i.e. genuinely visible and clear of SATC, not merely "top above satcTop" and not scrolled entirely offscreen.
+   The check is renamed `content:final-visible-above-satc` and records the final element + geometry in the JSON.
+
+2. **The reserve was on the wrong owner.** `product_main` (`.pdp`) is the FIRST PDP section, so reserving inside `.pdp` did not protect the sections that follow (`product_description`, `product_video`, `related_products`). The reserve now lives on the **whole-PDP content container** — `catalog/product_detail.html`'s wrapper, which gained a stable `pdp-page` class and holds every PDP section. It adds **real scrollable height** via `padding-bottom` (not just `scroll-padding-bottom`, which cannot add document height).
+
+3. **The reserve was being overridden.** `base.css` `.wrap{padding:0 18px}` set `padding-bottom:0`; a `.pdp-page:has(.pdp-satc)` selector tied/lost on the cascade and computed `0px`. The rule is now `.wrap.pdp-page:has(.pdp-satc){padding-bottom:calc(var(--gmn-clearance,...) + var(--satc-height) + 16px)}` (specificity beats `.wrap`); verified computed `padding-bottom = 158px` at 390px on `five_item`. The value is derived entirely from the canonical `--gmn-clearance` + `--satc-height` — no per-template/random number.
+
+**Evidence (max-scroll-then-scroll-to-final), true final element = last related-product `.pcard` at document bottom 2182:**
+
+| Variant | viewport | final content bottom | SATC top | innerHeight | visible+clear |
+|---|---|---|---|---|---|
+| five_item | 390×844 | 673 | 697 | 844 | PASS |
+| five_item | 360×800 | 629 | 653 | 800 | PASS |
+| raised_cart | 390×844 | 637 | 661 | 844 | PASS |
+| hidden | 390×844 | 751 | 775 | 844 | PASS |
+
+The same `content:final-visible-above-satc` check is PASS for every one of the 9 presentations at both 390×844 and 360×800. Screenshots per variant are committed.
+
+## MINOR — duplicate `.gmn` rule removed
+
+`storefront_builder.css` had two identical consecutive `.gmn{...}` declarations (an artifact of the earlier edit). The duplicate is removed (now exactly one).
+
+## Reverification (round 2)
+
+- All-variant browser QA regenerated: 9/9 presentations 0 FAIL (`report_<variant>.json` + `pdp_<variant>_mobile-390/360.png`).
+- Tests: **558** OK across focused/PDP + cart + render_service + section_registry + a8 ready-template contracts + r4 store-appearance rendering (1 skipped). Focused SATC class: 25 OK.
+- `python manage.py check`: no issues. `makemigrations --check --dry-run`: No changes detected. `git diff --check`: clean.
+
+## Files changed by round 2 (same branch)
+
+- `apps/catalog/templates/catalog/product_detail.html` — `pdp-page` class on the whole-PDP content container.
+- `apps/catalog/static/css/product_detail.css` — reserve moved to `.wrap.pdp-page:has(.pdp-satc)` (real height, correct owner, wins the cascade).
+- `apps/storefront_builder/static/css/storefront_builder.css` — removed the duplicate `.gmn` rule.
+- `apps/storefront_builder/tests/test_views.py` — updated the reserve-owner assertion.
+- `tools/storefront_builder_qa/public_task8_qa.mjs` — valid, document-position-based no-obscuration proof.
+- `docs/qa_evidence/storefront_design_engine/phase5/task8_browser_qa/` — regenerated per-variant reports + screenshots.
+
+ROUND 2 — CRITICAL: 0
+IMPORTANT: 0
+MINOR: 0
+NO-CONTENT-OBSCURATION PROOF: PASS
+ALL NAV VARIANTS QA: PASS
+TASK 8 TESTS: PASS
+REGRESSION: PASS
+MIGRATIONS: 0
+PR MERGED: NO

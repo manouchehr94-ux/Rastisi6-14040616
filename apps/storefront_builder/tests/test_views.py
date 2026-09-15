@@ -2619,11 +2619,12 @@ class ProductDetailContextAwareSectionsPreviewTests(StorefrontBuilderViewsTestCa
         # bottom offset derives from the canonical bottom-nav clearance token,
         # not a hard-coded magic number.
         self.assertIn("--gmn-clearance", css)
-        # IMPORTANT-3 repair: the PDP reserves bottom space (nav clearance +
-        # SATC's own height) so the fixed SATC never permanently obscures the
-        # final in-flow content — the reserve derives from canonical geometry,
-        # not a random per-template value.
-        self.assertRegex(css, r"\.pdp\s*\{[^}]*padding-bottom:calc\(")
+        # No-obscuration repair: the WHOLE-PDP page container (not just
+        # product_main, which is the FIRST section) reserves real bottom space
+        # (nav clearance + SATC height) so the genuine final PDP content clears
+        # the fixed SATC. The reserve is on the end-of-page owner and derives
+        # from canonical geometry, not a random per-template value.
+        self.assertRegex(css, r"\.wrap\.pdp-page:has\(\.pdp-satc\)\s*\{[^}]*padding-bottom:calc\(")
         self.assertIn("--satc-height", css)
 
     def test_bottom_nav_owner_exposes_presentation_clearance_token(self):

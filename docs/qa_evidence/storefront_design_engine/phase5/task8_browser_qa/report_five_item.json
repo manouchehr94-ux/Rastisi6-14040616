@@ -3,7 +3,7 @@
   "base": "http://rastisi-fashion-test.rastisi.localhost:8817",
   "pdp": "/products/accessory-scarf-%D8%A8%D8%B1%D8%AF%DB%8C%D8%A7-4/",
   "nav_identity_expected": "five_item",
-  "started_at": "2026-09-14T21:10:29.282Z",
+  "started_at": "2026-09-15T04:40:33.693Z",
   "checks": [
     {
       "name": "pdp:status:desktop-1440",
@@ -125,15 +125,20 @@
       }
     },
     {
-      "name": "content:final-reachable-above-satc:mobile-390",
+      "name": "content:final-visible-above-satc:mobile-390",
       "status": "PASS",
       "detail": {
-        "finalContent": {
-          "sel": ".guarantee",
-          "top": -1604,
-          "bottom": -1495
+        "finalElement": {
+          "tag": "article",
+          "cls": "pcard style-standard badge-treatment-none",
+          "absBottom": 2182
         },
-        "satcTop": 697
+        "finalContent": {
+          "top": 356,
+          "bottom": 673
+        },
+        "satcTop": 697,
+        "innerHeight": 844
       }
     },
     {
@@ -245,15 +250,20 @@
       }
     },
     {
-      "name": "content:final-reachable-above-satc:mobile-360",
+      "name": "content:final-visible-above-satc:mobile-360",
       "status": "PASS",
       "detail": {
-        "finalContent": {
-          "sel": ".guarantee",
-          "top": -1668,
-          "bottom": -1539
+        "finalElement": {
+          "tag": "article",
+          "cls": "pcard style-standard badge-treatment-none",
+          "absBottom": 2173
         },
-        "satcTop": 653
+        "finalContent": {
+          "top": 326,
+          "bottom": 629
+        },
+        "satcTop": 653,
+        "innerHeight": 800
       }
     },
     {
@@ -291,12 +301,17 @@
         "satcTop": 697,
         "innerHeight": 844,
         "finalContent": {
-          "sel": ".guarantee",
-          "top": -1604,
-          "bottom": -1495
+          "top": 356,
+          "bottom": 673
         },
-        "docScrollTop": 2651,
-        "maxScroll": 2651
+        "finalTag": "article",
+        "scrollY": 1509,
+        "pageScrollHeight": 3505,
+        "finalElement": {
+          "tag": "article",
+          "cls": "pcard style-standard badge-treatment-none",
+          "absBottom": 2182
+        }
       }
     },
     {
@@ -323,17 +338,22 @@
         "satcTop": 653,
         "innerHeight": 800,
         "finalContent": {
-          "sel": ".guarantee",
-          "top": -1668,
-          "bottom": -1539
+          "top": 326,
+          "bottom": 629
         },
-        "docScrollTop": 2685,
-        "maxScroll": 2685
+        "finalTag": "article",
+        "scrollY": 1544,
+        "pageScrollHeight": 3495,
+        "finalElement": {
+          "tag": "article",
+          "cls": "pcard style-standard badge-treatment-none",
+          "absBottom": 2173
+        }
       }
     }
   ],
   "console_errors": [],
-  "finished_at": "2026-09-14T21:10:34.489Z",
+  "finished_at": "2026-09-15T04:40:38.670Z",
   "summary": {
     "pass": 33,
     "fail": 0,

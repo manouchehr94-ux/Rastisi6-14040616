@@ -164,40 +164,83 @@ for (const vp of MOBILE) {
     record(`satc:shares-single-quantity=3:${vp.name}`, qtyVal === '3' ? 'PASS' : 'FAIL', { quantity: qtyVal });
   }
 
-  // ---- NO CONTENT OBSCURATION at max scroll (IMPORTANT-3) ----
-  // Scroll to the very bottom and prove the LAST meaningful PDP content (the
-  // review form / last accordion panel) can be brought fully above the fixed
-  // SATC top edge — i.e. it is reachable, not permanently hidden behind SATC.
-  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  await page.waitForTimeout(400);
+  // ---- NO CONTENT OBSCURATION (IMPORTANT-3) ----
+  // Prove the genuine final meaningful PDP content can be brought fully visible
+  // ABOVE the fixed SATC. Method:
+  //   1. Identify the TRUE final content by ABSOLUTE document position (max
+  //      rect.bottom + scrollY across meaningful leaves in ALL PDP sections) —
+  //      NOT a fixed selector-list order.
+  //   2. Programmatically scroll so that element's bottom sits a little above
+  //      the SATC top edge (this is what a user can do; it exercises the real
+  //      bottom content-reserve that makes such a scroll position reachable).
+  //   3. Assert its bottom edge is then visible AND above SATC AND on-screen
+  //      (not scrolled entirely past the top).
+  // First locate the true final element (at any scroll position).
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const finalSel = await page.evaluate(() => {
+    const satcEl = document.querySelector('.pdp-satc');
+    const meaningfulSel = [
+      'p', 'h1', 'h2', 'h3', 'button', 'a', 'img', 'table', 'li',
+      '.pcard', '.review', '.spec-table', '.guarantee .g', '.pdp-satc-btn',
+    ].join(',');
+    const wrap = document.querySelector('.pdp-page') || document.body;
+    let best = null, bestEl = null;
+    const all = wrap.querySelectorAll(meaningfulSel);
+    all.forEach((el, i) => {
+      if (satcEl && (el === satcEl || satcEl.contains(el))) return; // SATC is not content
+      const r = el.getBoundingClientRect();
+      if (r.width < 4 || r.height < 4) return;
+      if (r.height > window.innerHeight * 3) return;
+      const cs = getComputedStyle(el);
+      if (cs.visibility === 'hidden' || cs.display === 'none') return;
+      const absBottom = r.bottom + window.scrollY;
+      if (!best || absBottom > best) { best = absBottom; bestEl = el; }
+    });
+    if (bestEl) {
+      bestEl.setAttribute('data-qa-final', '1');
+      return { tag: bestEl.tagName.toLowerCase(), cls: String(bestEl.className || '').slice(0, 48), absBottom: Math.round(best) };
+    }
+    return null;
+  });
+  // Scroll the final element's bottom to just above the SATC top edge.
+  await page.evaluate(() => {
+    const el = document.querySelector('[data-qa-final]');
+    const satcEl = document.querySelector('.pdp-satc');
+    if (!el) return;
+    const satcTop = satcEl ? satcEl.getBoundingClientRect().top : window.innerHeight;
+    const r = el.getBoundingClientRect();
+    // move the page so the element's bottom lands ~24px above the SATC top
+    const delta = r.bottom - (satcTop - 24);
+    window.scrollBy(0, delta);
+  });
+  await page.waitForTimeout(300);
   const obsc = await page.evaluate(() => {
     const round = (n) => Math.round(n);
     const satcEl = document.querySelector('.pdp-satc');
     const satcTop = satcEl ? satcEl.getBoundingClientRect().top : window.innerHeight;
-    // Candidate "final content" anchors present on a PDP.
-    const anchors = [
-      '#review-form-container', '.review-form', '.pdp-tabs',
-      '.related-products', '.guarantee',
-    ];
-    let last = null;
-    for (const sel of anchors) {
-      const el = document.querySelector(sel);
-      if (el) { const r = el.getBoundingClientRect(); last = { sel, top: round(r.top), bottom: round(r.bottom) }; }
-    }
+    const el = document.querySelector('[data-qa-final]');
+    const r = el ? el.getBoundingClientRect() : null;
     return {
       satcTop: round(satcTop),
       innerHeight: window.innerHeight,
-      finalContent: last,
-      docScrollTop: round(window.scrollY),
-      maxScroll: round(document.body.scrollHeight - window.innerHeight),
+      finalContent: r ? { top: round(r.top), bottom: round(r.bottom) } : null,
+      finalTag: el ? el.tagName.toLowerCase() : null,
+      scrollY: round(window.scrollY),
+      pageScrollHeight: round(document.body.scrollHeight),
     };
   });
-  report.geometry.push({ viewport: vp.name, obscuration: obsc });
-  // Proof: at max scroll the final content's TOP is above the SATC top edge
-  // (i.e. its beginning is reachable in the viewport, not stuck under SATC).
-  const finalReachable = obsc.finalContent && obsc.finalContent.top < obsc.satcTop;
-  record(`content:final-reachable-above-satc:${vp.name}`, finalReachable ? 'PASS' : 'FAIL',
-    { finalContent: obsc.finalContent, satcTop: obsc.satcTop });
+  report.geometry.push({ viewport: vp.name, obscuration: { ...obsc, finalElement: finalSel } });
+  // VALID proof: the true final content, once scrolled to, is
+  //  (b) bottom edge ABOVE the SATC top edge (clears the fixed bar);
+  //  (c) bottom edge WITHIN the viewport (actually visible);
+  //  (d) NOT entirely offscreen above (top < innerHeight, bottom > 0).
+  const fc = obsc.finalContent;
+  const valid = !!fc
+    && fc.bottom <= obsc.satcTop
+    && fc.bottom <= obsc.innerHeight
+    && fc.bottom > 0 && fc.top < obsc.innerHeight;
+  record(`content:final-visible-above-satc:${vp.name}`, valid ? 'PASS' : 'FAIL',
+    { finalElement: finalSel, finalContent: fc, satcTop: obsc.satcTop, innerHeight: obsc.innerHeight });
 
   await page.screenshot({ path: `${REPORT_DIR}/pdp_${NAV_LABEL}_${vp.name}.png`, fullPage: false });
 

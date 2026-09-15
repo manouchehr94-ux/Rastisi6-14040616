@@ -232,9 +232,15 @@
    source; SATC never hard-codes per-variant/per-template offsets). SATC only
    adds its OWN height on top so it sits directly above the nav.
 
-   NO-OBSCURATION: ``.pdp`` reserves bottom space equal to the nav clearance +
-   SATC's own height so the final in-flow purchase controls and PDP content can
-   always be scrolled fully clear of the fixed SATC + nav stack. */
+   NO-OBSCURATION: the WHOLE PDP page content container (``.pdp-page`` — the
+   canonical wrapper around ALL PDP sections: product_main + product_description
+   + product_video + related_products) reserves real bottom space equal to the
+   nav clearance + SATC's own height + a gap. Because ``product_main`` is the
+   FIRST section, reserving inside ``.pdp`` alone would not protect the sections
+   that follow; the reserve must live on the end-of-page owner so the genuine
+   final content (e.g. related products / reviews) can be scrolled fully clear
+   of the fixed SATC + nav stack. This adds real scrollable document height
+   (``padding-bottom``), which ``scroll-padding-bottom`` alone cannot. */
 :root{--satc-height:64px}
 .pdp-satc{display:none}
 @media(max-width:680px){
@@ -254,12 +260,15 @@
   .pdp-satc-old{font-size:11.5px;color:var(--muted);text-decoration:line-through;white-space:nowrap}
   .pdp-satc-btn{flex:1;min-width:0;height:48px;font-size:15px}
   .pdp-satc-btn:disabled{opacity:.5;cursor:not-allowed}
-  /* Bottom content reserve: the PDP purchase block reserves space equal to the
-     canonical nav clearance PLUS SATC's own height (+ a small gap), so nothing
-     is permanently hidden behind the fixed SATC + bottom-nav stack. Applied to
-     the ``.pdp`` block (the product_main root) so it scopes to the PDP only and
-     never affects other pages. Derived entirely from the canonical geometry —
-     no random per-template value. */
-  .pdp{padding-bottom:calc(var(--gmn-clearance,env(safe-area-inset-bottom,0px)) + var(--satc-height) + 16px)}
+  /* Bottom content reserve on the WHOLE-PDP content container (covers every
+     PDP section, not just product_main), added only when a SATC is present on
+     the page. Real scrollable height (padding-bottom) so the genuine final
+     content clears the fixed SATC + bottom-nav stack; scoped to the PDP page
+     container so it never affects other pages. Value derived entirely from the
+     canonical nav geometry (--gmn-clearance) + SATC's own height + gap — no
+     random per-template value. */
+  .wrap.pdp-page:has(.pdp-satc){padding-bottom:calc(var(--gmn-clearance,env(safe-area-inset-bottom,0px)) + var(--satc-height) + 16px)}
+  /* Complements the reserve for keyboard/anchor scrolling; not sufficient on
+     its own (does not add document height), hence the padding above. */
   html:has(.pdp-satc){scroll-padding-bottom:calc(var(--gmn-clearance,env(safe-area-inset-bottom,0px)) + var(--satc-height) + 16px)}
 }
