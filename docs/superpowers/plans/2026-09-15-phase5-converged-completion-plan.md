@@ -50,6 +50,8 @@ Forbidden across ALL workstreams (introducing any of these is an automatic STOP 
 
 Every implementation workstream must: (1) start from the latest certified official Phase-5 checkpoint; (2) use its own branch; (3) use TDD (RED → GREEN → focused → regression → browser evidence → architecture/duplication gate → review); (4) produce evidence; (5) open an **unmerged** PR into `feature/phase5-design-expansion`; (6) receive independent Architect review; (7) merge only after Product Owner/Architect approval. Never work directly on the official branch. No force push, reset, stash, clean, or destructive rebase without explicit approval.
 
+**Workstreams are STRICTLY SEQUENTIAL — see the Sequencing section. Parallel implementation is prohibited; the next workstream is FROZEN until the current one is merged and has zero unresolved CRITICAL/IMPORTANT findings.**
+
 ### Migrations
 
 Expected default: **ZERO MIGRATIONS.** Any proposed database migration must STOP for architecture review before implementation. The current architecture already has suitable persisted JSON/Draft authorities (`StorefrontLayoutVersion.appearance_config` / `StoreAppearanceManifest.settings` / `template_baseline_snapshot`) for the remaining design capabilities unless source investigation proves otherwise.
@@ -80,7 +82,7 @@ Old Tasks 9–18 are replaced by exactly five workstreams: `P5-W1` … `P5-W5`. 
 - Context delivery: `render_service._cart_summary_context` (`render_service.py:696`) already passes `totals` (the `cart_totals` dict) to the template.
 
 **Exact files expected to change:**
-- `apps/cart/services/pricing.py` — extend the `cart_totals()` return dict with the precomputed `free_shipping_threshold`, `free_shipping_by_threshold`, `free_shipping_by_coupon`, `free_shipping_goal_remaining`, `free_shipping_goal_progress_percent` fields (all math here; see Canonical-math rule below).
+- `apps/cart/services/pricing.py` — extend the `cart_totals()` return dict with the precomputed `free_shipping_threshold`, `free_shipping_by_threshold`, `free_shipping_by_coupon`, `free_shipping_goal_remaining`, `free_shipping_goal_progress_percent`, and `free_shipping_goal_applicable` fields (all math here; `free_shipping_goal_applicable` from `apps.orders.services.shipping_service.cart_requires_shipping(items)`; see Canonical-math + Shippability rules below).
 - `apps/storefront_builder/templates/storefront_builder/sections/cart_summary.html` — add the goal/progress **display** markup reading only `totals.free_shipping_goal_*` and `totals.free_shipping_by_threshold`/`free_shipping_by_coupon`.
 - `apps/cart/static/css/cart.css` — the canonical cart stylesheet (loaded by `apps/cart/templates/cart/cart_detail.html:16`); add the goal/progress bar styles here. Do NOT create a new global sheet and do NOT put cart styles in `product_detail.css`.
 - Tests: `apps/cart/tests/` (extend the pricing/threshold suite against `cart_totals()`) plus a `render_service`/section render test asserting the goal fields reach the template and the view/template performs no threshold math.
@@ -96,6 +98,9 @@ Old Tasks 9–18 are replaced by exactly five workstreams: `P5-W1` … `P5-W5`. 
   - `free_shipping_by_coupon` — bool: coupon granted free shipping (the existing `free_shipping_by_coupon`), so the reason is distinguishable and coupon-granted free shipping is **never** misreported as "threshold reached."
   - `free_shipping_goal_remaining` — `max(Decimal("0"), threshold − items_total)` (Decimal, never negative), computed in pricing.
   - `free_shipping_goal_progress_percent` — `0` when threshold ≤ 0 or empty cart, else `min(100, round(items_total * 100 / threshold))`, **clamped to `[0,100]`** in pricing.
+  - `free_shipping_goal_applicable` — bool: whether the cart actually contains a physically-shippable item, computed via the EXISTING canonical `apps.orders.services.shipping_service.cart_requires_shipping(items)` (which reads `Product.requires_shipping` — do NOT invent a second shippability rule). When `False` (all-digital / no shippable item), the Goal/progress UI is hidden and NO "X تومان تا ارسال رایگان" (physical-shipping) copy is shown. This value is computed in `pricing.py` alongside the other goal fields; the template shows the Goal only when `free_shipping_goal_applicable` is true.
+
+**Shippability rule (non-negotiable):** the Free-Shipping Goal must never present a physical-shipping promise for an all-digital/non-shippable cart. Reuse the canonical `shipping_service.cart_requires_shipping(items)` + `Product.requires_shipping`; introduce no new shippability rule and change NO checkout/shipping schema in W1.
 - `_cart_summary_context` (`render_service.py:696`) continues to pass the existing `totals` dict unchanged (it now carries the new fields). **It must NOT read `ShopSettings` or compute anything.**
 - Template consumes only `totals.free_shipping_goal_*` / `totals.free_shipping_by_threshold` / `totals.free_shipping_by_coupon` for display.
 
@@ -109,7 +114,10 @@ Old Tasks 9–18 are replaced by exactly five workstreams: `P5-W1` … `P5-W5`. 
 7. **two Stores with different `free_shipping_threshold`** → different `remaining`/`progress_percent` (Store-scoped).
 8. **progress bounded 0–100** for arbitrary large `items_total`.
 9. **presentation consumes precomputed values only** — a render/template test asserting `_cart_summary_context` adds no `ShopSettings`/threshold computation and the template references only `totals.free_shipping_goal_*`/flags (assert no `ShopSettings.load` in the view layer for this path; template contains no arithmetic).
-Also: existing `items_total`/`grand_total`/`tax`/coupon outputs of `cart_totals()` remain unchanged (regression assertion).
+10. **all-digital / no-shippable-item cart** → `free_shipping_goal_applicable=False`; Goal/progress UI hidden; no physical-shipping copy rendered.
+11. **mixed cart (≥1 physical + digital)** → `free_shipping_goal_applicable=True`; Goal works normally.
+12. **physical-only cart** → `free_shipping_goal_applicable=True`.
+Also: existing `items_total`/`grand_total`/`tax`/coupon outputs of `cart_totals()` remain unchanged (regression assertion); no checkout/shipping schema change.
 
 **Expected RED reason:** `cart_totals()` does not yet return the `free_shipping_goal_*` / `free_shipping_by_threshold` fields, and `cart_summary.html` has no goal markup.
 
@@ -150,27 +158,40 @@ Also: existing `items_total`/`grand_total`/`tax`/coupon outputs of `cart_totals(
 ### Architecture decision (made now from source — not deferred)
 
 **A. Theme is a new optional canonical Store-Appearance FAMILY, not a free-form `settings` bag.** SOURCE-VERIFIED: `storefront_appearance/validation.py` closes `settings` — `_validate_typed_settings` rejects any top-level key not in `COMPONENT_FAMILIES` (`validation.py:107–110`) and any per-family key not in `ALLOWED_SETTINGS_BY_FAMILY[family]` (`validation.py:116–119`), and every family's allowed set is currently `frozenset()` (`validation.py:52–53`). So a bare "put theme key + intensity in settings" is invalid. Instead:
-- **Add a `theme` family** to `apps/storefront_builder/storefront_appearance/families.py` (`_FAMILY_DEFINITIONS`) as a `ComponentFamilyDefinition(key="theme", label_fa="تمِ مناسبتی", storage_adapter_key="theme_overlay", safe_default_component_key="theme.none.v1", renderer_role="theme_overlay", optional=True, capabilities={"responsive","rtl"})`. `optional=True` + a `theme.none.v1` safe default means **no theme by default**; the occasion is a bounded **component selection** in `manifest.selections["theme"]`.
-- **Register the occasion components** (`theme.none.v1`, `theme.nowruz.v1`, `theme.yalda.v1`, `theme.valentine.v1`, `theme.ramadan.v1`, `theme.eid_fitr.v1`, `theme.eid_qorban.v1`, `theme.muharram.v1`, …) in the canonical component catalog consumed by `apps/storefront_builder/storefront_appearance/registry.py` (`_DEFINITIONS` → `COMPONENT_REGISTRY`), validated by the existing `validate_component_catalog`. This is the SAME registration path header/footer/hero components use — **not a second registry.**
+- **Add a `theme` family** to `apps/storefront_builder/storefront_appearance/families.py` (`_FAMILY_DEFINITIONS`) as a `ComponentFamilyDefinition(key="theme", label_fa="تمِ مناسبتی", storage_adapter_key="theme_overlay", safe_default_component_key="theme.none.v1", renderer_role="appearance_token", optional=True, capabilities={"responsive","rtl"})`. **`renderer_role` MUST be `"appearance_token"`** — SOURCE-VERIFIED the contract's `_RENDERER_ROLES` is exactly `{global_region, section_variant, composition, appearance_token}` (`storefront_appearance/contracts.py:22-23`); a `theme_overlay` role is invalid and `_RENDERER_ROLES` must NOT be expanded for a Theme-specific role (Theme is an appearance overlay/token concern and reuses the existing `appearance_token` role, exactly like the existing `card_style`/`badge_treatment`/`appearance_motion` token references). `optional=True` + a `theme.none.v1` safe default means **no theme by default**; the occasion is a bounded **component selection** in `manifest.selections["theme"]`.
+- **Register the occasion components via the canonical adapter, NOT a hand-written registry list.** SOURCE-VERIFIED: `storefront_appearance/registry.py` does not own raw definitions — it consumes `adapters.build_existing_component_definitions()` (`adapters.py:141`) into `COMPONENT_REGISTRY` and resolves each via `adapters.resolve_registry_reference()` (`adapters.py:281`). Therefore the theme components (`theme.none.v1`, `theme.nowruz.v1`, `theme.yalda.v1`, `theme.valentine.v1`, `theme.ramadan.v1`, `theme.eid_fitr.v1`, `theme.eid_qorban.v1`, `theme.muharram.v1`, …) are built by extending **`adapters.build_existing_component_definitions()`** to emit one `ComponentDefinition` per catalog occasion (`_component(key=f"theme.{occasion}.v1", family_key="theme", label_fa=<from catalog>, registry_reference=f"theme_overlay:{occasion}")`), and **`adapters.resolve_registry_reference()`** gains a bounded 2-part branch `theme_overlay:<occasion-key>` that resolves to the platform-owned `theme_catalog` entry (mirroring the existing `card_style:`/`badge_treatment:`/`appearance_motion:` 2-part branches). Registration flow:
+  `theme_catalog.py` → `adapters.build_existing_component_definitions()` → `registry.COMPONENT_REGISTRY` → `rendering.resolve_store_appearance_manifest_state()`.
+  The Theme catalog is the SINGLE data source of occasion keys/labels/tokens/tone — the adapter reads it; occasion keys/labels/tokens are NOT duplicated independently in both catalog and adapter.
 - **Add intensity as a bounded family setting:** set `ALLOWED_SETTINGS_BY_FAMILY["theme"] = frozenset({"intensity"})` in `validation.py`, and add a typed validator that constrains `settings["theme"]["intensity"]` to the bounded enum `{"subtle","balanced","strong"}` (default `balanced`). Intensity lives in `manifest.settings["theme"]` — now a *validated, closed* family setting, not a free-form field.
 - If, on inspection, an existing family representation is provably safer, the implementer must document the source reason in the W2 report; the default and expected path is the dedicated `theme` family above.
 
 **B. Reversibility is the family's own `theme.none.v1` default — NOT `template_baseline_snapshot`.** SOURCE-VERIFIED: `template_baseline_snapshot` (`models.py:296`) is the *immutable Ready-Template baseline captured at Template Apply time*, NOT a snapshot of the merchant's appearance immediately before enabling a Theme. Using it for theme reversibility would wrongly discard non-theme merchant customizations. Because Theme is an independent overlay family, **`clear_theme()` = set `selections["theme"]="theme.none.v1"` and drop `settings["theme"]`, changing ONLY theme-owned state.** Every non-theme field (header/footer/bottom_nav/hero/product_view/card/badge selections, palette/font/density, section composition) is untouched — so removing a theme reproduces the exact prior non-theme state with no extra pre-theme snapshot. Undo/Redo/history use the existing `edit_history_service` mechanism.
 
-**C. Theme resolves through the canonical Store-Appearance resolution path, covering global chrome AND sections.** SOURCE-VERIFIED: `storefront_appearance/rendering.py::resolve_store_appearance_manifest_state` (`:67`) → `ResolvedStoreAppearance` (`:48`) is the single resolver used by BOTH the public render path (`resolve_store_appearance_render_state:105`) AND the candidate path (`preset_service.resolve_preset_candidate`, per its `rendering.py:74–75` docstring). The `theme` family (`renderer_role="theme_overlay"`) is resolved there once, so Preview/Public/Header/Footer/BottomNav/Sections all see one resolved theme state. `render_service` **consumes** the resolved theme result (e.g. exposing theme accent/motif CSS variables + a `data-theme`/`data-theme-intensity` attribute on the storefront shell, and letting section variants read the same resolved state) — it must **NOT** create a second independent theme resolver. Add a `theme_overlay_state(state)` accessor on the rendering module (mirroring `global_renderer_template`) so consumers read the resolved theme without re-resolving.
+**C. Theme resolves through the canonical Store-Appearance resolution path, covering global chrome AND sections.** SOURCE-VERIFIED: `storefront_appearance/rendering.py::resolve_store_appearance_manifest_state` (`:67`) → `ResolvedStoreAppearance` (`:48`) is the single resolver used by BOTH the public render path (`resolve_store_appearance_render_state:105`) AND the candidate path (`preset_service.resolve_preset_candidate`, per its `rendering.py:74–75` docstring). The `theme` family (`renderer_role="appearance_token"`) is resolved there once, so Preview/Public/Header/Footer/BottomNav/Sections all see one resolved theme state. `render_service` **consumes** the resolved theme result (e.g. exposing theme accent/motif CSS variables + a `data-theme`/`data-theme-intensity` attribute on the storefront shell, and letting section variants read the same resolved state) — it must **NOT** create a second independent theme resolver. Add a `theme_overlay_state(state)` accessor on the rendering module (mirroring `global_renderer_template`) so consumers read the resolved theme without re-resolving.
 
 **Exact files that MUST change (named now):**
-- `apps/storefront_builder/storefront_appearance/families.py` — add the `theme` `ComponentFamilyDefinition`.
-- `apps/storefront_builder/storefront_appearance/registry.py` (+ its `_DEFINITIONS` component source) — register the occasion `ComponentDefinition`s (incl. `theme.none.v1`).
-- `apps/storefront_builder/storefront_appearance/validation.py` — `ALLOWED_SETTINGS_BY_FAMILY["theme"] = frozenset({"intensity"})` + bounded intensity enum validation.
+- `apps/storefront_builder/theme_catalog.py` (NEW data module) — the bounded occasion catalog: for each occasion the component key, human label, accent/motif tokens, and a `tone` flag (`festive`/`neutral`/`mourning`). The SINGLE data source; a data catalog, NOT a registry competing with `layout_preset_registry`.
+- `apps/storefront_builder/storefront_appearance/families.py` — add the `theme` `ComponentFamilyDefinition` (`renderer_role="appearance_token"`, `optional=True`, `safe_default_component_key="theme.none.v1"`).
+- `apps/storefront_builder/storefront_appearance/adapters.py` — extend `build_existing_component_definitions()` to emit the theme `ComponentDefinition`s from `theme_catalog` (`registry_reference=f"theme_overlay:{occasion}"`), and extend `resolve_registry_reference()` with a bounded `theme_overlay:<occasion-key>` branch resolving to the catalog entry (mirroring the existing `card_style:`/`badge_treatment:` branches). This is the canonical component-registration path (`registry.py` consumes this — do NOT hand-write theme definitions in `registry.py`).
+- `apps/storefront_builder/storefront_appearance/validation.py` — `ALLOWED_SETTINGS_BY_FAMILY["theme"] = frozenset({"intensity"})` + bounded intensity enum validation (`{subtle,balanced,strong}`, default `balanced`).
 - `apps/storefront_builder/storefront_appearance/rendering.py` — resolve the `theme` family into `ResolvedStoreAppearance` and add the `theme_overlay_state` accessor (the single resolution point for global + section consumers).
 - `apps/storefront_builder/services/appearance_authority_service.py` — narrow `apply_theme(occasion_component_key, intensity)` / `clear_theme()` writing only `selections["theme"]` + `settings["theme"]` through the existing manifest persistence (`persist_store_appearance_manifest`), mirroring `apply_header_variant` (`:171`).
-- `apps/storefront_builder/theme_catalog.py` (NEW data module) — the bounded occasion catalog: for each occasion the component key, human label, accent/motif tokens, and a `tone` flag (`festive`/`neutral`/`mourning`). A data catalog, NOT a registry competing with `layout_preset_registry`.
+- **`apps/storefront_builder/a8_ready_templates.py` — REQUIRED backward-compatibility change (see below):** `_manifest(spec)["selections"]` must include `"theme": "theme.none.v1"` for ALL 50 Ready Templates (default only; NO occasion themes auto-assigned), so the built-in manifests stay complete under `validate_store_appearance_manifest(..., require_complete=True)`.
 - `templates/storefront_shell.html` (+ the relevant section/global CSS) — consume the resolved theme (accent/motif CSS variables + `data-theme`/`data-theme-intensity`), reusing the existing CSS-variable/token pattern; no per-template CSS fork.
 - R4 inspector template/JS — expose Theme + Intensity controls (Advanced tier), reusing the Task-4 inspector pattern and the canonical R4 mutation boundary.
 - Tests under `apps/storefront_builder/tests/`.
 
-**Files forbidden to duplicate:** the manifest contract/validator, `appearance_authority_service`, the `rendering.py` resolver (`resolve_store_appearance_manifest_state`), `render_service`, `layout_preset_registry`, `COMPONENT_REGISTRY`, Draft/lifecycle. No second theme registry/manifest/persistence/resolver.
+**Files forbidden to duplicate:** the manifest contract/validator, `appearance_authority_service`, the `rendering.py` resolver (`resolve_store_appearance_manifest_state`), the `adapters.py` reference resolver, `render_service`, `layout_preset_registry`, `COMPONENT_REGISTRY`, Draft/lifecycle. No second theme registry/manifest/persistence/resolver; occasion keys/labels/tokens are defined ONCE in `theme_catalog.py`.
+
+### All-50 Ready-Template backward compatibility (hard W2 regression gate)
+
+SOURCE-VERIFIED: the 50 Ready-Template manifests are generated by `a8_ready_templates.py::_manifest(spec)` and Ready-Template candidate/apply validation runs `validate_store_appearance_manifest(..., require_complete=True)`. Introducing a new *known* `theme` family without updating the built-in manifests would make all 50 manifests **incomplete** and break apply/preview. Therefore W2 MUST set `"theme": "theme.none.v1"` in every Ready-Template's `selections` (default only; no occasion assigned), and satisfy these mandatory regression tests:
+1. all 50 Ready-Template manifests remain valid/complete under `require_complete=True`;
+2. `resolve_preset_candidate` succeeds for all 50;
+3. Ready-Template Apply (`apply_preset`) remains valid for all 50;
+4. `theme.none.v1` preserves pre-W2 visual behavior (no rendered change for a store that selects no occasion);
+5. existing persisted pre-Theme manifests normalize safely to `theme.none.v1` (the safe default fills the missing family — verify against the manifest normalization path);
+6. NO migration required.
 
 **Required invariants (tests):**
 - Applying a Theme leaves base structural DNA **byte-for-byte unchanged**: `selections` for header, footer, bottom_nav, hero, product_view, card, badge, layout, mega_menu, motion and section composition are identical before/after; only `selections["theme"]` + `settings["theme"]` change.
@@ -335,13 +356,43 @@ Combined convergence + final rendering-quality workstream, in THREE ordered stag
 
 ---
 
-## Sequencing
+# Sequencing — Phase 5 implementation is STRICTLY SEQUENTIAL
+
+**Parallel implementation of P5-W1 through P5-W5 is prohibited** (Product Owner governance decision — this supersedes any earlier "may parallelize later" wording).
+
+Required order:
 
 ```
-P5-W1  →  P5-W2  →  P5-W3  →  P5-W4 (A→B→C)  →  P5-W5
+P5-W1  →  P5-W2  →  P5-W3  →  P5-W4A  →  P5-W4B  →  P5-W4C  →  P5-W5
 ```
 
-Rationale: W1 is small/isolated; W2 establishes the Theme owner; W3 consumes Theme + candidate infra; W4 certifies the final rendering state after all rendering changes; W5 is final human review + closure. **Do not parallelize by default;** the Architect may explicitly approve parallelization later.
+Required lifecycle for EVERY workstream (and every W4 sub-stage):
+
+```
+implementation → evidence → unmerged PR → Architect review →
+all CRITICAL/IMPORTANT fixed → approval → merge →
+new official checkpoint recorded → only then the next workstream
+```
+
+Freeze rules for every transition:
+
+- `CURRENT WORKSTREAM NOT MERGED = NEXT WORKSTREAM FROZEN`
+- `UNRESOLVED CRITICAL OR IMPORTANT = NEXT WORKSTREAM FROZEN`
+
+While one workstream is active or under review:
+
+- do NOT create the next implementation branch;
+- do NOT write next-workstream production code;
+- do NOT write next-workstream RED tests;
+- do NOT make speculative next-workstream changes.
+
+Read-only future investigation is permitted only when explicitly useful, and it must NOT modify production/test code.
+
+For **P5-W4**, run its stages sequentially: **P5-W4A (Public Shell Convergence) → review/close → P5-W4B (50-Template Curation) → review/close → P5-W4C (All-50 Browser Certification, closure gate).** Do NOT run all-50 certification before W4A and W4B are complete.
+
+Rationale for the order: W1 is small/isolated; W2 establishes the Theme owner; W3 consumes Theme + candidate infra; W4 certifies the final rendering state after all rendering changes; W5 is final human review + closure.
+
+If the Product Owner later wants any parallelism, that requires a NEW explicit governance decision — it is not permitted by this plan.
 
 ## Branch naming
 
