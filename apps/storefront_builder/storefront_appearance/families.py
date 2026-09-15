@@ -91,6 +91,21 @@ _FAMILY_DEFINITIONS = (
         optional=True,
         capabilities={"mobile", "rtl", "safe_area"},
     ),
+    # P5-W2 — reversible occasion/seasonal Theme layer. An OPTIONAL
+    # appearance-token family (like ``motion``): it tints/decorates the
+    # storefront without owning any structural region/section/composition.
+    # renderer_role MUST be ``appearance_token`` (an existing allowed role);
+    # ``_RENDERER_ROLES`` is NOT expanded. The safe default ``theme.none.v1``
+    # is a true visual no-op, so pre-W2 rendering is materially unchanged.
+    ComponentFamilyDefinition(
+        key="theme",
+        label_fa="تم مناسبتی",
+        storage_adapter_key="theme_overlay",
+        safe_default_component_key="theme.none.v1",
+        renderer_role="appearance_token",
+        optional=True,
+        capabilities={"responsive", "rtl"},
+    ),
 )
 
 validate_family_catalog(_FAMILY_DEFINITIONS)

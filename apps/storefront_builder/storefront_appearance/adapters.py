@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from .. import appearance_registry, global_region_registry, section_registry
+from .. import theme_catalog
 from ..services import container_service
 from ..variant_contract import get_variant
 from .contracts import ComponentDefinition, InvalidStoreAppearanceContract
@@ -275,6 +276,21 @@ def build_existing_component_definitions() -> tuple[ComponentDefinition, ...]:
             default_identity="hidden",
         )
     )
+
+    # P5-W2 — Theme (occasion/seasonal) components. The occasion identities,
+    # labels and presentation metadata live ONLY in ``theme_catalog``; this
+    # adapter merely projects each catalog entry into a ComponentDefinition
+    # whose symbolic ``theme_overlay:<occasion-key>`` reference resolves back
+    # against that same catalog. No occasion data is duplicated here.
+    for occasion in theme_catalog.list_theme_occasions():
+        definitions.append(
+            _component(
+                key=occasion.component_key,
+                family_key="theme",
+                label_fa=occasion.label_fa,
+                registry_reference=occasion.registry_reference,
+            )
+        )
     return tuple(definitions)
 
 
@@ -305,6 +321,11 @@ def resolve_registry_reference(reference: str):
     elif len(parts) == 2 and parts[0] == "badge_treatment":
         if parts[1] in section_registry.BADGE_TREATMENT_CHOICES:
             resolved = parts[1]
+    elif len(parts) == 2 and parts[0] == "theme_overlay":
+        # Resolve the bounded symbolic Theme reference against the single
+        # canonical ``theme_catalog``. Unknown occasion keys fail closed.
+        if theme_catalog.has_occasion(parts[1]):
+            resolved = theme_catalog.get_theme_occasion(parts[1])
     elif len(parts) == 3 and parts[0] == "virtual":
         token = (parts[1], parts[2])
         if token in _VIRTUAL_COMPONENTS:
