@@ -87,6 +87,7 @@ _MUTATION_HISTORY_LABELS = {
     "appearance.template.apply": "اعمال قالب آماده",
     "theme.apply": "اعمال تم مناسبتی",
     "theme.clear": "حذف تم مناسبتی",
+    "design_lab.apply_candidate": "اعمال ترکیب آزمایشگاه طراحی",
 }
 
 
@@ -651,6 +652,83 @@ def _apply_theme_clear(*, draft: StorefrontLayoutVersion, mutation: dict) -> Non
         raise R4MutationError("invalid_store_appearance_manifest") from exc
 
 
+def _apply_design_lab_candidate(
+    *, draft: StorefrontLayoutVersion, mutation: dict
+) -> None:
+    """P5-W3 — the ONE atomic Design Lab Apply. A single merchant Apply turns a
+    transient multi-family candidate into ONE canonical mutation: it reuses the
+    ONE mutation boundary (lock / base-revision / history / single revision
+    advance live in ``apply_mutation``), so this handler only validates the
+    candidate and delegates each state transformation to the existing canonical
+    authorities — never a second save/history/theme authority.
+
+    Atomicity: every component is validated against the canonical registry
+    BEFORE any write, so an invalid candidate raises and the surrounding
+    ``apply_mutation`` transaction rolls back with zero partial writes. Theme is
+    orthogonal (§9): Theme state is applied through the W2 ``apply_theme`` /
+    ``clear_theme`` owner; all other families go through the single multi-family
+    ``_persist_manifest_selection_updates`` writer. Both run inside the one
+    outer transaction — all-or-nothing.
+    """
+    from apps.storefront_builder import theme_catalog
+
+    _require_pinned_appearance_draft(draft=draft, mutation=mutation)
+
+    selections = mutation.get("selections")
+    if not isinstance(selections, dict) or not selections:
+        raise R4MutationError("invalid_design_lab_candidate")
+
+    theme_intensity = mutation.get("theme_intensity")
+
+    # --- Validate EVERYTHING first (fail closed, before any write) ---
+    theme_component_key = None
+    non_theme_updates: dict[str, str] = {}
+    for family, component_key in selections.items():
+        if not isinstance(family, str) or family not in COMPONENT_FAMILIES:
+            raise R4MutationError("invalid_appearance_family")
+        if not isinstance(component_key, str):
+            raise R4MutationError("invalid_appearance_component")
+        component = get_component(component_key)
+        if component is None or component.family_key != family:
+            raise R4MutationError("invalid_appearance_component")
+        if family == "theme":
+            theme_component_key = component_key
+        else:
+            non_theme_updates[family] = component_key
+
+    if theme_component_key is not None and theme_component_key != "theme.none.v1":
+        if theme_intensity is None:
+            theme_intensity = theme_catalog.DEFAULT_THEME_INTENSITY
+        if not isinstance(theme_intensity, str) or not theme_catalog.is_valid_intensity(
+            theme_intensity
+        ):
+            raise R4MutationError("invalid_theme_intensity")
+
+    # --- Apply (inside apply_mutation's single transaction => atomic) ---
+    # Non-theme DNA families in one canonical multi-family manifest write.
+    if non_theme_updates:
+        _persist_manifest_selection_updates(
+            draft=draft,
+            updates=non_theme_updates,
+            preserve_live_legacy_siblings=True,
+        )
+
+    # Theme is applied LAST through the canonical W2 owner (never duplicated):
+    # a no-op selection routes to clear_theme; any occasion routes to apply_theme.
+    if theme_component_key is not None:
+        try:
+            if theme_component_key == "theme.none.v1":
+                appearance_authority_service.clear_theme(version=draft)
+            else:
+                appearance_authority_service.apply_theme(
+                    version=draft,
+                    component_key=theme_component_key,
+                    intensity=theme_intensity,
+                )
+        except InvalidStoreAppearanceContract as exc:
+            raise R4MutationError("invalid_store_appearance_manifest") from exc
+
+
 def _apply_appearance_manifest(
     *, draft: StorefrontLayoutVersion, mutation: dict
 ) -> None:
@@ -1011,6 +1089,9 @@ def _dispatch_mutation(*, store, draft: StorefrontLayoutVersion, mutation: dict)
         return
     if mutation_type == "theme.clear":
         _apply_theme_clear(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "design_lab.apply_candidate":
+        _apply_design_lab_candidate(draft=draft, mutation=mutation)
         return
     raise R4MutationError("unknown_mutation_type")
 
