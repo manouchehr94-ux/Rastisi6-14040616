@@ -187,6 +187,88 @@ def badge_settings_for(state: ResolvedStoreAppearance) -> dict[str, str]:
     return {"badge_treatment": str(resolved.implementation)}
 
 
+@dataclasses.dataclass(frozen=True)
+class ThemeOverlayState:
+    """P5-W2 — the ONE resolved occasion Theme, resolved once through the
+    canonical ``resolve_store_appearance_manifest_state`` and consumed
+    identically by the storefront shell (global chrome) and page sections.
+
+    Consumers read THIS; they never re-read the manifest and never
+    independently look up the theme. ``css_variables`` are platform-owned,
+    bounded, and derived only from the ``theme_catalog`` entry plus the
+    validated intensity — never from any merchant-provided raw value.
+    """
+
+    occasion_key: str
+    component_key: str
+    tone: str
+    intensity: str
+    label_fa: str
+    css_variables: Mapping[str, str]
+    is_active: bool
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "css_variables", MappingProxyType(dict(self.css_variables))
+        )
+
+
+def theme_overlay_state(state: ResolvedStoreAppearance) -> ThemeOverlayState:
+    """Resolve the single active occasion Theme from the already-resolved
+    appearance state. ``theme.none.v1`` is a true no-op (``is_active=False``,
+    no decoration). Intensity comes from ``manifest.settings["theme"]``.
+    """
+
+    from ..theme_catalog import (
+        DEFAULT_THEME_INTENSITY,
+        accent_soft_mix_for,
+        get_theme_occasion_by_component_key,
+        motif_opacity_for,
+    )
+
+    resolved = state.component("theme")
+    if resolved.family.renderer_role != "appearance_token":
+        raise InvalidStoreAppearanceContract("theme is not an appearance-token family")
+
+    occasion = resolved.implementation
+    # ``resolve_component_implementation`` returns the ThemeOccasion catalog
+    # entry for a theme component. Guard defensively.
+    component_key = resolved.component.key
+    if getattr(occasion, "component_key", None) != component_key:
+        occasion = get_theme_occasion_by_component_key(component_key)
+
+    # Intensity is a bounded, validated per-family setting.
+    theme_settings = state.manifest.settings.get("theme", {})
+    intensity = theme_settings.get("intensity", DEFAULT_THEME_INTENSITY)
+
+    if occasion.is_noop:
+        return ThemeOverlayState(
+            occasion_key="none",
+            component_key=component_key,
+            tone=occasion.tone,
+            intensity=intensity,
+            label_fa=occasion.label_fa,
+            css_variables={},
+            is_active=False,
+        )
+
+    css_variables = {
+        "--occasion-accent": occasion.accent,
+        "--occasion-accent-soft": occasion.accent_soft,
+        "--occasion-motif-opacity": motif_opacity_for(intensity),
+        "--occasion-accent-mix": accent_soft_mix_for(intensity),
+    }
+    return ThemeOverlayState(
+        occasion_key=occasion.occasion_key,
+        component_key=component_key,
+        tone=occasion.tone,
+        intensity=intensity,
+        label_fa=occasion.label_fa,
+        css_variables=css_variables,
+        is_active=True,
+    )
+
+
 def section_variant_for(
     state: ResolvedStoreAppearance,
     section_key: str,

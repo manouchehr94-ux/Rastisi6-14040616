@@ -215,6 +215,40 @@ def shop_settings(request):
         shop_card_hover = _default_template.card_hover
         shop_hero_style = _default_template.hero_style
 
+    # P5-W2 — occasion Theme overlay. Resolved from the SAME global identity
+    # version used for every other global token (published version for public,
+    # ``request.storefront_appearance_version`` for preview), through the ONE
+    # canonical resolver. This is what makes editor Preview and the published
+    # public storefront show byte-identical Theme state. ``theme.none.v1`` is a
+    # true no-op, so a store without an occasion behaves exactly as before.
+    occasion_theme = "none"
+    occasion_tone = "neutral"
+    occasion_intensity = ""
+    occasion_accent = ""
+    occasion_accent_soft = ""
+    occasion_motif_opacity = ""
+    occasion_accent_mix = ""
+    if global_version is not None:
+        from apps.storefront_builder.services.render_service import (
+            resolve_store_appearance_render_state,
+            store_appearance_theme_overlay_state,
+        )
+
+        try:
+            _overlay = store_appearance_theme_overlay_state(
+                resolve_store_appearance_render_state(global_version)
+            )
+        except Exception:
+            _overlay = None
+        if _overlay is not None and _overlay.is_active:
+            occasion_theme = _overlay.occasion_key
+            occasion_tone = _overlay.tone
+            occasion_intensity = _overlay.intensity
+            occasion_accent = _overlay.css_variables.get("--occasion-accent", "")
+            occasion_accent_soft = _overlay.css_variables.get("--occasion-accent-soft", "")
+            occasion_motif_opacity = _overlay.css_variables.get("--occasion-motif-opacity", "")
+            occasion_accent_mix = _overlay.css_variables.get("--occasion-accent-mix", "")
+
     typography = _appearance_registry.resolve_typography(shop_type_scale)
 
     tone_config = (
@@ -359,6 +393,15 @@ def shop_settings(request):
         "SHOP_IMAGE_HOVER": shop_image_hover,
         "SHOP_CARD_IMAGE_CROSSFADE": "1" if shop_card_image_crossfade else "",
         "SHOP_CARD_IMAGE_ZOOM": "1" if shop_card_image_zoom else "",
+        # P5-W2 — occasion Theme overlay projection (platform-owned; drives the
+        # storefront shell + page-section decoration). Preview == Public.
+        "SHOP_OCCASION_THEME": occasion_theme,
+        "SHOP_OCCASION_TONE": occasion_tone,
+        "SHOP_OCCASION_INTENSITY": occasion_intensity,
+        "SHOP_OCCASION_ACCENT": occasion_accent,
+        "SHOP_OCCASION_ACCENT_SOFT": occasion_accent_soft,
+        "SHOP_OCCASION_MOTIF_OPACITY": occasion_motif_opacity,
+        "SHOP_OCCASION_ACCENT_MIX": occasion_accent_mix,
         # سلسله‌مراتبِ تایپوگرافی — پنج نقشِ معنادار، نه اندازه‌یِ دلخواه؛
         # نگاه کنید به ``appearance_registry.TYPE_SCALE_SIZES``.
         "SHOP_TYPE_SCALE": shop_type_scale,

@@ -1,0 +1,121 @@
+/*
+ * P5-W2 — Reversible occasion Theme overlay (bounded, platform-owned).
+ *
+ * ONE token/overlay layer driven entirely by the resolved platform-owned
+ * values (data-occasion-theme / data-occasion-tone / data-occasion-intensity
+ * on <html>, and the --occasion-* custom properties). It is orthogonal to the
+ * Ready Template DNA: there are NO per-template forks and NO `template == ...`
+ * branches. It works across all 50 Ready Templates because it only reads the
+ * occasion custom properties and never the template's own structural tokens.
+ *
+ * Reversibility: when no occasion is selected the <html> element carries no
+ * data-occasion-theme attribute and none of these rules match — a true no-op,
+ * so pre-W2 appearance is preserved exactly.
+ *
+ * Loaded AFTER theme_palette.css so an active occasion accent can consistently
+ * tint accent affordances without overriding the merchant's structural DNA.
+ */
+
+/* Accent affordances gently pick up the occasion accent. Scoped under the
+ * attribute so nothing changes when no occasion is active. */
+html[data-occasion-theme] {
+  /* A soft ambient tint on the shell background edges — subtle by default. */
+  --occasion-motif-opacity: var(--occasion-motif-opacity, 0.12);
+}
+
+/* Shell atmosphere: a restrained top accent hairline on the page shell.
+ * Uses the occasion accent, never the merchant's brand palette. */
+html[data-occasion-theme] body::before {
+  content: "";
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline: 0;
+  height: 3px;
+  background: var(--occasion-accent, transparent);
+  opacity: calc(var(--occasion-motif-opacity, 0.12) * 4);
+  z-index: 40;
+  pointer-events: none;
+}
+
+/* Global chrome — header/footer/bottom-nav pick up a soft occasion edge.
+ * These target the shared shell regions, not any single template. */
+html[data-occasion-theme] .site-header,
+html[data-occasion-theme] header.storefront-header,
+html[data-occasion-theme] .announce {
+  box-shadow: inset 0 -2px 0 0
+    color-mix(in srgb, var(--occasion-accent) calc(var(--occasion-motif-opacity) * 300%), transparent);
+}
+
+html[data-occasion-theme] .site-footer,
+html[data-occasion-theme] footer.storefront-footer {
+  box-shadow: inset 0 2px 0 0
+    color-mix(in srgb, var(--occasion-accent) calc(var(--occasion-motif-opacity) * 300%), transparent);
+}
+
+html[data-occasion-theme] .gmn,
+html[data-occasion-theme] [data-mobile-nav] {
+  border-top: 1px solid
+    color-mix(in srgb, var(--occasion-accent) calc(var(--occasion-motif-opacity) * 300%), transparent);
+}
+
+/* Page sections — a soft occasion surface wash on decorated sections. The
+ * section wrapper carries data-occasion-theme (set from the SAME resolved
+ * projection) so ONE resolved theme drives chrome AND sections. */
+.rsec[data-occasion-theme] {
+  position: relative;
+}
+
+.rsec[data-occasion-theme]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--occasion-accent-soft, transparent);
+  opacity: var(--occasion-motif-opacity, 0.12);
+  mix-blend-mode: multiply;
+  z-index: 0;
+}
+
+/* Keep section content above the wash. */
+.rsec[data-occasion-theme] > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Intensity scaling. subtle < balanced < strong. The --occasion-motif-opacity
+ * value is already intensity-derived server-side; these keep a floor/ceiling
+ * so readability/contrast stays acceptable even at "strong". */
+html[data-occasion-intensity="subtle"] { --occasion-intensity-scale: 0.75; }
+html[data-occasion-intensity="balanced"] { --occasion-intensity-scale: 1; }
+html[data-occasion-intensity="strong"] { --occasion-intensity-scale: 1.35; }
+
+/* Tone safety — a MOURNING theme (Muharram/Ashura) must remain restrained:
+ * no motion, no celebratory motif animation, muted wash only. This is the
+ * CSS-side reinforcement of the catalog's structural guarantee (mourning
+ * entries carry no festive/countdown/sale flags). */
+html[data-occasion-tone="mourning"] .rsec[data-occasion-theme]::after,
+html[data-occasion-tone="mourning"] body::before {
+  animation: none !important;
+  mix-blend-mode: normal;
+}
+
+html[data-occasion-tone="mourning"][data-occasion-theme] body::before {
+  /* A calm, non-celebratory band. */
+  opacity: calc(var(--occasion-motif-opacity, 0.12) * 2);
+}
+
+/* Festive tone may use a gentle shimmer, but ONLY when motion is allowed. */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-occasion-tone="festive"][data-occasion-theme] body::before {
+    transition: opacity 0.6s ease;
+  }
+}
+
+/* Reduced motion + mourning always disable any occasion animation. */
+@media (prefers-reduced-motion: reduce) {
+  html[data-occasion-theme] body::before,
+  html[data-occasion-theme] .rsec[data-occasion-theme]::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

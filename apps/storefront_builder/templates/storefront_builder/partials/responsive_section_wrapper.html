@@ -46,6 +46,10 @@ attribute-selectorِ پایه (در storefront_builder.css) غالب باشد.
      {% if item.context.settings.responsive.hide_on_desktop %}data-hide-desktop{% endif %}
      {% if item.context.settings.responsive.hide_on_tablet %}data-hide-tablet{% endif %}
      {% if item.context.settings.responsive.hide_on_mobile %}data-hide-mobile{% endif %}
+     {% comment %}P5-W2 — one resolved occasion Theme decorates page sections too (not
+     only global chrome). Consumes the SAME SHOP_OCCASION_* projection the shell reads;
+     never a second per-section theme lookup. Inert when no occasion is selected.{% endcomment %}
+     {% if SHOP_OCCASION_THEME and SHOP_OCCASION_THEME != "none" %}data-occasion-theme="{{ SHOP_OCCASION_THEME }}" data-occasion-tone="{{ SHOP_OCCASION_TONE }}"{% endif %}
      data-motion="{{ item.context.settings.motion.style|default:"none" }}"
      {% if item.context.settings.layout.content_width and item.context.settings.layout.content_width != "standard" %}data-width="{{ item.context.settings.layout.content_width }}"{% endif %}
      {% if item.context.settings.layout.height and item.context.settings.layout.height != "standard" %}data-height="{{ item.context.settings.layout.height }}"{% endif %}

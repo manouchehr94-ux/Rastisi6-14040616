@@ -97,6 +97,11 @@ def _manifest(spec: _RecipeSpec) -> dict:
             "motion": f"motion.{spec.motion}.v1",
             "footer": f"footer.{spec.footer}.v1",
             "bottom_nav": f"bottom_nav.{spec.bottom_nav}.v1",
+            # P5-W2 — every Ready Template must carry a complete manifest now
+            # that ``theme`` is a known family. Ready Templates never
+            # auto-assign an occasion; Theme is merchant-selected and
+            # independent, so all 50 default to the true no-op.
+            "theme": "theme.none.v1",
         },
         "settings": {},
     }

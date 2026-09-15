@@ -1,5 +1,6 @@
 {% load static persian %}<!DOCTYPE html>
 <html lang="fa" dir="rtl"
+      {% if SHOP_OCCASION_THEME and SHOP_OCCASION_THEME != 'none' %}data-occasion-theme="{{ SHOP_OCCASION_THEME }}" data-occasion-tone="{{ SHOP_OCCASION_TONE }}" data-occasion-intensity="{{ SHOP_OCCASION_INTENSITY }}"{% endif %}
       data-sfb-template="{{ SHOP_TEMPLATE_SLUG|default:'modern' }}"
       data-sfb-density="{{ SHOP_DENSITY|default:'normal' }}"
       data-sfb-type-scale="{{ SHOP_TYPE_SCALE|default:'normal' }}"
@@ -12,7 +13,7 @@
       data-sfb-image-hover="{{ SHOP_IMAGE_HOVER|default:'zoom' }}"
       data-sfb-card-crossfade="{{ SHOP_CARD_IMAGE_CROSSFADE|default:'' }}"
       data-sfb-card-zoom="{{ SHOP_CARD_IMAGE_ZOOM|default:'1' }}"
-      style="--brand-primary:{{ SHOP_PRIMARY_COLOR }};--brand-accent:{{ SHOP_ACCENT_COLOR }};--brand-primary-fg:{{ SHOP_PRIMARY_FG }};--brand-accent-fg:{{ SHOP_ACCENT_FG }};--brand-secondary:{{ SHOP_SECONDARY_COLOR }};--brand-secondary-fg:{{ SHOP_SECONDARY_FG }};--brand-background:{{ SHOP_BACKGROUND_COLOR }};--brand-surface:{{ SHOP_SURFACE_COLOR }};--brand-text:{{ SHOP_TEXT_COLOR }};--brand-muted:{{ SHOP_MUTED_TEXT_COLOR }};--brand-primary-hover:{{ SHOP_PRIMARY_HOVER }};--brand-border:{{ SHOP_BORDER_COLOR }};--brand-tone-1:{{ SHOP_PALETTE_TONE_1 }};--brand-tone-2:{{ SHOP_PALETTE_TONE_2 }};--brand-tone-3:{{ SHOP_PALETTE_TONE_3 }};--brand-tone-4:{{ SHOP_PALETTE_TONE_4 }};--brand-tone-5:{{ SHOP_PALETTE_TONE_5 }};--theme-header-bg:{{ SHOP_THEME_HEADER_BG }};--theme-header-text:{{ SHOP_THEME_HEADER_TEXT }};--theme-nav-bg:{{ SHOP_THEME_NAV_BG }};--theme-nav-text:{{ SHOP_THEME_NAV_TEXT }};--theme-card-bg:{{ SHOP_THEME_CARD_BG }};--theme-footer-bg:{{ SHOP_THEME_FOOTER_BG }};--theme-footer-text:{{ SHOP_THEME_FOOTER_TEXT }};--theme-price:{{ SHOP_THEME_PRICE }};--sfb-font:'{{ SHOP_FONT|default:"Vazirmatn" }}';--sfb-radius:{{ SHOP_RADIUS|default:18 }}px;--sfb-button-radius:{{ SHOP_BUTTON_RADIUS|default:12 }}px;--sfb-content-width:{{ SHOP_CONTENT_WIDTH|default:1200 }}px;--sfb-grid-density:{{ SHOP_GRID_DENSITY|default:4 }};--sfb-heading-size:{{ SHOP_HEADING_SIZE|default:19 }}px;--sfb-body-size:{{ SHOP_BODY_SIZE|default:14 }}px;--sfb-product-name-size:{{ SHOP_PRODUCT_NAME_SIZE|default:13 }}px;--sfb-price-size:{{ SHOP_PRICE_SIZE|default:15 }}px;--sfb-muted-size:{{ SHOP_MUTED_TEXT_SIZE|default:11 }}px;--sfb-image-fit:{{ SHOP_IMAGE_FIT|default:'cover' }}">
+      style="--brand-primary:{{ SHOP_PRIMARY_COLOR }};--brand-accent:{{ SHOP_ACCENT_COLOR }};--brand-primary-fg:{{ SHOP_PRIMARY_FG }};--brand-accent-fg:{{ SHOP_ACCENT_FG }};--brand-secondary:{{ SHOP_SECONDARY_COLOR }};--brand-secondary-fg:{{ SHOP_SECONDARY_FG }};--brand-background:{{ SHOP_BACKGROUND_COLOR }};--brand-surface:{{ SHOP_SURFACE_COLOR }};--brand-text:{{ SHOP_TEXT_COLOR }};--brand-muted:{{ SHOP_MUTED_TEXT_COLOR }};--brand-primary-hover:{{ SHOP_PRIMARY_HOVER }};--brand-border:{{ SHOP_BORDER_COLOR }};--brand-tone-1:{{ SHOP_PALETTE_TONE_1 }};--brand-tone-2:{{ SHOP_PALETTE_TONE_2 }};--brand-tone-3:{{ SHOP_PALETTE_TONE_3 }};--brand-tone-4:{{ SHOP_PALETTE_TONE_4 }};--brand-tone-5:{{ SHOP_PALETTE_TONE_5 }};--theme-header-bg:{{ SHOP_THEME_HEADER_BG }};--theme-header-text:{{ SHOP_THEME_HEADER_TEXT }};--theme-nav-bg:{{ SHOP_THEME_NAV_BG }};--theme-nav-text:{{ SHOP_THEME_NAV_TEXT }};--theme-card-bg:{{ SHOP_THEME_CARD_BG }};--theme-footer-bg:{{ SHOP_THEME_FOOTER_BG }};--theme-footer-text:{{ SHOP_THEME_FOOTER_TEXT }};--theme-price:{{ SHOP_THEME_PRICE }};--sfb-font:'{{ SHOP_FONT|default:"Vazirmatn" }}';--sfb-radius:{{ SHOP_RADIUS|default:18 }}px;--sfb-button-radius:{{ SHOP_BUTTON_RADIUS|default:12 }}px;--sfb-content-width:{{ SHOP_CONTENT_WIDTH|default:1200 }}px;--sfb-grid-density:{{ SHOP_GRID_DENSITY|default:4 }};--sfb-heading-size:{{ SHOP_HEADING_SIZE|default:19 }}px;--sfb-body-size:{{ SHOP_BODY_SIZE|default:14 }}px;--sfb-product-name-size:{{ SHOP_PRODUCT_NAME_SIZE|default:13 }}px;--sfb-price-size:{{ SHOP_PRICE_SIZE|default:15 }}px;--sfb-muted-size:{{ SHOP_MUTED_TEXT_SIZE|default:11 }}px;--sfb-image-fit:{{ SHOP_IMAGE_FIT|default:'cover' }}{% if SHOP_OCCASION_THEME and SHOP_OCCASION_THEME != 'none' %};--occasion-accent:{{ SHOP_OCCASION_ACCENT }};--occasion-accent-soft:{{ SHOP_OCCASION_ACCENT_SOFT }};--occasion-motif-opacity:{{ SHOP_OCCASION_MOTIF_OPACITY }};--occasion-accent-mix:{{ SHOP_OCCASION_ACCENT_MIX }}{% endif %}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -37,6 +38,10 @@
 {% comment %}Loaded AFTER page CSS so a selected full-site palette can consistently
 theme every storefront page without per-page forks.{% endcomment %}
 <link rel="stylesheet" href="{% static 'css/theme_palette.css' %}">
+{% comment %}P5-W2 — bounded occasion Theme overlay layer. One token layer driven by
+the resolved --occasion-* platform values; no per-template fork. Inert when no
+occasion is selected (no data-occasion-theme attribute on <html>).{% endcomment %}
+<link rel="stylesheet" href="{% static 'css/occasion_theme.css' %}">
 <script src="{% static 'js/htmx.min.js' %}" defer></script>
 {% comment %}Phase 5 Task 5 — shared storefront overlay-mechanics primitive
 (sfbOverlay). Loaded (defer) BEFORE Alpine so its alpine:init listener is

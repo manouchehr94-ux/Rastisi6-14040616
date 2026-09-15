@@ -37,6 +37,7 @@ from ..storefront_appearance.rendering import (
     global_renderer_template as store_appearance_global_renderer_template,
     resolve_store_appearance_render_state,
     section_variant_for as store_appearance_section_variant_for,
+    theme_overlay_state as store_appearance_theme_overlay_state,
 )
 from ..variant_contract import resolve_active_variant, resolve_renderer_template
 from . import section_appearance_service, section_data_service
