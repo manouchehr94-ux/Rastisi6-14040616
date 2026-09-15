@@ -1,7 +1,7 @@
 {
   "host": "rastisi-fashion-test.rastisi.localhost",
   "base": "http://rastisi-fashion-test.rastisi.localhost:8817",
-  "started_at": "2026-09-15T06:52:14.922Z",
+  "started_at": "2026-09-15T07:05:34.393Z",
   "checks": [
     {
       "name": "overflow:below:desktop-1440",
@@ -530,7 +530,7 @@
       "checkoutPresent": false
     }
   ],
-  "finished_at": "2026-09-15T06:52:26.690Z",
+  "finished_at": "2026-09-15T07:05:46.206Z",
   "summary": {
     "pass": 48,
     "fail": 0,

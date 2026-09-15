@@ -4,7 +4,7 @@
 ویو یا تمپلیت تکرار شود؛ همیشه از طریق این توابع خالص انجام شوند.
 """
 
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
 from django.utils import timezone
 
@@ -139,11 +139,18 @@ def cart_totals(
     # جداگانه). سبدِ کاملاً دیجیتال هدفِ ارسالِ فیزیکی را نمایش نمی‌دهد.
     free_shipping_goal_applicable = shipping_service.cart_requires_shipping(items)
     free_shipping_goal_remaining = max(Decimal("0"), free_shipping_threshold - items_total)
-    if free_shipping_threshold <= 0 or items_total <= 0:
+    # درصدِ پیشرفت — «۱۰۰٪» فقط و فقط برایِ حالتِ *رسیدن به آستانه* رزرو شده
+    # است. یک سبدِ زیرِ آستانه (باقی‌مانده > ۰) هرگز نباید نوارِ پُر (۱۰۰٪) نشان
+    # دهد؛ برایِ همین در حالتِ زیرِ آستانه به‌جایِ گِردکردن (که ۴۹۹۰۰۰/۵۰۰۰۰۰ =
+    # ۹۹٫۸٪ را به ۱۰۰ می‌رساند) به سمتِ پایین trunc می‌شود (ROUND_DOWN) و
+    # سقفِ ۹۹ اعمال می‌گردد.
+    if free_by_threshold:
+        free_shipping_goal_progress_percent = 100
+    elif free_shipping_threshold <= 0 or items_total <= 0:
         free_shipping_goal_progress_percent = 0
     else:
         free_shipping_goal_progress_percent = min(
-            100, int((items_total * 100 / free_shipping_threshold).to_integral_value(rounding=ROUND_HALF_UP))
+            99, int((items_total * 100 / free_shipping_threshold).to_integral_value(rounding=ROUND_DOWN))
         )
 
     shipping_zone = None

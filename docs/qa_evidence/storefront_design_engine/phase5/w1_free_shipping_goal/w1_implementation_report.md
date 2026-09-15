@@ -67,6 +67,9 @@ State **D** (FREE_SHIP coupon below threshold) is verified by unit tests (`test_
 ## Evidence files
 `docs/qa_evidence/storefront_design_engine/phase5/w1_free_shipping_goal/`: `red_pricing.txt`, `green_pricing.txt`, `green_focused.txt`, `regression.txt`, `regression_preexisting_note.txt`, `django_check.txt`, `migration_check.txt`, `diff_check.txt`, `architecture_duplication_audit.txt`, `browser_qa/report.json` + screenshots, this report.
 
+## Progress invariant (review repair)
+**100% progress is reserved for the threshold-reached state; a below-threshold cart can never render a full bar.** The initial implementation used `ROUND_HALF_UP`, which rounded a near-threshold value (e.g. 499,000 / 500,000 = 99.8%) up to 100 while `free_shipping_by_threshold` was still `False` — a contradictory "۱٬۰۰۰ تومان دیگر تا ارسال رایگان" shown next to a visually full bar. Fixed in `cart_totals()`: `free_shipping_goal_progress_percent = 100` **iff** `free_by_threshold`; otherwise (below threshold) the percent is truncated toward zero (`ROUND_DOWN`) and capped at `99`; empty/unusable threshold → `0`. No floating-point math (Decimal only); calculation stays in `cart_totals()`. Regression tests: `test_just_below_threshold_progress_is_99_not_100` (499,000/500,000 → 99) and `test_one_unit_below_threshold_progress_below_100` (499,999/500,000 → 99). RED evidence: `red_near_threshold.txt` (observed 100; expected 99).
+
 ## Migrations
 **0.**
 

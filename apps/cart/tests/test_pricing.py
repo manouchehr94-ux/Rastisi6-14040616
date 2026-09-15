@@ -441,6 +441,27 @@ class FreeShippingGoalTests(TestCase):
         self.assertEqual(t["free_shipping_goal_progress_percent"], 100)
         self.assertTrue(t["free_shipping_goal_progress_percent"] <= 100)
 
+    # ---- 8b. just below threshold must NEVER render a full (100%) bar ----
+    # Invariant: 100% progress is reserved for the threshold-reached state; a
+    # below-threshold cart (remaining > 0) must always be < 100. Nearest-integer
+    # rounding (499000/500000 = 99.8% → 100) violated this — the fix truncates
+    # below-threshold progress.
+    def test_just_below_threshold_progress_is_99_not_100(self):
+        self._add_item(price=499_000)  # 499,000 / 500,000
+        t = cart_totals(self.cart, store=self.store)
+        self.assertFalse(t["free_shipping_by_threshold"])
+        self.assertEqual(t["free_shipping_goal_remaining"], Decimal("1000"))
+        self.assertLess(t["free_shipping_goal_progress_percent"], 100)
+        self.assertEqual(t["free_shipping_goal_progress_percent"], 99)
+
+    def test_one_unit_below_threshold_progress_below_100(self):
+        self._add_item(price=499_999)  # 499,999 / 500,000
+        t = cart_totals(self.cart, store=self.store)
+        self.assertFalse(t["free_shipping_by_threshold"])
+        self.assertEqual(t["free_shipping_goal_remaining"], Decimal("1"))
+        self.assertLess(t["free_shipping_goal_progress_percent"], 100)
+        self.assertEqual(t["free_shipping_goal_progress_percent"], 99)
+
     # ---- 9. all-digital / non-shippable cart ----
     def test_all_digital_cart_goal_not_applicable(self):
         self._add_item(price=200_000, sku="DIGI-1", requires_shipping=False)
