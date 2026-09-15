@@ -262,11 +262,21 @@ class DesignLabCanonicalValidationTests(DesignLabBaseTestCase):
             locked_families=set(),
             seed=2,
         )
+        registry_before = len(layout_preset_registry.list_layout_presets())
         preset = design_lab_service.candidate_to_preset(self.draft, candidate)
         self.assertIsInstance(preset, LayoutPresetDefinition)
         self.assertIsNotNone(preset.store_appearance)
-        # Candidate preset must NOT be registered.
-        self.assertIsNone(layout_preset_registry.get_layout_preset(preset.key))
+        # candidate_to_preset must NEVER register anything (the transient preset
+        # is never added to the canonical registry — registry count unchanged).
+        self.assertEqual(
+            len(layout_preset_registry.list_layout_presets()), registry_before
+        )
+        # The transient candidate object is NOT the registered definition:
+        # it carries the candidate's own store_appearance manifest.
+        self.assertEqual(
+            preset.store_appearance["selections"],
+            dict(candidate.candidate_selections),
+        )
 
     def test_candidate_preset_accepted_by_resolve_preset_candidate(self):
         from apps.storefront_builder.services import design_lab_service, preset_service
