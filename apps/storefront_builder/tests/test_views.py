@@ -2639,20 +2639,22 @@ class ProductDetailContextAwareSectionsPreviewTests(StorefrontBuilderViewsTestCa
         ).read_text(encoding="utf-8")
         self.assertIn("--gmn-clearance", css)
 
-    def test_clearance_is_per_variant_and_zero_when_nav_absent(self):
-        # IMPORTANT-1 repair: --gmn-clearance is NOT a single global constant.
-        # It defaults to 0 (nav absent) and each registered nav variant
-        # publishes its OWN geometry off the nav identity class. This proves one
-        # canonical geometry source that distinguishes every active variant AND
-        # the hidden/absent case (so SATC never floats ~88px up with no nav).
+    def test_clearance_is_per_variant_and_safe_area_when_nav_absent(self):
+        # --gmn-clearance is NOT a single global constant. Its no-nav/default
+        # value is the device safe area alone (so SATC never floats ~88px up for
+        # a nav that isn't there, yet still clears the home indicator), and each
+        # registered nav variant publishes its OWN geometry off the nav identity
+        # class. One canonical geometry source distinguishing every active
+        # variant AND the hidden/absent case.
         from pathlib import Path
         from django.conf import settings as dj_settings
         css = Path(
             dj_settings.BASE_DIR,
             "apps/storefront_builder/static/css/storefront_builder.css",
         ).read_text(encoding="utf-8")
-        # default (absent) is 0
-        self.assertRegex(css, r":root\s*\{\s*--gmn-clearance:\s*0px\s*\}")
+        # default (absent) is the safe area alone — never a bare 0px.
+        self.assertRegex(css, r":root\s*\{\s*--gmn-clearance:\s*env\(safe-area-inset-bottom")
+        self.assertNotRegex(css, r":root\s*\{\s*--gmn-clearance:\s*0px\s*\}")
         # every registered variant has its own clearance rule keyed off identity
         for variant in [
             "four_item", "five_item", "raised_cart", "floating_dock",
@@ -2662,6 +2664,40 @@ class ProductDetailContextAwareSectionsPreviewTests(StorefrontBuilderViewsTestCa
                           f"missing canonical clearance for nav variant {variant}")
         # a generic .gmn rule covers default/luxury (which reuse default geometry)
         self.assertRegex(css, r":root:has\(\.gmn\)\s*\{\s*--gmn-clearance:")
+
+    def test_no_nav_clearance_includes_device_safe_area(self):
+        # No-nav safe-area contract: the canonical no-nav/default
+        # --gmn-clearance MUST include env(safe-area-inset-bottom) and must NOT
+        # be a bare 0px — otherwise, with no bottom nav, a bottom-anchored SATC
+        # would sit flush at bottom:0 and be clipped by the iPhone home
+        # indicator. Desktop Chromium resolves the inset to 0, so this contract
+        # test (not a pixel measurement) guards against regression.
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        css = Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/static/css/storefront_builder.css",
+        ).read_text(encoding="utf-8")
+        import re
+        m = re.search(r":root\s*\{\s*--gmn-clearance:\s*([^}]*?)\s*\}", css)
+        self.assertIsNotNone(m, "canonical :root --gmn-clearance declaration must exist")
+        no_nav_value = m.group(1).strip()
+        self.assertIn("env(safe-area-inset-bottom", no_nav_value,
+                      "no-nav --gmn-clearance must clear the device safe area")
+        self.assertNotEqual(no_nav_value, "0px",
+                            "no-nav --gmn-clearance must not be a bare 0px")
+        # Every active variant clearance also includes the safe area exactly
+        # once (calc(<n>px + env(safe-area-inset-bottom,0px))) — never doubled.
+        for variant in ["four_item", "five_item", "raised_cart", "floating_dock",
+                        "glass_dock", "minimal_icons", "wide_cart"]:
+            vm = re.search(
+                r":root:has\(\.gmn--" + variant + r"\)\s*\{\s*--gmn-clearance:\s*([^}]*?)\s*\}",
+                css,
+            )
+            self.assertIsNotNone(vm, f"missing clearance rule for {variant}")
+            val = vm.group(1)
+            self.assertEqual(val.count("env(safe-area-inset-bottom"), 1,
+                             f"{variant} must count the safe area exactly once")
 
 
 class ProductListingContextAwareSectionPreviewTests(StorefrontBuilderViewsTestCase):

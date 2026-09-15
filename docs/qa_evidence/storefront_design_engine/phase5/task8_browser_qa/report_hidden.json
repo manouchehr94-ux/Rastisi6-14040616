@@ -3,7 +3,7 @@
   "base": "http://rastisi-fashion-test.rastisi.localhost:8817",
   "pdp": "/products/accessory-scarf-%D8%A8%D8%B1%D8%AF%DB%8C%D8%A7-4/",
   "nav_identity_expected": "hidden",
-  "started_at": "2026-09-15T04:41:16.477Z",
+  "started_at": "2026-09-15T05:00:59.712Z",
   "checks": [
     {
       "name": "pdp:status:desktop-1440",
@@ -381,7 +381,7 @@
     }
   ],
   "console_errors": [],
-  "finished_at": "2026-09-15T04:41:21.418Z",
+  "finished_at": "2026-09-15T05:01:04.737Z",
   "summary": {
     "pass": 35,
     "fail": 0,

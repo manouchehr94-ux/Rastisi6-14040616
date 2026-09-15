@@ -247,7 +247,12 @@
   .pdp-satc{
     display:flex;align-items:center;gap:12px;
     position:fixed;z-index:90;inset-inline:0;
-    /* sit directly above the active bottom nav (or the safe area when absent) */
+    /* Sit directly above the active bottom nav, or — when no nav renders —
+       above the device safe area. The canonical --gmn-clearance ALREADY
+       includes env(safe-area-inset-bottom) in every branch (nav-absent value
+       is the safe area itself; each variant is calc(<n>px + safe-area)), so the
+       safe area is counted exactly once. The var() fallback here is only a
+       defensive backstop if the nav stylesheet failed to load. */
     bottom:var(--gmn-clearance,env(safe-area-inset-bottom,0px));
     min-height:var(--satc-height);
     padding:10px 14px;

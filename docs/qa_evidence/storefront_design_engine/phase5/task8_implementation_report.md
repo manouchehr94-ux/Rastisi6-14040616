@@ -286,3 +286,63 @@ TASK 8 TESTS: PASS
 REGRESSION: PASS
 MIGRATIONS: 0
 PR MERGED: NO
+
+
+
+---
+
+# Task 8 — Review Repair Round 3: no-nav safe area (addendum)
+
+Re-review of `475828a` left **1 IMPORTANT** (no-nav safe area lost) + **1 MINOR** (stale PR description). Both fixed on the same branch. PR #5 remains **unmerged**.
+
+## IMPORTANT — no-nav clearance now includes the device safe area (PASS)
+
+Previously the canonical no-nav value was `:root{--gmn-clearance:0px}`. Because it was a defined value, SATC's `bottom:var(--gmn-clearance, env(safe-area-inset-bottom,0px))` never used the fallback, so with no bottom nav SATC resolved to `bottom:0` and would be clipped by the iPhone home indicator. Desktop Chromium resolves the inset to 0, so a pixel measurement could not catch this.
+
+Fix (ONE canonical owner, no new variable/state, no per-template rule):
+
+```css
+:root{--gmn-clearance:env(safe-area-inset-bottom,0px)}      /* no nav → safe area alone */
+:root:has(.gmn){--gmn-clearance:calc(114px + env(safe-area-inset-bottom,0px))}      /* default / luxury */
+:root:has(.gmn--five_item){--gmn-clearance:calc(78px + env(safe-area-inset-bottom,0px))}
+/* …every variant is calc(<n>px + env(safe-area-inset-bottom,0px)) … */
+```
+
+The safe area is counted **exactly once** in every branch (never doubled): the no-nav value is the inset alone; each active variant adds it once inside its own `calc()`. Result:
+- no nav → SATC clears the device safe area;
+- active nav → SATC clears (nav geometry + safe area) once;
+- the whole-PDP bottom reserve derives from the same `--gmn-clearance`.
+
+### Contract test (regression guard)
+
+Because desktop Chromium resolves `env(safe-area-inset-bottom)` to 0, a pixel test cannot prove the iPhone case. A focused CSS/architecture test now asserts the no-nav/default `--gmn-clearance` **contains `env(safe-area-inset-bottom`** and is **not** a bare `0px`, and that every per-variant clearance counts the safe area exactly once: `test_no_nav_clearance_includes_device_safe_area`. The existing per-variant + zero-when-absent test was updated to `test_clearance_is_per_variant_and_safe_area_when_nav_absent` (asserts the no-nav value is the safe area, not `0px`).
+
+## Re-run (round 3)
+
+- All 9 bottom-nav browser QA runs regenerated: 9/9 presentations 0 FAIL at 390×844 and 360×800 (no behavioral change on a zero-inset device; the fix is a CSS-contract correctness fix verified by the contract test).
+- Tests: **559** OK (focused/PDP + cart + render_service + section_registry + a8 contracts + r4 store-appearance; 1 skipped). Focused SATC class: 26 OK.
+- `python manage.py check`: no issues. `makemigrations --check --dry-run`: No changes detected. `git diff --check`: clean. No migrations.
+
+## Current final implementation (authoritative — supersedes earlier first-pass notes)
+
+- **SATC lives physically inside the one canonical `cart:add` `<form>`** as a plain `type="submit"` button (`position:fixed`, so no layout impact). There is **no `form=` attribute** and **no `pdp-buy-form-<pk>` id** coupling. One form, one submitted `quantity` owner (the existing stepper), one `cart:add` pipeline, no second Alpine component.
+- **Nav clearance** is one canonical owner (`--gmn-clearance` in `storefront_builder.css`): safe-area-alone when no nav, per-variant `calc(<n>px + safe-area)` otherwise (raised_cart/luxury 114 to clear the raised orb; five_item 78; etc.).
+- **No-obscuration**: the whole-PDP container (`.wrap.pdp-page`) reserves real bottom height `calc(--gmn-clearance + --satc-height + 16px)` covering ALL PDP sections; the QA proof scrolls the true final content (by document position) to above SATC and asserts it is visible and clear.
+
+## Files changed by round 3 (same branch)
+
+- `apps/storefront_builder/static/css/storefront_builder.css` — no-nav `--gmn-clearance` now `env(safe-area-inset-bottom,0px)`.
+- `apps/catalog/static/css/product_detail.css` — clarified comment (safe area counted once; var() fallback is a backstop).
+- `apps/storefront_builder/tests/test_views.py` — added `test_no_nav_clearance_includes_device_safe_area`; updated the per-variant/no-nav test.
+- `docs/qa_evidence/.../task8_browser_qa/` — regenerated.
+
+ROUND 3 — CRITICAL: 0
+IMPORTANT: 0
+MINOR: 0
+NO-NAV SAFE AREA: PASS
+ALL NAV VARIANTS QA: PASS
+NO-CONTENT-OBSCURATION: PASS
+TASK 8 TESTS: PASS
+REGRESSION: PASS
+MIGRATIONS: 0
+PR MERGED: NO

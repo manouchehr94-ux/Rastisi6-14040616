@@ -5242,20 +5242,24 @@ html[data-sfb-density="compact"] .feat small{font-size:9.5px}
    mobile surface (e.g. the PDP Sticky Add-to-Cart) consumes ``--gmn-clearance``
    instead of hard-coding per-template offsets.
 
-   Default is 0 (+ safe area handled by the consumer): when NO bottom nav
-   renders, ``.gmn`` is absent, no variant rule matches, and a consumer must
-   not sit ~88px up for a nav that isn't there. Each active nav variant then
-   publishes its OWN real clearance below, keyed off the nav's identity class
-   via ``:has()`` on a common ancestor (the nav ``.gmn--<id>`` and the consumer
-   are cousins under the page shell, not ancestor/descendant, so a plain
-   custom-property cascade cannot reach the consumer). The values mirror the
-   nav's own geometry — bottom offset + bar min-height (+ raised-cart upward
-   extension) + a small gap — matching the nav's existing ``.gmn-spacer``
-   content-reserve numbers where those already exist (default 100, five_item
-   78, minimal_icons 82). ONE owner, no new application state, no new authority;
-   ``:has()`` is already an established pattern in this codebase's storefront
-   CSS. Only active <=680px (where the nav itself exists). */
-:root{--gmn-clearance:0px}
+   Default = the device safe area ALONE: when NO bottom nav renders, ``.gmn``
+   is absent, no variant rule matches, and a bottom-anchored consumer must not
+   sit ~88px up for a nav that isn't there — but it MUST still clear the mobile
+   safe area (iPhone home-indicator). So the canonical no-nav value is
+   ``env(safe-area-inset-bottom,0px)`` itself (0 on devices without an inset).
+   Each active nav variant then publishes its OWN real clearance below as
+   ``calc(<variant>px + env(safe-area-inset-bottom,0px))`` — the safe area is
+   counted EXACTLY ONCE in every branch (never doubled). Keyed off the nav's
+   identity class via ``:has()`` on a common ancestor (the nav ``.gmn--<id>``
+   and the consumer are cousins under the page shell, not ancestor/descendant,
+   so a plain custom-property cascade cannot reach the consumer). The variant
+   values mirror the nav's own geometry — bottom offset + bar min-height (+
+   raised-cart upward extension) + a small gap — matching the nav's existing
+   ``.gmn-spacer`` content-reserve numbers where those already exist (default
+   100, five_item 78, minimal_icons 82). ONE owner, no new application state,
+   no new authority; ``:has()`` is already an established pattern in this
+   codebase's storefront CSS. Only active <=680px (where the nav itself exists). */
+:root{--gmn-clearance:env(safe-area-inset-bottom,0px)}
 @media(max-width:680px){
   /* Canonical per-variant clearance (bottom offset + bar height + gap, plus the
      raised cart's upward orb extension where applicable), always + safe area. */
