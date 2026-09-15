@@ -373,10 +373,22 @@ class R4EditorJsSidebarContractTests(R4MutationApiTestCase):
         # R4 Task 11 legitimately adds two more sanctioned POST endpoints
         # (history/, publish/) alongside the original mutate/ — this guard
         # is "no ROGUE extra write path", not "exactly one POST forever".
+        # P5-W3 adds the transient Design Lab endpoint (design-lab/), which is
+        # READ-ONLY (computes candidates, writes nothing); the real Design Lab
+        # persistence still flows through the SAME canonical mutate/ endpoint
+        # (design_lab.apply_candidate via R4.enqueueMutation), never a new
+        # write target. So the WRITE endpoints remain exactly the sanctioned
+        # three; the two extra POSTs are the read-only Design Lab calls.
         self.assertIn("mutate/", self.js_source)
         self.assertIn("history/", self.js_source)
         self.assertIn("publish/", self.js_source)
-        self.assertEqual(self.js_source.count("method: 'POST'"), 3)
+        # The read-only Design Lab endpoint URL comes from the server-rendered
+        # data attribute, never a hardcoded JS write target.
+        self.assertIn("data-r4-design-lab-url", self.js_source)
+        self.assertEqual(self.js_source.count("method: 'POST'"), 5)
+        # The Design Lab apply still routes through the ONE mutation queue,
+        # never a bespoke write endpoint.
+        self.assertIn("enqueueMutation(body.mutation)", self.js_source)
 
     def test_rich_text_save_flows_through_enqueue_mutation(self):
         self.assertIn("sfb-rich-editor", self.js_source)
@@ -847,9 +859,14 @@ class Task4BBackgroundJsContractTests(R4MutationApiTestCase):
         self.assertIn("section.update_settings", bg_chunk)
 
     def test_background_widget_adds_no_new_write_endpoint(self):
-        # Task 4B must not add a 4th POST target — the sanctioned three
-        # (mutate/history/publish) stay exactly three.
-        self.assertEqual(self.js_source.count("method: 'POST'"), 3)
+        # Task 4B must not add a 4th WRITE POST target. The canonical WRITE
+        # endpoints remain the sanctioned three (mutate/history/publish); the
+        # background widget itself adds none. P5-W3 later added two READ-ONLY
+        # Design Lab POST fetches (design-lab/ candidate calls, which write
+        # nothing — the real apply reuses mutate/), so the literal POST count
+        # is five. The background widget still routes its own save through the
+        # single enqueueMutation(section.update_settings) path.
+        self.assertEqual(self.js_source.count("method: 'POST'"), 5)
         self.assertNotIn("modal", self.js_source.lower())
 
 

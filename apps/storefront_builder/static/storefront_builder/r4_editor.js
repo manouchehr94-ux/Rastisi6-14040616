@@ -1745,7 +1745,7 @@ window.RastiSiR4 = {
   // design_lab.apply_candidate mutation through the SAME R4.enqueueMutation
   // queue as every other edit. The client holds only the opaque candidate
   // token + the transient locked-family set — never a component key, seed,
-  // manifest, or any authority (localStorage is never used).
+  // manifest, or any client-side authority (no browser storage of state).
   (function initDesignLab() {
     if (!shell) return;
     var DL = {

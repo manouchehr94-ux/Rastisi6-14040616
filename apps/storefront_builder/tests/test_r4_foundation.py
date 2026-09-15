@@ -160,9 +160,15 @@ class R4DevicePreviewJsContractTests(StorefrontBuilderViewsTestCase):
         # UI-only preview state — never written to Store/Draft/localStorage,
         # and never through the mutation queue.
         self.assertNotIn("localStorage", self.js_source)
-        # The three sanctioned POST endpoints stay exactly three — device
-        # switching adds no write path.
-        self.assertEqual(self.js_source.count("method: 'POST'"), 3)
+        # P5-W3 — the sanctioned POST fetches are now five: the three canonical
+        # WRITE endpoints (mutate/history/publish) PLUS the two Design Lab
+        # transient-candidate calls (callDesignLab + applyCandidate's payload
+        # round-trip). The Design Lab endpoint (design-lab/) is READ-ONLY — it
+        # computes transient candidates and WRITES NOTHING; the actual Design
+        # Lab persistence still flows through the SAME mutate/ endpoint. Device
+        # switching itself still adds no POST path. (Guard intent: no ROGUE
+        # write path — see test_write_endpoints_are_only_the_sanctioned_r4_targets.)
+        self.assertEqual(self.js_source.count("method: 'POST'"), 5)
 
     def test_device_switcher_adds_no_second_renderer_or_preview_url(self):
         # No new iframe creation, no srcdoc, no second preview src.
