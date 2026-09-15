@@ -20,9 +20,19 @@ BASE-ONLY: (none)
 EMPTY DIFF: True
 ```
 
+## Reason-level comparison (not only test names)
+Beyond the sorted test-name lists, the COMPLETE raw stdout/stderr of both runs
+is preserved (`17_w2_full_suite_raw.txt`, `18_base_full_suite_raw.txt`) and
+compared by failure REASON (exception type + searched token/operands + failing
+`self.assert…` call, with the incidental embedded rendered-HTML haystack
+stripped). Result: W2-only = none, base-only = none, changed-reason = none.
+See `19_failure_reason_comparison.md`. This proves no already-failing test fails
+for a *different* W2-induced reason.
+
 ## Result
-The W2-branch failure set is **byte-for-byte identical** to the clean
-certified-base failure set on Python 3.12. **W2 introduces ZERO regressions.**
+The W2-branch failure set is **identical by test-identity AND by failure reason**
+to the clean certified-base failure set on Python 3.12. **W2 introduces ZERO
+regressions.**
 The 30 failures + 2 errors are PRE-EXISTING at `b7d8ac28` (Ready-Template
 reference-contract / mobile-nav / fullscreen-topbar / template-gallery /
 validator-boundary tests asserting frozen preset versions & reference

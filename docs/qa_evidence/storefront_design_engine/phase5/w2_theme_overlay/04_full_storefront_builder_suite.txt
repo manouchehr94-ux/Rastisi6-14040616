@@ -1,9 +1,10 @@
 === W2 BRANCH full suite (Python 3.12.13) tail ===
-Ran 3159 tests in 1368.535s
+Ran 3160 tests in 1372.673s
 
 FAILED (failures=30, errors=2, skipped=4)
 Destroying test database for alias 'default'...
-Found 3159 test(s).
+Found 3160 test(s).
 System check identified no issues (0 silenced).
 
 FULL_SUITE_EXIT=1 (non-zero expected while pre-existing failures remain)
+30 failures + 2 errors = identical by test-identity AND by failure reason to the certified base; see 19_failure_reason_comparison.md.

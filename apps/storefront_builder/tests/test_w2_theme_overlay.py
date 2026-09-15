@@ -1022,6 +1022,55 @@ class ThemeSingleResolutionTests(StorefrontBuilderViewsTestCase):
         with self.assertRaises(InvalidStoreAppearanceContract):
             shop_settings(request)
 
+    def test_normal_editor_preview_resolves_appearance_only_once(self):
+        """IMPORTANT 1 — the REAL editor Preview route must resolve the
+        canonical ResolvedStoreAppearance exactly once for a normal Draft: the
+        view's own resolve and the shell context processor's Theme projection
+        must share ONE request-scoped resolved state, never resolve the same
+        Draft twice."""
+        from unittest.mock import patch
+        from django.urls import reverse
+        from apps.storefront_builder.services import render_service
+        from apps.storefront_builder.services import appearance_authority_service
+
+        # Give the Draft a real occasion so the context processor does real work.
+        appearance_authority_service.apply_theme(
+            version=self.draft, component_key="theme.yalda.v1", intensity="strong"
+        )
+        self.draft.refresh_from_db()
+
+        # Count every persisted-Version resolution in the request by spying on
+        # the SINGLE underlying resolver at its source module. Both the Preview
+        # view's own call and the shell context processor's call (via the
+        # request-scoped helper) route through this exact function, regardless
+        # of which module-level name each caller imported.
+        from apps.storefront_builder.storefront_appearance import rendering as _rendering
+        from apps.storefront_builder.services import render_service as _rs
+        from apps.storefront_builder import views as _views
+
+        real = _rendering.resolve_store_appearance_render_state
+        calls = {"n": 0}
+
+        def _counting(version):
+            calls["n"] += 1
+            return real(version)
+
+        with patch.object(_rendering, "resolve_store_appearance_render_state", _counting), \
+             patch.object(_rs, "resolve_store_appearance_render_state", _counting), \
+             patch.object(_views, "resolve_store_appearance_render_state", _counting):
+            resp = self.client.get(
+                reverse("dashboard:storefront-builder-preview"), {"page": "listing"}
+            )
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode("utf-8")
+        self.assertIn('data-occasion-theme="yalda"', html)
+        self.assertEqual(
+            calls["n"],
+            1,
+            "normal editor Preview must resolve the Draft appearance exactly "
+            "once (view + context processor share one request-scoped state)",
+        )
+
     def test_transient_candidate_standin_does_not_call_persisted_resolver(self):
         """The template-Preview path sets storefront_appearance_version to a
         transient candidate stand-in (only effective_appearance_config(), no

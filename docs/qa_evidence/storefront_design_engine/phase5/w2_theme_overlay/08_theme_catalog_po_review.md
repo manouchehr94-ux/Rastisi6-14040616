@@ -70,9 +70,20 @@ fork, no merchant CSS. Intensity scales the ornament opacity
 
 Verified in Browser QA on two materially different Ready Templates
 (`dense_marketplace`, `editorial_jewelry`): a strong Yalda visibly reads as
-Yalda (crimson band + pomegranate corner ornament), Nowruz differs from Yalda
-(green blossom vs crimson orb), Ramadan is a restrained teal crescent, and
-Muharram/Ashura remains a calm neutral band with no celebratory affordance.
+Yalda (crimson band + pomegranate corner ornament), Ramadan is a restrained
+teal crescent, and Muharram/Ashura remains a calm neutral band with no
+celebratory affordance.
+
+**Nowruz (and Valentine, Eid al-Fitr, Eid al-Qorban) motifs are implemented and
+source-tested** — each has a distinct bounded `[data-occasion-motif="…"]`
+decoration in `occasion_theme.css`, asserted by
+`ThemeMotifTests.test_occasion_css_maps_motif_tokens_to_bounded_hooks` and
+`test_different_occasions_produce_different_motif_hooks` (Nowruz's
+`spring_blossom` motif is asserted distinct from Yalda's `pomegranate_night`).
+They were **not** part of the mandatory 54-case Browser QA matrix, which
+deliberately covered the three tone-representative occasions (Yalda festive,
+Ramadan Islamic-restrained, Muharram mourning). No visual Browser verification
+of Nowruz is claimed.
 See `07_browser_qa_report.md` and `screenshots/`.
 
 _Still awaiting Product Owner sign-off before W2 merge (PR #8 intentionally UNMERGED)._

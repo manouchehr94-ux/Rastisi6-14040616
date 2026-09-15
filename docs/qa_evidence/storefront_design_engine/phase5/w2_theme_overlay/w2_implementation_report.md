@@ -133,12 +133,29 @@ shell; that public-shell convergence is deferred to **P5-W4A**. W2 does NOT
 claim complete all-public-page Theme coverage before W4A.
 
 ### Repair test counts (Python 3.12.13, Django 5.2.17)
-- Focused `test_w2_theme_overlay`: **57 passed / 57**.
+- Focused `test_w2_theme_overlay`: **58 passed / 58** (adds the normal-editor-Preview
+  single-resolution regression test).
 - Candidate-preview regression: task2 (13) + `NonDestructiveTemplatePreviewTests` (11) = 24 PASS; task3 (11) PASS.
 - Targeted regression: 186 PASS (1 skip).
-- Full Storefront Builder suite: 3159 tests — 30 failures + 2 errors + 4 skipped,
-  **identical (empty diff) to the clean certified-base failure set** on Python
-  3.12 (reproduced via a clean clone, no stash). Zero W2 regressions.
+- Full Storefront Builder suite: 3160 tests — 30 failures + 2 errors + 4 skipped,
+  **identical BY TEST-IDENTITY AND BY FAILURE REASON** to the clean certified-base
+  failure set on Python 3.12 (reproduced via a clean clone, no stash; complete raw
+  outputs + reason-level comparison preserved — see
+  `17_w2_full_suite_raw.txt`, `18_base_full_suite_raw.txt`,
+  `19_failure_reason_comparison.md`). Zero W2 regressions.
+
+### Single request-scoped resolved appearance — BOTH paths
+- Public universal render → one canonical resolve (Repair A first pass).
+- Normal editor Preview (real `dashboard:storefront-builder-preview` route) →
+  one canonical resolve, shared with the shell context processor via the
+  request-scoped cache (IMPORTANT 1 fix in `views.storefront_preview`). Proven by
+  `ThemeSingleResolutionTests.test_normal_editor_preview_resolves_appearance_only_once`.
+
+### Additional production file changed by IMPORTANT-1 fix
+- `apps/storefront_builder/views.py` — `storefront_preview` now uses
+  `render_service.resolved_store_appearance_for_request(request, draft)` instead of
+  a direct `resolve_store_appearance_render_state(draft)`, so the view's resolve is
+  cached on the request and reused by the shell context processor.
 
 ### Task-6 historical guard correction
 The Task-6 additive guard `test_ready_template_recipe_files_are_untouched_by_task6`
