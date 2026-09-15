@@ -80,27 +80,40 @@ Old Tasks 9–18 are replaced by exactly five workstreams: `P5-W1` … `P5-W5`. 
 - Context delivery: `render_service._cart_summary_context` (`render_service.py:696`) already passes `totals` (the `cart_totals` dict) to the template.
 
 **Exact files expected to change:**
-- `apps/storefront_builder/templates/storefront_builder/sections/cart_summary.html` — add the goal/progress presentation reading `totals.items_total`, `totals.free_shipping`, and the Store threshold (exposed via the existing context; if the raw threshold is not yet in `totals`, add it to the returned dict in `_cart_summary_context` from `ShopSettings.load(store).free_shipping_threshold` — a context addition, NOT a new setting).
-- `apps/catalog/static/css/product_detail.css` **is NOT** the owner here; cart styling lives with the cart section CSS — use the existing cart/summary stylesheet the section already loads (confirm during implementation; do not create a new global sheet).
-- Tests: `apps/cart/tests/` (extend the pricing/threshold suite) and/or a `render_service`/section render test asserting the goal context + template output.
+- `apps/cart/services/pricing.py` — extend the `cart_totals()` return dict with the precomputed `free_shipping_threshold`, `free_shipping_by_threshold`, `free_shipping_by_coupon`, `free_shipping_goal_remaining`, `free_shipping_goal_progress_percent` fields (all math here; see Canonical-math rule below).
+- `apps/storefront_builder/templates/storefront_builder/sections/cart_summary.html` — add the goal/progress **display** markup reading only `totals.free_shipping_goal_*` and `totals.free_shipping_by_threshold`/`free_shipping_by_coupon`.
+- `apps/cart/static/css/cart.css` — the canonical cart stylesheet (loaded by `apps/cart/templates/cart/cart_detail.html:16`); add the goal/progress bar styles here. Do NOT create a new global sheet and do NOT put cart styles in `product_detail.css`.
+- Tests: `apps/cart/tests/` (extend the pricing/threshold suite against `cart_totals()`) plus a `render_service`/section render test asserting the goal fields reach the template and the view/template performs no threshold math.
 
-**Files forbidden to duplicate:** `pricing.py` (`cart_totals`), `ShopSettings`, the cart page/route, `cart:add`.
+**Files forbidden to duplicate:** `pricing.py` (`cart_totals` — it is the sole math owner), `ShopSettings` threshold read (only the existing `_free_shipping_threshold` call), the cart page/route, `cart:add`. `render_service._cart_summary_context` must NOT read `ShopSettings` or compute goal values.
 
-**Interfaces produced/consumed:** consumes `totals` (existing). Produces only template markup + a possible single added context key (`free_shipping_threshold`) in `_cart_summary_context`.
+**Canonical-math rule (non-negotiable):** ALL Free-Shipping Goal math lives in `apps/cart/services/pricing.py::cart_totals()` — the canonical pricing/coupon/free-shipping/tax authority. The View/render-context layer and the Template/CSS/JS layers perform **display only**. There must be **no second `ShopSettings.load()` threshold read** in the render/view/template layer, and **no pricing math in JavaScript**.
 
-**TDD RED tests (write first):**
-1. cart **below** threshold → goal shows a remaining-amount to the threshold (remaining = `threshold − items_total`, > 0).
-2. cart **exactly at** threshold → goal shows the "achieved" state; `free_shipping` truthy.
-3. cart **above** threshold → achieved state; progress clamped at 100% (never > valid range).
-4. **empty cart** → goal renders safely (no negative/NaN; either hidden or 0%).
-5. threshold source is **Store-scoped** (two stores with different `free_shipping_threshold` render different remaining amounts).
-6. **Persian/RTL** presentation (fa digits; RTL-safe markup).
-7. **no fabricated shipping promise** when `requires_shipping=False`/no shipping context (do not claim free physical shipping where none applies — mirror existing honesty gates).
-8. existing totals/coupon/tax outputs unchanged (regression assertion on `cart_totals`).
+**Interfaces produced/consumed:**
+- **Extend `cart_totals()`'s returned dict** (in `pricing.py`, reusing the already-computed `items_total`, existing `_free_shipping_threshold(store)`, and the existing `free_by_threshold` / `free_shipping_by_coupon` locals — `pricing.py:114–126`) with these precomputed, presentation-ready fields (names may follow project conventions; ownership stays in `pricing.py`):
+  - `free_shipping_threshold` — the Store-scoped threshold Decimal (from the existing `_free_shipping_threshold(store)`).
+  - `free_shipping_by_threshold` — bool: `items_total >= threshold` (the existing `free_by_threshold`).
+  - `free_shipping_by_coupon` — bool: coupon granted free shipping (the existing `free_shipping_by_coupon`), so the reason is distinguishable and coupon-granted free shipping is **never** misreported as "threshold reached."
+  - `free_shipping_goal_remaining` — `max(Decimal("0"), threshold − items_total)` (Decimal, never negative), computed in pricing.
+  - `free_shipping_goal_progress_percent` — `0` when threshold ≤ 0 or empty cart, else `min(100, round(items_total * 100 / threshold))`, **clamped to `[0,100]`** in pricing.
+- `_cart_summary_context` (`render_service.py:696`) continues to pass the existing `totals` dict unchanged (it now carries the new fields). **It must NOT read `ShopSettings` or compute anything.**
+- Template consumes only `totals.free_shipping_goal_*` / `totals.free_shipping_by_threshold` / `totals.free_shipping_by_coupon` for display.
 
-**Expected RED reason:** the goal markup/context does not exist yet in `cart_summary.html` / `_cart_summary_context`.
+**TDD RED tests (write first) — in `apps/cart/tests/` against `cart_totals()`:**
+1. **below** threshold, no coupon → `free_shipping_by_threshold=False`, `free_shipping_goal_remaining = threshold − items_total > 0`, `progress_percent` in `(0,100)`.
+2. **exactly at** threshold → `free_shipping_by_threshold=True`, `remaining=0`, `progress_percent=100`.
+3. **above** threshold → `free_shipping_by_threshold=True`, `remaining=0`, `progress_percent` clamped to `100`.
+4. **free-shipping coupon while still below threshold** → `free_shipping=True`, `free_shipping_by_coupon=True`, `free_shipping_by_threshold=False` (coupon-granted free shipping NOT reported as threshold reached).
+5. **threshold reached without coupon** → `free_shipping_by_threshold=True`, `free_shipping_by_coupon=False`.
+6. **empty cart** → `remaining = threshold`, `progress_percent=0`, no negative/NaN.
+7. **two Stores with different `free_shipping_threshold`** → different `remaining`/`progress_percent` (Store-scoped).
+8. **progress bounded 0–100** for arbitrary large `items_total`.
+9. **presentation consumes precomputed values only** — a render/template test asserting `_cart_summary_context` adds no `ShopSettings`/threshold computation and the template references only `totals.free_shipping_goal_*`/flags (assert no `ShopSettings.load` in the view layer for this path; template contains no arithmetic).
+Also: existing `items_total`/`grand_total`/`tax`/coupon outputs of `cart_totals()` remain unchanged (regression assertion).
 
-**Minimal GREEN implementation:** render the progress/goal from `totals` (+ threshold context key) in `cart_summary.html`; no JS math (progress computed server-side or via a bounded CSS width from server values); clamp width to `[0,100]`.
+**Expected RED reason:** `cart_totals()` does not yet return the `free_shipping_goal_*` / `free_shipping_by_threshold` fields, and `cart_summary.html` has no goal markup.
+
+**Minimal GREEN implementation:** add the precomputed fields to the `cart_totals()` return dict (reusing existing locals; no new `ShopSettings` read beyond the existing `_free_shipping_threshold`); render them for display in `cart_summary.html` (progress width driven by the server-computed `free_shipping_goal_progress_percent`; no JS/template arithmetic).
 
 **Focused test command:** `python manage.py test apps.cart.tests apps.storefront_builder.tests.test_render_service --settings=shop_core.settings`
 
@@ -134,42 +147,50 @@ Old Tasks 9–18 are replaced by exactly five workstreams: `P5-W1` … `P5-W5`. 
 
 **Certified starting checkpoint:** the official checkpoint **after P5-W1 merges** (record the SHA at kickoff; do NOT hard-code `804f734…`).
 
-**Exact canonical owner (SOURCE-VERIFIED) — verify before coding:**
-- `apps/storefront_builder/services/appearance_authority_service.py` — `apply_appearance_patch` (`:113`), `apply_store_appearance_manifest` (`:132`), `apply_header_variant` (`:171`), `apply_footer_variant` (`:194`), `apply_ready_template_appearance` (`:230`).
-- Manifest contract: `StoreAppearanceManifest` (`storefront_appearance/contracts.py:149`) = `{schema_version (== SUPPORTED_MANIFEST_SCHEMA_VERSION = 1), selections: Mapping, settings: Mapping (default {})}`. **`settings` is the extension slot** for typed theme fields (theme key + intensity), validated the same way palette/font/density are — NOT a new JSON blob outside the manifest.
-- Persistence: `storefront_appearance/persistence.py::persist_store_appearance_manifest` (`:106`).
-- Reversibility source: `StorefrontLayoutVersion.template_baseline_snapshot` (`apps/storefront_builder/models.py:296`) + the granular reset family in `preset_service.py` (`reset_storefront_to_baseline:714`, etc.).
-- Render application: `render_service._build_items_from_sections` (`:806`) — theme overlay is applied at render time over the resolved appearance, exactly like the existing hero/product_view/card/badge overlay; theme adds decoration/accents, it does not rewrite persisted structural selections.
+### Architecture decision (made now from source — not deferred)
 
-**Exact files expected to change (verify/confirm during implementation):**
-- `apps/storefront_builder/storefront_appearance/contracts.py` — add typed theme fields to the manifest `settings` contract + validators (occasion key from a bounded catalog; intensity enum). No schema_version bump unless Architect approves.
-- `apps/storefront_builder/services/appearance_authority_service.py` — a narrow `apply_theme(occasion, intensity)` / `clear_theme()` operation (mirroring `apply_header_variant`), writing only theme-owned fields.
-- `apps/storefront_builder/services/render_service.py` — read theme fields and apply the presentation overlay (accents/motifs/motion) over the resolved appearance.
-- A theme catalog module (new, e.g. `apps/storefront_builder/theme_catalog.py`) listing the supported occasions + their overlay tokens + tone flags — a data catalog, not a registry that competes with `layout_preset_registry`.
-- CSS: theme accent/motif variables consumed by existing sections (reuse existing CSS-variable/token pattern; no per-template fork).
-- R4 UI: expose Theme + Intensity as controls in the existing R4 inspector (Advanced tier), reusing Task-4 patterns.
+**A. Theme is a new optional canonical Store-Appearance FAMILY, not a free-form `settings` bag.** SOURCE-VERIFIED: `storefront_appearance/validation.py` closes `settings` — `_validate_typed_settings` rejects any top-level key not in `COMPONENT_FAMILIES` (`validation.py:107–110`) and any per-family key not in `ALLOWED_SETTINGS_BY_FAMILY[family]` (`validation.py:116–119`), and every family's allowed set is currently `frozenset()` (`validation.py:52–53`). So a bare "put theme key + intensity in settings" is invalid. Instead:
+- **Add a `theme` family** to `apps/storefront_builder/storefront_appearance/families.py` (`_FAMILY_DEFINITIONS`) as a `ComponentFamilyDefinition(key="theme", label_fa="تمِ مناسبتی", storage_adapter_key="theme_overlay", safe_default_component_key="theme.none.v1", renderer_role="theme_overlay", optional=True, capabilities={"responsive","rtl"})`. `optional=True` + a `theme.none.v1` safe default means **no theme by default**; the occasion is a bounded **component selection** in `manifest.selections["theme"]`.
+- **Register the occasion components** (`theme.none.v1`, `theme.nowruz.v1`, `theme.yalda.v1`, `theme.valentine.v1`, `theme.ramadan.v1`, `theme.eid_fitr.v1`, `theme.eid_qorban.v1`, `theme.muharram.v1`, …) in the canonical component catalog consumed by `apps/storefront_builder/storefront_appearance/registry.py` (`_DEFINITIONS` → `COMPONENT_REGISTRY`), validated by the existing `validate_component_catalog`. This is the SAME registration path header/footer/hero components use — **not a second registry.**
+- **Add intensity as a bounded family setting:** set `ALLOWED_SETTINGS_BY_FAMILY["theme"] = frozenset({"intensity"})` in `validation.py`, and add a typed validator that constrains `settings["theme"]["intensity"]` to the bounded enum `{"subtle","balanced","strong"}` (default `balanced`). Intensity lives in `manifest.settings["theme"]` — now a *validated, closed* family setting, not a free-form field.
+- If, on inspection, an existing family representation is provably safer, the implementer must document the source reason in the W2 report; the default and expected path is the dedicated `theme` family above.
+
+**B. Reversibility is the family's own `theme.none.v1` default — NOT `template_baseline_snapshot`.** SOURCE-VERIFIED: `template_baseline_snapshot` (`models.py:296`) is the *immutable Ready-Template baseline captured at Template Apply time*, NOT a snapshot of the merchant's appearance immediately before enabling a Theme. Using it for theme reversibility would wrongly discard non-theme merchant customizations. Because Theme is an independent overlay family, **`clear_theme()` = set `selections["theme"]="theme.none.v1"` and drop `settings["theme"]`, changing ONLY theme-owned state.** Every non-theme field (header/footer/bottom_nav/hero/product_view/card/badge selections, palette/font/density, section composition) is untouched — so removing a theme reproduces the exact prior non-theme state with no extra pre-theme snapshot. Undo/Redo/history use the existing `edit_history_service` mechanism.
+
+**C. Theme resolves through the canonical Store-Appearance resolution path, covering global chrome AND sections.** SOURCE-VERIFIED: `storefront_appearance/rendering.py::resolve_store_appearance_manifest_state` (`:67`) → `ResolvedStoreAppearance` (`:48`) is the single resolver used by BOTH the public render path (`resolve_store_appearance_render_state:105`) AND the candidate path (`preset_service.resolve_preset_candidate`, per its `rendering.py:74–75` docstring). The `theme` family (`renderer_role="theme_overlay"`) is resolved there once, so Preview/Public/Header/Footer/BottomNav/Sections all see one resolved theme state. `render_service` **consumes** the resolved theme result (e.g. exposing theme accent/motif CSS variables + a `data-theme`/`data-theme-intensity` attribute on the storefront shell, and letting section variants read the same resolved state) — it must **NOT** create a second independent theme resolver. Add a `theme_overlay_state(state)` accessor on the rendering module (mirroring `global_renderer_template`) so consumers read the resolved theme without re-resolving.
+
+**Exact files that MUST change (named now):**
+- `apps/storefront_builder/storefront_appearance/families.py` — add the `theme` `ComponentFamilyDefinition`.
+- `apps/storefront_builder/storefront_appearance/registry.py` (+ its `_DEFINITIONS` component source) — register the occasion `ComponentDefinition`s (incl. `theme.none.v1`).
+- `apps/storefront_builder/storefront_appearance/validation.py` — `ALLOWED_SETTINGS_BY_FAMILY["theme"] = frozenset({"intensity"})` + bounded intensity enum validation.
+- `apps/storefront_builder/storefront_appearance/rendering.py` — resolve the `theme` family into `ResolvedStoreAppearance` and add the `theme_overlay_state` accessor (the single resolution point for global + section consumers).
+- `apps/storefront_builder/services/appearance_authority_service.py` — narrow `apply_theme(occasion_component_key, intensity)` / `clear_theme()` writing only `selections["theme"]` + `settings["theme"]` through the existing manifest persistence (`persist_store_appearance_manifest`), mirroring `apply_header_variant` (`:171`).
+- `apps/storefront_builder/theme_catalog.py` (NEW data module) — the bounded occasion catalog: for each occasion the component key, human label, accent/motif tokens, and a `tone` flag (`festive`/`neutral`/`mourning`). A data catalog, NOT a registry competing with `layout_preset_registry`.
+- `templates/storefront_shell.html` (+ the relevant section/global CSS) — consume the resolved theme (accent/motif CSS variables + `data-theme`/`data-theme-intensity`), reusing the existing CSS-variable/token pattern; no per-template CSS fork.
+- R4 inspector template/JS — expose Theme + Intensity controls (Advanced tier), reusing the Task-4 inspector pattern and the canonical R4 mutation boundary.
 - Tests under `apps/storefront_builder/tests/`.
 
-**Files forbidden to duplicate:** the manifest contract, `appearance_authority_service`, `render_service`, `layout_preset_registry`, Draft/lifecycle.
+**Files forbidden to duplicate:** the manifest contract/validator, `appearance_authority_service`, the `rendering.py` resolver (`resolve_store_appearance_manifest_state`), `render_service`, `layout_preset_registry`, `COMPONENT_REGISTRY`, Draft/lifecycle. No second theme registry/manifest/persistence/resolver.
 
 **Required invariants (tests):**
-- Applying a Theme leaves base structural DNA **byte-for-byte unchanged**: header, footer, bottom_nav, hero family, product_view family, product_card family, section composition (only theme-overlay-owned fields change).
-- **Remove Theme reproduces the exact pre-Theme base state** (compare persisted manifest + rendered output before/after).
-- Theme participates in the existing Draft lifecycle, stale-write protection (`edit_revision`), history/undo-redo, Preview, and Publish/public rendering — via existing authorities (no new lifecycle).
-- Bounded intensity only.
+- Applying a Theme leaves base structural DNA **byte-for-byte unchanged**: `selections` for header, footer, bottom_nav, hero, product_view, card, badge, layout, mega_menu, motion and section composition are identical before/after; only `selections["theme"]` + `settings["theme"]` change.
+- **Remove Theme (`clear_theme`) reproduces the exact pre-Theme state for all non-theme fields.** Concrete scenario asserted: (1) apply Ready Template → (2) merchant changes header/font/radius/cards → (3) enable Yalda theme → (4) disable theme ⇒ manifest + rendered output for all non-theme fields equals state (2), NOT the Ready-Template baseline.
+- Theme participates in the existing Draft lifecycle, stale-write protection (`edit_revision`), `edit_history_service` undo/redo, Preview, and Publish/public rendering — via existing authorities (no new lifecycle).
+- Bounded intensity only (`{subtle,balanced,strong}`; invalid rejected by the validator).
+- **Preview/Public parity** + **global-region AND section proof:** the same resolved theme appears in the shell chrome (header/footer/bottom-nav) and in section variants, identically in Preview and Public render.
 
-**TDD RED tests:** (a) theme applied → only theme fields change, structural selections identical; (b) remove theme → exact restore; (c) intensity is bounded (invalid intensity rejected); (d) theme flows through publish → public render; (e) mourning-occasion tone flags present (see below). **Expected RED reason:** no theme field/symbol exists anywhere today (`grep theme_overlay|occasion|campaign_overlay|seasonal|intensity` is empty at `804f734`).
+**TDD RED tests:** (a) apply theme → only `selections["theme"]`/`settings["theme"]` change, all other selections identical; (b) `clear_theme` after non-theme edits → exact restore of the non-theme state (the 4-step scenario), NOT the template baseline; (c) intensity outside the enum is rejected by `validate_store_appearance_manifest`; (d) theme flows through publish → public render AND appears on global chrome + a section (parity); (e) `theme.none.v1` is the safe default (no theme unless selected); (f) mourning occasions carry `tone="mourning"` in the catalog. **Expected RED reason:** no `theme` family, no theme components, no `ALLOWED_SETTINGS_BY_FAMILY["theme"]`, and no theme resolution exist at `804f734` (`grep theme_overlay|occasion|campaign_overlay|seasonal|intensity` is empty).
 
 **Tone constraints (catalog review):** mourning themes (محرم/عاشورا) must NOT auto-introduce sale countdowns, confetti, high-pressure discount messaging, or celebratory motifs. Encode a per-occasion `tone` flag; the initial catalog copy is flagged for Product Owner review.
 
 **Focused test command:** `python manage.py test apps.storefront_builder.tests --settings=shop_core.settings` (theme + appearance suites).
-**Regression command:** full `appearance_authority_service`, `render_service`, `preset_service` suites (`test_r4_store_appearance_*`, `test_render_service`, `test_preset_service`).
-**Browser QA:** ≥3 themes (one festive Iranian, one Islamic, one neutral/sale) × 3 intensities on 2–3 base templates × 3 viewports RTL; plus Remove-Theme restore proof.
-**Tenant/security:** theme is Store-scoped through the manifest; no cross-store leakage.
-**Architecture duplication gate:** confirm theme lives inside `StoreAppearanceManifest.settings`, no second registry/manifest/Draft.
+**Regression command:** full appearance + render suites: `python manage.py test apps.storefront_builder.tests.test_r4_store_appearance_rendering apps.storefront_builder.tests.test_r4_store_appearance_registry apps.storefront_builder.tests.test_r4_store_appearance_contracts apps.storefront_builder.tests.test_render_service apps.storefront_builder.tests.test_preset_service --settings=shop_core.settings`.
+**Browser QA:** ≥3 themes (one festive Iranian, one Islamic, one neutral/sale) × 3 intensities on 2–3 base templates × 3 viewports RTL; plus the 4-step Remove-Theme restore proof and a global-chrome + section parity capture.
+**Tenant/security:** theme selection/intensity are Store-scoped through the per-version manifest; no cross-store leakage.
+**Architecture duplication gate:** confirm theme is a `theme` family in the single `COMPONENT_FAMILIES`/`COMPONENT_REGISTRY`, resolved by the single `rendering.py` resolver; no second registry/manifest/Draft/resolver; `render_service` only consumes the resolved state.
 **Checks:** expect **ZERO migrations** (theme lives in the existing JSON manifest). If a migration seems needed → STOP for Architect review.
 **Evidence:** `docs/qa_evidence/storefront_design_engine/phase5/w2_theme_overlay/` + `w2_implementation_report.md`.
-**Branch:** `feature/phase5-w2-theme-overlay`. **Commits:** e.g. `feat(storefront_builder): reversible Theme Overlay (manifest settings)` + catalog/UI commits. **PR gate:** unmerged; Architect + Product Owner (catalog tone) approval before merge.
+**Branch:** `feature/phase5-w2-theme-overlay`. **Commits (boundaries):** (1) `feat(storefront_builder): add reversible Theme appearance family + validator`; (2) theme catalog + resolution/consumption; (3) R4 Theme/Intensity controls. **PR gate:** unmerged; Architect + Product Owner (catalog tone) approval before merge.
 
 ---
 
@@ -191,13 +212,29 @@ Old Tasks 9–18 are replaced by exactly five workstreams: `P5-W1` … `P5-W5`. 
 - Apply/persistence + concurrency: `r4_mutation_service.apply_mutation` (`:1003`), `apply_history_command` (`:1031`), `publish_draft` (`:1119`); stale-write via `edit_revision != base_revision` under `select_for_update`; history via `edit_history_service`.
 - Remove Theme: the `clear_theme()` operation built in W2.
 
-**Exact files expected to change:**
-- `apps/storefront_builder/services/` — a Design-Lab service that GENERATES a candidate manifest (random-but-validated combination) and resolves it through `resolve_preset_candidate`; NO persistence. Locks are a transient (request/session-scoped) concept — explicitly NOT `StorefrontSection.is_locked`/`StorefrontContainer.is_locked` (structural lock, different semantics).
-- **Write-time reconciliation for hero/product_view/card/badge (absorbs old Task 13):** extend `appearance_authority_service.py` with `apply_component_variant(family, value)` (or per-family `apply_hero_variant`/`apply_product_view_variant`/`apply_card_variant`/`apply_badge_variant`) mirroring `apply_header_variant`, so Apply persists these families through the canonical manifest instead of only the render-time overlay. This is the write path Random-Mix Apply needs.
-- R4 UI (existing inspector/preview) — Design-Lab panel + controls, reusing the preview iframe and mutation boundary.
+### Exact candidate interface (decided now — Option A: transient `LayoutPresetDefinition`)
+
+SOURCE-VERIFIED: the canonical read-only resolver is `resolve_preset_candidate(draft: StorefrontLayoutVersion, preset: LayoutPresetDefinition) -> ResolvedPresetCandidate` (`preset_service.py:646`). It takes a **`LayoutPresetDefinition`**, NOT an arbitrary manifest, and performs zero writes (shares `_prepare_preset_application`; validates `preset.store_appearance` via `validate_store_appearance_manifest`; resolves appearance via `resolve_store_appearance_manifest_state`). SOURCE-VERIFIED: `LayoutPresetDefinition` is a **pure, Store-agnostic Python data object** (`layout_preset_registry.py`) with `key`, `version`, `default_palette_slug`, a `store_appearance` `StoreAppearanceManifest`, and `pages` = tuples of `PresetSectionEntry` — it is "data, not a new family implementation" and requires **no registration/persistence**.
+
+**Therefore the Design-Lab candidate = an in-memory transient `LayoutPresetDefinition` built by a pure generator, then passed straight to the existing `resolve_preset_candidate`.** No new candidate engine, no new manifest type, no persistence.
+
+- **Exact new service file:** `apps/storefront_builder/services/design_lab_service.py`.
+- **Transient candidate data contract (in-memory only; never saved):**
+  - `DesignLabCandidate` — a frozen dataclass holding: `base_selections: Mapping[str,str]` (the current Draft's resolved family selections), `candidate_selections: Mapping[str,str]` (per-family chosen component keys, incl. `theme`), `settings: Mapping` (bounded per-family settings, incl. `theme.intensity`), `locked_families: frozenset[str]` (transient locks), and `seed: int | None` (deterministic generation seam).
+  - `generate_candidate(draft, *, randomize_families: set[str], locked_families: set[str], seed: int | None) -> DesignLabCandidate` — a **pure** function: for each requested (unlocked) family it picks a component from that family's registered, compatible options (reusing the canonical `COMPONENT_REGISTRY` / family compatibility metadata), never changing a locked family, never producing a combination that fails the canonical validators. Randomize-One = a `randomize_families` of size 1 (Header/Hero/Product Cards/Footer/etc.).
+  - `candidate_to_preset(draft, candidate) -> LayoutPresetDefinition` — builds the transient `LayoutPresetDefinition` (page composition = the Draft's current pages preserved; `store_appearance` = a `StoreAppearanceManifest` with `candidate_selections` + `settings`; `default_palette_slug` = current). It is passed to `resolve_preset_candidate(draft, preset)` for **preview only** — no registration, no `register_layout_preset`.
+- **R4 preview handoff:** the Design-Lab panel previews the candidate through the EXISTING iframe path — `storefront_builder/views.py::storefront_preview` (`:249`) / `_preview_page_context` (`:202`) — fed by the `resolve_preset_candidate` result. No second preview view.
+- **Apply handoff:** explicit Apply commits the candidate's selections/settings through the EXISTING canonical mutation boundary `r4_mutation_service.apply_mutation(store, actor, base_revision, mutation)` (`:1003`) — which enforces `edit_revision != base_revision` stale-write (`:996-997`), tenant scope, and writes via `appearance_authority_service`/`edit_history_service`. Design-Lab NEVER writes directly.
+- **Locks:** live only in `DesignLabCandidate.locked_families` (transient request/session state) — explicitly NOT `StorefrontSection.is_locked`/`StorefrontContainer.is_locked` (structural lock; different semantics). No persistence of locks unless source proves a canonical persisted lock already exists (it does not at `804f734`).
+- **Zero persistence before Apply:** `generate_candidate`/`candidate_to_preset`/`resolve_preset_candidate` perform no `.save()`, no row create/delete, no manifest write, no history entry, no new `StorefrontLayoutVersion`.
+
+**Other exact files that change:**
+- **Write-time reconciliation for hero/product_view/card/badge (absorbs old Task 13):** extend `apps/storefront_builder/services/appearance_authority_service.py` with `apply_component_variant(draft, family, component_key)` (single generalized writer mirroring `apply_header_variant:171`/`apply_footer_variant:194`) so Apply persists these families into `StoreAppearanceManifest.selections` through the canonical manifest instead of only the render-time overlay in `render_service._build_items_from_sections`. This is the write path Random-Mix Apply uses.
+- `apps/storefront_builder/services/design_lab_service.py` (NEW, per above).
+- R4 inspector template/JS — Design-Lab panel + controls (Randomize / Randomize-One / lock toggles / Compare-with-Base / Return-to-Original / Reset / Remove-Theme / Preview / Apply), reusing the existing preview iframe and `apply_mutation` boundary.
 - Tests under `apps/storefront_builder/tests/`.
 
-**Files forbidden to duplicate:** candidate primitive, preview view, `apply_mutation`, Draft model, appearance manifest, `edit_history_service`.
+**Files forbidden to duplicate:** `resolve_preset_candidate` (candidate primitive), `LayoutPresetDefinition`/`register_layout_preset` (no registration of candidates), `storefront_preview` (preview view), `apply_mutation`, Draft model, appearance manifest/validator/resolver, `edit_history_service`.
 
 **Critical state rule:** before Apply, candidate state is transient; after explicit Apply, state flows through `apply_mutation`/`appearance_authority_service` only.
 
@@ -205,7 +242,7 @@ Old Tasks 9–18 are replaced by exactly five workstreams: `P5-W1` … `P5-W5`. 
 
 **Apply gate (tests):** Apply respects `edit_revision` and fails stale; preserves tenant isolation; creates normal history evidence; never bypasses `apply_mutation`.
 
-**TDD RED tests:** (a) Random Mix never changes a **locked** family; (b) Random Mix never produces a combination failing existing recipe validation; (c) Compare-with-Base diffs current vs `template_baseline_snapshot` correctly; (d) candidate state performs **no writes** until Apply; (e) Apply is stale-safe and goes through `apply_mutation`; (f) Remove Theme uses the W2 owner and restores exact pre-theme state. **Expected RED reason:** no Design-Lab/Random-Mix symbol exists at checkpoint.
+**TDD RED tests:** (a) `generate_candidate` never changes a **locked** family; (b) `candidate_to_preset` + `resolve_preset_candidate` never produce a combination that fails the canonical validators (invalid combos raise the same `InvalidPresetError`/`InvalidStoreAppearanceContract`); (c) **Compare-with-Base** correctly diffs the candidate's selections/settings against the **current committed Draft state** (base = the Draft's present manifest selections; "Return to Original DNA" restores that base — and, where the merchant is still on an unmodified Ready Template, that base equals `template_baseline_snapshot`); (d) candidate generation + preview perform **no writes** (assert no `.save()`/row/history/manifest write) until Apply; (e) Apply is stale-safe (wrong `base_revision` → `R4StaleRevision`) and goes through `apply_mutation`; (f) `generate_candidate` with the same `seed` is deterministic (reproducible for QA); (g) Remove Theme uses the W2 `clear_theme` owner and restores the exact pre-theme non-theme state. **Expected RED reason:** no `design_lab_service`/Design-Lab/Random-Mix symbol and no `apply_component_variant` exist at checkpoint.
 
 **Focused/regression/browser/tenant/duplication/checks:** focused = Design-Lab + appearance suites; regression = W1/W2 suites + candidate/preview/mutation suites together; browser = Random Mix (all-open + single-family), a Lock preventing change, Compare-with-Base real diff, Remove Theme restore, at 3 viewports RTL; tenant isolation asserted at Apply; duplication gate confirms transient candidate + single persistence; expect **ZERO migrations** (transient state; persisted fields already exist).
 **Evidence:** `docs/qa_evidence/storefront_design_engine/phase5/w3_design_lab/` + `w3_implementation_report.md`.

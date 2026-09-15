@@ -119,7 +119,7 @@ This was already a known Task-0 architecture gap; Tasks 1–8 did not close it. 
 - **Task 2** — live demo template gallery (replaces static screenshots), reusing the candidate primitive + real renderer. DOC + SOURCE.
 - **Task 3** — merchant-data template preview. DOC + SOURCE.
 - **Task 4** — R4 contextual editor repairs (device preview, media/background picker, scope labels, selection sync). DOC + SOURCE.
-- **Task 5** — high-impact primitives: Header R4 schema, **Mobile Nav Drawer**, **shared overlay primitive `sfbOverlay`**, **Quick View modal**, PDT tabs/accordion + PDTX trust, STRANS hero transition. This closed most of old Task 11 pre-emptively. SOURCE-VERIFIED.
+- **Task 5** — high-impact primitives: **HDR — canonical reuse / verification only; NO new Header SettingsSchema authority was built** (the existing Header/global-region system was reused and verified, not extended with a new schema owner), **Mobile Nav Drawer**, **shared overlay primitive `sfbOverlay`**, **Quick View modal**, PDT tabs/accordion + PDTX trust, STRANS hero transition. This closed most of old Task 11 pre-emptively. SOURCE-VERIFIED.
 - **Task 6** — Storefront Showcase canonical section (`luxury_showcase`). SOURCE.
 - **Task 7** — Browse/Search/Filter/Sort/pagination + mobile search + tenant isolation. DOC + SOURCE.
 - **Task 8** — PDP completion: **Sticky Add-to-Cart** inside the canonical cart form, per-variant bottom-nav clearance token, no-obscuration reserve; PDT/PDTX reused. SOURCE + TEST-VERIFIED (merged as `804f734`).
