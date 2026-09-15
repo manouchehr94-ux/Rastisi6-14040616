@@ -1,7 +1,33 @@
 # Phase 5 — Design Expansion Implementation Plan
 
 Date: 2026-09-11
-Status: DRAFT — created from the Task-0 kickoff audit (`docs/qa_evidence/storefront_design_engine/phase5/kickoff_capability_map.md`, `67_family_production_map.md`, `demo_store_inventory.md`). Not yet started; no production code changes have been made under this plan.
+
+> ## STATUS: SUPERSEDED AFTER TASK 8
+>
+> Tasks 1–8 are retained below as historical execution context.
+>
+> **Tasks 9–18 MUST NOT be executed as written.**
+>
+> The authoritative plan for all remaining Phase-5 work is:
+>
+> `docs/superpowers/plans/2026-09-15-phase5-converged-completion-plan.md`
+>
+> **Reason:** the Phase-5 Convergence Audit at checkpoint
+> `804f734a18d7504fb62f9db595433b0a4bf82fcd`
+> (`docs/qa_evidence/storefront_design_engine/phase5/phase5_convergence_audit.md`)
+> proved that Tasks 1–8 already subsumed substantial portions of the original
+> remaining plan, and executing Tasks 9–18 unchanged would create duplication
+> and unnecessary work. The remaining real Phase-5 gaps are covered by exactly
+> five converged workstreams (P5-W1 … P5-W5) in the authoritative plan above.
+> Old→new disposition (see the converged plan for detail): Task 9 → SHRINK to
+> P5-W1 (Free-Shipping Goal; Cross-Sell → BACKLOG); Task 10 → MERGE into
+> P5-W4B; Task 11 → DROP as standalone (primitives already exist; low-value
+> utilities → BACKLOG); Task 12 → REDESIGN into P5-W2; Tasks 13 & 14 →
+> REDESIGN/MERGE into P5-W3; Task 15 → MERGE into the quality/simplicity gates
+> across P5-W2/W3/W4; Task 16 → KEEP redesigned as P5-W4C; Task 17 → P5-W5
+> (Product Owner review); Task 18 → P5-W5 (final closure).
+
+Original status (historical): DRAFT — created from the Task-0 kickoff audit (`docs/qa_evidence/storefront_design_engine/phase5/kickoff_capability_map.md`, `67_family_production_map.md`, `demo_store_inventory.md`). Not yet started; no production code changes have been made under this plan.
 Starting point: `feature/phase5-design-expansion` branched from `chore/phase5-uiux-agent-foundation@9f71109`.
 
 ## How to read this plan
