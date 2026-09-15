@@ -53,6 +53,7 @@ from .services.render_service import (
     build_page_render_items,
     group_items_into_rows,
     resolve_store_appearance_render_state,
+    resolved_store_appearance_for_request,
     store_appearance_global_renderer_template,
 )
 
@@ -270,7 +271,14 @@ def storefront_preview(request):
     # forcing Container mode when none exist makes otherwise valid Draft
     # sections disappear from Preview.
     use_container_layout = page.containers.exists()
-    store_appearance = resolve_store_appearance_render_state(draft)
+    # P5-W2 Repair A (IMPORTANT 1) — resolve the canonical appearance ONCE per
+    # request and cache it on the request, so the shell context processor
+    # (apps.core.context_processors.shop_settings) reuses this exact resolved
+    # state for its Theme projection instead of resolving the same Draft a
+    # second time. The ``?preview_template`` candidate branch below sets a
+    # transient stand-in (not this Draft) as ``storefront_appearance_version``,
+    # which the context processor never passes to the persisted resolver.
+    store_appearance = resolved_store_appearance_for_request(request, draft)
     items = build_page_render_items(
         page,
         store,

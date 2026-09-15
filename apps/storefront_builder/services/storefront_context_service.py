@@ -132,7 +132,14 @@ def build_universal_storefront_context(request, store, page_type: str, page_cont
     # exact function, so both set this attribute exactly the same way.
     request.storefront_appearance_page = page
 
-    store_appearance = render_service.resolve_store_appearance_render_state(version)
+    # P5-W2 Repair A — resolve the canonical appearance ONCE per request and
+    # cache it on the request, so the shell context processor
+    # (apps.core.context_processors.shop_settings) reuses this exact resolved
+    # state for its Theme projection instead of resolving the same Version a
+    # second time.
+    store_appearance = render_service.resolved_store_appearance_for_request(
+        request, version
+    )
     items = render_service.build_page_render_items(
         page,
         store,

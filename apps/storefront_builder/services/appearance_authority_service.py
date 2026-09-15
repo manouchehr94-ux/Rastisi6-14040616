@@ -168,6 +168,65 @@ def _typed_key_for_selector(
     return component_key
 
 
+def apply_theme(
+    *,
+    version,
+    component_key: str,
+    intensity: str | None = None,
+):
+    """P5-W2 — the canonical reversible occasion-Theme write primitive.
+
+    Changes ONLY Theme-owned state: ``selections["theme"]`` and
+    ``settings["theme"]``. Every other family selection and every other
+    family's settings survive untouched (built on ``_manifest_with_family``,
+    which replaces exactly one selection). It NEVER touches
+    ``template_baseline_snapshot`` — Theme reversibility is owned entirely by
+    the Theme-owned manifest slice, not by Ready-Template baseline semantics.
+
+    Draft/lifecycle/authorization/locking/revision remain the caller's
+    responsibility; this writes through the single canonical persistence
+    primitive exactly like ``apply_header_variant``.
+    """
+    from ..theme_catalog import DEFAULT_THEME_INTENSITY
+
+    # Selecting "No Theme" (the no-op) is canonically identical to clearing:
+    # a no-op occasion carries no meaningful intensity, so it must never
+    # retain a stray intensity setting. Route it to the same result as
+    # clear_theme() rather than persisting theme.none.v1 + a dead intensity.
+    if component_key == "theme.none.v1":
+        return clear_theme(version=version)
+
+    if intensity is None:
+        intensity = DEFAULT_THEME_INTENSITY
+
+    primitive = _manifest_with_family(
+        version, family_key="theme", component_key=component_key
+    )
+    theme_settings = dict(primitive["settings"].get("theme", {}))
+    theme_settings["intensity"] = intensity
+    primitive["settings"]["theme"] = theme_settings
+    # validate_store_appearance_manifest (invoked by persistence) enforces the
+    # bounded intensity enum and that ``component_key`` is a real theme
+    # component — an unknown occasion or intensity fails closed here.
+    persist_store_appearance_manifest(version, primitive)
+    return version
+
+
+def clear_theme(*, version):
+    """P5-W2 — reset the occasion Theme to the safe no-op, changing NOTHING
+    else. Sets ``selections["theme"] = theme.none.v1`` and removes
+    ``settings["theme"]``. Non-theme selections and non-theme settings are
+    preserved byte-for-byte (a customization made before enabling a Theme is
+    never lost). Must NOT restore from ``template_baseline_snapshot``.
+    """
+    primitive = _manifest_with_family(
+        version, family_key="theme", component_key="theme.none.v1"
+    )
+    primitive["settings"].pop("theme", None)
+    persist_store_appearance_manifest(version, primitive)
+    return version
+
+
 def apply_header_variant(
     *,
     version,

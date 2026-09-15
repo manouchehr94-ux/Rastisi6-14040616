@@ -37,11 +37,46 @@ from ..storefront_appearance.rendering import (
     global_renderer_template as store_appearance_global_renderer_template,
     resolve_store_appearance_render_state,
     section_variant_for as store_appearance_section_variant_for,
+    theme_overlay_state as store_appearance_theme_overlay_state,
 )
 from ..variant_contract import resolve_active_variant, resolve_renderer_template
 from . import section_appearance_service, section_data_service
 
 TILE_CLASSES = ["t1", "t2", "t3"]
+
+
+#: P5-W2 Repair A — request attribute holding the ONE canonical resolved
+#: appearance state for the current request, so every consumer (the universal
+#: render pipeline AND the shell context processor) reuses a single
+#: ``ResolvedStoreAppearance`` per request instead of resolving the same
+#: persisted Version twice.
+_REQUEST_RESOLVED_APPEARANCE_ATTR = "storefront_resolved_appearance"
+
+
+def resolved_store_appearance_for_request(request, version) -> ResolvedStoreAppearance:
+    """Return the canonical ``ResolvedStoreAppearance`` for ``version``,
+    resolving it at most once per request.
+
+    The first caller in a request (normally
+    ``storefront_context_service.build_universal_storefront_context``) resolves
+    and caches it on the request; later consumers (the shell context processor)
+    reuse the cached instance. Resolution still goes through the single
+    canonical ``resolve_store_appearance_render_state`` — this is a
+    request-scoped memoization, NOT a second resolver. A malformed NEW manifest
+    still raises loudly (the resolver's ``InvalidStoreAppearanceContract`` is
+    never swallowed here).
+    """
+    cached = getattr(request, _REQUEST_RESOLVED_APPEARANCE_ATTR, None)
+    if cached is not None and getattr(cached, "version_id", None) == version.pk:
+        return cached
+    resolved = resolve_store_appearance_render_state(version)
+    try:
+        setattr(request, _REQUEST_RESOLVED_APPEARANCE_ATTR, resolved)
+    except (AttributeError, TypeError):
+        # A non-standard request stand-in that refuses attribute assignment is
+        # acceptable — resolution still succeeded; we simply cannot memoize.
+        pass
+    return resolved
 
 
 _DESTINATION_SELECT_RELATED = (

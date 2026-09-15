@@ -179,6 +179,9 @@ def _complete_store_appearance(
             "motion": f"motion.{motion}.v1",
             "footer": f"footer.{footer}.v1",
             "bottom_nav": f"bottom_nav.{bottom_nav}.v1",
+            # P5-W2 — Theme is now a known family; a complete manifest must
+            # carry it. Retained recipes never auto-assign an occasion.
+            "theme": "theme.none.v1",
         },
         "settings": {},
     }

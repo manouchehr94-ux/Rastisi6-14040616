@@ -95,6 +95,8 @@ A8_COMPONENT_KEYS = frozenset(
         "bottom_nav.glass_dock.v1",
         "bottom_nav.minimal_icons.v1",
         "bottom_nav.wide_cart.v1",
+        # P5-W2 — Ready Templates advertise only the Theme no-op.
+        "theme.none.v1",
     }
 )
 
@@ -124,9 +126,12 @@ class A8ComponentLibraryTests(SimpleTestCase):
                 "motion": 3,
                 "footer": 16,
                 "bottom_nav": 9,
+                # P5-W2 — 8 occasion themes (none + 7 occasions) from the
+                # single theme_catalog, adapted into the central registry.
+                "theme": 8,
             },
         )
-        self.assertEqual(len(COMPONENT_REGISTRY), 119)
+        self.assertEqual(len(COMPONENT_REGISTRY), 127)
 
     def test_mapping_vocabulary_is_registered_once_and_resolves_from_allowlist(self):
         self.assertTrue(

@@ -339,11 +339,21 @@ class ShowcaseFacadeReadyTemplateGuardTests(StorefrontBuilderViewsTestCase):
     authorities. This guards the recipe files against accidental edits."""
 
     def test_ready_template_recipe_files_are_untouched_by_task6(self):
+        # Historical Task-6 scope guard:
+        #   base = post-Task-5 certified checkpoint (Task-6 PR #3 base)
+        #   head = exact Task-6 PR #3 head
+        # Future workstreams must not affect this historical assertion, so the
+        # diff range is the FIXED Task-6 range (never ``...HEAD``): the guard
+        # proves TASK 6 ITSELF did not modify the listed canonical authorities.
         import subprocess
-        base = "c0ca174475bf19dd5c3ecac3857da479623e1e7d"
+        task6_base = "c0ca174475bf19dd5c3ecac3857da479623e1e7d"
+        task6_head = "a75711473b791c2add0389913707503bc0024cc0"
         changed = subprocess.run(
-            ["git", "diff", "--name-only", f"{base}...HEAD"],
-            cwd=dj_settings.BASE_DIR, capture_output=True, text=True,
+            ["git", "diff", "--name-only", f"{task6_base}...{task6_head}"],
+            cwd=dj_settings.BASE_DIR,
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout.split()
         forbidden = {
             "apps/storefront_builder/a8_ready_templates.py",

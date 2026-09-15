@@ -85,6 +85,8 @@ _MUTATION_HISTORY_LABELS = {
     "appearance.component.update": "تغییر جزء طراحی فروشگاه",
     "appearance.manifest.apply": "اعمال طراحی فروشگاه",
     "appearance.template.apply": "اعمال قالب آماده",
+    "theme.apply": "اعمال تم مناسبتی",
+    "theme.clear": "حذف تم مناسبتی",
 }
 
 
@@ -614,6 +616,41 @@ def _apply_appearance_component_update(
         raise
 
 
+def _apply_theme_apply(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """P5-W2 — apply an occasion Theme (selection + bounded intensity) through
+    the canonical appearance authority. Reuses the ONE mutation boundary
+    (lock/base-revision/history/increment in ``apply_mutation``); this handler
+    only validates input and delegates the state transformation."""
+    from apps.storefront_builder import theme_catalog
+
+    _require_pinned_appearance_draft(draft=draft, mutation=mutation)
+    component_key = mutation.get("component_key")
+    intensity = mutation.get("intensity", theme_catalog.DEFAULT_THEME_INTENSITY)
+
+    component = get_component(component_key) if isinstance(component_key, str) else None
+    if component is None or component.family_key != "theme":
+        raise R4MutationError("invalid_theme_component")
+    if not isinstance(intensity, str) or not theme_catalog.is_valid_intensity(intensity):
+        raise R4MutationError("invalid_theme_intensity")
+
+    try:
+        appearance_authority_service.apply_theme(
+            version=draft, component_key=component_key, intensity=intensity
+        )
+    except InvalidStoreAppearanceContract as exc:
+        raise R4MutationError("invalid_store_appearance_manifest") from exc
+
+
+def _apply_theme_clear(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """P5-W2 — clear the occasion Theme back to the safe no-op. Changes ONLY
+    Theme-owned state; never restores from ``template_baseline_snapshot``."""
+    _require_pinned_appearance_draft(draft=draft, mutation=mutation)
+    try:
+        appearance_authority_service.clear_theme(version=draft)
+    except InvalidStoreAppearanceContract as exc:
+        raise R4MutationError("invalid_store_appearance_manifest") from exc
+
+
 def _apply_appearance_manifest(
     *, draft: StorefrontLayoutVersion, mutation: dict
 ) -> None:
@@ -968,6 +1005,12 @@ def _dispatch_mutation(*, store, draft: StorefrontLayoutVersion, mutation: dict)
         return
     if mutation_type == "appearance.template.apply":
         _apply_appearance_template(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "theme.apply":
+        _apply_theme_apply(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "theme.clear":
+        _apply_theme_clear(draft=draft, mutation=mutation)
         return
     raise R4MutationError("unknown_mutation_type")
 

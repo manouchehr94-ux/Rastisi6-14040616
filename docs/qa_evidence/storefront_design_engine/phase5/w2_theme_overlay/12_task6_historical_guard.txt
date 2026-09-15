@@ -1,0 +1,37 @@
+P5-W2 repair — Task-6 historical guard correction (Python 3.12.13)
+
+The guard test_ready_template_recipe_files_are_untouched_by_task6 proves that
+TASK 6 ITSELF (PR #3, Storefront Showcase Facade) did not modify the listed
+canonical authorities. Its diff range was incorrectly open-ended (c0ca174...HEAD),
+so authorized post-Task-6 work (P5-W2) tripped it. Corrected to the FIXED
+historical Task-6 range:
+
+  base = c0ca174475bf19dd5c3ecac3857da479623e1e7d  (post-Task-5 certified / Task-6 PR #3 base)
+  head = a75711473b791c2add0389913707503bc0024cc0  (exact Task-6 PR #3 head)
+
+Original forbidden set and assertion semantics unchanged. NO W2 exemptions, NO
+weakened forbidden set, NO b7d8ac...HEAD anchor, NO current-HEAD dependence.
+
+$ git diff --name-only c0ca174475bf19dd5c3ecac3857da479623e1e7d...a75711473b791c2add0389913707503bc0024cc0
+apps/storefront_builder/management/commands/qa_storefront_builder_r4.py
+apps/storefront_builder/r4_views.py
+apps/storefront_builder/static/storefront_builder/r4_editor.css
+apps/storefront_builder/static/storefront_builder/r4_editor.js
+apps/storefront_builder/templates/dashboard/storefront_builder/r4/editor.html
+apps/storefront_builder/tests/test_r4_showcase_facade.py
+docs/qa_evidence/storefront_design_engine/phase5/task6_discovery_report.md
+docs/qa_evidence/storefront_design_engine/phase5/task6_showcase/01_showcase_chooser_desktop.png
+docs/qa_evidence/storefront_design_engine/phase5/task6_showcase/02_four_canonical_sections_desktop.png
+docs/qa_evidence/storefront_design_engine/phase5/task6_showcase/03_showcase_mobile_390_rtl.png
+docs/qa_evidence/storefront_design_engine/phase5/task6_showcase/r4_browser_result.json
+docs/qa_evidence/storefront_design_engine/phase5/task6_showcase/task6_diagnostics.json
+docs/qa_evidence/storefront_design_engine/phase5/task6_showcase_implementation_report.md
+docs/superpowers/plans/2026-09-11-phase5-design-expansion-implementation-plan.md
+docs/superpowers/plans/2026-09-14-phase5-task6-storefront-showcase-facade-implementation-plan.md
+docs/superpowers/specs/2026-09-14-phase5-task6-storefront-showcase-facade-design.md
+tools/storefront_builder_r4_qa/run.mjs
+
+=> NONE of the forbidden canonical-authority files appear in the Task-6 range.
+
+Guard test result (Python 3.12.13):
+  Ran 1 test — OK

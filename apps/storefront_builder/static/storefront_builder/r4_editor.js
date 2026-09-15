@@ -1257,6 +1257,44 @@ window.RastiSiR4 = {
     globalDesignPanel.addEventListener('click', function (evt) {
       if (evt.target.closest('[data-r4-global-design-close]')) closeGlobalDesign();
 
+      // P5-W2 — reversible occasion Theme. A Theme change carries a component
+      // selection AND a bounded intensity, plus an explicit Clear, so it needs
+      // its own branch (the generic single-scalar data-r4-global-field handler
+      // cannot express it). Both routes go through the ONE mutation boundary
+      // (R4.enqueueMutation -> apply_mutation) exactly like every other edit.
+      if (evt.target.closest('[data-r4-theme-apply]')) {
+        var occasionSelect = document.getElementById('r4ThemeOccasion');
+        var intensitySelect = document.getElementById('r4ThemeIntensity');
+        var themeDraftId = Number(shell && shell.dataset.r4DraftId);
+        if (!occasionSelect || !themeDraftId) return;
+        // No Theme selected -> canonical Clear (never a no-op selection with a
+        // meaningless intensity; server also normalizes, this keeps the wire
+        // payload honest).
+        if (occasionSelect.value === 'theme.none.v1') {
+          R4.enqueueMutation({ type: 'theme.clear', draft_id: themeDraftId }).then(function (result) {
+            if (result && result.ok) refreshGlobalDesignAndPreview();
+          });
+          return;
+        }
+        R4.enqueueMutation({
+          type: 'theme.apply',
+          draft_id: themeDraftId,
+          component_key: occasionSelect.value,
+          intensity: intensitySelect ? intensitySelect.value : 'balanced',
+        }).then(function (result) {
+          if (result && result.ok) refreshGlobalDesignAndPreview();
+        });
+        return;
+      }
+      if (evt.target.closest('[data-r4-theme-clear]')) {
+        var clearDraftId = Number(shell && shell.dataset.r4DraftId);
+        if (!clearDraftId) return;
+        R4.enqueueMutation({ type: 'theme.clear', draft_id: clearDraftId }).then(function (result) {
+          if (result && result.ok) refreshGlobalDesignAndPreview();
+        });
+        return;
+      }
+
       // R4 Task 7 (Batch 2) — one reset icon per appearance field, keyed
       // off the SAME ``data-r4-global-reset-field`` attribute value as the
       // field's own patch key (``appearance.reset_setting_to_baseline``'s
@@ -1327,6 +1365,19 @@ window.RastiSiR4 = {
         });
       }
     });
+
+    // P5-W2 — when "No Theme" is selected, intensity is meaningless, so
+    // disable the intensity control (server also ignores/normalizes it).
+    function syncThemeIntensityEnabled() {
+      var occasionSelect = document.getElementById('r4ThemeOccasion');
+      var intensitySelect = document.getElementById('r4ThemeIntensity');
+      if (!occasionSelect || !intensitySelect) return;
+      intensitySelect.disabled = occasionSelect.value === 'theme.none.v1';
+    }
+    globalDesignPanel.addEventListener('change', function (evt) {
+      if (evt.target.closest('[data-r4-theme-occasion]')) syncThemeIntensityEnabled();
+    });
+    syncThemeIntensityEnabled();
 
     // One delegated change handler — the mutation `type` and patch `key`
     // both come from data attributes already rendered by the server
