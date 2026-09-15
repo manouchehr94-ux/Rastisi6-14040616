@@ -279,6 +279,26 @@ def storefront_preview(request):
     # transient stand-in (not this Draft) as ``storefront_appearance_version``,
     # which the context processor never passes to the persisted resolver.
     store_appearance = resolved_store_appearance_for_request(request, draft)
+    # P5-W3 — transient Design Lab candidate preview. ``?design_lab=<token>``
+    # carries an in-memory appearance-DNA candidate (never persisted, never a
+    # candidate Draft). It is resolved through the EXACT same canonical
+    # resolver + renderer the committed Draft uses; the ONLY difference is
+    # which ``ResolvedStoreAppearance`` feeds ``build_page_render_items``. The
+    # candidate is ALWAYS re-validated server-side against the canonical
+    # registry (untrusted component keys fail closed with 400) — the token is a
+    # transport, never an authority, and never a source of truth. Zero writes.
+    design_lab_token = request.GET.get("design_lab")
+    if design_lab_token:
+        from .services import design_lab_service
+        from .storefront_appearance.contracts import InvalidStoreAppearanceContract
+
+        try:
+            candidate = design_lab_service.decode_candidate_token(design_lab_token)
+            store_appearance = design_lab_service.resolve_candidate_appearance(
+                draft, candidate
+            )
+        except (ValueError, InvalidStoreAppearanceContract):
+            return HttpResponseBadRequest("کاندید آزمایشگاه طراحی نامعتبر است")
     items = build_page_render_items(
         page,
         store,
