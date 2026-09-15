@@ -2501,12 +2501,203 @@ class ProductDetailContextAwareSectionsPreviewTests(StorefrontBuilderViewsTestCa
 
     def test_context_aware_sections_absent_on_other_page_tabs(self):
         """این چهار section فقط با ``?page=product_detail`` دیده می‌شوند —
-        اگر همان section (با دستکاریِ مستقیم) رویِ صفحه‌ی دیگری بنشیند،
+        اگر همان section (با دستکاریِ مستقیم) رویِ صفحه‌ی دیگری بنشیند,
         Preview آن صفحه هرگز آن را رندر نمی‌کند (چون اصلاً section آن
         صفحه نیست)."""
         StorefrontSection.objects.create(page=self.pd_page, section_key="product_main", order=0)
         resp = self.client.get(reverse("dashboard:storefront-builder-preview"), {"page": "cart"})
         self.assertNotContains(resp, "کالای پیش‌نمایشِ رندرشده")
+
+    # ---- Phase 5 Task 8 (SATC) — mobile Sticky Add-to-Cart -------------
+    # SATC is PRESENTATION inside the existing canonical Add-to-Cart form:
+    # one form, one submitted quantity owner, one cart:add flow. These tests
+    # assert that architecture (ONE CONCEPT = ONE CANONICAL OWNER), not
+    # fragile visual formatting.
+
+    def _pdp_main_tmpl(self):
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        return Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/templates/storefront_builder/sections/product_main.html",
+        ).read_text(encoding="utf-8")
+
+    def _one_product_main(self):
+        # product_main is removable=False / max_instances=1 on a real PDP; the
+        # product_detail page is pre-seeded with one. Ensure EXACTLY one for a
+        # deterministic single-purchase-form assertion (mirrors the canonical
+        # runtime invariant — never two product_main on one PDP).
+        StorefrontSection.objects.filter(page=self.pd_page, section_key="product_main").delete()
+        return StorefrontSection.objects.create(page=self.pd_page, section_key="product_main", order=0)
+
+    def test_satc_rendered_by_canonical_product_main(self):
+        # The sticky Add-to-Cart surface is emitted by the canonical
+        # product_main section (not a new section / not a separate renderer).
+        self._one_product_main()
+        content = self._preview().content.decode()
+        self.assertIn("pdp-satc", content)
+
+    def test_satc_submits_the_same_canonical_form_no_second_form(self):
+        # SATC lives PHYSICALLY INSIDE the one canonical Add-to-Cart form (the
+        # approved preferred design). Because it is position:fixed it does not
+        # disturb layout, and being a plain type="submit" of THAT form it reuses
+        # the existing variant_id + quantity + the single cart:add pipeline with
+        # NO `form=` coupling and NO second form. Assert: exactly ONE cart:add
+        # form on the page, the .pdp-satc block is inside it, and there is no
+        # `form=` attribute wiring on the sticky button.
+        self._one_product_main()
+        content = self._preview().content.decode()
+        import re
+        # exactly ONE canonical purchase pipeline: one form posting to cart:add.
+        # (The page has other unrelated forms — search / review / login — but
+        # there must be only a single hx-post to the cart-add endpoint.)
+        cart_forms = re.findall(r'<form\b[^>]*hx-post="[^"]*/cart/add/[^"]*"[^>]*>', content)
+        self.assertEqual(len(cart_forms), 1, "exactly one canonical cart:add form (no second purchase form)")
+        # The .pdp-satc block sits INSIDE that form: it appears between the
+        # cart:add <form ...> open tag and the next </form>.
+        form_open = content.index(cart_forms[0])
+        form_close = content.index("</form>", form_open)
+        satc_at = content.find("pdp-satc", form_open)
+        self.assertTrue(
+            0 <= satc_at < form_close,
+            "SATC must be physically inside the canonical Add-to-Cart form",
+        )
+        # No `form=` coupling was introduced (simpler inside-form design).
+        self.assertNotIn("pdp-buy-form-", content, "no deterministic-form-id coupling needed")
+        self.assertNotRegex(content, r'class="[^"]*pdp-satc-btn[^"]*"[^>]*\sform=', "sticky button uses no form= attr")
+
+    def test_satc_has_no_second_quantity_owner(self):
+        # SATC must NOT introduce its own quantity input/selector — the single
+        # submitted quantity owner remains the existing stepper input.
+        self._one_product_main()
+        content = self._preview().content.decode()
+        # exactly one quantity input in the whole rendered product_main
+        self.assertEqual(content.count('name="quantity"'), 1, "one and only one submitted quantity owner")
+
+    def test_normal_pdp_cta_still_present_alongside_satc(self):
+        # SATC is additive: the normal in-flow Add-to-Cart CTA remains. There
+        # are exactly TWO Add-to-Cart submit surfaces — the canonical in-flow
+        # CTA (.pdp-actions .btn-primary) and the sticky one (.pdp-satc-btn) —
+        # both submitting the SAME form (proven by the single-form test above).
+        self._one_product_main()
+        content = self._preview().content.decode()
+        self.assertIn("افزودن به سبد خرید", content)
+        # in-flow CTA still present
+        self.assertIn('class="pdp-actions"', content)
+        # sticky CTA present and is the additive second submit surface
+        self.assertIn("pdp-satc-btn", content)
+
+    def test_satc_reuses_canonical_purchasability_state_no_second_calc(self):
+        # The sticky button binds to the SAME Alpine getters as the main CTA
+        # (canAddToCart / needsSelection / displayStock) — no second stock or
+        # purchasability calculation. Template-level proof: within the SATC
+        # block, disabled/label bindings reference the canonical getters.
+        tmpl = self._pdp_main_tmpl()
+        satc_start = tmpl.find("pdp-satc")
+        self.assertNotEqual(satc_start, -1, "SATC block must exist in product_main")
+        satc_block = tmpl[satc_start:satc_start + 1200]
+        self.assertIn("canAddToCart", satc_block)
+        self.assertIn("needsSelection", satc_block)
+        # SATC introduces no new Alpine component (no second x-data with its own
+        # product/variant/quantity state) inside the sticky block.
+        self.assertNotIn("x-data", satc_block)
+
+    def test_satc_is_mobile_only_and_below_overlays_in_css(self):
+        # SATC presentation is mobile-only and layered BELOW the canonical
+        # overlays (login modal z-index:100, drawer 110/120, quick view
+        # 1000/1001) and does not cover the bottom nav. Verify via the
+        # canonical PDP CSS owner.
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        css = Path(dj_settings.BASE_DIR, "apps/catalog/static/css/product_detail.css").read_text(encoding="utf-8")
+        self.assertIn(".pdp-satc", css)
+        # mobile-only: the sticky rule lives under a max-width media query and
+        # is hidden by default on desktop.
+        self.assertRegex(css, r"@media\s*\(max-width:\s*680px\)")
+        # safe-area aware (consumes env(safe-area-inset-bottom)).
+        self.assertIn("safe-area-inset-bottom", css)
+        # bottom offset derives from the canonical bottom-nav clearance token,
+        # not a hard-coded magic number.
+        self.assertIn("--gmn-clearance", css)
+        # No-obscuration repair: the WHOLE-PDP page container (not just
+        # product_main, which is the FIRST section) reserves real bottom space
+        # (nav clearance + SATC height) so the genuine final PDP content clears
+        # the fixed SATC. The reserve is on the end-of-page owner and derives
+        # from canonical geometry, not a random per-template value.
+        self.assertRegex(css, r"\.wrap\.pdp-page:has\(\.pdp-satc\)\s*\{[^}]*padding-bottom:calc\(")
+        self.assertIn("--satc-height", css)
+
+    def test_bottom_nav_owner_exposes_presentation_clearance_token(self):
+        # The canonical mobile bottom-nav CSS owner exposes a presentation-only
+        # geometry token that SATC (and anything else) can consume, instead of
+        # per-template offsets. One canonical geometry owner.
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        css = Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/static/css/storefront_builder.css",
+        ).read_text(encoding="utf-8")
+        self.assertIn("--gmn-clearance", css)
+
+    def test_clearance_is_per_variant_and_safe_area_when_nav_absent(self):
+        # --gmn-clearance is NOT a single global constant. Its no-nav/default
+        # value is the device safe area alone (so SATC never floats ~88px up for
+        # a nav that isn't there, yet still clears the home indicator), and each
+        # registered nav variant publishes its OWN geometry off the nav identity
+        # class. One canonical geometry source distinguishing every active
+        # variant AND the hidden/absent case.
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        css = Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/static/css/storefront_builder.css",
+        ).read_text(encoding="utf-8")
+        # default (absent) is the safe area alone — never a bare 0px.
+        self.assertRegex(css, r":root\s*\{\s*--gmn-clearance:\s*env\(safe-area-inset-bottom")
+        self.assertNotRegex(css, r":root\s*\{\s*--gmn-clearance:\s*0px\s*\}")
+        # every registered variant has its own clearance rule keyed off identity
+        for variant in [
+            "four_item", "five_item", "raised_cart", "floating_dock",
+            "glass_dock", "minimal_icons", "wide_cart",
+        ]:
+            self.assertIn(f":has(.gmn--{variant})", css,
+                          f"missing canonical clearance for nav variant {variant}")
+        # a generic .gmn rule covers default/luxury (which reuse default geometry)
+        self.assertRegex(css, r":root:has\(\.gmn\)\s*\{\s*--gmn-clearance:")
+
+    def test_no_nav_clearance_includes_device_safe_area(self):
+        # No-nav safe-area contract: the canonical no-nav/default
+        # --gmn-clearance MUST include env(safe-area-inset-bottom) and must NOT
+        # be a bare 0px — otherwise, with no bottom nav, a bottom-anchored SATC
+        # would sit flush at bottom:0 and be clipped by the iPhone home
+        # indicator. Desktop Chromium resolves the inset to 0, so this contract
+        # test (not a pixel measurement) guards against regression.
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        css = Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/static/css/storefront_builder.css",
+        ).read_text(encoding="utf-8")
+        import re
+        m = re.search(r":root\s*\{\s*--gmn-clearance:\s*([^}]*?)\s*\}", css)
+        self.assertIsNotNone(m, "canonical :root --gmn-clearance declaration must exist")
+        no_nav_value = m.group(1).strip()
+        self.assertIn("env(safe-area-inset-bottom", no_nav_value,
+                      "no-nav --gmn-clearance must clear the device safe area")
+        self.assertNotEqual(no_nav_value, "0px",
+                            "no-nav --gmn-clearance must not be a bare 0px")
+        # Every active variant clearance also includes the safe area exactly
+        # once (calc(<n>px + env(safe-area-inset-bottom,0px))) — never doubled.
+        for variant in ["four_item", "five_item", "raised_cart", "floating_dock",
+                        "glass_dock", "minimal_icons", "wide_cart"]:
+            vm = re.search(
+                r":root:has\(\.gmn--" + variant + r"\)\s*\{\s*--gmn-clearance:\s*([^}]*?)\s*\}",
+                css,
+            )
+            self.assertIsNotNone(vm, f"missing clearance rule for {variant}")
+            val = vm.group(1)
+            self.assertEqual(val.count("env(safe-area-inset-bottom"), 1,
+                             f"{variant} must count the safe area exactly once")
 
 
 class ProductListingContextAwareSectionPreviewTests(StorefrontBuilderViewsTestCase):

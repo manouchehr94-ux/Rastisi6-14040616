@@ -205,3 +205,75 @@
     .pdp-acc-header::after{transition:none}
   }
 }
+
+
+/* ========================================================================
+   Phase 5 Task 8 (SATC) — mobile Sticky Add-to-Cart.
+   ------------------------------------------------------------------------
+   PRESENTATION-ONLY. The markup lives physically INSIDE the one canonical
+   Add-to-Cart form in ``product_main.html`` (a plain type="submit"), inside
+   the ``variantSelector`` Alpine scope — no ``form=`` coupling, no second
+   form, no second quantity/variant/price/stock owner. This file only styles
+   it and gates it to mobile.
+
+   LAYERING (public storefront stacking, verified): the sticky bar sits at
+   ``z-index:90`` — ABOVE page content but BELOW every canonical overlay that
+   is meant to cover the page (login modal ``.overlay`` z-index:100, mobile nav
+   drawer backdrop 110 / panel 120, Quick View backdrop 1000 / dialog 1001) and
+   BELOW the mobile bottom nav (``.gmn`` z-index:850). So overlays correctly
+   cover SATC and SATC never covers the bottom nav — reusing the EXISTING
+   stacking order, not a new global overlay-state system.
+
+   POSITION: the bottom offset consumes the canonical ``--gmn-clearance``
+   custom property. That property is owned and published by the mobile
+   bottom-nav CSS owner (``storefront_builder.css``): it is 0 by default (no
+   nav → SATC hugs the safe area), and each active nav variant sets its own
+   real geometry there via the nav's identity class (ONE canonical geometry
+   source; SATC never hard-codes per-variant/per-template offsets). SATC only
+   adds its OWN height on top so it sits directly above the nav.
+
+   NO-OBSCURATION: the WHOLE PDP page content container (``.pdp-page`` — the
+   canonical wrapper around ALL PDP sections: product_main + product_description
+   + product_video + related_products) reserves real bottom space equal to the
+   nav clearance + SATC's own height + a gap. Because ``product_main`` is the
+   FIRST section, reserving inside ``.pdp`` alone would not protect the sections
+   that follow; the reserve must live on the end-of-page owner so the genuine
+   final content (e.g. related products / reviews) can be scrolled fully clear
+   of the fixed SATC + nav stack. This adds real scrollable document height
+   (``padding-bottom``), which ``scroll-padding-bottom`` alone cannot. */
+:root{--satc-height:64px}
+.pdp-satc{display:none}
+@media(max-width:680px){
+  .pdp-satc{
+    display:flex;align-items:center;gap:12px;
+    position:fixed;z-index:90;inset-inline:0;
+    /* Sit directly above the active bottom nav, or — when no nav renders —
+       above the device safe area. The canonical --gmn-clearance ALREADY
+       includes env(safe-area-inset-bottom) in every branch (nav-absent value
+       is the safe area itself; each variant is calc(<n>px + safe-area)), so the
+       safe area is counted exactly once. The var() fallback here is only a
+       defensive backstop if the nav stylesheet failed to load. */
+    bottom:var(--gmn-clearance,env(safe-area-inset-bottom,0px));
+    min-height:var(--satc-height);
+    padding:10px 14px;
+    background:var(--card,#fff);border-top:1px solid var(--line);
+    box-shadow:0 -8px 24px rgba(15,23,42,.10);
+    direction:rtl;
+  }
+  .pdp-satc-price{display:flex;flex-direction:column;line-height:1.25;min-width:0;flex:0 0 auto}
+  .pdp-satc-now{font-size:16px;font-weight:900;color:var(--ink);white-space:nowrap}
+  .pdp-satc-old{font-size:11.5px;color:var(--muted);text-decoration:line-through;white-space:nowrap}
+  .pdp-satc-btn{flex:1;min-width:0;height:48px;font-size:15px}
+  .pdp-satc-btn:disabled{opacity:.5;cursor:not-allowed}
+  /* Bottom content reserve on the WHOLE-PDP content container (covers every
+     PDP section, not just product_main), added only when a SATC is present on
+     the page. Real scrollable height (padding-bottom) so the genuine final
+     content clears the fixed SATC + bottom-nav stack; scoped to the PDP page
+     container so it never affects other pages. Value derived entirely from the
+     canonical nav geometry (--gmn-clearance) + SATC's own height + gap — no
+     random per-template value. */
+  .wrap.pdp-page:has(.pdp-satc){padding-bottom:calc(var(--gmn-clearance,env(safe-area-inset-bottom,0px)) + var(--satc-height) + 16px)}
+  /* Complements the reserve for keyboard/anchor scrolling; not sufficient on
+     its own (does not add document height), hence the padding above. */
+  html:has(.pdp-satc){scroll-padding-bottom:calc(var(--gmn-clearance,env(safe-area-inset-bottom,0px)) + var(--satc-height) + 16px)}
+}

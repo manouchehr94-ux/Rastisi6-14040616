@@ -159,6 +159,36 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
           </button>
           {% include "customers/partials/wishlist_button.html" with button_class="wish" %}
         </div>
+
+        {% comment %}
+        Phase 5 Task 8 (SATC) — mobile Sticky Add-to-Cart. PRESENTATION ONLY,
+        placed physically INSIDE the canonical Add-to-Cart form (the approved
+        preferred design): because it is ``position:fixed`` (removed from normal
+        flow), its in-form DOM position does not disturb the in-flow layout, yet
+        it is a plain ``type="submit"`` button of THIS form — so it reuses the
+        existing ``variant_id`` + the single existing ``quantity`` stepper input
+        and the one ``cart:add`` HTMX submission with NO ``form=`` coupling, NO
+        second form, and NO second quantity/variant/price/stock owner. It is
+        inside the ``variantSelector`` Alpine scope, so price and button state
+        come from the SAME getters as the in-flow CTA (``displayPrice`` /
+        ``formatToman()`` / ``canAddToCart`` / ``needsSelection`` /
+        ``displayStock``) — no new Alpine component. The in-flow CTA above is
+        untouched and stays the primary interface; SATC is additive and CSS-
+        gated to the mobile breakpoint. ``x-cloak`` avoids a pre-boot flash;
+        with no JS the CSS keeps it hidden (the in-flow form still works).
+        {% endcomment %}
+        <div class="pdp-satc" x-cloak aria-label="خرید سریع">
+          <div class="pdp-satc-price" aria-hidden="true">
+            <span class="pdp-satc-now" x-text="formatToman(displayPrice.price)"></span>
+            <span class="pdp-satc-old" x-show="displayPrice.savings > 0" x-text="formatToman(displayPrice.regular)"></span>
+          </div>
+          <button type="submit" class="btn btn-primary pdp-satc-btn"
+                  :disabled="!canAddToCart"
+                  :aria-label="needsSelection ? 'ابتدا یک گزینه را انتخاب کنید' : (displayStock <= 0 ? 'ناموجود' : 'افزودن به سبد خرید')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg>
+            <span x-text="needsSelection ? 'ابتدا یک گزینه را انتخاب کنید' : (displayStock <= 0 ? 'ناموجود' : 'افزودن به سبد خرید')"></span>
+          </button>
+        </div>
       </form>
 
       {% comment %}PDTX (Phase 5 Task 5) — this hard-coded guarantee strip is
