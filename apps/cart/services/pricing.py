@@ -144,10 +144,14 @@ def cart_totals(
     # دهد؛ برایِ همین در حالتِ زیرِ آستانه به‌جایِ گِردکردن (که ۴۹۹۰۰۰/۵۰۰۰۰۰ =
     # ۹۹٫۸٪ را به ۱۰۰ می‌رساند) به سمتِ پایین trunc می‌شود (ROUND_DOWN) و
     # سقفِ ۹۹ اعمال می‌گردد.
-    if free_by_threshold:
-        free_shipping_goal_progress_percent = 100
-    elif free_shipping_threshold <= 0 or items_total <= 0:
+    if free_shipping_threshold <= 0 or items_total <= 0:
+        # آستانه‌ی غیرقابل‌استفاده (صفر/منفی) یا سبدِ خالی: هرگز ۱۰۰٪ نمی‌شود —
+        # این شرط *پیش از* free_by_threshold می‌آید چون برایِ آستانه‌ی صفر،
+        # ``items_total >= 0`` مقدارِ free_by_threshold را True می‌کند ولی
+        # قراردادِ نمایش می‌گوید آستانه‌ی ناموجود = ۰٪.
         free_shipping_goal_progress_percent = 0
+    elif free_by_threshold:
+        free_shipping_goal_progress_percent = 100
     else:
         free_shipping_goal_progress_percent = min(
             99, int((items_total * 100 / free_shipping_threshold).to_integral_value(rounding=ROUND_DOWN))

@@ -29,9 +29,9 @@ A cart Free-Shipping Goal / progress indicator, driven entirely by existing pric
 - **GREEN:** implemented the fields in `cart_totals()` and the `.fsg` presentation.
 
 ## Test results
-- **Focused pricing** (`green_pricing.txt`): `apps.cart.tests.test_pricing` → **41 passed**.
-- **Focused W1** (`green_focused.txt`): `apps.cart.tests` + `apps.storefront_builder.tests.test_render_service` → **251 passed** (1 skipped).
-- **Regression** (`regression.txt`): `apps.cart apps.storefront_builder.tests.test_views apps.orders.tests.test_checkout_correctness` → **408 tests; 1 failure + 1 error**, both in `FullscreenEditorTests` (R4 fullscreen editor — unrelated to W1). **Reproduced independently on the clean certified base `ef4f4e3` via a temporary git worktree with zero W1 changes** (same 1 failure + 1 error) → **PRE-EXISTING, not introduced by W1** (`regression_preexisting_note.txt`). All cart/pricing/render_service tests pass.
+- **Focused pricing** (`green_pricing.txt`): `apps.cart.tests.test_pricing` → **46 passed** (current head).
+- **Focused W1** (`green_focused.txt`): `apps.cart.tests` + `apps.storefront_builder.tests.test_render_service` → **256 passed** (1 skipped).
+- **Regression** (`regression.txt`): `apps.cart apps.storefront_builder.tests.test_views apps.orders.tests.test_checkout_correctness` → **413 tests; 1 failure + 1 error**, both in `FullscreenEditorTests` (R4 fullscreen editor — unrelated to W1). **Reproduced independently on the clean certified base `ef4f4e3` via a temporary git worktree with zero W1 changes** (same 1 failure + 1 error) → **PRE-EXISTING, not introduced by W1** (`regression_preexisting_note.txt`). All cart/pricing/render_service tests pass.
 
 New tests:
 - `apps/cart/tests/test_pricing.py` → `FreeShippingGoalTests` (11 cases: below/at/above threshold, FREE_SHIP-coupon-below-threshold, threshold-without-coupon, empty cart, progress-bounded, all-digital/mixed/physical-only applicability, existing-values-unchanged) + `FreeShippingGoalTwoStoreIsolationTests` (Store-scoped goal state, real two-Store).
@@ -67,8 +67,22 @@ State **D** (FREE_SHIP coupon below threshold) is verified by unit tests (`test_
 ## Evidence files
 `docs/qa_evidence/storefront_design_engine/phase5/w1_free_shipping_goal/`: `red_pricing.txt`, `green_pricing.txt`, `green_focused.txt`, `regression.txt`, `regression_preexisting_note.txt`, `django_check.txt`, `migration_check.txt`, `diff_check.txt`, `architecture_duplication_audit.txt`, `browser_qa/report.json` + screenshots, this report.
 
-## Progress invariant (review repair)
-**100% progress is reserved for the threshold-reached state; a below-threshold cart can never render a full bar.** The initial implementation used `ROUND_HALF_UP`, which rounded a near-threshold value (e.g. 499,000 / 500,000 = 99.8%) up to 100 while `free_shipping_by_threshold` was still `False` — a contradictory "۱٬۰۰۰ تومان دیگر تا ارسال رایگان" shown next to a visually full bar. Fixed in `cart_totals()`: `free_shipping_goal_progress_percent = 100` **iff** `free_by_threshold`; otherwise (below threshold) the percent is truncated toward zero (`ROUND_DOWN`) and capped at `99`; empty/unusable threshold → `0`. No floating-point math (Decimal only); calculation stays in `cart_totals()`. Regression tests: `test_just_below_threshold_progress_is_99_not_100` (499,000/500,000 → 99) and `test_one_unit_below_threshold_progress_below_100` (499,999/500,000 → 99). RED evidence: `red_near_threshold.txt` (observed 100; expected 99).
+## Progress invariant (review repairs)
+
+Final `free_shipping_goal_progress_percent` semantics (all in `cart_totals()`, Decimal-only, `ROUND_DOWN`):
+
+```
+- threshold <= 0                    → 0%
+- empty cart (items_total <= 0)     → 0%
+- positive threshold reached        → 100%
+- positive threshold not reached    → 0..99% (floor/truncate, capped at 99)
+```
+
+100% is produced **only** when the threshold is positive, the subtotal is positive, and the threshold is actually reached. A below-threshold cart, an empty cart, and a zero/negative threshold can never show 100%.
+
+Two review repairs got here:
+1. **Near-threshold rounding (repair 1):** `ROUND_HALF_UP` rounded 499,000/500,000 = 99.8% up to 100 while below threshold. Fixed by truncating below-threshold progress (`ROUND_DOWN`, capped 99). Tests: `test_just_below_threshold_progress_is_99_not_100`, `test_one_unit_below_threshold_progress_below_100`. Evidence: `red_near_threshold.txt`.
+2. **Non-positive threshold ordering (repair 2):** for `threshold=0`, `free_by_threshold = (items_total >= 0)` was `True` and short-circuited to 100. Fixed by ordering the non-positive-threshold / empty-cart guard **before** the `free_by_threshold` branch. Tests: `test_zero_threshold_empty_cart_progress_is_zero`, `test_zero_threshold_physical_cart_progress_is_zero`, `test_negative_threshold_progress_is_zero`. Evidence: `red_nonpositive_threshold.txt` (observed 100; expected 0). Note: `ShopSettings.free_shipping_threshold` is a plain `DecimalField(default=500000)` with no positive-only model validator, so the pricing layer must safely honor the 0/negative contract; no new validator/migration was added in W1.
 
 ## Migrations
 **0.**

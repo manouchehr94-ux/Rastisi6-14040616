@@ -462,6 +462,36 @@ class FreeShippingGoalTests(TestCase):
         self.assertLess(t["free_shipping_goal_progress_percent"], 100)
         self.assertEqual(t["free_shipping_goal_progress_percent"], 99)
 
+    # ---- 8c. non-positive threshold must NEVER produce 100% progress ----
+    # The model does not enforce a positive-only free_shipping_threshold, so the
+    # pricing layer must honor the contract: threshold <= 0 → 0% (even though
+    # items_total >= 0 makes free_shipping_by_threshold True for a 0 threshold).
+    def _set_threshold(self, value):
+        shop = ShopSettings.load(store=self.store)
+        shop.free_shipping_threshold = Decimal(value)
+        shop.save(update_fields=["free_shipping_threshold"])
+
+    def test_zero_threshold_empty_cart_progress_is_zero(self):
+        self._set_threshold(0)
+        t = cart_totals(self.cart, store=self.store)  # empty cart
+        self.assertEqual(t["free_shipping_goal_progress_percent"], 0)
+
+    def test_zero_threshold_physical_cart_progress_is_zero(self):
+        self._set_threshold(0)
+        self._add_item(price=200_000)  # physical item present
+        t = cart_totals(self.cart, store=self.store)
+        # Even though a 0 threshold makes free_shipping_by_threshold True, the
+        # Goal percentage for an unusable/non-positive threshold stays 0.
+        self.assertEqual(t["free_shipping_goal_progress_percent"], 0)
+
+    def test_negative_threshold_progress_is_zero(self):
+        # DecimalField has no positive-only validator, so a negative value can
+        # be persisted; the pricing layer must still yield 0% (never 100).
+        self._set_threshold(-1)
+        self._add_item(price=200_000)
+        t = cart_totals(self.cart, store=self.store)
+        self.assertEqual(t["free_shipping_goal_progress_percent"], 0)
+
     # ---- 9. all-digital / non-shippable cart ----
     def test_all_digital_cart_goal_not_applicable(self):
         self._add_item(price=200_000, sku="DIGI-1", requires_shipping=False)
