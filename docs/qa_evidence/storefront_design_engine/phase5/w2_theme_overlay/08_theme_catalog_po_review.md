@@ -45,3 +45,34 @@ section wash — it never swaps merchant content text/background colors.
    catalog mechanism (one entry each) with no architecture change.
 
 _Awaiting Product Owner sign-off before W2 merge (PR is intentionally UNMERGED)._
+
+
+
+---
+
+## Actual rendered motif behavior (Repair B — implemented, not just "ideas")
+
+Each occasion's `motif` token now drives a real, bounded, platform-owned CSS
+decoration in the single shared `occasion_theme.css` (keyed off
+`data-occasion-motif` on `<html>` and on page-section wrappers). No per-template
+fork, no merchant CSS. Intensity scales the ornament opacity
+(subtle 0.06 · balanced 0.12 · strong 0.20).
+
+| occasion | motif token | rendered treatment |
+|---|---|---|
+| nowruz | `spring_blossom` | soft green radial "petals" cluster in the top corner |
+| yalda | `pomegranate_night` | deep crimson orb + soft halo (pomegranate-night) top corner |
+| valentine | `hearts` | overlapping soft heart-like blobs top corner |
+| ramadan | `crescent_lantern` | restrained teal crescent ring (Islamic, no festive particles) |
+| eid_fitr | `crescent_star` | crescent ring + small star dot |
+| eid_qorban | `geometric_gold` | warm-gold geometric diagonal weave |
+| ⚠️ muharram | `muted_banner` | a single calm, flat mourning band — **no** corner ornament, **no** glow, **no** festive shapes, **no** animation |
+
+Verified in Browser QA on two materially different Ready Templates
+(`dense_marketplace`, `editorial_jewelry`): a strong Yalda visibly reads as
+Yalda (crimson band + pomegranate corner ornament), Nowruz differs from Yalda
+(green blossom vs crimson orb), Ramadan is a restrained teal crescent, and
+Muharram/Ashura remains a calm neutral band with no celebratory affordance.
+See `07_browser_qa_report.md` and `screenshots/`.
+
+_Still awaiting Product Owner sign-off before W2 merge (PR #8 intentionally UNMERGED)._

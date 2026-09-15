@@ -533,19 +533,21 @@ class ThemeMutationGovernanceTests(StorefrontBuilderViewsTestCase):
             load_store_appearance_manifest,
         )
 
-        base = self.draft.edit_revision
+        # Apply Yalda strong (single mutation: selection + intensity setting).
         rev_after_apply = r4_mutation_service.apply_mutation(
             store=self.store,
             actor=self.staff,
-            base_revision=base,
-            mutation=self._theme_apply_mutation(component="theme.yalda.v1"),
+            base_revision=self.draft.edit_revision,
+            mutation=self._theme_apply_mutation(
+                component="theme.yalda.v1", intensity="strong"
+            ),
         )
         self.draft.refresh_from_db()
-        self.assertEqual(
-            load_store_appearance_manifest(self.draft).selections["theme"],
-            "theme.yalda.v1",
-        )
+        manifest = load_store_appearance_manifest(self.draft)
+        self.assertEqual(manifest.selections["theme"], "theme.yalda.v1")
+        self.assertEqual(manifest.settings["theme"], {"intensity": "strong"})
 
+        # UNDO -> back to no theme, no theme settings.
         undo = r4_mutation_service.apply_history_command(
             store=self.store,
             actor=self.staff,
@@ -554,10 +556,59 @@ class ThemeMutationGovernanceTests(StorefrontBuilderViewsTestCase):
         )
         self.assertTrue(undo["changed"])
         self.draft.refresh_from_db()
+        manifest = load_store_appearance_manifest(self.draft)
+        self.assertEqual(manifest.selections["theme"], "theme.none.v1")
+        self.assertNotIn("theme", manifest.settings)
+
+        # REDO -> restore Yalda strong exactly.
+        redo = r4_mutation_service.apply_history_command(
+            store=self.store,
+            actor=self.staff,
+            base_revision=undo["new_revision"],
+            command="redo",
+        )
+        self.assertTrue(redo["changed"])
+        self.draft.refresh_from_db()
+        manifest = load_store_appearance_manifest(self.draft)
+        self.assertEqual(manifest.selections["theme"], "theme.yalda.v1")
+        self.assertEqual(manifest.settings["theme"], {"intensity": "strong"})
+
+    def test_clear_theme_participates_in_history(self):
+        from apps.storefront_builder.services import r4_mutation_service
+        from apps.storefront_builder.storefront_appearance.persistence import (
+            load_store_appearance_manifest,
+        )
+
+        # Apply then clear via the real mutation boundary.
+        rev = r4_mutation_service.apply_mutation(
+            store=self.store,
+            actor=self.staff,
+            base_revision=self.draft.edit_revision,
+            mutation=self._theme_apply_mutation(
+                component="theme.yalda.v1", intensity="balanced"
+            ),
+        )
+        rev = r4_mutation_service.apply_mutation(
+            store=self.store,
+            actor=self.staff,
+            base_revision=rev,
+            mutation={"type": "theme.clear", "draft_id": self.draft.pk},
+        )
+        self.draft.refresh_from_db()
         self.assertEqual(
             load_store_appearance_manifest(self.draft).selections["theme"],
             "theme.none.v1",
         )
+
+        # Undo the clear -> Yalda balanced comes back.
+        undo = r4_mutation_service.apply_history_command(
+            store=self.store, actor=self.staff, base_revision=rev, command="undo"
+        )
+        self.assertTrue(undo["changed"])
+        self.draft.refresh_from_db()
+        manifest = load_store_appearance_manifest(self.draft)
+        self.assertEqual(manifest.selections["theme"], "theme.yalda.v1")
+        self.assertEqual(manifest.settings["theme"], {"intensity": "balanced"})
 
 
 # ---------------------------------------------------------------------------
@@ -834,3 +885,460 @@ class ThemeR4EndpointTests(StorefrontBuilderViewsTestCase):
         self.assertIn("data-r4-theme-apply", body)
         self.assertIn("data-r4-theme-clear", body)
         self.assertIn("تم مناسبتی", body)
+
+
+
+# ---------------------------------------------------------------------------
+# Repair A — single request-scoped resolved appearance (no double resolve),
+# no broad exception swallowing, malformed new manifest fails loudly.
+# ---------------------------------------------------------------------------
+class ThemeSingleResolutionTests(StorefrontBuilderViewsTestCase):
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+        self.layout = layout_service.get_or_create_layout(self.store)
+        self.draft = layout_service.get_or_create_draft(self.store, user=self.staff)
+
+    def _publish_with(self, component_key, intensity):
+        from apps.storefront_builder.services import (
+            appearance_authority_service,
+            r4_mutation_service,
+        )
+
+        appearance_authority_service.apply_theme(
+            version=self.draft, component_key=component_key, intensity=intensity
+        )
+        self.draft.refresh_from_db()
+        r4_mutation_service.publish_draft(
+            store=self.store, actor=self.staff, base_revision=self.draft.edit_revision
+        )
+
+    def test_one_universal_render_resolves_appearance_only_once(self):
+        """A single public render must resolve the canonical
+        ResolvedStoreAppearance exactly once — the Theme projection in the
+        context processor must CONSUME that already-resolved state, never call
+        the persisted-Version resolver a second time for the same request."""
+        from unittest.mock import patch
+        from django.test import RequestFactory
+        from apps.storefront_builder.services import render_service, storefront_context_service
+        from apps.core.context_processors import shop_settings
+        from apps.storefront_builder.models import StorefrontPage
+
+        self._publish_with("theme.yalda.v1", "strong")
+
+        real = render_service.resolve_store_appearance_render_state
+        request = RequestFactory().get("/", HTTP_HOST="testserver")
+        request.store = self.store
+
+        with patch.object(
+            render_service,
+            "resolve_store_appearance_render_state",
+            wraps=real,
+        ) as spy:
+            # The universal context builder resolves the appearance once...
+            storefront_context_service.build_universal_storefront_context(
+                request, self.store, StorefrontPage.PageType.LISTING
+            )
+            # ...and the shell context processor must reuse it, not re-resolve.
+            ctx = shop_settings(request)
+
+        self.assertEqual(ctx["SHOP_OCCASION_THEME"], "yalda")
+        self.assertEqual(
+            spy.call_count,
+            1,
+            "appearance must be resolved exactly once per request; the Theme "
+            "projection must consume the already-resolved state",
+        )
+
+    def test_theme_projection_consumes_already_resolved_state(self):
+        """When the request already carries the canonical resolved appearance,
+        the context processor must not resolve again at all."""
+        from unittest.mock import patch
+        from django.test import RequestFactory
+        from apps.storefront_builder.services import render_service
+        from apps.core.context_processors import shop_settings
+
+        self._publish_with("theme.ramadan.v1", "balanced")
+        published = self.layout.__class__.objects.get(pk=self.layout.pk).published_version
+
+        request = RequestFactory().get("/", HTTP_HOST="testserver")
+        request.store = self.store
+        request.storefront_appearance_version = published
+        # Simulate the render pipeline having already resolved once.
+        request.storefront_resolved_appearance = (
+            render_service.resolve_store_appearance_render_state(published)
+        )
+
+        with patch.object(
+            render_service,
+            "resolve_store_appearance_render_state",
+        ) as spy:
+            ctx = shop_settings(request)
+
+        self.assertEqual(ctx["SHOP_OCCASION_THEME"], "ramadan")
+        self.assertEqual(
+            spy.call_count, 0, "must reuse the resolved appearance already on the request"
+        )
+
+    def test_malformed_new_manifest_is_not_silently_converted_to_no_theme(self):
+        """A malformed NEW Store-Appearance manifest must fail loudly, never be
+        silently swallowed into theme.none by a broad except."""
+        from django.test import RequestFactory
+        from apps.core.context_processors import shop_settings
+        from apps.storefront_builder.storefront_appearance.persistence import (
+            STORE_APPEARANCE_CONFIG_KEY,
+        )
+        from apps.storefront_builder.storefront_appearance.contracts import (
+            InvalidStoreAppearanceContract,
+        )
+
+        # Corrupt the persisted NEW manifest with an unknown component key.
+        appearance = dict(self.draft.appearance_config or {})
+        appearance[STORE_APPEARANCE_CONFIG_KEY] = {
+            "schema_version": 1,
+            "selections": {"theme": "theme.definitely_not_real.v1"},
+            "settings": {},
+        }
+        self.draft.appearance_config = appearance
+        self.draft.status = self.draft.Status.DRAFT
+        self.draft.save(update_fields=["appearance_config"])
+        # publish so a public request resolves it
+        from apps.storefront_builder.services import r4_mutation_service
+
+        self.draft.refresh_from_db()
+        try:
+            r4_mutation_service.publish_draft(
+                store=self.store, actor=self.staff, base_revision=self.draft.edit_revision
+            )
+        except Exception:
+            # If publish itself rejects the malformed manifest that is also
+            # acceptable (fail-closed) — but it must NOT be silently ignored.
+            pass
+
+        request = RequestFactory().get("/", HTTP_HOST="testserver")
+        request.store = self.store
+        request.storefront_appearance_version = self.draft
+
+        with self.assertRaises(InvalidStoreAppearanceContract):
+            shop_settings(request)
+
+    def test_transient_candidate_standin_does_not_call_persisted_resolver(self):
+        """The template-Preview path sets storefront_appearance_version to a
+        transient candidate stand-in (only effective_appearance_config(), no
+        pk). The shell context processor must NOT call the persisted-Version
+        resolver on it (it would crash), and must render as no-theme."""
+        from unittest.mock import patch
+        from django.test import RequestFactory
+        from apps.storefront_builder.services import render_service
+        from apps.core.context_processors import shop_settings
+
+        class _CandidateStandIn:
+            def __init__(self, config):
+                self._config = config
+
+            def effective_appearance_config(self):
+                return self._config
+
+        request = RequestFactory().get("/", HTTP_HOST="testserver")
+        request.store = self.store
+        request.storefront_appearance_version = _CandidateStandIn(
+            self.draft.effective_appearance_config()
+        )
+
+        with patch.object(
+            render_service, "resolve_store_appearance_render_state"
+        ) as spy:
+            ctx = shop_settings(request)
+
+        self.assertEqual(spy.call_count, 0)
+        self.assertEqual(ctx["SHOP_OCCASION_THEME"], "none")
+
+    def test_candidate_preview_still_resolves_theme(self):
+        """Transient candidate preview resolution (a NOT-saved manifest) still
+        resolves Theme through the shared manifest-state resolver."""
+        from apps.storefront_builder import layout_preset_registry as lpr
+        from apps.storefront_builder.services import preset_service
+        from apps.storefront_builder.storefront_appearance.rendering import (
+            theme_overlay_state,
+        )
+
+        preset = next(iter(lpr.list_ready_templates()))
+        candidate = preset_service.resolve_preset_candidate(self.draft, preset)
+        # Candidate resolution must expose a resolved appearance whose theme is
+        # the no-op default (Ready Templates never auto-assign an occasion).
+        overlay = theme_overlay_state(candidate.store_appearance)
+        self.assertEqual(overlay.occasion_key, "none")
+
+
+
+# ---------------------------------------------------------------------------
+# Repair B — the catalog motif is real: resolved Theme exposes it, shell and
+# section receive it, distinct occasions produce distinct motif hooks, and
+# mourning stays restrained.
+# ---------------------------------------------------------------------------
+class ThemeMotifTests(StorefrontBuilderViewsTestCase):
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+        self.draft = layout_service.get_or_create_draft(self.store, user=self.staff)
+
+    def _overlay(self, component_key, intensity="strong"):
+        from apps.storefront_builder.services import appearance_authority_service
+        from apps.storefront_builder.services.render_service import (
+            resolve_store_appearance_render_state,
+        )
+        from apps.storefront_builder.storefront_appearance.rendering import (
+            theme_overlay_state,
+        )
+
+        appearance_authority_service.apply_theme(
+            version=self.draft, component_key=component_key, intensity=intensity
+        )
+        self.draft.refresh_from_db()
+        return theme_overlay_state(resolve_store_appearance_render_state(self.draft))
+
+    def test_resolved_theme_exposes_catalog_motif(self):
+        from apps.storefront_builder import theme_catalog
+
+        overlay = self._overlay("theme.yalda.v1")
+        self.assertEqual(
+            overlay.motif, theme_catalog.get_theme_occasion("yalda").motif
+        )
+        self.assertTrue(overlay.motif)
+
+    def test_theme_none_has_no_motif(self):
+        from apps.storefront_builder.services.render_service import (
+            resolve_store_appearance_render_state,
+        )
+        from apps.storefront_builder.storefront_appearance.rendering import (
+            theme_overlay_state,
+        )
+
+        overlay = theme_overlay_state(resolve_store_appearance_render_state(self.draft))
+        self.assertEqual(overlay.motif, "")
+
+    def test_different_occasions_produce_different_motif_hooks(self):
+        yalda = self._overlay("theme.yalda.v1")
+        # fresh draft state for nowruz
+        nowruz = self._overlay("theme.nowruz.v1")
+        self.assertNotEqual(yalda.motif, nowruz.motif)
+
+    def test_shop_context_projects_motif_for_shell_and_section(self):
+        from django.test import RequestFactory
+        from apps.core.context_processors import shop_settings
+        from apps.storefront_builder.services import appearance_authority_service
+
+        appearance_authority_service.apply_theme(
+            version=self.draft, component_key="theme.yalda.v1", intensity="strong"
+        )
+        self.draft.refresh_from_db()
+        request = RequestFactory().get("/", HTTP_HOST="testserver")
+        request.store = self.store
+        request.storefront_appearance_version = self.draft
+        ctx = shop_settings(request)
+        self.assertEqual(
+            ctx["SHOP_OCCASION_MOTIF"],
+            __import__(
+                "apps.storefront_builder.theme_catalog",
+                fromlist=["get_theme_occasion"],
+            ).get_theme_occasion("yalda").motif,
+        )
+
+    def test_base_shell_and_section_templates_consume_motif(self):
+        import os
+        from django.conf import settings as dj_settings
+
+        with open(os.path.join(dj_settings.BASE_DIR, "templates/base.html"), encoding="utf-8") as h:
+            base_src = h.read()
+        self.assertIn("data-occasion-motif", base_src)
+        with open(
+            os.path.join(
+                dj_settings.BASE_DIR,
+                "apps/storefront_builder/templates/storefront_builder/partials/responsive_section_wrapper.html",
+            ),
+            encoding="utf-8",
+        ) as h:
+            section_src = h.read()
+        self.assertIn("data-occasion-motif", section_src)
+
+    def test_occasion_css_maps_motif_tokens_to_bounded_hooks(self):
+        import os
+        from django.conf import settings as dj_settings
+        from apps.storefront_builder import theme_catalog
+
+        with open(
+            os.path.join(dj_settings.BASE_DIR, "apps/core/static/css/occasion_theme.css"),
+            encoding="utf-8",
+        ) as h:
+            css = h.read()
+        # Every non-noop occasion motif token must have a bounded CSS hook
+        # (a [data-occasion-motif="<token>"] selector) so distinct occasions
+        # render distinctly. No merchant raw CSS, no per-template fork.
+        for entry in theme_catalog.list_theme_occasions():
+            if entry.is_noop:
+                continue
+            with self.subTest(motif=entry.motif):
+                self.assertIn(f'data-occasion-motif="{entry.motif}"', css)
+
+    def test_mourning_motif_cannot_enable_festive_or_pressure(self):
+        from apps.storefront_builder import theme_catalog
+
+        muharram = theme_catalog.get_theme_occasion("muharram")
+        self.assertEqual(muharram.tone, "mourning")
+        self.assertFalse(muharram.festive_motifs)
+        self.assertFalse(muharram.countdown_pressure)
+        self.assertFalse(muharram.sale_badge)
+        # The mourning motif must still be a bounded token (rendered restrained),
+        # never a festive one.
+        self.assertEqual(muharram.motif, "muted_banner")
+
+
+
+# ---------------------------------------------------------------------------
+# Repair D — ACTUAL rendered Preview/Public parity through the existing routes.
+# ---------------------------------------------------------------------------
+class ThemeRenderedPreviewPublicParityTests(StorefrontBuilderViewsTestCase):
+    """Render the real editor Preview route AND the real public storefront
+    route for the same Theme and assert their rendered Theme projection matches
+    (occasion / tone / intensity / motif / accent variables / shell marker /
+    section marker). Uses the existing pipelines only — no new preview route,
+    no editor-only or public-only Theme rendering."""
+
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+        from django.urls import reverse
+
+        self.layout = layout_service.get_or_create_layout(self.store)
+        self.layout.r4_editor_enabled = True
+        self.layout.save(update_fields=["r4_editor_enabled"])
+        self.draft = layout_service.get_or_create_draft(self.store, user=self.staff)
+
+    def _extract_occasion(self, html):
+        import re
+
+        def grab(attr):
+            m = re.search(attr + r'="([^"]*)"', html)
+            return m.group(1) if m else None
+
+        return {
+            "theme": grab("data-occasion-theme"),
+            "tone": grab("data-occasion-tone"),
+            "intensity": grab("data-occasion-intensity"),
+            "motif": grab("data-occasion-motif"),
+            "accent": "--occasion-accent" in html,
+        }
+
+    def test_actual_preview_and_public_render_the_same_theme(self):
+        from django.urls import reverse
+        from apps.storefront_builder.services import (
+            appearance_authority_service,
+            r4_mutation_service,
+        )
+
+        # Apply Yalda strong on the Draft.
+        appearance_authority_service.apply_theme(
+            version=self.draft, component_key="theme.yalda.v1", intensity="strong"
+        )
+        self.draft.refresh_from_db()
+
+        # ACTUAL editor Preview render (Draft) via the existing route.
+        preview_resp = self.client.get(
+            reverse("dashboard:storefront-builder-preview"), {"page": "listing"}
+        )
+        self.assertEqual(preview_resp.status_code, 200)
+        preview_html = preview_resp.content.decode("utf-8")
+
+        # Publish, then ACTUAL public render via the existing shell-based route.
+        r4_mutation_service.publish_draft(
+            store=self.store, actor=self.staff, base_revision=self.draft.edit_revision
+        )
+        public_resp = self.client.get(reverse("catalog:product-list"))
+        self.assertEqual(public_resp.status_code, 200)
+        public_html = public_resp.content.decode("utf-8")
+
+        preview = self._extract_occasion(preview_html)
+        public = self._extract_occasion(public_html)
+
+        # Both actually rendered the theme...
+        self.assertEqual(preview["theme"], "yalda")
+        self.assertEqual(public["theme"], "yalda")
+        # ...and their full rendered projection is identical.
+        self.assertEqual(preview, public)
+        # Global shell marker present in both.
+        self.assertIn('data-occasion-theme="yalda"', preview_html)
+        self.assertIn('data-occasion-theme="yalda"', public_html)
+        # Section marker present in both (chrome AND section from one theme).
+        self.assertIn("data-occasion-motif", preview_html)
+        self.assertIn("data-occasion-motif", public_html)
+
+
+
+# ---------------------------------------------------------------------------
+# Minor — selecting No Theme (theme.none.v1) yields the same canonical state as
+# clear_theme(): selection none + NO theme settings (no meaningless intensity).
+# ---------------------------------------------------------------------------
+class ThemeNoneNormalizationTests(StorefrontBuilderViewsTestCase):
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+        self.layout = layout_service.get_or_create_layout(self.store)
+        self.layout.r4_editor_enabled = True
+        self.layout.save(update_fields=["r4_editor_enabled"])
+        self.draft = layout_service.get_or_create_draft(self.store, user=self.staff)
+
+    def test_apply_theme_none_normalizes_to_clear_state(self):
+        from apps.storefront_builder.services import appearance_authority_service
+        from apps.storefront_builder.storefront_appearance.persistence import (
+            load_store_appearance_manifest,
+        )
+
+        # First enable a real occasion with intensity.
+        appearance_authority_service.apply_theme(
+            version=self.draft, component_key="theme.yalda.v1", intensity="strong"
+        )
+        self.draft.refresh_from_db()
+
+        # Now select "No Theme" through the SAME apply path.
+        appearance_authority_service.apply_theme(
+            version=self.draft, component_key="theme.none.v1", intensity="strong"
+        )
+        self.draft.refresh_from_db()
+        manifest = load_store_appearance_manifest(self.draft)
+        self.assertEqual(manifest.selections["theme"], "theme.none.v1")
+        # No meaningless intensity retained under the no-op selection.
+        self.assertNotIn("theme", manifest.settings)
+
+    def test_theme_apply_none_through_route_matches_clear(self):
+        import json
+        from django.urls import reverse
+        from apps.storefront_builder.services import appearance_authority_service
+        from apps.storefront_builder.storefront_appearance.persistence import (
+            load_store_appearance_manifest,
+        )
+
+        appearance_authority_service.apply_theme(
+            version=self.draft, component_key="theme.yalda.v1", intensity="balanced"
+        )
+        self.draft.refresh_from_db()
+
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-r4-mutation"),
+            data=json.dumps(
+                {
+                    "base_revision": self.draft.edit_revision,
+                    "mutation": {
+                        "type": "theme.apply",
+                        "draft_id": self.draft.pk,
+                        "component_key": "theme.none.v1",
+                        "intensity": "strong",
+                    },
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.draft.refresh_from_db()
+        manifest = load_store_appearance_manifest(self.draft)
+        self.assertEqual(manifest.selections["theme"], "theme.none.v1")
+        self.assertNotIn("theme", manifest.settings)

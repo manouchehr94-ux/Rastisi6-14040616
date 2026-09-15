@@ -1,0 +1,18 @@
+=== CANDIDATE-PREVIEW REGRESSION (Python 3.12.13) ===
+--- test_task2_live_demo_template_preview + NonDestructiveTemplatePreviewTests ---
+----------------------------------------------------------------------
+Ran 24 tests in 228.844s
+
+OK
+Destroying test database for alias 'default'...
+Found 24 test(s).
+System check identified no issues (0 silenced).
+
+--- test_task3_merchant_template_preview ---
+----------------------------------------------------------------------
+Ran 11 tests in 26.068s
+
+OK
+Destroying test database for alias 'default'...
+Found 11 test(s).
+System check identified no issues (0 silenced).

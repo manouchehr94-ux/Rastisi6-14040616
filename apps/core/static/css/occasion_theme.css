@@ -119,3 +119,110 @@ html[data-occasion-tone="mourning"][data-occasion-theme] body::before {
     transition: none !important;
   }
 }
+
+/* ===========================================================================
+ * Motif decoration — bounded, platform-owned, keyed off data-occasion-motif.
+ *
+ * Each catalog motif token maps to a DISTINCT decorative treatment so a strong
+ * Yalda reads as Yalda (not "a red line") and Nowruz visibly differs from
+ * Yalda. Motif decoration is a soft top-of-shell corner ornament rendered with
+ * CSS gradients on a bounded platform pseudo-element (`body::after`) plus a
+ * subtle section corner accent — no images required, no per-template fork, no
+ * merchant CSS, no change to Ready-Template structural DNA. RTL-safe
+ * (logical `inset-inline`), reduced-motion-safe (no animation), and
+ * intensity-scaled via the resolved --occasion-motif-opacity.
+ *
+ * The shell motif ornament: a decorative corner glow at the top of the page.
+ * =========================================================================== */
+html[data-occasion-motif] body::after {
+  content: "";
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  width: clamp(140px, 22vw, 320px);
+  height: clamp(90px, 14vw, 200px);
+  z-index: 39;
+  pointer-events: none;
+  opacity: calc(var(--occasion-motif-opacity, 0.12) * 3);
+  background-repeat: no-repeat;
+  background-position: top right;
+}
+
+/* Spring blossom (Nowruz) — soft green radial "petals" cluster. */
+html[data-occasion-motif="spring_blossom"] body::after {
+  background-image:
+    radial-gradient(circle at 82% 18%, var(--occasion-accent) 0 6px, transparent 7px),
+    radial-gradient(circle at 70% 30%, var(--occasion-accent-soft) 0 9px, transparent 10px),
+    radial-gradient(circle at 90% 40%, var(--occasion-accent-soft) 0 7px, transparent 8px);
+}
+
+/* Pomegranate night (Yalda) — deep crimson orb + soft halo (yalda watermelon/
+ * pomegranate night). */
+html[data-occasion-motif="pomegranate_night"] body::after {
+  background-image:
+    radial-gradient(circle at 84% 26%, var(--occasion-accent) 0 18px, transparent 19px),
+    radial-gradient(circle at 84% 26%, transparent 0 22px, var(--occasion-accent-soft) 23px 30px, transparent 31px);
+}
+
+/* Hearts (Valentine) — two overlapping soft heart-like blobs. */
+html[data-occasion-motif="hearts"] body::after {
+  background-image:
+    radial-gradient(circle at 76% 30%, var(--occasion-accent) 0 10px, transparent 11px),
+    radial-gradient(circle at 86% 30%, var(--occasion-accent) 0 10px, transparent 11px),
+    linear-gradient(135deg, transparent 60%, var(--occasion-accent-soft) 60%);
+}
+
+/* Crescent + lantern (Ramadan) — restrained teal crescent ring. */
+html[data-occasion-motif="crescent_lantern"] body::after {
+  background-image:
+    radial-gradient(circle at 82% 30%, transparent 0 14px, var(--occasion-accent) 15px 18px, transparent 19px),
+    radial-gradient(circle at 88% 26%, var(--brand-background, #fff) 0 15px, transparent 16px);
+}
+
+/* Crescent + star (Eid al-Fitr) — crescent ring with a small star dot. */
+html[data-occasion-motif="crescent_star"] body::after {
+  background-image:
+    radial-gradient(circle at 82% 30%, transparent 0 13px, var(--occasion-accent) 14px 17px, transparent 18px),
+    radial-gradient(circle at 90% 22%, var(--occasion-accent) 0 4px, transparent 5px);
+}
+
+/* Geometric gold (Eid al-Qorban) — warm gold geometric diagonal weave. */
+html[data-occasion-motif="geometric_gold"] body::after {
+  background-image:
+    repeating-linear-gradient(45deg, var(--occasion-accent-soft) 0 6px, transparent 6px 14px),
+    repeating-linear-gradient(-45deg, var(--occasion-accent) 0 2px, transparent 2px 16px);
+}
+
+/* Muted banner (Muharram/Ashura) — a single calm, flat mourning band. NO
+ * ornament cluster, NO glow, NO festive shapes: mourning restraint. */
+html[data-occasion-motif="muted_banner"] body::after {
+  width: 100%;
+  height: 4px;
+  inset-inline: 0;
+  opacity: calc(var(--occasion-motif-opacity, 0.06) * 4);
+  background-image: linear-gradient(90deg, transparent, var(--occasion-accent), transparent);
+}
+
+/* Section-level motif accent — a soft occasion corner tint on decorated
+ * sections, keyed off the SAME resolved motif so one theme drives chrome AND
+ * sections. Mourning uses no corner ornament. */
+.rsec[data-occasion-motif]:not([data-occasion-tone="mourning"])::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  width: 56px;
+  height: 56px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: calc(var(--occasion-motif-opacity, 0.12) * 2.5);
+  background:
+    radial-gradient(circle at 100% 0%, var(--occasion-accent-soft) 0 40%, transparent 60%);
+}
+
+/* Mourning tone: never render the festive corner ornament or the shell glow
+ * cluster; keep only the calm flat band. Reinforces the catalog's structural
+ * guarantee at the presentation layer. */
+html[data-occasion-tone="mourning"] .rsec[data-occasion-motif]::before {
+  content: none;
+}

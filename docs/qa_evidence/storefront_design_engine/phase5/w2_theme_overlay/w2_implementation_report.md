@@ -83,3 +83,78 @@ Single owner for every concern (family, catalog, registry path, resolver,
 persistence, Draft lifecycle, mutation boundary, preview, public renderer) —
 see `09_architecture_duplication_audit.md`. No new model, no migration, no
 second registry/resolver/persistence layer.
+
+
+
+---
+
+## PR #8 Architect-repair addendum (6 IMPORTANT + minor)
+
+Runtime for all repair verification: **Python 3.12.13, Django 5.2.17**.
+New PR head after repairs supersedes `0c29fb5…`.
+
+- **Repair A — single request-scoped resolved appearance.** Added
+  `render_service.resolved_store_appearance_for_request(request, version)` — a
+  request-scoped memoization (attribute `request.storefront_resolved_appearance`,
+  keyed by `version.pk`) around the single canonical
+  `resolve_store_appearance_render_state`. `build_universal_storefront_context`
+  and the `shop_settings` context processor now consume this ONE resolved state
+  per request instead of resolving the same Version twice. The broad
+  `except Exception:` was removed — a malformed NEW manifest now raises loudly
+  (never silently becomes `theme.none`). No second resolver.
+- **Repair B — real motif.** `ThemeOverlayState` gained a bounded `motif`
+  identity from the catalog; `SHOP_OCCASION_MOTIF` is projected; `<html>` and
+  `.rsec` section wrappers emit `data-occasion-motif`; the one shared
+  `occasion_theme.css` maps every non-noop motif token to a distinct bounded
+  decoration (per-occasion corner ornament + section corner accent). Mourning
+  (`muted_banner`) renders only a calm flat band and suppresses the ornament.
+  No per-template CSS, no merchant CSS, no motif registry, no DNA change.
+- **Repair C — Undo AND Redo.** The mutation history test now proves apply →
+  undo → redo restores the exact occasion + intensity; a Clear-Theme history
+  test was added.
+- **Repair D — actual rendered Preview/Public parity.** New integration test
+  renders the real Preview and real public routes and asserts identical rendered
+  Theme projection (occasion/tone/intensity/motif/accent + shell + section).
+- **Repair E — full Browser QA matrix.** 2 materially different Ready Templates
+  (`dense_marketplace`, `editorial_jewelry`) × 3 themes (Yalda/Ramadan/Muharram)
+  × 3 intensities × 3 viewports = 54 cases; representative screenshots for both
+  templates; no overflow, no console errors, RTL intact, motif rendered,
+  mourning restrained, none-restoration. See `07_browser_qa_report.md` +
+  `10_browser_qa_matrix_raw.txt` + `screenshots/A-*`,`screenshots/B-*`.
+- **Minor — No Theme == Clear.** `apply_theme("theme.none.v1", …)` routes to
+  `clear_theme()` (no dead intensity retained); the R4 UI routes "بدون تم
+  مناسبتی" to `theme.clear` and disables the intensity control for No Theme.
+
+### Public-home shell limitation — deferred to P5-W4A
+W2 Theme is certified on the current universal-shell surfaces (every page that
+extends `storefront_shell.html`/`base.html`, e.g. the product list). The
+standalone `catalog/home.html` public home does not yet use the universal
+shell; that public-shell convergence is deferred to **P5-W4A**. W2 does NOT
+claim complete all-public-page Theme coverage before W4A.
+
+### Repair test counts (Python 3.12.13, Django 5.2.17)
+- Focused `test_w2_theme_overlay`: **57 passed / 57**.
+- Candidate-preview regression: task2 (13) + `NonDestructiveTemplatePreviewTests` (11) = 24 PASS; task3 (11) PASS.
+- Targeted regression: 186 PASS (1 skip).
+- Full Storefront Builder suite: 3159 tests — 30 failures + 2 errors + 4 skipped,
+  **identical (empty diff) to the clean certified-base failure set** on Python
+  3.12 (reproduced via a clean clone, no stash). Zero W2 regressions.
+
+### Task-6 historical guard correction
+The Task-6 additive guard `test_ready_template_recipe_files_are_untouched_by_task6`
+had an open-ended diff range (`c0ca174…...HEAD`) that incorrectly flagged
+authorized post-Task-6 work. It was corrected to the FIXED historical Task-6
+range `c0ca174475bf19dd5c3ecac3857da479623e1e7d...a75711473b791c2add0389913707503bc0024cc0`
+(the guard's real purpose: prove Task 6 ITSELF did not touch canonical
+authorities). The forbidden set is UNCHANGED and NO W2 exemptions were added —
+this is a maintenance correction to a historical guard, not a W2 exception.
+
+### Additional production files changed by the repair
+- `apps/storefront_builder/services/render_service.py` — `resolved_store_appearance_for_request`.
+- `apps/storefront_builder/services/storefront_context_service.py` — consume the request-scoped resolved appearance.
+- `apps/core/context_processors.py` — consume resolved state; remove broad except; project `SHOP_OCCASION_MOTIF`.
+- `apps/storefront_builder/storefront_appearance/rendering.py` — `ThemeOverlayState.motif`.
+- `apps/storefront_builder/services/appearance_authority_service.py` — `apply_theme` no-op normalization to `clear_theme`.
+- `apps/core/static/css/occasion_theme.css` — per-motif bounded decorations.
+- `templates/base.html`, `.../responsive_section_wrapper.html` — `data-occasion-motif`.
+- `.../static/storefront_builder/r4_editor.js` — No-Theme → clear + intensity disable.

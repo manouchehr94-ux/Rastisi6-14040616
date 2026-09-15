@@ -224,26 +224,40 @@ def shop_settings(request):
     occasion_theme = "none"
     occasion_tone = "neutral"
     occasion_intensity = ""
+    occasion_motif = ""
     occasion_accent = ""
     occasion_accent_soft = ""
     occasion_motif_opacity = ""
     occasion_accent_mix = ""
-    if global_version is not None:
+    # Repair A — the occasion Theme is resolved ONLY for a real, saved
+    # ``StorefrontLayoutVersion`` (the persisted appearance manifest lives
+    # there). The template-Preview path deliberately sets
+    # ``storefront_appearance_version`` to a transient candidate stand-in
+    # (``_CandidateAppearanceVersion`` / ``_ReadyTemplateCandidateAppearanceVersion``)
+    # that exposes only ``effective_appearance_config()`` and is NOT a saved
+    # Version — the persisted-Version resolver must never be called on it
+    # (Architect Repair A). Such a candidate carries no persisted occasion
+    # theme, so it renders as no-theme; this is NOT exception-swallowing —
+    # a real saved Version with a malformed manifest still raises loudly below.
+    from apps.storefront_builder.models import StorefrontLayoutVersion
+
+    if isinstance(global_version, StorefrontLayoutVersion) and global_version.pk is not None:
         from apps.storefront_builder.services.render_service import (
-            resolve_store_appearance_render_state,
+            resolved_store_appearance_for_request,
             store_appearance_theme_overlay_state,
         )
 
-        try:
-            _overlay = store_appearance_theme_overlay_state(
-                resolve_store_appearance_render_state(global_version)
-            )
-        except Exception:
-            _overlay = None
-        if _overlay is not None and _overlay.is_active:
+        # Consume the ONE canonical ResolvedStoreAppearance for this request
+        # (resolved at most once via the request-scoped helper), NOT a second
+        # independent resolve. A malformed NEW manifest raises loudly here.
+        _overlay = store_appearance_theme_overlay_state(
+            resolved_store_appearance_for_request(request, global_version)
+        )
+        if _overlay.is_active:
             occasion_theme = _overlay.occasion_key
             occasion_tone = _overlay.tone
             occasion_intensity = _overlay.intensity
+            occasion_motif = _overlay.motif
             occasion_accent = _overlay.css_variables.get("--occasion-accent", "")
             occasion_accent_soft = _overlay.css_variables.get("--occasion-accent-soft", "")
             occasion_motif_opacity = _overlay.css_variables.get("--occasion-motif-opacity", "")
@@ -398,6 +412,7 @@ def shop_settings(request):
         "SHOP_OCCASION_THEME": occasion_theme,
         "SHOP_OCCASION_TONE": occasion_tone,
         "SHOP_OCCASION_INTENSITY": occasion_intensity,
+        "SHOP_OCCASION_MOTIF": occasion_motif,
         "SHOP_OCCASION_ACCENT": occasion_accent,
         "SHOP_OCCASION_ACCENT_SOFT": occasion_accent_soft,
         "SHOP_OCCASION_MOTIF_OPACITY": occasion_motif_opacity,

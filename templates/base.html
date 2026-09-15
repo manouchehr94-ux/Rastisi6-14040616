@@ -1,6 +1,6 @@
 {% load static persian %}<!DOCTYPE html>
 <html lang="fa" dir="rtl"
-      {% if SHOP_OCCASION_THEME and SHOP_OCCASION_THEME != 'none' %}data-occasion-theme="{{ SHOP_OCCASION_THEME }}" data-occasion-tone="{{ SHOP_OCCASION_TONE }}" data-occasion-intensity="{{ SHOP_OCCASION_INTENSITY }}"{% endif %}
+      {% if SHOP_OCCASION_THEME and SHOP_OCCASION_THEME != 'none' %}data-occasion-theme="{{ SHOP_OCCASION_THEME }}" data-occasion-tone="{{ SHOP_OCCASION_TONE }}" data-occasion-intensity="{{ SHOP_OCCASION_INTENSITY }}" data-occasion-motif="{{ SHOP_OCCASION_MOTIF }}"{% endif %}
       data-sfb-template="{{ SHOP_TEMPLATE_SLUG|default:'modern' }}"
       data-sfb-density="{{ SHOP_DENSITY|default:'normal' }}"
       data-sfb-type-scale="{{ SHOP_TYPE_SCALE|default:'normal' }}"

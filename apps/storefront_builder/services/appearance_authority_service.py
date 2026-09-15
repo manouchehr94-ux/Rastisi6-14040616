@@ -189,6 +189,13 @@ def apply_theme(
     """
     from ..theme_catalog import DEFAULT_THEME_INTENSITY
 
+    # Selecting "No Theme" (the no-op) is canonically identical to clearing:
+    # a no-op occasion carries no meaningful intensity, so it must never
+    # retain a stray intensity setting. Route it to the same result as
+    # clear_theme() rather than persisting theme.none.v1 + a dead intensity.
+    if component_key == "theme.none.v1":
+        return clear_theme(version=version)
+
     if intensity is None:
         intensity = DEFAULT_THEME_INTENSITY
 

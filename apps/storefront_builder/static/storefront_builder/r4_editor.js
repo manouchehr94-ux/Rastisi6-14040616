@@ -1267,6 +1267,15 @@ window.RastiSiR4 = {
         var intensitySelect = document.getElementById('r4ThemeIntensity');
         var themeDraftId = Number(shell && shell.dataset.r4DraftId);
         if (!occasionSelect || !themeDraftId) return;
+        // No Theme selected -> canonical Clear (never a no-op selection with a
+        // meaningless intensity; server also normalizes, this keeps the wire
+        // payload honest).
+        if (occasionSelect.value === 'theme.none.v1') {
+          R4.enqueueMutation({ type: 'theme.clear', draft_id: themeDraftId }).then(function (result) {
+            if (result && result.ok) refreshGlobalDesignAndPreview();
+          });
+          return;
+        }
         R4.enqueueMutation({
           type: 'theme.apply',
           draft_id: themeDraftId,
@@ -1356,6 +1365,19 @@ window.RastiSiR4 = {
         });
       }
     });
+
+    // P5-W2 — when "No Theme" is selected, intensity is meaningless, so
+    // disable the intensity control (server also ignores/normalizes it).
+    function syncThemeIntensityEnabled() {
+      var occasionSelect = document.getElementById('r4ThemeOccasion');
+      var intensitySelect = document.getElementById('r4ThemeIntensity');
+      if (!occasionSelect || !intensitySelect) return;
+      intensitySelect.disabled = occasionSelect.value === 'theme.none.v1';
+    }
+    globalDesignPanel.addEventListener('change', function (evt) {
+      if (evt.target.closest('[data-r4-theme-occasion]')) syncThemeIntensityEnabled();
+    });
+    syncThemeIntensityEnabled();
 
     // One delegated change handler — the mutation `type` and patch `key`
     // both come from data attributes already rendered by the server

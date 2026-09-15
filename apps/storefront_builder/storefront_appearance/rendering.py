@@ -204,6 +204,10 @@ class ThemeOverlayState:
     tone: str
     intensity: str
     label_fa: str
+    #: The bounded, catalog-owned motif identity (a CSS-class-safe token the
+    #: shared occasion stylesheet maps to a decorative treatment). Empty string
+    #: for the no-op theme.
+    motif: str
     css_variables: Mapping[str, str]
     is_active: bool
 
@@ -248,6 +252,7 @@ def theme_overlay_state(state: ResolvedStoreAppearance) -> ThemeOverlayState:
             tone=occasion.tone,
             intensity=intensity,
             label_fa=occasion.label_fa,
+            motif="",
             css_variables={},
             is_active=False,
         )
@@ -264,6 +269,7 @@ def theme_overlay_state(state: ResolvedStoreAppearance) -> ThemeOverlayState:
         tone=occasion.tone,
         intensity=intensity,
         label_fa=occasion.label_fa,
+        motif=occasion.motif,
         css_variables=css_variables,
         is_active=True,
     )

@@ -1,26 +1,9 @@
-Command:
-  python manage.py test apps.storefront_builder.tests --settings=shop_core.settings
+=== W2 BRANCH full suite (Python 3.12.13) tail ===
+Ran 3159 tests in 1368.535s
 
-Result:
-  Ran 3143 tests in 1389.399s
-  FAILED (failures=30, errors=2, skipped=4)
-  System check identified no issues (0 silenced).
+FAILED (failures=30, errors=2, skipped=4)
+Destroying test database for alias 'default'...
+Found 3159 test(s).
+System check identified no issues (0 silenced).
 
-Classification:
-  All 30 failures + 2 errors are PRE-EXISTING at the certified base
-  b7d8ac281389870877553f5a308af3e77dcdd7f0 — independently reproduced by
-  reverting the worktree to the base (git stash -u) and re-running the same
-  test modules, which produced the identical 30 failures + 2 errors with none
-  of the W2 code present. See 05_preexisting_failures_repro.md for the full
-  list and method. W2 introduces ZERO new failures.
-
-  W2-owned tests: 41/41 PASS (test_w2_theme_overlay).
-  Targeted regression: 186 PASS / 1 skip (see 03_targeted_regression.txt).
-
-Pre-existing failing modules (unrelated to Theme — frozen preset versions /
-reference silhouettes / mobile-nav / fullscreen topbar / template gallery /
-validator boundary):
-  test_warm_boutique_lalerokh_v2, test_dense_marketplace_beraito_v2,
-  test_dark_digital_luxury_v2, test_editorial_jewelry_saremi_v2,
-  test_premium_leather_shokolati_v2, test_u8_template_gallery,
-  test_r4_vertical_slice, test_views.FullscreenEditorTests
+FULL_SUITE_EXIT=1 (non-zero expected while pre-existing failures remain)
