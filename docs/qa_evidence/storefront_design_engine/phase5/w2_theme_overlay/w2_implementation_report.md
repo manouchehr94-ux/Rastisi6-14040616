@@ -39,7 +39,7 @@ observance), `muharram` (mourning). Future occasions add one catalog entry each.
 - `apps/storefront_builder/static/storefront_builder/r4_editor.js` — Theme apply/clear handlers via `R4.enqueueMutation`.
 
 ## Test files changed
-- `apps/storefront_builder/tests/test_w2_theme_overlay.py` **(new, 41 tests)**.
+- `apps/storefront_builder/tests/test_w2_theme_overlay.py` **(new; 58 tests — final)**.
 - `apps/storefront_builder/tests/test_r4_store_appearance_contracts.py` — family ordering now includes `theme`.
 - `apps/storefront_builder/tests/test_a8_component_coverage.py` — advertised counts include `theme: 1`.
 - `apps/storefront_builder/tests/test_a8_component_library.py` — registry counts `theme: 8`, total `127`, advertised set +`theme.none.v1`.
@@ -49,21 +49,41 @@ observance), `muharram` (mourning). Future occasions add one catalog entry each.
 `03_targeted_regression.txt`, `04_full_storefront_builder_suite.txt`,
 `05_preexisting_failures_repro.md`, `06_repo_gates.txt`,
 `07_browser_qa_report.md`, `08_theme_catalog_po_review.md`,
-`09_architecture_duplication_audit.md`, `screenshots/` (7 PNGs), this report.
+`09_architecture_duplication_audit.md`, `10_browser_qa_matrix_raw.txt`,
+`11_repair_red_green.md`, `12_task6_historical_guard.txt`,
+`13_candidate_preview_regression.txt`, `14_base_312_failures.txt`,
+`15_w2_312_failures.txt`, `16_base_full_suite.txt`,
+`17_w2_full_suite_raw.txt`, `18_base_full_suite_raw.txt`,
+`19_failure_reason_comparison.md`, `screenshots/` (representative set:
+`A-*` dense_marketplace + `B-*` editorial_jewelry), this report.
 
-## Exact test counts
-- W2 focused suite: **41 passed / 41** (`OK`).
-- Targeted regression (rendering, registry, contracts, render_service, preset_service): **186 passed** (1 skipped).
-- Full Storefront Builder suite: **3143 tests — 30 failures + 2 errors + 4 skipped**.
+## FINAL canonical test counts (Python 3.12.13, Django 5.2.17)
+> These SUPERSEDE any earlier interim numbers in this report. The final,
+> authoritative values are:
+
+- **Focused W2 (`test_w2_theme_overlay`): 58 / 58 PASS.**
+- **Candidate Preview regression:** task2 + `NonDestructiveTemplatePreviewTests` = **24 PASS**; task3 = **11 PASS**.
+- **Targeted regression** (rendering, registry, contracts, render_service, preset_service): **186 OK (1 skipped)**.
+- **W2 full Storefront Builder suite: 3160 tests — 30 failures, 2 errors, 4 skipped.**
+- **Certified-base full suite (clean clone): 3102 tests — 30 failures, 2 errors, 4 skipped.**
+- **W2 vs base failure identity: EMPTY.**
+- **W2 vs base failure reason: EMPTY.**
+- **Python: 3.12.13 · Django: 5.2.17.**
+
+(Earlier interim figures such as `41 / 41` focused and `3143` full-suite are
+obsolete and no longer apply — the final counts above are canonical.)
 
 ## Exact known failures
 - **30 failures + 2 errors** in the full suite are **PRE-EXISTING** at the
-  certified base — independently reproduced by reverting the worktree to
-  `b7d8ac28` (git stash -u) and re-running the same modules: identical 30+2
-  (see `05_preexisting_failures_repro.md`). They are Ready-Template reference
-  contract / mobile-nav / fullscreen-topbar / template-gallery / validator-
-  boundary tests that assert frozen preset versions & reference silhouettes;
-  none touch the Theme family or the appearance engine W2 modifies.
+  certified base. Final authoritative reproduction: a **separate clean clone at
+  `b7d8ac281389870877553f5a308af3e77dcdd7f0` (NO stash)**, Python 3.12.13, whose
+  full-suite failure set is identical to W2's by **test-identity AND by failure
+  reason** (see `05_preexisting_failures_repro.md`, `17_w2_full_suite_raw.txt`,
+  `18_base_full_suite_raw.txt`, `19_failure_reason_comparison.md`). They are
+  Ready-Template reference-contract / mobile-nav / fullscreen-topbar /
+  template-gallery / validator-boundary tests asserting frozen preset versions
+  & reference silhouettes; none touch the Theme family or the appearance engine
+  W2 modifies.
 - **W2 introduces ZERO new failures.**
 
 ## Result summary

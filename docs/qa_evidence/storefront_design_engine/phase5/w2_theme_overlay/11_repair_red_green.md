@@ -83,3 +83,42 @@ forbidden set unchanged, NO W2 exemptions. See `12_task6_historical_guard.txt`.
 
 ### Final focused count
 `test_w2_theme_overlay`: **57 tests, all PASS** on Python 3.12.13.
+
+
+
+---
+
+## Final review — IMPORTANT 1: normal editor Preview single resolution (TDD RED → GREEN)
+
+### RED
+Route: `dashboard:storefront-builder-preview` (the REAL editor Preview route).
+Before the fix, `storefront_preview` called `resolve_store_appearance_render_state(draft)`
+directly and never cached the result on the request, so the shell context
+processor (`shop_settings`) resolved the SAME Draft a second time.
+
+```
+Before fix:   resolver call_count = 2
+Expected:     resolver call_count = 1
+Observed RED: 2 != 1
+```
+(Counted at the single underlying resolver's source module so both the view's
+call and the context processor's call are captured regardless of import name.)
+
+### GREEN
+`storefront_preview` now uses
+`render_service.resolved_store_appearance_for_request(request, draft)`, so the
+view's resolve is cached on `request.storefront_resolved_appearance` and reused
+by the context processor.
+
+```
+After fix:        resolver call_count = 1
+Theme still rendered: yalda / strong  (data-occasion-theme="yalda" in HTML)
+```
+Locked by `ThemeSingleResolutionTests.test_normal_editor_preview_resolves_appearance_only_once`.
+Invariants preserved: public universal render = one resolve; transient candidate
+stand-in never passed to the persisted resolver; malformed NEW saved manifest
+still fails loudly.
+
+### FINAL focused count (supersedes the 57 above)
+`test_w2_theme_overlay`: **58 tests, all PASS** on Python 3.12.13 (adds the
+normal-editor-Preview single-resolution regression test).

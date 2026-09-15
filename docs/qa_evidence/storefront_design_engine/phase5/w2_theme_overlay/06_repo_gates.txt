@@ -1,57 +1,22 @@
-=== python manage.py check --settings=shop_core.settings ===
+=== P5-W2 repository gates — refreshed on final head (evidence-only cleanup) ===
+--- runtime ---
+Python 3.12.13
+/projects/sandbox/Rastisi6-14040616/.venv312/bin/python
+Django 5.2.17
+
+--- python manage.py check ---
 System check identified no issues (0 silenced).
 
-=== python manage.py makemigrations --check --dry-run --settings=shop_core.settings ===
+--- python manage.py makemigrations --check --dry-run ---
 No changes detected
 
-=== git diff --check ===
+--- git diff --check ---
 (clean)
 
-=== git status --short (excluding venv/.python-version) ===
- M apps/core/context_processors.py
- M apps/storefront_builder/a8_ready_templates.py
- M apps/storefront_builder/layout_preset_registry.py
- M apps/storefront_builder/r4_views.py
- M apps/storefront_builder/services/appearance_authority_service.py
- M apps/storefront_builder/services/r4_mutation_service.py
- M apps/storefront_builder/services/render_service.py
- M apps/storefront_builder/static/storefront_builder/r4_editor.js
- M apps/storefront_builder/storefront_appearance/adapters.py
- M apps/storefront_builder/storefront_appearance/families.py
- M apps/storefront_builder/storefront_appearance/inventory.py
- M apps/storefront_builder/storefront_appearance/rendering.py
- M apps/storefront_builder/storefront_appearance/validation.py
- M apps/storefront_builder/templates/dashboard/storefront_builder/r4/editor.html
- M apps/storefront_builder/templates/storefront_builder/partials/responsive_section_wrapper.html
- M apps/storefront_builder/tests/test_a8_component_coverage.py
- M apps/storefront_builder/tests/test_a8_component_library.py
- M apps/storefront_builder/tests/test_r4_store_appearance_contracts.py
- M templates/base.html
-?? apps/core/static/css/occasion_theme.css
-?? apps/storefront_builder/tests/test_w2_theme_overlay.py
-?? apps/storefront_builder/theme_catalog.py
-?? docs/qa_evidence/storefront_design_engine/phase5/w2_theme_overlay/
+--- git status --short (excluding venv) ---
+ M docs/qa_evidence/storefront_design_engine/phase5/w2_theme_overlay/06_repo_gates.txt
+ M docs/qa_evidence/storefront_design_engine/phase5/w2_theme_overlay/11_repair_red_green.md
+ M docs/qa_evidence/storefront_design_engine/phase5/w2_theme_overlay/w2_implementation_report.md
 
-=== git diff --stat (tracked, excluding venv) ===
- apps/core/context_processors.py                    | 43 ++++++++++++
- apps/storefront_builder/a8_ready_templates.py      |  5 ++
- apps/storefront_builder/layout_preset_registry.py  |  3 +
- apps/storefront_builder/r4_views.py                | 37 ++++++++++
- .../services/appearance_authority_service.py       | 52 ++++++++++++++
- .../services/r4_mutation_service.py                | 43 ++++++++++++
- apps/storefront_builder/services/render_service.py |  1 +
- .../static/storefront_builder/r4_editor.js         | 29 ++++++++
- .../storefront_appearance/adapters.py              | 21 ++++++
- .../storefront_appearance/families.py              | 15 ++++
- .../storefront_appearance/inventory.py             |  6 ++
- .../storefront_appearance/rendering.py             | 82 ++++++++++++++++++++++
- .../storefront_appearance/validation.py            | 15 ++++
- .../dashboard/storefront_builder/r4/editor.html    | 34 +++++++++
- .../partials/responsive_section_wrapper.html       |  4 ++
- .../tests/test_a8_component_coverage.py            |  2 +
- .../tests/test_a8_component_library.py             |  7 +-
- .../tests/test_r4_store_appearance_contracts.py    |  2 +
- templates/base.html                                |  7 +-
- 19 files changed, 406 insertions(+), 2 deletions(-)
-
-=== migrations dir (no new files) ===
+--- migrations added? ---
+NONE
