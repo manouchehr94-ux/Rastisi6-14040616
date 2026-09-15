@@ -1,0 +1,542 @@
+{
+  "host": "rastisi-fashion-test.rastisi.localhost",
+  "base": "http://rastisi-fashion-test.rastisi.localhost:8817",
+  "started_at": "2026-09-15T07:21:41.461Z",
+  "checks": [
+    {
+      "name": "overflow:below:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "sw": 1440,
+        "cw": 1440
+      }
+    },
+    {
+      "name": "rtl:below:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "checkout-usable:below:desktop-1440",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "bar-bounded:below:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "fill": 888,
+        "track": 1268
+      }
+    },
+    {
+      "name": "state-below:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "kind": "goal",
+        "goalText": "۱۵۰٬۰۰۰ تومان دیگر تا ارسال رایگان"
+      }
+    },
+    {
+      "name": "overflow:reached:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "sw": 1440,
+        "cw": 1440
+      }
+    },
+    {
+      "name": "rtl:reached:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "checkout-usable:reached:desktop-1440",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "state-reached:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "kind": "success",
+        "successText": "ارسال رایگان فعال شد"
+      }
+    },
+    {
+      "name": "overflow:digital:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "sw": 1440,
+        "cw": 1440
+      }
+    },
+    {
+      "name": "rtl:digital:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "checkout-usable:digital:desktop-1440",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "state-digital-hidden:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "present": false
+      }
+    },
+    {
+      "name": "overflow:empty:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "sw": 1440,
+        "cw": 1440
+      }
+    },
+    {
+      "name": "rtl:empty:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "checkout-usable:empty:desktop-1440",
+      "status": "WARN",
+      "detail": null
+    },
+    {
+      "name": "state-empty-safe:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "present": false
+      }
+    },
+    {
+      "name": "overflow:below:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "sw": 768,
+        "cw": 768
+      }
+    },
+    {
+      "name": "rtl:below:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "checkout-usable:below:tablet-768",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "bar-bounded:below:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "fill": 417,
+        "track": 596
+      }
+    },
+    {
+      "name": "state-below:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "kind": "goal",
+        "goalText": "۱۵۰٬۰۰۰ تومان دیگر تا ارسال رایگان"
+      }
+    },
+    {
+      "name": "overflow:reached:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "sw": 768,
+        "cw": 768
+      }
+    },
+    {
+      "name": "rtl:reached:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "checkout-usable:reached:tablet-768",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "state-reached:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "kind": "success",
+        "successText": "ارسال رایگان فعال شد"
+      }
+    },
+    {
+      "name": "overflow:digital:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "sw": 768,
+        "cw": 768
+      }
+    },
+    {
+      "name": "rtl:digital:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "checkout-usable:digital:tablet-768",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "state-digital-hidden:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "present": false
+      }
+    },
+    {
+      "name": "overflow:empty:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "sw": 768,
+        "cw": 768
+      }
+    },
+    {
+      "name": "rtl:empty:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "checkout-usable:empty:tablet-768",
+      "status": "WARN",
+      "detail": null
+    },
+    {
+      "name": "state-empty-safe:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "present": false
+      }
+    },
+    {
+      "name": "overflow:below:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "sw": 390,
+        "cw": 390
+      }
+    },
+    {
+      "name": "rtl:below:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "checkout-usable:below:mobile-390",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "bar-bounded:below:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "fill": 167,
+        "track": 238
+      }
+    },
+    {
+      "name": "state-below:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "kind": "goal",
+        "goalText": "۱۵۰٬۰۰۰ تومان دیگر تا ارسال رایگان"
+      }
+    },
+    {
+      "name": "overflow:reached:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "sw": 390,
+        "cw": 390
+      }
+    },
+    {
+      "name": "rtl:reached:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "checkout-usable:reached:mobile-390",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "state-reached:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "kind": "success",
+        "successText": "ارسال رایگان فعال شد"
+      }
+    },
+    {
+      "name": "overflow:digital:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "sw": 390,
+        "cw": 390
+      }
+    },
+    {
+      "name": "rtl:digital:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "checkout-usable:digital:mobile-390",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "state-digital-hidden:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "present": false
+      }
+    },
+    {
+      "name": "overflow:empty:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "sw": 390,
+        "cw": 390
+      }
+    },
+    {
+      "name": "rtl:empty:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "checkout-usable:empty:mobile-390",
+      "status": "WARN",
+      "detail": null
+    },
+    {
+      "name": "state-empty-safe:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "present": false
+      }
+    }
+  ],
+  "console_errors": [],
+  "failed_requests": [],
+  "geometry": [
+    {
+      "vp": "desktop-1440",
+      "state": "below",
+      "present": true,
+      "kind": "goal",
+      "goalText": "۱۵۰٬۰۰۰ تومان دیگر تا ارسال رایگان",
+      "successText": null,
+      "fillWidthPx": 888,
+      "trackWidthPx": 1268,
+      "dir": "rtl",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "checkoutPresent": true
+    },
+    {
+      "vp": "desktop-1440",
+      "state": "reached",
+      "present": true,
+      "kind": "success",
+      "goalText": null,
+      "successText": "ارسال رایگان فعال شد",
+      "fillWidthPx": null,
+      "trackWidthPx": null,
+      "dir": "rtl",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "checkoutPresent": true
+    },
+    {
+      "vp": "desktop-1440",
+      "state": "digital",
+      "present": false,
+      "kind": null,
+      "goalText": null,
+      "successText": null,
+      "fillWidthPx": null,
+      "trackWidthPx": null,
+      "dir": "rtl",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "checkoutPresent": true
+    },
+    {
+      "vp": "desktop-1440",
+      "state": "empty",
+      "present": false,
+      "kind": null,
+      "goalText": null,
+      "successText": null,
+      "fillWidthPx": null,
+      "trackWidthPx": null,
+      "dir": "rtl",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "checkoutPresent": false
+    },
+    {
+      "vp": "tablet-768",
+      "state": "below",
+      "present": true,
+      "kind": "goal",
+      "goalText": "۱۵۰٬۰۰۰ تومان دیگر تا ارسال رایگان",
+      "successText": null,
+      "fillWidthPx": 417,
+      "trackWidthPx": 596,
+      "dir": "rtl",
+      "scrollWidth": 768,
+      "clientWidth": 768,
+      "checkoutPresent": true
+    },
+    {
+      "vp": "tablet-768",
+      "state": "reached",
+      "present": true,
+      "kind": "success",
+      "goalText": null,
+      "successText": "ارسال رایگان فعال شد",
+      "fillWidthPx": null,
+      "trackWidthPx": null,
+      "dir": "rtl",
+      "scrollWidth": 768,
+      "clientWidth": 768,
+      "checkoutPresent": true
+    },
+    {
+      "vp": "tablet-768",
+      "state": "digital",
+      "present": false,
+      "kind": null,
+      "goalText": null,
+      "successText": null,
+      "fillWidthPx": null,
+      "trackWidthPx": null,
+      "dir": "rtl",
+      "scrollWidth": 768,
+      "clientWidth": 768,
+      "checkoutPresent": true
+    },
+    {
+      "vp": "tablet-768",
+      "state": "empty",
+      "present": false,
+      "kind": null,
+      "goalText": null,
+      "successText": null,
+      "fillWidthPx": null,
+      "trackWidthPx": null,
+      "dir": "rtl",
+      "scrollWidth": 768,
+      "clientWidth": 768,
+      "checkoutPresent": false
+    },
+    {
+      "vp": "mobile-390",
+      "state": "below",
+      "present": true,
+      "kind": "goal",
+      "goalText": "۱۵۰٬۰۰۰ تومان دیگر تا ارسال رایگان",
+      "successText": null,
+      "fillWidthPx": 167,
+      "trackWidthPx": 238,
+      "dir": "rtl",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "checkoutPresent": true
+    },
+    {
+      "vp": "mobile-390",
+      "state": "reached",
+      "present": true,
+      "kind": "success",
+      "goalText": null,
+      "successText": "ارسال رایگان فعال شد",
+      "fillWidthPx": null,
+      "trackWidthPx": null,
+      "dir": "rtl",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "checkoutPresent": true
+    },
+    {
+      "vp": "mobile-390",
+      "state": "digital",
+      "present": false,
+      "kind": null,
+      "goalText": null,
+      "successText": null,
+      "fillWidthPx": null,
+      "trackWidthPx": null,
+      "dir": "rtl",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "checkoutPresent": true
+    },
+    {
+      "vp": "mobile-390",
+      "state": "empty",
+      "present": false,
+      "kind": null,
+      "goalText": null,
+      "successText": null,
+      "fillWidthPx": null,
+      "trackWidthPx": null,
+      "dir": "rtl",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "checkoutPresent": false
+    }
+  ],
+  "finished_at": "2026-09-15T07:21:53.234Z",
+  "summary": {
+    "pass": 48,
+    "fail": 0,
+    "warn": 3,
+    "total": 51,
+    "console_errors": 0,
+    "failed_requests": 0
+  }
+}
