@@ -14,7 +14,7 @@ outgoing version-1 definition is preserved byte-for-byte in
 import dataclasses
 import hashlib
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
 
 from apps.storefront_builder import layout_preset_registry as lpr
 from apps.storefront_builder import section_registry
@@ -324,3 +324,23 @@ class DiversityContractTests(SimpleTestCase):
         signatures = [recipe_signature(preset) for preset in presets]
         self.assertEqual(len(signatures), 50)
         self.assertEqual(len(set(signatures)), 50)
+
+
+class AllFiftyCanonicalApplyRegressionTests(TestCase):
+    """All-50 canonical apply/resolution regression — through the existing
+    apply_preset authority only (no W4B-specific apply engine)."""
+
+    def test_every_latest_ready_template_applies_through_the_canonical_path(self):
+        from apps.stores.models import Store
+        from apps.storefront_builder.services import layout_service as svc
+        from apps.storefront_builder.services import preset_service
+
+        store = Store.objects.get(slug="akhlaghi")
+        presets = lpr.list_ready_templates()
+        self.assertEqual(len(presets), 50)
+        for preset in presets:
+            with self.subTest(key=preset.key, version=preset.version):
+                draft = svc.get_or_create_draft(store)
+                preset_service.apply_preset(draft, preset)
+                draft.refresh_from_db()
+                self.assertGreater(draft.get_page("home").sections.count(), 0)
