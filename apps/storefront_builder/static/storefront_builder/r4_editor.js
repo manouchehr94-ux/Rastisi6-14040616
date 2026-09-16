@@ -1919,8 +1919,12 @@ window.RastiSiR4 = {
       }
     });
 
-    // Apply: build the canonical mutation from the current token server-side,
-    // then enqueue it through the SAME single mutation queue as every edit.
+    // Apply: server-side materialise the canonical mutation from the current
+    // signed token (which carries the candidate's generation revision), then
+    // enqueue it through the SAME single mutation queue as every edit. The
+    // /design-lab/ apply_payload preflight rejects a stale candidate (HTTP 409,
+    // code=stale_candidate) BEFORE any mutation is produced; the canonical
+    // mutate endpoint remains the final transactional stale-write enforcement.
     function applyCandidate() {
       var p = panel();
       if (!p || !DL.token || !DL.draftId) return;
@@ -1930,8 +1934,18 @@ window.RastiSiR4 = {
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
         body: JSON.stringify({ action: 'apply_payload', candidate_token: DL.token }),
       })
-        .then(function (r) { return r.json(); })
-        .then(function (body) {
+        .then(function (r) { return r.json().then(function (body) { return { status: r.status, body: body }; }); })
+        .then(function (res) {
+          var body = res.body;
+          if (res.status === 409 && body && body.code === 'stale_candidate') {
+            // The Draft moved since this candidate was generated — never
+            // silently rebase. Ask the merchant to re-run Random Mix.
+            DL.token = null;
+            DL.hasCandidate = false;
+            setApplyEnabled(false);
+            setState('طرحِ فروشگاه از زمانِ این آزمایش تغییر کرده — دوباره «ترکیب تصادفی» را بزنید');
+            return;
+          }
           if (!body || !body.ok || !body.mutation) { setState('اعمال نشد'); return; }
           R4.enqueueMutation(body.mutation).then(function (result) {
             if (result && result.ok) {
@@ -1940,6 +1954,12 @@ window.RastiSiR4 = {
               setApplyEnabled(false);
               setState('اعمال شد ✔');
               refreshGlobalDesignAndPreview();
+            } else if (result && result.code === 'stale_revision') {
+              // Final transactional enforcement caught a race after preflight.
+              DL.token = null;
+              DL.hasCandidate = false;
+              setApplyEnabled(false);
+              setState('طرحِ فروشگاه تغییر کرده — دوباره «ترکیب تصادفی» را بزنید');
             } else {
               setState('اعمال نشد');
             }

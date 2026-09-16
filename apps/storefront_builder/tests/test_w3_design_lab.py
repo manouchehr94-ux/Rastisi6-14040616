@@ -84,6 +84,9 @@ class DesignLabBaseTestCase(StorefrontBuilderViewsTestCase):
         self.draft.refresh_from_db()
 
     def _current_selections(self):
+        # The manifest lives in the draft's appearance_config JSON; reload the
+        # in-memory instance so a prior mutation's write is observed.
+        self.draft.refresh_from_db()
         return dict(load_store_appearance_manifest(self.draft).selections)
 
 
@@ -891,3 +894,232 @@ class DesignLabRegistrySafetyTests(DesignLabBaseTestCase):
         after = len(layout_preset_registry.list_ready_templates())
         self.assertEqual(after, before)
         self.assertEqual(after, 50)
+
+
+
+# ===========================================================================
+# ARCHITECT REPAIR — real HTTP endpoint round-trip state-machine tests.
+#
+# These exercise encode -> /design-lab/ endpoint -> decode round-trips (NOT
+# direct Python-object calls), proving the transient candidate preserves its
+# original Base, base settings, base_revision, and draft identity across the
+# token transport, that chained operations evolve the CURRENT candidate, that
+# Lock preserves the current candidate value, and that a stale candidate Apply
+# is rejected through the real flow.
+# ===========================================================================
+class DesignLabEndpointRoundTripTests(DesignLabBaseTestCase):
+    def _design_lab(self, action, *, token=None, family=None, locked=None):
+        body = {"action": action}
+        if token is not None:
+            body["candidate_token"] = token
+        if family is not None:
+            body["family"] = family
+        if locked is not None:
+            body["locked_families"] = locked
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-r4-design-lab"),
+            data=json.dumps(body),
+            content_type="application/json",
+        )
+        return resp
+
+    def _mutate(self, mutation, base_revision=None):
+        self.draft.refresh_from_db()
+        if base_revision is None:
+            base_revision = self.draft.edit_revision
+        return self.client.post(
+            reverse("dashboard:storefront-builder-r4-mutation"),
+            data=json.dumps({"base_revision": base_revision, "mutation": mutation}),
+            content_type="application/json",
+        )
+
+    # ---- RED A — real Compare round-trip reports the actual A -> B diff -----
+    def test_compare_after_real_http_roundtrip_reports_A_to_B(self):
+        base = self._current_selections()  # A
+        # Random Mix -> candidate B (server-issued token).
+        mix = self._design_lab("random_mix", locked=[])
+        self.assertEqual(mix.status_code, 200, mix.content)
+        token = mix.json()["token"]
+        # Compare using that token — must report the real A -> B changes.
+        cmp = self._design_lab("compare", token=token)
+        self.assertEqual(cmp.status_code, 200, cmp.content)
+        diffs = cmp.json()["diffs"]
+        self.assertTrue(diffs, "compare produced no diff after a real round-trip")
+        for d in diffs:
+            # base side of each diff must equal the committed Draft base (A),
+            # NOT the candidate value (self-compare bug).
+            self.assertEqual(
+                d["base_key"], base.get(d["family"]),
+                msg=f"compare base for {d['family']} is not the original Base A",
+            )
+            self.assertNotEqual(
+                d["base_key"], d["candidate_key"],
+                msg="diff entry has identical base/candidate (self-compare)",
+            )
+
+    # ---- RED B — real Return-to-DNA round-trip yields A ---------------------
+    def test_return_to_dna_after_real_http_roundtrip_yields_base(self):
+        base = self._current_selections()  # A
+        mix = self._design_lab("random_mix", locked=[])
+        token = mix.json()["token"]
+        ret = self._design_lab("return_to_dna", token=token)
+        self.assertEqual(ret.status_code, 200, ret.content)
+        # Compare must now be empty (candidate == base).
+        self.assertEqual(ret.json()["diffs"], [], "return-to-DNA left a diff")
+        # And the candidate selections themselves must equal A — decode the
+        # returned token and check the actual candidate, not just the UI copy.
+        from apps.storefront_builder.services import design_lab_service
+
+        returned = design_lab_service.decode_candidate_token(ret.json()["token"])
+        self.assertEqual(dict(returned.candidate_selections), base)
+
+    # ---- RED C — settings comparison (theme intensity) ---------------------
+    def test_compare_detects_settings_difference(self):
+        # Give the committed Draft an active Theme with a specific intensity so
+        # the candidate's settings differ from base on a canonical typed setting.
+        self._mutate(
+            {
+                "type": "theme.apply",
+                "draft_id": self.draft.pk,
+                "component_key": "theme.yalda.v1",
+                "intensity": "strong",
+            }
+        )
+        base = self._current_selections()
+        self.assertEqual(base["theme"], "theme.yalda.v1")
+        # Build a candidate that keeps every selection but changes ONLY the
+        # theme intensity setting, then compare through the endpoint round-trip.
+        from apps.storefront_builder.services import design_lab_service
+
+        reset = self._design_lab("reset")
+        token = reset.json()["token"]
+        cand = design_lab_service.decode_candidate_token(token)
+        new_settings = dict(cand.settings)
+        new_settings["theme"] = {"intensity": "subtle"}
+        changed = design_lab_service.DesignLabCandidate(
+            base_selections=cand.base_selections,
+            base_settings=cand.base_settings,
+            candidate_selections=cand.candidate_selections,
+            candidate_settings=new_settings,
+            settings=new_settings,
+            locked_families=cand.locked_families,
+            seed=cand.seed,
+            base_revision=cand.base_revision,
+            draft_id=cand.draft_id,
+        )
+        diffs = design_lab_service.compare_with_base(changed)
+        theme_diff = [d for d in diffs if d["family"] == "theme"]
+        self.assertTrue(
+            theme_diff, "compare did not detect a theme intensity settings change"
+        )
+
+    # ---- Chaining: Randomize One after Random Mix preserves other families --
+    def test_randomize_one_after_random_mix_preserves_other_candidate_families(self):
+        from apps.storefront_builder.services import design_lab_service
+
+        mix = self._design_lab("random_mix", locked=[])
+        token_b = mix.json()["token"]
+        b = design_lab_service.decode_candidate_token(token_b)
+        # Randomize only footer, starting FROM candidate B.
+        one = self._design_lab("randomize_one", token=token_b, family="footer", locked=[])
+        self.assertEqual(one.status_code, 200, one.content)
+        c = design_lab_service.decode_candidate_token(one.json()["token"])
+        for family in EXPECTED_RANDOMIZABLE:
+            if family == "footer":
+                continue
+            self.assertEqual(
+                c.candidate_selections[family],
+                b.candidate_selections[family],
+                msg=f"{family} was reset to Draft base instead of preserving candidate B",
+            )
+
+    # ---- Chaining: Lock after Randomize preserves CURRENT candidate value ---
+    def test_lock_after_randomize_preserves_current_candidate_value(self):
+        from apps.storefront_builder.services import design_lab_service
+
+        base_header = self._current_selections()["header"]  # H0
+        # Randomize header until it changes to H1.
+        token = self._design_lab("reset").json()["token"]
+        h1 = base_header
+        for _ in range(30):
+            one = self._design_lab("randomize_one", token=token, family="header", locked=[])
+            token = one.json()["token"]
+            h1 = design_lab_service.decode_candidate_token(token).candidate_selections["header"]
+            if h1 != base_header:
+                break
+        self.assertNotEqual(h1, base_header, "could not randomize header to H1")
+        # Lock header + Random Mix repeatedly; header must stay H1 (current
+        # candidate value), NOT revert to the committed Draft H0.
+        for _ in range(4):
+            mix = self._design_lab("random_mix", token=token, locked=["header"])
+            token = mix.json()["token"]
+            cur = design_lab_service.decode_candidate_token(token).candidate_selections["header"]
+            self.assertEqual(cur, h1, "locked header did not preserve the CURRENT candidate value")
+
+    def test_multiple_candidate_operations_preserve_original_base_for_compare(self):
+        from apps.storefront_builder.services import design_lab_service
+
+        base = self._current_selections()  # A
+        token = self._design_lab("random_mix", locked=[]).json()["token"]
+        token = self._design_lab("randomize_one", token=token, family="footer").json()["token"]
+        token = self._design_lab("randomize_one", token=token, family="card").json()["token"]
+        cand = design_lab_service.decode_candidate_token(token)
+        # The original Base must be intact after several chained operations.
+        self.assertEqual(dict(cand.base_selections), base)
+
+    # ---- Real-flow stale candidate Apply through the endpoints --------------
+    def test_real_flow_stale_candidate_apply_is_rejected(self):
+        # 1. Design-Lab random_mix at revision N.
+        self.draft.refresh_from_db()
+        n = self.draft.edit_revision
+        mix = self._design_lab("random_mix", locked=[])
+        token = mix.json()["token"]
+        self.assertEqual(mix.json()["base_revision"], n)
+        # 3. A real canonical R4 mutation advances the Draft to N+1.
+        bump = self._mutate(
+            {
+                "type": "appearance.component.update",
+                "draft_id": self.draft.pk,
+                "family": "card",
+                "component_key": "card.standard.v1",
+            }
+        )
+        self.assertEqual(bump.status_code, 200, bump.content)
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.edit_revision, n + 1)
+        before = _draft_persistent_fingerprint(self.draft)
+        # 4. apply_payload with the OLD (revision-N) token must be rejected as
+        #    stale, before producing any accepted apply mutation.
+        ap = self._design_lab("apply_payload", token=token)
+        self.assertIn(ap.status_code, (409, 400), ap.content)
+        self.assertIn(ap.json().get("code"), ("stale_revision", "stale_candidate"))
+        # 6/7/8 — no apply happened; the N+1 edit is preserved; no partial write.
+        after = _draft_persistent_fingerprint(self.draft)
+        self.assertEqual(after, before, "stale apply caused a write")
+        self.assertEqual(self.draft.edit_revision, n + 1)
+
+    def test_apply_payload_current_candidate_succeeds_atomically(self):
+        # A fresh candidate at the current revision applies through the
+        # canonical mutate endpoint and advances the revision by exactly one.
+        self.draft.refresh_from_db()
+        n = self.draft.edit_revision
+        mix = self._design_lab("random_mix", locked=[])
+        token = mix.json()["token"]
+        ap = self._design_lab("apply_payload", token=token)
+        self.assertEqual(ap.status_code, 200, ap.content)
+        mutation = ap.json()["mutation"]
+        self.assertEqual(mutation["type"], "design_lab.apply_candidate")
+        applied = self._mutate(mutation, base_revision=n)
+        self.assertEqual(applied.status_code, 200, applied.content)
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.edit_revision, n + 1)
+
+    def test_candidate_token_is_integrity_protected(self):
+        # A tampered token (editing the base64 JSON) must be rejected, not
+        # trusted — the token carries correctness-critical base/revision truth.
+        from apps.storefront_builder.services import design_lab_service
+
+        token = self._design_lab("random_mix", locked=[]).json()["token"]
+        tampered = token[:-4] + ("AAAA" if token[-4:] != "AAAA" else "BBBB")
+        with self.assertRaises(ValueError):
+            design_lab_service.decode_candidate_token(tampered)

@@ -786,13 +786,38 @@ def storefront_r4_design_lab(request):
     # the actual persistence happens only when the client enqueues the returned
     # mutation through the canonical mutation endpoint (apply_mutation).
     if action == "apply_payload":
+        from apps.storefront_builder.storefront_appearance.contracts import (
+            InvalidStoreAppearanceContract,
+        )
+
         token = payload.get("candidate_token")
         if not token:
             return JsonResponse({"ok": False, "code": "no_candidate"}, status=400)
+        # Precise decode/validation exceptions only (MINOR): a malformed/tampered
+        # token or a canonical contract violation is a controlled 400; any other
+        # (programming) error propagates and fails loudly, never masked as
+        # "invalid_candidate".
         try:
             candidate = design_lab_service.decode_candidate_token(token)
+        except ValueError:
+            return JsonResponse({"ok": False, "code": "invalid_candidate"}, status=400)
+        # Real-flow stale preflight (Architect IMPORTANT 3): the candidate is
+        # bound to the Draft + revision it was generated against. If the Draft
+        # moved, reject as stale BEFORE producing the mutation — never silently
+        # rebase the old candidate onto the newer Draft. (The canonical
+        # apply_mutation boundary remains the final transactional enforcement.)
+        if design_lab_service.candidate_is_stale(draft, candidate):
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "code": "stale_candidate",
+                    "current_revision": draft.edit_revision,
+                },
+                status=409,
+            )
+        try:
             design_lab_service.resolve_candidate_appearance(draft, candidate)
-        except Exception:  # noqa: BLE001 — any decode/resolve failure => 400
+        except InvalidStoreAppearanceContract:
             return JsonResponse({"ok": False, "code": "invalid_candidate"}, status=400)
         return JsonResponse(
             {
@@ -800,7 +825,7 @@ def storefront_r4_design_lab(request):
                 "mutation": design_lab_service.candidate_apply_mutation(
                     candidate, draft_id=draft.pk
                 ),
-                "base_revision": draft.edit_revision,
+                "base_revision": candidate.base_revision,
             }
         )
 
@@ -819,13 +844,29 @@ def storefront_r4_design_lab(request):
 
     # Rebuild the prior candidate (if any) purely from its opaque token so
     # repeated actions accumulate transiently without any server state.
+    from apps.storefront_builder.storefront_appearance.contracts import (
+        InvalidStoreAppearanceContract,
+    )
+
+    # Rebuild the prior candidate (if any) purely from its signed token, so
+    # chained actions evolve the CURRENT candidate transiently with no server
+    # state. A tampered/expired token is rejected loudly rather than silently
+    # discarded (it carries correctness-critical Base/revision truth).
     prior_token = payload.get("candidate_token")
     prior_candidate = None
     if prior_token:
         try:
             prior_candidate = design_lab_service.decode_candidate_token(prior_token)
         except ValueError:
-            prior_candidate = None
+            return JsonResponse({"ok": False, "code": "invalid_candidate"}, status=400)
+
+    if action == "randomize_one":
+        family = payload.get("family")
+        if (
+            not isinstance(family, str)
+            or family not in design_lab_service.DESIGN_LAB_RANDOMIZABLE_FAMILIES
+        ):
+            return JsonResponse({"ok": False, "code": "invalid_family"}, status=400)
 
     try:
         if action == "reset":
@@ -839,23 +880,22 @@ def storefront_r4_design_lab(request):
         elif action == "compare":
             candidate = prior_candidate or design_lab_service.reset_candidate(draft)
         elif action == "randomize_one":
-            family = payload.get("family")
-            if (
-                not isinstance(family, str)
-                or family not in design_lab_service.DESIGN_LAB_RANDOMIZABLE_FAMILIES
-            ):
-                return JsonResponse(
-                    {"ok": False, "code": "invalid_family"}, status=400
-                )
+            # Chain from the CURRENT candidate (IMPORTANT 2): only the requested
+            # family may change; all other candidate families are preserved.
             candidate = design_lab_service.generate_candidate(
                 draft,
-                randomize_families={family},
+                current_candidate=prior_candidate,
+                randomize_families={payload["family"]},
                 locked_families=locked_families,
                 seed=_random_design_lab_seed(),
             )
         else:  # random_mix
+            # Chain from the CURRENT candidate: re-randomize all UNLOCKED
+            # eligible families of the current candidate; locked families keep
+            # their CURRENT candidate value.
             candidate = design_lab_service.generate_candidate(
                 draft,
+                current_candidate=prior_candidate,
                 randomize_families=set(
                     design_lab_service.DESIGN_LAB_RANDOMIZABLE_FAMILIES
                 ),
@@ -864,9 +904,10 @@ def storefront_r4_design_lab(request):
             )
         # Server-authoritative validation of the resolved candidate (fail
         # closed): a candidate that cannot resolve through the canonical
-        # contract is never returned to the client.
+        # contract is never returned to the client. Only the canonical contract
+        # violation becomes a 400; unexpected errors propagate (fail loudly).
         design_lab_service.resolve_candidate_appearance(draft, candidate)
-    except Exception:  # noqa: BLE001 — any resolution failure is a 400 for the UI
+    except InvalidStoreAppearanceContract:
         return JsonResponse({"ok": False, "code": "invalid_candidate"}, status=400)
 
     diffs = design_lab_service.compare_with_base(candidate)
@@ -876,8 +917,8 @@ def storefront_r4_design_lab(request):
             "token": design_lab_service.encode_candidate_token(candidate),
             "diffs": diffs,
             "locked_families": sorted(candidate.locked_families),
-            "base_revision": draft.edit_revision,
-            "draft_id": draft.pk,
+            "base_revision": candidate.base_revision,
+            "draft_id": candidate.draft_id,
         }
     )
 

@@ -25,7 +25,6 @@ migration, no registered preset, no DB row, no ``localStorage`` authority.
 
 from __future__ import annotations
 
-import base64
 import dataclasses
 import json
 import random
@@ -67,29 +66,61 @@ DESIGN_LAB_APPLY_MUTATION_TYPE = "design_lab.apply_candidate"
 class DesignLabCandidate:
     """A transient, in-memory Design Lab experiment. NEVER persisted.
 
-    * ``base_selections`` — the committed Draft's current family->component_key
-      selections at generation time (the "Base" for Compare/Return).
-    * ``candidate_selections`` — the experimental family->component_key mapping.
-    * ``settings`` — per-family typed settings (e.g. ``{"theme": {"intensity": ...}}``).
-    * ``locked_families`` — families the merchant locked (exploration lock only).
-    * ``seed`` — the deterministic PRNG seed used to generate it (opaque to the
-      merchant; used only for reproducibility/tests).
+    The candidate carries BOTH the immutable **generation base** (the committed
+    Draft state the whole experiment is measured against) AND the evolving
+    **working state**, so chained operations (Random Mix, Randomize One, Lock)
+    build on the current candidate while Compare/Return always measure against
+    the original Base. It also binds the candidate to the Draft it was generated
+    from (``draft_id``) and the revision at generation time (``base_revision``),
+    so a stale Apply can be rejected.
+
+    * ``base_selections`` / ``base_settings`` — the committed Draft's canonical
+      selections/settings at generation time (the fixed "Base" for Compare/Return).
+    * ``candidate_selections`` / ``candidate_settings`` — the evolving working state.
+    * ``locked_families`` — families the merchant locked (transient exploration lock).
+    * ``seed`` — the deterministic PRNG seed used by the last generation step.
+    * ``base_revision`` — the Draft ``edit_revision`` at generation time (stale check).
+    * ``draft_id`` — the Draft pk the candidate belongs to (tenant/stale binding).
+
+    ``settings`` is retained as an alias of ``candidate_settings`` for backward
+    compatibility with existing call sites (preview manifest, apply payload).
     """
 
     base_selections: Mapping[str, str]
     candidate_selections: Mapping[str, str]
-    settings: Mapping
-    locked_families: frozenset[str]
+    # Backward-compatible alias for candidate_settings (kept as a positional/
+    # keyword arg some call sites still pass); normalised in __post_init__.
+    settings: Mapping = None
+    locked_families: frozenset[str] = frozenset()
     seed: int | None = None
+    base_settings: Mapping = None
+    candidate_settings: Mapping = None
+    base_revision: int | None = None
+    draft_id: int | None = None
 
     def __post_init__(self) -> None:
+        # Normalise the settings aliases: candidate_settings is authoritative;
+        # ``settings`` is a backward-compatible alias that mirrors it.
+        cand_settings = (
+            self.candidate_settings
+            if self.candidate_settings is not None
+            else (self.settings if self.settings is not None else {})
+        )
+        base_settings = (
+            self.base_settings if self.base_settings is not None else cand_settings
+        )
         # Freeze the mutable inputs into immutable copies so the transient
         # candidate can never be mutated in place by a caller.
         object.__setattr__(self, "base_selections", dict(self.base_selections))
         object.__setattr__(
             self, "candidate_selections", dict(self.candidate_selections)
         )
-        object.__setattr__(self, "settings", _deep_freeze_settings(self.settings))
+        object.__setattr__(self, "base_settings", _deep_freeze_settings(base_settings))
+        object.__setattr__(
+            self, "candidate_settings", _deep_freeze_settings(cand_settings)
+        )
+        # ``settings`` mirrors candidate_settings (what preview/apply consume).
+        object.__setattr__(self, "settings", _deep_freeze_settings(cand_settings))
         object.__setattr__(self, "locked_families", frozenset(self.locked_families))
 
 
@@ -131,20 +162,45 @@ def _family_label(family_key: str) -> str:
 def generate_candidate(
     draft,
     *,
+    current_candidate: "DesignLabCandidate | None" = None,
     randomize_families: set[str],
     locked_families: set[str],
     seed: int | None = None,
 ) -> DesignLabCandidate:
-    """Produce a transient candidate from the committed Draft.
+    """Produce a transient candidate.
 
-    Rules (§8): start from the Draft's canonical selections; only families in
-    ``randomize_families`` may change; a family in ``locked_families`` never
-    changes; options come only from the canonical registry (never fabricated);
-    prefer a component different from the current one when alternatives exist;
-    leaving a family unchanged is valid when it has no compatible alternative.
-    Deterministic for a given (draft state, randomize set, locked set, seed).
+    Rules (§8):
+    - The **original Base** stays fixed for the whole experiment: it comes from
+      ``current_candidate`` when chaining, else from the committed Draft.
+    - The randomization starts from the CURRENT candidate working state (when
+      chaining) so chained operations preserve prior candidate choices — NOT the
+      committed Draft (Architect IMPORTANT 2). Fresh runs start from the Draft.
+    - Only families in ``randomize_families`` (∩ eligible) may change.
+    - A family in ``locked_families`` never changes — it preserves its CURRENT
+      candidate value (not the committed Draft value).
+    - Options come only from the canonical registry (never fabricated); prefer a
+      component different from the current one when alternatives exist; leaving a
+      family unchanged is valid when it has no alternative.
+    Deterministic for a given (starting state, randomize set, locked set, seed).
     """
-    base_selections, base_settings = _base_state(draft)
+    draft_selections, draft_settings = _base_state(draft)
+
+    if current_candidate is not None:
+        # Fixed original Base + binding survive across the whole experiment.
+        base_selections = dict(current_candidate.base_selections)
+        base_settings = _deep_freeze_settings(current_candidate.base_settings)
+        working_selections = dict(current_candidate.candidate_selections)
+        working_settings = _deep_freeze_settings(current_candidate.candidate_settings)
+        base_revision = current_candidate.base_revision
+        draft_id = current_candidate.draft_id
+    else:
+        base_selections = draft_selections
+        base_settings = draft_settings
+        working_selections = dict(draft_selections)
+        working_settings = _deep_freeze_settings(draft_settings)
+        base_revision = getattr(draft, "edit_revision", None)
+        draft_id = getattr(draft, "pk", None)
+
     locked = frozenset(locked_families)
     # A locked family is never randomized, even if also requested — lock wins.
     effective_randomize = (
@@ -152,14 +208,14 @@ def generate_candidate(
     )
 
     rng = random.Random(seed)
-    candidate_selections = dict(base_selections)
+    candidate_selections = dict(working_selections)
 
     # Deterministic family ordering so the PRNG draw sequence is stable.
     for family in sorted(effective_randomize):
-        current = base_selections.get(family)
-        # Deterministic option ordering from the canonical registry.
+        # Randomize away from the CURRENT candidate value (working state), so a
+        # visible change accumulates on top of prior choices (§8.10).
+        current = working_selections.get(family)
         options = [c.key for c in list_components(family)]
-        # Prefer a different component so Randomize visibly does something (§8.10).
         alternatives = [key for key in options if key != current]
         if alternatives:
             candidate_selections[family] = rng.choice(alternatives)
@@ -167,10 +223,13 @@ def generate_candidate(
 
     return DesignLabCandidate(
         base_selections=base_selections,
+        base_settings=base_settings,
         candidate_selections=candidate_selections,
-        settings=base_settings,
+        candidate_settings=working_settings,
         locked_families=locked,
         seed=seed,
+        base_revision=base_revision,
+        draft_id=draft_id,
     )
 
 
@@ -255,13 +314,18 @@ def compare_with_base(candidate: DesignLabCandidate) -> list[dict]:
     """
     diffs: list[dict] = []
     families = list(COMPONENT_FAMILIES.keys())
-    base_settings = dict(candidate.settings) if candidate.settings else {}
+    base_settings = dict(candidate.base_settings) if candidate.base_settings else {}
+    cand_settings = dict(candidate.candidate_settings) if candidate.candidate_settings else {}
     for family in families:
         base_key = candidate.base_selections.get(family)
         cand_key = candidate.candidate_selections.get(family)
-        if base_key == cand_key:
-            continue
-        if base_key is None and cand_key is None:
+        # A family differs if EITHER its selection OR its per-family settings
+        # changed (Architect RED C: settings differences must be detected).
+        selection_changed = base_key != cand_key and not (
+            base_key is None and cand_key is None
+        )
+        settings_changed = base_settings.get(family) != cand_settings.get(family)
+        if not selection_changed and not settings_changed:
             continue
         diffs.append(
             {
@@ -271,6 +335,9 @@ def compare_with_base(candidate: DesignLabCandidate) -> list[dict]:
                 "candidate_key": cand_key,
                 "base_label": _component_label(base_key) if base_key else "",
                 "candidate_label": _component_label(cand_key) if cand_key else "",
+                "base_settings": base_settings.get(family),
+                "candidate_settings": cand_settings.get(family),
+                "settings_changed": settings_changed,
             }
         )
     return diffs
@@ -284,45 +351,78 @@ def return_to_original_dna(draft, candidate: DesignLabCandidate) -> DesignLabCan
     """
     return DesignLabCandidate(
         base_selections=candidate.base_selections,
+        base_settings=candidate.base_settings,
         candidate_selections=dict(candidate.base_selections),
-        settings=candidate.settings,
+        candidate_settings=_deep_freeze_settings(candidate.base_settings),
         locked_families=candidate.locked_families,
         seed=candidate.seed,
+        base_revision=candidate.base_revision,
+        draft_id=candidate.draft_id,
     )
 
 
 def reset_candidate(draft) -> DesignLabCandidate:
     """Discard any transient experiment and return a candidate equal to the
     current committed Draft (§19). No write, no history, no revision change.
-    Not Undo — this never touches edit history.
+    Not Undo — this never touches edit history. Binds the fresh candidate to the
+    Draft's current identity + revision.
     """
     base_selections, base_settings = _base_state(draft)
     return DesignLabCandidate(
         base_selections=base_selections,
+        base_settings=base_settings,
         candidate_selections=dict(base_selections),
-        settings=base_settings,
+        candidate_settings=_deep_freeze_settings(base_settings),
         locked_families=frozenset(),
         seed=None,
+        base_revision=getattr(draft, "edit_revision", None),
+        draft_id=getattr(draft, "pk", None),
     )
 
 
 def remove_theme(candidate: DesignLabCandidate) -> DesignLabCandidate:
     """Transient Remove Theme (§9): set the candidate's theme selection to the
     no-op and drop theme settings. NO Draft write — the real removal happens on
-    Apply through the canonical W2 ``clear_theme`` owner. All non-theme state is
-    preserved exactly.
+    Apply through the canonical W2 ``clear_theme`` owner. All non-theme state and
+    the original Base are preserved exactly.
     """
     new_selections = dict(candidate.candidate_selections)
     new_selections["theme"] = THEME_NONE_COMPONENT_KEY
-    new_settings = dict(candidate.settings) if candidate.settings else {}
+    new_settings = dict(candidate.candidate_settings) if candidate.candidate_settings else {}
     new_settings.pop("theme", None)
     return DesignLabCandidate(
         base_selections=candidate.base_selections,
+        base_settings=candidate.base_settings,
         candidate_selections=new_selections,
-        settings=new_settings,
+        candidate_settings=new_settings,
         locked_families=candidate.locked_families,
         seed=candidate.seed,
+        base_revision=candidate.base_revision,
+        draft_id=candidate.draft_id,
     )
+
+
+# ---------------------------------------------------------------------------
+# Stale / tenant binding (§14, §15) — real-flow preflight
+# ---------------------------------------------------------------------------
+def candidate_is_stale(draft, candidate: DesignLabCandidate) -> bool:
+    """True IFF the candidate was generated against a different Draft or an
+    older revision than the currently-active Draft.
+
+    Binds the transient candidate to ``draft_id`` + ``base_revision`` recorded at
+    generation time. The Design Lab endpoint uses this as a preflight so a stale
+    candidate is rejected BEFORE an Apply mutation is even produced. It is not
+    the final enforcement — the canonical ``apply_mutation`` boundary still
+    performs the authoritative transactional stale-write check (never rebased).
+    """
+    if candidate.draft_id is not None and candidate.draft_id != getattr(draft, "pk", None):
+        return True
+    if (
+        candidate.base_revision is not None
+        and candidate.base_revision != getattr(draft, "edit_revision", None)
+    ):
+        return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -339,8 +439,9 @@ def candidate_apply_mutation(candidate: DesignLabCandidate, *, draft_id: int) ->
     Theme removal through the W2 ``clear_theme`` owner.
     """
     theme_intensity = None
-    if candidate.settings and isinstance(candidate.settings.get("theme"), Mapping):
-        theme_intensity = candidate.settings["theme"].get("intensity")
+    cand_settings = candidate.candidate_settings
+    if cand_settings and isinstance(cand_settings.get("theme"), Mapping):
+        theme_intensity = cand_settings["theme"].get("intensity")
     return {
         "type": DESIGN_LAB_APPLY_MUTATION_TYPE,
         "draft_id": draft_id,
@@ -352,46 +453,91 @@ def candidate_apply_mutation(candidate: DesignLabCandidate, *, draft_id: int) ->
 # ---------------------------------------------------------------------------
 # Transient candidate token for the existing Preview route (§11)
 # ---------------------------------------------------------------------------
-def encode_candidate_token(candidate: DesignLabCandidate) -> str:
-    """Encode a candidate into a bounded, URL-safe token for the existing
-    ``storefront_preview`` route's ``?design_lab=`` param.
+#: The token carries correctness-critical Base + generation-revision + draft
+#: identity, so it is integrity-protected with Django's own signing primitive
+#: (``django.core.signing``, HMAC over SECRET_KEY). It is a bounded, tamper-
+#: evident transport — NEVER a source of truth for component validity: the
+#: server ALWAYS re-validates every component key against the canonical registry
+#: when resolving/applying. The signature only guarantees the Base/revision/
+#: draft-id truth was server-issued and not client-edited.
+_TOKEN_SALT = "storefront_builder.design_lab.candidate.v1"
+#: Bounded token lifetime (a Design Lab session is short-lived; a very old token
+#: is stale anyway and re-checked against the live revision at Apply).
+_TOKEN_MAX_AGE_SECONDS = 60 * 60 * 6
 
-    This is NOT an authority: the server ALWAYS re-validates every component key
-    against the canonical registry when resolving the token for preview. It is a
-    transport, not a source of truth. It carries no store/draft identity (tenant
-    boundary is enforced by the preview route's own store resolution).
+
+def encode_candidate_token(candidate: DesignLabCandidate) -> str:
+    """Encode a candidate into a bounded, signed token for the existing
+    ``storefront_preview`` route's ``?design_lab=`` param and the Design Lab
+    endpoint. Integrity-protected (HMAC) so the Base/revision/draft-id it carries
+    cannot be edited by the client. Not an authority for component validity —
+    the server re-validates selections/settings through the canonical validator.
     """
+    from django.core import signing
+
     payload = {
-        "selections": dict(candidate.candidate_selections),
-        "settings": _deep_freeze_settings(candidate.settings),
+        "bs": dict(candidate.base_selections),
+        "bt": _deep_freeze_settings(candidate.base_settings),
+        "cs": dict(candidate.candidate_selections),
+        "ct": _deep_freeze_settings(candidate.candidate_settings),
+        "locked": sorted(candidate.locked_families),
+        "seed": candidate.seed,
+        "rev": candidate.base_revision,
+        "did": candidate.draft_id,
     }
-    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
-    return base64.urlsafe_b64encode(raw).decode("ascii")
+    return signing.dumps(payload, salt=_TOKEN_SALT, compress=True)
 
 
 def decode_candidate_token(token: str) -> DesignLabCandidate:
-    """Decode a ``?design_lab=`` token into a candidate. Raises ``ValueError`` on
-    malformed input. Does NOT validate component keys against the registry — the
-    caller (preview) must resolve through ``resolve_candidate_appearance`` /
-    ``validate_store_appearance_manifest`` which fail closed on bad keys.
+    """Decode + verify a signed ``design_lab`` token into a candidate.
+
+    Raises ``ValueError`` on a missing/malformed/tampered/expired token (a bad
+    HMAC signature is a ``signing.BadSignature`` which we surface as ``ValueError``
+    so callers uniformly return a controlled 400). Validates shape/types. Does
+    NOT validate component keys against the registry — the caller resolves
+    through ``resolve_candidate_appearance`` / ``validate_store_appearance_manifest``
+    which fail closed on bad keys.
     """
+    from django.core import signing
+
     if not isinstance(token, str) or not token:
         raise ValueError("empty design_lab token")
     try:
-        raw = base64.urlsafe_b64decode(token.encode("ascii"))
-        payload = json.loads(raw.decode("utf-8"))
-    except (ValueError, TypeError) as exc:
-        raise ValueError("malformed design_lab token") from exc
+        payload = signing.loads(
+            token, salt=_TOKEN_SALT, max_age=_TOKEN_MAX_AGE_SECONDS
+        )
+    except signing.BadSignature as exc:
+        raise ValueError("tampered or invalid design_lab token") from exc
+    except (signing.SignatureExpired, ValueError, TypeError) as exc:
+        raise ValueError("malformed or expired design_lab token") from exc
     if not isinstance(payload, dict):
         raise ValueError("malformed design_lab token")
-    selections = payload.get("selections")
-    settings = payload.get("settings", {})
-    if not isinstance(selections, dict) or not isinstance(settings, dict):
-        raise ValueError("malformed design_lab token")
+
+    base_selections = payload.get("bs")
+    base_settings = payload.get("bt", {})
+    candidate_selections = payload.get("cs")
+    candidate_settings = payload.get("ct", {})
+    locked = payload.get("locked", [])
+    if not isinstance(base_selections, dict) or not isinstance(candidate_selections, dict):
+        raise ValueError("malformed design_lab token: selections")
+    if not isinstance(base_settings, dict) or not isinstance(candidate_settings, dict):
+        raise ValueError("malformed design_lab token: settings")
+    if not isinstance(locked, list):
+        raise ValueError("malformed design_lab token: locked")
+    rev = payload.get("rev")
+    did = payload.get("did")
+    if rev is not None and not isinstance(rev, int):
+        raise ValueError("malformed design_lab token: rev")
+    if did is not None and not isinstance(did, int):
+        raise ValueError("malformed design_lab token: did")
+
     return DesignLabCandidate(
-        base_selections=selections,
-        candidate_selections=selections,
-        settings=settings,
-        locked_families=frozenset(),
-        seed=None,
+        base_selections=base_selections,
+        base_settings=base_settings,
+        candidate_selections=candidate_selections,
+        candidate_settings=candidate_settings,
+        locked_families=frozenset(f for f in locked if isinstance(f, str)),
+        seed=payload.get("seed"),
+        base_revision=rev,
+        draft_id=did,
     )
