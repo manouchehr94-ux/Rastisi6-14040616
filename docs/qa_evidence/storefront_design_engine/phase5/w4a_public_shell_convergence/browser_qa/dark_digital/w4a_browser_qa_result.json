@@ -1,0 +1,92 @@
+{
+  "started_at": "2026-09-16T10:47:42.999Z",
+  "origin": "http://127.0.0.1:8000",
+  "viewports": {
+    "desktop_wishlist_anon": {
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_present": true
+    },
+    "desktop_wishlist_empty": {
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_present": true
+    },
+    "desktop_wishlist_populated": {
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_present": true
+    },
+    "desktop_cms": {
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_present": true
+    },
+    "tablet_wishlist_anon": {
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_present": true
+    },
+    "tablet_wishlist_empty": {
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_present": true
+    },
+    "tablet_wishlist_populated": {
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_present": true
+    },
+    "tablet_cms": {
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_present": true
+    },
+    "mobile_wishlist_anon": {
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_present": true
+    },
+    "mobile_wishlist_empty": {
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_present": true
+    },
+    "mobile_wishlist_populated": {
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_present": true
+    },
+    "mobile_cms": {
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_present": true
+    }
+  },
+  "scenarios": [
+    {
+      "scenario": "wishlist_anonymous_state",
+      "ok": true,
+      "detail": "login prompt visible"
+    },
+    {
+      "scenario": "wishlist_empty_authenticated_state",
+      "ok": true,
+      "detail": "empty state visible"
+    },
+    {
+      "scenario": "wishlist_populated_productcard_visible",
+      "ok": true,
+      "detail": "1 product card(s)"
+    },
+    {
+      "scenario": "cms_title_body_visible",
+      "ok": true,
+      "detail": "CMS body text visible"
+    }
+  ],
+  "console_errors": [],
+  "failed_requests": [],
+  "overall": "PASS",
+  "finished_at": "2026-09-16T10:47:54.678Z"
+}
