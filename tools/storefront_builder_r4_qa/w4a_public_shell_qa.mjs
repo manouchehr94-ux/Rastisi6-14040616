@@ -6,8 +6,40 @@
 // public Wishlist (customers:wishlist) and CMS content (content:page-detail)
 // routes, across the required viewports, in RTL.
 //
+// P5-W4A review repair (IMPORTANT 4): strengthened to prove the full
+// acceptance contract per template x viewport x scenario, not just RTL/
+// overflow/header-present on desktop. Canonical markers are source-discovered
+// from the actual Header/Footer/Bottom-Nav variant templates (never a broad
+// ``[class*="header"]`` guess):
+//   - Header root:      ``header.header``      (every global_header/*.html
+//                        variant renders a real ``<header>`` carrying the
+//                        literal ``header`` class token — the U2A-era
+//                        variants add ``gh``/``gh--<id>`` alongside it, e.g.
+//                        ``<header class="header gh gh--dark">``, while the
+//                        pre-U2A "legacy-alias" variants — e.g. dark_digital's
+//                        actually-resolved ``compact_menu``, which is a thin
+//                        ``{% include %}`` of ``page_shell_header.html`` —
+//                        render plain ``<header class="header...">``; only
+//                        the shared ``header`` token is universal)
+//   - Footer root:       ``footer.gf, footer.footer`` (same split: U2A
+//                        variants render ``<footer class="gf ...">``,
+//                        legacy-alias variants render
+//                        ``<footer class="footer">`` via ``page_shell_footer.html``)
+//   - Bottom Nav root:   ``[data-mobile-nav]``  (global_mobile_nav/*.html;
+//                        the ``hidden`` variant renders nothing at all, so a
+//                        Store with no Bottom Nav configured yields count 0)
+//   - Bottom Nav visibility: ``.gmn`` is ``display:none`` by default and only
+//                        ``display:block`` under the canonical
+//                        ``@media(max-width:680px)`` rule in
+//                        storefront_builder.css — i.e. it must be
+//                        visible/healthy on the 390px mobile viewport only.
+//
 // Usage: node w4a_public_shell_qa.mjs <manifest.json>
-//   manifest: { origin, populated_session, empty_session, cms_slug, report_dir }
+//   manifest: {
+//     origin, populated_session, empty_session, cms_slug, report_dir,
+//     expect_bottom_nav: bool  // true for dark_digital (luxury_floating_cart),
+//                               // false for warm_boutique (hidden)
+//   }
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -53,6 +85,7 @@ const manifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const REPORT = manifest.report_dir;
 const SHOTS = path.join(REPORT, 'screenshots');
 fs.mkdirSync(SHOTS, { recursive: true });
+const EXPECT_BOTTOM_NAV = !!manifest.expect_bottom_nav;
 
 const VIEWPORTS = [
   { name: 'desktop', width: 1440, height: 900 },
@@ -60,9 +93,41 @@ const VIEWPORTS = [
   { name: 'mobile', width: 390, height: 844 },
 ];
 
+const SCENARIOS = [
+  {
+    label: 'wishlist_anon',
+    path: '/account/wishlist/',
+    session: null,
+    assertBody: async (bodyText) => /وارد حساب کاربری خود شوید/.test(bodyText || ''),
+    detail: 'login prompt visible',
+  },
+  {
+    label: 'wishlist_empty',
+    path: '/account/wishlist/',
+    session: 'empty_session',
+    assertBody: async (bodyText) => /لیست علاقه‌مندی‌های شما خالی است/.test(bodyText || ''),
+    detail: 'empty state visible',
+  },
+  {
+    label: 'wishlist_populated',
+    path: '/account/wishlist/',
+    session: 'populated_session',
+    assertBody: async (bodyText, page) => (await page.$$eval('article.pcard', (els) => els.length)) > 0,
+    detail: 'ProductCard (article.pcard) visible',
+  },
+  {
+    label: 'cms',
+    path: `/pages/${manifest.cms_slug}/`,
+    session: null,
+    assertBody: async (bodyText) => /باید دقیقاً حفظ شود/.test(bodyText || ''),
+    detail: 'CMS title/body visible',
+  },
+];
+
 const result = {
   started_at: new Date().toISOString(),
   origin: manifest.origin,
+  expect_bottom_nav: EXPECT_BOTTOM_NAV,
   viewports: {},
   scenarios: [],
   console_errors: [],
@@ -103,13 +168,67 @@ function wireDiagnostics(page, vp, label) {
   });
 }
 
-async function checkPage(page, vp, label) {
+async function checkPage(page, response) {
   const dir = await page.getAttribute('html', 'dir');
   const overflow = await page.evaluate(() =>
     document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
   );
-  const headerCount = await page.$$eval('[data-r4-global-header], header, .sfb-header, [class*="header"]', (els) => els.length);
-  return { rtl: dir === 'rtl', horizontal_overflow: overflow, header_present: headerCount > 0 };
+  const headerCount = await page.$$eval('header.header', (els) => els.length);
+  const footerCount = await page.$$eval('footer.gf, footer.footer', (els) => els.length);
+  const bottomNavCount = await page.$$eval('[data-mobile-nav]', (els) => els.length);
+  let bottomNavVisible = null;
+  if (bottomNavCount > 0) {
+    bottomNavVisible = await page.$eval('[data-mobile-nav]', (el) => {
+      const s = window.getComputedStyle(el);
+      const rect = el.getBoundingClientRect();
+      return s.display !== 'none' && s.visibility !== 'hidden' && rect.height > 0;
+    });
+  }
+  return {
+    response_status: response ? response.status() : null,
+    rtl: dir === 'rtl',
+    horizontal_overflow: overflow,
+    header_count: headerCount,
+    footer_count: footerCount,
+    bottom_nav_count: bottomNavCount,
+    bottom_nav_visible: bottomNavVisible,
+  };
+}
+
+function acceptanceContractOk(status, vp) {
+  const okStatus = status.response_status === 200;
+  const okRtl = status.rtl === true;
+  const okOverflow = status.horizontal_overflow === false;
+  const okHeaderNoDup = status.header_count === 1;
+  const okFooterNoDup = status.footer_count === 1;
+  const expectedBottomNavCount = EXPECT_BOTTOM_NAV ? 1 : 0;
+  const okBottomNavCount = status.bottom_nav_count === expectedBottomNavCount;
+  const okBottomNavVisible =
+    !(EXPECT_BOTTOM_NAV && vp.name === 'mobile') || status.bottom_nav_visible === true;
+  return okStatus && okRtl && okOverflow && okHeaderNoDup && okFooterNoDup
+    && okBottomNavCount && okBottomNavVisible;
+}
+
+async function runScenario(browser, vp, scenario) {
+  const session = scenario.session ? manifest[scenario.session] : null;
+  const context = await newContextWithSession(browser, vp, session);
+  const page = await context.newPage();
+  wireDiagnostics(page, vp, scenario.label);
+  const response = await page.goto(`${manifest.origin}${scenario.path}`, {
+    waitUntil: 'networkidle', timeout: 30000,
+  });
+  const status = await checkPage(page, response);
+  const key = `${vp.name}_${scenario.label}`;
+  result.viewports[key] = status;
+
+  const bodyText = await page.textContent('body');
+  const domainOk = await scenario.assertBody(bodyText, page);
+  await page.screenshot({ path: path.join(SHOTS, `${key}.png`), fullPage: false });
+  await context.close();
+
+  const contractOk = acceptanceContractOk(status, vp);
+  const ok = contractOk && domainOk;
+  record(key, ok, `${scenario.detail} :: ${JSON.stringify(status)}`);
 }
 
 async function run() {
@@ -121,79 +240,15 @@ async function run() {
 
   try {
     for (const vp of VIEWPORTS) {
-      // ---- Wishlist: anonymous ----
-      {
-        const context = await newContextWithSession(browser, vp, null);
-        const page = await context.newPage();
-        wireDiagnostics(page, vp, 'wishlist-anon');
-        await page.goto(`${manifest.origin}/account/wishlist/`, { waitUntil: 'networkidle', timeout: 30000 });
-        const status = await checkPage(page, vp, 'wishlist-anon');
-        result.viewports[`${vp.name}_wishlist_anon`] = status;
-        const bodyText = await page.textContent('body');
-        const hasLoginPrompt = /وارد حساب کاربری خود شوید/.test(bodyText || '');
-        await page.screenshot({ path: path.join(SHOTS, `${vp.name}_wishlist_anon.png`), fullPage: false });
-        if (vp.name === 'desktop') {
-          record('wishlist_anonymous_state', hasLoginPrompt, 'login prompt visible');
-        }
-        await context.close();
-      }
-
-      // ---- Wishlist: empty authenticated ----
-      {
-        const context = await newContextWithSession(browser, vp, manifest.empty_session);
-        const page = await context.newPage();
-        wireDiagnostics(page, vp, 'wishlist-empty');
-        await page.goto(`${manifest.origin}/account/wishlist/`, { waitUntil: 'networkidle', timeout: 30000 });
-        const status = await checkPage(page, vp, 'wishlist-empty');
-        result.viewports[`${vp.name}_wishlist_empty`] = status;
-        const bodyText = await page.textContent('body');
-        const hasEmptyState = /لیست علاقه‌مندی‌های شما خالی است/.test(bodyText || '');
-        await page.screenshot({ path: path.join(SHOTS, `${vp.name}_wishlist_empty.png`), fullPage: false });
-        if (vp.name === 'desktop') {
-          record('wishlist_empty_authenticated_state', hasEmptyState, 'empty state visible');
-        }
-        await context.close();
-      }
-
-      // ---- Wishlist: populated ----
-      {
-        const context = await newContextWithSession(browser, vp, manifest.populated_session);
-        const page = await context.newPage();
-        wireDiagnostics(page, vp, 'wishlist-populated');
-        await page.goto(`${manifest.origin}/account/wishlist/`, { waitUntil: 'networkidle', timeout: 30000 });
-        const status = await checkPage(page, vp, 'wishlist-populated');
-        result.viewports[`${vp.name}_wishlist_populated`] = status;
-        const productCardCount = await page.$$eval('article.pcard', (els) => els.length);
-        await page.screenshot({ path: path.join(SHOTS, `${vp.name}_wishlist_populated.png`), fullPage: false });
-        if (vp.name === 'desktop') {
-          record('wishlist_populated_productcard_visible', productCardCount > 0, `${productCardCount} product card(s)`);
-        }
-        await context.close();
-      }
-
-      // ---- CMS published page ----
-      {
-        const context = await newContextWithSession(browser, vp, null);
-        const page = await context.newPage();
-        wireDiagnostics(page, vp, 'cms');
-        await page.goto(`${manifest.origin}/pages/${manifest.cms_slug}/`, { waitUntil: 'networkidle', timeout: 30000 });
-        const status = await checkPage(page, vp, 'cms');
-        result.viewports[`${vp.name}_cms`] = status;
-        const bodyText = await page.textContent('body');
-        const hasBody = /باید دقیقاً حفظ شود/.test(bodyText || '');
-        await page.screenshot({ path: path.join(SHOTS, `${vp.name}_cms.png`), fullPage: false });
-        if (vp.name === 'desktop') {
-          record('cms_title_body_visible', hasBody, 'CMS body text visible');
-        }
-        await context.close();
+      for (const scenario of SCENARIOS) {
+        await runScenario(browser, vp, scenario);
       }
     }
 
     result.overall =
       result.scenarios.every((s) => s.ok) &&
       result.console_errors.length === 0 &&
-      result.failed_requests.length === 0 &&
-      Object.values(result.viewports).every((v) => v.rtl && !v.horizontal_overflow && v.header_present)
+      result.failed_requests.length === 0
         ? 'PASS'
         : 'FAIL';
   } catch (err) {
