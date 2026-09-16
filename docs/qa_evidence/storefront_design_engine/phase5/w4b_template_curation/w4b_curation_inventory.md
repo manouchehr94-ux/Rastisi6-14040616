@@ -425,7 +425,7 @@ candidates qualify — all of them already have `category_grid`).
   visible. No link at all (pure informational strip) — nothing to be
   dead. No redundancy risk (no other section renders this content).
 
-## 12. Corrected section eligibility table (supersedes §9's `blog_posts`/`promo_cards` rows) — resolves Independent Architect Review round-2 IMPORTANT-2(B)
+## 12. Corrected section eligibility table (supersedes §9's `blog_posts`/`promo_cards` rows) — resolves Independent Architect Review round-2 IMPORTANT-2(B) — `image_slider` AND `trust_features` ROWS FURTHER SUPERSEDED, see §13–§14
 
 | section_key | visible with shared fixture? | primary links/actions functional? | tenant/store scoping correct? | semantic data source | duplicates another section already in the target recipe? | eligible as primary W4B differentiator? |
 |---|---|---|---|---|---|---|
@@ -448,3 +448,143 @@ registered, used implicitly via its own family), `collection_tiles`,
 functional test above; `blog_posts` and `promo_cards` do not, regardless of
 their zero prior usage in the catalog, and are excluded from the repaired
 Tier-1 proposal entirely (design spec §8).
+
+## 13. Round-3 template-quality audit — `image_slider` redundancy and `trust_features` business-claim finding (resolves Independent Architect Review round-3 IMPORTANT-1 and IMPORTANT-2)
+
+**`image_slider` is byte-identical to `hero_banner` — round-2's "no
+redundancy found" verdict on this pair was wrong.** Full file contents,
+both templates, in their entirety:
+
+```
+apps/storefront_builder/templates/storefront_builder/sections/hero_banner.html:
+{% include "storefront_builder/partials/hero_slider_body.html" %}
+
+apps/storefront_builder/templates/storefront_builder/sections/image_slider.html:
+{% include "storefront_builder/partials/hero_slider_body.html" %}
+```
+
+Both sections render the exact same shared partial
+(`storefront_builder/partials/hero_slider_body.html`) — same markup, same
+Alpine.js slider behavior, same CSS classes (`section hero`). Round 2's
+`render_service.py`-level check (`_image_slider_context` **is**
+`_hero_banner_context`) correctly showed they share a context builder, but
+that observation should have been followed all the way to the rendered
+template, which shows they are not merely similarly-behaved — they are the
+identical UI. Every Tier-1 candidate that received `image_slider` in round
+2 (`premium_leather_noir`, `coastal_product`, `kamand_artisan`,
+`beauty_dew`, `mirror_beauty`) already has `hero_banner` in its
+composition, so adding `image_slider` there is a second instance of the
+literal same slider block — disqualified as redundant under the design's
+own rule ("no duplicated/redundant section without a specific purpose").
+`image_slider` is **removed from every current W4B assignment**. It
+remains available in principle for a template that genuinely lacks
+`hero_banner` — none of the 50 current recipes qualify (`hero` is absent
+from composition in only `premium_leather`, `utility_catalog`,
+`tool_finder`, `mother_utility`, `collection_index` — none of which are in
+this proposal — and even for those, `hero.none.v1` already means "no
+hero," so adding a slider there would be a bigger structural decision than
+this bounded pass should make unprompted).
+
+**`trust_features`'s default is not merchant-neutral.** Full default
+branch, `apps/storefront_builder/templates/storefront_builder/sections/trust_features.html`
+(already quoted in §11; repeated here for the specific claims):
+
+```
+<b>ارسال سریع</b><small>به سراسر کشور</small>            (fast shipping, nationwide)
+<b>ضمانت اصالت</b><small>کالای اورجینال</small>            (authenticity guarantee, original goods)
+<b>پشتیبانی ۲۴/۷</b><small>پاسخگویی همه‌روزه</small>        (24/7 support, daily response)
+<b>۷ روز ضمانت بازگشت</b><small>بدون دردسر</small>          (7-day hassle-free returns)
+```
+
+These are business-policy claims (nationwide shipping, a specific
+authenticity guarantee, 24/7 support, a 7-day no-hassle return window) that
+not every merchant has actually committed to. Publishing them by default
+inside a Ready Template's baked-in DNA — i.e. before any merchant has
+configured `settings.items` — risks stating a policy the merchant never
+agreed to. Reclassification: **VISIBLE BY DEFAULT: YES; MERCHANT-NEUTRAL BY
+DEFAULT: NO; ELIGIBLE AS A NEW W4B PRIMARY DIFFERENTIATOR: NO.**
+`trust_features` is **removed from every new W4B assignment**
+(`city_classic`, `laleh_play`, `green_workshop`). It is **not** removed
+from the 11 existing baseline recipes that already carry it (`cedar_home`,
+`simorgh_market`, `search_market`, `tool_finder`, `mother_utility`,
+`rayan_tech`, `tower_department`, `harbor_imports`'s own pre-curation
+baseline, etc.) — those are certified, pre-existing, out of this
+workstream's scope; W4B only avoids *expanding* the section's footprint.
+
+**Surviving eligible mechanisms: `collection_tiles`, `story_rail`,
+`brand_carousel`** — all three were independently re-verified against the
+rendered template (not just the context builder) in §11/§12 and found
+functionally and structurally distinct from every section already present
+in every template they are assigned to in the repaired §15 matrix below;
+none makes a business-policy claim (no static default copy at all — they
+render only real Store data or nothing).
+
+## 14. Re-run eligibility — the 3 surviving mechanisms against the round-3 six-point test
+
+| Check | `collection_tiles` | `story_rail` | `brand_carousel` |
+|---|---|---|---|
+| 1. Rendered output materially distinct from another section already in every recipe it's assigned to (verified per-template in §15) | YES — own `.pcard`/`grid g4` collection-tile layout, distinct from `category_grid`, `product_section`, `image_text`, `hero_banner` | YES — circular story-avatar rail, distinct from all others | YES — brand-logo tile grid/carousel, distinct from all others |
+| 2. Default/fixture behavior makes no merchant-business claim | YES — renders only real `MerchantCollection` rows or nothing; no static copy | YES — renders only real `StoryRailItem` rows or nothing; no static copy | YES — renders only real `Brand` rows or nothing; no static copy |
+| 3. Primary link/action is real, not `#` | YES — `catalog:collection-detail` (live route+view) | YES — `{% resolve_destination_item %}`; a safe non-link when no destination, never `href="#"` | YES — `catalog:product-list?brand=slug`; template's own comment states the explicit no-dead-button rule |
+| 4. Tenant scoping correct where Store-scoped | YES — `MerchantCollection.objects.filter(store=store, ...)` | YES — `StoryRailItem.objects.filter(section=section, ...)` + Store-wide fallback | YES — `Brand.objects.filter(store=store, is_active=True)` |
+| 5. No merchant-specific ID required in Template DNA | YES — default `collection_ids: []` = "show whatever the Store has" | YES — no settings at all (`_empty_defaults()`) | YES — default `brand_ids: []` = "show whatever the Store has" |
+| 6. Addition makes sense for the target template's identity | Verified per-template, §15 | Verified per-template, §15 | Verified per-template, §15 |
+
+All three pass all six checks unconditionally (checks 1–5); check 6 is
+necessarily per-template and is recorded in §15's implementation matrix.
+
+## 15. Final implementation matrix — resolves Independent Architect Review round-3 §3A/3B
+
+**Placement rule (removes all implementation-time ordering discretion):**
+every addition is **appended as the last entry** in the template's Home
+composition. This mirrors the existing, already-certified pattern the
+catalog's own richest recipes already use for their extra distinguishing
+sections — `dense_marketplace` appends `brand_carousel` then `testimonials`
+after its `catalog_product_wall`+`trust_features` core;
+`ferdowsi_department` appends `brand_carousel` then `trust_features` after
+its `featured_products`+`product_grid` core; `anniversary_mosaic` appends
+`testimonials` then `newsletter` after its `catalog_product_wall` core.
+Appending, not inserting mid-sequence, is the established convention for
+"one more distinguishing block on top of the core hero→categories→products
+flow" — no new ordering rule is invented.
+
+All 21 curated keys are currently version `"1"`; every one bumps to
+version `"2"` (none of the 21 collides with an already-versioned key —
+`editorial_jewelry`, `dense_marketplace`, `warm_boutique`, `premium_leather`,
+`dark_digital`, `fashion_promo_catalog`, `playful_lifestyle`,
+`utility_catalog` are not in this proposal).
+
+| # | Key | Old→New ver | Old composition tokens (exact, from certified `_SPECS`) | New composition tokens (appended token in **bold**) | Old Home section_key sequence | New Home section_key sequence | Mechanism | Fixture dependency |
+|---|---|---|---|---|---|---|---|---|
+| 1 | `premium_leather_noir` | 1→2 | `("hero","arch_categories","product_grid","brand_story")` | `(..., "brand_story", **"brands"**)` | hero_banner→category_grid→product_section→image_text | + brand_carousel | brand_carousel | ≥1 active Brand |
+| 2 | `artisan_grain` | 1→2 | `("hero","indexed_categories","product_grid","brand_story")` | `(..., **"collection_tiles"**)` | hero_banner→category_grid→product_section→image_text | + collection_tiles | collection_tiles | ≥1 active MerchantCollection |
+| 3 | `coastal_product` | 1→2 | `("hero","chip_categories","product_grid","brand_story")` | `(..., **"collection_tiles"**)` | hero_banner→category_grid→product_section→image_text | + collection_tiles | collection_tiles | ≥1 active MerchantCollection |
+| 4 | `handmade_luxe` | 1→2 | `("hero","indexed_categories","product_grid","brand_story")` | `(..., **"brands"**)` | hero_banner→category_grid→product_section→image_text | + brand_carousel | brand_carousel | ≥1 active Brand |
+| 5 | `watchmaker_round` | 1→2 | `("hero","indexed_categories","product_grid","brand_story")` | `(..., **"brands"**)` | hero_banner→category_grid→product_section→image_text | + brand_carousel | brand_carousel | ≥1 active Brand |
+| 6 | `horizon_story` | 1→2 | `("hero","chip_categories","product_grid","brand_story")` | `(..., **"community_gallery"**)` | hero_banner→category_grid→product_section→image_text | + story_rail | story_rail | ≥1 active StoryRailItem |
+| 7 | `silk_editorial` | 1→2 | `("hero","indexed_categories","product_grid","brand_story")` | `(..., **"collection_tiles"**)` | hero_banner→category_grid→product_section→image_text | + collection_tiles | collection_tiles | ≥1 active MerchantCollection |
+| 8 | `city_classic` | 1→2 | `("hero","circular_categories","product_grid","brand_story")` | `(..., **"collection_tiles"**)` | hero_banner→category_grid→product_section→image_text | + collection_tiles | collection_tiles | ≥1 active MerchantCollection |
+| 9 | `kamand_artisan` | 1→2 | `("hero","indexed_categories","product_grid","brand_story")` | `(..., **"community_gallery"**)` | hero_banner→category_grid→product_section→image_text | + story_rail | story_rail | ≥1 active StoryRailItem |
+| 10 | `parnian_editorial` | 1→2 | `("hero","arch_categories","product_grid","brand_story")` | `(..., **"community_gallery"**)` | hero_banner→category_grid→product_section→image_text | + story_rail | story_rail | ≥1 active StoryRailItem |
+| 11 | `niloufar_glass` | 1→2 | `("hero","circular_categories","product_grid","newsletter")` | `(..., **"collection_tiles"**)` | hero_banner→category_grid→product_section→newsletter | + collection_tiles | collection_tiles | ≥1 active MerchantCollection |
+| 12 | `beauty_dew` | 1→2 | `("hero","circular_categories","product_rail","newsletter")` | `(..., **"community_gallery"**)` | hero_banner→category_grid→product_section→newsletter | + story_rail | story_rail | ≥1 active StoryRailItem |
+| 13 | `laleh_play` | 1→2 | `("hero","chip_categories","product_grid","newsletter")` | `(..., **"brands"**)` | hero_banner→category_grid→product_section→newsletter | + brand_carousel | brand_carousel | ≥1 active Brand |
+| 14 | `almas_luxury` | 1→2 | `("hero","circular_categories","product_grid","newsletter")` | `(..., **"community_gallery"**)` | hero_banner→category_grid→product_section→newsletter | + story_rail | story_rail | ≥1 active StoryRailItem |
+| 15 | `green_workshop` | 1→2 | `("hero","tile_categories","product_grid","brand_story","newsletter")` | `(..., "newsletter", **"brands"**)` | hero_banner→category_grid→product_section→image_text→newsletter | + brand_carousel | brand_carousel | ≥1 active Brand |
+| 16 | `pine_eco` | 1→2 | `("hero","tile_categories","product_grid","brand_story","newsletter")` | `(..., "newsletter", **"collection_tiles"**)` | hero_banner→category_grid→product_section→image_text→newsletter | + collection_tiles | collection_tiles | ≥1 active MerchantCollection |
+| 17 | `mirror_beauty` | 1→2 | `("hero","circular_categories","product_grid","brand_story","newsletter")` | `(..., "newsletter", **"community_gallery"**)` | hero_banner→category_grid→product_section→image_text→newsletter | + story_rail | story_rail | ≥1 active StoryRailItem |
+| 18 | `cedar_home` | 1→2 | `("hero","tile_categories","product_grid","trust_features")` | `(..., **"collection_tiles"**)` | hero_banner→category_grid→product_section→trust_features | + collection_tiles | collection_tiles | ≥1 active MerchantCollection |
+| 19 | `simorgh_market` | 1→2 | `("hero","circular_categories","product_grid","trust_features")` | `(..., **"brands"**)` | hero_banner→category_grid→product_section→trust_features | + brand_carousel | brand_carousel | ≥1 active Brand |
+| 20 | `rayan_tech` | 1→2 | `("hero","tile_categories","product_grid","service_strip")` | `(..., **"community_gallery"**)` | hero_banner→category_grid→product_section→trust_features | + story_rail | story_rail | ≥1 active StoryRailItem |
+| 21 | `harbor_imports` | 1→2 | `("hero","tile_categories","product_grid","sale_products","trust_features")` | `(..., "trust_features", **"brands"**)` | hero_banner→category_grid→product_section→product_section→trust_features | + brand_carousel | brand_carousel | ≥1 active Brand |
+
+Final mechanism distribution: `collection_tiles`×7, `brand_carousel`×7,
+`story_rail`×7 — this even split is **incidental**, not a re-imposed
+quota: it is simply how 21 templates' own identity-driven mapping landed
+once `blog_posts`/`promo_cards` (round 2) and `image_slider`/`trust_features`
+(round 3) were excluded, leaving exactly 3 eligible mechanisms. No template
+below was assigned a mechanism to balance a count.
+
+Per-template identity rationale (why mechanism 6 in §14 is satisfied) and
+interactive-behavior/non-redundancy notes are in the design spec §8's
+matrix, cross-referenced to this table by key.
