@@ -1812,17 +1812,26 @@ window.RastiSiR4 = {
       box.hidden = false;
     }
 
-    // Reflect the server's authoritative current-selection labels after an op.
-    function refreshFamilyCurrentLabels(diffs) {
+    // Reflect the server's authoritative current-selection labels after an
+    // op. Refreshes EVERY family row from ``candidate_labels`` (Architect
+    // IMPORTANT 2) — NOT just the families present in ``diffs``. A family
+    // that returns to its Base value (Return to Original DNA, Reset, or a
+    // Random Mix draw that lands back on the same component) disappears from
+    // ``diffs`` but its visible label must still be refreshed, never left
+    // stale. Labels are always server-computed; nothing is derived here.
+    function refreshFamilyCurrentLabels(candidateLabels) {
       var p = panel();
-      if (!p || !diffs) return;
-      diffs.forEach(function (d) {
-        var row = p.querySelector('[data-r4-design-lab-family-row][data-r4-design-lab-family="' + d.family + '"]');
-        if (row) {
+      if (!p || !candidateLabels) return;
+      Array.prototype.forEach.call(
+        p.querySelectorAll('[data-r4-design-lab-family-row]'),
+        function (row) {
+          var family = row.getAttribute('data-r4-design-lab-family');
+          var label = candidateLabels[family];
+          if (label === undefined) return;
           var cur = row.querySelector('[data-r4-design-lab-current]');
-          if (cur && d.candidate_label) cur.textContent = d.candidate_label;
+          if (cur) cur.textContent = label;
         }
-      });
+      );
     }
 
     function callDesignLab(action, extra) {
@@ -1848,7 +1857,7 @@ window.RastiSiR4 = {
             DL.draftId = result.body.draft_id || DL.draftId;
             DL.hasCandidate = true;
             renderCompare(result.body.diffs);
-            refreshFamilyCurrentLabels(result.body.diffs);
+            refreshFamilyCurrentLabels(result.body.candidate_labels);
             previewCandidate();
             setApplyEnabled(true);
             setState('این فقط پیش‌نمایش است — برای ذخیره «اعمال تغییرات» را بزنید');
@@ -1949,11 +1958,20 @@ window.RastiSiR4 = {
           if (!body || !body.ok || !body.mutation) { setState('اعمال نشد'); return; }
           R4.enqueueMutation(body.mutation).then(function (result) {
             if (result && result.ok) {
+              // Clear the candidate + disable Apply immediately (the
+              // transient experiment is gone the instant the canonical
+              // mutation succeeds), but do NOT claim "Applied/Saved" until
+              // the fresh committed DOM is actually installed (Architect
+              // IMPORTANT 2) — otherwise the merchant can see the real
+              // revision/preview lag behind a success message that already
+              // fired, or a stale "این فقط پیش‌نمایش است" state persisting
+              // after a real save.
               DL.token = null;
               DL.hasCandidate = false;
               setApplyEnabled(false);
-              setState('اعمال شد ✔');
-              refreshGlobalDesignAndPreview();
+              refreshGlobalDesignAndPreview().then(function () {
+                setState('اعمال شد ✔');
+              });
             } else if (result && result.code === 'stale_revision') {
               // Final transactional enforcement caught a race after preflight.
               DL.token = null;

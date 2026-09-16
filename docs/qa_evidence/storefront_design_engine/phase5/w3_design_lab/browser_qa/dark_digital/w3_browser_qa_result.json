@@ -1,5 +1,5 @@
 {
-  "started_at": "2026-09-16T04:28:25.448Z",
+  "started_at": "2026-09-16T06:59:32.811Z",
   "origin": "http://127.0.0.1:8000",
   "builder_url": "http://127.0.0.1:8000/admin-portal/storefront-builder/r4/",
   "viewports": {
@@ -29,12 +29,12 @@
     {
       "scenario": "M_candidate_preview_renders_200",
       "ok": true,
-      "detail": "preview HTTP 200, 56135 bytes via existing storefront_preview route"
+      "detail": "preview HTTP 200, 55669 bytes via existing storefront_preview route"
     },
     {
       "scenario": "D_compare_with_base_real_diff",
       "ok": true,
-      "detail": "header: \"شناور فشرده\" -> \"بازارگاهی (جستجو-محور)\""
+      "detail": "header: \"شناور فشرده\" -> \"کمپینی (نوار پیشنهاد + جستجو)\""
     },
     {
       "scenario": "E_return_to_original_dna_exact",
@@ -49,12 +49,12 @@
     {
       "scenario": "B_randomize_one_footer_changes",
       "ok": true,
-      "detail": "footer footer.bold_columns.v1 -> footer.brand_story.v1"
+      "detail": "footer فشرده و مرکزی -> پرمیوم چندستونه"
     },
     {
       "scenario": "C_lock_preserves_current_candidate",
       "ok": true,
-      "detail": "locked header held current candidate value H1=header.compact_menu.v1 (H0=header.floating_compact.v1)"
+      "detail": "locked header held current candidate value H1=ردیف نشریه‌ای (H0=شناور فشرده)"
     },
     {
       "scenario": "F_reset_candidate",
@@ -64,12 +64,17 @@
     {
       "scenario": "G_remove_theme_transient",
       "ok": true,
-      "detail": "remove-theme candidate has theme.none.v1 (no write yet)"
+      "detail": "remove-theme candidate label=\"بدون تم مناسبتی\" (no write yet)"
     },
     {
       "scenario": "H_explicit_apply",
       "ok": true,
-      "detail": "apply enabled before=true; state=\"این فقط پیش‌نمایش است\"; revision 0->1"
+      "detail": "apply enabled before=true; state=\"اعمال شد ✔\"; revision 1->2; apply disabled after=true"
+    },
+    {
+      "scenario": "H_apply_does_not_show_preview_only_after_success",
+      "ok": true,
+      "detail": "state after apply=\"اعمال شد ✔\""
     },
     {
       "scenario": "STALE_candidate_apply_rejected",
@@ -80,5 +85,5 @@
   "console_errors": [],
   "failed_requests": [],
   "overall": "PASS",
-  "finished_at": "2026-09-16T04:28:57.676Z"
+  "finished_at": "2026-09-16T06:59:52.614Z"
 }

@@ -662,6 +662,21 @@ def _apply_design_lab_candidate(
     candidate and delegates each state transformation to the existing canonical
     authorities — never a second save/history/theme authority.
 
+    Integrity + final stale check (Architect IMPORTANT 1): the mutation never
+    carries raw client-editable ``selections``/``theme_intensity`` — only a
+    SIGNED ``candidate_token``. This handler decodes it INSIDE the same locked
+    ``apply_mutation`` transaction and re-checks the candidate's OWN
+    ``draft_id``/``base_revision`` against the Draft this call already holds
+    ``select_for_update`` on. That closes the race where a candidate generated
+    at revision N passes the ``/design-lab/`` ``apply_payload`` preflight at N,
+    an intervening canonical mutation then advances the Draft to N+1, and the
+    Design-Lab mutation is finally submitted with an OUTER envelope
+    ``base_revision`` that was refreshed to N+1 (so the generic
+    ``_lock_active_draft`` revision check alone would NOT catch it). A stale
+    candidate here raises the SAME canonical ``R4StaleRevision`` (409
+    ``stale_revision``) as every other R4 mutation — no second stale-conflict
+    system.
+
     Atomicity: every component is validated against the canonical registry
     BEFORE any write, so an invalid candidate raises and the surrounding
     ``apply_mutation`` transaction rolls back with zero partial writes. Theme is
@@ -671,14 +686,37 @@ def _apply_design_lab_candidate(
     outer transaction — all-or-nothing.
     """
     from apps.storefront_builder import theme_catalog
+    from apps.storefront_builder.services import design_lab_service
 
     _require_pinned_appearance_draft(draft=draft, mutation=mutation)
 
-    selections = mutation.get("selections")
-    if not isinstance(selections, dict) or not selections:
+    token = mutation.get("candidate_token")
+    if not isinstance(token, str) or not token:
+        raise R4MutationError("invalid_design_lab_candidate")
+    try:
+        candidate = design_lab_service.decode_candidate_token(token)
+    except ValueError as exc:
+        raise R4MutationError("invalid_design_lab_candidate") from exc
+
+    # Final transactional stale check — NEVER trust the token's own claims
+    # about which Draft/revision it belongs to without re-verifying them
+    # against the Draft this call already holds locked.
+    if candidate.draft_id is not None and candidate.draft_id != draft.pk:
+        raise R4MutationError("draft_not_found")
+    if (
+        candidate.base_revision is not None
+        and candidate.base_revision != draft.edit_revision
+    ):
+        raise R4StaleRevision(draft.edit_revision)
+
+    selections = dict(candidate.candidate_selections)
+    if not selections:
         raise R4MutationError("invalid_design_lab_candidate")
 
-    theme_intensity = mutation.get("theme_intensity")
+    theme_intensity = None
+    cand_settings = candidate.candidate_settings
+    if cand_settings and isinstance(cand_settings.get("theme"), dict):
+        theme_intensity = cand_settings["theme"].get("intensity")
 
     # --- Validate EVERYTHING first (fail closed, before any write) ---
     theme_component_key = None

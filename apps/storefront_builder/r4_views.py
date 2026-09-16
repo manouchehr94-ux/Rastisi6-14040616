@@ -911,6 +911,7 @@ def storefront_r4_design_lab(request):
         return JsonResponse({"ok": False, "code": "invalid_candidate"}, status=400)
 
     diffs = design_lab_service.compare_with_base(candidate)
+    family_labels = design_lab_service.all_family_labels(candidate)
     return JsonResponse(
         {
             "ok": True,
@@ -919,11 +920,17 @@ def storefront_r4_design_lab(request):
             "locked_families": sorted(candidate.locked_families),
             "base_revision": candidate.base_revision,
             "draft_id": candidate.draft_id,
-            # Server-authoritative current candidate + base selections (Persian
-            # labels are in ``diffs``; these raw maps let the UI reflect the
-            # exact per-family current selection and support QA data assertions).
-            "candidate_selections": dict(candidate.candidate_selections),
-            "base_selections": dict(candidate.base_selections),
+            # Merchant-facing Persian labels for EVERY family (Architect
+            # IMPORTANT 2) — never raw component keys. The client refreshes
+            # ALL rows from these, not just the ones present in ``diffs``, so a
+            # family that returns to its Base value still gets a correct
+            # current label instead of a stale one.
+            "candidate_labels": {
+                family: value["candidate_label"] for family, value in family_labels.items()
+            },
+            "base_labels": {
+                family: value["base_label"] for family, value in family_labels.items()
+            },
         }
     )
 

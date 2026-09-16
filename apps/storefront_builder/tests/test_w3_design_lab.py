@@ -605,6 +605,68 @@ class DesignLabApplyMutationTests(DesignLabBaseTestCase):
         self.draft.refresh_from_db()
         self.assertEqual(self._current_selections()["header"], applied_header)
 
+    def test_post_preflight_race_stale_candidate_rejected_by_final_transaction(self):
+        """Architect IMPORTANT 1 — the race AFTER the ``apply_payload``
+        preflight. A candidate generated (and preflight-approved) at revision
+        N must NOT apply once an intervening canonical mutation has advanced
+        the Draft to N+1, even when the caller refreshes the OUTER mutation
+        envelope's ``base_revision`` to the current N+1 (so the generic
+        ``_lock_active_draft`` revision check alone would NOT catch it). The
+        FINAL locked transaction must still know — from the signed token
+        itself — that the candidate was generated at N and reject it.
+        """
+        from apps.storefront_builder.services import design_lab_service
+
+        self.draft.refresh_from_db()
+        n = self.draft.edit_revision
+        candidate = design_lab_service.generate_candidate(
+            self.draft,
+            randomize_families={"header"},
+            locked_families=set(),
+            seed=7,
+        )
+        # The Design-Lab mutation is materialised (e.g. via a passing
+        # apply_payload preflight) while the Draft is still at N.
+        mutation = self._apply_candidate_mutation(candidate)
+
+        # An unrelated real canonical mutation runs concurrently, N -> N+1.
+        bump = self._mutate(
+            {
+                "type": "appearance.component.update",
+                "draft_id": self.draft.pk,
+                "family": "card",
+                "component_key": "card.standard.v1",
+            }
+        )
+        self.assertEqual(bump.status_code, 200, bump.content)
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.edit_revision, n + 1)
+        before = _draft_persistent_fingerprint(self.draft)
+
+        # Post the pre-bump Design-Lab mutation with the OUTER envelope's
+        # base_revision deliberately refreshed to the CURRENT N+1 — the outer
+        # generic stale check passes. Only the candidate's OWN signed
+        # base_revision (N, embedded in candidate_token) can still catch this.
+        applied = self._mutate(mutation, base_revision=n + 1)
+        self.assertEqual(applied.status_code, 409, applied.content)
+        self.assertEqual(applied.json()["code"], "stale_revision")
+
+        after = _draft_persistent_fingerprint(self.draft)
+        self.assertEqual(
+            after, before, "post-preflight race caused a partial/extra write"
+        )
+        self.assertEqual(
+            after["history_count"],
+            before["history_count"],
+            "stale post-preflight apply wrote a Design-Lab history entry",
+        )
+        self.draft.refresh_from_db()
+        self.assertEqual(
+            self.draft.edit_revision,
+            n + 1,
+            "the N+1 merchant edit was not preserved after the stale apply attempt",
+        )
+
 
 # ===========================================================================
 # I. Compare with Base
@@ -872,7 +934,15 @@ class DesignLabR4UITests(DesignLabBaseTestCase):
         mutation = resp.json()["mutation"]
         self.assertEqual(mutation["type"], "design_lab.apply_candidate")
         self.assertEqual(mutation["draft_id"], self.draft.pk)
-        self.assertIn("header", mutation["selections"])
+        # The mutation carries the SIGNED candidate token — never raw
+        # client-editable selections (Architect IMPORTANT 1) — so the
+        # canonical apply_mutation transaction can re-validate the
+        # candidate's own draft_id/base_revision against the locked Draft.
+        self.assertNotIn("selections", mutation)
+        self.assertNotIn("theme_intensity", mutation)
+        self.assertIn("candidate_token", mutation)
+        decoded = design_lab_service.decode_candidate_token(mutation["candidate_token"])
+        self.assertIn("header", decoded.candidate_selections)
 
 
 class DesignLabRegistrySafetyTests(DesignLabBaseTestCase):
@@ -1123,3 +1193,79 @@ class DesignLabEndpointRoundTripTests(DesignLabBaseTestCase):
         tampered = token[:-4] + ("AAAA" if token[-4:] != "AAAA" else "BBBB")
         with self.assertRaises(ValueError):
             design_lab_service.decode_candidate_token(tampered)
+
+    def test_endpoint_returns_merchant_facing_labels_for_all_families(self):
+        """Architect IMPORTANT 2 — the endpoint must return merchant-facing
+        ``candidate_labels``/``base_labels`` for EVERY family (never only the
+        families present in ``diffs``, and never raw component keys)."""
+        from apps.storefront_builder.services import design_lab_service
+
+        mix = self._design_lab("random_mix", locked=[])
+        self.assertEqual(mix.status_code, 200, mix.content)
+        body = mix.json()
+        self.assertNotIn("candidate_selections", body)
+        self.assertNotIn("base_selections", body)
+        self.assertIn("candidate_labels", body)
+        self.assertIn("base_labels", body)
+
+        candidate = design_lab_service.decode_candidate_token(body["token"])
+        expected = design_lab_service.all_family_labels(candidate)
+        self.assertEqual(
+            body["candidate_labels"],
+            {family: value["candidate_label"] for family, value in expected.items()},
+        )
+        self.assertEqual(
+            body["base_labels"],
+            {family: value["base_label"] for family, value in expected.items()},
+        )
+        # Every DNA family the panel renders must be present — not only the
+        # ones that happen to differ from Base.
+        for family in EXPECTED_RANDOMIZABLE:
+            self.assertIn(family, body["candidate_labels"])
+
+    def test_family_returning_to_base_still_refreshes_its_label(self):
+        """A family that lands back on its Base value must still get a
+        correct, current label even though it disappears from ``diffs``
+        (Architect IMPORTANT 2 — the old JS-only refresh, driven by ``diffs``,
+        left such rows showing a stale label)."""
+        from apps.storefront_builder.services import design_lab_service
+
+        base = self._current_selections()
+        mix = self._design_lab("random_mix", locked=[])
+        token = mix.json()["token"]
+        candidate = design_lab_service.decode_candidate_token(token)
+        changed_family = next(
+            f
+            for f in EXPECTED_RANDOMIZABLE
+            if candidate.candidate_selections.get(f) != base.get(f)
+        )
+        ret = self._design_lab("return_to_dna", token=token)
+        self.assertEqual(ret.status_code, 200, ret.content)
+        body = ret.json()
+        self.assertEqual(body["diffs"], [])
+        # The changed family is absent from `diffs` (empty), yet its label in
+        # `candidate_labels` must be the Base label, not a stale candidate one.
+        self.assertEqual(
+            body["candidate_labels"][changed_family], body["base_labels"][changed_family]
+        )
+
+    def test_signature_expired_reported_as_expired_not_tampered(self):
+        """MINOR — ``signing.SignatureExpired`` is a SUBCLASS of
+        ``signing.BadSignature``; it must be caught first, or an expired
+        token is misreported as a tampered one."""
+        from unittest import mock
+
+        from django.core import signing
+
+        from apps.storefront_builder.services import design_lab_service
+
+        token = self._design_lab("random_mix", locked=[]).json()["token"]
+        real_time = signing.time.time()
+        with mock.patch.object(signing.time, "time", return_value=real_time + 999999):
+            with self.assertRaises(ValueError) as ctx:
+                design_lab_service.decode_candidate_token(token)
+        self.assertIn(
+            "expired",
+            str(ctx.exception),
+            "an expired signature was reported as tampered (BadSignature caught first)",
+        )

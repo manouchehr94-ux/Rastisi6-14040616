@@ -15,11 +15,50 @@ import path from 'node:path';
 import process from 'node:process';
 import { createRequire } from 'node:module';
 
-const require = createRequire(
-  '/opt/toolchains/.nvm/versions/node/v22.23.2/lib/node_modules/@playwright/mcp/node_modules/playwright-core/package.json'
-);
-const { chromium } = require('playwright-core');
-const CHROME = '/opt/playwright/chromium-1232/chrome-linux64/chrome';
+// Same playwright-core resolution convention as the sibling
+// tools/storefront_builder_r4_qa/run.mjs harness (ONE dependency, not a
+// second copy): prefer the repo's own tools/storefront_builder_qa
+// package (its own `npm install`), then fall back to whatever
+// Playwright install this sandboxed QA environment ships.
+function resolvePlaywrightCore() {
+  const candidates = [
+    new URL('../storefront_builder_qa/package.json', import.meta.url),
+    '/opt/toolchains/.nvm/versions/node/v22.23.2/lib/node_modules/@playwright/mcp/node_modules/playwright-core/package.json',
+    '/opt/node22/lib/node_modules/playwright/node_modules/playwright-core/package.json',
+  ];
+  const errors = [];
+  for (const from of candidates) {
+    try {
+      return createRequire(from)('playwright-core');
+    } catch (error) {
+      errors.push(`${from}: ${error.message}`);
+    }
+  }
+  throw new Error(`No usable playwright-core found. ${errors.join(' | ')}`);
+}
+const { chromium } = resolvePlaywrightCore();
+
+// Same Chromium-resolution fallback convention as the sibling
+// tools/storefront_builder_r4_qa/run.mjs harness (ONE resolution strategy,
+// not a second one) — this sandboxed QA environment ships a pre-installed
+// Playwright Chromium at a path that varies per host, never a system
+// Chrome/Edge channel.
+function resolveChromePath() {
+  const candidates = [
+    process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+    '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+    '/opt/playwright/chromium-1232/chrome-linux64/chrome',
+    '/usr/local/bin/chrome',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+  ].filter(Boolean);
+  for (const executablePath of candidates) {
+    if (fs.existsSync(executablePath)) return executablePath;
+  }
+  throw new Error(`No usable installed Chromium browser found among: ${candidates.join(', ')}`);
+}
+const CHROME = resolveChromePath();
 
 const manifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const REPORT = manifest.report_dir;
@@ -70,8 +109,11 @@ async function previewStatus(page, token) {
 
 // Call the read-only /design-lab/ endpoint from within the page (same-origin,
 // session cookie + CSRF) and return the server-authoritative response — the
-// candidate token, base_selections, candidate_selections, and Persian diffs.
-// This lets the browser QA assert on real DATA, not panel visibility.
+// candidate token, merchant-facing candidate_labels/base_labels (never raw
+// component keys — those were removed from the endpoint per Architect
+// IMPORTANT 2), and the Persian diffs. This lets the browser QA assert on
+// real DATA transitions, not panel visibility, while staying on the SAME
+// merchant-facing contract the R4 editor UI itself consumes.
 async function designLab(page, body) {
   return page.evaluate(async (body) => {
     const url = document
@@ -199,10 +241,12 @@ async function run() {
       if (vp.name === 'desktop') {
         // Server-authoritative DATA: a fresh Random Mix must change families vs
         // Base, and its candidate must render through the existing preview route.
+        // Merchant-facing labels only (candidate_labels/base_labels) — never raw
+        // component keys, which the endpoint no longer returns.
         const mix = await designLab(page, { action: 'random_mix', locked_families: [] });
         const b = mix.body;
-        const changedFamilies = Object.keys(b.candidate_selections).filter(
-          (f) => b.candidate_selections[f] !== b.base_selections[f]
+        const changedFamilies = Object.keys(b.candidate_labels).filter(
+          (f) => b.candidate_labels[f] !== b.base_labels[f]
         );
         const ps = await previewStatus(page, b.token);
         record('A_full_random_mix_changes_candidate', changedFamilies.length > 0,
@@ -226,11 +270,12 @@ async function run() {
 
         // ---- Scenario E — Return to Original DNA (EXACT restore) ------------
         // Capture Base A; Random Mix -> B; Return -> assert candidate == A
-        // family-by-family (server-authoritative selections), not just "no diff".
+        // family-by-family (server-authoritative merchant-facing labels), not
+        // just "no diff" and not raw component keys.
         const freshMix = await designLab(page, { action: 'random_mix', locked_families: [] });
-        const A = freshMix.body.base_selections;
+        const A = freshMix.body.base_labels;
         const ret = await designLab(page, { action: 'return_to_dna', candidate_token: freshMix.body.token });
-        const returned = ret.body.candidate_selections;
+        const returned = ret.body.candidate_labels;
         const exactRestore = Object.keys(A).every((f) => returned[f] === A[f]) &&
           (ret.body.diffs || []).length === 0;
         await page.$('[data-r4-design-lab-return-dna]').then((el) => el && el.click());
@@ -241,13 +286,14 @@ async function run() {
 
         // ---- Scenario B — Chained Randomize One preserves other families ----
         // Random Mix -> B, Randomize footer -> C; every non-footer family in C
-        // must equal B; footer must change (registry has alternatives).
+        // must equal B; footer must change (registry has alternatives). Compared
+        // via merchant-facing labels (server-authoritative, never raw keys).
         const mixB = await designLab(page, { action: 'random_mix', locked_families: [] });
-        const B = mixB.body.candidate_selections;
+        const B = mixB.body.candidate_labels;
         const one = await designLab(page, {
           action: 'randomize_one', family: 'footer', candidate_token: mixB.body.token, locked_families: [],
         });
-        const C = one.body.candidate_selections;
+        const C = one.body.candidate_labels;
         const othersPreserved = Object.keys(B).every((f) => f === 'footer' || C[f] === B[f]);
         const footerChanged = C.footer !== B.footer;
         await page.$('[data-r4-design-lab-family-row][data-r4-design-lab-family="footer"] [data-r4-design-lab-randomize-one]')
@@ -262,19 +308,20 @@ async function run() {
         // ---- Scenario C — Lock CURRENT candidate value --------------------
         // Randomize header -> H1; Lock header; Random Mix; header must stay H1
         // (the CURRENT candidate value), not revert to the committed Draft H0.
+        // Captured via merchant-facing labels (server-authoritative).
         let cur = await designLab(page, { action: 'reset' });
-        const H0 = cur.body.base_selections.header;
+        const H0 = cur.body.base_labels.header;
         let H1 = H0, tok = cur.body.token;
         for (let i = 0; i < 30; i++) {
           const r = await designLab(page, { action: 'randomize_one', family: 'header', candidate_token: tok, locked_families: [] });
-          tok = r.body.token; H1 = r.body.candidate_selections.header;
+          tok = r.body.token; H1 = r.body.candidate_labels.header;
           if (H1 !== H0) break;
         }
         let lockedHeld = H1 !== H0;
         for (let i = 0; i < 3 && lockedHeld; i++) {
           const r = await designLab(page, { action: 'random_mix', candidate_token: tok, locked_families: ['header'] });
           tok = r.body.token;
-          if (r.body.candidate_selections.header !== H1) lockedHeld = false;
+          if (r.body.candidate_labels.header !== H1) lockedHeld = false;
         }
         // Exercise the UI lock button for the screenshot.
         await page.$('[data-r4-design-lab-family-row][data-r4-design-lab-family="header"] [data-r4-design-lab-lock]')
@@ -294,10 +341,13 @@ async function run() {
         await page.screenshot({ path: path.join(SHOTS, `desktop_07_reset.png`), fullPage: false });
 
         // ---- Scenario G — Remove Theme (transient) -------------------------
+        // The endpoint returns merchant-facing labels only, so assert against
+        // theme.none.v1's own merchant-facing label rather than the raw key.
+        const THEME_NONE_LABEL_FA = 'بدون تم مناسبتی';
         const rt = await designLab(page, { action: 'remove_theme', candidate_token: resetR.body.token });
         record('G_remove_theme_transient',
-          rt.body.candidate_selections.theme === 'theme.none.v1',
-          'remove-theme candidate has theme.none.v1 (no write yet)');
+          rt.body.candidate_labels.theme === THEME_NONE_LABEL_FA,
+          `remove-theme candidate label="${rt.body.candidate_labels.theme}" (no write yet)`);
         await page.$('[data-r4-design-lab-remove-theme]').then((el) => el && el.click());
         await page.waitForTimeout(500);
         await page.screenshot({ path: path.join(SHOTS, `desktop_08_remove_theme.png`), fullPage: false });
@@ -318,9 +368,24 @@ async function run() {
         await page.waitForTimeout(1500);
         const revAfter = await page.evaluate(() =>
           Number(document.querySelector('[data-r4-shell]').dataset.editRevision || 0));
+        // Re-query the Apply button: a successful Apply's fresh-DOM refresh
+        // (Architect IMPORTANT 2) replaces the Global Design panel's innerHTML
+        // (including this button's own DOM node), so the ORIGINAL handle is a
+        // detached element by now — that detachment is itself proof the fresh
+        // DOM was actually installed, not merely claimed.
+        const applyBtnAfter = await page.$('[data-r4-design-lab-apply]');
+        const applyDisabledAfter = applyBtnAfter ? await applyBtnAfter.isDisabled() : null;
         await page.screenshot({ path: path.join(SHOTS, `desktop_09_after_apply.png`), fullPage: false });
-        record('H_explicit_apply', /اعمال شد/.test(st || '') || revAfter > revBefore,
-          `apply enabled before=${!applyDisabledBefore}; state="${st}"; revision ${revBefore}->${revAfter}`);
+        // Merchant-visible truth (Architect IMPORTANT 2, a real prior defect):
+        // after a successful Apply the state must say Applied/Saved, the
+        // revision must have advanced, Apply must be disabled again, and the
+        // state must NEVER still read "این فقط پیش‌نمایش است" (preview-only).
+        const isPreviewOnlyText = /این فقط پیش‌نمایش است/.test(st || '');
+        record('H_explicit_apply',
+          /اعمال شد/.test(st || '') && revAfter === revBefore + 1 && applyDisabledAfter && !isPreviewOnlyText,
+          `apply enabled before=${!applyDisabledBefore}; state="${st}"; revision ${revBefore}->${revAfter}; apply disabled after=${applyDisabledAfter}`);
+        record('H_apply_does_not_show_preview_only_after_success', !isPreviewOnlyText,
+          `state after apply="${st}"`);
 
         // ---- New scenario — real-flow STALE apply --------------------------
         // Create a candidate at revision N; make another canonical edit (via a

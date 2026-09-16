@@ -343,6 +343,28 @@ def compare_with_base(candidate: DesignLabCandidate) -> list[dict]:
     return diffs
 
 
+def all_family_labels(candidate: DesignLabCandidate) -> dict[str, dict[str, str]]:
+    """Merchant-facing Persian labels for EVERY family — never only the ones
+    that changed (Architect IMPORTANT 2). ``compare_with_base`` only reports
+    changed families, so a family that returns to its Base value (Return to
+    Original DNA, Reset, Undo, or simply randomizing back to the same key)
+    disappears from ``diffs`` even though its visible label must still be
+    refreshed. The endpoint returns this for ALL families so the client never
+    has to derive a label in JavaScript — it only ever reflects a server-
+    computed string.
+    """
+    labels: dict[str, dict[str, str]] = {}
+    for family in COMPONENT_FAMILIES:
+        base_key = candidate.base_selections.get(family)
+        cand_key = candidate.candidate_selections.get(family)
+        labels[family] = {
+            "family_label": _family_label(family),
+            "base_label": _component_label(base_key) if base_key else "",
+            "candidate_label": _component_label(cand_key) if cand_key else "",
+        }
+    return labels
+
+
 def return_to_original_dna(draft, candidate: DesignLabCandidate) -> DesignLabCandidate:
     """Return the TRANSIENT candidate to the Design Lab's committed Draft base
     state (§18). ZERO Draft writes. Does NOT restore a historic Ready-Template
@@ -434,19 +456,20 @@ def candidate_apply_mutation(candidate: DesignLabCandidate, *, draft_id: int) ->
     ``r4_mutation_service.apply_mutation`` — one base_revision, one stale check,
     one transaction, one history entry.
 
-    Only the candidate's SELECTIONS + theme intensity are sent; the server
-    re-validates every component against the canonical registry and applies
-    Theme removal through the W2 ``clear_theme`` owner.
+    The payload carries the SIGNED ``candidate_token`` — never raw client-
+    editable ``selections``/``theme_intensity`` (Architect IMPORTANT 1). The
+    canonical mutation transaction decodes/re-validates the token and re-checks
+    the candidate's OWN ``draft_id``/``base_revision`` against the currently
+    locked Draft, so a candidate generated at revision N is rejected there even
+    if the OUTER mutation envelope's ``base_revision`` was refreshed to N+1 by
+    an intervening edit after the ``/design-lab/`` ``apply_payload`` preflight
+    already passed at N (that preflight is a UX nicety only, never the
+    enforcement).
     """
-    theme_intensity = None
-    cand_settings = candidate.candidate_settings
-    if cand_settings and isinstance(cand_settings.get("theme"), Mapping):
-        theme_intensity = cand_settings["theme"].get("intensity")
     return {
         "type": DESIGN_LAB_APPLY_MUTATION_TYPE,
         "draft_id": draft_id,
-        "selections": dict(candidate.candidate_selections),
-        "theme_intensity": theme_intensity,
+        "candidate_token": encode_candidate_token(candidate),
     }
 
 
@@ -497,6 +520,11 @@ def decode_candidate_token(token: str) -> DesignLabCandidate:
     NOT validate component keys against the registry — the caller resolves
     through ``resolve_candidate_appearance`` / ``validate_store_appearance_manifest``
     which fail closed on bad keys.
+
+    ``signing.SignatureExpired`` is a SUBCLASS of ``signing.BadSignature``, so it
+    MUST be caught first — an ``except BadSignature`` clause ahead of it would
+    silently swallow every expiry as a "tampered" verdict and never reach the
+    expiry branch (MINOR, Architect review).
     """
     from django.core import signing
 
@@ -506,9 +534,11 @@ def decode_candidate_token(token: str) -> DesignLabCandidate:
         payload = signing.loads(
             token, salt=_TOKEN_SALT, max_age=_TOKEN_MAX_AGE_SECONDS
         )
+    except signing.SignatureExpired as exc:
+        raise ValueError("malformed or expired design_lab token") from exc
     except signing.BadSignature as exc:
         raise ValueError("tampered or invalid design_lab token") from exc
-    except (signing.SignatureExpired, ValueError, TypeError) as exc:
+    except (ValueError, TypeError) as exc:
         raise ValueError("malformed or expired design_lab token") from exc
     if not isinstance(payload, dict):
         raise ValueError("malformed design_lab token")
