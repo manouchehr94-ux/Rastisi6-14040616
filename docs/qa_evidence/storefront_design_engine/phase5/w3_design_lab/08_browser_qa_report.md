@@ -70,3 +70,21 @@ python manage.py shell < _w3_qa_setup.py     # seed + session cookie
 bash _w3_run_browser_qa.sh                     # both templates, 3 viewports, A–H + stale
 ```
 (The `_w3_*` helper scripts and the SQLite dev DB are QA-only and NOT committed.)
+
+## Update — final Architect-review repair (commit `e9551ff`)
+
+The runner and this evidence were regenerated end-to-end on the final
+repaired code. Two real changes from the review are now reflected:
+
+- The `/design-lab/` endpoint no longer returns raw `candidate_selections`/
+  `base_selections` — only merchant-facing `candidate_labels`/`base_labels`
+  for EVERY family. The runner's data assertions (A, B, C, E, G) now read
+  those labels instead.
+- Scenario H (explicit Apply) now additionally asserts the revision advances
+  by **exactly one**, Apply is disabled again, and the visible state is
+  **never** still `این فقط پیش‌نمایش است` after a successful Apply — the
+  concrete defect the previous review flagged.
+
+Fresh result: **12/12 scenarios PASS** on both `dark_digital` and
+`warm_boutique`, all 3 viewports, RTL intact, 0 console errors, 0 failed
+requests. Raw JSON: `browser_qa/<template>/w3_browser_qa_result.json`.

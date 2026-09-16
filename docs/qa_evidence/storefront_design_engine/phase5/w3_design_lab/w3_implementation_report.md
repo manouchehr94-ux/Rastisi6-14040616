@@ -279,3 +279,81 @@ PASS, 0 console errors, 0 failed requests.
 bca004d test: post-repair regression + full-suite base comparison
 a41531f test: browser QA asserts DATA (+ endpoint candidate/base selections)
 ```
+
+## Final repair (independent Architect review of PR #9, head `4803b83`)
+
+Verdict on `4803b83`: `CRITICAL: 0, IMPORTANT: 2, MINOR: 1` — NOT READY FOR MERGE.
+
+**IMPORTANT 1 — post-preflight stale race.** `candidate_apply_mutation()`
+was still serialising raw `selections`/`theme_intensity` into the
+`design_lab.apply_candidate` mutation; `_apply_design_lab_candidate()` trusted
+them directly. A candidate generated at revision N, preflight-approved via
+`/design-lab/` `apply_payload` at N, could still apply after an intervening
+edit moved the Draft to N+1, provided the OUTER mutation envelope's
+`base_revision` was resubmitted as the fresh N+1 (the generic
+`_lock_active_draft` check alone does not know the CANDIDATE itself is
+stale). Fixed: `candidate_apply_mutation()` now carries the SIGNED
+`candidate_token`; `_apply_design_lab_candidate()` decodes it INSIDE the same
+locked `apply_mutation` transaction and re-checks the candidate's own
+`draft_id`/`base_revision` against the Draft this call already holds
+`select_for_update` on, raising the canonical `R4StaleRevision` (409
+`stale_revision`) on mismatch. New RED→GREEN test:
+`test_post_preflight_race_stale_candidate_rejected_by_final_transaction`.
+
+**IMPORTANT 2 — merchant-visible UI truth.** The `/design-lab/` endpoint
+returned raw `candidate_selections`/`base_selections`; the JS refreshed
+per-family labels only from `diffs`, leaving stale labels for a family that
+returned to its Base value. A successful Apply set the "اعمال شد ✔" state
+text and enqueued `refreshGlobalDesignAndPreview()` without waiting for it,
+so the merchant could briefly see the success text over the still-stale
+"این فقط پیش‌نمایش است" panel. Fixed: the endpoint now returns
+`candidate_labels`/`base_labels` for EVERY family
+(`design_lab_service.all_family_labels`); the JS refreshes every family row
+from `candidate_labels`; a successful Apply now awaits
+`refreshGlobalDesignAndPreview()` before setting the success state. New
+tests: `test_endpoint_returns_merchant_facing_labels_for_all_families`,
+`test_family_returning_to_base_still_refreshes_its_label`.
+
+**MINOR — exception ordering.** `decode_candidate_token` caught
+`signing.BadSignature` before `signing.SignatureExpired`, and the latter
+subclasses the former, so every expired token was misreported as tampered.
+Fixed: `SignatureExpired` is now caught first. New test:
+`test_signature_expired_reported_as_expired_not_tampered`.
+
+**Browser QA runner** (`tools/storefront_builder_r4_qa/w3_design_lab_qa.mjs`,
+the file Kiro's task brief said was interrupted mid-edit — verified NOT
+actually present in any commit or as an uncommitted change; the runner still
+read the now-removed `candidate_selections`/`base_selections`) — updated to
+read `candidate_labels`/`base_labels` throughout, added an explicit
+post-Apply UI-truth assertion, and fixed the runner's hardcoded
+Chromium/`playwright-core` paths to use the same environment-fallback
+convention as the sibling `run.mjs` harness (this sandbox's Chromium/
+playwright-core live at different paths than the original authoring
+environment).
+
+### Final verification (commit `e9551ff`)
+- W3 focused: **50 tests OK** (46 + 4 new; `14_red_final_repair.txt` /
+  `15_green_final_repair.txt`).
+- W2 Theme regression: **58 OK** (`17_final_w2_theme_regression.txt`).
+- Targeted R4 regression (W2 Theme + preset/preview/mutation/history +
+  R4 foundation/inspector JS guardrails): **619 OK, 1 pre-existing skip**
+  (`16_final_targeted_regression_619.txt`).
+- W1 cart/pricing: **105 OK** (`18_final_w1_cart_pricing_regression.txt`).
+- Full `apps.storefront_builder.tests`: **3210 tests, 30 failures + 2 errors,
+  4 skipped** (`19_final_full_storefront_builder_suite.txt`); identical
+  failure-identity set to a fresh run of the certified base `e28b563`
+  (**3160** tests, same 30F+2E+4skip — `19b_final_base_e28b563_full_suite.txt`).
+  Base comparison: `21_final_full_suite_base_comparison.md` —
+  **W3-only failures = 0; base-only failures = 0; changed pre-existing
+  failure reasons = 0** (the only textual differences were per-request CSRF
+  tokens, verified byte-for-byte after masking).
+- Browser QA re-run on both templates (`browser_qa/dark_digital`,
+  `browser_qa/warm_boutique`): **12/12 scenarios PASS each**, including the
+  post-Apply UI-truth assertions; 0 console errors; 0 failed requests; RTL
+  intact; no horizontal overflow at any of the 3 viewports.
+- `manage.py check`: 0 issues. `makemigrations --check`: no changes.
+  `git diff --check`: clean. (`20_final_repo_gates.txt`)
+- Architecture/duplication gate: PASS, zero unsigned raw-selection Apply
+  bypass (`22_final_architecture_duplication_gate.md`).
+
+Final PR head: `e9551ff1ff5df0a37183d39490a725c7c8f41525`.

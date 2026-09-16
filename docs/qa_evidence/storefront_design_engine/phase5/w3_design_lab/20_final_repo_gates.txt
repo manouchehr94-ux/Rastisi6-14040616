@@ -1,0 +1,19 @@
+=== python --version ===
+Python 3.12.3
+=== django version ===
+5.2.17
+=== manage.py check ===
+System check identified no issues (0 silenced).
+=== makemigrations --check --dry-run ===
+No changes detected
+=== git diff --check ===
+PASS (clean)
+=== git status --short ===
+?? docs/qa_evidence/storefront_design_engine/phase5/w3_design_lab/14_red_final_repair.txt
+?? docs/qa_evidence/storefront_design_engine/phase5/w3_design_lab/15_green_final_repair.txt
+?? docs/qa_evidence/storefront_design_engine/phase5/w3_design_lab/16_final_targeted_regression_619.txt
+?? docs/qa_evidence/storefront_design_engine/phase5/w3_design_lab/17_final_w2_theme_regression.txt
+?? docs/qa_evidence/storefront_design_engine/phase5/w3_design_lab/18_final_w1_cart_pricing_regression.txt
+?? docs/qa_evidence/storefront_design_engine/phase5/w3_design_lab/19_final_full_storefront_builder_suite.txt
+?? docs/qa_evidence/storefront_design_engine/phase5/w3_design_lab/19b_final_base_e28b563_full_suite.txt
+?? docs/qa_evidence/storefront_design_engine/phase5/w3_design_lab/20_final_repo_gates.txt
