@@ -1,10 +1,49 @@
 # P5-W3 — Design Lab / Random Mix — Implementation Report
 
+## FINAL CANONICAL STATE (read this first)
+
+This report accumulated across three review/repair rounds; the numbers in the
+body below carry forward each round's own record and are marked HISTORICAL /
+SUPERSEDED where a later round changed them. These are the authoritative
+final values:
+
+- **Certified starting checkpoint:** `e28b563ca614bd2eafea8ec102ad44cd8a56ae82`
+- **Implementation branch:** `feature/phase5-w3-design-lab`
+- **Final production-code repair commit:** `e9551ff1ff5df0a37183d39490a725c7c8f41525`
+  (the last commit that changed production/test code; the final Architect
+  review of PR #9 was performed against this repair, carried forward to head
+  `919184d` by docs-only evidence commits with zero code change).
+- **Reviewed PR head before this evidence-only cleanup:** `919184d5dd1d09224ba53b9c962a7cc817d4b3ad`
+- **Authoritative current PR head:** see GitHub PR #9 metadata (this document
+  is never the source of truth for the live PR head — do not infer it from
+  any commit SHA embedded in an evidence-only commit).
+- **Runtime used for final Claude verification:** Python 3.12.3, Django 5.2.17.
+
+| Suite | Result |
+|---|---|
+| Focused W3 (`test_w3_design_lab`) | **50 tests — PASS** |
+| W2 Theme | **58 tests — PASS** |
+| Targeted R4 regression | **619 tests — PASS** (1 pre-existing skip) |
+| W1 cart/pricing | **105 tests — PASS** |
+| Full `apps.storefront_builder.tests` (final W3 code) | **3210 tests — 30 failures, 2 errors, 4 skipped** |
+| Full suite, certified base `e28b563` (comparison) | **3160 tests — 30 failures, 2 errors, 4 skipped** |
+| W3-only failing tests | **0** |
+| Changed pre-existing failure reasons | **0** |
+| Migrations | **0** |
+
+Earlier-round numbers below (**37 focused**, **518 targeted**, **3197
+full-suite**, PR head `a5cdef0d...`) are **HISTORICAL / SUPERSEDED** — they
+recorded the state of an earlier round, not the final one. They are kept
+verbatim as the historical record of what each round actually measured at
+the time; they are not the current truth.
+
 ## Provenance
 - **Certified starting checkpoint:** `e28b563ca614bd2eafea8ec102ad44cd8a56ae82`
   (the independently certified P5-W2 merge on `feature/phase5-design-expansion`).
 - **Implementation branch:** `feature/phase5-w3-design-lab` (created from the checkpoint).
-- **Final PR head:** `a5cdef0d5d1a5dce18e71e030ccf7ffc305748a4` (updated if later commits land).
+- **Final PR head:** `a5cdef0d5d1a5dce18e71e030ccf7ffc305748a4` — **HISTORICAL / SUPERSEDED**,
+  this was the head after ONLY the first implementation round; see "FINAL
+  CANONICAL STATE" above for the actual final values.
 - **Runtime:** Python 3.12.13, Django 5.2.17 (matches the certified checkpoint).
 
 ## Source inventory findings (see `00_source_inventory.md`)
@@ -130,17 +169,29 @@ two materially different templates (`dark_digital`, `warm_boutique`), three view
 preview HTTP 200 all PASS; 0 console errors, 0 failed requests, no horizontal overflow.
 
 ## Tests
+> **HISTORICAL / SUPERSEDED** — this is the first-round count, before either
+> repair round. See "FINAL CANONICAL STATE" above for the final **50**.
+
 - **Focused W3** (`test_w3_design_lab`): **37 tests — OK** (`02_green_focused.txt`).
 - **TDD RED** first observed genuinely (`01_red_design_lab.txt`): 29× missing
   `design_lab_service`, 7× missing `apply_component_variant`; zero setup/fixture failures.
 
 ## Regression (see `06_regression.txt`, `06b_w1_cart_pricing.txt`)
+> **HISTORICAL / SUPERSEDED** — first-round targeted regression count. The
+> final targeted regression (after both repair rounds, including the
+> `test_r4_foundation`/`test_r4_inspector` JS guardrails) is **619**; see
+> "FINAL CANONICAL STATE" above.
+
 - **W2 Theme suite:** 58 tests — OK (baseline preserved; W3 adds none to that module).
 - **Targeted appearance/preset/preview/mutation/history:** 518 — OK (1 pre-existing skip).
 - **Candidate preview** (`NonDestructiveTemplatePreviewTests`, task2/task3 preview): OK.
 - **W1 cart/pricing:** 105 — OK.
 
 ## Full-suite status + base comparison (see `07*`)
+> **HISTORICAL / SUPERSEDED** — first-round full-suite count. The final full
+> suite (after both repair rounds) is **3210** tests, same 30F+2E+4skip
+> shape; see "FINAL CANONICAL STATE" above and `21_final_full_suite_base_comparison.md`.
+
 `apps.storefront_builder.tests`: **3197 tests, 30 failures + 2 errors + 4 skipped.**
 Compared against a **separate clean clone** of the certified base `e28b563` (3160 tests,
 30 failures + 2 errors + 4 skipped): **W3-only failures = 0**, **base-only differences = 0**,
@@ -356,4 +407,22 @@ environment).
 - Architecture/duplication gate: PASS, zero unsigned raw-selection Apply
   bypass (`22_final_architecture_duplication_gate.md`).
 
-Final PR head: `e9551ff1ff5df0a37183d39490a725c7c8f41525`.
+Final production-code head: `e9551ff1ff5df0a37183d39490a725c7c8f41525`
+(the last commit that changed production or test code for this repair; see
+"FINAL CANONICAL STATE" at the top of this document for the reviewed PR head
+before the evidence-only cleanup and for where to find the current
+authoritative PR head).
+
+## Non-blocking hardening backlog note (from the final evidence-only review)
+
+The final transaction's stale check (`_apply_design_lab_candidate`) compares
+`candidate.draft_id`/`candidate.base_revision` against the locked Draft only
+when those fields are not `None`. Every server-generated signed candidate
+always stamps both fields (`generate_candidate`/`reset_candidate` set
+`base_revision`/`draft_id` at generation time, and they survive the signed
+token unchanged), and there is no unsigned/raw-selection Apply bypass, so a
+candidate reaching this check with either field `None` cannot occur through
+any real client flow today. Recorded as a non-blocking hardening backlog
+item (e.g. reject a decoded candidate with a `None` `draft_id`/`base_revision`
+outright, rather than skipping the check) — not addressed in this evidence-only
+closure per its scope gate (no production code changes).

@@ -1,3 +1,13 @@
+NOTE (added during the docs/evidence-only closure, not part of the captured
+output below): this snapshot was taken WHILE the final evidence files
+(14_*..20_*) were staged as untracked, mid-preparation for the evidence
+commit — that is why `git status --short` below lists them as `??` rather
+than showing a clean tree. The gate commands themselves (check,
+makemigrations --check, git diff --check) all passed cleanly regardless.
+See `23_final_clean_status.txt` for a fresh `git status --short` captured
+AFTER the evidence commit was pushed, confirming a clean working tree.
+================================================================================
+
 === python --version ===
 Python 3.12.3
 === django version ===
