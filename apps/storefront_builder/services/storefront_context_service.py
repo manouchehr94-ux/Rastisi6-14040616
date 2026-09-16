@@ -53,7 +53,10 @@ def _top_level_categories(store):
     return Category.objects.filter(store=store, parent__isnull=True, is_active=True).order_by("order", "name")
 
 
-def build_universal_storefront_context(request, store, page_type: str, page_context: dict | None = None) -> dict:
+def build_universal_storefront_context(
+    request, store, page_type: str, page_context: dict | None = None,
+    *, shell_only: bool = False,
+) -> dict:
     """کانتکستِ سراسریِ Storefront برایِ ``store`` و ``page_type`` مشخص.
 
     عوارضِ جانبیِ عمدی (دقیقاً همان الگویِ قبلیِ ``home()``، حالا
@@ -79,57 +82,103 @@ def build_universal_storefront_context(request, store, page_type: str, page_cont
     بدونِ کوئریِ تکراری و بدونِ ذخیره‌یِ هیچ IDای در ``settings`` به همان
     دادهٔ از پیش تفکیک‌شده‌یِ Store دسترسی داشته باشند. غیابِ آن (``None``)
     دقیقاً معادلِ دیکشنریِ خالی است — صفحاتِ بدونِ section context-aware
-    (یا Storeهایی که هنوز منتشر نکرده‌اند) هیچ رفتاری تغییر نمی‌کند."""
+    (یا Storeهایی که هنوز منتشر نکرده‌اند) هیچ رفتاری تغییر نمی‌کند.
+
+    ``shell_only`` (P5-W4A): برایِ صفحاتِ عمومیِ domain-owned که به هیچ‌یک
+    از شش ``StorefrontPage.PageType`` واقعی مطابق نیستند (مثلِ Wishlist/CMS)
+    — یک opt-in **صریح**، هرگز از رویِ یک ``page_type`` ناشناخته استنتاج
+    نمی‌شود (یک تایپوی واقعی مثلِ ``"prodcut_detail"`` با ``shell_only=False``
+    پیش‌فرض همچنان دقیقاً همان رفتارِ «حل‌نشده»یِ همیشگی را می‌گیرد — نگاه
+    کنید به تست‌هایِ ``test_w4a_shell_only_context.py``). وقتی ``True``
+    است، هرگز ``resolve_published_page`` صدا زده نمی‌شود (پس هیچ
+    ``StorefrontPage``ای — نه حتی یکیِ نامرتبط مثلِ Home/Cart — resolve
+    نمی‌شود)؛ به‌جایش فقط از ``get_published_layout`` پرسیده می‌شود «آیا
+    اصلاً این Store یک Storefront V2 منتشرشده دارد؟» و همان پروجکشنِ
+    Header/Footer/Bottom-Nav/appearance/top_level_categoriesِ صفحاتِ واقعی
+    را می‌گیرد (از طریقِ همان helperِ خصوصیِ ``_build_published_shell_context``
+    زیر — یک مسیرِ اسمبلیِ واحد، نه دو نسخه‌یِ کپی‌شده)، با ``storefront_page=None``
+    و ``render_items``/``rows``/``render_containers`` خالی (چون هیچ
+    ``StorefrontPage``ای برایِ این صفحه وجود ندارد که section‌هایش resolve
+    شود — بدنه‌یِ صفحه کاملاً domain-owned می‌ماند)."""
+    if shell_only:
+        layout = page_resolution_service.get_published_layout(store)
+        if layout is None:
+            return _unresolved_context(page_type, store, page_context)
+        return _build_published_shell_context(
+            request, store, layout.published_version, page=None,
+            page_type=page_type, page_context=page_context,
+        )
+
     resolved = page_resolution_service.resolve_published_page(store, page_type)
-
     if not resolved.is_resolved:
-        items = render_service.build_default_render_items(page_type, store, page_context=page_context)
-        # Acceptance Batch 1 (post-U11) — this function is the single
-        # public/live rendering entry point (see module docstring); the
-        # Builder/editor preview never calls it (it calls
-        # ``build_page_render_items``/``build_default_render_items``
-        # directly), so this only ever hides empty optional product
-        # sections from real shoppers, never from a merchant composing a
-        # page. See ``render_service.hide_empty_public_sections``.
-        items = render_service.hide_empty_public_sections(items)
-        return {
-            "uses_universal_shell": False,
-            "storefront_version": None,
-            "storefront_page": None,
-            "page_type": page_type,
-            "layout_header_config": None,
-            "layout_footer_config": None,
-            "store_appearance": None,
-            "mobile_bottom_nav_template": None,
-            # Phase 5: پنج صفحه‌ی محصول/لیست/کالکشن/جستجو/سبد پیش از این
-            # فاز محتوایِ سخت‌کدشده‌ی خودشان را کاملاً مستقل از انتشارِ V2
-            # نشان می‌دادند — این تابع همان تجربه را حفظ می‌کند (نگاه کنید
-            # به build_default_render_items). ``home`` بی‌اثر می‌ماند، چون
-            # صفحه‌ی اصلیِ منتشرنشده از تمپلیتِ کاملاً جداگانه‌ی
-            # ``catalog/home.html`` استفاده می‌کند، نه render_items.
-            "render_items": items,
-            # Phase 2 (Universal Renderer): فهرستِ تخت بالا را به «ردیف‌ها»
-            # گروه‌بندی می‌کند (نگاه کنید به ``render_service.group_items_into_rows``)
-            # — تمپلیت‌های عمومی از این کلید برای رندر واقعی استفاده می‌کنند،
-            # نه ``render_items`` مستقیم (که فقط برای سازگاریِ عقب‌رو/مصرفِ
-            # احتمالیِ دیگر نگه داشته شده).
-            "rows": render_service.group_items_into_rows(items),
-            "render_containers": [],
-            "use_container_layout": False,
-            "top_level_categories": _top_level_categories(store),
-        }
+        return _unresolved_context(page_type, store, page_context)
+    return _build_published_shell_context(
+        request, store, resolved.version, page=resolved.page,
+        page_type=page_type, page_context=page_context,
+    )
 
-    version = resolved.version
-    page = resolved.page
-    # نگاه کنید به توضیحِ بالا — این تنها نقطه‌ای غیر از ``home()``یِ
-    # قدیمی است که این attribute را ست می‌کند؛ اکنون برایِ هر شش نوعِ
-    # صفحه یکسان است، نه فقط صفحه‌ی اصلی.
+
+def _unresolved_context(page_type: str, store, page_context: dict | None) -> dict:
+    """صورتِ ثابتِ «حل‌نشده» (Storeای که هرگز منتشر نکرده — یا ``page_type``ای
+    که به هیچ ``StorefrontPage`` واقعی‌ای مطابق نیست). استخراج‌شده از بدنه‌یِ
+    قدیمیِ تابعِ بالا — بدونِ تغییرِ رفتار."""
+    items = render_service.build_default_render_items(page_type, store, page_context=page_context)
+    # Acceptance Batch 1 (post-U11) — this function is the single
+    # public/live rendering entry point (see module docstring); the
+    # Builder/editor preview never calls it (it calls
+    # ``build_page_render_items``/``build_default_render_items``
+    # directly), so this only ever hides empty optional product
+    # sections from real shoppers, never from a merchant composing a
+    # page. See ``render_service.hide_empty_public_sections``.
+    items = render_service.hide_empty_public_sections(items)
+    return {
+        "uses_universal_shell": False,
+        "storefront_version": None,
+        "storefront_page": None,
+        "page_type": page_type,
+        "layout_header_config": None,
+        "layout_footer_config": None,
+        "store_appearance": None,
+        "mobile_bottom_nav_template": None,
+        # Phase 5: پنج صفحه‌ی محصول/لیست/کالکشن/جستجو/سبد پیش از این
+        # فاز محتوایِ سخت‌کدشده‌ی خودشان را کاملاً مستقل از انتشارِ V2
+        # نشان می‌دادند — این تابع همان تجربه را حفظ می‌کند (نگاه کنید
+        # به build_default_render_items). ``home`` بی‌اثر می‌ماند، چون
+        # صفحه‌ی اصلیِ منتشرنشده از تمپلیتِ کاملاً جداگانه‌ی
+        # ``catalog/home.html`` استفاده می‌کند، نه render_items.
+        "render_items": items,
+        # Phase 2 (Universal Renderer): فهرستِ تخت بالا را به «ردیف‌ها»
+        # گروه‌بندی می‌کند (نگاه کنید به ``render_service.group_items_into_rows``)
+        # — تمپلیت‌های عمومی از این کلید برای رندر واقعی استفاده می‌کنند،
+        # نه ``render_items`` مستقیم (که فقط برای سازگاریِ عقب‌رو/مصرفِ
+        # احتمالیِ دیگر نگه داشته شده).
+        "rows": render_service.group_items_into_rows(items),
+        "render_containers": [],
+        "use_container_layout": False,
+        "top_level_categories": _top_level_categories(store),
+    }
+
+
+def _build_published_shell_context(
+    request, store, version, page, page_type: str, page_context: dict | None,
+) -> dict:
+    """صورتِ ثابتِ «منتشرشده» — مشترک بینِ شش نوعِ صفحه‌یِ واقعی (``page``
+    یک ``StorefrontPage`` واقعی) و صفحاتِ domain-owned با ``shell_only=True``
+    (``page=None``). استخراج‌شده از بدنه‌یِ قدیمیِ تابعِ بالا — بدونِ تغییرِ
+    رفتار برایِ مسیرِ ``page`` واقعی؛ تنها یک اسمبلیِ واحد برایِ هر دو مسیر،
+    نه دو نسخه‌یِ کپی‌شده (نگاه کنید به سندِ معماریِ P5-W4A §۱۱)."""
+    # نگاه کنید به توضیحِ docstringِ تابعِ صدازننده — این تنها نقطه‌ای غیر از
+    # ``home()``یِ قدیمی است که این attribute را ست می‌کند؛ اکنون برایِ هر شش
+    # نوعِ صفحه‌یِ واقعی و هر صفحه‌یِ ``shell_only`` یکسان است.
     request.storefront_appearance_version = version
     # Phase 4 (Task 3C) — the SAME pattern, for the current StorefrontPage,
     # so apps.core.context_processors._versioned_appearance can resolve the
     # Page Appearance tier (Store Global merged with this page's own sparse
     # override) identically for Preview and Public — both routes reach this
     # exact function, so both set this attribute exactly the same way.
+    # P5-W4A: a ``shell_only`` page has no per-page Page Appearance tier of
+    # its own (no ``StorefrontPage`` row backs it), so this is explicitly
+    # ``None`` — never a foreign page's own tier.
     request.storefront_appearance_page = page
 
     # P5-W2 Repair A — resolve the canonical appearance ONCE per request and
@@ -140,17 +189,32 @@ def build_universal_storefront_context(request, store, page_type: str, page_cont
     store_appearance = render_service.resolved_store_appearance_for_request(
         request, version
     )
-    items = render_service.build_page_render_items(
-        page,
-        store,
-        page_context=page_context,
-        store_appearance=store_appearance,
-    )
-    # Acceptance Batch 1 (post-U11) — see the note on the unresolved-store
-    # branch above.
-    items = render_service.hide_empty_public_sections(items)
     header_config = version.effective_header_config()
     footer_config = version.effective_footer_config()
+
+    if page is None:
+        # P5-W4A shell_only: no StorefrontPage row backs this domain-owned
+        # page, so there is nothing to resolve sections for — the domain
+        # view supplies 100% of its own body markup. Never fabricate a page
+        # or borrow another page type's render_items.
+        items: list[dict] = []
+        rows: list[dict] = []
+        render_containers: list[dict] = []
+        use_container_layout = False
+    else:
+        items = render_service.build_page_render_items(
+            page,
+            store,
+            page_context=page_context,
+            store_appearance=store_appearance,
+        )
+        # Acceptance Batch 1 (post-U11) — see the note on the unresolved-store
+        # branch above.
+        items = render_service.hide_empty_public_sections(items)
+        rows = render_service.group_items_into_rows(items)
+        render_containers = render_service.build_container_render_items(page, items)
+        use_container_layout = page.containers.exists()
+
     return {
         "uses_universal_shell": True,
         "storefront_version": version,
@@ -175,8 +239,8 @@ def build_universal_storefront_context(request, store, page_type: str, page_cont
             store_appearance, "bottom_nav", footer_config,
         ),
         "render_items": items,
-        "rows": render_service.group_items_into_rows(items),
-        "render_containers": render_service.build_container_render_items(page, items),
-        "use_container_layout": page.containers.exists(),
+        "rows": rows,
+        "render_containers": render_containers,
+        "use_container_layout": use_container_layout,
         "top_level_categories": _top_level_categories(store),
     }
