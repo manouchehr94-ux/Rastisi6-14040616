@@ -9,7 +9,14 @@
 - **Implementation branch:** `feature/phase5-w4a-public-shell-convergence`, created exactly from the certified checkpoint (`git merge-base` verified).
 - **Runtime:** Python 3.12.3, Django 5.2.17.
 - **First implementation head (independently reviewed):** `73eb41c4860e79b0a786573152387d609d398f7a`.
-- **This document covers the review-repair round** on top of that head, addressing Independent Architect review findings on PR #10 (CRITICAL: 0, IMPORTANT: 4, MINOR: 1, verdict: NOT READY FOR MERGE).
+- **First review-repair head (second independently reviewed):** `acb9b2b5e98e6c88cc9c99698c019267d2c529c4`.
+- **This document covers two review-repair rounds** on top of the first
+  implementation head: round 1 addressed the first Independent Architect
+  review (CRITICAL: 0, IMPORTANT: 4, MINOR: 1, verdict: NOT READY FOR
+  MERGE); round 2 ("final micro-repair") addressed the second Independent
+  Architect re-review (CRITICAL: 0, IMPORTANT: 3, PRODUCTION BLOCKER: 0),
+  which made **zero production-code changes** — see "Final micro-repair
+  round" near the end of this document.
 
 ## What changed (exactly the approved scope)
 
@@ -119,10 +126,37 @@ depends on the Wishlist convergence changes.
 
 ## Focused tests
 
-`apps.storefront_builder.tests.test_w4a_shell_only_context` (6) +
-`apps.customers.tests.test_wishlist_shell_convergence` (11, was 7) +
-`apps.content.tests.test_page_shell_convergence` (9, was 8) = **26 tests,
-all PASS**.
+`apps.storefront_builder.tests.test_w4a_shell_only_context` (**6**, was 6) +
+`apps.customers.tests.test_wishlist_shell_convergence` (**10**, was 7) +
+`apps.content.tests.test_page_shell_convergence` (**9**, was 8) =
+**25 tests** (corrected — a prior draft of this report miscounted Wishlist
+as 11 and the total as 26; the source-verified count, `grep -c "def test_"`
+on each file, is 6 + 10 + 9 = 25).
+
+**Exact-head combined run** (all three modules in one
+`python manage.py test` invocation, as required by the second review
+round): `Found 25 tests` — **`FAILED (errors=2)`**, `real_exit_code=1`.
+Evidence: `25_final_focused_exact_head.txt`. Both errors are
+`RateLimitExceeded` on `apps.storefront_builder.services.layout_service`'s
+`storefront_layout.publish` rate limit (`max_attempts=20, window_seconds=3600`),
+both inside `CmsPageShellConvergenceTwoStoreTests`
+(`test_shell_isolation_between_stores`, `test_store_a_page_404s_on_store_b_host`).
+Root cause: many `setUp()` methods across all three files publish the
+shared compatibility Store (`slug="akhlaghi"`); Django's per-test
+transaction rollback resets the database between tests but does not reset
+the rate-limiter's cache-backed counter, so combining all three modules
+into one process accumulates enough `publish()` calls to exceed the
+20/hour budget partway through — deterministically (re-run twice,
+identical two failing identities both times) and only when these three
+specific modules run together. **This is not a functional defect** in
+Wishlist/CMS Store isolation or shell convergence: every one of these 25
+tests passes when the modules run individually or in the smaller
+combinations already exercised earlier in this branch's history
+(`02_green_task1_shell_only_context.txt` — shell-only, 6/6;
+`21_green_important4_css_link.txt` — Wishlist + CMS combined, 19/19). Per
+the review's own instruction not to modify Django test logic without a
+fresh run proving an actual new defect, no test file was changed for this
+finding — it is disclosed here instead.
 
 ## Regression
 
@@ -137,10 +171,14 @@ process exit status. Corrected, honestly captured with the real exit code:
 - **Certified base** (`5628d6ee31e177d0b4fa1dddad550f894bca540a`, isolated
   `git worktree`, `python manage.py test apps.customers.tests`):
   **74 tests, 3 errors, real_exit_code=1**. Evidence: `17_customers_base_honest.txt`.
-- **Final repaired W4A head** (same command, working tree):
-  **83 tests (74 + 9 new Wishlist-convergence tests), 3 errors,
-  real_exit_code=1**. Evidence: `18_customers_final_honest.txt`.
-- **Error identities, base vs. final — identical, 3/3**:
+- **First repair-round head** (`18_customers_final_honest.txt`, superseded
+  by the exact-head run below — captured before the Wishlist CSS-link test
+  existed): 83 tests, 3 errors, real_exit_code=1.
+- **Exact current head** (`acb9b2b5` + the two IMPORTANT-1/2 repair
+  commits above, same command, working tree): **84 tests (74 base + 10
+  Wishlist-convergence tests), 3 errors, real_exit_code=1**. Evidence:
+  `26_customers_final_exact_head.txt`.
+- **Error identities, base vs. exact-head — identical, 3/3**:
   `test_login_merges_guest_cart`, `test_otp_login_merges_guest_cart`,
   `test_signup_merges_guest_cart` (all `apps.customers.tests.test_auth_views`,
   all `AttributeError: 'NoneType' object has no attribute 'quantity'` — an
@@ -148,8 +186,9 @@ process exit status. Corrected, honestly captured with the real exit code:
   pre-existing on the certified base, not introduced by W4A).
 - **W4A-only customer errors: 0.**
 
-CUSTOMERS REGRESSION: 83 tests, **3 PRE-EXISTING ERRORS**, **0 W4A-ONLY
-ERRORS** (never "2" and never described as PASS).
+CUSTOMERS REGRESSION (exact current head): 84 tests, **3 PRE-EXISTING
+ERRORS**, **0 W4A-ONLY ERRORS** (never described as PASS while those
+historical errors remain).
 
 ### Other regression (unaffected by the repair round's production changes,
 but re-run at the final head for completeness)
@@ -216,7 +255,11 @@ a broad `[class*="header"]` guess):
 - when a Bottom Nav is configured, it is visible/healthy specifically on the
   390px **mobile** viewport (`display !== 'none'` and a nonzero bounding
   rect) per the canonical `@media(max-width:680px)` rule in
-  `storefront_builder.css`, and correctly *not* visible at desktop/tablet;
+  `storefront_builder.css`, and **explicitly asserted hidden** at
+  desktop/tablet (`bottom_nav_visible === (viewport === 'mobile')` —
+  second review round, IMPORTANT 2: the first repair round only asserted
+  the mobile-visible half of this contract and would have silently passed
+  a regression that left the Bottom Nav visible everywhere);
 - the scenario's own domain-state assertion (login prompt / empty state /
   `article.pcard` ProductCard / CMS body text) — now checked at **every**
   viewport, not just desktop.
@@ -255,16 +298,53 @@ pre-fix state. This is not being characterized as acceptable practice; it
 is recorded here factually, and the affected evidence has been corrected
 (see above) rather than left uncorrected or silently re-labeled.
 
-## System / migration gates (final repaired head)
+## Final micro-repair round (second Independent Architect re-review)
 
-- `python --version`: 3.12.3; `django.get_version()`: 5.2.17.
-- `python manage.py check`: 0 issues.
-- `python manage.py makemigrations --check --dry-run`: No changes detected.
-- **Migrations: 0.**
-- `git diff --check`: clean.
-- `git status --short`: clean after the repair-round commits.
+The second re-review of PR #10 (CRITICAL: 0, IMPORTANT: 3, PRODUCTION
+BLOCKER: 0) found no production defects — all three findings were
+evidence/tooling metadata issues, and this round made **zero production
+Python/template changes and zero Django test-file changes**:
 
-Raw evidence: `13_final_repair_repo_gates.txt`.
+- **IMPORTANT 1** — the report's focused/customer counts had drifted from
+  source truth (claimed Wishlist=11/focused=26/customers=83; actual
+  Wishlist=10/focused=25/customers=84 at the current head). Corrected
+  above (see "Focused tests" and "Regression").
+- **IMPORTANT 2** — `w4a_public_shell_qa.mjs`'s `acceptanceContractOk()`
+  never asserted the Bottom Nav is *hidden* on desktop/tablet, only that
+  it's visible on mobile when configured. Fixed (see "Browser QA" above)
+  and re-run: 12/12 PASS for both templates, with `bottom_nav_visible`
+  explicitly checked `false` at desktop/tablet and `true` at mobile.
+- **IMPORTANT 3** — the final "clean" evidence file
+  (`13_final_repair_repo_gates.txt`) was captured mid-round and its own
+  embedded `git status --short` output lists many pending files, so it
+  does not actually prove a clean final tree. `13_final_repair_repo_gates.txt`
+  is kept as historical repair-round evidence (not deleted or rewritten);
+  a new, genuinely-final evidence file —
+  `27_final_clean_status.txt` — records the clean state at the exact head
+  immediately before that evidence file's own commit (see below).
+
+Per this round's explicit instruction, the previously-captured full
+`apps.storefront_builder.tests` suite result (`22_full_storefront_builder_suite_final.txt`
+— 3216 tests, 30 failures, 2 errors, 4 skipped, W4A-only failures = 0,
+changed pre-existing failure reasons = 0) was **reused, not re-run**,
+since this round changed only QA tooling and evidence/docs/PR metadata —
+no production Python/template file and no Django test file changed.
+
+## System / migration gates
+
+- **First repair round** (head `acb9b2b5`): `python manage.py check`: 0
+  issues. `makemigrations --check --dry-run`: No changes detected.
+  Migrations: 0. `git diff --check`: clean. Raw evidence:
+  `13_final_repair_repo_gates.txt` (historical — see IMPORTANT 3 above for
+  why it doesn't prove a clean *final* tree by itself).
+- **Final micro-repair round** (genuinely final clean check, captured
+  immediately before its own evidence-only commit): see
+  `27_final_clean_status.txt` for the exact HEAD checked, `python
+  --version`/`django.get_version()`, `git status --short` (no output),
+  `git diff --check` (clean), `manage.py check` (0 issues), and
+  `makemigrations --check --dry-run` (no changes detected).
+- **Migrations: 0** (both rounds; unchanged from the original
+  implementation).
 
 ## Architecture / duplication gate (re-confirmed after the repair round)
 
