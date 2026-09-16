@@ -37,8 +37,17 @@
 // Usage: node w4a_public_shell_qa.mjs <manifest.json>
 //   manifest: {
 //     origin, populated_session, empty_session, cms_slug, report_dir,
-//     expect_bottom_nav: bool  // true for dark_digital (luxury_floating_cart),
-//                               // false for warm_boutique (hidden)
+//     expect_bottom_nav: bool  // whether THIS Store's actually-applied
+//                               // mobile_nav_variant (read back from the
+//                               // published layout by the QA setup script,
+//                               // never assumed from the literal preset-
+//                               // registry key) resolved to something other
+//                               // than "hidden" -- both dark_digital and
+//                               // warm_boutique can resolve true here, since
+//                               // a Ready Template's structural-DNA token is
+//                               // translated through the Store Appearance
+//                               // manifest, not matched string-for-string
+//                               // against the preset definition.
 //   }
 
 import fs from 'node:fs';
@@ -203,8 +212,12 @@ function acceptanceContractOk(status, vp) {
   const okFooterNoDup = status.footer_count === 1;
   const expectedBottomNavCount = EXPECT_BOTTOM_NAV ? 1 : 0;
   const okBottomNavCount = status.bottom_nav_count === expectedBottomNavCount;
-  const okBottomNavVisible =
-    !(EXPECT_BOTTOM_NAV && vp.name === 'mobile') || status.bottom_nav_visible === true;
+  // When a Bottom Nav is configured it must be visible on mobile AND hidden
+  // on desktop/tablet (storefront_builder.css's own @media(max-width:680px)
+  // rule); when none is configured there is nothing to check here (count
+  // above already requires 0, so bottom_nav_visible stays null).
+  const okBottomNavVisible = !EXPECT_BOTTOM_NAV
+    || status.bottom_nav_visible === (vp.name === 'mobile');
   return okStatus && okRtl && okOverflow && okHeaderNoDup && okFooterNoDup
     && okBottomNavCount && okBottomNavVisible;
 }

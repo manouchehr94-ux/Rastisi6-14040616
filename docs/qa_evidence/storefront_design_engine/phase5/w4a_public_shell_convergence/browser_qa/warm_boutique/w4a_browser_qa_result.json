@@ -1,5 +1,5 @@
 {
-  "started_at": "2026-09-16T12:42:18.879Z",
+  "started_at": "2026-09-16T14:11:12.726Z",
   "origin": "http://127.0.0.1:8000",
   "expect_bottom_nav": true,
   "viewports": {
@@ -177,5 +177,5 @@
   "console_errors": [],
   "failed_requests": [],
   "overall": "PASS",
-  "finished_at": "2026-09-16T12:42:30.694Z"
+  "finished_at": "2026-09-16T14:11:24.391Z"
 }
