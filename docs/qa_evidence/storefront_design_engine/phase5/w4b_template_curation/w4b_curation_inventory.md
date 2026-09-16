@@ -535,18 +535,37 @@ necessarily per-template and is recorded in §15's implementation matrix.
 
 ## 15. Final implementation matrix — resolves Independent Architect Review round-3 §3A/3B
 
-**Placement rule (removes all implementation-time ordering discretion):**
-every addition is **appended as the last entry** in the template's Home
-composition. This mirrors the existing, already-certified pattern the
-catalog's own richest recipes already use for their extra distinguishing
-sections — `dense_marketplace` appends `brand_carousel` then `testimonials`
-after its `catalog_product_wall`+`trust_features` core;
-`ferdowsi_department` appends `brand_carousel` then `trust_features` after
-its `featured_products`+`product_grid` core; `anniversary_mosaic` appends
-`testimonials` then `newsletter` after its `catalog_product_wall` core.
-Appending, not inserting mid-sequence, is the established convention for
-"one more distinguishing block on top of the core hero→categories→products
-flow" — no new ordering rule is invented.
+**Placement rule, corrected in the newsletter-order micro repair (removes
+all implementation-time ordering discretion) — supersedes the "every
+addition is appended as the last entry" statement previously here, which
+was not, in fact, the catalog's actual convention:**
+
+Checking the certified composition tokens of every existing recipe whose
+Home ends in `"newsletter"` (12 of them: `warm_boutique`, `dark_digital`,
+`playful_lifestyle`, `pixel_play`, `niloufar_glass`, `green_workshop`,
+`beauty_dew`, `laleh_play`, `almas_luxury`, `pine_eco`, `mirror_beauty`,
+`anniversary_mosaic`) shows `newsletter` is consistently the catalog's own
+terminal Home block wherever it is present — never followed by another
+section. `newsletter` renders an email-subscription CTA/form; moving a
+discovery/merchandising block after it would turn an established terminal
+CTA into a mid-page block, which no existing recipe does.
+
+- **If the key's certified composition ends in `"newsletter"`:** the
+  W4B-added token is inserted **immediately before** `"newsletter"`;
+  `newsletter` remains the final Home section. Applies to 7 of the 21
+  curated keys: `niloufar_glass`, `beauty_dew`, `laleh_play`,
+  `almas_luxury`, `green_workshop`, `pine_eco`, `mirror_beauty`.
+- **For every other curated key** (no `newsletter` in its composition):
+  the W4B-added token is appended as the last entry — this mirrors the
+  existing, already-certified pattern the catalog's own richest recipes
+  use for their extra distinguishing sections — `dense_marketplace`
+  appends `brand_carousel` then `testimonials` after its
+  `catalog_product_wall`+`trust_features` core; `ferdowsi_department`
+  appends `brand_carousel` then `trust_features` after its
+  `featured_products`+`product_grid` core. Applies to the other 14
+  curated keys, including `harbor_imports` (C10).
+
+No other reordering of existing content in either branch.
 
 All 21 curated keys are currently version `"1"`; every one bumps to
 version `"2"` (none of the 21 collides with an already-versioned key —
@@ -554,7 +573,7 @@ version `"2"` (none of the 21 collides with an already-versioned key —
 `dark_digital`, `fashion_promo_catalog`, `playful_lifestyle`,
 `utility_catalog` are not in this proposal).
 
-| # | Key | Old→New ver | Old composition tokens (exact, from certified `_SPECS`) | New composition tokens (appended token in **bold**) | Old Home section_key sequence | New Home section_key sequence | Mechanism | Fixture dependency |
+| # | Key | Old→New ver | Old composition tokens (exact, from certified `_SPECS`) | New composition tokens (**bold** = W4B-added token; position per the corrected placement rule above) | Old Home section_key sequence | New Home section_key sequence | Mechanism | Fixture dependency |
 |---|---|---|---|---|---|---|---|---|
 | 1 | `premium_leather_noir` | 1→2 | `("hero","arch_categories","product_grid","brand_story")` | `(..., "brand_story", **"brands"**)` | hero_banner→category_grid→product_section→image_text | + brand_carousel | brand_carousel | ≥1 active Brand |
 | 2 | `artisan_grain` | 1→2 | `("hero","indexed_categories","product_grid","brand_story")` | `(..., **"collection_tiles"**)` | hero_banner→category_grid→product_section→image_text | + collection_tiles | collection_tiles | ≥1 active MerchantCollection |
@@ -566,13 +585,13 @@ version `"2"` (none of the 21 collides with an already-versioned key —
 | 8 | `city_classic` | 1→2 | `("hero","circular_categories","product_grid","brand_story")` | `(..., **"collection_tiles"**)` | hero_banner→category_grid→product_section→image_text | + collection_tiles | collection_tiles | ≥1 active MerchantCollection |
 | 9 | `kamand_artisan` | 1→2 | `("hero","indexed_categories","product_grid","brand_story")` | `(..., **"community_gallery"**)` | hero_banner→category_grid→product_section→image_text | + story_rail | story_rail | ≥1 active StoryRailItem |
 | 10 | `parnian_editorial` | 1→2 | `("hero","arch_categories","product_grid","brand_story")` | `(..., **"community_gallery"**)` | hero_banner→category_grid→product_section→image_text | + story_rail | story_rail | ≥1 active StoryRailItem |
-| 11 | `niloufar_glass` | 1→2 | `("hero","circular_categories","product_grid","newsletter")` | `(..., **"collection_tiles"**)` | hero_banner→category_grid→product_section→newsletter | + collection_tiles | collection_tiles | ≥1 active MerchantCollection |
-| 12 | `beauty_dew` | 1→2 | `("hero","circular_categories","product_rail","newsletter")` | `(..., **"community_gallery"**)` | hero_banner→category_grid→product_section→newsletter | + story_rail | story_rail | ≥1 active StoryRailItem |
-| 13 | `laleh_play` | 1→2 | `("hero","chip_categories","product_grid","newsletter")` | `(..., **"brands"**)` | hero_banner→category_grid→product_section→newsletter | + brand_carousel | brand_carousel | ≥1 active Brand |
-| 14 | `almas_luxury` | 1→2 | `("hero","circular_categories","product_grid","newsletter")` | `(..., **"community_gallery"**)` | hero_banner→category_grid→product_section→newsletter | + story_rail | story_rail | ≥1 active StoryRailItem |
-| 15 | `green_workshop` | 1→2 | `("hero","tile_categories","product_grid","brand_story","newsletter")` | `(..., "newsletter", **"brands"**)` | hero_banner→category_grid→product_section→image_text→newsletter | + brand_carousel | brand_carousel | ≥1 active Brand |
-| 16 | `pine_eco` | 1→2 | `("hero","tile_categories","product_grid","brand_story","newsletter")` | `(..., "newsletter", **"collection_tiles"**)` | hero_banner→category_grid→product_section→image_text→newsletter | + collection_tiles | collection_tiles | ≥1 active MerchantCollection |
-| 17 | `mirror_beauty` | 1→2 | `("hero","circular_categories","product_grid","brand_story","newsletter")` | `(..., "newsletter", **"community_gallery"**)` | hero_banner→category_grid→product_section→image_text→newsletter | + story_rail | story_rail | ≥1 active StoryRailItem |
+| 11 | `niloufar_glass` | 1→2 | `("hero","circular_categories","product_grid","newsletter")` | `("hero","circular_categories","product_grid",` **`"collection_tiles"`**`,"newsletter")` | hero_banner→category_grid→product_section→newsletter | hero_banner→category_grid→product_section→**collection_tiles**→newsletter | collection_tiles | ≥1 active MerchantCollection |
+| 12 | `beauty_dew` | 1→2 | `("hero","circular_categories","product_rail","newsletter")` | `("hero","circular_categories","product_rail",` **`"community_gallery"`**`,"newsletter")` | hero_banner→category_grid→product_section→newsletter | hero_banner→category_grid→product_section→**story_rail**→newsletter | story_rail | ≥1 active StoryRailItem |
+| 13 | `laleh_play` | 1→2 | `("hero","chip_categories","product_grid","newsletter")` | `("hero","chip_categories","product_grid",` **`"brands"`**`,"newsletter")` | hero_banner→category_grid→product_section→newsletter | hero_banner→category_grid→product_section→**brand_carousel**→newsletter | brand_carousel | ≥1 active Brand |
+| 14 | `almas_luxury` | 1→2 | `("hero","circular_categories","product_grid","newsletter")` | `("hero","circular_categories","product_grid",` **`"community_gallery"`**`,"newsletter")` | hero_banner→category_grid→product_section→newsletter | hero_banner→category_grid→product_section→**story_rail**→newsletter | story_rail | ≥1 active StoryRailItem |
+| 15 | `green_workshop` | 1→2 | `("hero","tile_categories","product_grid","brand_story","newsletter")` | `("hero","tile_categories","product_grid","brand_story",` **`"brands"`**`,"newsletter")` | hero_banner→category_grid→product_section→image_text→newsletter | hero_banner→category_grid→product_section→image_text→**brand_carousel**→newsletter | brand_carousel | ≥1 active Brand |
+| 16 | `pine_eco` | 1→2 | `("hero","tile_categories","product_grid","brand_story","newsletter")` | `("hero","tile_categories","product_grid","brand_story",` **`"collection_tiles"`**`,"newsletter")` | hero_banner→category_grid→product_section→image_text→newsletter | hero_banner→category_grid→product_section→image_text→**collection_tiles**→newsletter | collection_tiles | ≥1 active MerchantCollection |
+| 17 | `mirror_beauty` | 1→2 | `("hero","circular_categories","product_grid","brand_story","newsletter")` | `("hero","circular_categories","product_grid","brand_story",` **`"community_gallery"`**`,"newsletter")` | hero_banner→category_grid→product_section→image_text→newsletter | hero_banner→category_grid→product_section→image_text→**story_rail**→newsletter | story_rail | ≥1 active StoryRailItem |
 | 18 | `cedar_home` | 1→2 | `("hero","tile_categories","product_grid","trust_features")` | `(..., **"collection_tiles"**)` | hero_banner→category_grid→product_section→trust_features | + collection_tiles | collection_tiles | ≥1 active MerchantCollection |
 | 19 | `simorgh_market` | 1→2 | `("hero","circular_categories","product_grid","trust_features")` | `(..., **"brands"**)` | hero_banner→category_grid→product_section→trust_features | + brand_carousel | brand_carousel | ≥1 active Brand |
 | 20 | `rayan_tech` | 1→2 | `("hero","tile_categories","product_grid","service_strip")` | `(..., **"community_gallery"**)` | hero_banner→category_grid→product_section→trust_features | + story_rail | story_rail | ≥1 active StoryRailItem |
@@ -588,3 +607,26 @@ below was assigned a mechanism to balance a count.
 Per-template identity rationale (why mechanism 6 in §14 is satisfied) and
 interactive-behavior/non-redundancy notes are in the design spec §8's
 matrix, cross-referenced to this table by key.
+
+## 16. Newsletter-terminal ordering contract (newsletter-order micro repair)
+
+**New implementation acceptance requirement:** for every latest Ready
+Template whose composition contains `newsletter`, `newsletter` must
+remain the final Home section. At minimum, test the 7 W4B-curated
+newsletter recipes in row 11–17 above:
+
+```python
+NEWSLETTER_TERMINAL_CURATED_KEYS = (
+    "niloufar_glass", "beauty_dew", "laleh_play", "almas_luxury",
+    "green_workshop", "pine_eco", "mirror_beauty",
+)
+
+def test_newsletter_stays_the_final_home_section(self):
+    for key in NEWSLETTER_TERMINAL_CURATED_KEYS:
+        preset = lpr.get_layout_preset(key)
+        with self.subTest(key=key):
+            self.assertEqual(preset.pages["home"][-1].section_key, "newsletter")
+```
+
+Ordering contract only — `newsletter`'s own section code/behavior is not
+touched by this repair or by W4B.

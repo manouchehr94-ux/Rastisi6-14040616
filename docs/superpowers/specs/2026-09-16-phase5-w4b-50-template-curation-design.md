@@ -133,39 +133,64 @@ QA/setup data, never written into `a8_ready_templates.py`.
 
 ## 8. Final implementation matrix — resolves §3A/§3B (exact order, exact version map, per-template identity rationale)
 
-**Placement rule:** every addition is **appended as the last entry** in
-the Home composition — the same convention the catalog's own richest
-existing recipes already use (`dense_marketplace` appends
-`brand_carousel`→`testimonials` after its core; `ferdowsi_department`
-appends `brand_carousel`→`trust_features`; `anniversary_mosaic` appends
-`testimonials`→`newsletter`). No new ordering rule; no
-implementation-time discretion — the exact resulting token tuple for
-every key is in companion inventory §15's table. **Version map: all 21
-keys are currently `"1"`; all 21 bump to `"2"`.**
+**Placement rule, corrected this round (was: "every addition is appended
+as the last entry" — that statement is removed; it was not, in fact, the
+catalog's actual convention):**
 
-| Key | Mechanism | Identity rationale | Non-redundant because | Merchant-neutral because | Interactive behavior |
-|---|---|---|---|---|---|
-| `premium_leather_noir` (زر) | `brand_carousel` | Luxury leather boutique showcasing the brands it carries — standard retail pattern for this vertical. | No `brand_carousel` anywhere in its current composition; distinct from `hero_banner`/`category_grid`/`product_section`/`image_text`. | Renders only the Store's own real `Brand` rows; no static copy. | Real link to `catalog:product-list?brand=slug`. |
-| `artisan_grain` (دانه) | `collection_tiles` | Organic/artisan product-collection showcase. | No `collection_tiles` present; distinct rendered layout (`.pcard`/`grid g4`) from anything else in the recipe. | Renders only real `MerchantCollection` rows. | Real link to `catalog:collection-detail`. |
-| `coastal_product` (موج) | `collection_tiles` | Coastal-lifestyle "resort/swim collection" showcase. | Same as above. | Same as above. | Same as above. |
-| `handmade_luxe` (چرم دست) | `brand_carousel` | Handcraft-leather multi-brand boutique pattern. | Same reasoning as `premium_leather_noir`. | Same as above. | Same as above. |
-| `watchmaker_round` (ساعت‌ساز) | `brand_carousel` | Multi-brand watch boutique — the standard retail pattern for this vertical. | Same reasoning. | Same as above. | Same as above. |
-| `horizon_story` (افق) | `story_rail` | "Story"-named template gets a highlight rail — the strongest single nominal fit in the catalog. | No `story_rail` present; distinct circular-avatar-rail layout. | Renders only real `StoryRailItem` rows or nothing; no static copy. | `{% resolve_destination_item %}`; a safe non-link, never a placeholder, when a story has no destination. |
-| `silk_editorial` (ابریشم) | `collection_tiles` | Silk collections presented as a curated tile set. | No `collection_tiles` present. | Same as artisan_grain. | Same as artisan_grain. |
-| `city_classic` (شهر) | `collection_tiles` | Generalist "classic" retailer's seasonal collection showcase. | No `collection_tiles` present. | Same as above. | Same as above. |
-| `kamand_artisan` (کمند) | `story_rail` | Artisan-process highlight rail. | No `story_rail` present. | Same as horizon_story. | Same as horizon_story. |
-| `parnian_editorial` (پرنیان) | `story_rail` | Editorial highlight rail. | No `story_rail` present. | Same as above. | Same as above. |
-| `niloufar_glass` (نیلوفر) | `collection_tiles` | Beauty product-line collection showcase. | No `collection_tiles` present. | Same as above. | Same as above. |
-| `beauty_dew` (شبنم) | `story_rail` | Beauty "get the look" highlight rail. | No `story_rail` present. | Same as above. | Same as above. |
-| `laleh_play` (لاله‌زار) | `brand_carousel` | Playful/floral multi-brand retailer pattern. | No `brand_carousel` present. | Same as premium_leather_noir. | Same as above. |
-| `almas_luxury` (الماس) | `story_rail` | Short luxury highlight rail. | No `story_rail` present. | Same as above. | Same as above. |
-| `green_workshop` (سبزه) | `brand_carousel` | Eco brand's own sustainable-partner-brand showcase; also widens the identity gap from `pine_eco` (both eco-themed — see round-1 overlap note). | No `brand_carousel` present. | Same as above. | Same as above. |
-| `pine_eco` (کاج) | `collection_tiles` | Eco product-collection showcase — deliberately a *different* mechanism from `green_workshop`'s, per the overlap note. | No `collection_tiles` present. | Same as above. | Same as above. |
-| `mirror_beauty` (آینه) | `story_rail` | Beauty "get the look" highlight rail. | No `story_rail` present. | Same as above. | Same as above. |
-| `cedar_home` (سدر) | `collection_tiles` | Furniture/home retailers organize by "room collections" — standard pattern. | No `collection_tiles` present (existing `trust_features` at the tail is untouched/kept, per §5's scope limit). | Same as above. | Same as above. |
-| `simorgh_market` (سیمرغ) | `brand_carousel` | Marketplaces conventionally feature a multi-brand carousel. | No `brand_carousel` present. | Same as above. | Same as above. |
-| `rayan_tech` (رایان) | `story_rail` | Tech-highlights rail. | No `story_rail` present. | Same as above. | Same as above. |
-| `harbor_imports` (بندر — "harbor/imports") | `brand_carousel` | The single strongest nominal fit in the catalog: imported goods are conventionally presented by the brands that make them. Also structurally separates C10 from `tower_department` (§9). | No `brand_carousel` present (existing `trust_features` at the tail is untouched/kept). | Same as above. | Same as above. |
+- **If the key's certified composition already ends in `"newsletter"`**
+  (12 existing catalog recipes do this today, confirmed at the certified
+  W4A checkpoint — `warm_boutique`, `dark_digital`, `playful_lifestyle`,
+  `pixel_play`, `niloufar_glass`, `green_workshop`, `beauty_dew`,
+  `laleh_play`, `almas_luxury`, `pine_eco`, `mirror_beauty`,
+  `anniversary_mosaic`), the rendered `newsletter` section is an
+  email-subscription CTA/form and is consistently the catalog's own
+  terminal Home block wherever it appears. The W4B-added token is
+  inserted **immediately before** `"newsletter"`; `newsletter` stays the
+  final Home section. Moving another discovery/merchandising block after
+  it would turn an established terminal CTA into a mid-page block, which
+  is not what any existing recipe does.
+- **For every other curated key** (no `newsletter` in its composition),
+  the W4B-added token is appended as the last entry — unchanged from the
+  prior round, still consistent with how `dense_marketplace`
+  (`brand_carousel`→`testimonials`), `ferdowsi_department`
+  (`brand_carousel`→`trust_features`), and `harbor_imports`'s own existing
+  tail (`...→trust_features`, now `→brand_carousel`) already compose their
+  extra distinguishing blocks.
+
+No other reordering of existing content. The exact resulting token tuple
+for every key is in companion inventory §15's table (updated this round
+for the 7 newsletter-terminal keys below). **Version map: all 21 keys are
+currently `"1"`; all 21 bump to `"2"`** (unchanged).
+
+| Key | Mechanism | Position | Identity rationale | Non-redundant because | Merchant-neutral because | Interactive behavior |
+|---|---|---|---|---|---|---|
+| `premium_leather_noir` (زر) | `brand_carousel` | append at end | Luxury leather boutique showcasing the brands it carries — standard retail pattern for this vertical. | No `brand_carousel` anywhere in its current composition; distinct from `hero_banner`/`category_grid`/`product_section`/`image_text`. | Renders only the Store's own real `Brand` rows; no static copy. | Real link to `catalog:product-list?brand=slug`. |
+| `artisan_grain` (دانه) | `collection_tiles` | append at end | Organic/artisan product-collection showcase. | No `collection_tiles` present; distinct rendered layout (`.pcard`/`grid g4`) from anything else in the recipe. | Renders only real `MerchantCollection` rows. | Real link to `catalog:collection-detail`. |
+| `coastal_product` (موج) | `collection_tiles` | append at end | Coastal-lifestyle "resort/swim collection" showcase. | Same as above. | Same as above. | Same as above. |
+| `handmade_luxe` (چرم دست) | `brand_carousel` | append at end | Handcraft-leather multi-brand boutique pattern. | Same reasoning as `premium_leather_noir`. | Same as above. | Same as above. |
+| `watchmaker_round` (ساعت‌ساز) | `brand_carousel` | append at end | Multi-brand watch boutique — the standard retail pattern for this vertical. | Same reasoning. | Same as above. | Same as above. |
+| `horizon_story` (افق) | `story_rail` | append at end | "Story"-named template gets a highlight rail — the strongest single nominal fit in the catalog. | No `story_rail` present; distinct circular-avatar-rail layout. | Renders only real `StoryRailItem` rows or nothing; no static copy. | `{% resolve_destination_item %}`; a safe non-link, never a placeholder, when a story has no destination. |
+| `silk_editorial` (ابریشم) | `collection_tiles` | append at end | Silk collections presented as a curated tile set. | No `collection_tiles` present. | Same as artisan_grain. | Same as artisan_grain. |
+| `city_classic` (شهر) | `collection_tiles` | append at end | Generalist "classic" retailer's seasonal collection showcase. | No `collection_tiles` present. | Same as above. | Same as above. |
+| `kamand_artisan` (کمند) | `story_rail` | append at end | Artisan-process highlight rail. | No `story_rail` present. | Same as horizon_story. | Same as horizon_story. |
+| `parnian_editorial` (پرنیان) | `story_rail` | append at end | Editorial highlight rail. | No `story_rail` present. | Same as above. | Same as above. |
+| `niloufar_glass` (نیلوفر) | `collection_tiles` | **immediately before `newsletter`** | Beauty product-line collection showcase. | No `collection_tiles` present. | Same as above. | Same as above. |
+| `beauty_dew` (شبنم) | `story_rail` | **immediately before `newsletter`** | Beauty "get the look" highlight rail. | No `story_rail` present. | Same as above. | Same as above. |
+| `laleh_play` (لاله‌زار) | `brand_carousel` | **immediately before `newsletter`** | Playful/floral multi-brand retailer pattern. | No `brand_carousel` present. | Same as premium_leather_noir. | Same as above. |
+| `almas_luxury` (الماس) | `story_rail` | **immediately before `newsletter`** | Short luxury highlight rail. | No `story_rail` present. | Same as above. | Same as above. |
+| `green_workshop` (سبزه) | `brand_carousel` | **immediately before `newsletter`** | Eco brand's own sustainable-partner-brand showcase; also widens the identity gap from `pine_eco` (both eco-themed — see round-1 overlap note). | No `brand_carousel` present. | Same as above. | Same as above. |
+| `pine_eco` (کاج) | `collection_tiles` | **immediately before `newsletter`** | Eco product-collection showcase — deliberately a *different* mechanism from `green_workshop`'s, per the overlap note. | No `collection_tiles` present. | Same as above. | Same as above. |
+| `mirror_beauty` (آینه) | `story_rail` | **immediately before `newsletter`** | Beauty "get the look" highlight rail. | No `story_rail` present. | Same as above. | Same as above. |
+| `cedar_home` (سدر) | `collection_tiles` | append at end | Furniture/home retailers organize by "room collections" — standard pattern. | No `collection_tiles` present (existing `trust_features` at the tail is untouched/kept, per §5's scope limit). | Same as above. | Same as above. |
+| `simorgh_market` (سیمرغ) | `brand_carousel` | append at end | Marketplaces conventionally feature a multi-brand carousel. | No `brand_carousel` present. | Same as above. | Same as above. |
+| `rayan_tech` (رایان) | `story_rail` | append at end | Tech-highlights rail. | No `story_rail` present. | Same as above. | Same as above. |
+| `harbor_imports` (بندر — "harbor/imports") | `brand_carousel` | append at end | The single strongest nominal fit in the catalog: imported goods are conventionally presented by the brands that make them. Also structurally separates C10 from `tower_department` (§9). | No `brand_carousel` present (existing `trust_features` at the tail is untouched/kept). | Same as above. | Same as above. |
+
+**7 keys use the corrected "immediately before `newsletter`" position:**
+`niloufar_glass`, `beauty_dew`, `laleh_play`, `almas_luxury`,
+`green_workshop`, `pine_eco`, `mirror_beauty`. The other 14 curated keys
+(including `harbor_imports`/C10) are unchanged from round 3 — their
+mechanism, version bump, and append-at-end position all stand.
 
 ## 9. C10 — kept active (resolves §6's requirement, unchanged decision from round 2)
 
@@ -316,20 +341,33 @@ functionally sound for every template they're assigned to.
 16. Latest-vs-historical visible comparison under identical fixture
     content, per curated template.
 17. Exact final Home order verified against §8/companion inventory §15's
-    matrix — the appended token is the *last* entry, nothing reordered.
-18. Full `apps.storefront_builder.tests` regression vs. the certified W4A
+    matrix — for the 14 non-newsletter curated keys (+ `harbor_imports`),
+    the appended token is the *last* entry; for the 7 newsletter-terminal
+    curated keys, the appended token is the second-to-last entry and
+    `newsletter` is still the last, nothing else reordered.
+18. **Newsletter-terminal ordering contract (new this round):** for every
+    latest Ready Template whose composition contains `newsletter`
+    (at minimum the 7 W4B-curated newsletter recipes — `niloufar_glass`,
+    `beauty_dew`, `laleh_play`, `almas_luxury`, `green_workshop`,
+    `pine_eco`, `mirror_beauty`), assert
+    `preset.pages["home"][-1].section_key == "newsletter"`. Ordering
+    contract only — `newsletter`'s own section code is not touched.
+19. Full `apps.storefront_builder.tests` regression vs. the certified W4A
     baseline (3216/30F/2E/4skip) — W4B-only failure/error identities = 0;
     changed historical failure reasons = 0.
-19. `python manage.py check` — clean.
-20. `python manage.py makemigrations --check --dry-run` — "No changes
+20. `python manage.py check` — clean.
+21. `python manage.py makemigrations --check --dry-run` — "No changes
     detected."
-21. `git diff --check` — clean.
+22. `git diff --check` — clean.
 
 ## 17. Open questions for the Product Owner
 
 **None.** Both round-3 findings were settled by reading the actual
 rendered `.html` files byte-for-byte; the resulting reassignment uses only
 mechanisms already fully vetted in round 2 (`collection_tiles`,
-`story_rail`, `brand_carousel`), and the exact-order/version-map
-requirement is satisfied by the append-only placement rule and the
+`story_rail`, `brand_carousel`); this micro-repair's newsletter-terminal
+placement fix was settled by reading the certified composition tokens of
+all 12 existing newsletter-terminal recipes directly. The exact-order/
+version-map requirement is satisfied by the corrected two-branch
+placement rule (§8) and the
 explicit 1→2 version map in §8/companion inventory §15.
