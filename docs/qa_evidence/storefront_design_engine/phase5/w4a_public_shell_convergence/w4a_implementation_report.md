@@ -11,7 +11,8 @@
 - **First implementation head (independently reviewed):** `73eb41c4860e79b0a786573152387d609d398f7a`.
 - **First review-repair head (second independently reviewed):** `acb9b2b5e98e6c88cc9c99698c019267d2c529c4`.
 - **Second review-repair head (third independently reviewed):** `4e1e7d6bb796dea5e3921609f3c160c71ab30075`.
-- **This document covers three review-repair rounds** on top of the first
+- **Third review-repair head (fourth independently reviewed):** `e321b1bc4bc376c0dd17e90e3df100212ed858a0`.
+- **This document covers four review-repair rounds** on top of the first
   implementation head: round 1 addressed the first Independent Architect
   review (CRITICAL: 0, IMPORTANT: 4, MINOR: 1, verdict: NOT READY FOR
   MERGE); round 2 ("final micro-repair") addressed the second Independent
@@ -19,8 +20,11 @@
   which made **zero production-code changes**; round 3 ("test-isolation
   repair") addressed the third Independent Architect re-review (CRITICAL:
   0, IMPORTANT: 1, PRODUCTION BLOCKER: 0), which made **zero production
-  code changes and zero rate-limit code changes** — see "Test-isolation
-  repair round" near the end of this document.
+  code changes and zero rate-limit code changes**; round 4 ("exact-head
+  regression refresh") addressed the fourth Independent Architect
+  re-review (CRITICAL: 0, IMPORTANT: 1, PRODUCTION BLOCKER: 0), which
+  made **zero `apps/`/`tools/` changes at all** (evidence/docs only) — see
+  "Exact-head regression refresh round" near the end of this document.
 
 ## What changed (exactly the approved scope)
 
@@ -214,7 +218,9 @@ but re-run at the final head for completeness)
   the `cart_badge` fix): **232 tests, 3 errors** (the same 3 pre-existing
   identities above), real_exit_code=1. Evidence:
   `16_green_cart_customers_after_important1.txt`.
-- `apps.content.tests` (final head): see `23_full_content_regression_final.txt`.
+- `apps.content.tests` (round 1 head): see `23_full_content_regression_final.txt`
+  — **superseded by round 4**'s exact-head re-run, `31_content_full_exact_head.txt`
+  (see "Exact-head regression refresh round" below).
 - `apps.storefront_builder.tests.test_page_shell` + `test_render_service`:
   **147 tests, OK** (1 pre-existing skip). Evidence: `02_green_task1_shell_only_context.txt`.
 - `apps.stores.tests.test_resolution` + catalog/cart shell-adjacent suites
@@ -223,10 +229,12 @@ but re-run at the final head for completeness)
   Evidence: `10_regression_shell_render_tenant_catalog_cart.txt`.
 - `apps.catalog.tests` + `apps.cart.tests` (full, pre-repair-round head):
   **1007 tests, OK**. Evidence: `11_full_catalog_cart_regression.txt`.
-- `apps.storefront_builder.tests` (full, **re-run at the final repaired
-  production head** per the review's explicit instruction not to reuse
-  pre-repair evidence): **3216 tests, 30 failures, 2 errors, 4 skipped**
-  (real_exit_code=1). Evidence: `22_full_storefront_builder_suite_final.txt`.
+- `apps.storefront_builder.tests` (full, round 1 head): **3216 tests, 30
+  failures, 2 errors, 4 skipped** (real_exit_code=1). Evidence:
+  `22_full_storefront_builder_suite_final.txt` — **superseded by round 4**'s
+  exact-head re-run, `32_full_storefront_builder_exact_head.txt` (this
+  file changed in round 3, so the round-1 capture was no longer exact-head
+  evidence; see "Exact-head regression refresh round" below).
 
 ## Full-suite base comparison (refreshed at the final repaired head)
 
@@ -399,11 +407,41 @@ identities as every prior run — `test_login_merges_guest_cart`,
 `test_otp_login_merges_guest_cart`, `test_signup_merges_guest_cart`.
 **W4A-only customer errors: 0.**
 
-Per this round's explicit instruction, the full `apps.storefront_builder.tests`
-suite (`22_full_storefront_builder_suite_final.txt`) and Browser QA
-(`browser_qa/dark_digital/`, `browser_qa/warm_boutique/`) were **reused,
-not re-run** — this round changed no production code, no
-`storefront_builder` test code, no templates, and no QA runner.
+Round 3 changed ONLY W4A test-fixture code in the three focused test
+modules listed above (one of which —
+`apps/storefront_builder/tests/test_w4a_shell_only_context.py` — lives
+inside `apps.storefront_builder.tests`); production code, templates, and
+the QA runner remained unchanged. Because that file changed, the
+previously-captured full `apps.storefront_builder.tests` result
+(`22_full_storefront_builder_suite_final.txt`) and the full
+`apps.content.tests` result were no longer exact-head evidence — both
+were refreshed before merge approval in the "Exact-head regression
+refresh round" below. Browser QA was reused unchanged (it exercises the
+live templates/production code, none of which this round touched).
+
+## Exact-head regression refresh round (fourth Independent Architect re-review)
+
+The fourth re-review of PR #10 (CRITICAL: 0, IMPORTANT: 1, PRODUCTION
+BLOCKER: 0) accepted the test-isolation repair itself (25/25 focused OK,
+customer regression unchanged, Browser QA accepted, production code
+unchanged) but flagged that the previously-reused full
+`apps.storefront_builder.tests` and `apps.content.tests` results predated
+round 3's modification to
+`apps/storefront_builder/tests/test_w4a_shell_only_context.py`, so they
+could no longer be described as exact-head evidence. This round made
+**zero changes under `apps/` or `tools/`** — evidence/docs refresh only.
+
+**`apps.content.tests` at the exact current head**
+(`31_content_full_exact_head.txt`): **467 tests, OK**, `real_exit_code=0`.
+
+**`apps.storefront_builder.tests` (full) at the exact current head**
+(`32_full_storefront_builder_exact_head.txt`): **3216 tests, 30 failures,
+2 errors, 4 skipped**, `real_exit_code=1`. Base comparison
+(`33_full_suite_exact_head_base_comparison.md`) against the certified
+checkpoint's own already-verified W3 evidence: **identical failure/error
+identity set, 32/32; zero content differences** after masking
+CSRF-token-shaped noise and trailing per-run summary text. **W4A-only
+failures/errors = 0. Changed pre-existing failure reasons = 0.**
 
 ## System / migration gates
 
