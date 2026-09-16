@@ -12,7 +12,9 @@ def cart_badge(request):
     if request.user.is_authenticated and hasattr(request.user, "customer_profile"):
         customer = request.user.customer_profile
         cart = Cart.objects.filter(customer=customer).first()
-        wishlist_count = Wishlist.objects.filter(customer=customer).count()
+        store = getattr(request, "store", None)
+        if store is not None:
+            wishlist_count = Wishlist.objects.filter(customer=customer, product__store=store).count()
     else:
         session_key = request.session.session_key
         cart = Cart.objects.filter(session_key=session_key, customer=None).first() if session_key else None

@@ -1,0 +1,37 @@
+Found 232 test(s).
+Creating test database for alias 'default'...
+System check identified no issues (0 silenced).
+................................................................................................................................................................................................E.....E........E........................
+======================================================================
+ERROR: test_login_merges_guest_cart (apps.customers.tests.test_auth_views.LoginViewTests.test_login_merges_guest_cart)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/customers/tests/test_auth_views.py", line 104, in test_login_merges_guest_cart
+    self.assertEqual(cart.items.first().quantity, 3)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'quantity'
+
+======================================================================
+ERROR: test_otp_login_merges_guest_cart (apps.customers.tests.test_auth_views.OtpLoginViewTests.test_otp_login_merges_guest_cart)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/customers/tests/test_auth_views.py", line 203, in test_otp_login_merges_guest_cart
+    self.assertEqual(cart.items.first().quantity, 1)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'quantity'
+
+======================================================================
+ERROR: test_signup_merges_guest_cart (apps.customers.tests.test_auth_views.SignupViewTests.test_signup_merges_guest_cart)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/customers/tests/test_auth_views.py", line 53, in test_signup_merges_guest_cart
+    self.assertEqual(cart.items.first().quantity, 2)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'quantity'
+
+----------------------------------------------------------------------
+Ran 232 tests in 107.697s
+
+FAILED (errors=3)
+Destroying test database for alias 'default'...
+[real_exit_code=1]

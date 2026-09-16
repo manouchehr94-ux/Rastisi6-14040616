@@ -92,6 +92,19 @@ class WishlistShellConvergenceTwoStoreTests(TestCase):
         self.assertIn("storefront_shell.html", template_names)
         self.assertIn("storefront_builder/partials/global_header/editorial_row.html", template_names)
 
+    # P5-W4A review repair (IMPORTANT 4 follow-up) — the strengthened
+    # Browser QA discovered that converging onto storefront_shell.html
+    # renders the global Header/Footer/Bottom-Nav partials but, unlike
+    # catalog/cart's own storefront_shell.html templates (which each link
+    # it themselves via their own ``extra_css`` block), wishlist.html never
+    # linked the stylesheet that actually styles those partials
+    # (``storefront_builder.css``) — so the chrome rendered, unstyled, with
+    # no CSS-driven visibility rules (e.g. the Bottom Nav's mobile-only
+    # ``@media(max-width:680px)`` rule) ever applying.
+    def test_canonical_shell_stylesheet_linked(self):
+        resp = self._get(HOST_A)
+        self.assertContains(resp, "css/storefront_builder.css")
+
     # G — cross-Store READ isolation (must fail on the certified base:
     # wishlist_list today filters only by customer, no product__store).
     def test_wishlist_shows_only_current_store_products(self):
@@ -147,6 +160,75 @@ class WishlistShellConvergenceStateTests(TestCase):
         self.assertContains(resp, "لیست علاقه‌مندی‌های شما خالی است")
         template_names = [t.name for t in resp.templates if t.name]
         self.assertIn("storefront_shell.html", template_names)
+
+
+@override_settings(ALLOWED_HOSTS=[HOST_A, HOST_B, "testserver"])
+class WishlistHeaderCountShellConvergenceTests(TestCase):
+    """P5-W4A review repair (IMPORTANT 1) — the canonical Header's
+    ``wishlist_count`` (rendered by every Header variant that includes
+    ``global_header/_shared/wishlist_action.html``, e.g. ``dark_tech``) must
+    be Store-scoped exactly like the Wishlist body itself: a Wishlist row
+    against a Product from another Store must never inflate the count shown
+    on this Store's Header, even though ``Customer`` is a global model.
+    Must fail on the pre-repair head, where
+    ``apps.cart.context_processors.cart_badge`` counts every Wishlist row
+    for the customer with no ``product__store`` filter."""
+
+    def setUp(self):
+        self.store_a = Store.objects.get(slug="akhlaghi")
+        self.store_b = Store.objects.create(name="Store B", slug="whc-store-b", status=Store.Status.ACTIVE)
+        _verified_domain(self.store_a, HOST_A)
+        _verified_domain(self.store_b, HOST_B)
+        ShopSettings.provision_for(self.store_b)
+        FooterSettings.provision_for(self.store_b)
+
+        vendor_a = Vendor.objects.create(store=self.store_a, name="Vendor A", slug="vendor-whc-a")
+        category_a = Category.objects.create(store=self.store_a, name="Cat A", slug="cat-whc-a")
+        self.product_a = Product.objects.create(
+            store=self.store_a, vendor=vendor_a, category=category_a,
+            name="Product A", slug="product-whc-a", sku="SKU-WHC-A",
+            price=Decimal("100000"), status=Product.Status.ACTIVE,
+        )
+        vendor_b = Vendor.objects.create(store=self.store_b, name="Vendor B", slug="vendor-whc-b")
+        category_b = Category.objects.create(store=self.store_b, name="Cat B", slug="cat-whc-b")
+        self.product_b = Product.objects.create(
+            store=self.store_b, vendor=vendor_b, category=category_b,
+            name="Product B", slug="product-whc-b", sku="SKU-WHC-B",
+            price=Decimal("200000"), status=Product.Status.ACTIVE,
+        )
+
+        # dark_tech (unlike editorial_row/community_shortcuts used
+        # elsewhere in this file) actually renders wishlist_action.html —
+        # required so the Header count is on the page to assert against.
+        _publish_with_header_variant(self.store_a, "dark_tech")
+        _publish_with_header_variant(self.store_b, "dark_tech")
+
+        user = User.objects.create_user(username="whc-user", password="pass12345")
+        self.customer = Customer.objects.create(user=user, full_name="مشتری", phone="09121114455")
+        Wishlist.objects.create(customer=self.customer, product=self.product_a)
+        Wishlist.objects.create(customer=self.customer, product=self.product_b)
+        self.client.login(username="whc-user", password="pass12345")
+
+    def _get(self, host):
+        return self.client.get(reverse("customers:wishlist"), HTTP_HOST=host)
+
+    def test_header_wishlist_count_is_store_scoped_on_host_a(self):
+        resp = self._get(HOST_A)
+        self.assertEqual(resp.status_code, 200)
+        template_names = [t.name for t in resp.templates if t.name]
+        self.assertIn(
+            "storefront_builder/partials/global_header/_shared/wishlist_action.html", template_names,
+        )
+        self.assertContains(resp, "Product A")
+        self.assertNotContains(resp, "Product B")
+        self.assertEqual(resp.context["wishlist_count"], 1)
+
+    def test_header_wishlist_count_is_store_scoped_on_host_b(self):
+        resp = self._get(HOST_B)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Product B")
+        self.assertNotContains(resp, "Product A")
+        self.assertEqual(resp.context["wishlist_count"], 1)
 
 
 class WishlistShellConvergenceFallbackTests(TestCase):
