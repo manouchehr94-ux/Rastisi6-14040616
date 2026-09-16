@@ -68,3 +68,30 @@ Same pre-existing test, changed W3-
 ```
 The W3 full-suite failure set reduces **exactly** to the certified base's pre-existing
 30 failures + 2 errors. Section 28's release condition is satisfied.
+
+---
+
+## Re-verification after Architect-review repair (commit `40661a7`+)
+
+Full `apps.storefront_builder.tests` re-run on the repaired branch:
+
+| | tests run | failures | errors | skipped |
+|---|---|---|---|---|
+| Certified base `e28b563` | 3160 | 30 | 2 | 4 |
+| W3 branch (post-repair) | 3206 | 30 | 2 | 4 |
+
+W3 now adds 46 tests (`3206 = 3160 + 46`; the repair added 9 endpoint round-trip
+tests to the original 37).
+
+Failure identity + reason comparison against the same clean base run
+(`07b_base_e28b563_full_suite.txt`):
+
+```
+W3-ONLY failures:                 0
+BASE-only failures:               0
+CHANGED pre-existing reasons:     0
+SHARED identical failing tests:   32  (30 failures + 2 errors)
+```
+
+The repaired W3 branch's full-suite failure set remains **exactly** the certified
+base's pre-existing set. Section 28 release condition still satisfied after the repair.

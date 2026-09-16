@@ -1,0 +1,50 @@
+Creating test database for alias 'default'...
+..........................................................................[2026-09-16 07:19:50,936] WARNING django.security.csrf: Forbidden (CSRF cookie not set.): /admin-portal/storefront-builder/apply-preset/
+.....................................................................................................................................................................................................................................................................................s.....................................................................................................................[2026-09-16 07:26:10,003] ERROR django.request: Internal Server Error: /admin-portal/storefront-builder/r4/sections/15/inspector/
+Traceback (most recent call last):
+  File "/projects/sandbox/Rastisi6-14040616/.venv/lib64/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/projects/sandbox/Rastisi6-14040616/.venv/lib64/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/projects/sandbox/Rastisi6-14040616/.venv/lib64/python3.12/site-packages/django/views/decorators/http.py", line 64, in inner
+    return func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/projects/sandbox/Rastisi6-14040616/apps/dashboard/decorators.py", line 103, in wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/projects/sandbox/Rastisi6-14040616/apps/dashboard/decorators.py", line 133, in wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/projects/sandbox/Rastisi6-14040616/apps/storefront_builder/r4_views.py", line 1040, in storefront_r4_section_inspector
+    raise ImproperlyConfigured(
+django.core.exceptions.ImproperlyConfigured: R4 Inspector (Phase 0) cannot render field_type='color' for key='swatch' on section_key='hero_banner'
+......................................................................................[2026-09-16 07:26:39,226] ERROR django.request: Internal Server Error: /admin-portal/storefront-builder/r4/sections/15/inspector/
+Traceback (most recent call last):
+  File "/projects/sandbox/Rastisi6-14040616/.venv/lib64/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/projects/sandbox/Rastisi6-14040616/.venv/lib64/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/projects/sandbox/Rastisi6-14040616/.venv/lib64/python3.12/site-packages/django/views/decorators/http.py", line 64, in inner
+    return func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/projects/sandbox/Rastisi6-14040616/apps/dashboard/decorators.py", line 103, in wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/projects/sandbox/Rastisi6-14040616/apps/dashboard/decorators.py", line 133, in wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/projects/sandbox/Rastisi6-14040616/apps/storefront_builder/r4_views.py", line 1040, in storefront_r4_section_inspector
+    raise ImproperlyConfigured(
+django.core.exceptions.ImproperlyConfigured: R4 Inspector (Phase 0) cannot render field_type='color' for key='swatch' on section_key='hero_banner'
+................................................................
+----------------------------------------------------------------------
+Ran 619 tests in 440.678s
+
+OK (skipped=1)
+Destroying test database for alias 'default'...
+Found 619 test(s).
+System check identified no issues (0 silenced).
