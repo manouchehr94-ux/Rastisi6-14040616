@@ -178,7 +178,83 @@ No family axis is degenerate (every family has ≥2 distinct values in active us
 
 The 8 pre-A8 keys (`dense_marketplace`, `premium_leather`, `warm_boutique`, `fashion_promo_catalog`, `playful_lifestyle`, `utility_catalog`, `editorial_jewelry`, `dark_digital`) already exercise this exact mechanism: their **old** exact versions (e.g. `dense_marketplace@2`, confirmed at `layout_preset_registry.py:904`) are hardcoded as separate, untouched `LayoutPresetDefinition(...)` registrations directly in `layout_preset_registry.py`, while `a8_ready_templates.py`'s `_SPECS` registers only the current/latest version (`@3`, `@8`, etc.) for the same key. Both remain independently resolvable; `list_ready_templates()` still returns exactly 50 (one latest per key — extra historical versions never inflate this count, since `LAYOUT_PRESET_REGISTRY` is a dict keyed by `key`).
 
-**Conclusion for W4B implementation:** for every curated key, ADD a new `_RecipeSpec` row to `_SPECS` at the next integer version; do **not** edit the existing row in place. The existing row stays byte-for-byte unchanged (preserving `get_layout_preset_version(key, old_version)` exactly as today), and `register_layout_preset`'s max-version-wins logic automatically promotes the new row into the merchant-facing catalog. This requires no change to `layout_preset_registry.py` and no new registration mechanism — it is the same pattern already proven by the 8 legacy keys, just expressed as two `_RecipeSpec` tuple rows instead of two hardcoded `LayoutPresetDefinition` blocks. `test_a8_ready_template_catalog.py::EXPECTED_LATEST_VERSIONS` (and any other test literal keyed on a bumped version) must be updated in the same commit — this is the same routine maintenance already performed when A8 bumped 5 keys from `@1`/`@2` to `@3`/`@7`/`@8`.
+**CORRECTED conclusion (previous design-gate round got this wrong — see the
+Independent Architect Review IMPORTANT-1 finding):** `A8_READY_TEMPLATES =
+tuple(_build(spec) for spec in _SPECS)` is a **direct 1:1 map over `_SPECS`
+with no dedup**. Appending a new row to `_SPECS` while leaving the old row
+in place — the previous conclusion — would make `_SPECS` (and therefore
+`A8_READY_TEMPLATES`) grow past 50 for every curated key, which
+`test_a8_ready_template_catalog.py::test_show_all_is_exactly_the_literal_fifty_key_catalog`
+(`len(A8_READY_TEMPLATES) == 50`) would correctly reject. That test reads
+`A8_READY_TEMPLATES` itself, not the deduplicated `LAYOUT_PRESET_REGISTRY`,
+so the "`list_ready_templates()` dedups by key" argument does not save it.
+
+**Repaired mechanism (still zero new registry, still the same canonical
+`register_layout_preset`/`LAYOUT_PRESET_VERSION_REGISTRY`, still confined to
+`a8_ready_templates.py` — no `layout_preset_registry.py` change needed):**
+add a second, separate, frozen tuple in `a8_ready_templates.py`,
+`_HISTORICAL_SPECS`, holding the exact, untouched `_RecipeSpec` for every
+key's outgoing version, registered through a second loop that never feeds
+`A8_READY_TEMPLATES`:
+
+```python
+_SPECS = (
+    # ... exactly 50 rows, one per key, always the CURRENT latest version ...
+)
+
+_HISTORICAL_SPECS = (
+    # one frozen row per curated key's OUTGOING version, added only when
+    # that key is curated — copied verbatim from its old _SPECS row and
+    # never edited again.
+)
+
+A8_READY_TEMPLATES = tuple(_build(spec) for spec in _SPECS)          # stays 50
+for _ready_template in A8_READY_TEMPLATES:
+    register_layout_preset(_ready_template)
+
+for _historical_spec in _HISTORICAL_SPECS:                            # NEW
+    register_layout_preset(_build(_historical_spec))
+```
+
+Why this satisfies every constraint the review listed:
+1/2. `A8_READY_TEMPLATES` is built from `_SPECS` alone, which always has
+   exactly 50 rows (curating a key edits its existing `_SPECS` row in place —
+   version bump + new composition — it does not add a row); `list_ready_templates()`
+   stays 50 for the same reason plus the existing max-version-wins dedup.
+3. Editing a key's `_SPECS` row to a higher version number is exactly "every
+   curated key receives a new numeric latest version."
+4. The old row, copied verbatim into `_HISTORICAL_SPECS` before being edited
+   out of `_SPECS`, is registered via the exact same `register_layout_preset`
+   call (routed through the same `_build()` compiler) — `get_layout_preset_version(key, old_version)`
+   resolves it forever, byte-for-byte.
+5. `_HISTORICAL_SPECS` entries never reach `A8_READY_TEMPLATES`; and because
+   their version number is always lower than the corresponding `_SPECS` row,
+   `register_layout_preset`'s `_version_number(...) > _version_number(current.version)`
+   comparison never lets them claim `LAYOUT_PRESET_REGISTRY[key]` (the
+   "latest" slot `list_ready_templates()`/`get_layout_preset()` read) —
+   independent of import/registration order.
+6/7. Same `LAYOUT_PRESET_VERSION_REGISTRY`/`register_layout_preset` authority,
+   same `_build()` compiler, same `_RecipeSpec` dataclass — no second
+   registry, no second compiler.
+8. The 8 pre-A8 legacy hardcoded blocks in `layout_preset_registry.py` are
+   untouched; this mechanism lives entirely in `a8_ready_templates.py` and
+   does not interact with them.
+
+This is a strict improvement over both the previous (broken) design and
+over literally mirroring the 8 legacy keys' pattern in `layout_preset_registry.py`
+(which would require hand-transcribing each curated key's fully-compiled
+`PresetSectionEntry` tuple instead of reusing `_build()`) — it is a smaller,
+single-file, single-compiler change.
+
+`test_a8_ready_template_catalog.py::EXPECTED_LATEST_VERSIONS` must be
+updated for every bumped key in the same commit — routine maintenance,
+already performed historically when A8 bumped 5 keys from `@1`/`@2` to
+`@3`/`@7`/`@8`. The hardcoded 8-key `HISTORICAL_IDENTITIES` dicts in
+`test_a8_ready_template_catalog.py` and `test_a8_ready_template_contracts.py`
+are untouched (they enumerate only the 8 pre-A8 keys, never the newly
+curated ones) — the new RED/GREEN contract for curated keys is a new test,
+not an edit to those two dicts. See the companion design spec §10 for the
+exact RED/GREEN contract.
 
 ## 8. Notable pre-existing observation (not a W4B defect)
 
@@ -191,3 +267,56 @@ discrepancy was found once the actual historical-registration blocks in
 and read; the earlier working hypothesis that historical versions were
 unrecoverable was disproven by that read and is recorded here only so a
 future reviewer does not re-open the same dead end.
+
+## 9. Section render-precondition classification (SOURCE, not assumption)
+
+Read directly from `apps/storefront_builder/section_registry.py`
+(`default_*_settings()`) and `apps/storefront_builder/services/render_service.py`
+(`_CONTEXT_AWARE_BUILDERS` / the individual `_*_context(store, section)`
+functions) for every section named in the Tier-1 proposal, per the
+Independent Architect Review IMPORTANT-3 finding.
+
+| section_key | default settings | render precondition | auto-source? | visible on a standard populated Store with zero manual per-section edit? | requires merchant-specific config (an ID/URL/menu the merchant must pick)? | eligible as PRIMARY differentiator? |
+|---|---|---|---|---|---|---|
+| `faq` | `{"title": "سوالات متداول", "items": []}` | `items` non-empty | No — `_static_context` returns `{}`; template renders only whatever is in `section.settings.items` | **NO** | Yes (merchant must author Q&A pairs) | **NO** |
+| `testimonials` | `{"title": "نظرات مشتریان", "items": []}` | `items` non-empty | No — `_static_context` returns `{}` | **NO** | Yes (merchant must author quotes) | **NO** |
+| `video_section` | `{"title": "", "video_url": "", "caption": ""}` | non-empty, provider-recognized `video_url` | No — `_video_section_context` returns null embed fields when `video_url` is empty | **NO** | Yes (merchant must supply a real video URL) | **NO** |
+| `quick_links` | `{"title": "", "menu_id": None}` | `menu_id` must reference an existing, active Store `Menu` | No — `_quick_links_context` returns `quick_link_items: []` when `menu_id` is unset | **NO** | Yes (merchant must pick an existing Menu) | **NO** |
+| `blog_posts` | `{"item_limit": 6, "title": ""}` | platform `BlogPost` table (global, no Store FK — same query `catalog.views.home` already runs) has ≥1 entry | **Yes** — `_blog_posts_context` auto-queries `BlogPost.objects.order_by("-published_at")[:item_limit]` | **YES**, once the shared fixture/platform has ≥1 published post | No | **YES** |
+| `promo_cards` | `{"item_limit": 4}` | Store has ≥1 active `Category` | **Yes** — `_category_context_for_promo_cards` auto-queries the Store's own active Categories | **YES** — every Ready Template that already uses `category_grid` (49/50) already depends on this same precondition | No | **YES** |
+| `collection_tiles` | `{"title": "", "collection_ids": [], "tile_style": "grid"}` | Store has ≥1 active `MerchantCollection` (empty `collection_ids` = auto: all active) | **Yes** — `_collection_tiles_context` auto-queries the Store's own active Collections | **YES**, once the shared fixture defines ≥1 Collection | No | **YES** |
+| `image_slider` | `default_slider_settings()` (autoplay/interval/arrows/…, no image data) | ≥1 `HeroSlide` scoped to the section | **Yes** — `_image_slider_context` **is** `_hero_banner_context` (identical function) | **YES**, under the exact same precondition `hero_banner` already carries in 45/50 templates today (confirmed by `test_u10_ready_template_catalog.py::ApplyAndRenderSmokeTests`, which creates one `HeroSlide` after Apply specifically so the smoke test has visible content) | No | **YES** |
+| `story_rail` | `_empty_defaults()` → `{}` | ≥1 active `StoryRailItem` scoped to the section (or Store-wide fallback) | **Yes** — `_story_rail_context` auto-queries `StoryRailItem` | **YES**, once the shared fixture defines ≥1 StoryRailItem (already required today for `mina_community`'s existing `story_rail` usage) | No | **YES** |
+
+**Conclusion:** `faq`, `testimonials`, `video_section`, and `quick_links`
+("Group B") render nothing under neutral default settings and must never be
+the *sole* reason a Tier-1 template is called materially curated (repaired
+design spec §5 applies this). `blog_posts`, `promo_cards`, `collection_tiles`,
+`image_slider`, and `story_rail` ("Group A") are auto-sourced from real
+Store/platform data with no merchant-specific ID required in Template DNA,
+and become visible under a standard, shared, controlled QA fixture — exactly
+the same precondition class the catalog already accepts for `hero_banner`/
+`category_grid`/`product_section`.
+
+## 10. Tier-2 / remaining shared-skeleton clusters — per-axis structural diff (evidence for the design spec's closure matrix)
+
+For each of the 7 size-2 clusters left unchanged or deferred, the count of
+differing values (out of the 7 non-palette/non-font family axes: header,
+hero, layout, product_view, card, footer, bottom_nav — read directly from
+the §5 table above):
+
+| Cluster | Pair | Differing axes | Count | Shared axes |
+|---|---|---|---:|---|
+| C10 | `tower_department` / `harbor_imports` | card, bottom_nav | **2/7 (weakest)** | header, hero, layout, product_view, footer |
+| C5 | `street_drop` / `racer_tech` | hero, card, footer | 3/7 | header, layout, product_view, bottom_nav |
+| C6 | `tool_finder` / `mother_utility` | header, footer, bottom_nav | 3/7 | hero, layout, product_view, card |
+| C8 | `literary_catalog` / `gallery_minimal` | header, hero, card, footer | 4/7 | layout, product_view, bottom_nav |
+| C11 | `mist_quiet` / `night_catalog` | header, layout, card, footer | 4/7 | hero, product_view, bottom_nav |
+| C9 | `aftab_price` / `charcoal_grill` | header, hero, card, footer, bottom_nav | 5/7 | layout, product_view |
+| C7 | `roosta_zigzag` / `calligraphy_paper` | header, hero, layout, product_view, card, footer, bottom_nav | **7/7 (strongest)** | (none — only the raw skeleton shape is shared) |
+
+`C10` (`tower_department`/`harbor_imports`) is honestly the weakest-justified
+"leave unchanged" pair in the whole catalog — the two differ only in card
+style (`marketplace_price` vs `shipping_label`) and bottom-nav variant. The
+repaired design spec's closure matrix (§8) flags this explicitly rather than
+asserting "no change" without qualification.
