@@ -74,6 +74,19 @@ class CmsPageShellConvergenceTwoStoreTests(TestCase):
         self.assertIn("storefront_shell.html", template_names)
         self.assertIn("storefront_builder/partials/global_header/editorial_row.html", template_names)
 
+    # P5-W4A review repair (IMPORTANT 4 follow-up) — the strengthened
+    # Browser QA discovered that converging onto storefront_shell.html
+    # renders the global Header/Footer/Bottom-Nav partials but, unlike
+    # catalog/cart's own storefront_shell.html templates (which each link
+    # it themselves via their own ``extra_css`` block), page_detail.html
+    # never linked the stylesheet that actually styles those partials
+    # (``storefront_builder.css``) — so the chrome rendered, unstyled, with
+    # no CSS-driven visibility rules (e.g. the Bottom Nav's mobile-only
+    # ``@media(max-width:680px)`` rule) ever applying.
+    def test_canonical_shell_stylesheet_linked(self):
+        resp = self._get(HOST_A, "about-cmssc")
+        self.assertContains(resp, "css/storefront_builder.css")
+
     # B — body/summary/title remain exact CMS content.
     def test_body_and_title_preserved(self):
         resp = self._get(HOST_A, "about-cmssc")
