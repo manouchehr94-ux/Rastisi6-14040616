@@ -21,6 +21,7 @@ db.sqlite3
 
 # Ad hoc local venvs created during read-only QA/browser baseline work
 .venv-baseline/
+.venv-w3/
 
 # User uploads
 media/
@@ -61,3 +62,9 @@ graphify-out/
 
 # Local pre-PR semantic-review artifacts (never committed)
 semantic-review/
+
+
+# P5-W3 browser-QA local-only helpers (seed script + one-shot runner; the
+# committed reusable runner is tools/storefront_builder_r4_qa/w3_design_lab_qa.mjs)
+_w3_qa_setup.py
+_w3_run_browser_qa.sh

@@ -1,0 +1,9 @@
+Found 50 test(s).
+Creating test database for alias 'default'...
+System check identified no issues (0 silenced).
+..................................................
+----------------------------------------------------------------------
+Ran 50 tests in 76.078s
+
+OK
+Destroying test database for alias 'default'...

@@ -286,6 +286,60 @@ def apply_footer_variant(
     return version
 
 
+def apply_component_variant(
+    *,
+    version,
+    family: str,
+    component_key: str,
+):
+    """P5-W3 — the ONE generalized canonical appearance-component writer.
+
+    Changes exactly the ``family`` selection to ``component_key`` (a typed
+    component key already resolved from the canonical registry), preserving
+    every other family selection and every family's settings — built on
+    ``_manifest_with_family`` exactly like ``apply_theme``/``apply_header_
+    variant`` already are, then persisted through the single validating
+    ``persist_store_appearance_manifest`` primitive.
+
+    This is the canonical *write-time reconciliation* seam W3's Design Lab
+    Apply needs for families (``hero``/``product_view``/``card``/``badge``)
+    whose variant historically took visual effect only via a render-time
+    manifest overlay: writing ``selections[family] = component_key`` here is
+    exactly what makes that selection persisted canonical state, so the
+    persisted manifest and the rendered component agree after Apply.
+
+    Draft/lifecycle/authorization/locking/revision remain the caller's
+    responsibility (the R4 mutation boundary). This is a pure state-transform
+    primitive, identical in contract to the sibling ``apply_*`` writers.
+
+    Validation is fail-closed: an unknown family, an unknown component key, or
+    a component key belonging to a different family raises
+    ``InvalidStoreAppearanceContract`` BEFORE any write. (The final complete
+    manifest — including cross-family compatibility hard-errors — is validated
+    again inside ``persist_store_appearance_manifest``.)
+    """
+    from ..storefront_appearance.families import COMPONENT_FAMILIES
+    from ..storefront_appearance.registry import get_component
+
+    if not isinstance(family, str) or family not in COMPONENT_FAMILIES:
+        raise InvalidStoreAppearanceContract(f"unknown appearance family: {family!r}")
+    if not isinstance(component_key, str):
+        raise InvalidStoreAppearanceContract(
+            f"invalid component key for {family}: {component_key!r}"
+        )
+    component = get_component(component_key)
+    if component is None or component.family_key != family:
+        raise InvalidStoreAppearanceContract(
+            f"component {component_key!r} does not belong to family {family!r}"
+        )
+
+    manifest = _manifest_with_family(
+        version, family_key=family, component_key=component_key
+    )
+    persist_store_appearance_manifest(version, manifest)
+    return version
+
+
 def apply_ready_template_appearance(
     *,
     version,

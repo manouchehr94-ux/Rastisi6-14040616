@@ -478,6 +478,46 @@ def _build_theme_design_context(draft: StorefrontLayoutVersion) -> dict:
     }
 
 
+def _build_design_lab_design_context(draft: StorefrontLayoutVersion) -> dict:
+    """P5-W3 — the Design Lab panel's read projection. The randomizable family
+    list + their merchant-facing Persian labels come ONLY from the canonical
+    ``COMPONENT_FAMILIES`` catalog and ``design_lab_service``; the current
+    per-family selection labels come from the draft's canonical manifest (never
+    a second source). No component keys or seeds are surfaced to the merchant.
+    """
+    from apps.storefront_builder.services import design_lab_service
+    from apps.storefront_builder.storefront_appearance.families import (
+        COMPONENT_FAMILIES,
+    )
+    from apps.storefront_builder.storefront_appearance.persistence import (
+        load_store_appearance_manifest,
+    )
+    from apps.storefront_builder.storefront_appearance.registry import get_component
+
+    manifest = load_store_appearance_manifest(draft)
+
+    def _label(component_key):
+        component = get_component(component_key)
+        return (component.label_fa if component else component_key) or component_key
+
+    families = []
+    for family_key in COMPONENT_FAMILIES:
+        if family_key not in design_lab_service.DESIGN_LAB_RANDOMIZABLE_FAMILIES:
+            continue
+        current_key = manifest.selections.get(family_key, "")
+        families.append(
+            {
+                "family": family_key,
+                "label_fa": COMPONENT_FAMILIES[family_key].label_fa or family_key,
+                "current_label": _label(current_key) if current_key else "",
+            }
+        )
+    return {
+        "families": families,
+        "endpoint_url": reverse("dashboard:storefront-builder-r4-design-lab"),
+    }
+
+
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
 def storefront_r4_editor(request):
@@ -639,6 +679,8 @@ def storefront_r4_editor(request):
                 draft.template_provenance,
             )["template"]["key"],
             "global_design": _build_global_design_context(draft),
+            # P5-W3 — Design Lab / Random Mix panel read projection.
+            "design_lab": _build_design_lab_design_context(draft),
             "history": edit_history_service.history_state(draft),
         },
     )
@@ -690,6 +732,216 @@ def storefront_r4_mutation(request):
         return JsonResponse({"ok": False, "code": str(exc)}, status=400)
 
     return JsonResponse({"ok": True, "new_revision": new_revision, "mutation_type": mutation_type})
+
+
+@require_POST
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
+def storefront_r4_design_lab(request):
+    """P5-W3 — the transient Design Lab operations endpoint. READ-ONLY: it never
+    writes anything (no draft.save, no history, no revision change). It runs the
+    canonical ``design_lab_service`` server-side (locks and family eligibility
+    are enforced HERE, not just in JS) and returns:
+
+      * an opaque preview ``token`` for the EXISTING ``storefront_preview``
+        ``?design_lab=`` route (never a component key the client fabricated);
+      * the server-computed Compare-with-Base ``diffs`` (Persian labels);
+      * the current ``locked_families`` and ``base_revision``.
+
+    The real persistence happens ONLY on the separate explicit Apply, through
+    the ONE canonical ``design_lab.apply_candidate`` mutation. Store identity is
+    resolved from the request (tenant boundary), never from client input.
+    """
+    from apps.storefront_builder.services import design_lab_service
+
+    store = resolve_store_for_service(request)
+    layout = layout_service.get_or_create_layout(store)
+    if not layout.r4_editor_enabled:
+        raise Http404
+
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({"ok": False, "code": "malformed_json"}, status=400)
+    if not isinstance(payload, dict):
+        return JsonResponse({"ok": False, "code": "invalid_request_shape"}, status=400)
+
+    action = payload.get("action")
+    if action not in (
+        "random_mix",
+        "randomize_one",
+        "compare",
+        "return_to_dna",
+        "reset",
+        "remove_theme",
+        "apply_payload",
+    ):
+        return JsonResponse({"ok": False, "code": "invalid_action"}, status=400)
+
+    draft = layout_service.get_or_create_draft(store, user=request.user)
+
+    # apply_payload: materialise the ONE canonical design_lab.apply_candidate
+    # mutation from the current transient token, server-side, so the client
+    # never has to hold or transmit component keys. This still WRITES NOTHING —
+    # the actual persistence happens only when the client enqueues the returned
+    # mutation through the canonical mutation endpoint (apply_mutation).
+    if action == "apply_payload":
+        from apps.storefront_builder.storefront_appearance.contracts import (
+            InvalidStoreAppearanceContract,
+        )
+
+        token = payload.get("candidate_token")
+        if not token:
+            return JsonResponse({"ok": False, "code": "no_candidate"}, status=400)
+        # Precise decode/validation exceptions only (MINOR): a malformed/tampered
+        # token or a canonical contract violation is a controlled 400; any other
+        # (programming) error propagates and fails loudly, never masked as
+        # "invalid_candidate".
+        try:
+            candidate = design_lab_service.decode_candidate_token(token)
+        except ValueError:
+            return JsonResponse({"ok": False, "code": "invalid_candidate"}, status=400)
+        # Real-flow stale preflight (Architect IMPORTANT 3): the candidate is
+        # bound to the Draft + revision it was generated against. If the Draft
+        # moved, reject as stale BEFORE producing the mutation — never silently
+        # rebase the old candidate onto the newer Draft. (The canonical
+        # apply_mutation boundary remains the final transactional enforcement.)
+        if design_lab_service.candidate_is_stale(draft, candidate):
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "code": "stale_candidate",
+                    "current_revision": draft.edit_revision,
+                },
+                status=409,
+            )
+        try:
+            design_lab_service.resolve_candidate_appearance(draft, candidate)
+        except InvalidStoreAppearanceContract:
+            return JsonResponse({"ok": False, "code": "invalid_candidate"}, status=400)
+        return JsonResponse(
+            {
+                "ok": True,
+                "mutation": design_lab_service.candidate_apply_mutation(
+                    candidate, draft_id=draft.pk
+                ),
+                "base_revision": candidate.base_revision,
+            }
+        )
+
+    # Locked families are transient exploration locks (client-supplied list of
+    # family keys) — never persisted, never a DB field. Only eligible families
+    # can be locked/randomized; unknown keys are ignored (fail-safe).
+    raw_locked = payload.get("locked_families") or []
+    if not isinstance(raw_locked, list):
+        return JsonResponse({"ok": False, "code": "invalid_locked_families"}, status=400)
+    locked_families = {
+        f
+        for f in raw_locked
+        if isinstance(f, str)
+        and f in design_lab_service.DESIGN_LAB_RANDOMIZABLE_FAMILIES
+    }
+
+    # Rebuild the prior candidate (if any) purely from its opaque token so
+    # repeated actions accumulate transiently without any server state.
+    from apps.storefront_builder.storefront_appearance.contracts import (
+        InvalidStoreAppearanceContract,
+    )
+
+    # Rebuild the prior candidate (if any) purely from its signed token, so
+    # chained actions evolve the CURRENT candidate transiently with no server
+    # state. A tampered/expired token is rejected loudly rather than silently
+    # discarded (it carries correctness-critical Base/revision truth).
+    prior_token = payload.get("candidate_token")
+    prior_candidate = None
+    if prior_token:
+        try:
+            prior_candidate = design_lab_service.decode_candidate_token(prior_token)
+        except ValueError:
+            return JsonResponse({"ok": False, "code": "invalid_candidate"}, status=400)
+
+    if action == "randomize_one":
+        family = payload.get("family")
+        if (
+            not isinstance(family, str)
+            or family not in design_lab_service.DESIGN_LAB_RANDOMIZABLE_FAMILIES
+        ):
+            return JsonResponse({"ok": False, "code": "invalid_family"}, status=400)
+
+    try:
+        if action == "reset":
+            candidate = design_lab_service.reset_candidate(draft)
+        elif action == "return_to_dna":
+            base = prior_candidate or design_lab_service.reset_candidate(draft)
+            candidate = design_lab_service.return_to_original_dna(draft, base)
+        elif action == "remove_theme":
+            base = prior_candidate or design_lab_service.reset_candidate(draft)
+            candidate = design_lab_service.remove_theme(base)
+        elif action == "compare":
+            candidate = prior_candidate or design_lab_service.reset_candidate(draft)
+        elif action == "randomize_one":
+            # Chain from the CURRENT candidate (IMPORTANT 2): only the requested
+            # family may change; all other candidate families are preserved.
+            candidate = design_lab_service.generate_candidate(
+                draft,
+                current_candidate=prior_candidate,
+                randomize_families={payload["family"]},
+                locked_families=locked_families,
+                seed=_random_design_lab_seed(),
+            )
+        else:  # random_mix
+            # Chain from the CURRENT candidate: re-randomize all UNLOCKED
+            # eligible families of the current candidate; locked families keep
+            # their CURRENT candidate value.
+            candidate = design_lab_service.generate_candidate(
+                draft,
+                current_candidate=prior_candidate,
+                randomize_families=set(
+                    design_lab_service.DESIGN_LAB_RANDOMIZABLE_FAMILIES
+                ),
+                locked_families=locked_families,
+                seed=_random_design_lab_seed(),
+            )
+        # Server-authoritative validation of the resolved candidate (fail
+        # closed): a candidate that cannot resolve through the canonical
+        # contract is never returned to the client. Only the canonical contract
+        # violation becomes a 400; unexpected errors propagate (fail loudly).
+        design_lab_service.resolve_candidate_appearance(draft, candidate)
+    except InvalidStoreAppearanceContract:
+        return JsonResponse({"ok": False, "code": "invalid_candidate"}, status=400)
+
+    diffs = design_lab_service.compare_with_base(candidate)
+    family_labels = design_lab_service.all_family_labels(candidate)
+    return JsonResponse(
+        {
+            "ok": True,
+            "token": design_lab_service.encode_candidate_token(candidate),
+            "diffs": diffs,
+            "locked_families": sorted(candidate.locked_families),
+            "base_revision": candidate.base_revision,
+            "draft_id": candidate.draft_id,
+            # Merchant-facing Persian labels for EVERY family (Architect
+            # IMPORTANT 2) — never raw component keys. The client refreshes
+            # ALL rows from these, not just the ones present in ``diffs``, so a
+            # family that returns to its Base value still gets a correct
+            # current label instead of a stale one.
+            "candidate_labels": {
+                family: value["candidate_label"] for family, value in family_labels.items()
+            },
+            "base_labels": {
+                family: value["base_label"] for family, value in family_labels.items()
+            },
+        }
+    )
+
+
+def _random_design_lab_seed() -> int:
+    """A fresh nondeterministic seed for an interactive merchant Randomize
+    click. Deterministic seeding is used only in tests (which pass an explicit
+    seed into ``generate_candidate``); the merchant never sees it."""
+    import secrets
+
+    return secrets.randbelow(2**31)
 
 
 #: Phase 3 (V02) — mirror of r4_mutation_service._BRAND_VIEW_ALL_SUPPORTING_VARIANTS
