@@ -121,3 +121,24 @@ existing single owner**. No second copy of any canonical concept was created.
 ## Conclusion
 **ARCHITECTURE DUPLICATION GATE: PASS.** No STOP condition from Section 3 was
 triggered.
+
+
+
+---
+
+## Post-repair note (Architect review of PR #9)
+
+The candidate state-machine repair changed only the transient candidate contract
+and its transport — it introduced **no** new architectural concept:
+- The transport token moved from plain Base64 to **`django.core.signing`** (an
+  existing platform-owned signing primitive) — still transient, still not an
+  authority (selections re-validated through the canonical validator).
+- `DesignLabCandidate` gained fields (`base_settings`, `candidate_settings`,
+  `base_revision`, `draft_id`) but remains a **frozen in-memory dataclass** — no
+  model, no DB table, no migration, no persisted candidate storage.
+- Stale binding (`candidate_is_stale`) is a pure read; the canonical
+  `apply_mutation` boundary remains the single final transactional enforcement.
+
+Re-verified counts (unchanged): 0 design-lab models/tables/migrations, 0 candidate
+registration, 0 localStorage authority, 0 JS draft writes, 0 per-template random
+engines, 50 Ready Templates. **ARCHITECTURE DUPLICATION GATE: PASS** (still).

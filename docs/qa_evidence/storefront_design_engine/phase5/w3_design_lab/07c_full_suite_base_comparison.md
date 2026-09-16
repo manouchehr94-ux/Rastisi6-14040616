@@ -95,3 +95,28 @@ SHARED identical failing tests:   32  (30 failures + 2 errors)
 
 The repaired W3 branch's full-suite failure set remains **exactly** the certified
 base's pre-existing set. Section 28 release condition still satisfied after the repair.
+
+
+
+---
+
+## Final re-verification on the repaired head (`a41531f`)
+
+The full suite was re-run on the FINAL head (after the browser-QA endpoint change
+that returns `candidate_selections`/`base_selections`), so this evidence reflects
+the exact code being submitted:
+
+| | tests run | failures | errors | skipped |
+|---|---|---|---|---|
+| Certified base `e28b563` | 3160 | 30 | 2 | 4 |
+| W3 branch (final `a41531f`) | 3206 | 30 | 2 | 4 |
+
+```
+W3-ONLY failures:              0
+BASE-only failures:            0
+CHANGED pre-existing reasons:  0
+SHARED identical failing:      32
+```
+
+The repaired W3 branch's full-suite failure set is **identical** to the certified
+base's pre-existing set on the final head. Section 28 release condition satisfied.

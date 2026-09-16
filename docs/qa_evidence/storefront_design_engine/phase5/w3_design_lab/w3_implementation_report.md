@@ -180,3 +180,102 @@ a5cdef0 docs: architecture duplication audit + repo gates
   (they belong to Ready-Template recipe/version contracts and pre-existing R4 UI
   expectations at the certified base). They are documented, not hidden.
 - **P5-W4 not started** (frozen): no W4 branch, no W4 code, no W4 tests.
+
+
+
+---
+
+# Independent Architect review repair (PR #9)
+
+Independent review of head `4c41f31` returned CRITICAL 0 / IMPORTANT 3 / MINOR 1,
+verdict NOT READY FOR MERGE. The following state-machine defects were repaired on
+the **same** branch/PR (no restart, no new module, no model, no migration). RED
+tests were written first (`11_red_roundtrip_repair.txt`), then made GREEN
+(`12_green_roundtrip_repair.txt`); all exercise the REAL `/design-lab/` HTTP
+endpoint round-trips, not only direct Python calls.
+
+## Candidate base-state preservation across HTTP
+The transient `DesignLabCandidate` now carries BOTH the immutable **generation
+base** and the evolving **working state**, so a real HTTP round-trip no longer
+collapses them (the previous decode set `base = candidate`, causing self-compare):
+- `base_selections`, `base_settings` — fixed original Base for Compare/Return.
+- `candidate_selections`, `candidate_settings` — evolving working state.
+- `locked_families`, `seed`.
+- `base_revision`, `draft_id` — generation binding for stale/tenant checks.
+
+## Candidate current working state
+Chained operations evolve the CURRENT candidate (Architect IMPORTANT 2):
+`generate_candidate(draft, *, current_candidate=None, ...)` starts randomization
+from the current candidate's working selections when chaining (not the committed
+Draft), so Randomize One changes only the requested family and Random Mix
+re-randomizes only unlocked eligible families — all other candidate choices are
+preserved. The original Base stays fixed for the whole experiment.
+
+## Signed / integrity-protected transient token
+The transport token is now produced by **`django.core.signing`** (HMAC over
+`SECRET_KEY`, `salt="storefront_builder.design_lab.candidate.v1"`, `compress=True`,
+bounded `max_age = 6h`) instead of plain editable Base64. `decode_candidate_token`
+verifies the signature and validates shape/types; a tampered/expired token raises
+`ValueError` → controlled 400. The token is a tamper-evident transport, never an
+authority: selections/settings are still re-validated through the canonical
+Store-Appearance validator on preview and apply.
+
+## Candidate generation revision + draft identity
+`reset_candidate`/`generate_candidate` stamp `base_revision = draft.edit_revision`
+and `draft_id = draft.pk` at generation time; these survive the signed token.
+
+## Real-flow stale rejection
+`candidate_is_stale(draft, candidate)` returns True when the candidate's
+`draft_id`/`base_revision` no longer match the active Draft. The `/design-lab/`
+`apply_payload` action calls this as a **preflight** and returns HTTP 409
+`stale_candidate` BEFORE producing any mutation — it never silently rebases the
+old candidate. The canonical `apply_mutation` boundary remains the FINAL
+transactional stale-write enforcement (a race after preflight still yields
+`R4StaleRevision` 409). Proved through the real route sequence:
+random_mix @N → real canonical edit → N+1 → `apply_payload` old token → 409, no
+write, N+1 preserved (`test_real_flow_stale_candidate_apply_is_rejected`).
+
+## Chained Randomize-One preservation & Lock-current-candidate semantics
+`test_randomize_one_after_random_mix_preserves_other_candidate_families` and
+`test_lock_after_randomize_preserves_current_candidate_value` (endpoint
+round-trips) prove non-requested families are preserved from B and a locked
+family holds its CURRENT candidate value H1 (never reverts to committed Draft H0).
+
+## Real Compare diff / real Return-to-DNA proof
+Compare now measures the candidate against the ORIGINAL Base and detects both
+selection AND settings differences (e.g. Theme intensity — `test_compare_detects
+_settings_difference`). Return-to-DNA yields Base A family-by-family across a real
+round-trip (`test_return_to_dna_after_real_http_roundtrip_yields_base`).
+
+## Broad exception swallowing removed (MINOR)
+The Design Lab decode/validation paths no longer use bare `except Exception`.
+Only `ValueError` (bad/tampered/expired token) and `InvalidStoreAppearanceContract`
+(canonical contract) become controlled 400s; unexpected programming errors
+propagate and fail loudly.
+
+## Browser QA now asserts DATA (not visibility)
+`w3_design_lab_qa.mjs` reads server-authoritative `candidate_selections`/
+`base_selections`/`diffs` from the read-only endpoint: Compare asserts a real
+changed family with `base_label != candidate_label`; Return asserts exact Base
+restore family-by-family; chained Randomize asserts other families preserved +
+footer changes; Lock asserts the CURRENT candidate value is held; a new stale
+scenario asserts 409 `stale_candidate`; Apply asserts the Draft revision advances
+0→1 only after the explicit Apply. Both templates × 3 viewports, RTL, OVERALL
+PASS, 0 console errors, 0 failed requests.
+
+## Post-repair verification
+- W3 focused: **46 tests OK** (37 original + 9 endpoint round-trip).
+- W2 Theme regression **58 OK**; targeted regression **619 OK** (adds
+  `test_r4_foundation` + `test_r4_inspector` JS guardrails); W1 cart/pricing **105 OK**.
+- Full `apps.storefront_builder.tests` on the final head `a41531f`: **3206 tests,
+  30 failures + 2 errors** — identical failure identity+reason set to the certified
+  base `e28b563`. **W3-only failures = 0; changed pre-existing reasons = 0.**
+- Django check 0 issues; `makemigrations --check` = No changes detected;
+  `git diff --check` clean; **migrations = 0**; no env artifacts tracked.
+
+## Repair commits
+```
+40661a7 fix: candidate state-machine repair (signed token, base state, chaining, stale, precise except)
+bca004d test: post-repair regression + full-suite base comparison
+a41531f test: browser QA asserts DATA (+ endpoint candidate/base selections)
+```
