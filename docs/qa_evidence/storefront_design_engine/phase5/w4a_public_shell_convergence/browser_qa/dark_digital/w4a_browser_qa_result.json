@@ -1,0 +1,181 @@
+{
+  "started_at": "2026-09-16T14:10:51.292Z",
+  "origin": "http://127.0.0.1:8000",
+  "expect_bottom_nav": true,
+  "viewports": {
+    "desktop_wishlist_anon": {
+      "response_status": 200,
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_count": 1,
+      "footer_count": 1,
+      "bottom_nav_count": 1,
+      "bottom_nav_visible": false
+    },
+    "desktop_wishlist_empty": {
+      "response_status": 200,
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_count": 1,
+      "footer_count": 1,
+      "bottom_nav_count": 1,
+      "bottom_nav_visible": false
+    },
+    "desktop_wishlist_populated": {
+      "response_status": 200,
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_count": 1,
+      "footer_count": 1,
+      "bottom_nav_count": 1,
+      "bottom_nav_visible": false
+    },
+    "desktop_cms": {
+      "response_status": 200,
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_count": 1,
+      "footer_count": 1,
+      "bottom_nav_count": 1,
+      "bottom_nav_visible": false
+    },
+    "tablet_wishlist_anon": {
+      "response_status": 200,
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_count": 1,
+      "footer_count": 1,
+      "bottom_nav_count": 1,
+      "bottom_nav_visible": false
+    },
+    "tablet_wishlist_empty": {
+      "response_status": 200,
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_count": 1,
+      "footer_count": 1,
+      "bottom_nav_count": 1,
+      "bottom_nav_visible": false
+    },
+    "tablet_wishlist_populated": {
+      "response_status": 200,
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_count": 1,
+      "footer_count": 1,
+      "bottom_nav_count": 1,
+      "bottom_nav_visible": false
+    },
+    "tablet_cms": {
+      "response_status": 200,
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_count": 1,
+      "footer_count": 1,
+      "bottom_nav_count": 1,
+      "bottom_nav_visible": false
+    },
+    "mobile_wishlist_anon": {
+      "response_status": 200,
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_count": 1,
+      "footer_count": 1,
+      "bottom_nav_count": 1,
+      "bottom_nav_visible": true
+    },
+    "mobile_wishlist_empty": {
+      "response_status": 200,
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_count": 1,
+      "footer_count": 1,
+      "bottom_nav_count": 1,
+      "bottom_nav_visible": true
+    },
+    "mobile_wishlist_populated": {
+      "response_status": 200,
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_count": 1,
+      "footer_count": 1,
+      "bottom_nav_count": 1,
+      "bottom_nav_visible": true
+    },
+    "mobile_cms": {
+      "response_status": 200,
+      "rtl": true,
+      "horizontal_overflow": false,
+      "header_count": 1,
+      "footer_count": 1,
+      "bottom_nav_count": 1,
+      "bottom_nav_visible": true
+    }
+  },
+  "scenarios": [
+    {
+      "scenario": "desktop_wishlist_anon",
+      "ok": true,
+      "detail": "login prompt visible :: {\"response_status\":200,\"rtl\":true,\"horizontal_overflow\":false,\"header_count\":1,\"footer_count\":1,\"bottom_nav_count\":1,\"bottom_nav_visible\":false}"
+    },
+    {
+      "scenario": "desktop_wishlist_empty",
+      "ok": true,
+      "detail": "empty state visible :: {\"response_status\":200,\"rtl\":true,\"horizontal_overflow\":false,\"header_count\":1,\"footer_count\":1,\"bottom_nav_count\":1,\"bottom_nav_visible\":false}"
+    },
+    {
+      "scenario": "desktop_wishlist_populated",
+      "ok": true,
+      "detail": "ProductCard (article.pcard) visible :: {\"response_status\":200,\"rtl\":true,\"horizontal_overflow\":false,\"header_count\":1,\"footer_count\":1,\"bottom_nav_count\":1,\"bottom_nav_visible\":false}"
+    },
+    {
+      "scenario": "desktop_cms",
+      "ok": true,
+      "detail": "CMS title/body visible :: {\"response_status\":200,\"rtl\":true,\"horizontal_overflow\":false,\"header_count\":1,\"footer_count\":1,\"bottom_nav_count\":1,\"bottom_nav_visible\":false}"
+    },
+    {
+      "scenario": "tablet_wishlist_anon",
+      "ok": true,
+      "detail": "login prompt visible :: {\"response_status\":200,\"rtl\":true,\"horizontal_overflow\":false,\"header_count\":1,\"footer_count\":1,\"bottom_nav_count\":1,\"bottom_nav_visible\":false}"
+    },
+    {
+      "scenario": "tablet_wishlist_empty",
+      "ok": true,
+      "detail": "empty state visible :: {\"response_status\":200,\"rtl\":true,\"horizontal_overflow\":false,\"header_count\":1,\"footer_count\":1,\"bottom_nav_count\":1,\"bottom_nav_visible\":false}"
+    },
+    {
+      "scenario": "tablet_wishlist_populated",
+      "ok": true,
+      "detail": "ProductCard (article.pcard) visible :: {\"response_status\":200,\"rtl\":true,\"horizontal_overflow\":false,\"header_count\":1,\"footer_count\":1,\"bottom_nav_count\":1,\"bottom_nav_visible\":false}"
+    },
+    {
+      "scenario": "tablet_cms",
+      "ok": true,
+      "detail": "CMS title/body visible :: {\"response_status\":200,\"rtl\":true,\"horizontal_overflow\":false,\"header_count\":1,\"footer_count\":1,\"bottom_nav_count\":1,\"bottom_nav_visible\":false}"
+    },
+    {
+      "scenario": "mobile_wishlist_anon",
+      "ok": true,
+      "detail": "login prompt visible :: {\"response_status\":200,\"rtl\":true,\"horizontal_overflow\":false,\"header_count\":1,\"footer_count\":1,\"bottom_nav_count\":1,\"bottom_nav_visible\":true}"
+    },
+    {
+      "scenario": "mobile_wishlist_empty",
+      "ok": true,
+      "detail": "empty state visible :: {\"response_status\":200,\"rtl\":true,\"horizontal_overflow\":false,\"header_count\":1,\"footer_count\":1,\"bottom_nav_count\":1,\"bottom_nav_visible\":true}"
+    },
+    {
+      "scenario": "mobile_wishlist_populated",
+      "ok": true,
+      "detail": "ProductCard (article.pcard) visible :: {\"response_status\":200,\"rtl\":true,\"horizontal_overflow\":false,\"header_count\":1,\"footer_count\":1,\"bottom_nav_count\":1,\"bottom_nav_visible\":true}"
+    },
+    {
+      "scenario": "mobile_cms",
+      "ok": true,
+      "detail": "CMS title/body visible :: {\"response_status\":200,\"rtl\":true,\"horizontal_overflow\":false,\"header_count\":1,\"footer_count\":1,\"bottom_nav_count\":1,\"bottom_nav_visible\":true}"
+    }
+  ],
+  "console_errors": [],
+  "failed_requests": [],
+  "overall": "PASS",
+  "finished_at": "2026-09-16T14:11:03.434Z"
+}

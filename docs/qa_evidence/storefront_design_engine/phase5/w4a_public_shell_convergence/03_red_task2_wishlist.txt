@@ -1,0 +1,49 @@
+SUPERSEDED — THIS FILE DID NOT CONTAIN GENUINE RED EVIDENCE
+=============================================================
+
+Independent Architect review (P5-W4A review repair round, IMPORTANT 2)
+found that this file's original content was:
+
+    Found 7 test(s).
+    Creating test database for alias 'default'...
+    System check identified no issues (0 silenced).
+    .......
+    ----------------------------------------------------------------------
+    Ran 7 tests in 7.988s
+
+    OK
+    Destroying test database for alias 'default'...
+
+That is a GREEN result (7/7 OK), not a RED result. The
+w4a_implementation_report.md claim that this file demonstrated genuine
+pre-fix failures (missing canonical shell, cross-Store Wishlist leak) was
+false relative to this committed evidence. Most likely cause: during the
+original RED-capture attempt for Task 2, an unintended ``git stash`` /
+``git stash pop`` cycle occurred (see "Process deviation" section of
+w4a_implementation_report.md); this file appears to have been captured
+after the stash was popped and the fix restored, not before.
+
+This file is being corrected transparently, without rewriting git
+history (no rebase/amend/force-push was used — this is a normal new
+commit that replaces this file's content).
+
+The genuine RED evidence for Task 2 (Wishlist convergence) is now:
+
+    19_reconstructed_red_task2_wishlist.txt
+
+labeled RECONSTRUCTED RED VERIFICATION AGAINST THE EXACT PRE-WISHLIST
+PRODUCTION COMMIT (``c4dc37e9`` — the commit that has the ``shell_only``
+context contract but NOT yet the Wishlist convergence production changes),
+captured via a non-destructive isolated `git worktree` (never stash/reset
+on the active worktree), running the CURRENT Wishlist convergence test
+module (including the IMPORTANT-1 header-count tests added in this repair
+round) against that exact pre-fix production state:
+
+    Ran 9 tests in 11.194s
+    FAILED (failures=7)
+    [real_exit_code=1]
+
+Current HEAD (post-fix) GREEN evidence for the same test module is:
+
+    04_green_task2_wishlist.txt (original Task 2 GREEN — still valid, 7/7)
+    15_green_important1_header_count.txt (full 9/9 module GREEN, this repair round)
