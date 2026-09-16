@@ -1,30 +1,38 @@
 # P5-W4B — 50-Template Curation: Design / Inventory Gate
 
-**Status:** DESIGN GATE ONLY, REPAIR ROUND 1. No production/test code has
+**Status:** DESIGN GATE ONLY, REPAIR ROUND 2. No production/test code has
 been touched by this document, this repair, or this workstream so far.
 Only the two design/inventory documents named in the repair instruction
 were modified this round.
 
-**Repair context:** Independent Architect review of design head
-`58c2dbc0248cc82a79cb53f3d51a82839cf6ed4e` returned CRITICAL:0 / IMPORTANT:3
-/ MINOR:1, verdict REPAIR REQUIRED. This revision resolves all four
-findings from source — see the per-section notes below (each repaired
-section states which finding it resolves). Nothing here starts production
+**Repair context:** Independent Architect re-review of design head
+`b450722bd87916a9fcc8380c80762b220c52c308` returned CRITICAL:0 / IMPORTANT:4,
+verdict REPAIR REQUIRED. Round 1's repairs (exact-50 versioning
+architecture, bounded composition-token compilation, invisible-default
+section classification, removing "trivially true") were **accepted
+unchanged** and are kept below. This round fixes 4 new findings: (1)
+`blog_posts` has a confirmed dead placeholder link and must not be used;
+(2) the "even distribution" language must be removed and `promo_cards` is
+confirmed functionally redundant with `category_grid`; (3) cluster C10
+(`tower_department`/`harbor_imports`) must be actively curated, not
+deferred; (4) the historical-preservation test must fingerprint the whole
+`LayoutPresetDefinition`, not just the Home section-key sequence, plus a
+historical forbidden-payload safety scan. Nothing here starts production
 implementation or W4C.
 
 **Certified starting checkpoint:** `707dd631e851bdd13173bf3950489142f3e526b1`
-(HEAD of `feature/phase5-design-expansion`, the merged+certified P5-W4A
-checkpoint) — re-verified unchanged at the start of this repair round.
+(HEAD of `feature/phase5-design-expansion`) — re-verified unchanged at the
+start of this repair round.
 
 **Authoritative source for scope:** `docs/superpowers/plans/
-2026-09-15-phase5-converged-completion-plan.md`, §P5-W4B (supersedes older
-A8/Task 9–18 documents wherever they conflict).
+2026-09-15-phase5-converged-completion-plan.md`, §P5-W4B.
 
 **Companion evidence:** `docs/qa_evidence/storefront_design_engine/phase5/
 w4b_template_curation/w4b_curation_inventory.md` — full 50-row inventory,
-cluster analysis, the corrected versioning mechanism (§7), the section
-render-precondition classification (§9), and the Tier-2 per-axis diff
-evidence (§10). This document assumes that inventory.
+cluster analysis, the versioning mechanism (§7), the round-1 section
+classification (§9, partially superseded), the Tier-2 per-axis diff
+evidence (§10), and the **round-2 template-quality audit + corrected
+eligibility table (§11–§12)** this revision is built on.
 
 ---
 
@@ -38,189 +46,227 @@ evidence (§10). This document assumes that inventory.
 
 Primary production scope: **data-level composition/recipe curation inside
 `apps/storefront_builder/a8_ready_templates.py`.** No renderer, registry, or
-persistence-architecture change is proposed anywhere below.
+persistence-architecture change is proposed.
 
-## 2. What "material difference" means here (unchanged, source-verified)
+## 2. What "material difference" means here (unchanged)
 
-`recipe_signature()` (`storefront_appearance/inventory.py`) hashes the 10
-component-family selections (`theme` is fixed at `theme.none.v1` for all 50)
-plus the normalized Home section sequence. All 50 current recipes already
-produce 50 pairwise-unique signatures — the diversity test is not at risk
-today. The harder, real question is repetition the signature test cannot
-see: templates whose Home **skeleton** (section-type sequence, ignoring
+`recipe_signature()` already produces 50 pairwise-unique signatures today.
+The real curation target is repetition the signature test cannot see:
+templates whose Home **skeleton** (section-type sequence, ignoring
 settings) is identical to another's.
 
 ## 3. The repetition finding (unchanged)
 
 - 32/50 templates use exactly 4 Home sections.
 - The single largest cluster (**C1**, 10 templates) is *exactly*
-  `hero_banner → category_grid → product_section → image_text`, with zero
-  variation in section types or order: `premium_leather_noir`,
-  `artisan_grain`, `coastal_product`, `handmade_luxe`, `horizon_story`,
-  `silk_editorial`, `city_classic`, `kamand_artisan`, `watchmaker_round`,
-  `parnian_editorial`.
-- 10 further clusters of size 2–4 repeat the same pattern at smaller scale
-  (companion inventory §6, C2–C11).
+  `hero_banner → category_grid → product_section → image_text`:
+  `premium_leather_noir`, `artisan_grain`, `coastal_product`,
+  `handmade_luxe`, `horizon_story`, `silk_editorial`, `city_classic`,
+  `kamand_artisan`, `watchmaker_round`, `parnian_editorial`.
+- 10 further clusters of size 2–4 repeat the pattern at smaller scale.
 - 16 templates already have a unique skeleton.
 
-## 4. Section render-precondition classification — resolves IMPORTANT-3(A)
+## 4. Revised material-curation principle — resolves the review's "revised material-curation principle" section
 
-Full source citations and the per-section table are in the companion
-inventory §9. Summary: of the 9 sections available for curation, 4
-(`faq`, `testimonials`, `video_section`, `quick_links` — "**Group B**")
-render nothing under neutral default settings — each requires the merchant
-to manually author content (Q&A pairs, quotes, a video URL, or picking an
-existing Menu) before anything appears. The other 5 (`blog_posts`,
-`promo_cards`, `collection_tiles`, `image_slider`, `story_rail` —
-"**Group A**") are auto-sourced from real Store/platform data (the global
-blog feed, the Store's own Categories/Collections, or existing
-`HeroSlide`/`StoryRailItem` media records) and become visible under a
-standard populated Store with **no manual per-section settings edit** —
-exactly the same precondition class the catalog already accepts for
-`hero_banner`/`category_grid`/`product_section` today.
+"A new section exists in the recipe" is **not** equated with "the template
+is materially better/different." Every actively curated template must
+satisfy all six:
 
-## 5. Primary-differentiator rule — resolves IMPORTANT-3(B)
+1. Coherent identity rationale (not picked at random, not picked to hit a
+   coverage number — companion inventory §12 confirms zero-prior-usage was
+   never itself a selection criterion).
+2. Structural difference (`recipe_signature()` changes; the Home skeleton
+   changes).
+3. Merchant-visible difference under the shared fixture (§6) — the added
+   content actually renders, not an empty DOM node.
+4. **No dead primary interaction introduced** — a section whose primary
+   link/action is a placeholder (`href="#"` or equivalent) is disqualified
+   outright, regardless of how "visible" it otherwise is.
+5. No fake merchant content, no ID in Template DNA.
+6. **No duplicated/redundant section without a specific purpose** — adding
+   a section that repeats what an existing section in the *same* recipe
+   already does is not curation.
 
-**A Group-B section must never be the sole reason a Ready Template is
-called materially curated**, and Template DNA must stay merchant-ID-free —
-so fabricating FAQ answers, testimonial quotes, a video URL, or a Menu
-selection inside a Ready Template recipe to force Group-B sections
-"visible" is explicitly forbidden (companion inventory §14 constraint,
-Master Handoff §14).
+## 5. Section eligibility — round-2 corrected (resolves IMPORTANT-1 and IMPORTANT-2A/2B)
 
-**Consequence:** the design-gate-round-1 Tier-1 proposal used a Group-B
-section as the *sole* addition for 11 of its 20 templates
-(`premium_leather_noir`, `artisan_grain`, `coastal_product`, `horizon_story`,
-`watchmaker_round`, `niloufar_glass`, `beauty_dew`, `almas_luxury`,
-`green_workshop`, `mirror_beauty`, `rayan_tech`). **§8 below replaces every
-one of those 11 assignments with a Group-A section instead** — no template
-in the repaired Tier-1 relies on a Group-B section as its material
-differentiator. Group-B sections are not used anywhere in this repaired
-proposal; they remain available to individual merchants through the normal
-R4 Inspector after Apply, same as for any of the other 41 non-curated
-templates today — nothing here removes that option, curation simply does
-not rely on it.
+Full source citations, the rendered-template reads, and the complete
+eligibility table (with the exact columns the review asked for: visible
+with fixture / primary links functional / tenant scoping correct /
+semantic data source / duplicates another section in the target recipe /
+eligible as primary differentiator) are in companion inventory §11–§12.
+Summary of the two corrections:
 
-## 6. Standard shared W4B QA visibility fixture — resolves IMPORTANT-3(C)
+**`blog_posts` — REJECTED.** `blog_posts.html`'s own comment states the
+post-detail route does not exist yet in the project, and every rendered
+card is `<a class="blog-card" href="#">` — a confirmed dead placeholder
+link. Classification:
+- VISIBLE: YES, when `BlogPost` rows exist.
+- INTERACTIONALLY COMPLETE: **NO**.
+- ELIGIBLE AS W4B PRIMARY DIFFERENTIATOR: **NO**.
+- Not fixed in W4B (no Blog detail subsystem, no Content/CMS widening,
+  per the review's explicit instruction). Remains a valid, existing,
+  registered section usable once its navigation contract is completed in
+  a future workstream — out of scope here.
 
-One shared, controlled fixture — reused for every Tier-1 curated template's
-before/after comparison, so the comparison is fair and nothing is
-per-template special-cased:
+**`promo_cards` — REJECTED (different reason: redundancy, not
+brokenness).** `promo_cards.html` renders a real, working link
+(`catalog:product-list?category=slug`) — but its markup is functionally
+and structurally near-identical to `category_grid.html`'s own default
+`else` branch (same tile-cycling pattern, same "مشاهده محصولات {name}"
+button, same destination URL), and `category_grid` is present in 49/50
+templates including every Tier-1 candidate. Adding `promo_cards` anywhere
+in this proposal would render a second, near-identical block of the same
+Store's own Categories — disqualified as redundant, not as broken.
+
+**5 sections remain eligible** (all pass every check in companion
+inventory §12): `collection_tiles`, `image_slider`, `story_rail`,
+`brand_carousel`, `trust_features`. `brand_carousel` and `trust_features`
+are newly added to the candidate pool this round — both were always
+existing, registered, working sections; round 1 simply hadn't needed them
+yet. `trust_features` in particular needs **zero** Store data or fixture
+content to render (a static, universal 4-badge default) — the strongest
+visibility guarantee of any candidate.
+
+`faq`, `testimonials`, `video_section`, `quick_links` remain rejected from
+round 1 (empty by default, no auto-source) — unchanged from the prior
+repair.
+
+## 6. No artificial distribution target — resolves IMPORTANT-2
+
+Round 1 stated the 5 (then different) Group-A sections were "intentionally
+even" at 4 templates each. That target is **removed**. W4B is curation,
+not quota balancing — an uneven distribution is fully acceptable, and the
+repaired Tier-1 proposal below is deliberately uneven (§8: 5/5/4/3/3
+across the 5 eligible sections), driven only by per-template identity fit.
+
+## 7. Standard shared W4B QA visibility fixture — updated
 
 | Fixture element | Used by | Belongs to |
 |---|---|---|
-| The existing demo Store's product/category set (already used by every other Ready Template QA pass — no new products/categories) | `category_grid`, `product_section` (unchanged baseline) | QA fixture (already exists) |
-| ≥1 active `MerchantCollection` | `collection_tiles` | QA fixture (new — one, reused by every template that adds `collection_tiles`) |
-| ≥1 published `BlogPost` (global platform feed, not Store-scoped) | `blog_posts` | QA fixture (new — the platform blog feed, reused by every template that adds `blog_posts`) |
-| ≥1 `HeroSlide` scoped to the new `image_slider` section, per curated template | `image_slider` | QA fixture (same mechanism `ApplyAndRenderSmokeTests` already uses for `hero_banner` — not new infrastructure) |
+| The existing demo Store's product/category set (unchanged, already reused by every other Ready Template QA pass) | `category_grid`, `product_section` (unchanged baseline) | QA fixture (already exists) |
+| ≥1 active `MerchantCollection` | `collection_tiles` | QA fixture (new) |
+| ≥1 active `Brand` | `brand_carousel` | QA fixture (new — replaces the round-1 `BlogPost` fixture requirement, now dropped along with `blog_posts`) |
+| ≥1 `HeroSlide` scoped to the new `image_slider` section, per curated template | `image_slider` | QA fixture (same mechanism `ApplyAndRenderSmokeTests` already uses for `hero_banner`) |
 | ≥1 active `StoryRailItem`, per curated template | `story_rail` | QA fixture (same mechanism already proven for `mina_community`) |
+| *(none needed)* | `trust_features` | Renders its static universal default with zero fixture content |
 
-**Template DNA vs QA fixture, explicit line:** Template DNA (the
-`_RecipeSpec`/`_manifest()`/`_home()` output) only ever names a
-**section_key** plus neutral default settings (`collection_ids: []` =
-"show whatever the Store has," `item_limit: N` = a bounded count — never a
-specific Collection/Product/BlogPost ID). The fixture's actual Collection,
-BlogPost, HeroSlide, and StoryRailItem *rows* are QA/setup data created for
-the browser-QA pass, never written into `a8_ready_templates.py`. This
-mirrors exactly how the existing catalog already treats `hero_banner`
-(recipe names the section; the demo Store's own `HeroSlide` rows make it
-visible) and `category_grid`/`product_section` (recipe names the section;
-the demo Store's own Categories/Products make it visible).
+The round-1 `BlogPost` fixture entry is removed — `blog_posts` is not used
+anywhere in this proposal, so no fixture content should be created "only
+to make a bad section choice appear valid" (explicit review instruction).
+Template DNA vs QA fixture split is unchanged from round 1: Template DNA
+only ever names a `section_key` + neutral default settings; the fixture's
+actual Collection/Brand/HeroSlide/StoryRailItem rows are QA/setup data,
+never written into `a8_ready_templates.py`.
 
-## 7. Material-curation acceptance criterion — resolves IMPORTANT-3(D)
+## 8. Proposed curation — Tier 1 REPAIRED (20 templates) + C10 (1 template) = 21 active
 
-For every Tier-1 curated template, implementation must prove **both**:
-
-1. **Structural recipe change** — the new version's Home composition
-   differs from the old version's in intended, bounded structural DNA
-   (the added `section_key` is present; `recipe_signature()` differs).
-2. **Visible change** — under the standard fixture (§6), the newly curated
-   latest version renders a merchant-visible structural difference from its
-   own old version (the added section actually appears with real content,
-   not an empty DOM node).
-
-A section that satisfies #1 but not #2 (any Group-B section used alone)
-does **not** satisfy this criterion — this is why §8 uses Group-A sections
-exclusively.
-
-## 8. Proposed curation — Tier 1, REPAIRED (20 templates, Group-A only)
-
-Every addition below is a Group-A (auto-sourced, visible-under-fixture)
-section, chosen for identity fit — not for coverage. Distribution across
-the 5 Group-A sections is intentionally even (4 templates each) so no
-single section type is overused; several picks differ from the original
-(rejected) round specifically because the original pick was Group-B.
+Every addition is one of the 5 eligible sections (§5), chosen for identity
+fit. Distribution is intentionally uneven (§6): `image_slider`×5,
+`collection_tiles`×5, `story_rail`×4, `brand_carousel`×4,
+`trust_features`×3 across 21 templates.
 
 ### Cluster C1 (10 templates)
 
-| Key | Identity | Addition (repaired) | Why | Fixture dependency |
+| Key | Identity | Addition (round-2 final) | Why | Fixture dependency |
 |---|---|---|---|---|
-| `premium_leather_noir` (زر) | luxury dark leather, immersive hero | `image_slider` | Luxury/immersive identity suits a cinematic product-imagery slider (same precondition class as its own `hero_banner`). | 1 `HeroSlide` on the new section |
-| `handmade_luxe` (چرم دست) | handcraft leather, editorial_split hero | `blog_posts` | "Handmade" identity → a maker's journal. | shared `BlogPost` fixture |
-| `artisan_grain` (دانه) | grain/organic artisan | `collection_tiles` | Organic/artisan product collections showcase. | shared `MerchantCollection` fixture |
-| `watchmaker_round` (ساعت‌ساز) | watch precision, portrait_round card | `promo_cards` | Limited-edition/collection promo cards fit a precision-watch retailer. | Store's own active Categories (already required by `category_grid`) |
+| `premium_leather_noir` (زر) | luxury dark leather, immersive hero | `image_slider` | Cinematic product-imagery slider, same precondition class as its own `hero_banner`. | 1 `HeroSlide` on the new section |
+| `handmade_luxe` (چرم دست) | handcraft leather | `brand_carousel` *(changed from the rejected `blog_posts`)* | A handcraft-leather boutique showcasing the brands it carries is a standard retail pattern. | shared `Brand` fixture |
+| `artisan_grain` (دانه) | grain/organic artisan | `collection_tiles` | Organic/artisan product-collection showcase. | shared `MerchantCollection` fixture |
+| `watchmaker_round` (ساعت‌ساز) | watch precision, portrait_round card | `brand_carousel` *(changed from the rejected `promo_cards`)* | Multi-brand watch boutique is the standard retail pattern for this vertical. | shared `Brand` fixture |
 | `coastal_product` (موج) | coastal lifestyle | `image_slider` | Coastal lifestyle imagery slider. | 1 `HeroSlide` on the new section |
-| `horizon_story` (افق) | travel/sand editorial — "story" in the identity | `story_rail` | Strong nominal fit: a "story"-named template gets a highlight rail. | 1 `StoryRailItem` |
+| `horizon_story` (افق) | travel/sand editorial — "story" in the identity | `story_rail` | Strong nominal fit. | 1 `StoryRailItem` |
 | `silk_editorial` (ابریشم) | silk editorial luxury | `collection_tiles` | Silk collections as a curated tile set. | shared `MerchantCollection` fixture |
-| `city_classic` (شهر) | city/classic professional | `promo_cards` | Generalist city-retail seasonal promos. | Store's own active Categories |
-| `kamand_artisan` (کمند) | artisan clay | `blog_posts` | Artisan process journal. | shared `BlogPost` fixture |
+| `city_classic` (شهر) | city/classic professional | `trust_features` *(changed from the rejected `promo_cards`)* | Generalist trust/authenticity strip fits a "classic" identity; zero fixture dependency. | none |
+| `kamand_artisan` (کمند) | artisan clay | `image_slider` *(changed from the rejected `blog_posts`)* | Artisan-process imagery slider. | 1 `HeroSlide` on the new section |
 | `parnian_editorial` (پرنیان) | editorial cream | `story_rail` | Editorial highlight rail. | 1 `StoryRailItem` |
 
-Group-A distribution in C1: `image_slider`×2, `blog_posts`×2,
-`collection_tiles`×2, `promo_cards`×2, `story_rail`×2 — even, not
-mechanical (each pick still keyed to that template's own identity).
+C1 distribution: `image_slider`×3, `collection_tiles`×2, `brand_carousel`×2,
+`story_rail`×2, `trust_features`×1.
 
 ### Cluster C2 (4 templates) — `... → newsletter`
 
-| Key | Identity | Addition (repaired) | Why |
+| Key | Identity | Addition (round-2 final) | Why |
 |---|---|---|---|
 | `niloufar_glass` (نیلوفر) | beauty glass | `collection_tiles` | Beauty product-collection showcase. |
-| `beauty_dew` (شبنم) | beauty dew | `image_slider` | Beauty imagery slider (tutorial-style stills). |
-| `laleh_play` (لاله‌زار) | playful/floral | `promo_cards` | Seasonal/floral promo cards. |
+| `beauty_dew` (شبنم) | beauty dew | `image_slider` | Beauty imagery slider. |
+| `laleh_play` (لاله‌زار) | playful/floral | `trust_features` *(changed from the rejected `promo_cards`)* | Generic reliability strip; genuinely distinct from the other 3 C2 picks, zero fixture dependency. |
 | `almas_luxury` (الماس) | diamond luxury | `story_rail` | Short luxury highlight rail. |
 
 ### Cluster C3 (3 templates) — `... → image_text → newsletter`
 
-| Key | Identity | Addition (repaired) | Why |
+| Key | Identity | Addition (round-2 final) | Why |
 |---|---|---|---|
-| `green_workshop` (سبزه) | eco/green workshop | `blog_posts` | Eco brand journal. |
-| `pine_eco` (کاج) | eco (identity-overlap note below) | `collection_tiles` | Eco product-collection showcase — deliberately a *different* Group-A type from `green_workshop`, widening the gap between these two already-similar eco-identity templates. |
+| `green_workshop` (سبزه) | eco/green workshop | `trust_features` *(changed from the rejected `blog_posts`)* | An eco brand's own certification/quality trust strip — strong identity fit, zero fixture dependency, and further widens the gap from `pine_eco` (see identity-overlap note below). |
+| `pine_eco` (کاج) | eco (identity-overlap note) | `collection_tiles` | Eco product-collection showcase — a different mechanism from `green_workshop`'s `trust_features`. |
 | `mirror_beauty` (آینه) | beauty | `image_slider` | Beauty imagery slider. |
 
-**Identity-overlap note (unchanged from round 1, still just an
-observation, not a defect):** `green_workshop` and `pine_eco` are both
-literally eco-themed; distinct card styles (`standard` vs `soft_capsule`)
-already separate them somewhat, and the two different Group-A additions
-above widen that gap further. No key rename proposed (Master Handoff §8).
+**Identity-overlap note (unchanged observation, not a defect):**
+`green_workshop` and `pine_eco` are both eco-themed; distinct card styles
+(`standard` vs `soft_capsule`) plus now two structurally different
+additions (`trust_features` vs `collection_tiles`) separate them clearly.
+No key rename proposed.
 
 ### Cluster C4 (3 templates) — `... → trust_features`
 
-| Key | Identity | Addition (repaired) | Why |
+All three already have `trust_features` in their baseline composition, so
+none of them can add it again (would duplicate — companion inventory §12,
+column 5). Additions:
+
+| Key | Identity | Addition (round-2 final) | Why |
 |---|---|---|---|
-| `cedar_home` (سدر) | home/furniture | `blog_posts` | Home/decor journal. |
-| `simorgh_market` (سیمرغ) | general marketplace | `promo_cards` | Marketplace seasonal-deal cards. |
-| `rayan_tech` (رایان) | tech | `story_rail` | Tech-highlights rail (repaired from the rejected `video_section` pick). |
+| `cedar_home` (سدر) | home/furniture | `collection_tiles` *(changed from the rejected `blog_posts`)* | Furniture/home retailers organize by "room collections" — a strong, standard retail pattern. |
+| `simorgh_market` (سیمرغ) | general marketplace | `brand_carousel` *(changed from the rejected `promo_cards`)* | Marketplaces conventionally feature a multi-brand carousel. |
+| `rayan_tech` (رایان) | tech | `story_rail` | Tech-highlights rail. |
 
-**Tier 1 total: 20 templates**, C1:10 + C2:4 + C3:3 + C4:3. Final Group-A
-distribution across all 20: `image_slider`×4, `blog_posts`×4,
-`collection_tiles`×4, `promo_cards`×4, `story_rail`×4.
+### Cluster C10 (1 of 2 templates curated) — resolves IMPORTANT-3
 
-## 9. Composition-token compilation fix — resolves IMPORTANT-2
+`tower_department` and `harbor_imports` share header, hero, layout,
+product_view, and footer, differing only in card style
+(`marketplace_price` vs `shipping_label`) and bottom-nav variant — the
+weakest-justified "unchanged" pair in the catalog (companion inventory
+§10). Per the review's explicit instruction, this specific pair (and only
+this pair) is promoted into active curation — no other Tier-2 pair is
+touched.
 
-**Finding confirmed from source:** `_home()`'s only fallback for a
-composition token is `_STATIC_SECTIONS[token]` (a plain dict lookup); none
-of the 5 Group-A tokens above (`blog_posts`, `promo_cards`,
-`collection_tiles`, `image_slider`, `story_rail` — the token literal is
-identical to the target `section_key`, same convention `_STATIC_SECTIONS`
-already uses for `testimonials`/`newsletter`) currently exist in
-`_STATIC_SECTIONS`. Placing any of them in a new `_RecipeSpec.composition`
-tuple today raises `KeyError` at import time. Round-1's design silently
-assumed this compiled; it does not.
+| Key | Identity | Addition | Why | Structural effect |
+|---|---|---|---|---|
+| `harbor_imports` (بندر — literally "harbor/imports") | import/shipping marketplace, `shipping_label` card already reflects this | `brand_carousel` | An "imports" identity is the single strongest nominal fit of any candidate in the whole catalog for a multi-brand carousel — imported goods are conventionally presented by the brands that make them. | Home composition grows from 5 to 6 sections and gains a section type `tower_department` does not have — the two no longer share a skeleton at all (not just a settings difference). |
 
-**Repair — the smallest possible extension, inside the existing canonical
-recipe-compilation path, no new compiler, no per-template branching:** add
-exactly the 5 identity entries this proposal actually uses to the existing
-`_STATIC_SECTIONS` dict in `a8_ready_templates.py`:
+`tower_department` is **not** modified — per the review's own allowance
+("21 curated templates is fine if only one C10 template needs change"),
+changing one side of a near-duplicate pair is sufficient to break the
+near-duplicate relationship, and `harbor_imports`'s own identity
+(`بندر` = harbor) is the clearly stronger fit for `brand_carousel` than
+`tower_department`'s (`برج` = tower, a generic department-store identity
+with no comparably strong single-section fit). Cosmetic-only changes
+(palette/font/motion) are explicitly insufficient per the review and are
+not what is proposed here — this is a real added section with a new,
+functioning, visible interaction.
+
+**Tier-1 + C10 total: 21 actively curated templates.** The count is not
+rounded to 20 or 22 on purpose — it is exactly how many templates the
+source-backed rationale above supports.
+
+## 9. Composition-token compilation fix — updated to the final token set (resolves IMPORTANT-2's "final token allowlist" instruction)
+
+**Only 2 genuinely new tokens are needed.** `_home()`'s `_STATIC_SECTIONS`
+dict already contains identity-mapping rows for `trust_features` (directly)
+and for `story_rail`/`brand_carousel` under different token names
+(`community_gallery` → `story_rail`; `brands` → `brand_carousel`) — the
+repaired Tier-1 proposal reuses those **existing** tokens directly instead
+of adding redundant new aliases:
+
+- Templates gaining `story_rail` (`horizon_story`, `parnian_editorial`,
+  `almas_luxury`, `rayan_tech`) use the existing composition token
+  `"community_gallery"`.
+- Templates gaining `brand_carousel` (`handmade_luxe`, `watchmaker_round`,
+  `simorgh_market`, `harbor_imports`) use the existing composition token
+  `"brands"`.
+- Templates gaining `trust_features` (`city_classic`, `laleh_play`,
+  `green_workshop`) use the existing composition token `"trust_features"`.
+
+**Genuinely new tokens (2, both identity-mappings, same convention as the
+existing `testimonials`/`newsletter` rows):**
 
 ```python
 _STATIC_SECTIONS = {
@@ -233,271 +279,258 @@ _STATIC_SECTIONS = {
     "testimonials": "testimonials",
     "newsletter": "newsletter",
     "community_gallery": "story_rail",
-    # W4B additions — identity mapping, same convention as the 8 rows above:
-    "blog_posts": "blog_posts",
-    "promo_cards": "promo_cards",
+    # W4B additions — only the 2 tokens the final curation actually uses:
     "collection_tiles": "collection_tiles",
     "image_slider": "image_slider",
-    "story_rail": "story_rail",
 }
 ```
 
-This is a **bounded allowlist addition**, not an open mapping: only the 5
-section keys this specific proposal uses are added, exactly as the
-architect's own example (`"faq" -> "faq"`) prescribed, mirroring the
-pre-existing `testimonials`/`newsletter` identity-mapping rows already in
-the same dict. No change to `_home()`'s dispatch logic, `_product_entry()`,
-`section_registry.py`, or any other file. `faq`, `video_section`, and
-`quick_links` are deliberately **not** added — they are not used anywhere
-in the repaired Tier-1 proposal (§8), so extending the allowlist for them
-now would be scope creep the architecture-boundary rule (§14) forbids.
+`blog_posts`, `promo_cards`, `faq`, `video_section`, and `quick_links` are
+**not** added — none is used anywhere in the final proposal, and adding an
+unused alias would be exactly the speculative allowlist growth the review
+forbade.
 
-**Test contract for this fix** (addresses IMPORTANT-2B): for every Tier-1
-curated key, a focused test must prove that its new composition:
-- compiles through `_home()` without raising (`KeyError` or otherwise);
-- produces only section keys `section_registry.is_valid_section_key()`
-  accepts, on a page type each is `section_registry.is_section_allowed_on_page()`-permitted
-  for (`home`);
-- passes `register_layout_preset`'s full import-time validation chain
-  (`_validate_page_composition_shape` → per-section `validate_settings`/
-  `default_settings()` → `row_service.validate_page_row_layout` →
-  `_validate_ready_template_store_appearance` → `validate_store_appearance_manifest(..., require_complete=True)`)
-  without raising `InvalidLayoutPresetError`;
-- introduces no key in `test_a8_ready_template_catalog.py::FORBIDDEN_DATA_KEYS`
-  anywhere in its compiled `LayoutPresetDefinition` (no merchant/tenant ID).
+**Test contract (unchanged from round 1, restated for completeness):** for
+every actively curated key, a focused test must prove its new composition
+compiles through `_home()` without raising, produces only
+`section_registry.is_valid_section_key`-accepted keys that are
+`is_section_allowed_on_page(..., "home")`-permitted, and passes
+`register_layout_preset`'s full import-time validation chain without
+raising `InvalidLayoutPresetError`.
 
-## 10. Versioning strategy, REPAIRED — resolves IMPORTANT-1
+## 10. Versioning strategy — UNCHANGED, ACCEPTED
 
-Full derivation and the exact code shape are in the companion inventory §7
-(new `_HISTORICAL_SPECS` tuple + a second registration loop, both confined
-to `a8_ready_templates.py`). Summary of why round 1 was wrong and what
-replaces it:
+The round-1 `_HISTORICAL_SPECS` mechanism is accepted unmodified per the
+review:
 
-**Round-1 error:** `A8_READY_TEMPLATES = tuple(_build(spec) for spec in
-_SPECS)` maps `_SPECS` 1:1 with no dedup. Appending a new version row per
-curated key while leaving the old row in `_SPECS` would grow `_SPECS` (and
-`A8_READY_TEMPLATES`) to 70 rows for 20 curated keys — `test_a8_ready_template_catalog.py`'s
-`len(A8_READY_TEMPLATES) == 50` assertion would correctly fail. `list_ready_templates()`'s
-dedup-by-key does not help, because the test asserts on the raw
-`A8_READY_TEMPLATES` tuple itself, not on `list_ready_templates()`.
+- `_SPECS` stays at exactly 50 rows; curating a key edits its row in
+  place (version bump + new composition), never appends.
+- The pre-curation row is copied verbatim into a second, append-only
+  tuple, `_HISTORICAL_SPECS`, registered through a second loop that feeds
+  `register_layout_preset` (via the same `_build()` compiler) but never
+  feeds `A8_READY_TEMPLATES`.
+- `A8_READY_TEMPLATES` (built only from `_SPECS`) stays exactly 50;
+  `list_ready_templates()` stays exactly 50 (max-version-wins dedup, order
+  independent).
+- Both latest and historical versions register through the same canonical
+  `register_layout_preset`/`LAYOUT_PRESET_REGISTRY`/
+  `LAYOUT_PRESET_VERSION_REGISTRY` — no second registry.
+- `layout_preset_registry.py` is not touched; the 8 pre-A8 legacy
+  hardcoded blocks in it are untouched.
 
-**Repaired mechanism:** `_SPECS` stays at exactly 50 rows forever — curating
-a key **edits its existing row in place** (new version number, new
-composition), it never adds a row. The row's exact pre-curation field
-values are copied, unedited, into a second, append-only tuple —
-`_HISTORICAL_SPECS` — registered through a second loop that feeds
-`register_layout_preset` (via the same `_build()` compiler) but never
-feeds `A8_READY_TEMPLATES`:
+**Scope update for this round:** 21 keys are now curated (the 20 Tier-1
+keys plus `harbor_imports`), so `_HISTORICAL_SPECS` holds 21 frozen rows,
+and `test_a8_ready_template_catalog.py::EXPECTED_LATEST_VERSIONS` is
+updated for 21 keys (was 20 in round 1).
 
-```python
-_HISTORICAL_SPECS = (
-    # one frozen row per curated key's outgoing version — copied verbatim
-    # from its old _SPECS row at curation time, never edited again.
-)
+## 11. Full historical fingerprint contract — resolves IMPORTANT-4A
 
-for _historical_spec in _HISTORICAL_SPECS:
-    register_layout_preset(_build(_historical_spec))
-```
+Round 1's proposed historical-preservation test compared only
+`tuple(e.section_key for e in historical.pages["home"])` — proving the
+Home *skeleton* survived, not the full recipe. This is now replaced with a
+whole-object fingerprint covering every field on `LayoutPresetDefinition`
+(`key`, `label_fa`, `description_fa`, `version`, `is_ready_template`,
+`store_appearance`, `appearance`, `default_palette_slug`, `header`,
+`footer`, `pages` — including, per page, every `section_key`/`settings`/
+`row_key`/`row_span`/`container_settings` — and `compatible_families`).
 
-Why every constraint from the review is satisfied:
-
-| # | Constraint | How it's satisfied |
-|---|---|---|
-| 1 | `A8_READY_TEMPLATES` stays exactly 50 | It is built only from `_SPECS`, which is edited-in-place, never appended, for curation. |
-| 2 | `list_ready_templates()` stays exactly 50 | Same reason, plus the pre-existing max-version-wins dedup by key. |
-| 3 | Every curated key gets a new numeric latest version | The in-place `_SPECS` edit bumps the version string. |
-| 4 | Old exact version stays resolvable via `get_layout_preset_version` | `_HISTORICAL_SPECS`'s frozen row is registered through the same canonical call. |
-| 5 | Historical versions never appear as extra catalog entries | `_HISTORICAL_SPECS` never touches `A8_READY_TEMPLATES`; its lower version number can never win `LAYOUT_PRESET_REGISTRY[key]` regardless of registration order (`register_layout_preset`'s own numeric comparison). |
-| 6 | No second Ready Template registry | Same `LAYOUT_PRESET_REGISTRY`/`LAYOUT_PRESET_VERSION_REGISTRY`. |
-| 7 | Canonical `register_layout_preset`/registry used | Yes, unchanged. |
-| 8 | Existing historical versions preserved | The 8 pre-A8 hardcoded blocks in `layout_preset_registry.py` are untouched; this mechanism doesn't interact with them at all. |
-
-This is a **smaller** change than literally mirroring the 8 legacy keys'
-pattern in `layout_preset_registry.py` would have been (that would require
-hand-transcribing each curated key's fully-compiled `PresetSectionEntry`
-tuple instead of reusing `_build()`), and it stays inside the one file
-named as W4B's primary production scope. `layout_preset_registry.py` is
-**not** touched by this design.
-
-**RED/GREEN contract per curated key (addresses IMPORTANT-1B):**
+**Freeze/fingerprint function** (reuses the exact recursive-freeze pattern
+`storefront_appearance/inventory.py::_freeze` already uses for
+`recipe_signature`, and `dataclasses.asdict` so no field can be
+accidentally omitted by hand-listing):
 
 ```python
-def test_<key>_curation_preserves_history_and_promotes_latest(self):
-    latest = lpr.get_layout_preset(key)
-    historical = lpr.get_layout_preset_version(key, old_version)
+import dataclasses
+import hashlib
 
-    self.assertEqual(latest.version, new_version)
-    self.assertEqual(historical.version, old_version)
-    self.assertIsNot(latest, historical)
-    # the old recipe's Home composition is byte-for-byte the certified
-    # pre-W4B structure:
-    self.assertEqual(
-        tuple(e.section_key for e in historical.pages["home"]),
-        <certified pre-W4B skeleton for this key, from companion inventory §5>,
-    )
 
-def test_a8_read_template_catalog_still_exactly_fifty(self):
-    self.assertEqual(len(A8_READY_TEMPLATES), 50)
-    self.assertEqual(len(lpr.list_ready_templates()), 50)
+def _deep_freeze(value):
+    if isinstance(value, dict):
+        return tuple(sorted((k, _deep_freeze(v)) for k, v in value.items()))
+    if isinstance(value, (list, tuple)):
+        return tuple(_deep_freeze(v) for v in value)
+    if isinstance(value, (set, frozenset)):
+        return tuple(sorted(_deep_freeze(v) for v in value))
+    return value
+
+
+def fingerprint(preset) -> str:
+    frozen = _deep_freeze(dataclasses.asdict(preset))
+    return hashlib.sha256(repr(frozen).encode()).hexdigest()
 ```
 
-## 11. Post-curation closure matrix — resolves the Tier-2/remaining-cluster-closure requirement
+**Procedure (part of the TDD RED step, before any recipe is edited):**
+1. At the certified W4A base (`707dd631e851bdd13173bf3950489142f3e526b1`),
+   compute and record `CERTIFIED_W4A_FINGERPRINT[(key, version)]` for each
+   of the 21 keys about to be curated, using their *current* (pre-curation)
+   registered `LayoutPresetDefinition`.
+2. Implement the curation (in-place `_SPECS` edit + `_HISTORICAL_SPECS`
+   freeze, per §10).
+3. Assert, for every curated key:
+   ```python
+   self.assertEqual(
+       fingerprint(lpr.get_layout_preset_version(key, old_version)),
+       CERTIFIED_W4A_FINGERPRINT[(key, old_version)],
+   )
+   ```
+   This proves the frozen historical row is byte-for-byte identical to
+   what was certified at W4A — not just its Home section-key sequence.
 
-No cluster below is automatically added to this W4B pass. This matrix
-exists so "deferred" is an honest, measured statement, not an unmeasured
-scope escape.
+## 12. Historical safety scan — resolves IMPORTANT-4B
 
-**Curated (20 templates, §8):** C1 (10) + C2 (4) + C3 (3) + C4 (3) — see §8
-for the exact addition and rationale per template.
+`test_a8_ready_template_catalog.py::test_recipes_contain_no_tenant_executable_or_prototype_payload`
+iterates `lpr.list_ready_templates()` — the **latest** dict only — so it
+never walks the new `_HISTORICAL_SPECS` entries. This is not because the
+old recipes are suspected unsafe; it is a regression contract so the
+historical-copy mechanism itself cannot silently introduce altered data.
 
-**Unique-skeleton, no shared cluster, no change (16 templates):**
-`editorial_jewelry`, `dense_marketplace`, `warm_boutique`, `premium_leather`,
-`dark_digital`, `search_market`, `playful_lifestyle`, `utility_catalog`,
-`pixel_play`, `fashion_promo_catalog`, `mina_community`, `tuska_bento`,
-`collection_index`, `kite_playful`, `ferdowsi_department`,
-`anniversary_mosaic`. Justification: each already has a Home skeleton no
-other template shares (companion inventory §6, C12–C27) — the strongest
-possible non-palette/non-font distinctness this catalog can express.
+**New test:** run the exact same walk/assertion the existing test already
+performs (`_walk()` + `FORBIDDEN_DATA_KEYS` intersection + the
+`<script`/`javascript:`/`{%`/`{{`/prototype-ID regex checks), but over
+`[lpr.get_layout_preset_version(key, old_version) for key, old_version in
+CURATED_KEYS_AND_OLD_VERSIONS]` instead of `list_ready_templates()`. No new
+scanning logic — the existing test's own walk function is reused verbatim
+against the 21 historical entries.
 
-**Shared-skeleton, left unchanged this pass (14 templates, 7 pairs) — ranked
-honestly by how many of the 7 non-palette structural axes (header, hero,
-layout, product_view, card, footer, bottom_nav) actually differ (full
-per-axis breakdown: companion inventory §10):**
+## 13. Post-curation closure matrix — updated counts
+
+**Actively curated (21 templates):** C1 (10) + C2 (4) + C3 (3) + C4 (3) +
+`harbor_imports` (1) — §8.
+
+**Unique-skeleton, no shared cluster, no change (16 templates, unchanged
+from round 1):** `editorial_jewelry`, `dense_marketplace`, `warm_boutique`,
+`premium_leather`, `dark_digital`, `search_market`, `playful_lifestyle`,
+`utility_catalog`, `pixel_play`, `fashion_promo_catalog`, `mina_community`,
+`tuska_bento`, `collection_index`, `kite_playful`, `ferdowsi_department`,
+`anniversary_mosaic`.
+
+**`tower_department` (1 template) — unchanged, no longer paired with an
+unresolved near-duplicate.** Its former cluster-mate `harbor_imports` is
+now actively curated (§8), so `tower_department` is simply an unmodified,
+unique-composition template going forward — not part of any remaining
+shared-skeleton pair.
+
+**Shared-skeleton, left unchanged this pass (12 templates, 6 pairs) — same
+honest per-axis ranking as round 1, C10 removed (now curated above):**
 
 | Cluster | Pair | Differing axes (count) | Closure judgment |
 |---|---|---|---|
-| C7 | `roosta_zigzag` / `calligraphy_paper` | 7/7 — every family axis differs, plus a layout/product_view combination (`editorial_zigzag`+`featured_wall`) no other template uses at all | Materially distinct already; leaving unchanged is fully justified. |
-| C9 | `aftab_price` / `charcoal_grill` | 5/7 (header, hero, card, footer, bottom_nav) | Materially distinct already; leaving unchanged is justified. |
-| C8 | `literary_catalog` / `gallery_minimal` | 4/7 (header, hero, card, footer) | Distinct enough to justify no change; `gallery_minimal`'s deliberate minimalism would be undercut by adding a section, which is itself a reason to leave it alone. |
-| C11 | `mist_quiet` / `night_catalog` | 4/7 (header, layout, card, footer) | Distinct enough; both are deliberately spare/quiet identities (`motion.none`) — padding either would work against its own design intent. |
-| C6 | `tool_finder` / `mother_utility` | 3/7 (header, footer, bottom_nav) | Weaker but still a full chrome difference (header pattern + footer + bottom-nav all differ); acceptable to leave unchanged this pass, reasonable Tier-2 candidate if scope is later widened. |
-| C5 | `street_drop` / `racer_tech` | 3/7 (hero, card, footer) | Same strength as C6; acceptable to leave unchanged this pass, reasonable Tier-2 candidate if scope is later widened. |
-| **C10** | **`tower_department` / `harbor_imports`** | **2/7 (card, bottom_nav only)** | **Weakest justification in the catalog — flagged, not hidden.** These two share header, hero, layout, product_view, and footer exactly. Recommendation: this is the single strongest candidate if the Product Owner or Architect wants W4B's scope widened beyond Tier 1; this design does **not** widen scope unilaterally (the review's own instruction: "do NOT automatically expand W4B to all remaining repeated-skeleton pairs"), so it stays unchanged for this pass, honestly labeled as the weakest "unchanged" case rather than asserted as adequately distinct. |
+| C7 | `roosta_zigzag` / `calligraphy_paper` | 7/7 | Materially distinct already; unchanged is fully justified. |
+| C9 | `aftab_price` / `charcoal_grill` | 5/7 | Materially distinct already; unchanged is justified. |
+| C8 | `literary_catalog` / `gallery_minimal` | 4/7 | Distinct enough; `gallery_minimal`'s deliberate minimalism is itself a reason to leave it alone. |
+| C11 | `mist_quiet` / `night_catalog` | 4/7 | Distinct enough; both deliberately spare/quiet identities. |
+| C6 | `tool_finder` / `mother_utility` | 3/7 | Acceptable to leave unchanged; reasonable candidate if scope is later widened. |
+| C5 | `street_drop` / `racer_tech` | 3/7 | Acceptable to leave unchanged; reasonable candidate if scope is later widened. |
 
-Total accounted for: 20 (curated) + 16 (unique) + 14 (deferred pairs) = 50.
+Total accounted for: 21 (curated) + 16 (unique) + 1 (`tower_department`) +
+12 (deferred pairs) = **50**.
 
-## 12. New-section rule compliance (unchanged)
+## 14. New-section rule compliance (unchanged)
 
-No new section type is proposed. The 5 sections used in the repaired Tier 1
-(`blog_posts`, `promo_cards`, `collection_tiles`, `image_slider`,
-`story_rail`) already exist, are registered, tested
-(`test_section_registry.py`), and auto-sourced from real Store/platform
-data with no merchant/tenant ID in Template DNA. STAT and any other new
-editorial primitive remain untouched/BACKLOG (Master Handoff §12).
+No new section type is proposed. The 5 sections used
+(`collection_tiles`, `image_slider`, `story_rail`, `brand_carousel`,
+`trust_features`) already exist, are registered, tested, and — per the
+round-2 audit (companion inventory §11–§12) — confirmed functionally
+sound (real working links where applicable, correct Store scoping, no
+redundancy in their assigned target recipe). STAT and any other new
+editorial primitive remain untouched/BACKLOG.
 
-## 13. Architecture / duplication / tenant impact (updated file list)
+## 15. Architecture / duplication / tenant impact (updated)
 
 - **Files expected to change during implementation:**
-  - `apps/storefront_builder/a8_ready_templates.py` — (a) 20 `_RecipeSpec`
-    rows edited in place (version bump + new composition); (b) a new
-    `_HISTORICAL_SPECS` tuple (20 frozen rows) + one new registration loop;
-    (c) 5 new identity rows in `_STATIC_SECTIONS` (§9). No function
-    signature changes to `_build`/`_home`/`_manifest`/`_appearance`.
+  - `apps/storefront_builder/a8_ready_templates.py` — (a) 21 `_RecipeSpec`
+    rows edited in place; (b) a new `_HISTORICAL_SPECS` tuple (21 frozen
+    rows) + one new registration loop; (c) 2 new identity rows in
+    `_STATIC_SECTIONS` (§9).
   - `apps/storefront_builder/tests/test_a8_ready_template_catalog.py` —
-    `EXPECTED_LATEST_VERSIONS` updated for the 20 bumped keys; new
-    RED/GREEN tests per §10.
-  - New focused test module (or an addition to an existing one) for the
-    per-key historical-preservation + compilation contracts in §9/§10.
-  - **`apps/storefront_builder/layout_preset_registry.py` is NOT changed**
-    (round-1's implicit assumption that no file besides `a8_ready_templates.py`
-    would need touching is now correct in substance, though the historical
-    hardcoded-block idea it gestured at would have required touching this
-    file — the repaired `_HISTORICAL_SPECS` mechanism does not).
-- **No renderer, registry, manifest, or persistence file changes.** No new
-  canonical owner introduced or duplicated (Master Handoff §6 fully
-  respected).
+    `EXPECTED_LATEST_VERSIONS` updated for the 21 bumped keys; new
+    fingerprint + historical-safety-scan tests (§11–§12).
+  - **`apps/storefront_builder/layout_preset_registry.py` is NOT changed.**
+- **No renderer, registry, manifest, or persistence file changes.**
 - **Migrations:** expected **zero**.
-- **Tenant/Store scoping:** unaffected — Ready Template recipes remain
-  global, Store-agnostic Python data.
-- **Merchant data in Template DNA:** none of the 5 Group-A sections'
-  default settings reference a Product/Category/Collection/Brand/BlogPost
-  ID (companion inventory §9) — consistent with Master Handoff §14.
-- **W2/W3 non-interference:** `theme` stays `theme.none.v1` for all 50;
-  Random Mix/Design Lab/Theme overlay untouched.
+- **Tenant/Store scoping:** unaffected; all 5 newly-used sections' own
+  context builders were confirmed Store-scoped correctly in companion
+  inventory §12 (`collection_tiles`/`brand_carousel` filter by `store=store`;
+  `image_slider`/`story_rail` reuse the existing scoped-with-fallback
+  helpers already proven for `hero_banner`).
+- **Merchant data in Template DNA:** none of the 5 sections' default
+  settings reference a specific Collection/Brand/HeroSlide/StoryRailItem
+  ID — every default is neutral (`collection_ids: []` = "show whatever the
+  Store has," etc.).
+- **W2/W3 non-interference:** unchanged, `theme` stays `theme.none.v1` for
+  all 50.
 
-## 14. Architecture boundary (explicit, per review request)
+## 16. Architecture boundary (explicit, per review request)
 
 | Item | Answer |
 |---|---|
-| Exactly 50 latest Ready Templates | YES (§10 proof) |
+| Exactly 50 latest Ready Templates | YES |
 | New renderer | NO |
 | New Ready Template registry | NO |
 | New section type | NO |
-| New Store Appearance family | NO |
 | New Theme mechanism | NO |
 | New Random Mix engine | NO |
 | New tenant resolver | NO |
-| New ProductCard path | NO |
-| New merchant-data persistence inside Template DNA | NO |
+| New ProductCard authority | NO |
+| New CMS/blog subsystem | NO |
+| Merchant IDs inside Template DNA | NO |
 | Migrations | 0 |
 | W4C | FROZEN — not started |
 
-## 15. Test plan (repaired — no predicted results, only commands to run)
+## 17. Test plan (repaired — matches the review's 19-point list)
 
-1. **Exact-50 latest-catalog contract:** `len(A8_READY_TEMPLATES) == 50` and
-   `len(lpr.list_ready_templates()) == 50`, run and recorded as evidence
-   after the `_SPECS`/`_HISTORICAL_SPECS` change — not assumed.
-2. **Historical exact-version preservation** for all 20 curated keys (§10
-   RED/GREEN contract) — `get_layout_preset_version(key, old_version)` is
-   not `None`, is not the same object as `get_layout_preset(key)`, and its
-   Home skeleton matches the certified pre-W4B skeleton recorded in
-   companion inventory §5, byte-for-byte.
-3. **Composition-token compilation** for the 5 newly-used section keys
-   (§9 test contract) — no `KeyError`, valid registered section keys,
-   passes the full `register_layout_preset` validation chain.
-4. **Registered-section / page-type validation** — `section_registry.is_valid_section_key`
-   and `is_section_allowed_on_page(..., "home")` true for every added
-   section.
-5. **Merchant-ID-free DNA** — `test_a8_ready_template_catalog.py`'s existing
-   `test_recipes_contain_no_tenant_executable_or_prototype_payload` re-run
-   against the 20 curated + 20 historical entries; must stay green
-   unmodified (this test already walks all of `lpr.list_ready_templates()`
-   generically, no test-code change needed for it to cover the new rows).
-6. **50 pairwise-unique structural signatures** —
-   `apps.storefront_builder.tests.test_a8_template_diversity` run and its
-   actual `len(signatures) == 50` / `len(set(signatures)) == 50` output
-   recorded — **not** asserted in advance as "trivially true."
-7. **Component coverage regression without coverage-gaming** —
-   `test_a8_component_coverage` run; confirm no advertised component key
-   becomes newly unused, and that no new component was added to
-   `A8_ADVERTISED_COMPONENTS_BY_FAMILY` purely to chase a coverage number
-   (none is proposed — §8 only edits Home composition, no family selection
-   changes).
-8. **Candidate resolution / Ready Template apply regression for all 50** —
-   run whichever existing tests already cover `resolve_preset_candidate`/
-   `apply_preset` against the full `list_ready_templates()` set (e.g.
-   `test_preset_service`, `test_u10_ready_template_catalog::ApplyAndRenderSmokeTests`
-   pattern) — confirm the 20 curated latest versions apply/preview without
-   error.
-9. **Bounded browser QA, Tier-1 curated templates only** (not the W4C
-   all-50 matrix): 3 standard viewports, RTL, under the standard fixture
-   (§6) — confirm the new section renders with real content (not an empty
-   DOM node) and Header/Footer/Bottom-Nav duplication stays at 0.
-10. **Visible latest-vs-historical comparison** under the *same* fixture
-    (§7's acceptance criterion #2) — a screenshot or DOM assertion pair per
-    curated template, old version vs new version, proving the added
+1. `len(A8_READY_TEMPLATES) == 50`.
+2. `len(lpr.list_ready_templates()) == 50`.
+3. Correct latest version for every one of the 21 curated keys
+   (`get_layout_preset(key).version == new_version`).
+4. **Full certified-base historical fingerprint equality** for every
+   outgoing curated version (§11) — not section-keys-only.
+5. **Explicit historical forbidden-payload safety scan** over the 21
+   `_HISTORICAL_SPECS` entries (§12).
+6. Bounded composition-token compilation — the 2 new `_STATIC_SECTIONS`
+   rows (§9) compile without `KeyError` for every curated composition.
+7. All added sections registered and Home-allowed
+   (`is_valid_section_key`, `is_section_allowed_on_page(..., "home")`).
+8. No merchant IDs/content in DNA — existing
+   `test_recipes_contain_no_tenant_executable_or_prototype_payload`, run
+   unmodified (it already walks `list_ready_templates()` generically) plus
+   the new historical scan (item 5).
+9. 50/50 pairwise-unique `recipe_signature()` — run and recorded, not
+   predicted.
+10. Component coverage regression — `test_a8_component_coverage` run; no
+    advertised component newly unused, no component added to
+    `A8_ADVERTISED_COMPONENTS_BY_FAMILY` (none is proposed — this workstream
+    only edits Home composition).
+11. All-50 candidate resolution/apply regression using existing canonical
+    paths (`test_preset_service`, the `ApplyAndRenderSmokeTests` pattern) —
+    confirm all 21 curated latest versions apply/preview without error.
+12. Bounded browser QA for every actively curated template (21, not 20) —
+    3 standard viewports, RTL, under the fixture (§7); confirm
+    Header/Footer/Bottom-Nav duplication stays 0.
+13. Latest-vs-historical visible comparison under the identical fixture —
+    a screenshot/DOM-assertion pair per curated template proving the added
     section is actually visible, not just present in the manifest.
-11. **Full `storefront_builder` regression** compared against the certified
-    W4A baseline evidence (`.../w4a_public_shell_convergence/
-    32_full_storefront_builder_exact_head.txt` and
-    `33_full_suite_exact_head_base_comparison.md`, 3216 tests / 30F / 2E /
-    4skip) — any new failure/error identity is a blocker; the 30
-    pre-existing failures + 2 errors must remain the same identities and
-    reasons.
-12. **`python manage.py check`** — clean.
-13. **`python manage.py makemigrations --check --dry-run`** — "No changes
+14. **No dead/placeholder primary interaction introduced** — for every
+    actively curated template whose addition has a primary link
+    (`collection_tiles`, `brand_carousel`; `image_slider`/`story_rail`
+    where their resolved destination is present), assert the rendered
+    `href` is not `#` and resolves to the intended application route
+    (`catalog:collection-detail` / `catalog:product-list?brand=...` /
+    whatever `resolve_destination_item` returns) — not merely that
+    *something* rendered.
+15. Post-curation closure matrix for all 50 (§13) — cross-checked against
+    the actual diff during implementation, not just asserted in this doc.
+16. Full `apps.storefront_builder.tests` comparison against the certified
+    W4A baseline (3216 tests / 30F / 2E / 4skip) — W4B-only
+    failure/error identities = 0; changed historical failure reasons = 0.
+17. `python manage.py check` — clean.
+18. `python manage.py makemigrations --check --dry-run` — "No changes
     detected."
-14. **`git diff --check`** — clean.
+19. `git diff --check` — clean.
 
-## 16. Open questions for the Product Owner
+## 18. Open questions for the Product Owner
 
-**None that block proceeding.** All four review findings were resolved
-from source in this repair. One item is surfaced for transparency, not as
-a blocking question: companion inventory §10 shows `tower_department`/
-`harbor_imports` (C10) is the weakest-justified "leave unchanged" pair in
-the whole catalog (only 2 of 7 structural axes differ). Per the review's
-own instruction not to auto-expand W4B's scope, this design leaves C10
-unchanged for this pass and simply states that fact plainly rather than
-asserting it is "already materially distinct" without qualification. If a
-future reviewer wants C10 folded into Tier 1, that is a one-line addition
-to §8 using the same Group-A methodology — not a design change.
+**None that block proceeding.** All four round-2 findings were resolved
+from source (two rendered-template reads settled `blog_posts`/`promo_cards`
+definitively; the C10 curation and the fingerprint/safety-scan contracts
+were direct instructions with a clear source-backed implementation path).

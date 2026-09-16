@@ -268,7 +268,16 @@ and read; the earlier working hypothesis that historical versions were
 unrecoverable was disproven by that read and is recorded here only so a
 future reviewer does not re-open the same dead end.
 
-## 9. Section render-precondition classification (SOURCE, not assumption)
+## 9. Section render-precondition classification (SOURCE, not assumption) — PARTIALLY SUPERSEDED, see §12
+
+**Round-2 note:** the `blog_posts` and `promo_cards` rows below were
+re-verified against the actual rendered *template* (not just the context
+builder) in round 2 and found unfit for different reasons — a dead
+placeholder link and functional redundancy with `category_grid`,
+respectively. Their "eligible: YES" verdict below is superseded by §12;
+this table is kept unedited as the round-1 record, per the design spec's
+own audit-trail convention (companion inventory §7 does the same for the
+versioning-mechanism correction).
 
 Read directly from `apps/storefront_builder/section_registry.py`
 (`default_*_settings()`) and `apps/storefront_builder/services/render_service.py`
@@ -320,3 +329,122 @@ the §5 table above):
 style (`marketplace_price` vs `shipping_label`) and bottom-nav variant. The
 repaired design spec's closure matrix (§8) flags this explicitly rather than
 asserting "no change" without qualification.
+
+**Round-2 update:** per the Independent Architect review's IMPORTANT-3
+finding, C10 is no longer left deferred — the repaired design spec now
+curates `harbor_imports` (adds `brand_carousel`), which also breaks the
+skeleton match. See §12 below and the design spec's repaired closure
+matrix.
+
+## 11. Round-2 template-quality audit (rendered `.html`, not just the context builder) — resolves Independent Architect Review round-2 IMPORTANT-1 and IMPORTANT-2(A)
+
+Round 1 classified sections only by their `render_service.py` context
+builder (does it auto-populate?). Round 2 additionally reads the actual
+rendered Django template for every section touched by the Tier-1 proposal,
+because a context builder can auto-populate data into a template that is
+itself broken or redundant.
+
+**`blog_posts.html` — confirmed dead primary interaction.** Full file:
+
+```
+{% comment %}
+Phase 3 — بلوکِ جدیدِ «مطالب وبلاگ»، ساده و قابلِ‌استفاده‌ی مجدد (نه یک
+رندرکننده‌ی مختصِ V5). صفحه‌ی جزئیاتِ مطلب هنوز در پروژه وجود ندارد — دقیقاً
+همان محدودیتِ ``catalog/home.html``ی قدیمی (``href="#"``).
+{% endcomment %}
+...
+<a class="blog-card" href="#">
+```
+
+The template's own comment states the post-detail route does not exist yet
+in the project, and every rendered card is an `<a href="#">` — a
+placeholder link, not a real navigation. **`blog_posts` is downgraded:
+VISIBLE (yes, if `BlogPost` rows exist) but INTERACTIONALLY INCOMPLETE, and
+therefore NOT ELIGIBLE as a W4B primary differentiator.** Not fixed in
+W4B (no Blog detail subsystem, no Content/CMS widening) — remains a valid,
+existing, reusable section that can become eligible once its own
+navigation contract is completed in a future workstream.
+
+**`promo_cards.html` — confirmed functional but redundant with
+`category_grid`.** Full file:
+
+```
+{% if categories %}
+<section class="section"><div class="tiles">
+  {% for cat in categories %}
+  <div class="tile {% cycle 't1' 't2' 't3' %}">
+    <span class="wm">{{ cat.icon }}</span>
+    <h4>{{ cat.name }}</h4>
+    <a class="btn" href="{% url 'catalog:product-list' %}?category={{ cat.slug }}">مشاهده محصولات</a>
+  </div>
+  {% endfor %}
+</div></section>
+{% endif %}
+```
+
+The link is real (`catalog:product-list?category=slug`), but the markup is
+functionally and almost literally identical to `category_grid.html`'s own
+default (`else`) branch (`storefront_builder/sections/category_grid.html`
+lines 183–194): same `tile`/`t1`/`t2`/`t3` cycling, same `<h4>مشاهده محصولات
+{name}</h4>` + `<a class="btn">` pattern, same destination URL. `category_grid`
+is present in 49/50 templates (including every Tier-1 candidate). **Adding
+`promo_cards` to any template that already has `category_grid` — i.e. every
+Tier-1 candidate — would render a second, near-identical block of the same
+Store's own Categories.** `promo_cards` is downgraded: functional (no dead
+link) but **NOT ELIGIBLE as a W4B primary differentiator on any of the
+proposed templates**, because it duplicates `category_grid`'s own function
+rather than adding a new one. It remains a legitimate section for a
+template that genuinely lacks `category_grid` (none of the Tier-1
+candidates qualify — all of them already have `category_grid`).
+
+**Sections re-verified as sound (rendered template read, no defect found):**
+
+- `collection_tiles.html` — real link to `catalog:collection-detail`
+  (confirmed live route+view: `apps/catalog/urls.py:14`,
+  `path("collections/<uslug:slug>/", views.collection_detail, name="collection-detail")`).
+  Distinct from `category_grid`/`product_section` (collections, not
+  categories or raw product listings) — no redundancy found in any
+  Tier-1 candidate.
+- `image_slider.html` — `{% include "storefront_builder/partials/hero_slider_body.html" %}`,
+  the exact shared partial `hero_banner.html` also uses; same
+  already-proven, already-shipped interaction (whatever `hero_banner`'s
+  own slides link to, `image_slider`'s slides link to identically).
+- `story_rail.html` — uses `{% resolve_destination_item %}`; renders a
+  plain non-link block when an item has no destination (never a
+  placeholder `href="#"`) — confirmed no dead-link pattern.
+- `brand_carousel.html` — real link to `catalog:product-list?brand=slug`;
+  its own comment states the explicit rule "هرگز دکمه‌ی بی‌اثر" ("never an
+  ineffective button") — the "View all" link only renders when a real
+  destination exists. Distinct from `category_grid`/`promo_cards`
+  (Brand-scoped, not Category-scoped) — no redundancy found.
+- `trust_features.html` — **strongest visibility guarantee of any
+  candidate section:** with `settings.items` empty (the neutral default),
+  it renders 4 **static, hardcoded, universal** trust badges (fast
+  shipping / authenticity guarantee / 24-7 support / 7-day returns) —
+  requires **zero Store data and zero shared QA fixture content** to be
+  visible. No link at all (pure informational strip) — nothing to be
+  dead. No redundancy risk (no other section renders this content).
+
+## 12. Corrected section eligibility table (supersedes §9's `blog_posts`/`promo_cards` rows) — resolves Independent Architect Review round-2 IMPORTANT-2(B)
+
+| section_key | visible with shared fixture? | primary links/actions functional? | tenant/store scoping correct? | semantic data source | duplicates another section already in the target recipe? | eligible as primary W4B differentiator? |
+|---|---|---|---|---|---|---|
+| `faq` | NO (empty by default) | N/A (nothing rendered) | N/A | none (merchant-authored only) | N/A | **NO** |
+| `testimonials` | NO (empty by default) | N/A | N/A | none (merchant-authored only) | N/A | **NO** |
+| `video_section` | NO (empty by default) | N/A | N/A | none (merchant-authored only) | N/A | **NO** |
+| `quick_links` | NO (empty by default) | N/A | Correct when configured (`Menu.objects.filter(store=store, ...)`) | none until merchant picks an existing Menu | N/A | **NO** |
+| `blog_posts` | YES, if `BlogPost` rows exist | **NO — confirmed `href="#"` placeholder, detail route does not exist** | N/A (intentionally global/platform feed, not Store-scoped — by design, not a leak) | platform `BlogPost` (global) | not checked further — disqualified on interaction alone | **NO** |
+| `promo_cards` | YES (Store's own Categories) | YES (`catalog:product-list?category=slug`, real route) | Correct (`Category.objects.filter(store=store, is_active=True)`) | Store `Category` | **YES — duplicates `category_grid`'s own function in every Tier-1 candidate (49/50 templates already have `category_grid`)** | **NO** |
+| `collection_tiles` | YES, once fixture has ≥1 active `MerchantCollection` | YES (`catalog:collection-detail`, real route+view) | Correct (`MerchantCollection.objects.filter(store=store, ...)`) | Store `MerchantCollection` | No | **YES** |
+| `image_slider` | YES, once fixture has ≥1 `HeroSlide` on the section (same precondition `hero_banner` already carries in 45/50 templates) | YES (identical to `hero_banner`'s own already-proven slide destinations) | Correct (`_scoped_hero_slides`, same as `hero_banner`) | Store `HeroSlide` | No | **YES** |
+| `story_rail` | YES, once fixture has ≥1 active `StoryRailItem` | YES (`{% resolve_destination_item %}`; renders a safe non-link when no destination — never dead) | Correct (`StoryRailItem.objects.filter(section=section, ...)` + Store-wide fallback) | Store `StoryRailItem` | No | **YES** |
+| `brand_carousel` | YES, once fixture has ≥1 active `Brand` | YES (`catalog:product-list?brand=slug`; "View all" only shown when a real destination exists — explicit no-dead-button rule in the template's own comment) | Correct (`Brand.objects.filter(store=store, is_active=True)`) | Store `Brand` | No | **YES** |
+| `trust_features` | **YES unconditionally — static default, zero fixture dependency** | N/A (informational strip, no links) | N/A (no query at all under default settings) | none needed (static copy) or merchant-authored `settings.items` | No | **YES** |
+
+**Zero prior usage was never the selection criterion — it is not one now
+either.** `trust_features` (11/50 baseline uses), `brand_carousel` (already
+registered, used implicitly via its own family), `collection_tiles`,
+`image_slider`, and `story_rail` are the 5 sections that pass every
+functional test above; `blog_posts` and `promo_cards` do not, regardless of
+their zero prior usage in the catalog, and are excluded from the repaired
+Tier-1 proposal entirely (design spec §8).
