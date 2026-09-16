@@ -3,6 +3,16 @@
 Certified starting checkpoint: `5628d6ee31e177d0b4fa1dddad550f894bca540a`
 (merged P5-W3 official checkpoint). Branch: `feature/phase5-w4a-public-shell-convergence`.
 
+**Correction (Architect spec-repair round, INVENTORY MINOR CLEANUP):** the
+"Home (unpublished fallback)" row originally said its current path uses
+"neither `build_universal_storefront_context` nor `storefront_shell.html`."
+That was source-inaccurate — `catalog.views.home` DOES call
+`build_universal_storefront_context` unconditionally, first, before
+choosing the fallback; it just discards that dict for the unpublished
+branch. Corrected below. The row's Class-A documented-exception
+disposition is unchanged — this is a wording fix only, no new evidence
+changes the classification.
+
 Method: enumerated every `urls.py` reachable from `shop_core/urls.py` (the
 public site's root URLconf — `apps.catalog`, `apps.cart`, `apps.customers`,
 `apps.orders`, `apps.content`), plus a search for any other app with a public
@@ -36,7 +46,7 @@ of the rendered template for `{% extends %}`.
 
 | Surface | Route | View | Template | Current shell/context | Classification | Evidence | W4A action |
 |---|---|---|---|---|---|---|---|
-| Home (unpublished fallback) | `catalog:home` | `catalog.views.home` | `catalog/home.html` | Neither `build_universal_storefront_context` nor `storefront_shell.html` | A (documented exception) | Renders when the Store has no published universal layout; `home()` still calls `build_universal_storefront_context` for `top_level_categories`/unrelated bootstrap, but this specific template predates the shell and is legacy-only content, not a merchant-designed page | NONE |
+| Home (unpublished fallback) | `catalog:home` | `catalog.views.home` | `catalog/home.html` | Calls `build_universal_storefront_context` (unconditionally, first — used to test `uses_universal_shell`), but the returned dict is DISCARDED for this branch in favor of a separately-built legacy context; template does not extend `storefront_shell.html` | A (documented exception) | `apps/catalog/views.py:48-120` — `home()` always calls `build_universal_storefront_context(request, store, PageType.HOME)` first; when `uses_universal_shell` is `False` it builds an entirely separate `context` dict (lines 96-119) and renders `catalog/home.html`, never reusing `universal_context`; this template predates the shell and is legacy-only content for a Store that has never published, not a merchant-designed page | NONE |
 | Home (published/universal) | `catalog:home` | `catalog.views.home` | `catalog/home_visual.html` | Calls `build_universal_storefront_context`; template extends `base.html` directly | A (documented exception) | `templates/storefront_shell.html`'s own top-of-file comment: `home_visual.html` deliberately does not migrate to `storefront_shell.html` because it already directly includes the same `header_variant_template`/`footer_variant_template` partials itself — not a second shell, just a different structural path to the identical chrome | NONE |
 | Product Listing / Search | `catalog:product-list` | `catalog.views.product_list` | `catalog/product_list.html` | Calls `build_universal_storefront_context` with `page_type = SEARCH` or `LISTING`; extends `storefront_shell.html` | A | `apps/catalog/views.py:395-418` | NONE |
 | Product Detail | `catalog:product-detail` | `catalog.views.product_detail` | `catalog/product_detail.html` | Calls `build_universal_storefront_context`; extends `storefront_shell.html` | A | `apps/catalog/views.py:560-568` | NONE |

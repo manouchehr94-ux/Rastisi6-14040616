@@ -146,12 +146,15 @@ W4A changes **only** the storefront envelope (Header/Footer/Bottom-Nav/
 appearance chrome). Domain data keeps its existing owner, unchanged:
 
 - **Wishlist domain** (`apps.customers`) keeps: the `Wishlist`/`Customer`
-  query in `wishlist_list`, the authentication/`can_view` gate, the empty
-  state, the `ProductCard` iteration. The `Store` resolved for shell purposes
-  is used **only** to build the universal context — it is explicitly **not**
-  used to filter which wishlisted products are shown (that query has no
-  `store` scoping today and W4A does not add any; see §17 for why this is
-  correct and out of scope).
+  query and its `.filter()`/`.select_related()`/`.prefetch_related()`/
+  `.order_by()` shape in `wishlist_list`, the authentication/`can_view` gate,
+  the empty state, the `ProductCard` iteration. **Revised per Architect
+  IMPORTANT 2:** the `Store` resolved for shell purposes is ALSO used to
+  scope that same query (`product__store=store`, §13/§17) — this is still a
+  Wishlist-domain change made inside `apps.customers.views`, not a move of
+  the query into `storefront_builder`; `storefront_builder` supplies the
+  `Store` object (via the same canonical resolver every other view uses),
+  it does not gain the query itself.
 - **Content domain** (`apps.content`) keeps: the `ContentPage` lookup,
   `PUBLISHED`-only visibility, `store` scoping (already correct), title,
   summary, body, `effective_seo_title`/`effective_seo_description`.
@@ -165,14 +168,31 @@ of Wishlist or CMS business rules.
 view (customers.wishlist_list / content.page_detail)
   → resolve Store (apps.stores.resolution.resolve_store_for_storefront)
   → build domain context dict (unchanged: products/can_view, or {page: page})
-  → build_universal_storefront_context(request, store, <page_type>, page_context=<domain dict, optional>)
-  → context = {**domain_context, **universal_context}   # ONE merge direction:
-                                                          # universal keys never
-                                                          # overwrite domain keys
-                                                          # that share a name
-                                                          # (none do today —
-                                                          # verified by diffing
-                                                          # both key sets)
+  → universal_context = build_universal_storefront_context(
+        request, store, <page_type>, page_context=<domain dict, optional>,
+        shell_only=True,
+    )
+  → context = domain_context
+    context.update(universal_context)   # `dict.update`, the SAME merge
+                                          # pattern every existing canonical
+                                          # view already uses (see
+                                          # catalog.views.product_detail:565-566
+                                          # / collection_index:632, etc. — no
+                                          # second merge policy invented here).
+                                          # Python's `dict.update` means the
+                                          # LATER argument's keys win on
+                                          # collision — universal_context's
+                                          # keys are therefore canonical/
+                                          # reserved and MUST NOT be reused as
+                                          # domain-context keys. Verified: the
+                                          # domain dicts' key sets
+                                          # ({"products","can_view"} for
+                                          # Wishlist; {"page"} for CMS) are
+                                          # disjoint from every key
+                                          # build_universal_storefront_context
+                                          # returns (§3's dict-shape list) —
+                                          # zero collision today. §18 adds a
+                                          # regression assertion for this.
   → render(request, <template extending storefront_shell.html>, context)
 ```
 
@@ -205,28 +225,78 @@ naively reusing an existing one is wrong on both sides of the publish state:
   the requirement W4A exists to satisfy — the merchant's published Header/
   Footer would never appear on Wishlist/CMS even after "convergence."
 
-**Conclusion — bounded extension, decided now, inside the canonical context
-service:** `build_universal_storefront_context` gains one small branch. When
-`page_type` is not a member of `StorefrontPage.PageType.values`, it skips
-`resolve_published_page` (which requires a real `StorefrontPage` row) and
-instead asks only "does this Store have a published layout at all?" via the
-ALREADY-EXISTING `page_resolution_service.get_published_layout(store)`
-(store-only lookup, no `page_type` involved, already used elsewhere in this
-exact module family). If a published layout exists, the function returns the
-**same published-shape dict** as today's resolved branch — `uses_universal_shell=True`,
-real `header_variant_template`/`footer_variant_template`/`mobile_bottom_nav_template`,
-real `store_appearance`, real `top_level_categories` — but with
-`storefront_page=None`, `render_items=[]`, `rows=[]`, `render_containers=[]`,
-`use_container_layout=False` (there is no per-version `StorefrontPage` row
-backing a domain-owned page, so there is nothing to resolve sections for —
-the domain view supplies 100% of its own body markup, matching §9). If no
-published layout exists, the function falls through to **today's unchanged**
-unresolved-shape branch (already proven safe above — `build_default_render_items`
-returns `[]` for an unrecognized `page_type` via a plain `dict.get(..., [])`,
-no exception path).
+**REVISED per Architect IMPORTANT 1** — the first draft of this spec
+proposed inferring shell-only behavior implicitly ("`page_type` not in
+`PageType.values`"). Rejected: `resolve_published_page`'s own fail-safe
+design principle is that an invalid `page_type` string means "unresolved,"
+full stop — including a *typo* in a real page_type (e.g. `"prodcut_detail"`).
+An implicit inference rule would silently reinterpret that exact failure
+mode as "this is a legitimate shell-only domain page" instead of the
+programming error it actually is. Shell-only behavior must be **requested
+explicitly by the caller**, never inferred from the shape of the string.
+
+**Conclusion — explicit, additive keyword parameter, decided now, inside the
+canonical context service:**
+
+```python
+def build_universal_storefront_context(
+    request, store, page_type, page_context=None, *, shell_only=False,
+):
+    ...
+```
+
+- **Every existing caller is unchanged** — `shell_only` defaults to `False`,
+  and with `shell_only=False` the function's behavior is **byte-for-byte
+  identical** to today, for every `page_type` value, valid or invalid
+  (including the typo case above, which still degrades to the unresolved
+  shape — RED test 3, §18). This is not a new code path for existing
+  callers; it is an unused default.
+- **Wishlist calls it with `page_type="wishlist", shell_only=True`.** **CMS
+  calls it with `page_type="content_page", shell_only=True`.** These two
+  literals are non-model string labels — used ONLY as a dict key/label,
+  never persisted, never validated against `PageType.choices` (§23).
+- **When `shell_only=True`:** the function NEVER calls
+  `resolve_published_page` (so no `StorefrontPage` lookup of any kind
+  happens, and no foreign page's sections can ever be resolved — RED test
+  4, §18). Instead it asks only "does this Store have a published layout at
+  all?" via the ALREADY-EXISTING `page_resolution_service.get_published_layout(store)`
+  (store-only lookup, no `page_type` involved, already used elsewhere in
+  this exact module family).
+  - **Published Store:** returns the **same published-shape dict** as
+    today's resolved branch — `uses_universal_shell=True`, real
+    `header_variant_template`/`footer_variant_template`/`mobile_bottom_nav_template`,
+    real `store_appearance`, real `top_level_categories` — but with
+    `storefront_page=None`, `render_items=[]`, `rows=[]`,
+    `render_containers=[]`, `use_container_layout=False` (there is no
+    per-version `StorefrontPage` row backing a domain-owned page, so there
+    is nothing to resolve sections for — the domain view supplies 100% of
+    its own body markup, matching §9) — RED test 1, §18.
+  - **Unpublished Store:** falls through to **today's unchanged**
+    unresolved-shape branch (already proven safe — `build_default_render_items`
+    returns `[]` for an unrecognized `page_type` via a plain
+    `dict.get(..., [])`, no exception path) — RED test 2, §18.
+- **When `shell_only=False`** (the default, every existing call site): the
+  function behaves exactly as it does today, unconditionally — a `page_type`
+  not in `StorefrontPage.PageType.values` still degrades to the unresolved
+  shape via `resolve_published_page`'s existing `StorefrontPage.DoesNotExist`
+  fail-safe, published Store or not. No inference, no exception.
+
+**No duplicated published-context assembly:** the published-shape dict
+(`uses_universal_shell=True` plus `header_variant_template`/
+`footer_variant_template`/`mobile_bottom_nav_template`/`store_appearance`/
+`top_level_categories`) is assembled by ONE private helper inside
+`storefront_context_service.py` — e.g. `_build_published_shell_context(request, store, version, page, page_context)`
+— that both the normal resolved branch and the new `shell_only=True`
+branch call, with `page=None` in the `shell_only` case (so `render_items`/
+`rows`/`render_containers`/`use_container_layout` naturally reduce to their
+empty defaults instead of duplicating that logic a second time). This is
+private implementation factoring inside the SAME canonical owner, not a
+second context authority — it is not importable/callable from outside this
+module, and no other module gains a new dependency.
 
 This is entirely additive to the existing function, in the existing file,
-using an existing helper (`get_published_layout`). It creates:
+using an existing helper (`get_published_layout`) plus one new private
+helper local to the same file. It creates:
 
 - **NO** new `StorefrontPage.PageType` member (so **no** `AlterField`
   migration for the `choices=` metadata — see §23).
@@ -234,13 +304,8 @@ using an existing helper (`get_published_layout`). It creates:
   `content_storefront_context`, `public_shell_context_service`, or similar —
   forbidden by the task brief and unnecessary given the above).
 - **NO** new shell template.
-
-`page_type` for Wishlist/CMS becomes a plain, non-model string label —
-decided now as `"wishlist"` for the Wishlist view and `"content_page"` for
-the CMS view — used ONLY as a dict key/label, never persisted, never
-validated against `PageType.choices` since it never touches that field —
-consistent with how `page_type` is already just a Python string
-parameter of `build_universal_storefront_context`, not a model instance.
+- **NO** duplicated published-context assembly logic (one private helper,
+  shared by both branches).
 
 ## 12. Fallback behavior
 
@@ -269,10 +334,57 @@ is false).
 
 **View (`wishlist_list`):** add `store = resolve_store_for_storefront(request)`
 (the same resolver every other public view in `catalog`/`cart`/`content`
-already uses) as the first line. Keep the existing `Wishlist`/`Customer`
-query, `can_view` gate, and product list computation completely unchanged.
-Merge `build_universal_storefront_context(request, store, "wishlist")` into
-the context alongside the existing `{"products": products, "can_view": can_view}`.
+already uses) as the first line. Merge
+`build_universal_storefront_context(request, store, "wishlist", shell_only=True)`
+into the context alongside the existing `{"products": products, "can_view": can_view}`,
+using `dict.update` per §10.
+
+**REVISED per Architect IMPORTANT 2** — the product query itself changes,
+narrowly. Today:
+
+```python
+items = (
+    Wishlist.objects.filter(customer=request.user.customer_profile)
+    .select_related("product", "product__brand")
+    .prefetch_related("product__images")
+    .order_by("-created_at")
+)
+```
+
+`Customer` is a single global identity (no `store` FK — see `apps/customers/models.py:7-52`);
+`Wishlist` links `customer` → `product` with no `store` FK of its own
+(`apps/customers/models.py:250-264`); `Product` is Store-owned. So today a
+customer's full wishlist can already contain products from multiple Stores,
+and `wishlist_list` renders ALL of them regardless of which Store's site the
+customer is currently browsing — while `wishlist_toggle` (the write path)
+already rejects adding a foreign Store's product by slug 404
+(`test_wishlist_store_isolation.py`). W4A is already introducing the current
+`store` into this view for shell purposes, and tenant isolation is a
+mandatory W4A gate — leaving the read path unscoped while the write path is
+scoped is an inconsistency this workstream must not ship. The minimal fix,
+confined to this one queryset's `filter()`:
+
+```python
+items = (
+    Wishlist.objects.filter(customer=request.user.customer_profile, product__store=store)
+    .select_related("product", "product__brand")
+    .prefetch_related("product__images")
+    .order_by("-created_at")
+)
+```
+
+This is the **only** change to Wishlist domain logic in W4A. Explicitly
+preserved: no `Wishlist`/`Customer` model change, no migration (a `FilteredRelation`-free
+`product__store=store` filter on an existing FK path requires none), no new
+Wishlist service, no recommendation logic. Explicitly NOT done: `wishlist_list`
+does not adopt `storefront_visible_products`/`publicly_visible_products` or
+any other canonical visibility filter — that helper is already used
+elsewhere in this same file (`wishlist_toggle`, `apps/customers/views.py:42`)
+but NOT by `wishlist_list` today, so adopting it here would be a genuine
+visibility-semantics change outside this fix's minimal scope, not merely a
+Store-scoping fix. Product active/public visibility semantics for the
+listing itself are unchanged — only which Store's products are eligible to
+appear changes (§18 RED tests A-C).
 
 **Template (`customers/wishlist.html`):** change `{% extends "base.html" %}`
 to `{% extends "storefront_shell.html" %}`. Keep `{% block robots_meta %}`
@@ -289,14 +401,14 @@ unresolvable Host will 404 the Wishlist page too, matching every other
 public page's behavior (`resolve_store_for_storefront` raises `Http404` via
 `CompatibilityFallbackUnavailableError`, per `apps/stores/resolution.py`).
 This is a deliberate consistency fix, not a side effect to hide — call it out
-in the PR description.
+in the PR description, alongside the read-scoping fix above.
 
 ## 14. CMS design
 
-**View (`page_detail`):** already resolves `store` correctly. Add
-`context.update(build_universal_storefront_context(request, store, "content_page"))`
-(or equivalent — merge, don't replace) and pass `context = {"page": page, **universal_context}`
-to `render`.
+**View (`page_detail`):** already resolves `store` correctly. Compute
+`universal_context = build_universal_storefront_context(request, store, "content_page", shell_only=True)`,
+then `context = {"page": page}; context.update(universal_context)` (per §10's
+merge semantics), and pass `context` to `render`.
 
 **Template (`content/page_detail.html`):** change `{% extends "base.html" %}`
 to `{% extends "storefront_shell.html" %}`. Keep `{% block title %}`,
@@ -316,7 +428,11 @@ through the same Class A/B/C test in §6 before being added to W4A's scope.
 **Option A (recommended, selected):** inventory-driven convergence through
 the existing universal context/shell owner, extended minimally (§11) to
 support domain-owned shell-only pages. Confirmed to require zero new owners,
-zero migrations, and preserves both domains' business logic untouched.
+zero migrations, and keeps both domains' business logic under its existing
+owner — CMS's is fully untouched; Wishlist's gains exactly one narrow
+Store-scoping filter (§13/§17), made inside `apps.customers.views` itself,
+required to keep the read path consistent with the already-Store-scoped
+write path.
 
 **Option B — blindly convert every direct-`base.html` public template:**
 rejected. This would sweep in `customers/account.html`, `customers/order_detail.html`,
@@ -348,18 +464,35 @@ pages already named in the plan.
   — two real Stores, two verified `StoreDomain`s, distinct `HTTP_HOST`s) are
   the reusable harnesses for proving "Store A shell cannot leak into Store B
   Wishlist/CMS" (§20).
-- **Wishlist product-query scoping:** unchanged and explicitly OUT OF SCOPE
-  for W4A (§9) — `wishlist_list`'s product query is not Store-scoped today
-  (a `Customer` is a single global identity; `Wishlist` has no `store` FK;
-  only `wishlist_toggle`, the write path, is Store-scoped by product slug,
-  per `test_wishlist_store_isolation.py`). W4A does not broaden or narrow
-  this — it only adds Store resolution for shell rendering. If the Product
-  Owner wants Wishlist scoped per-Store, that is a **separate**, explicitly
-  domain-owned decision outside this shell-convergence workstream.
+- **Wishlist product-query scoping (REVISED per Architect IMPORTANT 2 — no
+  longer out of scope):** `wishlist_list`'s product query gains
+  `product__store=store` (§13) so that the READ path is scoped exactly like
+  the WRITE path (`wishlist_toggle`) already is. A global `Customer`'s
+  wishlist may still contain rows for products from multiple Stores (that
+  fact is unchanged — `Wishlist`/`Customer` still have no `store` FK, §9);
+  what changes is that any single **render** of the Wishlist page shows only
+  the rows whose product belongs to the Store currently being browsed. This
+  is the minimum fix that makes the read path consistent with the write
+  path and with every other tenant-scoped view in this codebase — it does
+  not broaden product visibility (§13), does not touch the `Wishlist`/`Customer`
+  models, and does not introduce any new domain concept (no "primary Store"
+  on `Customer`, no cross-Store wishlist merging/UI). §9's "Wishlist domain
+  owns the wishlist product query" statement still holds — W4A does not move
+  this query into `storefront_builder`; it only adds the Store filter that
+  domain-consistency already demanded.
 - **CMS tenant scoping:** already correct and untouched — `ContentPage`
   lookup is `store`-scoped and `PUBLISHED`-only (`apps/content/views.py:14-16`).
 
 ## 18. TDD RED matrix (to be written in the implementation round, not now)
+
+### `build_universal_storefront_context` shell-only contract (§11) — write these FIRST
+
+| # | Scenario | Expected RED reason today |
+|---|---|---|
+| 1 | `shell_only=True` + published Store ⇒ canonical shell works | `shell_only` parameter does not exist yet |
+| 2 | `shell_only=True` + unpublished Store ⇒ today's legacy fallback shape (`uses_universal_shell=False`, no `header_variant_template` key) | same — parameter does not exist yet |
+| 3 | An invalid **normal** `page_type` (e.g. `"prodcut_detail"`, a typo) with `shell_only=False` (the default) on a published Store still returns the unresolved shape, unchanged from today — proves no implicit "unknown page_type ⇒ shell-only" inference was introduced | should PASS unchanged once `shell_only` defaults to `False` — a regression guard proving existing callers are byte-for-byte unaffected, not new RED |
+| 4 | `shell_only=True` never resolves or references ANY `StorefrontPage` row (assert zero `StorefrontPage.objects` queries with `page_type` in the SQL captured via `assertNumQueries`/query-log inspection, or equivalently assert `storefront_page is None` in the returned dict and that a decoy `StorefrontPage` for a real page_type on the same Store is never touched) | proves no foreign page's sections can leak into a shell-only context |
 
 ### Wishlist
 
@@ -372,7 +505,8 @@ pages already named in the plan.
 | E | Populated wishlist `ProductCard`s preserved | should already pass unchanged — regression guard |
 | F | Anonymous/not-`can_view` state preserved | should already pass unchanged — regression guard |
 | G | Store A shell cannot leak into Store B Wishlist | new: two real Stores + verified `StoreDomain`s (reuse `test_wishlist_store_isolation.py`'s fixture shape), assert Store B's header/footer variant never appears when browsing Store A's Wishlist |
-| H | Wishlist product query stays scoped to the current customer's legitimate data; public product visibility is not broadened | regression guard — assert the query/behavior is byte-identical to today (§17) |
+| H (REVISED, two-Store read isolation) | A single global `Customer` has `Wishlist(Product A @ Store A)` AND `Wishlist(Product B @ Store B)`. **GET Wishlist on `HOST_A`:** Product A visible, Product B absent. **GET Wishlist on `HOST_B`:** Product B visible, Product A absent. Reuses `test_wishlist_store_isolation.py`'s exact two-Store/verified-`StoreDomain`/distinct-`HTTP_HOST` fixture pattern (`HOST_A`/`HOST_B`, `_verified_domain`); no `request.store` mocking. | `wishlist_list`'s query has no `product__store` filter today — both products would appear on both hosts |
+| I | Shell for `HOST_A` is Store A's shell only; shell for `HOST_B` is Store B's shell only (combined with H in the same two-Store fixture) | same root cause as G, exercised together with the read-isolation fixture |
 
 ### CMS
 
@@ -384,7 +518,7 @@ pages already named in the plan.
 | D | `effective_seo_description` preserved | regression guard |
 | E | Unpublished page remains inaccessible (404) | regression guard (already covered by `test_draft_page_returns_404`) |
 | F | Store A's CMS page cannot resolve on Store B | regression guard — `page_detail` is already Store-scoped; assert this survives the shell change |
-| G | No shell context from another Store | new — same two-Store harness as Wishlist G |
+| G | No shell context from another Store | new — same two-Store harness as Wishlist G/I |
 
 ### Fallback Store (no published R4/universal layout)
 
@@ -448,10 +582,13 @@ established W1-W3 evidence convention. No new evidence directory scheme.
 ## 22. Zero-migration rule
 
 Confirmed: §11's bounded extension touches only `storefront_context_service.py`
-(and reuses the existing `page_resolution_service.get_published_layout`) —
-no model field changes, no new `StorefrontPage.PageType` member, no schema
+(the new `shell_only` keyword parameter, the private `_build_published_shell_context`
+helper, and reusing the existing `page_resolution_service.get_published_layout`)
+— no model field changes, no new `StorefrontPage.PageType` member, no schema
 change of any kind. `page_type` stays a plain Python string parameter, never
-written to `PageType`'s `choices=` metadata. **Expected: MIGRATIONS = 0.**
+written to `PageType`'s `choices=` metadata. `apps/customers/views.py`'s
+`product__store=store` filter addition (§13) is an ORM filter on an existing
+FK path, not a schema change. **Expected: MIGRATIONS = 0.**
 If implementation reveals this is not achievable as designed, the
 implementer must STOP and record **ARCHITECTURE ESCALATION REQUIRED** rather
 than add a migration.
@@ -461,29 +598,36 @@ than add a migration.
 | Forbidden duplicate | Introduced by this design? |
 |---|---|
 | Second public storefront shell | NO — reuses `storefront_shell.html` |
-| Second global storefront context builder | NO — bounded extension inside `build_universal_storefront_context` itself |
+| Second global storefront context builder | NO — explicit `shell_only` keyword parameter on the existing `build_universal_storefront_context`, not a new function/module |
+| Duplicated published-context assembly (two copies of the header/footer/bottom-nav/appearance projection logic) | NO — ONE private helper (`_build_published_shell_context`) inside `storefront_context_service.py`, called by both the normal resolved branch and the `shell_only=True` branch (§11) |
 | Second Header/Footer/Bottom-Nav renderer | NO — reuses `global_region_registry` resolution |
 | Second appearance resolver | NO — reuses `render_service.resolved_store_appearance_for_request` |
 | Second Ready Template registry | NO — untouched |
 | Second tenant resolver | NO — reuses `resolve_store_for_storefront` |
 | Second page renderer | NO — reuses `render_service` |
+| Second wishlist/product-query service | NO — the `product__store=store` filter is added directly to the existing queryset in `wishlist_list`, not extracted into a new service |
 | Per-page storefront chrome logic | NO — Wishlist/CMS get the same chrome as every other page, from the same source |
 | Per-domain Header/Footer copies | NO |
 | Per-template shell forks | NO |
-| New `StorefrontPage.PageType` | NO — deliberately avoided (§11) |
+| New `StorefrontPage.PageType` | NO — deliberately avoided; `shell_only` is explicit instead (§11) |
+| Implicit/inferred shell-only behavior | NO — REMOVED per Architect IMPORTANT 1; `shell_only` must be passed explicitly, default `False` |
 
 **Gate: PASS** (by design — to be re-verified against the actual diff in the
 implementation round).
 
 ## 24. Exact implementation scope (for the future round — not done now)
 
-- `apps/customers/views.py` — `wishlist_list`: add Store resolution + context merge.
+- `apps/customers/views.py` — `wishlist_list`: add Store resolution, add
+  `product__store=store` to the existing `Wishlist` queryset filter, add the
+  `shell_only=True` context merge.
 - `apps/customers/templates/customers/wishlist.html` — change `extends`.
-- `apps/content/views.py` — `page_detail`: add context merge.
+- `apps/content/views.py` — `page_detail`: add the `shell_only=True` context merge.
 - `apps/content/templates/content/page_detail.html` — change `extends`.
 - `apps/storefront_builder/services/storefront_context_service.py` —
-  `build_universal_storefront_context`: bounded branch for a non-model
-  `page_type` (§11).
+  `build_universal_storefront_context`: add the explicit `shell_only`
+  keyword parameter (default `False`, byte-identical behavior for every
+  existing caller) and the private `_build_published_shell_context` helper
+  factoring (§11).
 - New/updated tests per §18-19.
 - New evidence per §21.
 
@@ -492,8 +636,12 @@ implementation round).
 - No change to `customers/account.html`, `customers/order_detail.html`,
   `orders/checkout_step1.html`, `orders/payment_result.html`, or any other
   Class-B surface.
-- No change to Wishlist's product-query scoping (§17).
+- No change to Wishlist's product-query scoping BEYOND the single
+  `product__store=store` filter addition (§13/§17) — no visibility-semantics
+  change, no `storefront_visible_products` adoption, no cross-Store wishlist
+  UI/merging, no `Wishlist`/`Customer` model change.
 - No new `StorefrontPage.PageType`.
+- No implicit/inferred shell-only behavior — `shell_only` is always explicit (§11).
 - No P5-W4B (50-Template Curation) or P5-W4C (All-50 Browser Certification)
   work — both remain FROZEN until W4A is reviewed, approved, and merged.
 - No implementation, no RED tests, no template edits in this round.
@@ -503,19 +651,35 @@ implementation round).
 None. Every question the task brief raised (page-type ownership, fallback
 behavior, tenant isolation, Class-B boundaries) was resolved from source in
 this round (§11, §12, §17, §8), including the exact `page_type` literals
-(§11, §13, §14). No item requires Architect escalation before implementation.
+(§11, §13, §14) and the explicit `shell_only` contract (§11, revised per
+Architect IMPORTANT 1) and Wishlist read-scoping (§13/§17, revised per
+Architect IMPORTANT 2). No item requires Architect escalation before
+implementation.
 
 ## 27. Self-review
 
-Checked for: TBD/TODO markers (none — the one draft "TBD" this spec
-initially contained, the exact `page_type` literal in §11, was resolved
-before this commit), ambiguous ownership (none — §9/§17
-name the owner of every piece of state), duplicate authority (none — §23),
-invented page type (explicitly rejected — §11), second context builder
-(explicitly rejected — §11), second shell (none), unsupported assumptions
-(every claim in §3/§11/§12 is cited to a specific file/line or an existing
-test), missing public surface (full inventory in §5, cross-checked against
-`shop_core/urls.py`'s complete include list), contradictory fallback rules
-(§12's two branches match the existing, already-tested behavior exactly),
-unclear tenant boundaries (§17 states exactly what changes and what doesn't
-for both Wishlist and CMS).
+Checked for: TBD/TODO markers (none — the draft "TBD" this spec originally
+contained, the exact `page_type` literal in §11, was resolved before the
+first commit), broad "unknown page type == shell-only" inference (REMOVED —
+§11 now requires an explicit `shell_only` keyword, default `False`, with
+existing-caller behavior byte-identical and RED test 3 (§18) proving an
+invalid *normal* `page_type` still degrades exactly as it does today),
+invalid-`page_type` behavior preserved (§11/§18 RED test 3), new
+`StorefrontPage.PageType` (none — explicitly rejected, §11/§23), new context
+builder (none — one keyword parameter on the existing function, §11/§23),
+duplicated published-context assembly (none — one private helper shared by
+both branches, §11/§23), ambiguous ownership (none — §9/§13/§17 name the
+owner of every piece of state, including the revised Wishlist read-scoping),
+duplicate authority (none — §23), second shell (none), unsupported
+assumptions (every claim in §3/§11/§12/§13 is cited to a specific file/line
+or an existing test), missing public surface (full inventory in §5,
+cross-checked against `shop_core/urls.py`'s complete include list),
+contradictory fallback rules (§12's two branches match the existing,
+already-tested behavior exactly), unclear tenant boundaries (§9/§13/§17
+state exactly what changes — the new `product__store=store` filter — and
+what doesn't, for both Wishlist and CMS), Wishlist read scoped to current
+Store (§13 — `product__store=store`), two-Store read-isolation RED test
+defined (§18 Wishlist H), shell-isolation RED test defined (§18 Wishlist
+G/I, CMS G), context-merge semantics corrected to `dict.update` (§10, MINOR
+1), Home inventory wording corrected (see the inventory file's own changelog
+note), W4B/W4C still frozen (§25).
