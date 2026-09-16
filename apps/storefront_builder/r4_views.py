@@ -919,6 +919,11 @@ def storefront_r4_design_lab(request):
             "locked_families": sorted(candidate.locked_families),
             "base_revision": candidate.base_revision,
             "draft_id": candidate.draft_id,
+            # Server-authoritative current candidate + base selections (Persian
+            # labels are in ``diffs``; these raw maps let the UI reflect the
+            # exact per-family current selection and support QA data assertions).
+            "candidate_selections": dict(candidate.candidate_selections),
+            "base_selections": dict(candidate.base_selections),
         }
     )
 

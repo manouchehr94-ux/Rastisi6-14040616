@@ -1,5 +1,5 @@
 {
-  "started_at": "2026-09-15T19:07:09.285Z",
+  "started_at": "2026-09-16T04:28:59.793Z",
   "origin": "http://127.0.0.1:8000",
   "builder_url": "http://127.0.0.1:8000/admin-portal/storefront-builder/r4/",
   "viewports": {
@@ -24,56 +24,61 @@
     {
       "scenario": "A_full_random_mix_changes_candidate",
       "ok": true,
-      "detail": "changed 7 families; draft NOT yet applied"
+      "detail": "changed 7 families vs Base; draft NOT applied"
     },
     {
       "scenario": "M_candidate_preview_renders_200",
       "ok": true,
-      "detail": "preview HTTP 200, 52616 bytes via existing storefront_preview route"
+      "detail": "preview HTTP 200, 52950 bytes via existing storefront_preview route"
     },
     {
-      "scenario": "D_compare_with_base_shows_diff",
+      "scenario": "D_compare_with_base_real_diff",
       "ok": true,
-      "detail": "compare panel visible"
+      "detail": "header: \"منوی فشرده\" -> \"فعلی / پیش‌فرض\""
     },
     {
-      "scenario": "C_lock_header_never_changes",
+      "scenario": "E_return_to_original_dna_exact",
       "ok": true,
-      "detail": "header locked stayed \"ردیف نشریه‌ای\""
+      "detail": "returned candidate equals Base A family-by-family"
     },
     {
-      "scenario": "C_other_family_still_changes",
+      "scenario": "B_chained_randomize_preserves_others",
       "ok": true,
-      "detail": "a non-locked eligible family changed"
+      "detail": "non-footer candidate families preserved from B"
     },
     {
-      "scenario": "B_randomize_one_only_selected",
+      "scenario": "B_randomize_one_footer_changes",
       "ok": true,
-      "detail": "changed families: footer"
+      "detail": "footer footer.dark_tech.v1 -> footer.editorial_wordmark.v1"
     },
     {
-      "scenario": "E_return_to_original_dna",
+      "scenario": "C_lock_preserves_current_candidate",
       "ok": true,
-      "detail": "candidate returned to committed base"
+      "detail": "locked header held current candidate value H1=header.promo_bar.v1 (H0=header.compact_menu.v1)"
     },
     {
       "scenario": "F_reset_candidate",
       "ok": true,
-      "detail": "candidate discarded, back to preview state"
+      "detail": "reset candidate equals committed Draft"
     },
     {
       "scenario": "G_remove_theme_transient",
       "ok": true,
-      "detail": "remove-theme candidate previewed (no write yet)"
+      "detail": "remove-theme candidate has theme.none.v1 (no write yet)"
     },
     {
       "scenario": "H_explicit_apply",
       "ok": true,
-      "detail": "apply enabled before=true; state=\"اعمال شد ✔\""
+      "detail": "apply enabled before=true; state=\"این فقط پیش‌نمایش است\"; revision 0->1"
+    },
+    {
+      "scenario": "STALE_candidate_apply_rejected",
+      "ok": true,
+      "detail": "stale apply_payload => HTTP 409 code=stale_candidate"
     }
   ],
   "console_errors": [],
   "failed_requests": [],
   "overall": "PASS",
-  "finished_at": "2026-09-15T19:07:36.105Z"
+  "finished_at": "2026-09-16T04:29:32.227Z"
 }

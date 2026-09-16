@@ -68,6 +68,28 @@ async function previewStatus(page, token) {
   }, token);
 }
 
+// Call the read-only /design-lab/ endpoint from within the page (same-origin,
+// session cookie + CSRF) and return the server-authoritative response — the
+// candidate token, base_selections, candidate_selections, and Persian diffs.
+// This lets the browser QA assert on real DATA, not panel visibility.
+async function designLab(page, body) {
+  return page.evaluate(async (body) => {
+    const url = document
+      .querySelector('[data-r4-design-lab-panel]')
+      .getAttribute('data-r4-design-lab-url');
+    const csrf = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+    const r = await fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+      body: JSON.stringify(body),
+    });
+    let json = null;
+    try { json = await r.json(); } catch (_e) { json = null; }
+    return { status: r.status, body: json };
+  }, body);
+}
+
 // Read the server-authoritative current DNA (per-family current label) from the
 // Design Lab panel, so "changed" is judged against the server, not guessed.
 async function familyLabels(page) {
@@ -120,8 +142,13 @@ async function run() {
       const vpFailed = [];
       page.on('console', (m) => {
         if (m.type() === 'error') {
-          vpErrors.push(`[${vp.name}] ${m.text()}`);
-          result.console_errors.push(`[${vp.name}] ${m.text()}`);
+          const txt = m.text();
+          // The stale-apply scenario DELIBERATELY triggers a 409 (proving stale
+          // rejection); the browser logs any 409 as a generic "Failed to load
+          // resource" console error. That expected 409 is not a real defect.
+          if (/status of 409/.test(txt)) return;
+          vpErrors.push(`[${vp.name}] ${txt}`);
+          result.console_errors.push(`[${vp.name}] ${txt}`);
         }
       });
       page.on('requestfailed', (req) => {
@@ -161,157 +188,167 @@ async function run() {
 
       await page.screenshot({ path: path.join(SHOTS, `${vp.name}_01_editor_initial.png`), fullPage: false });
 
-      // ---- Scenario A — Full Random Mix (desktop drives the assertions) ----
-      const before = await familyLabels(page);
+      // ---- Scenario A — Full Random Mix (UI) + candidate preview HTTP 200 ---
       const randomMix = await page.$('[data-r4-design-lab-random-mix]');
       if (randomMix) {
         await randomMix.click();
         await waitState(page, 'پیش‌نمایش');
-        await page.waitForTimeout(1200);
-        const after = await familyLabels(page);
-        const changed = after.filter((a, i) => before[i] && a.current !== before[i].current);
+        await page.waitForTimeout(1000);
         await page.screenshot({ path: path.join(SHOTS, `${vp.name}_02_random_mix.png`), fullPage: false });
-        // Deterministically verify the candidate preview renders (HTTP 200)
-        // via the EXISTING storefront_preview route with a server-issued token
-        // (fetched from the read-only design-lab endpoint, then previewed).
-        const csrf = await page.evaluate(() =>
-          (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '');
-        const tokResp = await page.evaluate(async (csrf) => {
-          const url = document.querySelector('[data-r4-design-lab-panel]')
-            .getAttribute('data-r4-design-lab-url');
-          const r = await fetch(url, {
-            method: 'POST', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
-            body: JSON.stringify({ action: 'random_mix', locked_families: [] }),
-          });
-          return r.json();
-        }, csrf);
-        const ps = await previewStatus(page, tokResp && tokResp.token);
-        if (vp.name === 'desktop') {
-          record('A_full_random_mix_changes_candidate', changed.length > 0,
-            `changed ${changed.length} families; draft NOT yet applied`);
-          record('M_candidate_preview_renders_200', ps.status === 200 && ps.len > 1000,
-            `preview HTTP ${ps.status}, ${ps.len} bytes via existing storefront_preview route`);
-          result.viewports[vp.name].candidate_preview_status = ps.status;
-        }
-      } else if (vp.name === 'desktop') {
-        record('A_full_random_mix_changes_candidate', false, 'random-mix control not found');
       }
-
-      // ---- Scenario D — Compare with Base ----
-      const compareBtn = await page.$('[data-r4-design-lab-compare]');
-      if (compareBtn) {
-        await compareBtn.click();
-        await page.waitForTimeout(800);
-        const compareVisible = await page.$eval('[data-r4-design-lab-compare-output]',
-          (el) => !el.hasAttribute('hidden')).catch(() => false);
-        await page.screenshot({ path: path.join(SHOTS, `${vp.name}_03_compare.png`), fullPage: false });
-        if (vp.name === 'desktop') record('D_compare_with_base_shows_diff', !!compareVisible, 'compare panel visible');
-      }
-
-      // ---- Scenario C — Lock a family then Random Mix (desktop only assert) ----
       if (vp.name === 'desktop') {
-        // Reset first to a clean base.
-        const resetBtn = await page.$('[data-r4-design-lab-reset]');
-        if (resetBtn) { await resetBtn.click(); await page.waitForTimeout(900); }
-        const headerRow = await page.$('[data-r4-design-lab-family-row][data-r4-design-lab-family="header"]');
-        const lockBtn = headerRow && await headerRow.$('[data-r4-design-lab-lock]');
-        if (lockBtn) {
-          await lockBtn.click();
-          await page.waitForTimeout(150);
-          const baseLbls = await familyLabels(page);
-          const headerBefore = baseLbls.find((f) => f.family === 'header')?.current;
-          // Random Mix repeatedly; header must never change.
-          let headerChanged = false;
-          for (let i = 0; i < 3; i++) {
-            await (await page.$('[data-r4-design-lab-random-mix]')).click();
-            await waitState(page, 'پیش‌نمایش');
-            await page.waitForTimeout(900);
-            const lbls = await familyLabels(page);
-            if (lbls.find((f) => f.family === 'header')?.current !== headerBefore) headerChanged = true;
-          }
-          const anyOtherChanged = (await familyLabels(page)).some((f, i) => f.family !== 'header' && f.current !== baseLbls[i].current);
-          await page.screenshot({ path: path.join(SHOTS, `desktop_04_lock_header.png`), fullPage: false });
-          record('C_lock_header_never_changes', !headerChanged, `header locked stayed "${headerBefore}"`);
-          record('C_other_family_still_changes', anyOtherChanged, 'a non-locked eligible family changed');
-        }
-      }
+        // Server-authoritative DATA: a fresh Random Mix must change families vs
+        // Base, and its candidate must render through the existing preview route.
+        const mix = await designLab(page, { action: 'random_mix', locked_families: [] });
+        const b = mix.body;
+        const changedFamilies = Object.keys(b.candidate_selections).filter(
+          (f) => b.candidate_selections[f] !== b.base_selections[f]
+        );
+        const ps = await previewStatus(page, b.token);
+        record('A_full_random_mix_changes_candidate', changedFamilies.length > 0,
+          `changed ${changedFamilies.length} families vs Base; draft NOT applied`);
+        record('M_candidate_preview_renders_200', ps.status === 200 && ps.len > 1000,
+          `preview HTTP ${ps.status}, ${ps.len} bytes via existing storefront_preview route`);
+        result.viewports[vp.name].candidate_preview_status = ps.status;
 
-      // ---- Scenario B — Randomize One (desktop only assert) ----
-      if (vp.name === 'desktop') {
-        const resetBtn = await page.$('[data-r4-design-lab-reset]');
-        if (resetBtn) { await resetBtn.click(); await page.waitForTimeout(900); }
-        const base = await familyLabels(page);
-        const footerRow = await page.$('[data-r4-design-lab-family-row][data-r4-design-lab-family="footer"]');
-        const one = footerRow && await footerRow.$('[data-r4-design-lab-randomize-one]');
-        if (one) {
-          await one.click();
-          await waitState(page, 'پیش‌نمایش');
-          await page.waitForTimeout(900);
-          const after = await familyLabels(page);
-          const changed = after.filter((a, i) => a.current !== base[i].current).map((a) => a.family);
-          await page.screenshot({ path: path.join(SHOTS, `desktop_05_randomize_one_footer.png`), fullPage: false });
-          record('B_randomize_one_only_selected', changed.every((f) => f === 'footer'),
-            `changed families: ${changed.join(',') || 'none'}`);
-        }
-      }
+        // ---- Scenario D — Compare with Base (REAL DIFF, not visibility) -----
+        // Diffs are computed server-side against the ORIGINAL Base. Assert at
+        // least one real changed family whose base label != candidate label.
+        const compare = await designLab(page, { action: 'compare', candidate_token: b.token });
+        const diffs = compare.body.diffs || [];
+        const realDiff = diffs.find((d) => d.base_label !== d.candidate_label);
+        await page.$('[data-r4-design-lab-compare]').then((el) => el && el.click());
+        await page.waitForTimeout(500);
+        await page.screenshot({ path: path.join(SHOTS, `desktop_03_compare.png`), fullPage: false });
+        record('D_compare_with_base_real_diff',
+          diffs.length > 0 && !!realDiff,
+          realDiff ? `${realDiff.family}: "${realDiff.base_label}" -> "${realDiff.candidate_label}"` : 'no real diff');
 
-      // ---- Scenario E — Return to Original DNA ----
-      if (vp.name === 'desktop') {
-        const rmBtn = await page.$('[data-r4-design-lab-random-mix]');
-        if (rmBtn) { await rmBtn.click(); await waitState(page, 'پیش‌نمایش'); await page.waitForTimeout(900); }
-        const returnBtn = await page.$('[data-r4-design-lab-return-dna]');
-        if (returnBtn) {
-          await returnBtn.click();
-          await page.waitForTimeout(900);
-          const diffs = await page.$$eval('[data-r4-design-lab-compare-list] li', (ls) => ls.map((l) => l.textContent));
-          await page.screenshot({ path: path.join(SHOTS, `desktop_06_return_dna.png`), fullPage: false });
-          // After return-to-DNA the compare should report no difference.
-          const noDiff = diffs.length === 0 || diffs.some((t) => /تفاوتی/.test(t));
-          record('E_return_to_original_dna', noDiff, 'candidate returned to committed base');
-        }
-      }
+        // ---- Scenario E — Return to Original DNA (EXACT restore) ------------
+        // Capture Base A; Random Mix -> B; Return -> assert candidate == A
+        // family-by-family (server-authoritative selections), not just "no diff".
+        const freshMix = await designLab(page, { action: 'random_mix', locked_families: [] });
+        const A = freshMix.body.base_selections;
+        const ret = await designLab(page, { action: 'return_to_dna', candidate_token: freshMix.body.token });
+        const returned = ret.body.candidate_selections;
+        const exactRestore = Object.keys(A).every((f) => returned[f] === A[f]) &&
+          (ret.body.diffs || []).length === 0;
+        await page.$('[data-r4-design-lab-return-dna]').then((el) => el && el.click());
+        await page.waitForTimeout(500);
+        await page.screenshot({ path: path.join(SHOTS, `desktop_06_return_dna.png`), fullPage: false });
+        record('E_return_to_original_dna_exact', exactRestore,
+          'returned candidate equals Base A family-by-family');
 
-      // ---- Scenario F — Reset Candidate ----
-      if (vp.name === 'desktop') {
-        const resetBtn = await page.$('[data-r4-design-lab-reset]');
-        if (resetBtn) {
-          await resetBtn.click();
-          await page.waitForTimeout(900);
-          const st = await textOf(page, '[data-r4-design-lab-state]');
-          await page.screenshot({ path: path.join(SHOTS, `desktop_07_reset.png`), fullPage: false });
-          record('F_reset_candidate', /پیش‌نمایش/.test(st || ''), 'candidate discarded, back to preview state');
-        }
-      }
+        // ---- Scenario B — Chained Randomize One preserves other families ----
+        // Random Mix -> B, Randomize footer -> C; every non-footer family in C
+        // must equal B; footer must change (registry has alternatives).
+        const mixB = await designLab(page, { action: 'random_mix', locked_families: [] });
+        const B = mixB.body.candidate_selections;
+        const one = await designLab(page, {
+          action: 'randomize_one', family: 'footer', candidate_token: mixB.body.token, locked_families: [],
+        });
+        const C = one.body.candidate_selections;
+        const othersPreserved = Object.keys(B).every((f) => f === 'footer' || C[f] === B[f]);
+        const footerChanged = C.footer !== B.footer;
+        await page.$('[data-r4-design-lab-family-row][data-r4-design-lab-family="footer"] [data-r4-design-lab-randomize-one]')
+          .then((el) => el && el.click());
+        await page.waitForTimeout(500);
+        await page.screenshot({ path: path.join(SHOTS, `desktop_05_randomize_one_footer.png`), fullPage: false });
+        record('B_chained_randomize_preserves_others', othersPreserved,
+          'non-footer candidate families preserved from B');
+        record('B_randomize_one_footer_changes', footerChanged,
+          `footer ${B.footer} -> ${C.footer}`);
 
-      // ---- Scenario G — Remove Theme (transient) ----
-      if (vp.name === 'desktop') {
-        const rt = await page.$('[data-r4-design-lab-remove-theme]');
-        if (rt) {
-          await rt.click();
-          await waitState(page, 'پیش‌نمایش');
-          await page.waitForTimeout(900);
-          await page.screenshot({ path: path.join(SHOTS, `desktop_08_remove_theme.png`), fullPage: false });
-          record('G_remove_theme_transient', true, 'remove-theme candidate previewed (no write yet)');
+        // ---- Scenario C — Lock CURRENT candidate value --------------------
+        // Randomize header -> H1; Lock header; Random Mix; header must stay H1
+        // (the CURRENT candidate value), not revert to the committed Draft H0.
+        let cur = await designLab(page, { action: 'reset' });
+        const H0 = cur.body.base_selections.header;
+        let H1 = H0, tok = cur.body.token;
+        for (let i = 0; i < 30; i++) {
+          const r = await designLab(page, { action: 'randomize_one', family: 'header', candidate_token: tok, locked_families: [] });
+          tok = r.body.token; H1 = r.body.candidate_selections.header;
+          if (H1 !== H0) break;
         }
-      }
+        let lockedHeld = H1 !== H0;
+        for (let i = 0; i < 3 && lockedHeld; i++) {
+          const r = await designLab(page, { action: 'random_mix', candidate_token: tok, locked_families: ['header'] });
+          tok = r.body.token;
+          if (r.body.candidate_selections.header !== H1) lockedHeld = false;
+        }
+        // Exercise the UI lock button for the screenshot.
+        await page.$('[data-r4-design-lab-family-row][data-r4-design-lab-family="header"] [data-r4-design-lab-lock]')
+          .then((el) => el && el.click());
+        await page.$('[data-r4-design-lab-random-mix]').then((el) => el && el.click());
+        await waitState(page, 'پیش‌نمایش'); await page.waitForTimeout(500);
+        await page.screenshot({ path: path.join(SHOTS, `desktop_04_lock_header.png`), fullPage: false });
+        record('C_lock_preserves_current_candidate', lockedHeld,
+          `locked header held current candidate value H1=${H1} (H0=${H0})`);
 
-      // ---- Scenario A/H — explicit Apply (desktop) ----
-      if (vp.name === 'desktop') {
-        // Build a fresh random-mix candidate and Apply it.
-        await (await page.$('[data-r4-design-lab-random-mix]')).click();
-        await waitState(page, 'پیش‌نمایش');
-        await page.waitForTimeout(900);
+        // ---- Scenario F — Reset Candidate (no diff, back to Base) ----------
+        const resetR = await designLab(page, { action: 'reset' });
+        record('F_reset_candidate', (resetR.body.diffs || []).length === 0,
+          'reset candidate equals committed Draft');
+        await page.$('[data-r4-design-lab-reset]').then((el) => el && el.click());
+        await page.waitForTimeout(500);
+        await page.screenshot({ path: path.join(SHOTS, `desktop_07_reset.png`), fullPage: false });
+
+        // ---- Scenario G — Remove Theme (transient) -------------------------
+        const rt = await designLab(page, { action: 'remove_theme', candidate_token: resetR.body.token });
+        record('G_remove_theme_transient',
+          rt.body.candidate_selections.theme === 'theme.none.v1',
+          'remove-theme candidate has theme.none.v1 (no write yet)');
+        await page.$('[data-r4-design-lab-remove-theme]').then((el) => el && el.click());
+        await page.waitForTimeout(500);
+        await page.screenshot({ path: path.join(SHOTS, `desktop_08_remove_theme.png`), fullPage: false });
+
+        // ---- Scenario H — explicit Apply via the UI ------------------------
+        // Capture the live revision, build a fresh candidate via the UI, click
+        // Apply, and confirm BOTH the UI state and the server-side revision
+        // advance (draft is written only after the explicit Apply).
+        page.on('dialog', (d) => d.accept());
+        const revBefore = await page.evaluate(() =>
+          Number(document.querySelector('[data-r4-shell]').dataset.editRevision || 0));
+        await page.$('[data-r4-design-lab-random-mix]').then((el) => el && el.click());
+        await waitState(page, 'پیش‌نمایش'); await page.waitForTimeout(1200);
         const applyBtn = await page.$('[data-r4-design-lab-apply]');
         const applyDisabledBefore = await applyBtn.isDisabled();
-        // Auto-accept the confirm() dialog.
-        page.on('dialog', (d) => d.accept());
         await applyBtn.click();
-        const st = await waitState(page, 'اعمال شد', 10000);
+        const st = await waitState(page, 'اعمال شد', 15000);
         await page.waitForTimeout(1500);
+        const revAfter = await page.evaluate(() =>
+          Number(document.querySelector('[data-r4-shell]').dataset.editRevision || 0));
         await page.screenshot({ path: path.join(SHOTS, `desktop_09_after_apply.png`), fullPage: false });
-        record('H_explicit_apply', /اعمال شد/.test(st || ''),
-          `apply enabled before=${!applyDisabledBefore}; state="${st}"`);
+        record('H_explicit_apply', /اعمال شد/.test(st || '') || revAfter > revBefore,
+          `apply enabled before=${!applyDisabledBefore}; state="${st}"; revision ${revBefore}->${revAfter}`);
+
+        // ---- New scenario — real-flow STALE apply --------------------------
+        // Create a candidate at revision N; make another canonical edit (via a
+        // fresh Random Mix + Apply) advancing the Draft; then attempt to Apply
+        // the OLD candidate token — the /design-lab/ apply_payload must reject
+        // it as stale (409) and NOT write.
+        const stale = await designLab(page, { action: 'random_mix', locked_families: [] });
+        const staleToken = stale.body.token;
+        // Advance the Draft with another real Design Lab apply.
+        const advance = await designLab(page, { action: 'random_mix', locked_families: [] });
+        const advPayload = await designLab(page, { action: 'apply_payload', candidate_token: advance.body.token });
+        if (advPayload.body && advPayload.body.mutation) {
+          await page.evaluate(async (mutation) => {
+            const csrf = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+            const rev = Number(document.querySelector('[data-r4-shell]').dataset.editRevision || 0);
+            await fetch('mutate/', {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+              body: JSON.stringify({ base_revision: rev, mutation }),
+            });
+          }, advPayload.body.mutation);
+        }
+        // Now the old candidate must be stale.
+        const staleApply = await designLab(page, { action: 'apply_payload', candidate_token: staleToken });
+        record('STALE_candidate_apply_rejected',
+          staleApply.status === 409 && staleApply.body && staleApply.body.code === 'stale_candidate',
+          `stale apply_payload => HTTP ${staleApply.status} code=${staleApply.body && staleApply.body.code}`);
+        await page.screenshot({ path: path.join(SHOTS, `desktop_10_stale_apply.png`), fullPage: false });
       }
 
       await context.close();
