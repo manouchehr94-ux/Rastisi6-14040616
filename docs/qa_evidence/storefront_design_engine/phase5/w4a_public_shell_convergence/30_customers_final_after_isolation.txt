@@ -1,0 +1,318 @@
+Found 84 test(s).
+Creating test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+Operations to perform:
+  Synchronize unmigrated apps: messages, staticfiles
+  Apply all migrations: admin, auth, billing, blog, cart, catalog, content, contenttypes, core, customers, notifications, orders, portal, sessions, sms, storefront_builder, stores, subscriptions
+Synchronizing apps without migrations:
+  Creating tables...
+    Running deferred SQL...
+Running migrations:
+  Applying contenttypes.0001_initial... OK
+  Applying auth.0001_initial... OK
+  Applying admin.0001_initial... OK
+  Applying admin.0002_logentry_remove_auto_add... OK
+  Applying admin.0003_logentry_add_action_flag_choices... OK
+  Applying contenttypes.0002_remove_content_type_name... OK
+  Applying auth.0002_alter_permission_name_max_length... OK
+  Applying auth.0003_alter_user_email_max_length... OK
+  Applying auth.0004_alter_user_username_opts... OK
+  Applying auth.0005_alter_user_last_login_null... OK
+  Applying auth.0006_require_contenttypes_0002... OK
+  Applying auth.0007_alter_validators_add_error_messages... OK
+  Applying auth.0008_alter_user_username_max_length... OK
+  Applying auth.0009_alter_user_last_name_max_length... OK
+  Applying auth.0010_alter_group_name_max_length... OK
+  Applying auth.0011_update_proxy_permissions... OK
+  Applying auth.0012_alter_user_first_name_max_length... OK
+  Applying stores.0001_initial... OK
+  Applying stores.0002_create_akhlaghi_store... OK
+  Applying stores.0003_store_admin_subdomain_schema... OK
+  Applying stores.0004_backfill_store_admin_subdomain... OK
+  Applying stores.0005_store_admin_subdomain_enforce_not_null... OK
+  Applying subscriptions.0001_initial... OK
+  Applying subscriptions.0002_storesubscription_subscriptionevent_usagerecord_and_more... OK
+  Applying subscriptions.0003_provision_legacy_subscriptions... OK
+  Applying subscriptions.0004_alter_subscriptionevent_event_type... OK
+  Applying billing.0001_initial... OK
+  Applying billing.0002_billingsequence_subscriptioninvoiceline... OK
+  Applying billing.0003_subscriptionpaymentattempt... OK
+  Applying billing.0004_billingwebhookevent... OK
+  Applying billing.0005_subscriptiondunningstate... OK
+  Applying billing.0006_scheduledplanchange... OK
+  Applying billing.0007_subscriptioncreditnote_subscriptionrefund_and_more... OK
+  Applying blog.0001_initial... OK
+  Applying catalog.0001_initial... OK
+  Applying customers.0001_initial... OK
+  Applying cart.0001_initial... OK
+  Applying cart.0002_initial... OK
+  Applying cart.0003_cart_checkout_token... OK
+  Applying cart.0004_coupon_store_scope_schema... OK
+  Applying cart.0005_backfill_coupon_store... OK
+  Applying cart.0006_coupon_store_enforce_not_null... OK
+  Applying cart.0007_cartitem_gift_wrap... OK
+  Applying stores.0006_store_platform_code_schema... OK
+  Applying stores.0007_backfill_store_platform_code... OK
+  Applying stores.0008_store_platform_code_enforce_not_null... OK
+  Applying stores.0009_storedomain_domain_type_and_redirect... OK
+  Applying stores.0010_storedomain_retire_instead_of_redirect... OK
+  Applying stores.0011_store_onboarding_completed_at... OK
+  Applying stores.0012_backfill_store_onboarding_completed_at... OK
+  Applying stores.0013_store_onboarding_stage... OK
+  Applying stores.0014_store_deletion_requested_at_and_more... OK
+  Applying stores.0015_storeownershiptransfer... OK
+  Applying stores.0016_store_integration_connection... OK
+  Applying stores.0017_platform_owner_admin_gap_fill... OK
+  Applying orders.0001_initial... OK
+  Applying orders.0002_order_tracking_code... OK
+  Applying orders.0003_store_scope_orders_schema... OK
+  Applying catalog.0002_initial... OK
+  Applying catalog.0003_productimage_is_cover_productimage_thumbnail... OK
+  Applying catalog.0004_specification_specificationtemplate_and_more... OK
+  Applying catalog.0005_variant_backfill_and_constraints... OK
+  Applying catalog.0006_store_scope_catalog_schema... OK
+  Applying catalog.0007_backfill_catalog_store... OK
+  Applying catalog.0008_store_scope_catalog_enforce_not_null... OK
+  Applying orders.0004_backfill_orders_store... OK
+  Applying orders.0005_store_scope_orders_enforce_not_null... OK
+  Applying orders.0006_payment_gateway_config_and_attempt... OK
+  Applying orders.0007_refund_refunditem_returnrequest_returnitem_and_more... OK
+  Applying catalog.0009_product_logistics_and_seo_fields... OK
+  Applying catalog.0010_product_image_variant... OK
+  Applying catalog.0011_attribute_option_variant_engine... OK
+  Applying catalog.0012_industry_templates_and_category_schema... OK
+  Applying catalog.0013_attributevalue_source_template_value_and_more... OK
+  Applying catalog.0014_stockmovement... OK
+  Applying catalog.0015_stockmovement_return_item_alter_stockmovement_reason_and_more... OK
+  Applying catalog.0016_stockmovement_refund_item_alter_stockmovement_reason_and_more... OK
+  Applying catalog.0017_alter_stockmovement_reason_warehouse_and_more... OK
+  Applying catalog.0018_provision_default_warehouses... OK
+  Applying orders.0008_shippingraterule_shippingzone_taxclass_taxrate_and_more... OK
+  Applying catalog.0019_product_tax_class... OK
+  Applying catalog.0020_alter_stockmovement_reason... OK
+  Applying catalog.0021_brand_description_brand_is_active_brand_name_en... OK
+  Applying catalog.0022_alter_brand_options_brand_country_brand_sort_order_and_more... OK
+  Applying catalog.0023_attributevalue_swatch_image... OK
+  Applying catalog.0024_productimage_caption_productimage_is_360_and_more... OK
+  Applying catalog.0025_attribute_is_image_driving_productimage_option_value... OK
+  Applying catalog.0026_productvariant_price_productvariant_tax_class_and_more... OK
+  Applying catalog.0027_productoption_input_type_productvariant_sales_limit... OK
+  Applying catalog.0028_product_publish_at_product_visibility_and_more... OK
+  Applying catalog.0029_industry_template_sector... OK
+  Applying catalog.0030_industrytemplate_default_section_keys... OK
+  Applying catalog.0031_product_country_of_origin_product_model_code_and_more... OK
+  Applying catalog.0032_producttag_purpose... OK
+  Applying catalog.0033_product_draft_placeholder... OK
+  Applying catalog.0034_alter_productvideo_provider_add_instagram... OK
+  Applying catalog.0035_merchantcollection_merchantcollectionitem_and_more... OK
+  Applying catalog.0036_merchantcollection_source_legacy_product_tag... OK
+  Applying catalog.0037_category_image... OK
+  Applying catalog.0038_productmetafield... OK
+  Applying storefront_builder.0001_initial... OK
+  Applying storefront_builder.0002_storefrontsection_collapsed_in_editor... OK
+  Applying storefront_builder.0003_storefrontlayoutversion_appearance_config... OK
+  Applying content.0001_content_page... OK
+  Applying content.0002_publication_constraint... OK
+  Applying content.0003_homepage_media... OK
+  Applying content.0004_image_size_validators... OK
+  Applying content.0005_social_link... OK
+  Applying content.0006_navigation_menus... OK
+  Applying content.0007_menu_item_protect_menu_fk... OK
+  Applying content.0008_footer_configuration... OK
+  Applying content.0009_footer_phone_validators... OK
+  Applying content.0010_image_content_validator... OK
+  Applying content.0011_store_scope_settings_schema... OK
+  Applying content.0012_backfill_footer_store... OK
+  Applying content.0013_store_scope_settings_enforce_not_null... OK
+  Applying content.0014_storefront_builder_store_scoping... OK
+  Applying content.0015_assign_legacy_content_ownership... OK
+  Applying content.0016_add_collection_destination... OK
+  Applying content.0017_scope_hero_slides_and_banners_to_section... OK
+  Applying content.0018_storyrailitem... OK
+  Applying content.0019_mediaasset... OK
+  Applying content.0020_placement_asset_fks... OK
+  Applying content.0021_backfill_placement_assets... OK
+  Applying content.0022_alter_heroslide_destination_type_and_more... OK
+  Applying content.0023_newslettersubscriber... OK
+  Applying core.0001_initial... OK
+  Applying core.0002_shopsettings_melipayamak_password_and_more... OK
+  Applying core.0003_add_visual_identity_fields... OK
+  Applying core.0004_theme_tokens... OK
+  Applying core.0005_store_scope_settings_schema... OK
+  Applying core.0006_backfill_shopsettings_store... OK
+  Applying core.0007_store_scope_settings_enforce_not_null... OK
+  Applying core.0008_auditlogentry... OK
+  Applying core.0009_shopsettings_default_tax_class_and_more... OK
+  Applying core.0010_exportjob... OK
+  Applying core.0011_importjob_importrowresult_and_more... OK
+  Applying core.0012_shopsettings_kavenegar_api_key_and_more... OK
+  Applying core.0013_shopsettings_smsrasti_device_token_and_more... OK
+  Applying core.0014_private_storage_deconstructible... OK
+  Applying core.0015_shopsettings_tax_setup_confirmed_at... OK
+  Applying core.0016_shopsettings_gift_wrap... OK
+  Applying customers.0002_customerprofile_customernote_customertag_and_more... OK
+  Applying customers.0003_customersegment_customersegmentrule_and_more... OK
+  Applying notifications.0001_initial... OK
+  Applying orders.0009_shipping_free_over_optional_and_cost_check... OK
+  Applying orders.0010_orderitem_gift_wrap... OK
+  Applying portal.0001_initial... OK
+  Applying portal.0002_platform_configuration_and_audit... OK
+  Applying portal.0003_owner_otp_and_phone... OK
+  Applying portal.0004_alter_ownerotpchallenge_purpose... OK
+  Applying portal.0005_platformconfiguration_sms_fields... OK
+  Applying portal.0006_platform_owner_admin_gap_fill... OK
+  Applying portal.0007_platformconfiguration_enamad_verification_meta_tag... OK
+  Applying portal.0008_platformconfiguration_encrypted_zibal_credentials_and_more... OK
+  Applying portal.0009_platformconfiguration_enamad_auth_code_and_more... OK
+  Applying sessions.0001_initial... OK
+  Applying sms.0001_initial... OK
+  Applying sms.0002_otpcode_code_hash... OK
+  Applying sms.0003_smsoutboxitem... OK
+  Applying sms.0004_smslog_store... OK
+  Applying sms.0005_sms_balance_and_packages... OK
+  Applying sms.0006_seed_sms_packages... OK
+  Applying sms.0007_platform_owner_admin_gap_fill... OK
+  Applying sms.0008_sms_control_center... OK
+  Applying storefront_builder.0004_storefrontsection_stable_id... OK
+  Applying storefront_builder.0005_storefrontpage... OK
+  Applying storefront_builder.0006_ensure_pages_for_existing_versions... OK
+  Applying storefront_builder.0007_storefrontsection_page... OK
+  Applying storefront_builder.0008_backfill_section_page... OK
+  Applying storefront_builder.0009_storefrontsection_page_not_null_and_stable_id_scope... OK
+  Applying storefront_builder.0010_remove_storefrontsection_version... OK
+  Applying storefront_builder.0011_seed_default_non_home_sections... OK
+  Applying storefront_builder.0012_universal_block_row_and_lock... OK
+  Applying storefront_builder.0013_storefrontedithistoryentry... OK
+  Applying storefront_builder.0014_storefront_container_cell_foundation... OK
+  Applying storefront_builder.0015_storefrontsection_cell_and_cell_order... OK
+  Applying storefront_builder.0016_storefrontlayoutversion_template_provenance... OK
+  Applying storefront_builder.0017_add_ready_template_baseline_snapshot_and_slot_key... OK
+  Applying storefront_builder.0018_r4_editor_gate_and_edit_revision... OK
+  Applying storefront_builder.0019_page_appearance_overrides... OK
+  Applying storefront_builder.0020_r4_editor_enabled_default_true... OK
+  Applying stores.0018_storedomain_delivery_readiness... OK
+  Applying subscriptions.0005_platforminvoice_platformpaymentattempt_and_more... OK
+  Applying subscriptions.0006_remove_platform_invoice_and_attempt... OK
+  Applying subscriptions.0007_alter_subscriptionevent_event_type... OK
+System check identified no issues (0 silenced).
+test_anonymous_sees_login_prompt (apps.customers.tests.test_account_views.AccountHomeViewTests.test_anonymous_sees_login_prompt) ... ok
+test_authenticated_sees_profile_and_stats (apps.customers.tests.test_account_views.AccountHomeViewTests.test_authenticated_sees_profile_and_stats) ... ok
+test_anonymous_sees_login_prompt (apps.customers.tests.test_account_views.AccountOrderDetailViewTests.test_anonymous_sees_login_prompt) ... ok
+test_ordered_variant_label_is_shown (apps.customers.tests.test_account_views.AccountOrderDetailViewTests.test_ordered_variant_label_is_shown)
+قیچیِ ایتالیایی — مشتری باید دقیقاً همان تنوعی را که سفارش داده در ... ok
+test_other_customer_gets_404 (apps.customers.tests.test_account_views.AccountOrderDetailViewTests.test_other_customer_gets_404) ... ok
+test_owner_sees_order_detail (apps.customers.tests.test_account_views.AccountOrderDetailViewTests.test_owner_sees_order_detail) ... ok
+test_cannot_delete_another_customers_address (apps.customers.tests.test_account_views.AddressManagementTests.test_cannot_delete_another_customers_address) ... ok
+test_delete_default_promotes_another_address (apps.customers.tests.test_account_views.AddressManagementTests.test_delete_default_promotes_another_address) ... ok
+test_first_address_added_becomes_default (apps.customers.tests.test_account_views.AddressManagementTests.test_first_address_added_becomes_default) ... ok
+test_invalid_phone_rejected (apps.customers.tests.test_account_views.AddressManagementTests.test_invalid_phone_rejected) ... ok
+test_second_address_is_not_default (apps.customers.tests.test_account_views.AddressManagementTests.test_second_address_is_not_default) ... ok
+test_set_default_switches_flag (apps.customers.tests.test_account_views.AddressManagementTests.test_set_default_switches_flag) ... ok
+test_blank_full_name_is_rejected (apps.customers.tests.test_account_views.ProfileUpdateViewTests.test_blank_full_name_is_rejected) ... ok
+test_valid_update_changes_customer_fields (apps.customers.tests.test_account_views.ProfileUpdateViewTests.test_valid_update_changes_customer_fields) ... ok
+test_ambiguous_email_returns_none (apps.customers.tests.test_auth_service.AuthenticateCustomerByIdentifierTests.test_ambiguous_email_returns_none) ... ok
+test_authenticates_by_email (apps.customers.tests.test_auth_service.AuthenticateCustomerByIdentifierTests.test_authenticates_by_email) ... ok
+test_authenticates_by_phone (apps.customers.tests.test_auth_service.AuthenticateCustomerByIdentifierTests.test_authenticates_by_phone) ... ok
+test_authenticates_by_phone_international_format (apps.customers.tests.test_auth_service.AuthenticateCustomerByIdentifierTests.test_authenticates_by_phone_international_format) ... ok
+test_email_lookup_is_case_insensitive (apps.customers.tests.test_auth_service.AuthenticateCustomerByIdentifierTests.test_email_lookup_is_case_insensitive) ... ok
+test_empty_identifier_returns_none (apps.customers.tests.test_auth_service.AuthenticateCustomerByIdentifierTests.test_empty_identifier_returns_none) ... ok
+test_malformed_phone_returns_none_not_exception (apps.customers.tests.test_auth_service.AuthenticateCustomerByIdentifierTests.test_malformed_phone_returns_none_not_exception) ... ok
+test_nonexistent_email_returns_none (apps.customers.tests.test_auth_service.AuthenticateCustomerByIdentifierTests.test_nonexistent_email_returns_none) ... ok
+test_nonexistent_phone_returns_none (apps.customers.tests.test_auth_service.AuthenticateCustomerByIdentifierTests.test_nonexistent_phone_returns_none) ... ok
+test_wrong_password_returns_none (apps.customers.tests.test_auth_service.AuthenticateCustomerByIdentifierTests.test_wrong_password_returns_none) ... ok
+test_correct_credentials_authenticate (apps.customers.tests.test_auth_service.AuthenticateCustomerTests.test_correct_credentials_authenticate) ... ok
+test_seeded_style_user_with_different_username_still_authenticates (apps.customers.tests.test_auth_service.AuthenticateCustomerTests.test_seeded_style_user_with_different_username_still_authenticates) ... ok
+test_unknown_phone_fails (apps.customers.tests.test_auth_service.AuthenticateCustomerTests.test_unknown_phone_fails) ... ok
+test_wrong_password_fails (apps.customers.tests.test_auth_service.AuthenticateCustomerTests.test_wrong_password_fails) ... ok
+test_creates_user_and_customer_with_random_password (apps.customers.tests.test_auth_service.CreateAccountForGuestTests.test_creates_user_and_customer_with_random_password) ... ok
+test_generated_password_actually_works_for_login (apps.customers.tests.test_auth_service.CreateAccountForGuestTests.test_generated_password_actually_works_for_login) ... ok
+test_sends_welcome_sms_after_commit (apps.customers.tests.test_auth_service.CreateAccountForGuestTests.test_sends_welcome_sms_after_commit) ... ok
+test_merges_guest_cart_into_new_user_cart (apps.customers.tests.test_auth_service.MergeGuestCartTests.test_merges_guest_cart_into_new_user_cart) ... ok
+test_merges_quantities_when_product_already_in_user_cart (apps.customers.tests.test_auth_service.MergeGuestCartTests.test_merges_quantities_when_product_already_in_user_cart) ... ok
+test_no_guest_cart_is_a_no_op (apps.customers.tests.test_auth_service.MergeGuestCartTests.test_no_guest_cart_is_a_no_op) ... ok
+test_signup_creates_user_and_customer (apps.customers.tests.test_auth_service.SignupServiceTests.test_signup_creates_user_and_customer) ... ok
+test_signup_rejects_duplicate_phone (apps.customers.tests.test_auth_service.SignupServiceTests.test_signup_rejects_duplicate_phone) ... ok
+test_signup_rejects_weak_password (apps.customers.tests.test_auth_service.SignupServiceTests.test_signup_rejects_weak_password) ... ok
+test_signup_sends_welcome_sms_after_commit (apps.customers.tests.test_auth_service.SignupServiceTests.test_signup_sends_welcome_sms_after_commit) ... ok
+test_anonymous_sees_login_button (apps.customers.tests.test_auth_views.HeaderAuthStateTests.test_anonymous_sees_login_button) ... ok
+test_authenticated_sees_account_link (apps.customers.tests.test_auth_views.HeaderAuthStateTests.test_authenticated_sees_account_link) ... ok
+test_ambiguous_email_shared_by_two_customers_never_authenticates (apps.customers.tests.test_auth_views.LoginViewTests.test_ambiguous_email_shared_by_two_customers_never_authenticates)
+Customer.email has no uniqueness constraint - a shared email must ... ok
+test_login_accepts_international_phone_format (apps.customers.tests.test_auth_views.LoginViewTests.test_login_accepts_international_phone_format)
++98/0098/bare-9-without-0 all normalize to the same stored 09... phone. ... ok
+test_login_by_email (apps.customers.tests.test_auth_views.LoginViewTests.test_login_by_email) ... ok
+test_login_merges_guest_cart (apps.customers.tests.test_auth_views.LoginViewTests.test_login_merges_guest_cart) ... ERROR
+test_remember_me_checked_uses_persistent_expiry (apps.customers.tests.test_auth_views.LoginViewTests.test_remember_me_checked_uses_persistent_expiry) ... ok
+test_remember_me_unchecked_expires_at_browser_close (apps.customers.tests.test_auth_views.LoginViewTests.test_remember_me_unchecked_expires_at_browser_close) ... ok
+test_valid_login_refreshes_page (apps.customers.tests.test_auth_views.LoginViewTests.test_valid_login_refreshes_page) ... ok
+test_wrong_password_shows_error (apps.customers.tests.test_auth_views.LoginViewTests.test_wrong_password_shows_error) ... ok
+test_logout_ends_session_and_redirects_home (apps.customers.tests.test_auth_views.LogoutViewTests.test_logout_ends_session_and_redirects_home) ... ok
+test_otp_login_merges_guest_cart (apps.customers.tests.test_auth_views.OtpLoginViewTests.test_otp_login_merges_guest_cart) ... ERROR
+test_remember_me_choice_survives_the_request_to_verify_transition (apps.customers.tests.test_auth_views.OtpLoginViewTests.test_remember_me_choice_survives_the_request_to_verify_transition)
+The real page carries remember_me forward via a hidden field ... ok
+test_request_for_existing_account_moves_to_verify_stage (apps.customers.tests.test_auth_views.OtpLoginViewTests.test_request_for_existing_account_moves_to_verify_stage) ... ok
+test_request_for_unknown_phone_shows_error_and_sends_nothing (apps.customers.tests.test_auth_views.OtpLoginViewTests.test_request_for_unknown_phone_shows_error_and_sends_nothing) ... ok
+test_reset_view_does_not_send_a_new_code (apps.customers.tests.test_auth_views.OtpLoginViewTests.test_reset_view_does_not_send_a_new_code) ... ok
+test_unchecked_remember_me_expires_at_browser_close (apps.customers.tests.test_auth_views.OtpLoginViewTests.test_unchecked_remember_me_expires_at_browser_close) ... ok
+test_verify_with_correct_code_logs_in (apps.customers.tests.test_auth_views.OtpLoginViewTests.test_verify_with_correct_code_logs_in) ... ok
+test_verify_with_wrong_code_shows_error_and_does_not_log_in (apps.customers.tests.test_auth_views.OtpLoginViewTests.test_verify_with_wrong_code_shows_error_and_does_not_log_in) ... ok
+test_duplicate_phone_shows_error_and_does_not_log_in (apps.customers.tests.test_auth_views.SignupViewTests.test_duplicate_phone_shows_error_and_does_not_log_in) ... ok
+test_signup_merges_guest_cart (apps.customers.tests.test_auth_views.SignupViewTests.test_signup_merges_guest_cart) ... ERROR
+test_valid_signup_logs_user_in_with_full_page_refresh (apps.customers.tests.test_auth_views.SignupViewTests.test_valid_signup_logs_user_in_with_full_page_refresh) ... ok
+test_address_creation (apps.customers.tests.test_models.CustomersModelsTests.test_address_creation) ... ok
+test_customer_creation_and_joined_at (apps.customers.tests.test_models.CustomersModelsTests.test_customer_creation_and_joined_at) ... ok
+test_wishlist_unique_together (apps.customers.tests.test_models.CustomersModelsTests.test_wishlist_unique_together) ... ok
+test_header_wishlist_count_is_store_scoped_on_host_a (apps.customers.tests.test_wishlist_shell_convergence.WishlistHeaderCountShellConvergenceTests.test_header_wishlist_count_is_store_scoped_on_host_a) ... ok
+test_header_wishlist_count_is_store_scoped_on_host_b (apps.customers.tests.test_wishlist_shell_convergence.WishlistHeaderCountShellConvergenceTests.test_header_wishlist_count_is_store_scoped_on_host_b) ... ok
+test_wishlist_renders_without_published_layout (apps.customers.tests.test_wishlist_shell_convergence.WishlistShellConvergenceFallbackTests.test_wishlist_renders_without_published_layout) ... ok
+test_anonymous_state_preserved_under_canonical_shell (apps.customers.tests.test_wishlist_shell_convergence.WishlistShellConvergenceStateTests.test_anonymous_state_preserved_under_canonical_shell) ... ok
+test_empty_authenticated_state_preserved_under_canonical_shell (apps.customers.tests.test_wishlist_shell_convergence.WishlistShellConvergenceStateTests.test_empty_authenticated_state_preserved_under_canonical_shell) ... ok
+test_canonical_shell_stylesheet_linked (apps.customers.tests.test_wishlist_shell_convergence.WishlistShellConvergenceTwoStoreTests.test_canonical_shell_stylesheet_linked) ... ok
+test_canonical_shell_templates_present_on_published_store (apps.customers.tests.test_wishlist_shell_convergence.WishlistShellConvergenceTwoStoreTests.test_canonical_shell_templates_present_on_published_store) ... ok
+test_product_card_partial_reused (apps.customers.tests.test_wishlist_shell_convergence.WishlistShellConvergenceTwoStoreTests.test_product_card_partial_reused) ... ok
+test_shell_isolation_between_stores (apps.customers.tests.test_wishlist_shell_convergence.WishlistShellConvergenceTwoStoreTests.test_shell_isolation_between_stores) ... ok
+test_wishlist_shows_only_current_store_products (apps.customers.tests.test_wishlist_shell_convergence.WishlistShellConvergenceTwoStoreTests.test_wishlist_shows_only_current_store_products) ... ok
+test_wishlist_toggle_other_stores_product_slug_returns_404 (apps.customers.tests.test_wishlist_store_isolation.WishlistToggleCrossStoreTests.test_wishlist_toggle_other_stores_product_slug_returns_404) ... ok
+test_wishlist_toggle_other_stores_product_slug_returns_404_reverse_direction (apps.customers.tests.test_wishlist_store_isolation.WishlistToggleCrossStoreTests.test_wishlist_toggle_other_stores_product_slug_returns_404_reverse_direction) ... ok
+test_wishlist_toggle_own_store_product_succeeds (apps.customers.tests.test_wishlist_store_isolation.WishlistToggleCrossStoreTests.test_wishlist_toggle_own_store_product_succeeds) ... ok
+test_anonymous_user_sees_login_prompt (apps.customers.tests.test_wishlist_views.WishlistListViewTests.test_anonymous_user_sees_login_prompt) ... ok
+test_logged_in_customer_sees_only_their_wishlisted_products (apps.customers.tests.test_wishlist_views.WishlistListViewTests.test_logged_in_customer_sees_only_their_wishlisted_products) ... ok
+test_logged_in_customer_with_empty_wishlist_sees_empty_state (apps.customers.tests.test_wishlist_views.WishlistListViewTests.test_logged_in_customer_with_empty_wishlist_sees_empty_state) ... ok
+test_anonymous_user_cannot_toggle_and_gets_login_prompt (apps.customers.tests.test_wishlist_views.WishlistToggleTests.test_anonymous_user_cannot_toggle_and_gets_login_prompt) ... ok
+test_get_request_not_allowed (apps.customers.tests.test_wishlist_views.WishlistToggleTests.test_get_request_not_allowed) ... ok
+test_logged_in_customer_can_add_to_wishlist (apps.customers.tests.test_wishlist_views.WishlistToggleTests.test_logged_in_customer_can_add_to_wishlist) ... ok
+test_toggle_updates_header_wishlist_count_oob (apps.customers.tests.test_wishlist_views.WishlistToggleTests.test_toggle_updates_header_wishlist_count_oob) ... ok
+test_toggling_twice_removes_from_wishlist (apps.customers.tests.test_wishlist_views.WishlistToggleTests.test_toggling_twice_removes_from_wishlist) ... ok
+
+======================================================================
+ERROR: test_login_merges_guest_cart (apps.customers.tests.test_auth_views.LoginViewTests.test_login_merges_guest_cart)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/customers/tests/test_auth_views.py", line 104, in test_login_merges_guest_cart
+    self.assertEqual(cart.items.first().quantity, 3)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'quantity'
+
+======================================================================
+ERROR: test_otp_login_merges_guest_cart (apps.customers.tests.test_auth_views.OtpLoginViewTests.test_otp_login_merges_guest_cart)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/customers/tests/test_auth_views.py", line 203, in test_otp_login_merges_guest_cart
+    self.assertEqual(cart.items.first().quantity, 1)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'quantity'
+
+======================================================================
+ERROR: test_signup_merges_guest_cart (apps.customers.tests.test_auth_views.SignupViewTests.test_signup_merges_guest_cart)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/customers/tests/test_auth_views.py", line 53, in test_signup_merges_guest_cart
+    self.assertEqual(cart.items.first().quantity, 2)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'quantity'
+
+----------------------------------------------------------------------
+Ran 84 tests in 42.580s
+
+FAILED (errors=3)
+Destroying test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+[real_exit_code=1]

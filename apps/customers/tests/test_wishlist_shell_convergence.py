@@ -8,6 +8,7 @@ stay exactly as they are. Reuses that same file's real two-Store/verified-
 isolation proof — no ``request.store`` mocking."""
 
 from decimal import Decimal
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -37,11 +38,24 @@ def _verified_domain(store, hostname):
     )
 
 
+def _publish(store):
+    """Fixture-only isolation for W4A test setup (never production code):
+    ``enforce_rate_limit`` is cache-backed, not reset by Django's per-test
+    transaction rollback, so running this module together with
+    ``test_w4a_shell_only_context``/``test_page_shell_convergence`` in one
+    process accumulates enough ``svc.publish(store)`` calls against the
+    shared ``akhlaghi`` Store to exceed the real (unmodified)
+    ``storefront_layout.publish`` rate limit -- a test-isolation artifact,
+    not something these tests exercise or depend on."""
+    with mock.patch("apps.storefront_builder.services.layout_service.enforce_rate_limit"):
+        return svc.publish(store)
+
+
 def _publish_with_header_variant(store, header_variant):
     draft = svc.get_or_create_draft(store)
     draft.header_config = {**(draft.header_config or {}), "header_variant": header_variant}
     draft.save(update_fields=["header_config"])
-    svc.publish(store)
+    _publish(store)
 
 
 @override_settings(ALLOWED_HOSTS=[HOST_A, HOST_B, "testserver"])
@@ -142,7 +156,7 @@ class WishlistShellConvergenceStateTests(TestCase):
     def setUp(self):
         self.store = Store.objects.get(slug="akhlaghi")
         svc.get_or_create_draft(self.store)
-        svc.publish(self.store)
+        _publish(self.store)
 
     def test_anonymous_state_preserved_under_canonical_shell(self):
         resp = self.client.get(reverse("customers:wishlist"))

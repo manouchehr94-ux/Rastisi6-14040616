@@ -29,6 +29,19 @@ def _akhlaghi():
     return Store.objects.get(slug="akhlaghi")
 
 
+def _publish(store):
+    """Fixture-only isolation for W4A test setup (never production code):
+    ``enforce_rate_limit`` is cache-backed, not reset by Django's per-test
+    transaction rollback, so running this module together with
+    ``test_wishlist_shell_convergence``/``test_page_shell_convergence`` in
+    one process accumulates enough ``svc.publish(store)`` calls against the
+    shared ``akhlaghi`` Store to exceed the real (unmodified)
+    ``storefront_layout.publish`` rate limit -- a test-isolation artifact,
+    not something these tests exercise or depend on."""
+    with mock.patch("apps.storefront_builder.services.layout_service.enforce_rate_limit"):
+        return svc.publish(store)
+
+
 class ShellOnlyContextTests(TestCase):
     def setUp(self):
         self.store = _akhlaghi()
@@ -39,7 +52,7 @@ class ShellOnlyContextTests(TestCase):
 
     def test_shell_only_published_store_returns_canonical_shell(self):
         svc.get_or_create_draft(self.store)
-        svc.publish(self.store)
+        _publish(self.store)
         self.store.refresh_from_db()
 
         request = self._request()
@@ -90,7 +103,7 @@ class ShellOnlyContextTests(TestCase):
 
     def test_invalid_normal_page_type_preserves_todays_fail_safe(self):
         svc.get_or_create_draft(self.store)
-        svc.publish(self.store)
+        _publish(self.store)
         self.store.refresh_from_db()
 
         request = self._request()
@@ -107,7 +120,7 @@ class ShellOnlyContextTests(TestCase):
 
     def test_shell_only_never_resolves_a_storefront_page(self):
         svc.get_or_create_draft(self.store)
-        svc.publish(self.store)
+        _publish(self.store)
         self.store.refresh_from_db()
 
         request = self._request()
@@ -126,7 +139,7 @@ class ShellOnlyContextTests(TestCase):
 
     def test_shell_only_published_sets_request_appearance_version_not_page(self):
         svc.get_or_create_draft(self.store)
-        version = svc.publish(self.store)
+        version = _publish(self.store)
         self.store.refresh_from_db()
 
         request = self._request()
@@ -137,7 +150,7 @@ class ShellOnlyContextTests(TestCase):
 
     def test_normal_page_type_request_side_effects_unchanged(self):
         svc.get_or_create_draft(self.store)
-        version = svc.publish(self.store)
+        version = _publish(self.store)
         self.store.refresh_from_db()
 
         request = self._request()

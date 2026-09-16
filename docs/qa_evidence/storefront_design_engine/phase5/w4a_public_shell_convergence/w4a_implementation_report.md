@@ -10,13 +10,17 @@
 - **Runtime:** Python 3.12.3, Django 5.2.17.
 - **First implementation head (independently reviewed):** `73eb41c4860e79b0a786573152387d609d398f7a`.
 - **First review-repair head (second independently reviewed):** `acb9b2b5e98e6c88cc9c99698c019267d2c529c4`.
-- **This document covers two review-repair rounds** on top of the first
+- **Second review-repair head (third independently reviewed):** `4e1e7d6bb796dea5e3921609f3c160c71ab30075`.
+- **This document covers three review-repair rounds** on top of the first
   implementation head: round 1 addressed the first Independent Architect
   review (CRITICAL: 0, IMPORTANT: 4, MINOR: 1, verdict: NOT READY FOR
   MERGE); round 2 ("final micro-repair") addressed the second Independent
   Architect re-review (CRITICAL: 0, IMPORTANT: 3, PRODUCTION BLOCKER: 0),
-  which made **zero production-code changes** — see "Final micro-repair
-  round" near the end of this document.
+  which made **zero production-code changes**; round 3 ("test-isolation
+  repair") addressed the third Independent Architect re-review (CRITICAL:
+  0, IMPORTANT: 1, PRODUCTION BLOCKER: 0), which made **zero production
+  code changes and zero rate-limit code changes** — see "Test-isolation
+  repair round" near the end of this document.
 
 ## What changed (exactly the approved scope)
 
@@ -156,7 +160,15 @@ combinations already exercised earlier in this branch's history
 `21_green_important4_css_link.txt` — Wishlist + CMS combined, 19/19). Per
 the review's own instruction not to modify Django test logic without a
 fresh run proving an actual new defect, no test file was changed for this
-finding — it is disclosed here instead.
+finding in round 2 — it was disclosed instead.
+
+**Superseded by round 3** ("Test-isolation repair round" below): the
+third re-review required this combined-run gate to actually be GREEN, as
+a genuine test-isolation defect rather than a mere disclosure. This
+`25_final_focused_exact_head.txt` RED evidence is kept exactly as
+captured (not erased or rewritten) — see
+`28_final_focused_green_after_isolation.txt` for the fix and the GREEN
+re-run.
 
 ## Regression
 
@@ -174,11 +186,16 @@ process exit status. Corrected, honestly captured with the real exit code:
 - **First repair-round head** (`18_customers_final_honest.txt`, superseded
   by the exact-head run below — captured before the Wishlist CSS-link test
   existed): 83 tests, 3 errors, real_exit_code=1.
-- **Exact current head** (`acb9b2b5` + the two IMPORTANT-1/2 repair
-  commits above, same command, working tree): **84 tests (74 base + 10
-  Wishlist-convergence tests), 3 errors, real_exit_code=1**. Evidence:
+- **Round 2 exact head** (`acb9b2b5` + the two IMPORTANT-1/2 repair
+  commits, same command, working tree): 84 tests (74 base + 10
+  Wishlist-convergence tests), 3 errors, real_exit_code=1. Evidence:
   `26_customers_final_exact_head.txt`.
-- **Error identities, base vs. exact-head — identical, 3/3**:
+- **Round 3 exact head (current, authoritative)** — re-run because the
+  test-isolation fix touched Django test files (production code
+  unchanged, so the result is expected to be, and is, identical to round
+  2's): **84 tests, 3 errors, real_exit_code=1**. Evidence:
+  `30_customers_final_after_isolation.txt`.
+- **Error identities, base vs. current head — identical, 3/3**:
   `test_login_merges_guest_cart`, `test_otp_login_merges_guest_cart`,
   `test_signup_merges_guest_cart` (all `apps.customers.tests.test_auth_views`,
   all `AttributeError: 'NoneType' object has no attribute 'quantity'` — an
@@ -329,6 +346,64 @@ Per this round's explicit instruction, the previously-captured full
 changed pre-existing failure reasons = 0) was **reused, not re-run**,
 since this round changed only QA tooling and evidence/docs/PR metadata —
 no production Python/template file and no Django test file changed.
+
+## Test-isolation repair round (third Independent Architect re-review)
+
+The third re-review of PR #10 (CRITICAL: 0, IMPORTANT: 1, PRODUCTION
+BLOCKER: 0) accepted every prior finding and confirmed round 2's
+diagnosis of the combined-run `RateLimitExceeded` errors (see "Focused
+tests" above) was correct in substance, but required it actually fixed —
+the exact combined focused suite must be GREEN before merge, as a
+test-isolation defect rather than a production one. This round made
+**zero production code changes and zero rate-limit code changes**
+(`apps/core/services/rate_limit.py` and
+`apps/storefront_builder/services/layout_service.py` untouched); it added
+one fixture-only helper to each of the three W4A test files:
+
+```python
+def _publish(store):
+    with mock.patch("apps.storefront_builder.services.layout_service.enforce_rate_limit"):
+        return svc.publish(store)
+```
+
+— routing every `svc.publish(store)` call in
+`apps/storefront_builder/tests/test_w4a_shell_only_context.py` (5 call
+sites), `apps/customers/tests/test_wishlist_shell_convergence.py` (via
+`_publish_with_header_variant` plus one direct call in
+`WishlistShellConvergenceStateTests.setUp`), and
+`apps/content/tests/test_page_shell_convergence.py` (via
+`_publish_with_header_variant`) through it instead of `svc.publish`
+directly. This patches out only the rate-limit *check* around W4A fixture
+publication — `layout_service.publish()` itself, and every other caller
+of it anywhere else in the codebase (including
+`apps.storefront_builder.tests.test_layout_service`'s own rate-limit
+tests), is completely untouched. No second publish helper/service was
+created — `_publish` is a thin test-local wrapper around the existing
+`svc.publish`, not a new authority.
+
+**Exact required green gate** (`28_final_focused_green_after_isolation.txt`):
+
+```
+python manage.py test apps.storefront_builder.tests.test_w4a_shell_only_context apps.customers.tests.test_wishlist_shell_convergence apps.content.tests.test_page_shell_convergence --settings=shop_core.settings
+Ran 25 tests in 7.847s
+OK
+[real_exit_code=0]
+```
+
+**Customer regression, re-run because Django test files changed**
+(`30_customers_final_after_isolation.txt`, supersedes
+`26_customers_final_exact_head.txt` — same production code, only the test
+fixture wrapper changed, so this is expected to be, and is, identical):
+**84 tests, 3 errors** (`real_exit_code=1`), the exact same 3 historical
+identities as every prior run — `test_login_merges_guest_cart`,
+`test_otp_login_merges_guest_cart`, `test_signup_merges_guest_cart`.
+**W4A-only customer errors: 0.**
+
+Per this round's explicit instruction, the full `apps.storefront_builder.tests`
+suite (`22_full_storefront_builder_suite_final.txt`) and Browser QA
+(`browser_qa/dark_digital/`, `browser_qa/warm_boutique/`) were **reused,
+not re-run** — this round changed no production code, no
+`storefront_builder` test code, no templates, and no QA runner.
 
 ## System / migration gates
 
