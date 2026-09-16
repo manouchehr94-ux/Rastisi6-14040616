@@ -21,6 +21,7 @@ db.sqlite3
 
 # Ad hoc local venvs created during read-only QA/browser baseline work
 .venv-baseline/
+.venv-w3/
 
 # User uploads
 media/
