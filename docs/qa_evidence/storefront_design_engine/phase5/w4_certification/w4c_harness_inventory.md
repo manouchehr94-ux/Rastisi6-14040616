@@ -306,35 +306,40 @@ Exact, source-verified extension seam (full detail: harness inventory §10):
   evidence tree; this is a named, deliberate Gallery-refresh step (plan
   §14), never an incidental side effect of running `--w4c-all50`.
 
-**Session/authentication precedent, and its consequence for cell isolation:**
+**Session/authentication precedent — repaired (Round 2, Important 2):**
 `run.mjs` has exactly ONE browser-context-creation pattern in active use:
 `browser.newContext(...)` immediately followed by
 `context.addCookies([manifest.session])` (the staff cookie from
 `Client().force_login`) — used unconditionally for the core scenarios AND
 for every phase3 "public route" context (8 separate call sites all inject
 the same session cookie; confirmed by direct grep — there is no genuinely
-anonymous context anywhere in `run.mjs` today). W4C's Home/Listing cells
-(read-only, no mutation) reuse this exact precedent: one fresh
-`browser.newContext()` per cell, cookied with `manifest.session`, mirroring
-phase3's own public-route contexts precisely.
+anonymous context anywhere in `run.mjs` today outside of `public_w1_qa.mjs`,
+a sibling file). The Round 1 version of this document proposed W4C's
+Home/Listing cells reuse the phase3 pattern (staff-cookied), reserving only
+PDP/Cart for a cookie-less context. **The Independent Architect rejected
+this in Round 2:** W4C certifies customer-facing public traffic, so ALL FOUR
+page classes — Home, Listing, PDP, and Cart alike — must be genuinely
+anonymous; none of them are ever cookied with the staff session. The staff
+session remains available only for the legacy R4 QA scenarios, unchanged,
+and is never constructed or threaded into any W4C manifest at all (W4C's
+Python orchestrator needs no authenticated browser/HTTP path, since every
+Store-state transition is a direct ORM/service call — plan §3.1/§3.4/§3.6).
 
-W4C's PDP/Cart cells mutate server-side cart state, and reusing the SAME
-injected session cookie across "fresh" contexts would not actually isolate
-cart state (the cart is scoped to the underlying Django session, and every
-context carrying the same cookie value shares that one session/cart) — a
-real bug the state-isolation repair (plan §11a) must not reintroduce.
-`run.mjs` has no existing pattern for a repeated, isolated, anonymous cart
-mutation; the one existing precedent for exactly that in this repository is
-`tools/storefront_builder_qa/public_w1_qa.mjs`, which already drives
-`cart:add`/cart-state assertions through a genuinely cookie-less
+W4C's PDP/Cart cells mutate server-side cart state; a cookie-less context
+per cell is what makes "start empty" safe without any DB/session
+manipulation (reusing the SAME cookie value across "fresh" contexts would
+not isolate state, since the cart is scoped to the underlying Django
+session, and every context carrying the same cookie value shares that one
+session/cart). `run.mjs` has no existing pattern for a repeated, isolated,
+anonymous cart mutation; the one existing precedent for exactly that in this
+repository is `tools/storefront_builder_qa/public_w1_qa.mjs`, which already
+drives `cart:add`/cart-state assertions through a genuinely cookie-less
 `context.request.post(...)` (a Playwright `APIRequestContext` call — part of
 the same `playwright-core` package `run.mjs` already borrows via
 `createRequire`, so this is reusing an existing capability of the
-already-shared dependency, not adding one). W4C's new PDP/Cart cells
-therefore use a fresh, cookie-less `browser.newContext()` per cell (no
-`manifest.session` injected), letting Django's session middleware issue a
-brand-new, empty-cart session on first request — exactly `public_w1_qa.mjs`'s
-own already-proven mechanism, adapted into the new `run.mjs` block rather
+already-shared dependency, not adding one). Every one of W4C's cells — Home
+and Listing included, not only PDP/Cart — uses this same fresh, cookie-less
+`browser.newContext()` pattern, adapted into the new `run.mjs` block rather
 than copied into a second file.
 
 **Host resolution:** `run.mjs`'s `resolver_host` is only populated today in
@@ -605,39 +610,51 @@ workstream defines.
 
 ---
 
-## 9. Conclusion — REPAIRED (Independent Review Round 1)
+## 9. Conclusion — REPAIRED (Independent Review Round 2)
 
 No architectural impossibility was found anywhere in this inventory. Every
 requirement in the authoritative plan's W4C section is satisfiable by a
 bounded, opt-in extension of the two files the plan itself names —
-`tools/storefront_builder_r4_qa/run.mjs` (new `manifest.w4c`-gated block,
-inserted in `main()`'s existing additive-block position, touching zero lines
-of the existing 15 scenarios or the phase3/showcase blocks) and
+`tools/storefront_builder_r4_qa/run.mjs` (a NEW top-level `if (manifest.w4c)
+{...} else { await main(); }` guard — W4C never runs alongside the existing
+15 scenarios, since it needs a genuinely published Ready-Template starting
+state the legacy `_prepare_r4_sandbox` fixture actively destroys, §11.3 —
+plus one new `w4cAll50Certification` function, invoked fresh once per
+Template) and
 `apps/storefront_builder/management/commands/qa_storefront_builder_r4.py`
-(new `--w4c-all50` flag + `w4c`/`w4c_fixture` manifest keys, following the
-exact shape of the existing `--phase3`/`phase3_fixture` extension point) —
-reusing: the already-shared `playwright-core` dependency (via the existing
+(new `--w4c-all50` flag; `_prepare_w4c_certification_fixture` in place of
+`_prepare_r4_sandbox`; `_apply_and_verify_published`/
+`_theme_cleanup_and_verify` using the REAL `StorefrontLayout.published_version`
+chain, never the registry alone, §11.1–11.2/11.4; a per-Template Python loop
+that spawns `run.mjs` once per key; a corrected 3-way `host` branch in
+`_build_manifest` so `origin`/`public_url`/`resolver_host` all resolve to
+the real customer-facing Store host in W4C mode, §11.5) — reusing: the
+already-shared `playwright-core` dependency (via the existing
 `createRequire` borrow), the existing subprocess-invocation and
-JSON-result/exit-code pass/fail mechanism, the existing
-`browser.newContext()` + session-cookie pattern for read-only Home/Listing
-cells, `public_w1_qa.mjs`'s already-proven cookie-less
-`context.request`-based anonymous cart-mutation pattern for PDP/Cart cells,
-the canonical `preset_service`/`layout_service` apply/publish path, the
-canonical public-host resolution pattern (computed the same way
-`capture_ready_template_previews.py` already computes it, not the way
-`showcase` mode computes its own, different, admin-host mapping), the shared
-`rasti-mode-demo`/`seed_ready_template_fashion_demo` fixture, the canonical
-`catalog:product-list`/`catalog:product-detail`/`cart:detail` routes, and the
-canonical `apply_theme`/`clear_theme` authority-service calls through the
-canonical Draft→publish lifecycle.
+JSON-result/exit-code pass/fail mechanism, `public_w1_qa.mjs`'s
+already-proven cookie-less `context.request`-based anonymous
+cart-mutation pattern (adopted for ALL FOUR page classes, not only PDP/Cart
+— every W4C cell is genuinely anonymous customer traffic, §11 Round-2
+session note above), the canonical `preset_service`/`layout_service`
+apply/publish path, the canonical public-host resolution pattern (computed
+the same way `capture_ready_template_previews.py` already computes it, not
+the way `showcase` mode computes its own, different, admin-host mapping),
+the shared `rasti-mode-demo`/`seed_ready_template_fashion_demo` fixture, the
+canonical `catalog:product-list`/`catalog:product-detail`/`cart:detail`
+routes, and the canonical `get_or_create_draft`/`apply_theme`/`clear_theme`/
+`publish` calls through the canonical Draft→publish lifecycle, all owned by
+Python — Node never calls into Django, Python never reaches into the
+browser (§11.4).
 `capture_ready_template_previews.py` is used only for its own, unmodified,
-pre-existing Gallery-capture responsibility (`--full-qa --only <key>`,
-invoked once per key as a deliberate, separately-recorded step) — it is
-never the W4C PASS/FAIL authority and is never invoked from within the
-`--w4c-all50` run. No second harness, no second Playwright package, no
-second browser launcher, no second public-storefront renderer, no parallel
-Apply/Publish authority, and no separate W4C-only route system are
-proposed. See the implementation plan
+pre-existing, DIFFERENT-viewport Gallery-capture responsibility (§11.6) —
+never as the source of the mandatory W5 Home gallery (which comes directly
+from the `--w4c-all50` cells themselves), invoked only for a key found
+genuinely stale by the existing fingerprint contract, as one deliberate,
+separately-recorded step — it is never the W4C PASS/FAIL authority and is
+never invoked from within the `--w4c-all50` run. No second harness, no
+second Playwright package, no second browser launcher, no second
+public-storefront renderer, no parallel Apply/Publish authority, and no
+separate W4C-only route system are proposed. See the implementation plan
 (`docs/superpowers/plans/2026-09-17-phase5-w4c-all50-browser-certification.md`)
 for the full task breakdown, pass/fail contracts, evidence plan, and
 resumability design.
@@ -721,3 +738,156 @@ is quoted or paraphrased from actual source, not inferred from filenames.
   and the sibling `.meta.json`, per `template_preview_service.py` lines
   367–475 (`_PREVIEWS_STATIC_SUBDIR = "ready_template_previews"`,
   `APP_STATIC_DIR = apps/storefront_builder/static`).
+
+## 11. Repair Round 2 — exact orchestration facts (source-verified)
+
+### 11.1 Real published-state verification chain
+
+`StorefrontLayout` (`apps/storefront_builder/models.py:188-235`) has real FK
+fields `published_version`/`draft_version` → `StorefrontLayoutVersion`
+(`status` = `draft`/`published`/`archived`; `template_provenance` JSONField,
+default `{}`, written by `build_template_provenance(template_key=,
+template_version=)` — `variant_contract.py:437-446` — the registry's
+`key`/`version` stored verbatim). Exact verification chain a Python
+orchestrator uses after apply+publish:
+
+```python
+layout = StorefrontLayout.objects.get(store=store)
+pv = layout.published_version
+assert pv is not None and pv.status == pv.Status.PUBLISHED
+template = (pv.template_provenance or {}).get("template") or {}
+assert template.get("key") == key and template.get("version") == version
+```
+
+`lpr.get_layout_preset(key).version` only proves the REGISTRY definition
+exists at that version — it says nothing about what is actually published on
+a given Store. The two are conflated in the pre-repair design; this chain
+is the fix.
+
+### 11.2 `apply_preset_with_checkpoint` / `publish` — exact division of labor
+
+`preset_service.apply_preset_with_checkpoint(store, preset, *, user=None)`
+(`preset_service.py:920-949`) is **Draft-only** — its own docstring states
+"نسخه‌ی منتشرشده هرگز لمس نمی‌شود؛ هرگز خودکار publish نمی‌کند" (the
+Published version is never touched; it never auto-publishes). It writes
+`template_provenance`/`appearance_config`/`template_baseline_snapshot` onto
+`layout.draft_version` only, no-op-returning early if that Draft already
+matches the preset (`_draft_already_matches_preset`).
+`layout_service.publish(store, *, user=None)` (`layout_service.py:851-895`)
+takes whatever `layout.draft_version` currently is, flips its `status` to
+`PUBLISHED`, archives the previous `published_version`, sets
+`layout.published_version = draft`, clears `layout.draft_version = None`. It
+performs **no `edit_revision`/optimistic-lock check** (that field is an
+R4-editor concurrency token consulted elsewhere, never inside `publish`
+itself) — so the sequence `apply_preset_with_checkpoint(store, preset)` →
+`layout_service.publish(store)` is the complete, sufficient, canonical
+apply-then-publish pair; no third call is needed.
+
+### 11.3 `_prepare_r4_sandbox` — confirmed destructive, confirmed unsafe for W4C
+
+`qa_storefront_builder_r4.py:422-512` unconditionally deletes any existing
+`layout.published_version` AND `layout.draft_version` row
+(`old_published.delete()` / `old_draft.delete()`), nulls both FKs, wipes the
+Home page's `Section`/`Container` rows, and rebuilds a synthetic two-section
+Draft with throwaway `t12-*` fixture objects — never calling
+`apply_preset_with_checkpoint` or `publish`, so the resulting Draft carries
+no `template_provenance` at all. Its own comment confirms intent: "Publish
+must be a real, observable state transition during the run, so it must
+start unpublished." This is correct for the legacy R4 mutation/undo/redo/
+publish smoke suite (which needs to OBSERVE a publish transition happen) and
+is exactly why it must never run when `--w4c-all50` is set — W4C needs an
+Ready-Template-published starting state to certify, not a wiped one.
+
+### 11.4 Theme apply/clear — exact Python call sequence and verification
+
+```python
+draft = layout_service.get_or_create_draft(store)                     # layout_service.py:800-836
+appearance_authority_service.apply_theme(                              # appearance_authority_service.py:171-212
+    version=draft, component_key=occasion_component_key, intensity=intensity,
+)
+layout_service.publish(store)
+
+# verification (rendering.py:67-121 / persistence.py load_store_appearance_manifest)
+layout = StorefrontLayout.objects.get(store=store)
+manifest = load_store_appearance_manifest(layout.published_version)
+assert manifest.selections["theme"] == occasion_component_key
+assert manifest.settings.get("theme", {}).get("intensity") == intensity
+```
+
+`apply_theme`/`clear_theme` write directly onto the `StorefrontLayoutVersion`
+object passed as `version=` via `persist_store_appearance_manifest` — since
+that is the same Draft row `publish(store)` reads as `layout.draft_version`,
+no extra synchronization step is needed. `clear_theme(version=draft)` +
+`layout_service.publish(store)` is the exact cleanup pair (§ state-isolation
+contract, plan §5.3), verified the same way with
+`occasion_component_key = "theme.none.v1"` and no `intensity` key present.
+
+### 11.5 `_build_manifest`'s `origin`/`public_url`/`resolver_host` — confirmed single-host bug
+
+Exact current logic (`qa_storefront_builder_r4.py:1267-1314`):
+
+```python
+host = (
+    f"{store.admin_subdomain}{self.SHOWCASE_QA_HOST_SUFFIX}"
+    if showcase else "127.0.0.1"
+)
+origin = f"http://{host}:{port}"
+return {
+    "origin": origin,
+    "resolver_host": host if showcase else None,
+    "public_url": f"{origin}/",
+    ...
+}
+```
+
+`origin`, `public_url`, and `resolver_host` are ALL derived from the SAME
+single `host` variable, gated by the SAME `showcase` boolean. In non-showcase
+mode `host` is hardcoded `"127.0.0.1"` and `resolver_host` is hardcoded
+`None` — there is no path today where `resolver_host` can be set
+independently of `origin`/`public_url`, and no path where `origin`/
+`public_url` ever becomes the customer-facing Store host (`showcase` mode's
+own `host` is the **admin**-subdomain host, a different hostname family, not
+the `shop-`-prefixed public host `capture_ready_template_previews.py`
+already uses correctly). This confirms the exact, real bug Important 3
+identified — the pre-repair plan's `resolver_host` fix alone would have had
+no effect, because `public_url` would still have been `http://127.0.0.1:{port}/`.
+The fix (plan §3.2) adds a third branch to this same `host` computation,
+gated by `w4c_all50` (mutually exclusive with `showcase`), producing the
+real `shop-{admin_subdomain}.{RASTISI_ADMIN_DOMAIN_SUFFIX}` host for all
+three fields together.
+
+### 11.6 Gallery capture viewport mismatch — confirmed, not merely suspected
+
+`capture_ready_template_previews.py:61-66`:
+
+```python
+CANONICAL_VIEWPORT = {"width": 1440, "height": 1100}
+QA_VIEWPORTS = {
+    "home_mobile": {"width": 390, "height": 844},
+    "listing_desktop": {"width": 1440, "height": 1100},
+    "pdp_desktop": {"width": 1440, "height": 1100},
+}
+```
+
+The Gallery command's own canonical Home-Desktop capture is **1440×1100**,
+not W4C's certification viewport **1440×900** — confirmed, not merely
+suspected. The two are not interchangeable; this is the exact reason the
+100-asset mandatory Home gallery (plan §12/§4A) must be sourced from the
+`--w4c-all50` certification cells themselves (which already run at
+1440×900/390×844) rather than copied from a `--full-qa` Gallery-command run.
+
+**Staleness contract** (`template_preview_service.py`): `preview_content_hash`
+(L372-386) hashes `{appearance, default_palette_slug, header, footer,
+home_section_keys}` from the live registry object;
+`preview_input_fingerprint` (L416-447) additionally folds in
+`preset.key`/`preset.version`/the Demo Store's
+`selected_product_media_manifest.json` bytes/`seed_ready_template_fashion_demo.py`'s
+own source bytes; `resolve_real_screenshot` (L478-512) returns the stored
+screenshot only when its sidecar's recorded fingerprint exactly equals a
+freshly-recomputed one, else `None` (fallback to the SVG schematic). A
+static Gallery asset is stale iff any of: the registry entry's appearance/
+palette/header/footer/composition changed, `preset.version` changed (also
+changes the storage path itself), the Demo Store's media manifest changed,
+or the seed command's own source changed — this is the exact, source-backed
+test plan §16 Task 6 applies before deciding whether to refresh a given
+key's static Gallery asset.

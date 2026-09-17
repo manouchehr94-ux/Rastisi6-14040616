@@ -120,91 +120,217 @@ Architect review; the matrix is never silently shrunk.
 
 ---
 
-## 3. Canonical harness extension target (repaired — Important 1)
+## 3. Canonical harness extension target + exact control flow (repaired — Important 1, Round 2)
 
-**Repair note:** the prior revision of this plan proposed extending
-`capture_ready_template_previews.py` into the certification authority. The
-Independent Architect rejected this: the authoritative plan explicitly names
-`tools/storefront_builder_r4_qa/run.mjs` (and/or `tools/storefront_builder_qa/`)
-as the harness to reuse. The corrected target below is binding.
+**Repair note (Round 1):** the original plan proposed extending
+`capture_ready_template_previews.py` into the certification authority,
+rejected because the authoritative plan names
+`tools/storefront_builder_r4_qa/run.mjs` (and/or `tools/storefront_builder_qa/`).
 
-### 3.1 `tools/storefront_builder_r4_qa/run.mjs` — browser certification authority
+**Repair note (Round 2):** Round 1's corrected target was accepted, but left
+the apply/publish/verify transition and the Python↔Node invocation loop
+undefined, and cited `lpr.get_layout_preset(key).version` as sufficient
+publish-proof (it is not — it only proves the registry definition exists,
+never that it is published on the Store). This section now defines one
+exact, executable control flow, source-grounded in harness inventory §11.
 
-Exact insertion point (source-verified, harness inventory §10): inside
-`main()`, immediately after the existing `if (manifest.phase3) { ... }`
-block (source line 4138) and before the unconditional scenario 14 (source
-line 4140):
+### 3.1 Division of authority (binding)
+
+- **Python (`qa_storefront_builder_r4.py`) owns every Store-state
+  transition:** applying a preset to a Draft, publishing it, applying/
+  clearing a Theme, and verifying the REAL published result via
+  `StorefrontLayout.published_version` — never the registry alone.
+- **Node (`run.mjs`) owns only browser assertions** for one already-published
+  Template's public cells, for one invocation, then exits — it never calls
+  into Django, never reconstructs a preset, never patches a model.
+- No second preset-application path, no Node-side preset reconstruction, no
+  direct model patching from either side.
+
+### 3.2 Exact Python ⟷ Node loop (`qa_storefront_builder_r4.py`, `--w4c-all50`)
+
+```
+_prepare_w4c_certification_fixture(store)        # 3.3 — NOT _prepare_r4_sandbox
+start one local runserver (existing subprocess pattern, reused unchanged)
+w4c_fixture = _build_w4c_fixture(store)          # 50 key/version pairs, PDP product id,
+                                                  # Tier-1 occasion map (section 1.1), Tier-2 pair
+for key in selected_keys (deterministic _SPECS order, or --only subset):
+    preset = lpr.get_layout_preset(key)
+    # --- Python: apply + publish + verify (real state, section 3.4) ---
+    _apply_and_verify_published(store, preset)
+    # --- Python: write this Template's active-key envelope ---
+    active_key_manifest_path = _write_w4c_active_key_manifest(
+        base_manifest=stable_w4c_manifest,       # origin/public_url/resolver_host, computed once (section 3.5)
+        key=preset.key, version=preset.version,
+        cells=["home", "listing", "pdp", "cart"] x [desktop, tablet, mobile],
+        theme_cell=w4c_fixture["tier1_occasions"][key],   # {occasion, intensity: "balanced"} always present, Tier 1 covers all 50
+        tier2=(key in ("warm_boutique", "beauty_dew")),
+    )
+    # --- Node: ONE fresh invocation, browser assertions only ---
+    exit_code = _run_logged([node, run_mjs_path, active_key_manifest_path], ...)
+    per_key_result = json.loads((report_dir / f"w4c-result-{key}.json").read_text())
+    # --- Theme cleanup (Python), section 3.6 — runs even if the above raised ---
+    _theme_cleanup_and_verify(store)
+    # --- Python: merge this Template's result into the combined matrix ---
+    _merge_into_matrix_json(matrix_json_path, key, per_key_result)   # atomic read-merge-write, plan section 15
+    os.unlink(active_key_manifest_path)
+run final 704-cell aggregator (plan section 15)
+finally: stop runserver, restore SQLite DB backup (existing lifecycle, reused unchanged)
+```
+
+Node is invoked **once per Template** (a fresh browser process per
+invocation — the same anti-cache-leak isolation
+`capture_ready_template_previews.py` already established as necessary), not
+once for the whole 50-Template run. This mirrors the existing
+`_run_logged`/`subprocess.Popen` mechanism exactly (harness inventory §10.B)
+— called N times in a loop instead of once.
+
+### 3.3 `_prepare_w4c_certification_fixture` — bypasses the legacy sandbox
+
+New method on the same `Command` class, invoked only when `--w4c-all50` is
+set, in place of `_prepare_r4_sandbox` (never both):
+
+- Ensures `rasti-mode-demo` exists and is current via
+  `call_command("seed_ready_template_fashion_demo")` (idempotent, §2) —
+  never wipes `layout.published_version`/`draft_version` and never deletes
+  `Section`/`Container` rows the way `_prepare_r4_sandbox` does (confirmed
+  destructive at `qa_storefront_builder_r4.py:422-512`, harness inventory
+  §11.3 — that method is correct for the legacy R4 smoke suite's own need to
+  OBSERVE a from-scratch publish transition, and is exactly wrong for W4C,
+  which needs a real, Ready-Template-published starting state per Template).
+- Reuses the existing SQLite backup/restore safety lifecycle unchanged (the
+  same backup-before/restore-after wrapping every other `qa_storefront_builder_r4`
+  invocation already uses).
+- When `--w4c-all50` is NOT set, this method is never called and
+  `_prepare_r4_sandbox` runs exactly as it does today — byte-for-byte
+  unchanged non-W4C behavior.
+
+### 3.4 `_apply_and_verify_published` — exact apply/publish/verify sequence
+
+```python
+def _apply_and_verify_published(self, store, preset):
+    preset_service.apply_preset_with_checkpoint(store, preset)   # Draft-only, never touches Published
+    layout_service.publish(store)                                # flips Draft -> Published
+    layout = StorefrontLayout.objects.get(store=store)
+    pv = layout.published_version
+    template = (pv.template_provenance or {}).get("template") or {}
+    if pv is None or pv.status != pv.Status.PUBLISHED \
+       or template.get("key") != preset.key or template.get("version") != preset.version:
+        raise CommandError(f"W4C: {preset.key} v{preset.version} did not verify as published")
+```
+
+This is the exact, source-verified chain (harness inventory §11.1–11.2):
+`apply_preset_with_checkpoint` is Draft-only by its own docstring guarantee;
+`publish` performs the pointer swap with no `edit_revision` check, so the
+two calls in sequence are sufficient; verification reads
+`StorefrontLayout.published_version.template_provenance["template"]`
+(written verbatim by `apply_preset`'s `build_template_provenance` call),
+never the registry alone.
+
+### 3.5 Host resolution — `_build_manifest`'s single-`host` bug, fixed (Important 3, detailed in §3.7)
+
+Confirmed exact bug (harness inventory §11.5): `origin`, `public_url`, and
+`resolver_host` are today all derived from ONE `host` variable gated by the
+SAME `showcase` boolean — non-showcase mode hardcodes `host = "127.0.0.1"`
+and `resolver_host = None` unconditionally, so no existing caller can make
+`public_url` resolve to the customer-facing Store host. The fix extends that
+same computation with a third, mutually-exclusive branch:
+
+```python
+if showcase:
+    host = f"{store.admin_subdomain}{self.SHOWCASE_QA_HOST_SUFFIX}"
+elif w4c_all50:
+    host = f"shop-{store.admin_subdomain}.{settings.RASTISI_ADMIN_DOMAIN_SUFFIX}"
+else:
+    host = "127.0.0.1"
+origin = f"http://{host}:{port}"
+resolver_host = host if (showcase or w4c_all50) else None
+public_url = f"{origin}/"
+```
+
+`--w4c-all50` and `--showcase` are validated mutually exclusive in
+`handle()` (a `CommandError` if both are passed), so this is a clean 3-way
+branch, never an ambiguous combination. Chromium in `run.mjs` receives
+`--host-resolver-rules=MAP {resolver_host} 127.0.0.1` exactly as it already
+does for `showcase` mode — no new Chromium launch mechanism.
+
+### 3.6 Theme cleanup ownership — Python only, failure-safe
+
+```python
+def _theme_cleanup_and_verify(self, store):
+    draft = layout_service.get_or_create_draft(store)
+    appearance_authority_service.clear_theme(version=draft)
+    layout_service.publish(store)
+    layout = StorefrontLayout.objects.get(store=store)
+    manifest = load_store_appearance_manifest(layout.published_version)
+    if manifest.selections.get("theme") != "theme.none.v1":
+        raise CommandError("W4C: Theme cleanup did not verify theme.none.v1 -- BLOCKING further certification")
+```
+
+Called from a Python `try/finally` around each Theme cell's apply+publish+
+navigate+assert sequence (plan §5.3) — cleanup runs whether the browser
+assertion step passed, failed, or raised. If `_theme_cleanup_and_verify`
+itself raises, the entire `--w4c-all50` run halts immediately (no further
+base or Theme cells execute) and the run is reported `BLOCKED`, per the
+Round 1 contract, now with an exact, real verification query
+(`load_store_appearance_manifest(layout.published_version).selections["theme"]`,
+harness inventory §11.4) rather than an unverified assumption.
+
+### 3.7 `tools/storefront_builder_r4_qa/run.mjs` — browser certification authority, one Template per invocation
+
+Exact insertion point (source-verified, harness inventory §10): a NEW,
+separate entry path guarded by `manifest.w4c` at the very top of the
+script's dispatch, BEFORE the existing `main()`'s 13 unconditional core
+scenarios run — because a `--w4c-all50` invocation of `run.mjs` runs ONLY
+the W4C browser-assertion function for its one active key, never the R4
+mutation/undo/redo/publish smoke suite (those 13 scenarios assume the
+`_prepare_r4_sandbox` fixture, which W4C never creates, §3.3):
 
 ```js
+const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 if (manifest.w4c) {
-  await scenario('w4c-all50-certification', w4cAll50Certification);
+  await w4cAll50Certification(manifest);   // new function; writes its own w4c-result-<key>.json; process.exit() inside
+} else {
+  await main();                             // existing, completely unchanged
 }
 ```
 
-`w4cAll50Certification` is one new function added to this file (not a new
-file), reusing:
-- The existing `browser`/top-level `context`/`page` variables already in
-  scope inside `main()` for Home/Listing cells (fresh
-  `browser.newContext()` per cell, cookied with `manifest.session` — the
-  exact pattern the phase3 block's own public-route sub-contexts already
-  use, 8 existing call sites, confirmed zero exceptions).
-- A NEW, cookie-less `browser.newContext()` per PDP/Cart cell (no
-  `manifest.session` injected), using `context.request.post(...)` /
-  `context.request.get(...)` (Playwright's `APIRequestContext`, part of the
-  already-shared `playwright-core` dependency) for the `cart:add`/
-  `cart:item-update`/`cart:item-remove` mutations — copied from
-  `tools/storefront_builder_qa/public_w1_qa.mjs`'s own already-proven
-  anonymous cart-flow implementation (the one existing precedent for
-  repeated, isolated, anonymous cart mutations in this repository), adapted
-  into this new function, not duplicated into a second file.
-- The existing module-level `result` object: `result.w4c = {...}` (mutated
-  directly, exactly like every other scenario already does), landing in the
-  single `r4-browser-result.json` write Django already reads for pass/fail.
-  A dedicated sidecar `w4c-browser-result.json` (the full 704-cell
-  `matrix.json`, §9) is additionally hand-written via a plain
-  `fs.writeFileSync(path.join(manifest.report_dir, 'matrix.json'), ...)`,
-  the same ad hoc way `metrics.json`/`task6_diagnostics.json` already are —
-  there is no shared writer function to call.
-- Zero lines of the existing 15 scenarios or the phase3/showcase functions
-  are touched.
+`w4cAll50Certification(manifest)` is one new function added to this file
+(not a new file):
+- Every one of Home/Listing/PDP/Cart's cells uses a fresh, **cookie-less**
+  `browser.newContext()` — no `manifest.session` field exists or is injected
+  in W4C mode at all (Important 2, §5). Python needs no authenticated
+  browser action for W4C (all Store-state transitions are ORM/service calls,
+  §3.1), so the manifest this function receives never carries a `session`
+  key.
+- PDP/Cart mutation cells (`cart:add`/`cart:item-update`/`cart:item-remove`)
+  use `context.request.post(...)`/`context.request.get(...)` (Playwright's
+  `APIRequestContext`, part of the already-shared `playwright-core`
+  dependency) — copied from `tools/storefront_builder_qa/public_w1_qa.mjs`'s
+  own already-proven anonymous cart-flow implementation, adapted into this
+  new function, not duplicated into a second file.
+- Writes its own `w4c-result-<key>.json` into `manifest.report_dir` via a
+  plain `fs.writeFileSync(...)`, the same ad hoc way `metrics.json`/
+  `task6_diagnostics.json` already are (no shared writer function exists to
+  call, confirmed absent by grep) — Python reads this file and merges it
+  into the combined `matrix.json` (§3.2).
+- Zero lines of the existing 15 scenarios, the phase3/showcase blocks, or
+  `main()` itself are touched — the `if (manifest.w4c) {...} else {
+  await main(); }` guard at the very top is the only change to the file's
+  control flow.
 
-### 3.2 `apps/storefront_builder/management/commands/qa_storefront_builder_r4.py` — Django orchestration authority
+### 3.8 `apps/storefront_builder/management/commands/capture_ready_template_previews.py` — Gallery capture only, unchanged, and NOT the Home-gallery source
 
-- New flag in `add_arguments` (added alongside the existing 10, no existing
-  flag changed): `--w4c-all50` (`action="store_true"`). Mutually exclusive
-  with `--showcase` at validation time (mirroring the existing
-  `--showcase` requires `--phase3` validation already present) — they
-  target different host-resolution needs (§3.3).
-- New method `_build_w4c_fixture(self, store)`, mirroring the shape of the
-  existing `_prepare_phase3_brand_gate()`, returning a dict with: the exact
-  50-Template key/version list (read live from
-  `lpr.list_ready_templates()`, never hardcoded), the deterministic PDP
-  fixture product id (§2), the Tier-1 occasion assignment (§1.1, computed
-  the same deterministic way, not hardcoded as a literal 50-row dict, so it
-  never drifts from `_SPECS` order), and the Tier-2 Template pair
-  (`warm_boutique`, `beauty_dew`).
-- `_build_manifest()`'s existing literal dict (lines 1267–1314) gains two
-  new keys: `"w4c": bool(options["w4c_all50"])` and
-  `"w4c_fixture": self._build_w4c_fixture(store) if options["w4c_all50"]
-  else None` — no existing key in that dict is renamed or removed.
-- Host resolution: when `--w4c-all50` is passed, `resolver_host` is computed
-  as `f"shop-{store.admin_subdomain}.{settings.RASTISI_ADMIN_DOMAIN_SUFFIX}"`
-  — the exact pattern `capture_ready_template_previews.py` already uses
-  correctly for the real customer-facing public storefront — never the
-  `showcase` mode's own, different, admin-host mapping.
-- No change to the node-invocation mechanism (`subprocess.Popen`, temp-file
-  manifest path as `argv[2]`) or the pass/fail read
-  (`r4-browser-result.json`'s `summary.failed` OR nonzero exit code).
-
-### 3.3 `apps/storefront_builder/management/commands/capture_ready_template_previews.py` — Gallery capture only, unchanged
-
-Zero code changes. Used only as a deliberately-invoked, separately-recorded
-step (§9/§14) to produce the mandatory Home Desktop + Home Mobile gallery
-assets via its existing `--full-qa --only <key>` mode — never invoked from,
-or by, the `--w4c-all50` run itself. Its exclusive ownership of
-`apps/storefront_builder/static/ready_template_previews/<key>/v<version>.{webp,meta.json}`
-is preserved; the `w4c` block in `run.mjs` never reads or writes anything
-under that path.
+Zero code changes. Confirmed (harness inventory §11.6): its own canonical
+Home-Desktop capture viewport is **1440×1100**, not W4C's certification
+viewport **1440×900** — the two are not interchangeable. The mandatory
+100-asset Home gallery (§12) is therefore sourced directly from the
+`--w4c-all50` certification cells themselves (§4, which already run Home at
+Desktop 1440×900 and Mobile 390×844), never from this command's output.
+This command is used only as a separate, deliberately-invoked,
+stale-check-gated step (§12/§17 Task 6) for the DIFFERENT, pre-existing
+responsibility of refreshing `apps/storefront_builder/static/ready_template_previews/<key>/v<version>.{webp,meta.json}`
+— the `w4c` code path in `run.mjs` never reads or writes anything under
+that path.
 
 No other file under `apps/`, `tools/`, or `migrations/` is touched by this
 extension.
@@ -261,85 +387,124 @@ For every Template x viewport:
   are excluded here too, never a new exclusion invented ad hoc).
 - [ ] Accessibility-critical controls (§10) pass for every control actually
   present on Home for this Template.
-- [ ] Session used: `browser.newContext()` + `manifest.session` cookie (§3.1)
-  — read-only cell, no state-isolation risk (§5.2).
+- [ ] Session used: fresh, cookie-less anonymous `browser.newContext()` (§5)
+  — Home is public customer traffic, never staff-cookied.
 
 ---
 
-## 5. State isolation contract (new — Important 3)
+## 5. State isolation contract (repaired — Important 2 + 3, Round 2)
 
-### 5.1 Browser session isolation
+**Repair note:** the Round 1 version of this contract cookied Home/Listing
+cells with the staff `manifest.session` cookie (mirroring the R4 harness's
+phase3 blocks). The Independent Architect rejected this (Round 2, Important
+2): W4C certifies CUSTOMER-FACING public traffic, so all four page classes —
+Home, Listing, PDP, and Cart alike — must be genuinely anonymous. The staff
+session is not carried into any public certification context at all; it is
+not needed there, since every Store-state transition (apply/publish/Theme)
+is a Python ORM/service call, never a browser action (§3.1).
 
-Every one of the 600 base cells uses its own fresh
-`browser.newContext()` — never a context shared across Templates, page
-classes, or viewports. Concretely:
+### 5.1 Browser session isolation — all cells anonymous
 
-- **Home / Listing cells (read-only):** fresh `browser.newContext()` per
-  cell, cookied with `manifest.session` (mirrors the existing phase3
-  public-route pattern, §3.1). Read-only cells carry no mutation risk, so
-  cookie reuse across these cells is safe — no cart/session state is ever
-  written by a Home or Listing cell.
+Every one of the 600 base cells (Home, Listing, PDP, and Cart alike) and
+every one of the 104 Theme cells uses its own fresh, **cookie-less**
+`browser.newContext()` — no `manifest.session` field exists in W4C mode's
+manifest at all, and no cell of any page class is ever cookied with a staff
+session. Concretely:
+
+- **Home / Listing cells (read-only):** fresh, cookie-less
+  `browser.newContext()` per cell. Django's session middleware issues an
+  anonymous session on first request exactly as it would for a real
+  customer; no mutation occurs, so this session's lifetime is irrelevant
+  beyond the cell itself.
 - **PDP / Cart cells (mutating):** fresh, cookie-less `browser.newContext()`
-  per cell (no `manifest.session` injected). Django's session middleware
-  issues a brand-new session (and therefore an empty cart) on that context's
-  first request — this is the mechanism that guarantees "start empty"
-  without any direct DB/session manipulation, per the repair directive's
-  explicit prohibition. Each Cart cell independently: starts empty (fresh
-  context, §above), adds exactly the deterministic fixture product via
-  `context.request.post` to `cart:add`, exercises its bounded mutations
-  (`cart:item-update`, `cart:item-remove`), reads the resulting DOM/totals
-  via `page.goto('cart:detail')` in the SAME context, then the context is
-  closed at the end of the cell — never reused for a later cell.
+  per cell (same mechanism as Home/Listing — the distinction that mattered
+  in the Round 1 draft, cookied-vs-anonymous, no longer exists; ALL cells
+  are anonymous now). Django's session middleware issues a brand-new session
+  (and therefore an empty cart) on that context's first request — this is
+  the mechanism that guarantees "start empty" without any direct DB/session
+  manipulation, per the repair directive's explicit prohibition. Each Cart
+  cell independently: starts empty (fresh context), adds exactly the
+  deterministic fixture product via `context.request.post` to `cart:add`,
+  exercises its bounded mutations (`cart:item-update`, `cart:item-remove`),
+  reads the resulting DOM/totals via `page.goto('cart:detail')` in the SAME
+  context, then the context is closed at the end of the cell — never reused
+  for a later cell.
 - PDP Add-to-Cart in one cell therefore cannot populate a later Cart cell:
   they never share a context, and a cookie-less context never resumes a
   prior session.
+- Theme public-verification cells (104/104) are equally anonymous: the
+  Theme MUTATION (apply/clear) is a Python-side Draft+publish operation
+  (§3.6); the Theme's rendered effect is then OBSERVED via an anonymous
+  browser navigation to the public Home page, exactly like any other Home
+  cell.
+- The staff session (`Client().force_login`) remains available ONLY for
+  legacy R4 QA's own existing scenarios (used exactly as today, never
+  changed) — it is never constructed, never present in, and never passed to
+  a W4C manifest, since W4C's Python orchestrator needs no authenticated
+  browser/HTTP path at all (every mutation goes through direct service
+  calls, §3.1, §3.4, §3.6).
 
-### 5.2 Template / Store state
+### 5.2 Template / Store state — real published-state verification
 
 - Before each Template's 12 base cells (4 page classes x 3 viewports):
-  verify via `lpr.get_layout_preset(key).version` that the exact expected
-  version is the one currently published on `rasti-mode-demo` (apply/publish
-  it if not — idempotent, mirroring `capture_ready_template_previews.py`'s
-  own idempotent skip-if-already-published check).
-- Before every BASE-matrix batch (§10): verify the Store's published Theme
-  selection is `theme.none.v1`. If it is not (e.g. a prior interrupted Theme
-  cell left it non-none), run the Tier-1 cleanup lifecycle (§5.3) before
-  proceeding, and record this as a recovered-state event in `matrix.json`'s
-  `_meta`.
+  Python calls `_apply_and_verify_published(store, preset)` (§3.4), which
+  verifies the REAL `StorefrontLayout.published_version.template_provenance`
+  — never `lpr.get_layout_preset(key).version` alone, which only proves the
+  registry definition exists, not that it is published on the Store
+  (harness inventory §11.1). This call is idempotent
+  (`apply_preset_with_checkpoint`'s own `_draft_already_matches_preset`
+  no-op check) — re-verifying an already-correct Template is cheap.
+- Before every Theme cell and before every BASE-matrix batch: Python
+  verifies the Store's published Theme selection via
+  `load_store_appearance_manifest(layout.published_version).selections["theme"] == "theme.none.v1"`
+  (harness inventory §11.4). If it is not (e.g. a prior interrupted Theme
+  cell left it non-none), Python runs `_theme_cleanup_and_verify` (§3.6)
+  before proceeding, and records this as a recovered-state event in
+  `matrix.json`'s `_meta`.
 - The Store's published Template MAY persist across a Template's own 12 base
   cells (no per-cell re-apply needed once verified) — only the BROWSER
   SESSION must not persist (§5.1).
 
-### 5.3 Theme cleanup must survive failures
+### 5.3 Theme cleanup must survive failures (repaired — Python-owned, per §3.1/§3.6)
+
+**Repair note:** the Round 1 draft described this lifecycle without naming
+which process runs it, and a later paragraph incorrectly implied a JS
+`try/finally` inside `run.mjs`. Per §3.1's division of authority, every
+Store-state transition — including Theme apply/clear/publish/verify — is
+Python's responsibility; Node only observes the rendered result. The
+lifecycle is corrected below to name its real owner.
 
 Every Tier-1/Tier-2 Theme cell (§1) follows this exact, failure-safe
-lifecycle:
+lifecycle, run entirely in `qa_storefront_builder_r4.py`'s per-Template loop
+(§3.2) as a Python `try/finally`:
 
-```
-1. get_or_create_draft(store)
-2. apply_theme(draft, occasion_component_key, intensity)   # appearance_authority_service
-3. layout_service.publish(store)
-4. navigate + assert (occasion attributes, RTL, overflow, console/page errors, muharram-safety)
-5. FINALLY (always runs, whether step 4 passed or raised):
-     a. get_or_create_draft(store)
-     b. clear_theme(draft)                                  # appearance_authority_service
-     c. layout_service.publish(store)
-     d. verify published state == theme.none.v1
-6. IF the finally block's verification (5d) itself fails:
-     mark the ENTIRE run BLOCKED, halt all subsequent base-matrix and
-     Theme cells immediately, and require a manual/automated Store-state
-     repair + re-verification before any further certification proceeds.
+```python
+try:
+    draft = layout_service.get_or_create_draft(store)
+    appearance_authority_service.apply_theme(version=draft, component_key=occasion_component_key, intensity=intensity)
+    layout_service.publish(store)
+    _verify_published_theme(store, occasion_component_key, intensity)   # raises on mismatch
+    # invoke run.mjs for ONE anonymous browser navigation + assertion (occasion attributes,
+    # RTL, overflow, console/page errors, muharram-safety) -- Node's only role here
+    exit_code = _run_logged([node, run_mjs_path, theme_cell_manifest_path], ...)
+    theme_cell_result = json.loads((report_dir / f"w4c-theme-result-{key}.json").read_text())
+finally:
+    self._theme_cleanup_and_verify(store)   # section 3.6 -- ALWAYS runs, whether the try block passed or raised
 ```
 
-This is implemented in `w4cAll50Certification` as a JS
-`try { ... } finally { ... }` block per Theme cell — never a bare
-best-effort cleanup that can be silently skipped by an early return or an
-uncaught exception. A Theme assertion/navigation failure (step 4) is
-recorded as a FAIL for that cell but does NOT skip step 5 — cleanup always
-runs regardless of step 4's outcome.
+If `_theme_cleanup_and_verify` (the `finally` block) itself raises, the
+ENTIRE `--w4c-all50` run halts immediately (no further base-matrix or Theme
+cells execute), the run is reported `BLOCKED`, and a manual/automated
+Store-state repair + re-verification is required before any further
+certification proceeds (§3.6). A Theme assertion/navigation failure inside
+the `try` block is recorded as a FAIL for that one cell but does NOT skip
+the `finally` — cleanup always runs regardless of the `try` block's outcome.
 
 No direct writes to a published version at any point — every Theme mutation
-goes through `get_or_create_draft` + the canonical mutation + `publish`.
+goes through `get_or_create_draft` + the canonical mutation
+(`apply_theme`/`clear_theme`) + `publish`, exactly as `layout_service` and
+`appearance_authority_service` already define them (harness inventory §11.4)
+— Node never calls into Django, and Python never reaches into the browser.
 
 ---
 
@@ -384,8 +549,8 @@ Route: `catalog:product-list` (`/products/`). For every Template x viewport:
   and `form[role=search]` contract already proven by
   `public_task7_qa.mjs` — never a new selector).
 - [ ] Real product links (first product card's `href` resolves, HTTP 200,
-  verified via an in-page `fetch()` from the SAME session-cookied context —
-  Listing is a read-only cell, §5.1).
+  verified via an in-page `fetch()` from the SAME anonymous context —
+  Listing is a read-only, cookie-less cell like every other page class, §5).
 - [ ] No dead interaction (no `href="#"`, no disabled-looking control that
   is actually meant to be active).
 - [ ] Accessibility-critical controls (§10) for filter/sort/pagination.
@@ -535,14 +700,16 @@ Required artifacts:
 1. `matrix.json` — one machine-readable file covering every one of the 704
    certification cells (§1), schema in §13.
 2. `home_gallery/` — **100 files** (repaired from 50): for each of the 50
-   Templates, one Home Desktop screenshot (`<key>_home_desktop.jpg`, 1440
-   wide) AND one Home Mobile screenshot (`<key>_home_mobile.jpg`, 390 wide)
-   — mandatory, for W5 review, which explicitly requires Desktop + Mobile
-   inspection including the Bottom Navigation axis. Produced via the
-   existing Gallery authority's `--full-qa --only <key>` mode (§3.3), which
-   already captures both at these exact viewports; W4C copies those two
-   outputs per key into this folder rather than re-implementing capture.
-   Home Tablet is exercised in `matrix.json` but not gallery-retained.
+   Templates, one Home Desktop screenshot (`<key>_home_desktop.jpg`, 1440×900)
+   AND one Home Mobile screenshot (`<key>_home_mobile.jpg`, 390×844) — mandatory,
+   for W5 review, which explicitly requires Desktop + Mobile inspection
+   including the Bottom Navigation axis. Repaired (Round 2, Important 4):
+   sourced DIRECTLY from that Template's own `--w4c-all50` certification
+   Home cells (§3.7/§4), which already run at exactly these two viewports —
+   never from `capture_ready_template_previews.py`'s `--full-qa` mode, whose
+   own canonical Home-Desktop viewport is a confirmed, different 1440×1100
+   (harness inventory §11.6), not a substitutable capture. Home Tablet is
+   exercised in `matrix.json` but not gallery-retained.
 3. `gallery_index.md` — a single 100-row-referencing, 50-Template index
    (key, label_fa, Desktop thumbnail reference, Mobile thumbnail reference,
    rendered-identity summary including Bottom-Nav style) suitable for
@@ -613,10 +780,11 @@ Each per-viewport object carries, at minimum: `http_status`, `rtl`,
 `bottom_nav_display`, `rsec_count`, `expected_rsec_count`,
 `product_cards_present`, `dead_href_count`, `console_errors` (list),
 `page_errors` (list), `failed_requests` (list), `accessibility_checks`
-(object, per §10), `session_mode` (`"cookied"` for Home/Listing,
-`"anonymous"` for PDP/Cart, per §5.1), `result` (`"PASS"`/`"FAIL"`/
-`"BLOCKED"`/`"N/A"`), `reason` (string, required when `result` is not
-`PASS`), `screenshot` (path or `null` when not retained per §12).
+(object, per §10), `result` (`"PASS"`/`"FAIL"`/`"BLOCKED"`/`"N/A"`), `reason`
+(string, required when `result` is not `PASS`), `screenshot` (path or `null`
+when not retained per §12). A `session_mode` field is deliberately NOT
+present — every cell of every page class is anonymous (§5), so the field
+would carry no information.
 
 A top-level `_meta` object records: `run_started_at`, `run_finished_at`,
 `certified_base_sha`, `w4c_branch_head_sha`, `total_cells_expected` (704),
@@ -653,8 +821,7 @@ repaired unexpected state).
   behavior is untouched, §3.3).
 - [ ] Existing R4 QA scenarios 01–15 and the phase3/showcase blocks must
   remain behaviorally identical when `--w4c-all50` is NOT passed (the new
-  flag defaults to off; this is itself asserted by one of the RED-turned-
-  GREEN tests, §16 Task 1).
+  flag defaults to off; this is itself asserted by RED case 8, §17 Task 1).
 - [ ] Expected migrations for this entire workstream: **0**.
 
 ---
@@ -710,11 +877,16 @@ second harness invocation path):
 - [ ] The only files changed for the harness extension are
   `tools/storefront_builder_r4_qa/run.mjs` and
   `apps/storefront_builder/management/commands/qa_storefront_builder_r4.py`.
-- [ ] `capture_ready_template_previews.py` is not modified; it is only
-  invoked, unmodified, in its existing `--full-qa --only <key>` mode, as one
-  explicitly-listed step (§3.3) to produce Gallery/W5 Home assets — this
-  invocation is recorded in `execution_report.md` as a deliberate Gallery
-  refresh, distinct from and never triggered by the `--w4c-all50` run.
+- [ ] `capture_ready_template_previews.py` is not modified and is never the
+  source of the mandatory W5 Home gallery (that comes directly from the
+  `--w4c-all50` certification cells themselves, §12/Task 6). It is only
+  invoked, unmodified, in its existing `--only <key>` mode, for the
+  DIFFERENT, pre-existing responsibility of refreshing a static Gallery
+  preview asset — and only for a key found genuinely stale by the existing
+  fingerprint contract (§12/Task 6/harness inventory §11.6), never blindly
+  for all 50 — recorded in `execution_report.md` as a deliberate, separate
+  refresh, distinct from and never triggered by the `--w4c-all50` run
+  itself.
 - [ ] No new Node package is added — the extension reuses the
   `playwright-core` dependency `run.mjs` already borrows via `createRequire`
   from `tools/storefront_builder_qa/package.json`.
@@ -730,64 +902,139 @@ second harness invocation path):
 ## 17. Task checklist (for the authorized implementation round — not this round)
 
 - [ ] **Task 1 — RED contract tests asserting the DESIRED W4C behavior**
-  (repaired — Important 5B: these assert the feature that should exist and
+  (repaired — Round 1 Important 5B + Round 2 §5: exact module, exact 16
+  cases, exact commands; these assert the feature that should exist and
   currently fails because it does not, never "absence of a feature"):
-  - `qa_storefront_builder_r4.py`'s `add_arguments` accepts `--w4c-all50`
-    and `--only` (as a comma-list) — FAILS today (flag does not exist).
-  - `_build_manifest()`'s returned dict contains `w4c` (bool) and, when
-    `--w4c-all50` is passed, a `w4c_fixture` dict with keys
-    `templates` (list of 50 `{key, version}`), `pdp_product_id`,
-    `tier1_occasions` (dict of 50 `{key: occasion}` matching §1.1's cycling
-    rule exactly), `tier2_keys` (`["warm_boutique", "beauty_dew"]`) — FAILS
-    today (keys do not exist).
-  - `run.mjs`'s `main()` contains an `if (manifest.w4c)` branch that invokes
-    a `w4cAll50Certification` function — FAILS today (branch does not
-    exist).
-  - Passing `manifest.w4c = false`/absent produces byte-identical scenario
-    execution (same `result.scenarios` order/content) to the certified W4B
-    era baseline run — this test PASSES today (proving non-interference) and
-    must keep passing after Task 2 (a regression guard, not a RED test).
-  - The aggregator (new, small Python or JS utility introduced as part of
-    Task 2, not a separate harness) rejects a `matrix.json` with
-    `total_cells_recorded != 704`, rejects one with a non-empty
-    `missing_cells`, and rejects one with a non-empty `duplicate_cells` —
-    FAILS today (aggregator does not exist).
-  - A Tier-1 Theme cell's recorded entry contains the exact
-    `{key, version, occasion, intensity}` for its Template — FAILS today.
-  - A Hero-`none` Template's (§6) Home cell records `hero_result: "N/A"`,
-    never `"FAIL"` — FAILS today (contract does not exist).
-  - A cookie-less PDP/Cart context, when it issues `cart:add` twice in two
-    SEPARATE cell invocations, ends up with two independent, non-cumulative
-    carts (proving isolation) — FAILS today (mechanism does not exist).
-  All of the above FAIL on the current certified base because the `w4c`
-  mode does not exist yet — this is the valid RED state.
+
+  **Exact test module:** `apps/storefront_builder/tests/test_w4c_all50_certification_harness.py`
+  (new file — no existing module is a closer owner: `test_ready_template_real_previews.py`
+  owns the unrelated Gallery-screenshot contract, and there is no existing
+  R4-QA-wrapper test module to extend).
+
+  RED cases (16, matching Round 2 §5 exactly):
+  1. `add_arguments` accepts `--w4c-all50` (`action="store_true"`).
+  2. `add_arguments` accepts `--only` as a comma-separated list, and this
+     flag only affects Template selection when `--w4c-all50` is also passed
+     (asserted via `Command().create_parser(...)` introspection, not a full
+     run).
+  3. Calling `handle()` with `--w4c-all50` calls
+     `_prepare_w4c_certification_fixture` and never calls
+     `_prepare_r4_sandbox` (mock/patch both methods and assert call counts).
+  4. `_build_w4c_fixture(store)` returns a `templates` list of exactly 50
+     `{key, version}` pairs, read live from `lpr.list_ready_templates()`
+     (assert the returned list matches that live call's output, not a
+     hardcoded literal).
+  5. Published-Template verification reads
+     `StorefrontLayout.objects.get(store=store).published_version.template_provenance["template"]`
+     — not `lpr.get_layout_preset(key).version` alone (assert
+     `_apply_and_verify_published` raises `CommandError` when
+     `published_version` is `None`, even if the registry has the right
+     version, proving the check is state-based not registry-based).
+  6. `manifest["public_url"]` contains the customer-facing host
+     (`shop-{store.admin_subdomain}.{RASTISI_ADMIN_DOMAIN_SUFFIX}`) when
+     `w4c_all50=True` is passed to `_build_manifest`.
+  7. `manifest["resolver_host"]` equals the exact same host as
+     `manifest["public_url"]`'s host component (string-parsed comparison).
+  8. Calling `_build_manifest(..., w4c_all50=False, showcase=False)` (the
+     ordinary non-W4C path) produces byte-identical `origin`/`public_url`/
+     `resolver_host` values to the certified pre-repair behavior
+     (`http://127.0.0.1:{port}/`, `resolver_host=None`) — a regression guard,
+     not new behavior; PASSES today and must keep passing.
+  9. Every cell manifest passed to `run.mjs` in W4C mode has no `session`
+     key at all (assert the per-Template active-key envelope dict has no
+     `"session"` key, proving no staff cookie is ever threaded into a public
+     certification context).
+  10. The aggregator utility (introduced in Task 2) rejects a `matrix.json`
+      with `total_cells_recorded != 704`.
+  11. The aggregator rejects a `matrix.json` with a non-empty `missing_cells`
+      list — reports `INCOMPLETE`, never `PASS`.
+  12. The aggregator rejects a `matrix.json` with a non-empty
+      `duplicate_cells` list.
+  13. A Hero-`none` Template's (§6) Home cell computation returns
+      `hero_result: "N/A"`, derived from the live
+      `LayoutPresetDefinition.pages["home"]` section-key sequence lacking a
+      `"hero"` token — never `"FAIL"`, and never keyed off a hardcoded
+      Template-key list.
+  14. `_build_w4c_fixture(store)["tier1_occasions"]` assigns exactly the
+      deterministic cycle (§1.1) for all 50 keys in `_SPECS` order — assert
+      the full 50-entry dict matches the exact table in §1.1, not merely its
+      length or distribution.
+  15. `_theme_cleanup_and_verify` raising an exception (simulated via a
+      mocked `clear_theme` that leaves a non-`theme.none.v1` state) halts
+      the per-Template loop immediately and marks the run `BLOCKED` — no
+      further Template in the batch is processed after the raise.
+  16. `_build_w4c_fixture`/the per-Template loop records, for each of the 50
+      keys, a Home-Desktop and Home-Mobile screenshot path under
+      `docs/qa_evidence/storefront_design_engine/phase5/w4_certification/home_gallery/`
+      (100 total paths) sourced from that Template's own W4C certification
+      cell — never from `capture_ready_template_previews.py`'s output paths
+      (`apps/storefront_builder/static/ready_template_previews/**`).
+
+  All 16 FAIL on the current certified base (`3a4fe907...`) because the
+  `--w4c-all50` mode, `_build_w4c_fixture`, `_apply_and_verify_published`,
+  `_theme_cleanup_and_verify`, the aggregator, and the Hero/gallery-sourcing
+  contracts do not exist yet — this is the valid RED state. Case 8 is the
+  one explicit non-interference regression guard and is expected to PASS
+  immediately (proving the ordinary R4 QA path is architecturally
+  independent of the new W4C code before any of it is even written).
+
+  **Exact focused test command:**
+  ```
+  python manage.py test apps.storefront_builder.tests.test_w4c_all50_certification_harness --settings=shop_core.settings
+  ```
 - [ ] Task 2 — Implement the bounded `--w4c-all50` extension (§3) across
-  `qa_storefront_builder_r4.py` and `run.mjs`: manifest keys, the
-  `w4cAll50Certification` function (Home/Listing cookied cells,
-  PDP/Cart cookie-less cells, Theme Tier 1/Tier 2 with the try/finally
-  cleanup lifecycle of §5.3), the `matrix.json` writer/merger (§15), and the
-  small aggregator utility (§15/Task 1).
+  `qa_storefront_builder_r4.py` (`_prepare_w4c_certification_fixture`,
+  `_build_w4c_fixture`, `_apply_and_verify_published`,
+  `_theme_cleanup_and_verify`, the per-Template Python loop invoking `run.mjs`
+  once per key, the 3-way `host` branch in `_build_manifest`) and `run.mjs`
+  (the `if (manifest.w4c) {...} else { await main(); }` top-level guard and
+  the new `w4cAll50Certification` function — every cell of every page class
+  anonymous, per §5), the `matrix.json` writer/merger (§15), and the small
+  aggregator utility (§15/§17 Task 1).
 - [ ] Task 3 — Prove GREEN on Task 1's tests, plus existing
   `test_ready_template_real_previews.py` and the existing R4 QA scenario
   suite (both must remain green and behaviorally unchanged when
-  `--w4c-all50` is absent).
+  `--w4c-all50` is absent). Exact commands:
+  ```
+  python manage.py test apps.storefront_builder.tests.test_w4c_all50_certification_harness --settings=shop_core.settings
+  python manage.py test apps.storefront_builder.tests.test_ready_template_real_previews --settings=shop_core.settings
+  python manage.py qa_storefront_builder_r4 --store-slug rasti-mode-demo --username <existing staff QA user> --settings=shop_core.settings
+  ```
+  (the third command is the existing, unmodified R4 QA gate invocation —
+  run without `--w4c-all50` to prove byte-for-byte non-interference.)
 - [ ] Task 4 — Execute the 704-cell campaign in deterministic batches
   (§15), producing `matrix.json`.
 - [ ] Task 5 — Run the visual-distinctness clustering pass (§11) against the
   real Home Desktop+Mobile captures; resolve or escalate any `NEEDS REPAIR`
   finding before proceeding.
-- [ ] Task 6 — Deliberately run `capture_ready_template_previews.py
-  --full-qa --only <key>` for all 50 keys against `rasti-mode-demo` (§3.3),
-  and copy the resulting Home Desktop + Home Mobile assets into
-  `home_gallery/` (§12); record exactly which versioned Gallery static
-  assets were produced/refreshed by this step in `execution_report.md`.
+- [ ] Task 6 — Populate `home_gallery/` (§12) directly from the 50 Home
+  Desktop (1440×900) + 50 Home Mobile (390×844) screenshots each Template's
+  own `--w4c-all50` certification cell (§3.7) already captured during Task
+  4's campaign (§3.8 — never from `capture_ready_template_previews.py`,
+  whose own canonical viewport, 1440×1100, is a different, non-substitutable
+  capture). Separately, and only afterward: for each of the 50 keys, check
+  `template_preview_service.resolve_real_screenshot(preset)` /
+  `preview_input_fingerprint(preset)` (harness inventory §11.6) against the
+  currently-stored static Gallery asset; where — and only where — the stored
+  fingerprint no longer matches (i.e. the asset is genuinely stale), run
+  `python manage.py capture_ready_template_previews --base-url <origin>
+  --only <key> --settings=shop_core.settings` to refresh it. Record in
+  `execution_report.md` the exact list of keys found stale and refreshed,
+  and the (expected, larger) list found current and left untouched — never
+  blindly refresh all 50.
 - [ ] Task 7 — Produce all remaining evidence artifacts (§12).
 - [ ] Task 8 — Full regression comparison (§14) against the certified W4B
-  baseline; `manage.py check`/`makemigrations --check`/`git diff --check`.
+  baseline. Exact commands:
+  ```
+  python manage.py check --settings=shop_core.settings
+  python manage.py makemigrations --check --dry-run --settings=shop_core.settings
+  git diff --check
+  python manage.py test apps.storefront_builder.tests --settings=shop_core.settings
+  ```
 - [ ] Task 9 — Architecture/duplication audit (§16) confirming the bounded
   extension introduced nothing beyond what this plan authorized, and
-  confirming the Gallery static tree was touched only by Task 6's deliberate
-  step.
+  confirming the Gallery static tree was touched only by Task 6's
+  stale-only, explicitly-recorded refresh step.
 - [ ] Task 10 — Final clean-status evidence sequence (temp-path capture,
   verify empty, then commit), mirroring W4B's own corrected methodology.
 - [ ] Task 11 — Open the unmerged PR (base `feature/phase5-design-expansion`,
