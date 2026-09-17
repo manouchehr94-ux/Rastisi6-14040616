@@ -4789,10 +4789,13 @@ async function w4cRunCartCell(context, cell, manifest, viewport) {
     // Python-computed expected state, BEFORE the remove step below empties
     // the cart (the goal widget's state depends on cart contents).
     const freeShippingGoal = await w4cFreeShippingGoalCheck(targetPage, manifest.expected_free_shipping_state);
+    // Round 2 repair (4E) -- accessibility, BEFORE the destructive remove
+    // step below (found via the smoke: checking quantity/remove controls
+    // AFTER removing the only item left every check 'n/a').
+    const cartA11y = await w4cCartControlAccessibility(targetPage);
     // Round 2 repair (3B) -- add -> verify -> quantity update -> verify ->
     // remove -> verify removal, deterministically ordered, last.
     const realRemove = await w4cCartRealRemove(targetPage);
-    const cartA11y = await w4cCartControlAccessibility(targetPage);
     const dead = await targetPage.locator('a[href="#"]').count();
     const bottomNavExpected = Boolean(manifest.active_key && manifest.active_key.bottom_nav_expected);
     const bottomNavOk = w4cBottomNavOk(health.bottomNavDisplay, viewport, bottomNavExpected);

@@ -1557,6 +1557,16 @@ class W4CAccessibilityCriticalContractTests(TestCase):
         self.assertIn("checkout", body.lower())
         self.assertIn("accessibility_checks", body)
 
+    def test_84b_cart_accessibility_runs_before_the_destructive_remove(self):
+        """Smoke-round bug regression: checking quantity/remove control
+        accessibility AFTER w4cCartRealRemove already emptied the cart
+        made every check come back 'n/a' -- found via the real smoke
+        against a genuinely single-item cart."""
+        body = self._body("w4cRunCartCell")
+        self.assertLess(
+            body.index("w4cCartControlAccessibility"), body.index("w4cCartRealRemove"),
+        )
+
 
 # =============================================================================
 # Repair Round 2 -- IMPORTANT 5: campaign evidence capture contract. Path
