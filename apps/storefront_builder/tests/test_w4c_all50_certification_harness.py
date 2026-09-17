@@ -27,6 +27,7 @@ from django.core.cache import cache
 from django.core.management.base import CommandError
 from django.test import TestCase
 
+from apps.core.services.rate_limit import RateLimitExceeded
 from apps.storefront_builder import layout_preset_registry as lpr
 from apps.storefront_builder.management.commands import qa_storefront_builder_r4 as r4_mod
 from apps.storefront_builder.management.commands.qa_storefront_builder_r4 import Command
@@ -1835,3 +1836,243 @@ class W4CAccessibilityGatingTests(TestCase):
         this matrix -- it must NOT gain the new gate."""
         body = self._body("w4cRunThemeCell")
         self.assertNotIn("w4cAccessibilityChecksPass", body)
+
+
+# =============================================================================
+# Rate-Limit-Aware Campaign Sharding Repair
+#
+# Attempt 1 of the real 704-cell campaign crashed with an unhandled
+# ``RateLimitExceeded`` (production ``storefront_layout.new_draft`` control,
+# max_attempts=30/hour) after 15 Ready Templates -- see
+# docs/qa_evidence/.../38_full_campaign_attempt1_blocked/. The Architect's
+# binding decision: the real rate limiter is never changed; the harness's
+# own EXECUTION SHARDING adapts to it instead, via one new bounded option,
+# ``--w4c-tier2-budget``, that caps how many currently-missing Tier-2 Theme
+# cells one process attempts. These tests are genuinely RED against the
+# certified pre-repair head: neither the CLI option, its validation, its
+# threading into ``_run_w4c_campaign``, nor the controlled
+# ``RateLimitExceeded`` diagnostic exist yet.
+# =============================================================================
+class W4CTier2BudgetShardingTests(TestCase):
+    """--w4c-tier2-budget: bounded, resumable Tier-2 process sharding."""
+
+    def setUp(self):
+        cache.clear()
+        self.store = Store.objects.create(
+            name="فروشگاه بودجه Tier-2", slug="w4c-tier2-budget-case", admin_subdomain="w4c-tier2-budget-case",
+        )
+        self.command = Command()
+        self.campaign_root = Path(tempfile.mkdtemp())
+        self.matrix_path = self.campaign_root / "matrix.json"
+        self.command._validate_or_init_campaign_matrix(self.matrix_path)
+        self.preset = lpr.get_layout_preset("warm_boutique")
+        # Pre-record Base + Tier-1 for warm_boutique so only the Tier-2
+        # sharding loop itself is under test (isolating the new behavior
+        # from the already-covered Base/Tier-1 resume logic).
+        self.command._merge_base_into_matrix(
+            self.matrix_path, "warm_boutique", self.preset.version,
+            {"page_classes": {
+                pc: {vp: _valid_base_cell() for vp in ("desktop", "tablet", "mobile")}
+                for pc in ("home", "listing", "pdp", "cart")
+            }},
+        )
+        self.tier1_occasion = self.command._build_w4c_fixture(self.store)["tier1_occasions"]["warm_boutique"]
+        self.command._merge_theme_into_matrix(
+            self.matrix_path, "warm_boutique", self.preset.version,
+            self.tier1_occasion, "balanced", "desktop", "tier1", {"result": "PASS"},
+        )
+        self.base_manifest = {"origin": "http://x", "public_url": "http://x/"}
+
+    @staticmethod
+    def _fake_run_logged(cmd_list, *, cwd, log_path):
+        _write_node_result(cmd_list[2])
+        return 0
+
+    def _run_campaign(self, tier2_budget):
+        with mock.patch.object(Command, "_run_logged", side_effect=self._fake_run_logged):
+            return self.command._run_w4c_campaign(
+                store=self.store,
+                w4c_fixture={
+                    "templates": [{"key": "warm_boutique", "version": self.preset.version}],
+                    "tier1_occasions": {"warm_boutique": self.tier1_occasion},
+                },
+                selected_keys=["warm_boutique"],
+                campaign_root=self.campaign_root, node="node",
+                run_mjs_path=Path("run.mjs"), r4_tool_dir=Path("."),
+                base_manifest=self.base_manifest,
+                tier2_budget=tier2_budget,
+            )
+
+    def _tier2_cells_recorded(self):
+        matrix = json.loads(self.matrix_path.read_text(encoding="utf-8"))
+        return matrix["templates"]["warm_boutique"]["theme"].get("tier2_cells", {})
+
+    def test_1_budget_zero_executes_no_tier2_cells(self):
+        self._run_campaign(tier2_budget=0)
+        self.assertEqual(self._tier2_cells_recorded(), {})
+
+    def test_2_budget_four_executes_exactly_first_four_missing(self):
+        self._run_campaign(tier2_budget=4)
+        recorded = self._tier2_cells_recorded()
+        self.assertEqual(len(recorded), 4)
+        expected_first_four = self.command._planned_tier2_cells(["warm_boutique"])[:4]
+        expected_slots = {
+            f"{occasion}__{intensity}__{viewport}"
+            for (_key, occasion, intensity, viewport) in expected_first_four
+        }
+        self.assertEqual(set(recorded.keys()), expected_slots)
+
+    def test_3_already_recorded_tier2_cells_do_not_consume_budget(self):
+        planned = self.command._planned_tier2_cells(["warm_boutique"])
+        for (key, occasion, intensity, viewport) in planned[:2]:
+            self.command._merge_theme_into_matrix(
+                self.matrix_path, key, self.preset.version, occasion, intensity, viewport,
+                "tier2", {"result": "PASS"},
+            )
+        self._run_campaign(tier2_budget=4)
+        # 2 pre-existing (free) + 4 newly executed (budgeted) = 6 total.
+        self.assertEqual(len(self._tier2_cells_recorded()), 6)
+
+    def test_4_next_invocation_continues_from_the_next_missing_cell(self):
+        self._run_campaign(tier2_budget=4)
+        first_batch = set(self._tier2_cells_recorded().keys())
+        self.assertEqual(len(first_batch), 4)
+        self._run_campaign(tier2_budget=4)
+        second_total = self._tier2_cells_recorded()
+        self.assertEqual(len(second_total), 8)
+        self.assertTrue(first_batch.issubset(set(second_total.keys())))
+
+    def test_5_budget_does_not_alter_total_cells_expected(self):
+        self._run_campaign(tier2_budget=4)
+        matrix = json.loads(self.matrix_path.read_text(encoding="utf-8"))
+        self.assertEqual(matrix["_meta"]["total_cells_expected"], r4_mod.W4C_TOTAL_CELLS_EXPECTED)
+
+    def test_6_budget_does_not_alter_tier1_coverage(self):
+        self._run_campaign(tier2_budget=0)
+        matrix = json.loads(self.matrix_path.read_text(encoding="utf-8"))
+        self.assertIsNotNone(matrix["templates"]["warm_boutique"]["theme"].get("tier1_cell"))
+
+    def test_7_option_rejected_without_w4c_all50(self):
+        with self.assertRaises(CommandError):
+            Command._validate_w4c_tier2_budget({"w4c_tier2_budget": 4, "w4c_all50": False})
+
+    def test_8_negative_value_rejected(self):
+        with self.assertRaises(CommandError):
+            Command._validate_w4c_tier2_budget({"w4c_tier2_budget": -1, "w4c_all50": True})
+
+    def test_9_zero_value_accepted(self):
+        self.assertEqual(
+            Command._validate_w4c_tier2_budget({"w4c_tier2_budget": 0, "w4c_all50": True}), 0,
+        )
+
+    def test_10_omitted_option_preserves_existing_unbounded_behavior(self):
+        self.assertIsNone(
+            Command._validate_w4c_tier2_budget({"w4c_tier2_budget": None, "w4c_all50": True}),
+        )
+        self.assertIsNone(
+            Command._validate_w4c_tier2_budget({"w4c_tier2_budget": None, "w4c_all50": False}),
+        )
+
+    def test_11_full_matrix_still_requires_all_54_tier2_cells_before_global_pass(self):
+        campaign_root = Path(tempfile.mkdtemp())
+        command = Command()
+        matrix_path = campaign_root / "matrix.json"
+        command._validate_or_init_campaign_matrix(matrix_path)
+        for p in lpr.list_ready_templates():
+            command._merge_base_into_matrix(
+                matrix_path, p.key, p.version,
+                {"page_classes": {
+                    pc: {vp: {"result": "PASS"} for vp in ("desktop", "tablet", "mobile")}
+                    for pc in ("home", "listing", "pdp", "cart")
+                }},
+            )
+        fixture = command._build_w4c_fixture(Store.objects.create(
+            name="فروشگاه ۱۱", slug="w4c-case-tier2-budget-11", admin_subdomain="w4c-case-tier2-budget-11",
+        ))
+        for p in lpr.list_ready_templates():
+            occasion = fixture["tier1_occasions"][p.key]
+            command._merge_theme_into_matrix(
+                matrix_path, p.key, p.version, occasion, "balanced", "desktop", "tier1", {"result": "PASS"},
+            )
+        all_keys = [p.key for p in lpr.list_ready_templates()]
+        all_tier2 = command._planned_tier2_cells(all_keys)
+        self.assertEqual(len(all_tier2), 54)
+        # Record only 53 of the 54 -- one short of global closure.
+        for (key, occasion, intensity, viewport) in all_tier2[:-1]:
+            version = next(p.version for p in lpr.list_ready_templates() if p.key == key)
+            command._merge_theme_into_matrix(
+                matrix_path, key, version, occasion, intensity, viewport, "tier2", {"result": "PASS"},
+            )
+        aggregate = command._run_final_w4c_aggregator(matrix_path)
+        campaign_complete = (
+            aggregate["total_cells_recorded"] == r4_mod.W4C_TOTAL_CELLS_EXPECTED
+            and not aggregate["missing_cells"] and not aggregate["duplicate_cells"]
+        )
+        self.assertFalse(campaign_complete, "53/54 Tier-2 cells must not be reported as global PASS")
+
+
+class W4CRateLimitControlledDiagnosticTests(TestCase):
+    """Section 4 -- an unexpected RateLimitExceeded mid-shard must become a
+    controlled, informative CommandError, never a raw unhandled traceback,
+    never a cell silently marked PASS, and must stop this process
+    immediately without touching another cell."""
+
+    def setUp(self):
+        cache.clear()
+        self.store = Store.objects.create(
+            name="فروشگاه محدودیت نرخ", slug="w4c-ratelimit-diag-case", admin_subdomain="w4c-ratelimit-diag-case",
+        )
+        self.command = Command()
+        self.campaign_root = Path(tempfile.mkdtemp())
+        self.matrix_path = self.campaign_root / "matrix.json"
+        self.command._validate_or_init_campaign_matrix(self.matrix_path)
+
+    @staticmethod
+    def _fake_run_logged(cmd_list, *, cwd, log_path):
+        _write_node_result(cmd_list[2])
+        return 0
+
+    def test_unexpected_rate_limit_becomes_controlled_command_error(self):
+        preset1 = lpr.get_layout_preset("dense_marketplace")
+        preset2 = lpr.get_layout_preset("premium_leather")
+        call_count = {"n": 0}
+        original_apply = preset_service.apply_preset_with_checkpoint
+
+        def flaky_apply(store, preset):
+            call_count["n"] += 1
+            if call_count["n"] == 2:
+                raise RateLimitExceeded(
+                    "تعداد تلاش برای «storefront_layout.new_draft» بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید"
+                )
+            return original_apply(store, preset)
+
+        with mock.patch.object(Command, "_run_logged", side_effect=self._fake_run_logged), \
+             mock.patch.object(r4_mod.preset_service, "apply_preset_with_checkpoint", side_effect=flaky_apply):
+            with self.assertRaises(CommandError) as ctx:
+                self.command._run_w4c_campaign(
+                    store=self.store,
+                    w4c_fixture={
+                        "templates": [
+                            {"key": "dense_marketplace", "version": preset1.version},
+                            {"key": "premium_leather", "version": preset2.version},
+                        ],
+                        "tier1_occasions": {"dense_marketplace": "nowruz", "premium_leather": "nowruz"},
+                    },
+                    selected_keys=["dense_marketplace", "premium_leather"],
+                    campaign_root=self.campaign_root, node="node",
+                    run_mjs_path=Path("run.mjs"), r4_tool_dir=Path("."),
+                    base_manifest={"origin": "http://x", "public_url": "http://x/"},
+                    tier2_budget=None,
+                )
+        # never the raw exception type escaping to the caller
+        self.assertNotIsInstance(ctx.exception, RateLimitExceeded)
+        message = str(ctx.exception)
+        self.assertIn("RATE-LIMIT", message.upper())
+        self.assertIn("dense_marketplace", message)
+        self.assertIn(str(self.campaign_root), message)
+        # the first key's cells were genuinely merged; the second key (whose
+        # apply raised) must NOT appear at all -- never a partially-executed
+        # cell silently marked PASS.
+        matrix = json.loads(self.matrix_path.read_text(encoding="utf-8"))
+        self.assertIn("dense_marketplace", matrix["templates"])
+        self.assertNotIn("premium_leather", matrix["templates"])
