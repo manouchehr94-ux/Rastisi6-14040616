@@ -81,7 +81,10 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
                 <template x-for="v in axis.values" :key="v.id">
                   <div class="swatch" :class="{ active: selected[axis.id] === v.id, unavailable: !isValueAvailable(axis.id, v.id) }"
                        :style="'background:' + v.color_hex" :title="v.label"
-                       @click="selectAxisValue(axis.id, v.id)"></div>
+                       role="button" tabindex="0" :aria-label="v.label" :aria-pressed="selected[axis.id] === v.id"
+                       @click="selectAxisValue(axis.id, v.id)"
+                       @keydown.enter.prevent="selectAxisValue(axis.id, v.id)"
+                       @keydown.space.prevent="selectAxisValue(axis.id, v.id)"></div>
                 </template>
               </div>
             </template>
@@ -104,7 +107,10 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
                 <template x-for="v in group.values" :key="v.id">
                   <div class="swatch" :class="{ active: selectedVariantId === v.id, unavailable: !v.is_purchasable }"
                        :style="'background:' + v.color_hex" :title="v.label"
-                       @click="selectLegacy(v.id)"></div>
+                       role="button" tabindex="0" :aria-label="v.label" :aria-pressed="selectedVariantId === v.id"
+                       @click="selectLegacy(v.id)"
+                       @keydown.enter.prevent="selectLegacy(v.id)"
+                       @keydown.space.prevent="selectLegacy(v.id)"></div>
                 </template>
               </div>
             </template>
