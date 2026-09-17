@@ -527,21 +527,43 @@ that path.
 No other file under `apps/`, `tools/`, or `migrations/` is touched by this
 extension.
 
-### 3.9 Campaign report root, unique result/log paths, and matrix schema guard (new — Round 3, Important 3)
+### 3.9 Campaign report root, unique result/log paths, and matrix schema guard (repaired — Round 3 Important 3, Round 5 Important 2: cross-platform)
 
 **Exact, stable, external campaign root (chosen now, not left to operator
-discretion):**
+discretion) — referred to throughout this document by the platform-neutral
+name `CAMPAIGN_REPORT_ROOT`:**
 
 ```
-CAMPAIGN_REPORT_ROOT = /var/tmp/rastisi_w4c_campaign
+CAMPAIGN_REPORT_ROOT = <one stable directory outside the repository, under the local OS temp root>
 ```
+
+**Repair note (Round 5, Important 2):** the actual RastiSi development
+environment for this workstream is Windows + PowerShell, not Linux/Bash.
+Earlier drafts of this document hardcoded a POSIX path
+(`/var/tmp/rastisi_w4c_campaign`), which is not a value that exists on
+Windows. `CAMPAIGN_REPORT_ROOT` is now the platform-neutral name used
+everywhere in this document; its concrete value for local execution is:
+
+```powershell
+$CampaignRoot = Join-Path $env:TEMP "rastisi_w4c_campaign"
+```
+
+which resolves to a real path such as
+`C:\Users\<user>\AppData\Local\Temp\rastisi_w4c_campaign` — the exact
+username is never hardcoded; `$env:TEMP` resolves it at run time. Neither
+`qa_storefront_builder_r4.py` nor `run.mjs` hardcodes this or any other
+OS-specific path anywhere in its own implementation (§3.2's Task-2 note) —
+both use `pathlib.Path`/Node's `path.join()` for every filesystem join in
+this section, so the SAME code works unmodified on Linux, macOS, or
+Windows; only the PowerShell execution examples in this document resolve
+the concrete local value.
 
 External to the repository (never noisy in `git status` mid-campaign — 154
 log files + 154 result JSONs are scratch, not evidence, until curated).
 Every one of the 154 invocations in ONE campaign passes
-`--report-dir /var/tmp/rastisi_w4c_campaign` (via `qa_storefront_builder_r4.py`'s
+`--report-dir "$CampaignRoot"` (via `qa_storefront_builder_r4.py`'s
 existing `--report-dir` flag) — this is the single invariant that keeps them
-all reading/writing the SAME `matrix.json`. Only at the end (§17 Task 7)
+all reading/writing the SAME `matrix.json`. Only at the end (§17 Task 6)
 does the campaign's curated evidence get copied from this root into
 `docs/qa_evidence/storefront_design_engine/phase5/w4_certification/`.
 
@@ -599,7 +621,7 @@ any base or Theme cell runs. A batch launched against
 fast with a `CommandError` — it never silently merges. Starting a genuinely
 new campaign means passing a different, empty `--report-dir`.
 
-### 3.10 Python wrapper final-status branching (new — Round 3, Important 2C)
+### 3.10 Python wrapper final-status branching (repaired — Round 5, Important 1: partial-batch vs. global-campaign status)
 
 The existing, unmodified, non-W4C path in `handle()` reads
 `report_dir / "r4-browser-result.json"` and raises `CommandError` if either
@@ -607,16 +629,47 @@ the node exit code is nonzero or `summary.failed` is nonzero (harness
 inventory §10.B) — this logic is untouched and still runs exactly as today
 whenever `--w4c-all50` is absent.
 
-When `--w4c-all50` IS passed, `handle()` takes a completely separate status
-path that never reads or references `r4-browser-result.json` at all (that
-file is not even written by the base/Theme node invocations, §3.7):
+**Repair note:** the Round 3/4 draft's `--w4c-all50` branch raised
+`CommandError` whenever `total_cells_recorded != 704`, regardless of
+whether `--only` was passed. That contradicted the plan's own,
+already-accepted support for repeated `--only` batches against one shared
+`matrix.json` (§15) — every legitimate partial batch would have exited as
+a failed command until the very last batch happened to complete the full
+704. The corrected branching below distinguishes a **batch's own outcome**
+from the **global campaign's outcome**, and only raises `CommandError` for
+genuine problems (a full, non-`--only` run left incomplete; a global
+campaign that IS complete but failed; or a Theme-cleanup `BLOCKED`
+condition) — never merely because a partial batch, invoked as a partial
+batch, left the wider campaign's matrix short of 704:
 
 ```python
 if options["w4c_all50"]:
-    # ... run the full base + Theme loop from section 3.2 ...
-    aggregate = self._run_final_w4c_aggregator(matrix_path)   # section 15
-    if aggregate["total_cells_recorded"] != 704 or aggregate["missing_cells"] or aggregate["duplicate_cells"]:
-        raise CommandError(f"W4C: INCOMPLETE -- {aggregate}")
+    # ... run the (possibly --only-filtered) base + Theme loop from section 3.2 ...
+    aggregate = self._run_final_w4c_aggregator(matrix_path)   # section 15 -- always run, every invocation
+    campaign_complete = (
+        aggregate["total_cells_recorded"] == 704
+        and not aggregate["missing_cells"]
+        and not aggregate["duplicate_cells"]
+    )
+    if not campaign_complete:
+        if not options["only"]:
+            # a full, non---only invocation is EXPECTED to complete the whole campaign in one run;
+            # leaving it incomplete is a genuine problem, not a partial-batch outcome
+            raise CommandError(f"W4C: INCOMPLETE -- full run did not record all 704 cells -- {aggregate}")
+        # a --only batch is EXPECTED to leave the wider campaign incomplete until the last batch runs --
+        # this is success FOR THIS BATCH, not a command failure
+        self.stdout.write(self.style.SUCCESS(
+            f"W4C BATCH COMPLETE -- CAMPAIGN INCOMPLETE -- "
+            f"selected_keys={options['only']}, "
+            f"cells_recorded_this_run={aggregate['cells_recorded_this_run']}, "
+            f"cumulative_total_cells_recorded={aggregate['total_cells_recorded']}/704, "
+            f"cumulative_missing={len(aggregate['missing_cells'])}, "
+            f"cumulative_fail_count={aggregate['fail_count']}, "
+            f"cumulative_blocked_count={aggregate['blocked_count']}"
+        ))
+        return   # normal return -- NOT a CommandError, provided no infrastructure-level BLOCKED condition occurred
+    # the campaign IS complete (704/704, no missing, no duplicates) -- whether this happened on a full
+    # run or because this was the batch that happened to close out the last remaining cells (section 3.10.1)
     if aggregate["fail_count"] > 0 or aggregate["blocked_count"] > 0:
         raise CommandError(f"W4C: certification did not pass -- {aggregate['fail_count']} FAIL, {aggregate['blocked_count']} BLOCKED")
     self.stdout.write(self.style.SUCCESS("W4C: 704/704 cells recorded, 0 FAIL, 0 BLOCKED -- PASS"))
@@ -624,11 +677,36 @@ else:
     # ... existing, completely unchanged non-W4C path, still reads r4-browser-result.json ...
 ```
 
-W4C reports PASS ONLY from the 704-cell matrix aggregator (§15) — never
-from the legacy result file. Every base/Theme node invocation's own nonzero
-exit code is still recorded (against its exact cell/batch, inside that
-cell's own result JSON, per §3.7's `process.exitCode` logic) but does not
-by itself halt the campaign (§3.2's Important-2C exception) — only a
+**3.10.1 The final batch closes the campaign automatically — no `--finalize`
+flag.** `_run_final_w4c_aggregator` (§15) is called identically on every
+invocation, `--only` or not; it always reads the CURRENT state of the one
+shared `matrix.json`. When a partial batch happens to be the one that
+brings `missing_cells` to `[]` (i.e., it was the last outstanding subset),
+`campaign_complete` becomes `True` on that very invocation and the SAME
+code path above evaluates the real global PASS/FAIL — there is no separate
+"finalize" step and no second aggregator. One canonical status authority
+(`_run_final_w4c_aggregator`) decides both a batch's own report and the
+campaign's global report, from the same `matrix.json`, every time it is
+called.
+
+**Binding invariants (unchanged from Round 3, restated for clarity):** a
+`_theme_cleanup_and_verify` failure is BLOCKING and raises `CommandError`
+IMMEDIATELY during the batch itself (§3.6), regardless of whether that
+batch is partial or full — this always aborts the run, never falls through
+to the "BATCH COMPLETE / CAMPAIGN INCOMPLETE" success path above. Ordinary
+browser-assertion `FAIL` cells recorded by a PARTIAL batch are preserved in
+`matrix.json` exactly as any other batch's cells are (§15) — a batch that
+records some `FAIL` cells is still `BATCH COMPLETE` for ITS OWN selection
+(it did what it was asked, cell-for-cell); those `FAIL`s are only evaluated
+against the global PASS/FAIL threshold once the campaign as a whole is
+`campaign_complete`.
+
+W4C reports global PASS ONLY from the 704-cell matrix aggregator once the
+campaign is complete (§15) — never from the legacy result file. Every
+base/Theme node invocation's own nonzero exit code is still recorded
+(against its exact cell/batch, inside that cell's own result JSON, per
+§3.7's `process.exitCode` logic) but does not by itself halt the campaign
+or the current batch (§3.2's Important-2C exception) — only a
 `_theme_cleanup_and_verify` failure does. After the outer command's
 `finally` block, the existing SQLite backup/restore lifecycle still runs
 exactly as it does today, in both the W4C and non-W4C paths, unchanged.
@@ -1146,10 +1224,10 @@ never a second harness invocation path):
   extended to a comma-separated list) to run a subset of Templates' base
   AND Theme cells per invocation.
 - [ ] Every invocation in one campaign passes the SAME explicit
-  `--report-dir /var/tmp/rastisi_w4c_campaign` (§3.9) — there is no
-  timestamp-based default for W4C mode; omitting `--report-dir` under
-  `--w4c-all50` is itself a `CommandError` (never silently falls back to a
-  fresh, unshared directory).
+  `--report-dir "$CampaignRoot"` (the one `CAMPAIGN_REPORT_ROOT`, §3.9) —
+  there is no timestamp-based default for W4C mode; omitting
+  `--report-dir` under `--w4c-all50` is itself a `CommandError` (never
+  silently falls back to a fresh, unshared directory).
 - [ ] Each invocation appends its results into the SAME `matrix.json` at
   that one campaign root (never overwrites it wholesale) — implemented as:
   `_validate_or_init_campaign_matrix` (§3.9) guards against a mismatched
@@ -1187,13 +1265,22 @@ never a second harness invocation path):
   overwrites an already-`PASS` cell's entry unless explicitly running a
   separately-documented recheck mode (not part of this plan's default
   execution path).
-- [ ] A final aggregator step (`_run_final_w4c_aggregator`, §3.10 — run
-  after all batches, and internally at the end of every single-invocation
-  full run too) reads `matrix.json` and verifies: `total_cells_recorded ==
-  704`, `missing_cells == []`, `duplicate_cells == []`, `fail_count == 0`,
-  `blocked_count == 0`. A partially-completed run is reported as
-  `INCOMPLETE`, never as `PASS` — this aggregator check is itself part of
-  `execution_report.md` (§12).
+- [ ] The SAME aggregator step (`_run_final_w4c_aggregator`, §3.10) runs at
+  the end of EVERY `--w4c-all50` invocation — full or `--only`-partial
+  alike, never only "after all batches." It reads `matrix.json` and
+  returns `total_cells_recorded`, `missing_cells`, `duplicate_cells`,
+  `fail_count`, `blocked_count`, and `cells_recorded_this_run` (the count
+  of cells this specific invocation just wrote, for the batch-level status
+  line). **A `--only` partial batch reports `BATCH COMPLETE / CAMPAIGN
+  INCOMPLETE` and returns normally** when the wider campaign's
+  `missing_cells` is still non-empty — this is success for that batch, not
+  a command failure (§3.10 repair, Round 5). Only a full, non-`--only`
+  invocation that leaves the matrix incomplete, or ANY invocation where the
+  campaign IS complete (`704`/`[]`/`[]`) but `fail_count`/`blocked_count`
+  is nonzero, is reported as a `CommandError` — a genuinely
+  partially-completed CAMPAIGN (as opposed to a successfully-completed
+  PARTIAL BATCH) is never reported as global `PASS`. This aggregator
+  check is itself part of `execution_report.md` (§12).
 - [ ] No parallel Phase-5 workstream is started to speed this up; internal
   batching is the only concurrency this plan allows.
 
@@ -1205,6 +1292,18 @@ never a second harness invocation path):
   type, Store-Appearance family, Theme mechanism, tenant resolver,
   ProductCard path, cart/add-to-cart path, Bottom Navigation system,
   search backend, or browser-rendering/QA authority is introduced.
+- [ ] **Cross-platform implementation contract (new — Round 5, Important
+  2D):** `qa_storefront_builder_r4.py` and `run.mjs` construct every
+  filesystem path via `pathlib.Path` (Python) or `path.join()` (Node) —
+  never a hand-built string with a hardcoded separator. Neither file
+  embeds `/var/tmp`, a Windows drive letter, or a backslash-only path
+  anywhere in application/harness logic; `options["report_dir"]` is
+  wrapped in `pathlib.Path` immediately on receipt and used as a `Path`
+  object throughout. Only the PowerShell execution examples in this
+  document (§3.9, §17 Tasks 3/4/6) resolve a concrete local
+  `CAMPAIGN_REPORT_ROOT` value via `$env:TEMP` — the implementation itself
+  remains OS-agnostic and would run identically given a POSIX
+  `--report-dir` value on Linux/macOS.
 - [ ] The only files changed for the harness extension are
   `tools/storefront_builder_r4_qa/run.mjs` and
   `apps/storefront_builder/management/commands/qa_storefront_builder_r4.py`.
@@ -1242,8 +1341,10 @@ never a second harness invocation path):
   owns the unrelated Gallery-screenshot contract, and there is no existing
   R4-QA-wrapper test module to extend).
 
-  RED cases (26 total — 16 from Round 2 §5, plus 10 added in Round 3 §4
-  closing the execution-control-flow gaps):
+  RED cases (37 total, accumulated across repair rounds — 16 from Round 2
+  §5, +10 from Round 3 §4 closing the execution-control-flow gaps, +5 from
+  Round 4 §1A closing the `--only`/Tier-2 filter gap, +6 from Round 5 §1D
+  closing the partial-batch/global-campaign status gap):
   1. `add_arguments` accepts `--w4c-all50` (`action="store_true"`).
   2. `add_arguments` accepts `--only` as a comma-separated list, and this
      flag only affects Template selection when `--w4c-all50` is also passed
@@ -1388,17 +1489,56 @@ never a second harness invocation path):
       proving an unrelated `--only` batch cannot rewrite Tier-2 evidence it
       never executed.
 
-  29 of these 31 cases are feature-contract assertions and are expected RED
-  (FAIL) on the current certified base (`3a4fe907...`), because the
+  **Added in Repair Round 5** (§3.10 partial-batch vs. global-campaign
+  status fix):
+
+  32. A `--only` subset run against a fixture where the wider campaign's
+      `matrix.json` still has missing cells returns normally (exit code 0,
+      no `CommandError`) and its stdout contains the literal string
+      `"BATCH COMPLETE"` and `"CAMPAIGN INCOMPLETE"` — never
+      `"0 FAIL, 0 BLOCKED -- PASS"` (that string is reserved for a
+      genuinely complete, passing campaign).
+  33. The same `--only` subset invocation from case 32 does NOT raise
+      `CommandError` merely because `aggregate["total_cells_recorded"] < 704`
+      — assert no exception propagates out of `handle()` for this case.
+  34. A full invocation (`options["only"]` falsy/empty) that leaves
+      `matrix.json` with `missing_cells != []` after running DOES raise
+      `CommandError` containing `"INCOMPLETE"` — the full-run case behaves
+      differently from the `--only` case in exactly this one respect.
+  35. Given a `matrix.json` already missing only ONE remaining key's cells,
+      an `--only <that-key>` invocation that successfully records them
+      causes `_run_final_w4c_aggregator` to report
+      `total_cells_recorded == 704`, `missing_cells == []`, and the
+      command evaluates the REAL global PASS/FAIL on that same
+      invocation (asserting the stdout contains `"704/704"` and either
+      `"PASS"` or the `CommandError` path, never the
+      `"BATCH COMPLETE -- CAMPAIGN INCOMPLETE"` line) — proving the final
+      batch closes the campaign automatically, with no separate
+      `--finalize` step.
+  36. A `_theme_cleanup_and_verify` failure injected during a `--only`
+      partial batch still raises `CommandError` immediately (never falls
+      through to the `"BATCH COMPLETE"` success path) — the BLOCKING
+      exception in §3.6 takes precedence over the partial-batch tolerance
+      added in this round.
+  37. A `matrix.json` already containing one previously-recorded `FAIL`
+      cell from an earlier batch, followed by a later, independent `--only`
+      batch that records more (unrelated, passing) cells, still shows that
+      original `FAIL` cell present and unchanged in `matrix.json` afterward
+      — proving a partial campaign's preserved FAILs survive to be
+      evaluated only once the campaign reaches `campaign_complete`.
+
+  **37 total planned cases. 35 are feature-contract assertions expected
+  RED (FAIL) on the current certified base** (`3a4fe907...`), because the
   `--w4c-all50` mode, `_build_w4c_fixture`, `_apply_and_verify_published`,
-  `_theme_cleanup_and_verify`, the Tier-2 filter, the aggregator, and the
-  Hero/gallery-staging contracts do not exist yet. Cases 8 and 21 are
-  deliberate exceptions: they are non-interference/regression guards
-  asserting the EXISTING, unmodified non-W4C behavior, and are expected to
-  PASS (GREEN) immediately, before any W4C code is written — this is not a
-  contradiction of the RED state above; it is the explicit proof that the
-  ordinary R4 QA path is architecturally independent of the new W4C code
-  from the very first commit of this test file.
+  `_theme_cleanup_and_verify`, the Tier-2 filter, the aggregator, the
+  Hero/gallery-staging contracts, and the partial-batch/global-campaign
+  status split do not exist yet. **Cases 8 and 21 remain the only two
+  deliberate exceptions** — non-interference/regression guards asserting
+  the EXISTING, unmodified non-W4C behavior, expected to PASS (GREEN)
+  immediately, before any W4C code is written. This is not a contradiction
+  of the RED state above; it is the explicit proof that the ordinary R4 QA
+  path is architecturally independent of the new W4C code from the very
+  first commit of this test file.
 
   **Exact focused test command:**
   ```
@@ -1433,9 +1573,21 @@ never a second harness invocation path):
 - [ ] Task 4 — Execute the 704-cell / 154-invocation campaign in
   deterministic batches (§15), producing `matrix.json` at the one stable
   campaign root. Exact command shape (repeatable per `--only` batch, all
-  batches passing the SAME `--report-dir`):
-  ```
-  python manage.py qa_storefront_builder_r4 --store-slug rasti-mode-demo --username w4c_qa_owner --port 8765 --browser-channel auto --w4c-all50 --only <key1,key2,...> --report-dir /var/tmp/rastisi_w4c_campaign --settings=shop_core.settings
+  batches passing the SAME `--report-dir`) — PowerShell, the real local
+  execution environment for this workstream (repaired, Round 5, Important
+  2 — no Bash/POSIX syntax remains in any execution-critical command):
+  ```powershell
+  $CampaignRoot = Join-Path $env:TEMP "rastisi_w4c_campaign"
+
+  python manage.py qa_storefront_builder_r4 `
+    --store-slug rasti-mode-demo `
+    --username w4c_qa_owner `
+    --port 8765 `
+    --browser-channel auto `
+    --w4c-all50 `
+    --only "<key1,key2,...>" `
+    --report-dir "$CampaignRoot" `
+    --settings=shop_core.settings
   ```
   Omit `--only` to run all 50 Templates' base+Theme cells in one invocation
   of the command (internally still 154 separate `run.mjs` process launches,
@@ -1484,15 +1636,43 @@ never a second harness invocation path):
      stop — do NOT start any server, do NOT run
      `capture_ready_template_previews` at all.
   3. Otherwise, run a SEPARATE, deliberate Gallery-refresh lifecycle — NOT
-     the W4C certification server, and never claimed to be:
-     ```
+     the W4C certification server, and never claimed to be. Repaired
+     (Round 5, Important 2): PowerShell `Start-Process`/`Stop-Process`
+     with `try/finally`, never Bash `&`/`kill %1` (no Unix job-control
+     syntax remains in any execution-critical W4C command):
+     ```powershell
      python manage.py seed_ready_template_fashion_demo --settings=shop_core.settings   # ensure fixture current, idempotent
-     python manage.py runserver 127.0.0.1:8766 --settings=shop_core.settings &         # dedicated Gallery-refresh port, distinct from 8765
-     # wait until http://127.0.0.1:8766/ answers (poll, confirmed ready) before proceeding
-     for key in STALE_STATIC_PREVIEWS:
-         python manage.py capture_ready_template_previews --base-url http://127.0.0.1:8766 --only <key> --settings=shop_core.settings
-     # verify each refreshed asset's new preview_input_fingerprint now matches (no longer stale)
-     kill %1   # stop the dedicated port-8766 server in a finally-equivalent cleanup — never leave it running
+
+     $GalleryOut = Join-Path $env:TEMP "rastisi_w4c_gallery_8766.out.log"
+     $GalleryErr = Join-Path $env:TEMP "rastisi_w4c_gallery_8766.err.log"
+
+     $Server = Start-Process `
+       -FilePath "python" `
+       -ArgumentList @("manage.py", "runserver", "127.0.0.1:8766", "--settings=shop_core.settings") `
+       -PassThru `
+       -RedirectStandardOutput $GalleryOut `
+       -RedirectStandardError $GalleryErr
+
+     try {
+         # bounded port-readiness check: poll http://127.0.0.1:8766/ up to e.g. 30 times at 1s intervals;
+         # fail the step (never proceed silently) if it never answers within that bound
+         $deadline = (Get-Date).AddSeconds(30)
+         while ((Get-Date) -lt $deadline) {
+             try { Invoke-WebRequest -Uri "http://127.0.0.1:8766/" -UseBasicParsing -TimeoutSec 2 | Out-Null; break }
+             catch { Start-Sleep -Seconds 1 }
+         }
+
+         foreach ($key in $StaleStaticPreviews) {
+             python manage.py capture_ready_template_previews --base-url http://127.0.0.1:8766 --only $key --settings=shop_core.settings
+         }
+         # verify each refreshed asset's new preview_input_fingerprint now matches (no longer stale)
+     }
+     finally {
+         if ($Server -and -not $Server.HasExited) {
+             Stop-Process -Id $Server.Id -Force
+             $Server.WaitForExit()
+         }
+     }
      ```
   4. Record in `execution_report.md` the exact `STALE_STATIC_PREVIEWS` keys
      refreshed and the (expected, larger) `CURRENT_STATIC_PREVIEWS` list

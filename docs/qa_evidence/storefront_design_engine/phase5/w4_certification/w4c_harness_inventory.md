@@ -938,3 +938,33 @@ within the plan document, reusing facts already established above:
    a dedicated, separate runserver on port 8766 ONLY when stale keys exist,
    stopping it afterward — never claimed to be, and never conflated with,
    the W4C certification server.
+
+## 14. Repair Round 5 — operational status/portability only, no new source facts
+
+Round 5 fixed two remaining defects, entirely within the plan document,
+reusing facts already established above:
+
+1. §3.10's `--w4c-all50` status branch previously raised `CommandError`
+   whenever `total_cells_recorded != 704`, even for a legitimate `--only`
+   partial batch — contradicting the plan's own already-accepted
+   multi-batch `matrix.json` design (§15). Now a partial batch reports
+   `"BATCH COMPLETE -- CAMPAIGN INCOMPLETE"` and returns normally; only a
+   full (non-`--only`) run left incomplete, or a campaign that IS complete
+   but failed/blocked, raises `CommandError`. The same aggregator call
+   (`_run_final_w4c_aggregator`) decides both outcomes from the one shared
+   `matrix.json`, so the final batch that happens to close out the
+   remaining cells automatically evaluates the real global PASS/FAIL — no
+   separate `--finalize` flag.
+2. The plan's execution examples previously hardcoded a POSIX path
+   (`/var/tmp/rastisi_w4c_campaign`) and Bash job-control syntax
+   (`command &`, `kill %1`) for the Gallery-refresh server lifecycle. The
+   real local execution environment for this workstream is Windows +
+   PowerShell. All execution-critical commands now use the
+   platform-neutral name `CAMPAIGN_REPORT_ROOT` (resolved for local
+   execution via `$env:TEMP`) and PowerShell
+   `Start-Process`/`Stop-Process` with `try/finally` for the dedicated
+   port-8766 Gallery-refresh server, including a bounded port-readiness
+   poll. `qa_storefront_builder_r4.py`/`run.mjs` themselves are unaffected
+   — they already needed to use `pathlib.Path`/`path.join()` for
+   cross-platform correctness, which this round makes an explicit, binding
+   architecture constraint (plan §16) rather than an implicit assumption.
