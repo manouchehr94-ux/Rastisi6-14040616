@@ -1,0 +1,27 @@
+Safety DB backup: /home/user/RastiSi4_r4_qa_backups/storefront-builder-r4-qa-20260917-140822.sqlite3 (sha256=d008ecf54d4ad8e73c0aa44a443d1ceeb87f958a0d5c4097b7d831dea1b6efad)
+seed_ready_template_fashion_demo با موفقیت اجرا شد:
+  Store: rasti-mode-demo (admin_subdomain=rasti-mode-demo)
+  دسته‌بندی: 13
+  برند: 6
+  کالا: 50
+  تنوع: 206 (روی 41 کالا)
+  تصویرِ کالا: 0
+  کالکشن: 6
+  Hero: 0  Banner: 0  Story: 0
+  Ready Template: هیچ‌کدام (بدونِ --ready-template)
+W4C all-50 browser certification
+file:///home/user/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:149
+  if (!condition) throw new Error(message);
+                        ^
+
+Error: manifest.phase3_fixture.final_remediation_families is missing
+    at assert (file:///home/user/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:149:25)
+    at finalRemediationFixture (file:///home/user/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:2857:3)
+    at file:///home/user/Rastisi6-14040616/tools/storefront_builder_r4_qa/run.mjs:2986:19
+    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+
+Node.js v22.22.2
+Local database restored — pre=d008ecf54d4ad8e73c0aa44a443d1ceeb87f958a0d5c4097b7d831dea1b6efad post=d008ecf54d4ad8e73c0aa44a443d1ceeb87f958a0d5c4097b7d831dea1b6efad match=True
+CommandError: W4C: BLOCKED -- no result produced for base editorial_jewelry (node_exit=1)
