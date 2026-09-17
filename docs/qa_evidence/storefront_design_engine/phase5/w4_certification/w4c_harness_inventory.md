@@ -247,35 +247,113 @@ resolution + threading pattern needed for W4C exists in exactly one place —
 
 ---
 
-## 3. Harness classification
+## 3. Harness classification — REPAIRED (Independent Review Round 1)
 
-**B — bounded extension required.**
+**Repair note:** the original version of this section proposed extending
+`capture_ready_template_previews.py` into the W4C PASS/FAIL browser
+authority. The Independent Architect rejected this (Repair Round 1,
+IMPORTANT 1): the authoritative plan explicitly requires reusing
+`tools/storefront_builder_r4_qa/run.mjs` (and/or `tools/storefront_builder_qa/`)
+as the browser-assertion authority, and "reusing dependency/patterns" from a
+different file is not sufficient when the plan names a specific existing
+harness to extend. This section is corrected below; §3 is the current,
+binding classification.
 
-The plan's suggested files (`tools/storefront_builder_r4_qa/run.mjs`,
-`tools/storefront_builder_qa/`) are, per source (§2.1–2.3), admin-editor-focused
-Node/Playwright-core tools that do not iterate the Ready Template registry and
-do not drive a genuinely anonymous public-storefront session per template. The
-plan's instruction to "reuse" them is satisfied at the dependency/pattern
-level (same `playwright-core` package family already declared in this repo,
-same "Python management-command wrapper shells out to a Node/Playwright
-script" architecture those two tools already establish), not by literally
-running those files unmodified against 50 templates.
+**B — bounded, opt-in extension of the existing harness required (not a new
+harness).**
 
-**Canonical extension target:**
-`apps/storefront_builder/management/commands/capture_ready_template_previews.py`
-— the one file that already does canonical registry iteration, canonical
-apply/publish, canonical host-resolution, and the canonical ORM-thread-safety
-pattern, using the Python `playwright` package this exact command already
-depends on. The bounded extension (implementation round, not this round) adds:
-Tablet viewport, Cart page class, assertion logic (RTL/overflow/header-and-
-footer-exactly-once/bottom-nav-responsive-contract/dead-href/console-page-
-request-error capture/accessibility-critical checks), a JSON result schema
-(§1.6 shape, extended), and the bounded Theme sub-matrix (plan §9). No new
-Playwright package, no new browser launcher, no new public-storefront
-renderer, no parallel Apply/Publish authority, and no separate W4C-only route
-system are introduced — every route/service call is one already exercised by
-this file or by `w1_qa`/`task5/7/8_qa`'s already-proven anonymous-session
-patterns.
+Exact, source-verified extension seam (full detail: harness inventory §10):
+
+- **Browser certification authority:**
+  `tools/storefront_builder_r4_qa/run.mjs`. Its `main()` (lines 4090–4153)
+  already dispatches optional, additive blocks via a plain boolean check —
+  `if (manifest.showcase) { ... }` / `if (manifest.phase3) { ... }` — placed
+  after the 13 unconditional core scenarios and before 2 more unconditional
+  scenarios (14–15). A new `if (manifest.w4c) { await scenario('w4c-...',
+  w4cFn); }` block is inserted in exactly that same gated position (after
+  the phase3/showcase blocks, before scenario 14), touching zero lines of
+  the existing 15 scenarios or the phase3/showcase functions' own bodies.
+- **Django orchestration authority:**
+  `apps/storefront_builder/management/commands/qa_storefront_builder_r4.py`.
+  Its `add_arguments` (lines 109–159) already defines 10 flags including
+  `--phase3`/`--showcase` (both `action="store_true"`); a new `--w4c-all50`
+  flag (also `action="store_true"`) is added the same way. Its
+  `_build_manifest()` (lines 1267–1314) already returns a plain dict with
+  keys `origin, resolver_host, builder_url, public_url, report_dir, headed,
+  browser_channel, phase3, showcase, phase3_fixture, session, store`; a new
+  `w4c` (bool) and `w4c_fixture` (dict) key are added to that same literal
+  dict, populated by a new `_build_w4c_fixture()` method mirroring the
+  existing `_prepare_phase3_brand_gate()` helper's shape. The manifest is
+  still written once to a `tempfile.mkstemp` path and passed as `argv[2]` —
+  unchanged mechanism. Pass/fail is still determined the same way: node
+  process exit code OR `r4-browser-result.json`'s `summary.failed` nonzero
+  (lines 334–343) — the new W4C block's failures feed the SAME `result`
+  object (`result.w4c = {...}`, following the existing "mutate the shared
+  module-level `result` object" pattern; there is no shared `writeResult()`
+  helper to call — confirmed absent by grep — every block hand-rolls its own
+  `fs.writeFileSync` for any additional sidecar file, exactly as
+  `metrics.json`/`task6_diagnostics.json` already do).
+- **`capture_ready_template_previews.py` role: GALLERY CAPTURE ONLY.** It is
+  never invoked by, and never shares a process with, the `--w4c-all50` run.
+  It remains the sole owner of
+  `apps/storefront_builder/static/ready_template_previews/<key>/v<version>.{webp,meta.json}`
+  (exact paths, confirmed in `template_preview_service.py` lines 367–475).
+  W4C's mandatory Home gallery evidence (plan §11/§4A) is produced by
+  deliberately invoking this existing command with `--full-qa --only <key>`
+  for all 50 keys (its `--full-qa` mode already captures Home Desktop
+  1440×1100 canonical + Home Mobile 390×844 — confirmed in the original
+  harness-inventory pass, §2.5) and copying those two outputs into the W4C
+  evidence tree; this is a named, deliberate Gallery-refresh step (plan
+  §14), never an incidental side effect of running `--w4c-all50`.
+
+**Session/authentication precedent, and its consequence for cell isolation:**
+`run.mjs` has exactly ONE browser-context-creation pattern in active use:
+`browser.newContext(...)` immediately followed by
+`context.addCookies([manifest.session])` (the staff cookie from
+`Client().force_login`) — used unconditionally for the core scenarios AND
+for every phase3 "public route" context (8 separate call sites all inject
+the same session cookie; confirmed by direct grep — there is no genuinely
+anonymous context anywhere in `run.mjs` today). W4C's Home/Listing cells
+(read-only, no mutation) reuse this exact precedent: one fresh
+`browser.newContext()` per cell, cookied with `manifest.session`, mirroring
+phase3's own public-route contexts precisely.
+
+W4C's PDP/Cart cells mutate server-side cart state, and reusing the SAME
+injected session cookie across "fresh" contexts would not actually isolate
+cart state (the cart is scoped to the underlying Django session, and every
+context carrying the same cookie value shares that one session/cart) — a
+real bug the state-isolation repair (plan §11a) must not reintroduce.
+`run.mjs` has no existing pattern for a repeated, isolated, anonymous cart
+mutation; the one existing precedent for exactly that in this repository is
+`tools/storefront_builder_qa/public_w1_qa.mjs`, which already drives
+`cart:add`/cart-state assertions through a genuinely cookie-less
+`context.request.post(...)` (a Playwright `APIRequestContext` call — part of
+the same `playwright-core` package `run.mjs` already borrows via
+`createRequire`, so this is reusing an existing capability of the
+already-shared dependency, not adding one). W4C's new PDP/Cart cells
+therefore use a fresh, cookie-less `browser.newContext()` per cell (no
+`manifest.session` injected), letting Django's session middleware issue a
+brand-new, empty-cart session on first request — exactly `public_w1_qa.mjs`'s
+own already-proven mechanism, adapted into the new `run.mjs` block rather
+than copied into a second file.
+
+**Host resolution:** `run.mjs`'s `resolver_host` is only populated today in
+`showcase` mode, targeting the Store's **admin**-subdomain host — a
+different hostname family from the customer-facing public storefront host
+(`shop-{admin_subdomain}.{RASTISI_ADMIN_DOMAIN_SUFFIX}`, the pattern
+`capture_ready_template_previews.py` already uses correctly and
+`w4c_fixture` must reuse verbatim). `_build_w4c_fixture()` computes
+`resolver_host` using that public-host pattern, not the showcase pattern;
+`--w4c-all50` and `--showcase` are mutually exclusive at the argparse level
+(the same way `--showcase` already requires `--phase3`), since they target
+different hosts.
+
+**No second Playwright package, no second browser launcher, no second
+public-storefront renderer, no parallel Apply/Publish authority, no separate
+W4C-only route system:** confirmed — every mechanism above reuses either an
+existing `run.mjs`/`qa_storefront_builder_r4.py` construct verbatim, or an
+existing sibling file's (`public_w1_qa.mjs`) already-proven technique using
+the same shared `playwright-core` dependency.
 
 **Second harness proposed: NO.**
 
@@ -443,7 +521,18 @@ architecture audit already confirmed for the 21 curated keys.
 
 ---
 
-## 8. Theme sub-matrix — source-derived, bounded (not guessed)
+## 8. Theme sub-matrix — REPAIRED (Independent Review Round 1)
+
+**Repair note:** the original version of this section certified Theme on
+only 40 of the 50 Templates, selected as "one per distinct shell triple plus
+all 21 curated keys." The Independent Architect rejected this (Repair Round
+1, IMPORTANT 2): since Theme is confirmed source-side to be uniformly
+applicable to all 50 (every `_manifest()` row carries a `theme` selection),
+"representative QA does not count" applies to Theme exactly as it applies to
+the base matrix — Tier 1 must cover all 50, not a 40-Template subset. The
+mechanism facts below (Theme's architecture, W2's own certified precedent,
+the occasion/intensity catalog) are unchanged and still accurate; only the
+Tier 1 selection and cardinality are corrected.
 
 `docs/qa_evidence/storefront_design_engine/phase5/w2_theme_overlay/00_source_inventory.md`
 + `w2_implementation_report.md` (certified W2 evidence) establish: Theme is a
@@ -467,67 +556,168 @@ Verified via `theme_catalog.list_theme_occasions()`: 8 occasions — `none`
 
 Because Theme's mechanism is proven uniform/orthogonal (shell-level
 attributes, not per-Template code), re-running W2's full occasion × intensity
-matrix on all 50 Templates would not exercise any Template-specific code path
-— the genuine, still-open question W4C must close is only: **does the
-shell-level overlay mechanism visually/functionally survive every distinct
-Header/Footer/Bottom-Nav combination present across the 50, and every one of
-the 21 new W4B section families**, neither of which existed when W2 chose its
-original 2 representative templates.
+× viewport sweep on all 50 Templates would not exercise any additional
+Template-specific code path beyond what one occasion per Template already
+exercises — but per the repair, breadth must still literally reach every one
+of the 50, not a representative subset, since Theme's applicability itself
+is universal and the plan's "representative QA does not count" language
+draws no exception for Theme.
 
-Computed via source (`_SPECS` header/footer/bottom_nav triples):
+Computed via source (`_SPECS` header/footer/bottom_nav triples, retained as
+supporting context for Tier 2's Template selection, no longer used to bound
+Tier 1's population):
 
 ```
 $ /usr/bin/python3 -c "... Counter of (header, footer, bottom_nav) across _SPECS ..."
 distinct (header, footer, bottom_nav) triples: 33
 ```
 
-**Theme representative set** = (one Template per distinct triple) ∪ (all 21
-W4B-curated keys), deduplicated = **40 Templates** (33 triple-representatives,
-of which 14 already are curated keys, plus the 7 curated keys not otherwise
-selected as a triple's representative). Full 40-key list is deterministic and
-reproducible from source (`_SPECS` iteration order ∪ curated-key set); it is
-recorded in the plan document (§9) rather than duplicated here.
-
 **Bounded Theme additional matrix (two tiers, both reusing only the existing
-`apply_theme`/`clear_theme` authority-service calls — no new Theme
-mechanism):**
+`apply_theme`/`clear_theme` authority-service calls through the canonical
+Draft→publish lifecycle — no new Theme mechanism, no direct writes to a
+published version):**
 
-- **Tier 1 (breadth):** 1 occasion per tone (`nowruz`=festive, `ramadan`=
-  neutral, `muharram`=mourning) × `balanced` intensity (default) × Desktop
-  viewport only (Theme's CSS-variable/attribute mechanism is not a responsive
-  concern) × all 40 representative Templates → apply, verify
-  `data-occasion-*` attributes present + zero console/page/overflow
-  regressions + (muharram only) no festive/sale/countdown marker present →
-  clear → verify reversion to the Template's own `theme.none.v1` baseline
-  Home capture. **= 3 occasions × 40 Templates = 120 apply/clear cells.**
+- **Tier 1 (breadth, ALL 50 Templates):** for every one of the 50 Templates
+  in `_SPECS` source order, assign exactly one occasion by cycling
+  `nowruz → ramadan → muharram → nowruz → ...` deterministically across the
+  50-item sequence (no runtime randomness; the exact per-Template assignment
+  is fixed and recorded in the plan, §9). For each: `balanced` intensity,
+  Desktop 1440×900 only (Theme's CSS-variable/attribute mechanism is not a
+  responsive concern — verified structurally, not per-viewport). Apply to a
+  Draft, publish, verify `data-occasion-theme`/`data-occasion-tone`/
+  `data-occasion-intensity` attributes present + zero new console/page/
+  overflow regressions + (for every Template assigned `muharram`) no
+  festive/sale/countdown marker introduced; then clear the Theme on a Draft,
+  publish, and verify the published state returns to `theme.none.v1` with
+  the Template's non-Theme rendered state byte-identical to its own pre-Theme
+  baseline Home capture. **= 50 Templates × 1 occasion each = 50 cells.**
 - **Tier 2 (depth, closes the W4B-curated gap):** reuses W2's own certified
   shape exactly — 3 occasions (one per tone) × 3 intensities × 3 viewports —
-  applied to exactly 2 Templates: one of W2's own original certified
-  Templates (continuity) and one W4B-curated Template with a new section
-  family (gap closure). **= 2 Templates × 27 cases = 54 cells.**
+  applied to exactly 2 Templates: `warm_boutique` (one of W2's own original
+  certified Templates, for continuity) and `beauty_dew` (a W4B-curated
+  Template whose new `community_gallery`/`story_rail` section family
+  postdates W2's own Theme certification — gap closure). **= 2 Templates ×
+  27 cases = 54 cells.**
 
-**Total Theme additional matrix: 174 cells**, on top of the 600 base cells
-(§5), for a grand total of **774 certification cells** this workstream
-defines.
+**Total Theme additional matrix: 104 cells** (50 + 54), on top of the 600
+base cells (§5), for a grand total of **704 certification cells** this
+workstream defines.
 
 ---
 
-## 9. Conclusion
+## 9. Conclusion — REPAIRED (Independent Review Round 1)
 
 No architectural impossibility was found anywhere in this inventory. Every
 requirement in the authoritative plan's W4C section is satisfiable by a
-bounded, in-place extension of
-`apps/storefront_builder/management/commands/capture_ready_template_previews.py`,
-reusing: the Python `playwright` package it already depends on, the canonical
-`preset_service`/`layout_service` apply/publish path, the canonical
-`--host-resolver-rules` public-host resolution pattern, the canonical
-`ThreadPoolExecutor` ORM-thread-safety pattern, the shared
+bounded, opt-in extension of the two files the plan itself names —
+`tools/storefront_builder_r4_qa/run.mjs` (new `manifest.w4c`-gated block,
+inserted in `main()`'s existing additive-block position, touching zero lines
+of the existing 15 scenarios or the phase3/showcase blocks) and
+`apps/storefront_builder/management/commands/qa_storefront_builder_r4.py`
+(new `--w4c-all50` flag + `w4c`/`w4c_fixture` manifest keys, following the
+exact shape of the existing `--phase3`/`phase3_fixture` extension point) —
+reusing: the already-shared `playwright-core` dependency (via the existing
+`createRequire` borrow), the existing subprocess-invocation and
+JSON-result/exit-code pass/fail mechanism, the existing
+`browser.newContext()` + session-cookie pattern for read-only Home/Listing
+cells, `public_w1_qa.mjs`'s already-proven cookie-less
+`context.request`-based anonymous cart-mutation pattern for PDP/Cart cells,
+the canonical `preset_service`/`layout_service` apply/publish path, the
+canonical public-host resolution pattern (computed the same way
+`capture_ready_template_previews.py` already computes it, not the way
+`showcase` mode computes its own, different, admin-host mapping), the shared
 `rasti-mode-demo`/`seed_ready_template_fashion_demo` fixture, the canonical
 `catalog:product-list`/`catalog:product-detail`/`cart:detail` routes, and the
-canonical `apply_theme`/`clear_theme` authority-service calls. No second
-harness, no second Playwright package, no second browser launcher, no second
-public-storefront renderer, no parallel Apply/Publish authority, and no
-separate W4C-only route system are proposed. See the implementation plan
+canonical `apply_theme`/`clear_theme` authority-service calls through the
+canonical Draft→publish lifecycle.
+`capture_ready_template_previews.py` is used only for its own, unmodified,
+pre-existing Gallery-capture responsibility (`--full-qa --only <key>`,
+invoked once per key as a deliberate, separately-recorded step) — it is
+never the W4C PASS/FAIL authority and is never invoked from within the
+`--w4c-all50` run. No second harness, no second Playwright package, no
+second browser launcher, no second public-storefront renderer, no parallel
+Apply/Publish authority, and no separate W4C-only route system are
+proposed. See the implementation plan
 (`docs/superpowers/plans/2026-09-17-phase5-w4c-all50-browser-certification.md`)
 for the full task breakdown, pass/fail contracts, evidence plan, and
 resumability design.
+
+## 10. Exact extension-seam facts (source-verified, for the implementer)
+
+Verified by direct, full reads of both files at this HEAD — every fact below
+is quoted or paraphrased from actual source, not inferred from filenames.
+
+**`qa_storefront_builder_r4.py`:**
+- `add_arguments` (lines 109–159) currently defines exactly: `--store-slug`
+  (required), `--username` (required), `--port` (int, default 8765),
+  `--headed` (flag), `--browser-channel` (choices `auto`/`chrome`/`msedge`,
+  default `auto`), `--install-node-deps` (flag), `--report-dir` (default
+  `""`), `--showcase` (flag), `--phase3` (flag),
+  `--simulate-failure-after-backup` (flag). `--showcase` already requires
+  `--phase3` per the command's own validation — the same mutual-dependency
+  pattern `--w4c-all50` reuses (mutually EXCLUSIVE with `--showcase`, since
+  they target different host-resolution needs).
+- `_build_manifest()` (lines 1267–1314) returns a plain dict with exactly
+  these top-level keys today: `origin, resolver_host, builder_url,
+  public_url, report_dir, headed, browser_channel, phase3, showcase,
+  phase3_fixture, session, store`.
+- The manifest is written once via `tempfile.mkstemp(prefix="rastisi-r4-qa-",
+  suffix=".json")`, passed as `argv[2]` to the node subprocess, and deleted
+  in a `finally` block. Node is invoked via
+  `subprocess.Popen([node, str(node_script), runtime_manifest_path],
+  cwd=r4_tool_dir, stdout=PIPE, stderr=STDOUT)`; no extra env vars are
+  injected (the child inherits the parent's environment unmodified).
+- Pass/fail: after the run, Django reads
+  `report_dir / "r4-browser-result.json"` and raises `CommandError` if
+  EITHER the node exit code is nonzero OR `summary.failed` (from that JSON)
+  is nonzero.
+- The staff session cookie is built via `Client().force_login(user)` then
+  reading `client.cookies.get(settings.SESSION_COOKIE_NAME)` — no login view
+  is ever hit.
+- The one genuinely anonymous request in this file is
+  `_phase3_tenant_negatives()` (lines 383–398), which uses a bare
+  `Client(SERVER_NAME="127.0.0.1")` (no `force_login`) purely at the Django
+  test-client level, never through the browser — not a pattern for browser
+  cell isolation, only cited here for completeness.
+
+**`run.mjs`:**
+- `main()` (lines 4090–4153): one `browser.newContext({width:1440,
+  height:900})` + `context.addCookies([manifest.session])` at the very top
+  (line 4094–4095, shared by every scenario and, unconditionally, by every
+  phase3 public-route sub-context too — 8 separate call sites all inject the
+  same cookie; grep-confirmed, no exceptions). The 13 core scenarios run
+  unconditionally, then `if (manifest.showcase) {...}` / `if
+  (manifest.phase3) {...}` (lines 4121–4138), then 2 more unconditional
+  scenarios (14–15, lines 4140–4152). A new `if (manifest.w4c) {...}` block
+  inserted after line 4138 and before line 4140 requires zero changes to any
+  other line in `main()`.
+- No shared `writeResult()` helper exists anywhere in the file (confirmed by
+  grep — zero matches). The pattern to follow is: mutate the one
+  module-level `result` object (declared lines 82–99) directly — e.g.
+  `result.w4c = {...}` — so it lands in the single `r4-browser-result.json`
+  write at the end (line 4166) that Django already reads for pass/fail;
+  optionally also hand-roll one dedicated sidecar JSON file via a plain
+  `fs.writeFileSync(path.join(manifest.report_dir, '<name>.json'), ...)`,
+  exactly the way the phase3 block's own `metrics.json` and the showcase
+  block's own `task6_diagnostics.json` already do ad hoc (there is no shared
+  writer function to import).
+- No Playwright `APIRequestContext`/`context.request` pattern exists
+  anywhere in `run.mjs` today (confirmed by grep for `context.request`,
+  `request.newContext`, `request.get(`, `request.post(` — zero matches;
+  every HTTP interaction in this file is an in-page `fetch()` executed via
+  `page.evaluate`/`frame.evaluate`). The cookie-less anonymous
+  `context.request.post(...)` pattern W4C's PDP/Cart cells need is copied
+  from `tools/storefront_builder_qa/public_w1_qa.mjs`'s own already-working
+  implementation, not invented fresh and not borrowed from inside `run.mjs`
+  itself (it has no such precedent to borrow).
+- No batched/resumable execution concept exists in either file today.
+  `R4_QA_ONLY_SCENARIO` (lines 172–185) is a debug-only scenario-name
+  substring filter with no result-accumulation or cross-invocation state —
+  confirmed explicitly documented as "never set in the real CI/QA gate
+  invocation." W4C's own resumable-merge behavior (plan §14) is new logic
+  within the new `w4c` block, not a reuse of this env var.
+- Gallery static output (must never be touched by the `w4c` block):
+  `apps/storefront_builder/static/ready_template_previews/<template_key>/v<version>.webp`
+  and the sibling `.meta.json`, per `template_preview_service.py` lines
+  367–475 (`_PREVIEWS_STATIC_SUBDIR = "ready_template_previews"`,
+  `APP_STATIC_DIR = apps/storefront_builder/static`).
