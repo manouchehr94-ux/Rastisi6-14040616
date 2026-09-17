@@ -4458,6 +4458,19 @@ async function w4cCaptureRequiredScreenshot(targetPage, shotPath) {
   }
 }
 
+// Accessibility Closure Round -- ONE shared truthfulness verdict for every
+// Base cell's own accessibility_checks object: "PASS" and "n/a" never
+// block; ANY "FAIL" anywhere in the object means the accessibility gate
+// itself fails. Repair round 2 recorded these checks but never let a FAIL
+// prevent result="PASS" -- exactly the defect this round repairs. No
+// second accessibility engine, no new runner: this is the single helper
+// every one of w4cRunHomeCell/w4cRunListingCell/w4cRunPdpCell/
+// w4cRunCartCell calls (never w4cRunThemeCell -- Theme's public path
+// exposes no admin accessibility controls in this matrix).
+function w4cAccessibilityChecksPass(checks) {
+  return Object.values(checks).every((value) => value !== 'FAIL');
+}
+
 async function w4cRunHomeCell(context, manifest, viewport) {
   const targetPage = await context.newPage();
   const errors = w4cAttachErrorCollectors(targetPage);
@@ -4488,12 +4501,15 @@ async function w4cRunHomeCell(context, manifest, viewport) {
     const rsecOk = typeof expectedRsecCount !== 'number' || rsecCount === expectedRsecCount;
     const cardsOk = !cardsExpected || cardCount > 0;
     const mobileNavA11y = await w4cMobileNavAccessibility(targetPage, viewport);
+    const homeA11yChecks = { mobile_nav_opener: mobileNavA11y };
+    const homeA11yOk = w4cAccessibilityChecksPass(homeA11yChecks);
     const shellOk = w4cShellPasses(health, response);
     let passing = shellOk && dead === 0 && rsecOk && cardsOk && bottomNavOk
-      && (heroResult === 'PASS' || heroResult === 'N/A') && mobileNavA11y !== 'FAIL'
+      && (heroResult === 'PASS' || heroResult === 'N/A') && homeA11yOk
       && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0 && errors.requestFailures.length === 0;
     let result = passing ? 'PASS' : 'FAIL';
-    let reason = result === 'PASS' ? undefined : 'see rsec/hero/cards/bottom-nav/error sub-checks';
+    let reason = result === 'PASS' ? undefined
+      : `see rsec/hero/cards/bottom-nav/error sub-checks; accessibility_ok=${homeA11yOk}`;
     let screenshot = null;
     if (viewport === 'desktop' || viewport === 'mobile') {
       const shotPath = viewport === 'desktop' ? manifest.home_screenshot_desktop : manifest.home_screenshot_mobile;
@@ -4521,7 +4537,7 @@ async function w4cRunHomeCell(context, manifest, viewport) {
       hero_expected: heroExpected,
       hero_result: heroResult,
       dead_href_count: dead,
-      accessibility_checks: { mobile_nav_opener: mobileNavA11y },
+      accessibility_checks: homeA11yChecks,
       console_errors: errors.consoleErrors,
       page_errors: errors.pageErrors,
       failed_requests: errors.requestFailures,
@@ -4579,18 +4595,28 @@ async function w4cRunListingCell(context, cell, manifest, viewport) {
     const searchA11y = await w4cSearchInputAccessibility(targetPage);
     // Round 2 repair (3A/4B) -- sort/filter/pagination presence + bounded
     // interaction, and (4C) Product Card / Quick View accessibility.
-    // Recorded, never gating -- see w4cListingControlAccessibility's own
-    // comment for why (a genuine, pre-existing production markup gap this
-    // contract discovered, not a harness defect).
+    // Accessibility Closure Round -- these now GATE the cell via
+    // w4cAccessibilityChecksPass below, same as every other Base cell;
+    // see w4cListingControlAccessibility's own comment for the genuine,
+    // pre-existing production markup gap this contract discovered (a
+    // production defect, not a harness one -- repaired separately, in
+    // the two authorized production template files).
     const controls = await w4cListingControlsCheck(targetPage);
     const controlA11y = await w4cListingControlAccessibility(targetPage);
     const cardA11y = await w4cProductCardAccessibility(targetPage);
+    const listingA11yChecks = {
+      search_input: searchA11y, sort_control: controlA11y.sort_control,
+      category_filter: controlA11y.category_filter, product_card: cardA11y.card_link,
+      quick_view: cardA11y.quick_view,
+    };
+    const listingA11yOk = w4cAccessibilityChecksPass(listingA11yChecks);
     const shellOk = w4cShellPasses(health, response);
     let passing = shellOk && cardCount > 0 && dead === 0 && linkResolves && bottomNavOk
-      && searchA11y !== 'FAIL' && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0
+      && listingA11yOk && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0
       && errors.requestFailures.length === 0;
     let result = passing ? 'PASS' : 'FAIL';
-    let reason = result === 'PASS' ? undefined : `cards=${cardCount} linkResolves=${linkResolves} href=${linkHref}`;
+    let reason = result === 'PASS' ? undefined
+      : `cards=${cardCount} linkResolves=${linkResolves} href=${linkHref} accessibility_ok=${listingA11yOk}`;
     let screenshot = null;
     const shotPath = viewport === 'desktop' && result === 'PASS'
       ? cell.representative_screenshot : (result !== 'PASS' ? cell.failure_screenshot : null);
@@ -4616,11 +4642,7 @@ async function w4cRunListingCell(context, cell, manifest, viewport) {
       product_cards_present: cardCount > 0,
       dead_href_count: dead,
       listing_controls: controls,
-      accessibility_checks: {
-        search_input: searchA11y, sort_control: controlA11y.sort_control,
-        category_filter: controlA11y.category_filter, product_card: cardA11y.card_link,
-        quick_view: cardA11y.quick_view,
-      },
+      accessibility_checks: listingA11yChecks,
       console_errors: errors.consoleErrors,
       page_errors: errors.pageErrors,
       failed_requests: errors.requestFailures,
@@ -4677,6 +4699,7 @@ async function w4cRunPdpCell(context, cell, manifest, viewport) {
     // since it's the one mutation in this cell.
     const realAddToCart = await w4cRealAddToCart(targetPage);
     const pdpA11y = await w4cPdpControlAccessibility(targetPage);
+    const pdpA11yOk = w4cAccessibilityChecksPass(pdpA11y);
     const dead = await targetPage.locator('a[href="#"]').count();
     const bottomNavExpected = Boolean(manifest.active_key && manifest.active_key.bottom_nav_expected);
     const bottomNavOk = w4cBottomNavOk(health.bottomNavDisplay, viewport, bottomNavExpected);
@@ -4685,7 +4708,7 @@ async function w4cRunPdpCell(context, cell, manifest, viewport) {
       && variantTransition.attempted && variantTransition.changed
       && qtyPresent && qtyAdjusted && realAddToCart.present && realAddToCart.changed
       && realNavigation.attempted && realNavigation.resolved
-      && tabsOrAccordionOk && satcOk && bottomNavOk && dead === 0
+      && tabsOrAccordionOk && satcOk && bottomNavOk && dead === 0 && pdpA11yOk
       && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0
       && errors.requestFailures.length === 0;
     let result = passing ? 'PASS' : 'FAIL';
@@ -4693,7 +4716,7 @@ async function w4cRunPdpCell(context, cell, manifest, viewport) {
       : `gallery=${galleryCount} price=${JSON.stringify(priceText)} stock=${JSON.stringify(stockText)} `
         + `variantTransition=${JSON.stringify(variantTransition)} qty=${qtyPresent}/${qtyAdjusted} `
         + `realAddToCart=${JSON.stringify(realAddToCart)} realNavigation=${JSON.stringify(realNavigation)} `
-        + `tabs=${tabs}/${panels} satcOk=${satcOk} bottomNavOk=${bottomNavOk}`;
+        + `tabs=${tabs}/${panels} satcOk=${satcOk} bottomNavOk=${bottomNavOk} accessibility_ok=${pdpA11yOk}`;
     let screenshot = null;
     const shotPath = viewport === 'desktop' && result === 'PASS'
       ? cell.representative_screenshot : (result !== 'PASS' ? cell.failure_screenshot : null);
@@ -4793,6 +4816,7 @@ async function w4cRunCartCell(context, cell, manifest, viewport) {
     // step below (found via the smoke: checking quantity/remove controls
     // AFTER removing the only item left every check 'n/a').
     const cartA11y = await w4cCartControlAccessibility(targetPage);
+    const cartA11yOk = w4cAccessibilityChecksPass(cartA11y);
     // Round 2 repair (3B) -- add -> verify -> quantity update -> verify ->
     // remove -> verify removal, deterministically ordered, last.
     const realRemove = await w4cCartRealRemove(targetPage);
@@ -4803,7 +4827,7 @@ async function w4cRunCartCell(context, cell, manifest, viewport) {
     let passing = shellOk && addStatus != null && addStatus < 400 && itemCount > 0 && totalsPresent
       && checkoutPresent && quantityUpdateWorked
       && realRemove.attempted && realRemove.removed
-      && freeShippingGoal !== 'FAIL'
+      && freeShippingGoal !== 'FAIL' && cartA11yOk
       && bottomNavOk && dead === 0
       && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0
       && errors.requestFailures.length === 0;
@@ -4811,7 +4835,7 @@ async function w4cRunCartCell(context, cell, manifest, viewport) {
     let reason = result === 'PASS' ? undefined
       : `addStatus=${addStatus} items=${itemCount} totals=${totalsPresent} checkout=${checkoutPresent} `
         + `qtyUpdate=${quantityUpdateWorked} realRemove=${JSON.stringify(realRemove)} `
-        + `freeShippingGoal=${freeShippingGoal}`;
+        + `freeShippingGoal=${freeShippingGoal} accessibility_ok=${cartA11yOk}`;
     let screenshot = null;
     const shotPath = viewport === 'desktop' && result === 'PASS'
       ? cell.representative_screenshot : (result !== 'PASS' ? cell.failure_screenshot : null);
