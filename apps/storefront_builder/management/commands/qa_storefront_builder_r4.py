@@ -57,7 +57,7 @@ W4C_REQUIRED_BASE_CELL_FIELDS = (
 )
 W4C_REQUIRED_THEME_RESULT_FIELDS = (
     "http_status", "rtl", "overflow", "console_errors", "page_errors",
-    "failed_requests", "result",
+    "failed_requests", "result", "screenshot",
 )
 
 
@@ -319,6 +319,7 @@ class Command(BaseCommand):
                     w4c_all50=True,
                 )
                 base_manifest["pdp_product_slug"] = w4c_fixture["pdp_product_slug"]
+                base_manifest["expected_free_shipping_state"] = w4c_fixture["expected_free_shipping_state"]
                 (report_dir / "fixture.json").write_text(json.dumps(fixture, ensure_ascii=False, indent=2), encoding="utf-8")
 
                 self.stdout.write(self.style.MIGRATE_HEADING("W4C all-50 browser certification"))
@@ -1549,21 +1550,62 @@ class Command(BaseCommand):
         # Rather than duplicate that selection logic here, require every
         # active, non-obsolete variant to be in stock, so any variant the
         # storefront could pick as default is purchasable.
-        pdp_product = (
+        candidates = (
             Product.objects.filter(
                 store=store, product_type=Product.ProductType.VARIABLE,
                 variants__is_active=True, variants__is_obsolete=False, variants__stock__gt=0,
             )
             .exclude(variants__is_active=True, variants__is_obsolete=False, variants__stock=0)
-            .distinct().order_by("id").first()
+            .distinct().order_by("id")
         )
+        pdp_product = None
+        for candidate in candidates:
+            # IMPORTANT 2A (repair round 2) -- a single-variant product can
+            # never exercise a real variant TRANSITION; require at least 2
+            # purchasable choices.
+            if candidate.variants.filter(is_active=True, is_obsolete=False).count() >= 2:
+                pdp_product = candidate
+                break
+
+        expected_free_shipping_state = self._w4c_expected_free_shipping_state(store, pdp_product)
+
         return {
             "templates": templates,
             "tier1_occasions": tier1_occasions,
             "tier2_keys": list(W4C_TIER2_KEYS),
             "pdp_product_id": pdp_product.pk if pdp_product else None,
             "pdp_product_slug": pdp_product.slug if pdp_product else None,
+            "expected_free_shipping_state": expected_free_shipping_state,
         }
+
+    def _w4c_expected_free_shipping_state(self, store: Store, product) -> str:
+        """IMPORTANT 3C (repair round 2) -- never a second pricing engine in
+        JS: the expected Free-Shipping Goal state is computed HERE, once,
+        from the same canonical services the real cart uses
+        (``ShopSettings.free_shipping_threshold``,
+        ``pricing_service.resolve_effective_price``), and merely verified
+        (not recomputed) by run.mjs. ``product.requires_shipping`` is the
+        exact same field ``shipping_service.cart_requires_shipping`` reads
+        per cart item -- reading it directly here is not a second rule."""
+        if product is None or not product.requires_shipping:
+            return "n/a"
+        from apps.catalog.services.pricing_service import resolve_effective_price
+        from apps.core.models import ShopSettings, ShopSettingsNotProvisionedError
+
+        try:
+            threshold = ShopSettings.load(store=store).free_shipping_threshold
+        except ShopSettingsNotProvisionedError:
+            return "n/a"
+        # The exact same default-variant selection
+        # apps.catalog.services.storefront_variant_service uses (never a
+        # second variant-selection rule) -- the real add-to-cart click adds
+        # whichever variant the storefront itself pre-selects as default.
+        default_variant = (
+            product.variants.filter(is_default=True).first()
+            or product.variants.order_by("display_order", "id").first()
+        )
+        price = resolve_effective_price(product, default_variant)
+        return "success" if price >= threshold else "goal"
 
     def _home_hero_expected(self, preset) -> bool:
         """Section 6 — data-driven, never a hardcoded key list: derived from
@@ -1682,12 +1724,39 @@ class Command(BaseCommand):
         base = Path(campaign_root) / "screenshots" / "home"
         return (str(base / f"{key}_home_desktop.jpg"), str(base / f"{key}_home_mobile.jpg"))
 
+    # -- evidence-capture staging paths (Code Review Repair Round 2,
+    # IMPORTANT 5) -- deterministic, under CAMPAIGN_REPORT_ROOT only; never
+    # final repository evidence (that promotion is a separate, later task,
+    # per section 6/§12's two-stage contract, not this repair round). -------
+    def _w4c_representative_screenshot_path(self, campaign_root, key: str, page_class: str) -> str:
+        return str(Path(campaign_root) / "screenshots" / "representative" / f"{key}_{page_class}_desktop.jpg")
+
+    def _w4c_failure_screenshot_path(self, campaign_root, key: str, page_class: str, viewport: str) -> str:
+        return str(Path(campaign_root) / "screenshots" / "failures" / f"{key}_{page_class}_{viewport}_FAIL.jpg")
+
+    def _w4c_theme_screenshot_path(self, campaign_root, key: str, occasion: str, intensity: str, viewport: str, tier: str) -> str:
+        return str(
+            Path(campaign_root) / "screenshots" / "theme"
+            / f"{key}__{tier}__{occasion}__{intensity}__{viewport}.jpg"
+        )
+
     # -- manifest writers (section 3.2/3.7) -----------------------------------
     def _write_w4c_base_manifest(self, *, base: dict, key: str, version: str, result_path: Path,
                                   hero_expected: bool = False, hero_index=None, run_token: str, cells=None,
                                   expected_rsec_count=None, product_cards_expected: bool = False,
                                   bottom_nav_expected: bool = False) -> str:
-        home_desktop, home_mobile = self._w4c_home_screenshot_paths(result_path.parents[2], key)
+        campaign_root = result_path.parents[2]
+        home_desktop, home_mobile = self._w4c_home_screenshot_paths(campaign_root, key)
+        cells_list = []
+        for page_class, viewport in (cells if cells is not None else self._base_cell_matrix()):
+            entry = {"page_class": page_class, "viewport": viewport}
+            if page_class != "home":
+                entry["representative_screenshot"] = (
+                    self._w4c_representative_screenshot_path(campaign_root, key, page_class)
+                    if viewport == "desktop" else None
+                )
+                entry["failure_screenshot"] = self._w4c_failure_screenshot_path(campaign_root, key, page_class, viewport)
+            cells_list.append(entry)
         manifest = dict(base)
         manifest.update({
             "w4c": True,
@@ -1700,7 +1769,7 @@ class Command(BaseCommand):
                 "bottom_nav_expected": bool(bottom_nav_expected),
             },
             "result_path": str(result_path),
-            "cells": [{"page_class": pc, "viewport": vp} for pc, vp in (cells if cells is not None else self._base_cell_matrix())],
+            "cells": cells_list,
             "home_screenshot_desktop": home_desktop,
             "home_screenshot_mobile": home_mobile,
         })
@@ -1714,6 +1783,12 @@ class Command(BaseCommand):
     def _write_w4c_theme_manifest(self, *, base: dict, key: str, version: str, occasion: str, intensity: str,
                                    viewport: str, tier: str, result_path: Path, run_token: str,
                                    expected_theme: dict | None = None) -> str:
+        # IMPORTANT 5D -- Tier-1 screenshot only on FAIL/BLOCKED, Tier-2
+        # always retained; Node decides which by inspecting active_key.tier
+        # + its own computed result, this path is just where it lands.
+        theme_screenshot_path = self._w4c_theme_screenshot_path(
+            result_path.parents[2], key, occasion, intensity, viewport, tier,
+        )
         manifest = dict(base)
         manifest.update({
             "w4c": True,
@@ -1725,6 +1800,7 @@ class Command(BaseCommand):
             },
             "expected_theme": expected_theme,
             "result_path": str(result_path),
+            "theme_screenshot_path": theme_screenshot_path,
         })
         result_path.parent.mkdir(parents=True, exist_ok=True)
         fd, manifest_path = tempfile.mkstemp(prefix="rastisi-w4c-theme-", suffix=".json")
@@ -1828,8 +1904,22 @@ class Command(BaseCommand):
 
     # -- campaign matrix (section 3.9/3.10/13/15) -----------------------------
     def _validate_or_init_campaign_matrix(self, matrix_path: Path) -> None:
+        """IMPORTANT 6 (repair round 2) -- a fresh matrix binds itself to the
+        exact harness git HEAD and refuses to be created against a dirty
+        tracked worktree (never certify uncommitted harness code); a
+        resumed matrix requires the CURRENT HEAD to still match, so two
+        batches executed under different harness code can never be merged
+        into one matrix.json."""
         matrix_path = Path(matrix_path)
         if not matrix_path.exists():
+            if self._tracked_worktree_is_dirty():
+                raise CommandError(
+                    "W4C: tracked worktree is dirty -- refusing to start a real W4C "
+                    "campaign against uncommitted harness code. Commit or discard the "
+                    "changes, then re-run."
+                )
+            from datetime import datetime as _dt
+
             matrix_path.parent.mkdir(parents=True, exist_ok=True)
             matrix_path.write_text(json.dumps({
                 "_meta": {
@@ -1838,6 +1928,9 @@ class Command(BaseCommand):
                     "total_cells_expected": W4C_TOTAL_CELLS_EXPECTED,
                     "duplicate_cells": [],
                     "recovered_state_events": [],
+                    "w4c_branch_head_sha": self._current_git_head(),
+                    "run_started_at": _dt.now().isoformat(),
+                    "run_finished_at": None,
                 },
                 "templates": {},
             }, indent=2), encoding="utf-8")
@@ -1849,6 +1942,14 @@ class Command(BaseCommand):
                 f"W4C: {matrix_path} belongs to a different campaign/schema "
                 f"({meta.get('schema_version')!r}/{meta.get('certified_base_sha')!r}) -- "
                 "use a different --report-dir to start a new campaign; never silently merge across roots"
+            )
+        current_head = self._current_git_head()
+        if meta.get("w4c_branch_head_sha") != current_head:
+            raise CommandError(
+                f"W4C: {matrix_path} was recorded at harness HEAD "
+                f"{meta.get('w4c_branch_head_sha')!r} but the current tracked HEAD is "
+                f"{current_head!r} -- use a fresh --report-dir for a campaign under a "
+                "new code head; never mix evidence from two source heads."
             )
 
     def _load_matrix(self, matrix_path: Path) -> dict:
@@ -2180,4 +2281,15 @@ class Command(BaseCommand):
 
         aggregate = self._run_final_w4c_aggregator(matrix_path)
         aggregate["cells_recorded_this_run"] = cells_recorded_this_run
+        campaign_truly_complete = (
+            aggregate["total_cells_recorded"] == W4C_TOTAL_CELLS_EXPECTED
+            and not aggregate["missing_cells"] and not aggregate["duplicate_cells"]
+        )
+        if campaign_truly_complete:
+            matrix = self._load_matrix(matrix_path)
+            if not matrix["_meta"].get("run_finished_at"):
+                from datetime import datetime as _dt
+
+                matrix["_meta"]["run_finished_at"] = _dt.now().isoformat()
+                self._save_matrix(matrix_path, matrix)
         return aggregate
