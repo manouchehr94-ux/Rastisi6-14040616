@@ -42,6 +42,32 @@ def _fake_exists(path_self, _orig=Path.exists):
     return _orig(path_self)
 
 
+# Repair Round 2, IMPORTANT 6 -- every test in this module that reaches
+# _run_w4c_campaign/_validate_or_init_campaign_matrix touches the new
+# git-HEAD-binding/dirty-worktree gate. Defaulting both to a clean,
+# deterministic state here (module-wide) means the hundred-plus existing
+# cases above never depend on this actual repo's real worktree/HEAD state
+# at test-run time (which is genuinely dirty during this very repair
+# round's own edit/test cycle) -- only the dedicated
+# W4CCampaignProvenanceTests below override these defaults, deliberately,
+# to exercise the real dirty/mismatch branches.
+_GIT_HEAD_PATCHER = None
+_DIRTY_WORKTREE_PATCHER = None
+
+
+def setUpModule():
+    global _GIT_HEAD_PATCHER, _DIRTY_WORKTREE_PATCHER
+    _GIT_HEAD_PATCHER = mock.patch.object(Command, "_current_git_head", return_value="0" * 40)
+    _DIRTY_WORKTREE_PATCHER = mock.patch.object(Command, "_tracked_worktree_is_dirty", return_value=False)
+    _GIT_HEAD_PATCHER.start()
+    _DIRTY_WORKTREE_PATCHER.start()
+
+
+def tearDownModule():
+    _GIT_HEAD_PATCHER.stop()
+    _DIRTY_WORKTREE_PATCHER.stop()
+
+
 class W4CAll50CertificationHarnessTests(TestCase):
     """Cases 1-16 -- Round 2 (+Round 1's carried-over 5)."""
 
@@ -823,6 +849,7 @@ def _valid_theme_payload(manifest, result="PASS"):
         "viewport": active_key["viewport"], "tier": active_key["tier"],
         "http_status": 200, "rtl": True, "overflow": False,
         "console_errors": [], "page_errors": [], "failed_requests": [], "result": result,
+        "screenshot": None,
     }
 
 
@@ -1312,3 +1339,361 @@ class W4CBrowserContractSourceTests(TestCase):
         self.assertNotIn("context.request.post", body)
         self.assertIn("targetPage.evaluate", body)
         self.assertIn("csrftoken", body)
+
+
+# =============================================================================
+# Repair Round 2 -- IMPORTANT 1: request failures must gate every public cell
+# (Listing/PDP/Cart/Theme), not just Home. Genuine browser proof of this gate
+# is the bounded real-browser smoke (section 1's own instruction); these are
+# static source-grep regression guards, not a substitute for that proof.
+# =============================================================================
+class W4CRequestFailureGateTests(TestCase):
+    def setUp(self):
+        self.source = (
+            Path(r4_mod.__file__).resolve().parents[4]
+            / "tools" / "storefront_builder_r4_qa" / "run.mjs"
+        ).read_text(encoding="utf-8")
+
+    def _body(self, fn_name):
+        start = self.source.index(f"function {fn_name}")
+        end = self.source.index("\nasync function", start + 1)
+        return self.source[start:end]
+
+    def test_65_listing_request_failure_gates_pass(self):
+        body = self._body("w4cRunListingCell")
+        self.assertIn("errors.requestFailures.length === 0", body)
+
+    def test_66_pdp_request_failure_gates_pass(self):
+        body = self._body("w4cRunPdpCell")
+        self.assertIn("errors.requestFailures.length === 0", body)
+
+    def test_67_cart_request_failure_gates_pass(self):
+        body = self._body("w4cRunCartCell")
+        self.assertIn("errors.requestFailures.length === 0", body)
+
+    def test_68_theme_request_failure_gates_pass(self):
+        body = self._body("w4cRunThemeCell")
+        self.assertIn("errors.requestFailures.length === 0", body)
+
+
+# =============================================================================
+# Repair Round 2 -- IMPORTANT 2: full PDP interaction contract. Source-grep
+# regression guards for the real (not presence-only) variant transition,
+# real Add-to-Cart, and real navigation checks; genuine behavioral proof is
+# the bounded real-browser smoke.
+# =============================================================================
+class W4CPdpInteractionContractTests(TestCase):
+    def setUp(self):
+        self.source = (
+            Path(r4_mod.__file__).resolve().parents[4]
+            / "tools" / "storefront_builder_r4_qa" / "run.mjs"
+        ).read_text(encoding="utf-8")
+        self.store = Store.objects.create(
+            name="فروشگاه W4C R2", slug="w4c-r2-demo", admin_subdomain="w4c-r2-demo",
+        )
+
+    def _body(self, fn_name):
+        start = self.source.index(f"function {fn_name}")
+        end = self.source.index("\nasync function", start + 1)
+        return self.source[start:end]
+
+    def test_69_pdp_variant_presence_alone_is_insufficient(self):
+        """The old gate (`variantControls > 0`) proved a control EXISTS, never
+        that selecting a different one actually changes anything. The new
+        gate must depend on a real transition outcome, not raw control count."""
+        body = self._body("w4cRunPdpCell")
+        self.assertNotIn("variantControls > 0 && qtyPresent && qtyAdjusted && addToCartForm", body)
+
+    def test_70_pdp_requires_real_variant_transition(self):
+        body = self._body("w4cRunPdpCell")
+        self.assertIn(".opt-block .swatch, .opt-block .size", body)
+        self.assertIn("VariantTransition", body)
+
+    def test_71_pdp_add_to_cart_presence_alone_is_insufficient(self):
+        body = self._body("w4cRunPdpCell")
+        self.assertNotIn("addToCartForm >= 1", body)
+
+    def test_72_pdp_requires_real_add_to_cart_effect(self):
+        body = self._body("w4cRunPdpCell")
+        self.assertIn("cart-count", body)
+        self.assertIn("RealAddToCart", body)
+
+    def test_73_pdp_requires_real_navigation(self):
+        body = self._body("w4cRunPdpCell")
+        self.assertIn("RealNavigation", body)
+
+    def test_74_pdp_fixture_has_enough_variants_for_a_transition(self):
+        """2A -- the deterministic fixture product must have at least 2
+        purchasable variants so a real transition is possible; a
+        single-variant product can never exercise this contract. Uses the
+        REAL seeded fixture store (seed_ready_template_fashion_demo always
+        targets its own fixed rasti-mode-demo store), matching what the
+        actual campaign runs against."""
+        from django.core.management import call_command
+
+        from apps.catalog.models import Product
+
+        call_command("seed_ready_template_fashion_demo")
+        store = Store.objects.get(slug="rasti-mode-demo")
+        fixture = Command()._build_w4c_fixture(store)
+        product_id = fixture["pdp_product_id"]
+        self.assertIsNotNone(product_id)
+        product = Product.objects.get(pk=product_id)
+        purchasable = product.variants.filter(is_active=True, is_obsolete=False, stock__gt=0).count()
+        self.assertGreaterEqual(purchasable, 2)
+
+
+# =============================================================================
+# Repair Round 2 -- IMPORTANT 3: Listing + Cart behavior completion.
+# =============================================================================
+class W4CListingCartBehaviorContractTests(TestCase):
+    def setUp(self):
+        self.source = (
+            Path(r4_mod.__file__).resolve().parents[4]
+            / "tools" / "storefront_builder_r4_qa" / "run.mjs"
+        ).read_text(encoding="utf-8")
+
+    def _body(self, fn_name):
+        start = self.source.index(f"function {fn_name}")
+        end = self.source.index("\nasync function", start + 1)
+        return self.source[start:end]
+
+    def test_75_listing_checks_sort_filter_pagination_where_rendered(self):
+        body = self._body("w4cRunListingCell")
+        for marker in ('select[name="sort"]', 'select[name="category"]', ".pagination"):
+            self.assertIn(marker, body)
+
+    def test_76_cart_remove_presence_alone_is_insufficient(self):
+        body = self._body("w4cRunCartCell")
+        self.assertNotIn("removePresent = (await targetPage.locator('.citem .rm').count()) > 0;\n", body)
+
+    def test_77_cart_requires_real_remove_effect(self):
+        body = self._body("w4cRunCartCell")
+        self.assertIn("RealRemove", body)
+
+    def test_78_cart_requires_free_shipping_goal_contract(self):
+        body = self._body("w4cRunCartCell")
+        self.assertIn("FreeShippingGoal", body)
+        self.assertIn(".fsg", body)
+
+    def test_79_free_shipping_state_computed_in_python_not_recomputed_in_js(self):
+        """Never a second pricing engine in JS -- the expected state must be
+        computed server-side (Python) and merely verified in run.mjs."""
+        body = self._body("w4cRunCartCell")
+        self.assertNotIn("free_shipping_threshold", body)
+        self.assertIn("expected_free_shipping_state", body)
+
+    def test_80_fixture_exposes_expected_free_shipping_state(self):
+        from django.core.management import call_command
+
+        call_command("seed_ready_template_fashion_demo")
+        store = Store.objects.get(slug="rasti-mode-demo")
+        fixture = Command()._build_w4c_fixture(store)
+        self.assertIn("expected_free_shipping_state", fixture)
+        self.assertIn(fixture["expected_free_shipping_state"], {"goal", "success", "n/a"})
+
+
+# =============================================================================
+# Repair Round 2 -- IMPORTANT 4: accessibility-critical contract.
+# =============================================================================
+class W4CAccessibilityCriticalContractTests(TestCase):
+    def setUp(self):
+        self.source = (
+            Path(r4_mod.__file__).resolve().parents[4]
+            / "tools" / "storefront_builder_r4_qa" / "run.mjs"
+        ).read_text(encoding="utf-8")
+
+    def _body(self, fn_name):
+        start = self.source.index(f"function {fn_name}")
+        end = self.source.index("\nasync function", start + 1)
+        return self.source[start:end]
+
+    def test_81_mobile_nav_accessible_name_alone_is_insufficient(self):
+        body = self._body("w4cMobileNavAccessibility")
+        self.assertIn("aria-expanded", body)
+        self.assertIn("Escape", body)
+
+    def test_82_product_card_accessibility_checked(self):
+        self.assertIn("function w4cProductCardAccessibility", self.source)
+
+    def test_83_pdp_control_accessibility_checked(self):
+        body = self._body("w4cRunPdpCell")
+        self.assertIn("accessibility_checks", body)
+        self.assertIn("variant_control", body)
+
+    def test_84_cart_control_accessibility_checked(self):
+        body = self._body("w4cRunCartCell")
+        self.assertIn("checkout", body.lower())
+        self.assertIn("accessibility_checks", body)
+
+
+# =============================================================================
+# Repair Round 2 -- IMPORTANT 5: campaign evidence capture contract. Path
+# helpers and manifest wiring are pure Python and fully behavioral here;
+# the write-failure -> BLOCKED enforcement is JS-side (source-grep guard
+# only -- genuine proof is the bounded smoke).
+# =============================================================================
+class W4CEvidenceCaptureContractTests(TestCase):
+    def setUp(self):
+        self.command = Command()
+        self.js_source = (
+            Path(r4_mod.__file__).resolve().parents[4]
+            / "tools" / "storefront_builder_r4_qa" / "run.mjs"
+        ).read_text(encoding="utf-8")
+
+    def test_85_representative_screenshot_path_is_deterministic(self):
+        path = self.command._w4c_representative_screenshot_path("/tmp/campaign", "editorial_jewelry", "listing")
+        self.assertEqual(path, str(Path("/tmp/campaign") / "screenshots" / "representative" / "editorial_jewelry_listing_desktop.jpg"))
+
+    def test_86_failure_screenshot_path_is_deterministic(self):
+        path = self.command._w4c_failure_screenshot_path("/tmp/campaign", "editorial_jewelry", "pdp", "mobile")
+        self.assertEqual(path, str(Path("/tmp/campaign") / "screenshots" / "failures" / "editorial_jewelry_pdp_mobile_FAIL.jpg"))
+
+    def test_87_theme_screenshot_path_is_deterministic(self):
+        path = self.command._w4c_theme_screenshot_path("/tmp/campaign", "warm_boutique", "nowruz", "balanced", "desktop", "tier2")
+        self.assertEqual(
+            path,
+            str(Path("/tmp/campaign") / "screenshots" / "theme" / "warm_boutique__tier2__nowruz__balanced__desktop.jpg"),
+        )
+
+    def test_88_base_manifest_threads_representative_and_failure_paths_for_non_home_cells(self):
+        manifest_path = self.command._write_w4c_base_manifest(
+            base={"origin": "http://x"}, key="editorial_jewelry", version="3",
+            result_path=Path("/tmp/w4c-evidence-test/w4c-results/base/editorial_jewelry.json"),
+            run_token="tok", cells=[("listing", "desktop"), ("listing", "mobile")],
+        )
+        try:
+            manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+        finally:
+            Path(manifest_path).unlink(missing_ok=True)
+        listing_desktop = next(c for c in manifest["cells"] if c["page_class"] == "listing" and c["viewport"] == "desktop")
+        listing_mobile = next(c for c in manifest["cells"] if c["page_class"] == "listing" and c["viewport"] == "mobile")
+        self.assertIsNotNone(listing_desktop["representative_screenshot"])
+        self.assertIsNotNone(listing_desktop["failure_screenshot"])
+        self.assertIsNone(listing_mobile["representative_screenshot"])
+        self.assertIsNotNone(listing_mobile["failure_screenshot"])
+
+    def test_89_theme_manifest_threads_screenshot_path(self):
+        manifest_path = self.command._write_w4c_theme_manifest(
+            base={"origin": "http://x"}, key="editorial_jewelry", version="3", occasion="nowruz",
+            intensity="balanced", viewport="desktop", tier="tier1",
+            result_path=Path("/tmp/w4c-evidence-test/w4c-results/theme/x.json"), run_token="tok",
+        )
+        try:
+            manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+        finally:
+            Path(manifest_path).unlink(missing_ok=True)
+        self.assertIn("theme_screenshot_path", manifest)
+        self.assertIsNotNone(manifest["theme_screenshot_path"])
+
+    def test_90_required_theme_fields_include_screenshot(self):
+        self.assertIn("screenshot", r4_mod.W4C_REQUIRED_THEME_RESULT_FIELDS)
+
+    def test_91_screenshot_write_failure_forces_blocked_not_null(self):
+        """5E -- source-grep guard: a required screenshot write must be
+        wrapped so a thrown error forces BLOCKED, never a silent
+        screenshot=null while some other PASS verdict stands."""
+        for fn_name in ("w4cRunListingCell", "w4cRunPdpCell", "w4cRunCartCell"):
+            with self.subTest(fn=fn_name):
+                start = self.js_source.index(f"function {fn_name}")
+                end = self.js_source.index("\nasync function", start + 1)
+                body = self.js_source[start:end]
+                self.assertIn("BLOCKED", body)
+
+
+# =============================================================================
+# Repair Round 2 -- IMPORTANT 6: bind the campaign matrix to the exact
+# harness HEAD; reject a dirty worktree at real-campaign start; reject a
+# resumed batch under a different HEAD. Fully behavioral (mocked git calls,
+# no browser needed).
+# =============================================================================
+class W4CCampaignProvenanceTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.store = Store.objects.create(
+            name="فروشگاه W4C پرووننس", slug="w4c-provenance-demo", admin_subdomain="w4c-provenance-demo",
+        )
+        self.command = Command()
+
+    def _tmp_campaign_root(self):
+        return Path(tempfile.mkdtemp(prefix="w4c-provenance-"))
+
+    def test_92_fresh_matrix_records_branch_head_sha(self):
+        matrix_path = self._tmp_campaign_root() / "matrix.json"
+        with mock.patch.object(Command, "_current_git_head", return_value="a" * 40):
+            self.command._validate_or_init_campaign_matrix(matrix_path)
+        matrix = json.loads(matrix_path.read_text(encoding="utf-8"))
+        self.assertEqual(matrix["_meta"]["w4c_branch_head_sha"], "a" * 40)
+
+    def test_93_fresh_matrix_records_run_started_at(self):
+        matrix_path = self._tmp_campaign_root() / "matrix.json"
+        self.command._validate_or_init_campaign_matrix(matrix_path)
+        matrix = json.loads(matrix_path.read_text(encoding="utf-8"))
+        self.assertIsNotNone(matrix["_meta"].get("run_started_at"))
+        self.assertIsNone(matrix["_meta"].get("run_finished_at"))
+
+    def test_94_dirty_worktree_rejected_at_fresh_campaign_start(self):
+        campaign_root = self._tmp_campaign_root()
+        matrix_path = campaign_root / "matrix.json"
+        with mock.patch.object(Command, "_tracked_worktree_is_dirty", return_value=True):
+            with self.assertRaises(CommandError):
+                self.command._validate_or_init_campaign_matrix(matrix_path)
+        self.assertFalse(matrix_path.exists(), "a dirty-worktree rejection must never create campaign artifacts")
+
+    def test_95_resume_under_matching_head_proceeds(self):
+        matrix_path = self._tmp_campaign_root() / "matrix.json"
+        with mock.patch.object(Command, "_current_git_head", return_value="b" * 40):
+            self.command._validate_or_init_campaign_matrix(matrix_path)
+            # Resuming under the SAME head must not raise.
+            self.command._validate_or_init_campaign_matrix(matrix_path)
+
+    def test_96_resume_under_different_head_rejected(self):
+        matrix_path = self._tmp_campaign_root() / "matrix.json"
+        with mock.patch.object(Command, "_current_git_head", return_value="c" * 40):
+            self.command._validate_or_init_campaign_matrix(matrix_path)
+        with mock.patch.object(Command, "_current_git_head", return_value="d" * 40):
+            with self.assertRaises(CommandError):
+                self.command._validate_or_init_campaign_matrix(matrix_path)
+
+    def test_97_run_finished_at_recorded_only_when_campaign_truly_completes(self):
+        self._publish("editorial_jewelry")
+        campaign_root = self._tmp_campaign_root()
+        base_manifest = Command()._build_manifest(
+            store=self.store, port=18765, session_cookie="x", report_dir=campaign_root,
+            headed=False, browser_channel="auto", w4c_all50=True,
+        )
+        base_manifest["pdp_product_slug"] = None
+        matrix_path = campaign_root / "matrix.json"
+
+        def fake_run_logged(cmd_list, *, cwd, log_path):
+            manifest_path = cmd_list[2]
+            manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+            result_path = Path(manifest["result_path"])
+            if manifest.get("mode") == "theme":
+                result = _valid_theme_payload(manifest, result="PASS")
+            else:
+                result = {
+                    "run_token": manifest.get("run_token"), "key": manifest["active_key"]["key"],
+                    "version": manifest["active_key"]["version"],
+                    "page_classes": {c["page_class"]: {c["viewport"]: _valid_base_cell()} for c in manifest["cells"]},
+                }
+            result_path.parent.mkdir(parents=True, exist_ok=True)
+            result_path.write_text(json.dumps(result), encoding="utf-8")
+            return 0
+
+        with mock.patch.object(Command, "_run_logged", side_effect=fake_run_logged):
+            Command()._run_w4c_campaign(
+                store=self.store, w4c_fixture=r4_mod.Command()._build_w4c_fixture(self.store),
+                selected_keys=["editorial_jewelry"], campaign_root=campaign_root, node="node",
+                run_mjs_path=Path("run.mjs"), r4_tool_dir=campaign_root, base_manifest=base_manifest,
+            )
+        matrix = json.loads(matrix_path.read_text(encoding="utf-8"))
+        # Only editorial_jewelry ran -- nowhere near the full 704, so
+        # run_finished_at must still be unset (never falsely marked complete).
+        self.assertIsNone(matrix["_meta"].get("run_finished_at"))
+
+    def _publish(self, key):
+        preset = lpr.get_layout_preset(key)
+        preset_service.apply_preset_with_checkpoint(self.store, preset)
+        layout_service.publish(self.store)
+        return preset

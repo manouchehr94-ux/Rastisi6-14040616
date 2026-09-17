@@ -1738,6 +1738,25 @@ class Command(BaseCommand):
     def _new_run_token() -> str:
         return secrets.token_hex(16)
 
+    # -- campaign/harness git provenance (Code Review Repair Round 2,
+    # IMPORTANT 6) -- pure primitives; the actual dirty/mismatch REJECTION
+    # behavior lives in _validate_or_init_campaign_matrix, under TDD below.
+    @staticmethod
+    def _current_git_head() -> str:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=str(Path(settings.BASE_DIR).resolve()),
+            capture_output=True, text=True, check=True,
+        )
+        return result.stdout.strip()
+
+    @staticmethod
+    def _tracked_worktree_is_dirty() -> bool:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"], cwd=str(Path(settings.BASE_DIR).resolve()),
+            capture_output=True, text=True, check=True,
+        )
+        return bool(result.stdout.strip())
+
     def _validate_base_cell_schema(self, cell, *, context: str) -> None:
         if not isinstance(cell, dict):
             raise CommandError(f"W4C: malformed base cell at {context}: {cell!r}")
