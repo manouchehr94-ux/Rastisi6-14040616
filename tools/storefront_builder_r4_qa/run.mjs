@@ -2853,7 +2853,16 @@ async function phase3Task6FamilyGate() {
 // explains rich_text is a genuinely different Inspector CONTROL type, not a
 // sharing case) — so each gets exactly one new shared scenario function.
 function finalRemediationFixture() {
-  const fx = manifest.phase3_fixture && manifest.phase3_fixture.final_remediation_families;
+  // FINAL_REMEDIATION_SCALAR_EDITS (below) is a MODULE-SCOPE array literal
+  // that calls this function eagerly at import time, for every manifest
+  // shape -- including the default (non-phase3) and W4C manifests, which
+  // never carry `phase3_fixture` at all. Its real values are consumed only
+  // inside phase3FinalRemediationFamilyGate, itself only ever invoked when
+  // `manifest.phase3` is true (main()'s own `if (manifest.phase3)` guard) --
+  // so a genuinely missing fixture is only ever a real problem THERE, never
+  // at module load for a manifest that was never going to run this gate.
+  if (!manifest.phase3_fixture) return {};
+  const fx = manifest.phase3_fixture.final_remediation_families;
   assert(fx && typeof fx === 'object', 'manifest.phase3_fixture.final_remediation_families is missing');
   return fx;
 }
@@ -4257,7 +4266,8 @@ async function w4cRunListingCell(context, manifest, viewport) {
       linkHref = await firstLink.getAttribute('href');
       if (linkHref && linkHref !== '#') {
         try {
-          const linkResp = await targetPage.request.get(linkHref);
+          const absoluteHref = /^https?:\/\//.test(linkHref) ? linkHref : `${manifest.origin}${linkHref}`;
+          const linkResp = await targetPage.request.get(absoluteHref);
           linkResolves = linkResp.status() === 200;
         } catch (_error) { linkResolves = false; }
       }
@@ -4508,8 +4518,12 @@ async function w4cRunThemeCell(context, manifest) {
         accent: html.style.getPropertyValue('--occasion-accent').trim(),
       };
     });
+    // apps/core/context_processors.py sets data-occasion-theme to the raw
+    // occasion key (_overlay.occasion_key), never the full component key --
+    // so the rendered marker is compared against activeKey.occasion, not a
+    // constructed "theme.<occasion>.v1" string.
     const expectedComponentKey = `theme.${activeKey.occasion}.v1`;
-    const identityOk = rendered.theme === expectedComponentKey
+    const identityOk = rendered.theme === activeKey.occasion
       && rendered.intensity === activeKey.intensity
       && rendered.tone === expected.tone
       && rendered.motif === expected.motif;

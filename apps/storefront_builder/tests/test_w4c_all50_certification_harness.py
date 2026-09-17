@@ -220,6 +220,36 @@ class W4CAll50CertificationHarnessTests(TestCase):
         self.assertEqual(fixture["tier1_occasions"]["beauty_dew"], "ramadan")
         self.assertEqual(fixture["tier1_occasions"]["green_workshop"], "muharram")
 
+    # -- 14b (smoke-round bug regression, section 11) ---------------------
+    def test_14b_pdp_fixture_product_must_have_in_stock_variant(self):
+        """The PDP/Cart cells exercise real quantity-adjustment and
+        add-to-cart flows against this fixture product -- an out-of-stock
+        VARIABLE product (found via the bounded editorial_jewelry browser
+        smoke) makes those checks fail for the fixture's sake, not the check
+        logic's. Reuses the same "has inventory" predicate as
+        product_completion_service._has_inventory."""
+        from decimal import Decimal
+
+        from apps.catalog.models import Category, Product, ProductVariant, Vendor
+
+        vendor = Vendor.objects.create(store=self.store, name="فروشنده", slug="w4c-fixture-vendor")
+        category = Category.objects.create(store=self.store, name="دسته", slug="w4c-fixture-cat")
+        out_of_stock = Product.objects.create(
+            store=self.store, vendor=vendor, category=category, name="کالای ناموجود",
+            slug="w4c-oos-product", sku="W4C-OOS", price=Decimal("100000"),
+            product_type=Product.ProductType.VARIABLE,
+        )
+        ProductVariant.objects.create(product=out_of_stock, attribute="رنگ", value="قرمز", stock=0)
+        in_stock = Product.objects.create(
+            store=self.store, vendor=vendor, category=category, name="کالای موجود",
+            slug="w4c-in-stock-product", sku="W4C-IN-STOCK", price=Decimal("100000"),
+            product_type=Product.ProductType.VARIABLE,
+        )
+        ProductVariant.objects.create(product=in_stock, attribute="رنگ", value="سبز", stock=5)
+
+        fixture = Command()._build_w4c_fixture(self.store)
+        self.assertEqual(fixture["pdp_product_id"], in_stock.pk)
+
     # -- 15 --------------------------------------------------------------
     def test_15_theme_cleanup_failure_halts_run_immediately_and_blocks(self):
         self._publish("editorial_jewelry")
@@ -1225,3 +1255,19 @@ class W4CBrowserContractSourceTests(TestCase):
                 end = self.source.index("\nasync function", start + 1)
                 body = self.source[start:end]
                 self.assertIn("bottom_nav", body)
+
+    # -- smoke-round bug regressions (found by actually running the bounded
+    # editorial_jewelry browser smoke, section 11) --------------------------
+    def test_62_listing_resolves_relative_href_before_requesting_it(self):
+        start = self.source.index("function w4cRunListingCell")
+        end = self.source.index("\nasync function", start + 1)
+        body = self.source[start:end]
+        self.assertNotIn("targetPage.request.get(linkHref)", body)
+        self.assertIn("manifest.origin", body)
+
+    def test_63_theme_identity_compares_against_raw_occasion_key(self):
+        start = self.source.index("function w4cRunThemeCell")
+        end = self.source.index("\nasync function", start + 1)
+        body = self.source[start:end]
+        self.assertIn("rendered.theme === activeKey.occasion", body)
+        self.assertNotIn("rendered.theme === expectedComponentKey", body)

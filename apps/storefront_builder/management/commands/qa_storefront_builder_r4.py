@@ -1542,9 +1542,17 @@ class Command(BaseCommand):
             spec.key: W4C_TIER1_OCCASION_CYCLE[i % len(W4C_TIER1_OCCASION_CYCLE)]
             for i, spec in enumerate(a8_ready_templates._SPECS)
         }
+        # The PDP/Cart cells exercise real quantity-adjustment and add-to-cart
+        # flows, so the fixture product must actually be purchasable -- reusing
+        # the same "has inventory" predicate as
+        # product_completion_service._has_inventory for a VARIABLE product
+        # (never a second, hand-rolled stock rule).
         pdp_product = (
-            Product.objects.filter(store=store, product_type=Product.ProductType.VARIABLE)
-            .order_by("id").first()
+            Product.objects.filter(
+                store=store, product_type=Product.ProductType.VARIABLE,
+                variants__is_active=True, variants__is_obsolete=False, variants__stock__gt=0,
+            )
+            .distinct().order_by("id").first()
         )
         return {
             "templates": templates,
