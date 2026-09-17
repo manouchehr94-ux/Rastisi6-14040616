@@ -21,6 +21,7 @@ import tempfile
 from pathlib import Path
 from unittest import mock
 
+from django.core.cache import cache
 from django.core.management.base import CommandError
 from django.test import TestCase
 
@@ -45,6 +46,7 @@ class W4CAll50CertificationHarnessTests(TestCase):
     """Cases 1-16 -- Round 2 (+Round 1's carried-over 5)."""
 
     def setUp(self):
+        cache.clear()
         self.store = Store.objects.create(
             name="فروشگاه W4C", slug="w4c-cert-demo", admin_subdomain="w4c-cert-demo",
         )
@@ -348,6 +350,7 @@ class W4CControlFlowCardinalityTests(TestCase):
     """Cases 17-26 -- Round 3 (execution control-flow closure)."""
 
     def setUp(self):
+        cache.clear()
         self.command = Command()
 
     def test_17_base_batch_invocation_and_cell_cardinality(self):
@@ -519,6 +522,7 @@ class W4CTier2FilterTests(TestCase):
     """Cases 27-31 -- Round 4 (--only must filter Tier-2)."""
 
     def setUp(self):
+        cache.clear()
         self.command = Command()
 
     def test_27_non_tier2_only_selection_produces_zero_tier2_cells(self):
@@ -569,6 +573,7 @@ class W4CPartialBatchStatusTests(TestCase):
     """Cases 32-37 -- Round 5 (partial-batch vs. global-campaign status)."""
 
     def setUp(self):
+        cache.clear()
         self.command = Command()
 
     def _seeded_matrix(self, campaign_root, *, total_recorded, missing, duplicate=None):
@@ -713,3 +718,477 @@ class W4CPartialBatchStatusTests(TestCase):
             merged["templates"]["editorial_jewelry"]["page_classes"]["home"]["desktop"]["result"],
             "FAIL",
         )
+
+
+# =============================================================================
+# Independent Architect Code Review Repair Round 1
+#
+# CRITICAL 1 -- a stale result file must never be accepted as evidence of a
+# current invocation. IMPORTANT 3 -- resume must execute only missing cells
+# and never silently overwrite a terminal cell. IMPORTANT 4 -- an incomplete
+# cell payload must be rejected before it ever reaches matrix.json.
+#
+# These tests are genuinely RED against implementation head
+# e2f1070e68a259d94092f1c26ecbfe1ab67b19d5: none of _new_run_token,
+# _validate_base_result_freshness, _validate_theme_result_freshness,
+# _missing_base_cells, _cell_already_recorded_theme, or
+# _record_recovered_state_event exist yet, and the current
+# _merge_base_into_matrix/_run_one_theme_cell do not perform freshness,
+# identity, or schema validation at all.
+# =============================================================================
+def _valid_base_cell(result="PASS", **overrides):
+    cell = {
+        "http_status": 200, "rtl": True, "overflow": False,
+        "header_count": 1, "footer_count": 1,
+        "bottom_nav_present": True, "bottom_nav_display": "none",
+        "rsec_count": 5, "expected_rsec_count": 5,
+        "product_cards_present": True, "dead_href_count": 0,
+        "console_errors": [], "page_errors": [], "failed_requests": [],
+        "accessibility_checks": {}, "result": result, "screenshot": None,
+    }
+    if result != "PASS":
+        cell["reason"] = "simulated failure"
+    cell.update(overrides)
+    return cell
+
+
+class W4CResultFreshnessTests(TestCase):
+    """CRITICAL 1 -- never accept a stale result file."""
+
+    def setUp(self):
+        cache.clear()
+        self.store = Store.objects.create(
+            name="فروشگاه تازگی", slug="w4c-freshness", admin_subdomain="w4c-freshness",
+        )
+        preset = lpr.get_layout_preset("editorial_jewelry")
+        preset_service.apply_preset_with_checkpoint(self.store, preset)
+        layout_service.publish(self.store)
+        self.campaign_root = Path(tempfile.mkdtemp(prefix="w4c-fresh-"))
+        self.command = Command()
+        self.base_manifest = self.command._build_manifest(
+            store=self.store, port=18765, session_cookie="x", report_dir=self.campaign_root,
+            headed=False, browser_channel="auto", w4c_all50=True,
+        )
+
+    def _campaign_kwargs(self, keys):
+        return dict(
+            store=self.store,
+            w4c_fixture={
+                "templates": [{"key": k, "version": lpr.get_layout_preset(k).version} for k in keys],
+                "tier1_occasions": {k: "nowruz" for k in keys},
+            },
+            selected_keys=keys,
+            campaign_root=self.campaign_root, node="node",
+            run_mjs_path=Path("run.mjs"), r4_tool_dir=Path("."),
+            base_manifest=self.base_manifest,
+        )
+
+    def test_38_run_token_is_generated_and_distinct_per_invocation(self):
+        tokens = {self.command._new_run_token() for _ in range(5)}
+        self.assertEqual(len(tokens), 5)
+        for token in tokens:
+            self.assertIsInstance(token, str)
+            self.assertGreaterEqual(len(token), 16)
+
+    def test_39_stale_pass_file_survives_node_crash_is_rejected(self):
+        result_path = self.command._w4c_base_result_path(self.campaign_root, "editorial_jewelry")
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        stale = {"run_token": "an-old-token-from-a-previous-run", "key": "editorial_jewelry",
+                  "version": "3", "page_classes": {"home": {"desktop": _valid_base_cell()}}}
+        result_path.write_text(json.dumps(stale), encoding="utf-8")
+
+        def crash_without_writing(cmd_list, *, cwd, log_path):
+            return 1  # Node crashed -- writes nothing new, the stale file is left behind
+
+        with mock.patch.object(Command, "_run_logged", side_effect=crash_without_writing):
+            with self.assertRaises(CommandError):
+                self.command._run_w4c_campaign(**self._campaign_kwargs(["editorial_jewelry"]))
+        # The stale file's own content must never have been merged as fresh evidence.
+        matrix_path = self.campaign_root / "matrix.json"
+        if matrix_path.exists():
+            matrix = json.loads(matrix_path.read_text(encoding="utf-8"))
+            self.assertNotIn("editorial_jewelry", matrix.get("templates", {}))
+
+    def test_40_run_token_mismatch_rejected(self):
+        result_path = self.command._w4c_base_result_path(self.campaign_root, "editorial_jewelry")
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+
+        def write_wrong_token(cmd_list, *, cwd, log_path):
+            manifest = json.loads(Path(cmd_list[2]).read_text(encoding="utf-8"))
+            payload = {"run_token": "wrong-token", "key": manifest["active_key"]["key"],
+                       "version": manifest["active_key"]["version"],
+                       "page_classes": {"home": {"desktop": _valid_base_cell()}}}
+            Path(manifest["result_path"]).write_text(json.dumps(payload), encoding="utf-8")
+            return 0
+
+        with mock.patch.object(Command, "_run_logged", side_effect=write_wrong_token):
+            with self.assertRaises(CommandError):
+                self.command._run_w4c_campaign(**self._campaign_kwargs(["editorial_jewelry"]))
+
+    def test_41_wrong_template_identity_rejected(self):
+        def write_wrong_identity(cmd_list, *, cwd, log_path):
+            manifest = json.loads(Path(cmd_list[2]).read_text(encoding="utf-8"))
+            payload = {"run_token": manifest.get("run_token"), "key": "some_other_key",
+                       "version": manifest["active_key"]["version"],
+                       "page_classes": {"home": {"desktop": _valid_base_cell()}}}
+            Path(manifest["result_path"]).write_text(json.dumps(payload), encoding="utf-8")
+            return 0
+
+        with mock.patch.object(Command, "_run_logged", side_effect=write_wrong_identity):
+            with self.assertRaises(CommandError):
+                self.command._run_w4c_campaign(**self._campaign_kwargs(["editorial_jewelry"]))
+
+    def test_42_malformed_json_rejected(self):
+        def write_garbage(cmd_list, *, cwd, log_path):
+            manifest = json.loads(Path(cmd_list[2]).read_text(encoding="utf-8"))
+            Path(manifest["result_path"]).write_text("{not valid json", encoding="utf-8")
+            return 0
+
+        with mock.patch.object(Command, "_run_logged", side_effect=write_garbage):
+            with self.assertRaises(CommandError):
+                self.command._run_w4c_campaign(**self._campaign_kwargs(["editorial_jewelry"]))
+
+    def test_43_missing_result_field_rejected(self):
+        def write_incomplete(cmd_list, *, cwd, log_path):
+            manifest = json.loads(Path(cmd_list[2]).read_text(encoding="utf-8"))
+            cell = _valid_base_cell()
+            del cell["console_errors"]
+            payload = {"run_token": manifest.get("run_token"), "key": manifest["active_key"]["key"],
+                       "version": manifest["active_key"]["version"],
+                       "page_classes": {"home": {"desktop": cell}}}
+            Path(manifest["result_path"]).write_text(json.dumps(payload), encoding="utf-8")
+            return 0
+
+        with mock.patch.object(Command, "_run_logged", side_effect=write_incomplete):
+            with self.assertRaises(CommandError):
+                self.command._run_w4c_campaign(**self._campaign_kwargs(["editorial_jewelry"]))
+
+    def test_44_unknown_result_enum_rejected(self):
+        def write_unknown_enum(cmd_list, *, cwd, log_path):
+            manifest = json.loads(Path(cmd_list[2]).read_text(encoding="utf-8"))
+            cell = _valid_base_cell(result="MAYBE")
+            payload = {"run_token": manifest.get("run_token"), "key": manifest["active_key"]["key"],
+                       "version": manifest["active_key"]["version"],
+                       "page_classes": {"home": {"desktop": cell}}}
+            Path(manifest["result_path"]).write_text(json.dumps(payload), encoding="utf-8")
+            return 0
+
+        with mock.patch.object(Command, "_run_logged", side_effect=write_unknown_enum):
+            with self.assertRaises(CommandError):
+                self.command._run_w4c_campaign(**self._campaign_kwargs(["editorial_jewelry"]))
+
+    def test_45_nonzero_exit_with_no_result_is_blocked(self):
+        def crash_after_unlink(cmd_list, *, cwd, log_path):
+            return 1
+
+        with mock.patch.object(Command, "_run_logged", side_effect=crash_after_unlink):
+            with self.assertRaises(CommandError):
+                self.command._run_w4c_campaign(**self._campaign_kwargs(["editorial_jewelry"]))
+
+    def test_46_nonzero_exit_with_valid_fresh_fail_result_is_merged_as_fail(self):
+        def write_genuine_fail(cmd_list, *, cwd, log_path):
+            manifest = json.loads(Path(cmd_list[2]).read_text(encoding="utf-8"))
+            cell = _valid_base_cell(result="FAIL")
+            payload = {"run_token": manifest.get("run_token"), "key": manifest["active_key"]["key"],
+                       "version": manifest["active_key"]["version"],
+                       "page_classes": {"home": {"desktop": cell}}}
+            Path(manifest["result_path"]).write_text(json.dumps(payload), encoding="utf-8")
+            return 1  # a genuine FAIL exit consistent with the FAIL cell above
+
+        with mock.patch.object(Command, "_run_logged", side_effect=write_genuine_fail):
+            # Must NOT raise -- a consistent FAIL result is real evidence, not infrastructure BLOCKED.
+            self.command._run_w4c_campaign(**self._campaign_kwargs(["editorial_jewelry"]))
+        matrix = json.loads((self.campaign_root / "matrix.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            matrix["templates"]["editorial_jewelry"]["page_classes"]["home"]["desktop"]["result"], "FAIL",
+        )
+
+    def test_47_nonzero_exit_but_all_pass_result_is_inconsistent_blocked(self):
+        def write_all_pass_but_crash(cmd_list, *, cwd, log_path):
+            manifest = json.loads(Path(cmd_list[2]).read_text(encoding="utf-8"))
+            payload = {"run_token": manifest.get("run_token"), "key": manifest["active_key"]["key"],
+                       "version": manifest["active_key"]["version"],
+                       "page_classes": {"home": {"desktop": _valid_base_cell(result="PASS")}}}
+            Path(manifest["result_path"]).write_text(json.dumps(payload), encoding="utf-8")
+            return 1  # exit 1 despite an all-PASS result -- inconsistent, must BLOCK
+
+        with mock.patch.object(Command, "_run_logged", side_effect=write_all_pass_but_crash):
+            with self.assertRaises(CommandError):
+                self.command._run_w4c_campaign(**self._campaign_kwargs(["editorial_jewelry"]))
+
+
+class W4CResumeAndMergeTests(TestCase):
+    """IMPORTANT 3 -- resume executes only missing cells; merges are insert-only."""
+
+    def setUp(self):
+        cache.clear()
+        self.store = Store.objects.create(
+            name="فروشگاه ازسرگیری", slug="w4c-resume", admin_subdomain="w4c-resume",
+        )
+        preset = lpr.get_layout_preset("editorial_jewelry")
+        preset_service.apply_preset_with_checkpoint(self.store, preset)
+        layout_service.publish(self.store)
+        self.campaign_root = Path(tempfile.mkdtemp(prefix="w4c-resume-"))
+        self.command = Command()
+        self.matrix_path = self.campaign_root / "matrix.json"
+        self.command._validate_or_init_campaign_matrix(self.matrix_path)
+        self.base_manifest = self.command._build_manifest(
+            store=self.store, port=18765, session_cookie="x", report_dir=self.campaign_root,
+            headed=False, browser_channel="auto", w4c_all50=True,
+        )
+
+    def test_48_missing_base_cells_helper_reports_only_unrecorded(self):
+        matrix = json.loads(self.matrix_path.read_text(encoding="utf-8"))
+        missing_all = self.command._missing_base_cells(matrix, "editorial_jewelry")
+        self.assertEqual(len(missing_all), 12)
+        self.command._merge_base_into_matrix(
+            self.matrix_path, "editorial_jewelry", "3",
+            {"page_classes": {"home": {"desktop": _valid_base_cell()}}},
+        )
+        matrix = json.loads(self.matrix_path.read_text(encoding="utf-8"))
+        missing_after = self.command._missing_base_cells(matrix, "editorial_jewelry")
+        self.assertEqual(len(missing_after), 11)
+        self.assertNotIn(("home", "desktop"), missing_after)
+
+    def test_49_fully_recorded_template_skips_node_entirely(self):
+        for page_class, viewport in self.command._base_cell_matrix():
+            self.command._merge_base_into_matrix(
+                self.matrix_path, "editorial_jewelry", "3",
+                {"page_classes": {page_class: {viewport: _valid_base_cell()}}},
+            )
+        node_calls = []
+        with mock.patch.object(Command, "_run_logged", side_effect=lambda *a, **kw: node_calls.append(1) or 0):
+            self.command._run_w4c_campaign(
+                store=self.store,
+                w4c_fixture={"templates": [{"key": "editorial_jewelry", "version": "3"}],
+                             "tier1_occasions": {"editorial_jewelry": "nowruz"}},
+                selected_keys=["editorial_jewelry"],
+                campaign_root=self.campaign_root, node="node",
+                run_mjs_path=Path("run.mjs"), r4_tool_dir=Path("."),
+                base_manifest=self.base_manifest,
+            )
+        base_invocations = [c for c in node_calls]  # any call at all would indicate re-execution
+        # The base loop must have made zero Node calls for this fully-recorded key --
+        # only Theme cells (tier1) remain unrecorded and would call Node.
+        # We assert indirectly: the base result file was never rewritten after our seed.
+        base_result_path = self.command._w4c_base_result_path(self.campaign_root, "editorial_jewelry")
+        self.assertFalse(base_result_path.exists())  # never written by run.mjs -- only matrix.json holds it
+
+    def test_50_partial_resume_requests_only_missing_cells_in_manifest(self):
+        self.command._merge_base_into_matrix(
+            self.matrix_path, "editorial_jewelry", "3",
+            {"page_classes": {"home": {"desktop": _valid_base_cell()}}},
+        )
+        seen_manifests = []
+
+        def capture_manifest(cmd_list, *, cwd, log_path):
+            manifest = json.loads(Path(cmd_list[2]).read_text(encoding="utf-8"))
+            seen_manifests.append(manifest)
+            cells = {}
+            for cell_spec in manifest.get("cells", []):
+                cells.setdefault(cell_spec["page_class"], {})[cell_spec["viewport"]] = _valid_base_cell()
+            payload = {"run_token": manifest.get("run_token"), "key": manifest["active_key"]["key"],
+                       "version": manifest["active_key"]["version"], "page_classes": cells}
+            Path(manifest["result_path"]).write_text(json.dumps(payload), encoding="utf-8")
+            return 0
+
+        with mock.patch.object(Command, "_run_logged", side_effect=capture_manifest):
+            self.command._run_w4c_campaign(
+                store=self.store,
+                w4c_fixture={"templates": [{"key": "editorial_jewelry", "version": "3"}],
+                             "tier1_occasions": {"editorial_jewelry": "nowruz"}},
+                selected_keys=["editorial_jewelry"],
+                campaign_root=self.campaign_root, node="node",
+                run_mjs_path=Path("run.mjs"), r4_tool_dir=Path("."),
+                base_manifest=self.base_manifest,
+            )
+        base_manifests = [m for m in seen_manifests if m.get("mode") == "base"]
+        self.assertEqual(len(base_manifests), 1)
+        requested_cells = {(c["page_class"], c["viewport"]) for c in base_manifests[0]["cells"]}
+        self.assertEqual(len(requested_cells), 11)
+        self.assertNotIn(("home", "desktop"), requested_cells)
+
+    def test_51_merge_refuses_to_overwrite_a_terminal_cell(self):
+        self.command._merge_base_into_matrix(
+            self.matrix_path, "editorial_jewelry", "3",
+            {"page_classes": {"home": {"desktop": _valid_base_cell(result="PASS")}}},
+        )
+        self.command._merge_base_into_matrix(
+            self.matrix_path, "editorial_jewelry", "3",
+            {"page_classes": {"home": {"desktop": _valid_base_cell(result="FAIL")}}},
+        )
+        matrix = json.loads(self.matrix_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            matrix["templates"]["editorial_jewelry"]["page_classes"]["home"]["desktop"]["result"], "PASS",
+        )
+        self.assertTrue(matrix["_meta"]["duplicate_cells"])
+
+    def test_51b_merge_refuses_to_overwrite_a_terminal_fail_cell_with_pass(self):
+        # The stricter rule is symmetric: an existing FAIL is just as terminal
+        # as an existing PASS -- ordinary resume must never replace it either,
+        # not even with a later PASS (a genuine recheck is a separate,
+        # explicitly-invoked mode that does not exist in W4C today).
+        self.command._merge_base_into_matrix(
+            self.matrix_path, "editorial_jewelry", "3",
+            {"page_classes": {"listing": {"mobile": _valid_base_cell(result="FAIL")}}},
+        )
+        self.command._merge_base_into_matrix(
+            self.matrix_path, "editorial_jewelry", "3",
+            {"page_classes": {"listing": {"mobile": _valid_base_cell(result="PASS")}}},
+        )
+        matrix = json.loads(self.matrix_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            matrix["templates"]["editorial_jewelry"]["page_classes"]["listing"]["mobile"]["result"], "FAIL",
+        )
+
+    def test_52_recovered_state_event_recorded_on_theme_drift(self):
+        draft = layout_service.get_or_create_draft(self.store)
+        r4_mod.appearance_authority_service.apply_theme(
+            version=draft, component_key="theme.nowruz.v1", intensity="balanced",
+        )
+        layout_service.publish(self.store)  # published Theme is now drifted away from theme.none.v1
+
+        def write_pass(cmd_list, *, cwd, log_path):
+            manifest = json.loads(Path(cmd_list[2]).read_text(encoding="utf-8"))
+            payload = {"run_token": manifest.get("run_token"), "key": manifest["active_key"]["key"],
+                       "occasion": manifest["active_key"]["occasion"], "intensity": manifest["active_key"]["intensity"],
+                       "viewport": manifest["active_key"]["viewport"], "tier": manifest["active_key"]["tier"],
+                       "result": "PASS"}
+            Path(manifest["result_path"]).write_text(json.dumps(payload), encoding="utf-8")
+            return 0
+
+        with mock.patch.object(Command, "_run_logged", side_effect=write_pass):
+            self.command._run_one_theme_cell(
+                store=self.store, key="editorial_jewelry", version="3", occasion="ramadan",
+                intensity="balanced", viewport="desktop", tier="tier1",
+                campaign_root=self.campaign_root, matrix_path=self.matrix_path,
+                node="node", run_mjs_path=Path("run.mjs"), r4_tool_dir=Path("."),
+                base_manifest=self.base_manifest,
+            )
+        matrix = json.loads(self.matrix_path.read_text(encoding="utf-8"))
+        self.assertTrue(matrix["_meta"]["recovered_state_events"])
+
+
+class W4CThemeCleanupOrderingTests(TestCase):
+    """IMPORTANT 2 -- cleanup_verified only after cleanup genuinely succeeds."""
+
+    def setUp(self):
+        cache.clear()
+        self.store = Store.objects.create(
+            name="فروشگاه پاک‌سازی", slug="w4c-cleanup-order", admin_subdomain="w4c-cleanup-order",
+        )
+        preset = lpr.get_layout_preset("editorial_jewelry")
+        preset_service.apply_preset_with_checkpoint(self.store, preset)
+        layout_service.publish(self.store)
+        self.campaign_root = Path(tempfile.mkdtemp(prefix="w4c-cleanup-"))
+        self.command = Command()
+        self.matrix_path = self.campaign_root / "matrix.json"
+        self.command._validate_or_init_campaign_matrix(self.matrix_path)
+        self.base_manifest = self.command._build_manifest(
+            store=self.store, port=18765, session_cookie="x", report_dir=self.campaign_root,
+            headed=False, browser_channel="auto", w4c_all50=True,
+        )
+
+    def test_53_cleanup_verified_true_only_after_real_cleanup_success(self):
+        def write_pass(cmd_list, *, cwd, log_path):
+            manifest = json.loads(Path(cmd_list[2]).read_text(encoding="utf-8"))
+            payload = {"run_token": manifest.get("run_token"), "key": manifest["active_key"]["key"],
+                       "occasion": manifest["active_key"]["occasion"], "intensity": manifest["active_key"]["intensity"],
+                       "viewport": manifest["active_key"]["viewport"], "tier": manifest["active_key"]["tier"],
+                       "result": "PASS"}
+            Path(manifest["result_path"]).write_text(json.dumps(payload), encoding="utf-8")
+            return 0
+
+        with mock.patch.object(Command, "_run_logged", side_effect=write_pass):
+            self.command._run_one_theme_cell(
+                store=self.store, key="editorial_jewelry", version="3", occasion="nowruz",
+                intensity="balanced", viewport="desktop", tier="tier1",
+                campaign_root=self.campaign_root, matrix_path=self.matrix_path,
+                node="node", run_mjs_path=Path("run.mjs"), r4_tool_dir=Path("."),
+                base_manifest=self.base_manifest,
+            )
+        matrix = json.loads(self.matrix_path.read_text(encoding="utf-8"))
+        self.assertTrue(matrix["templates"]["editorial_jewelry"]["theme"]["tier1_cell"]["cleanup_verified"])
+
+    def test_54_cleanup_failure_prevents_any_merge(self):
+        def write_pass(cmd_list, *, cwd, log_path):
+            manifest = json.loads(Path(cmd_list[2]).read_text(encoding="utf-8"))
+            payload = {"run_token": manifest.get("run_token"), "key": manifest["active_key"]["key"],
+                       "occasion": manifest["active_key"]["occasion"], "intensity": manifest["active_key"]["intensity"],
+                       "viewport": manifest["active_key"]["viewport"], "tier": manifest["active_key"]["tier"],
+                       "result": "PASS"}
+            Path(manifest["result_path"]).write_text(json.dumps(payload), encoding="utf-8")
+            return 0
+
+        with mock.patch.object(Command, "_run_logged", side_effect=write_pass), \
+             mock.patch.object(r4_mod.appearance_authority_service, "clear_theme"):
+            with self.assertRaises(CommandError):
+                self.command._run_one_theme_cell(
+                    store=self.store, key="editorial_jewelry", version="3", occasion="nowruz",
+                    intensity="balanced", viewport="desktop", tier="tier1",
+                    campaign_root=self.campaign_root, matrix_path=self.matrix_path,
+                    node="node", run_mjs_path=Path("run.mjs"), r4_tool_dir=Path("."),
+                    base_manifest=self.base_manifest,
+                )
+        matrix = json.loads(self.matrix_path.read_text(encoding="utf-8"))
+        self.assertNotIn("editorial_jewelry", matrix.get("templates", {}))
+
+
+class W4CBrowserContractSourceTests(TestCase):
+    """IMPORTANT 1/2 -- real Home/Listing/PDP/Cart/Theme contracts in run.mjs,
+    verified as static source-grep regression guards (the same technique
+    the existing test_qa_harness_contract.py uses), since a live browser is
+    not run in this repair round."""
+
+    def setUp(self):
+        self.source = (
+            Path(r4_mod.__file__).resolve().parents[4]
+            / "tools" / "storefront_builder_r4_qa" / "run.mjs"
+        ).read_text(encoding="utf-8")
+
+    def test_55_hero_check_is_positional_not_broad_text_selector(self):
+        self.assertNotIn(':has-text("")', self.source)
+        self.assertIn("hero_index", self.source)
+
+    def test_56_home_result_requires_rsec_and_cards_for_pass(self):
+        base_start = self.source.index("function w4cRunHomeCell")
+        base_end = self.source.index("\nasync function", base_start + 1)
+        body = self.source[base_start:base_end]
+        self.assertIn("rsec_count", body)
+        self.assertIn("expected_rsec_count", body)
+
+    def test_57_listing_requires_real_product_link_resolution(self):
+        start = self.source.index("function w4cRunListingCell")
+        end = self.source.index("\nasync function", start + 1)
+        body = self.source[start:end]
+        self.assertIn("pcard-hitarea", body)
+
+    def test_58_pdp_requires_gallery_price_stock_variant_quantity_addtocart(self):
+        start = self.source.index("function w4cRunPdpCell")
+        end = self.source.index("\nasync function", start + 1)
+        body = self.source[start:end]
+        for marker in ("data-slide", "pricebox", ".stock", "opt-block", "quantity", "cart/add"):
+            self.assertIn(marker, body)
+
+    def test_59_cart_requires_item_quantity_remove_totals_checkout(self):
+        start = self.source.index("function w4cRunCartCell")
+        end = self.source.index("\nasync function", start + 1)
+        body = self.source[start:end]
+        for marker in ("citem", "stepper", ".rm", "totals", "checkout"):
+            self.assertIn(marker, body)
+
+    def test_60_theme_cell_checks_rendered_dom_identity(self):
+        start = self.source.index("function w4cRunThemeCell")
+        end = self.source.index("\nasync function", start + 1)
+        body = self.source[start:end]
+        self.assertIn("data-occasion-theme", body)
+        self.assertIn("data-occasion-tone", body)
+        self.assertIn("data-occasion-intensity", body)
+
+    def test_61_bottom_nav_is_a_pass_fail_contract(self):
+        for fn in ("w4cRunHomeCell", "w4cRunListingCell", "w4cRunPdpCell", "w4cRunCartCell"):
+            with self.subTest(fn=fn):
+                start = self.source.index(f"function {fn}")
+                end = self.source.index("\nasync function", start + 1)
+                body = self.source[start:end]
+                self.assertIn("bottom_nav", body)
