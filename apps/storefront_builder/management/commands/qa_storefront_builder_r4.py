@@ -23,6 +23,7 @@ from django.db import connections
 from django.test import Client
 
 from apps.catalog.models import Brand, Category, Product, Vendor
+from apps.core.services.rate_limit import RateLimitExceeded
 from apps.storefront_builder import layout_preset_registry as lpr
 from apps.storefront_builder import section_registry
 from apps.storefront_builder.section_registry import BRAND_CAROUSEL_DISPLAY_MODES
@@ -209,6 +210,35 @@ class Command(BaseCommand):
                 "no effect unless --w4c-all50 is also passed."
             ),
         )
+        parser.add_argument(
+            "--w4c-tier2-budget",
+            type=int,
+            default=None,
+            help=(
+                "Rate-limit-aware campaign sharding repair -- caps how many "
+                "currently-missing Tier-2 Theme cells (across --only's selected "
+                "keys) THIS process attempts, in the existing deterministic "
+                "Tier-2 order. 0 runs none; omitted preserves the existing "
+                "unbounded behavior. Already-terminal Tier-2 cells never "
+                "consume budget. Only valid with --w4c-all50."
+            ),
+        )
+
+    @staticmethod
+    def _validate_w4c_tier2_budget(options):
+        """Rate-limit-aware campaign sharding repair -- validates
+        ``--w4c-tier2-budget`` without requiring the full, heavy ``handle()``
+        machinery (real server/browser/user), so this is directly unit-
+        testable. Returns the resolved budget (``None`` means unbounded,
+        preserving the pre-repair behavior)."""
+        budget = options.get("w4c_tier2_budget")
+        if budget is None:
+            return None
+        if not options.get("w4c_all50"):
+            raise CommandError("--w4c-tier2-budget requires --w4c-all50")
+        if budget < 0:
+            raise CommandError("--w4c-tier2-budget must be >= 0")
+        return budget
 
     def handle(self, *args, **options):
         if not settings.DEBUG:
@@ -238,6 +268,7 @@ class Command(BaseCommand):
                 "every invocation of one campaign must pass) -- it never falls back "
                 "to a fresh, unshared timestamp directory."
             )
+        tier2_budget = self._validate_w4c_tier2_budget(options)
 
         base_dir = Path(settings.BASE_DIR).resolve()
         shared_tool_dir = base_dir / "tools" / "storefront_builder_qa"
@@ -348,6 +379,7 @@ class Command(BaseCommand):
                     run_mjs_path=node_script,
                     r4_tool_dir=r4_tool_dir,
                     base_manifest=base_manifest,
+                    tier2_budget=tier2_budget,
                 )
                 browser_exit = 0
             else:
@@ -2211,7 +2243,7 @@ class Command(BaseCommand):
 
     # -- the full campaign orchestration (section 3.2) ------------------------
     def _run_w4c_campaign(self, *, store, w4c_fixture, selected_keys, campaign_root, node,
-                           run_mjs_path, r4_tool_dir, base_manifest) -> dict:
+                           run_mjs_path, r4_tool_dir, base_manifest, tier2_budget=None) -> dict:
         campaign_root = Path(campaign_root)
         matrix_path = campaign_root / "matrix.json"
         self._validate_or_init_campaign_matrix(matrix_path)
@@ -2221,63 +2253,94 @@ class Command(BaseCommand):
         keys = list(selected_keys) if selected_keys else [t["key"] for t in all_templates]
         cells_recorded_this_run = 0
 
-        # ---------- BASE: one invocation per key, only missing cells -------
-        for key in keys:
-            version = by_key[key]
-            matrix = self._load_matrix(matrix_path)
-            missing = self._missing_base_cells(matrix, key)
-            if not missing:
-                continue  # IMPORTANT 3 -- fully recorded already; skip Node entirely
-            preset = lpr.get_layout_preset(key)
-            self._ensure_published_with_recovery(store, preset, matrix_path)
-            result_path = self._w4c_base_result_path(campaign_root, key)
-            log_path = self._w4c_base_log_path(campaign_root, key)
-            result_path.unlink(missing_ok=True)  # CRITICAL 1 -- never read a stale file
-            run_token = self._new_run_token()
-            manifest_path = self._write_w4c_base_manifest(
-                base=base_manifest, key=key, version=version, result_path=result_path,
-                hero_expected=self._home_hero_expected(preset), hero_index=self._home_hero_index(preset),
-                run_token=run_token, cells=missing,
-                expected_rsec_count=len(preset.pages.get("home", ())),
-                product_cards_expected=self._home_product_cards_expected(preset),
-                bottom_nav_expected=self._home_bottom_nav_expected(preset),
-            )
-            try:
-                node_exit = self._run_logged([node, str(run_mjs_path), manifest_path], cwd=r4_tool_dir, log_path=log_path)
-                if not result_path.exists():
-                    raise CommandError(f"W4C: BLOCKED -- no result produced for base {key} (node_exit={node_exit})")
+        # Rate-Limit-Aware Campaign Sharding Repair -- the real production
+        # storefront_layout.{new_draft,publish} controls are never bypassed
+        # or raised (Architect decision, binding). An unexpected
+        # RateLimitExceeded here means this process's shard genuinely
+        # exhausted a real budget: it must become one controlled,
+        # informative CommandError -- never a raw traceback, never a
+        # partially-executed cell silently merged as PASS, and it must stop
+        # this process immediately. matrix.json already only ever gains a
+        # cell via a successful, fully-validated merge above, so simply
+        # letting this propagate (as a CommandError, not the raw exception)
+        # leaves it exactly at the last successfully-merged terminal cell;
+        # the caller's own outer DB-restore ``finally`` still runs untouched.
+        try:
+            # ---------- BASE: one invocation per key, only missing cells ---
+            for key in keys:
+                version = by_key[key]
+                matrix = self._load_matrix(matrix_path)
+                missing = self._missing_base_cells(matrix, key)
+                if not missing:
+                    continue  # IMPORTANT 3 -- fully recorded already; skip Node entirely
+                preset = lpr.get_layout_preset(key)
+                self._ensure_published_with_recovery(store, preset, matrix_path)
+                result_path = self._w4c_base_result_path(campaign_root, key)
+                log_path = self._w4c_base_log_path(campaign_root, key)
+                result_path.unlink(missing_ok=True)  # CRITICAL 1 -- never read a stale file
+                run_token = self._new_run_token()
+                manifest_path = self._write_w4c_base_manifest(
+                    base=base_manifest, key=key, version=version, result_path=result_path,
+                    hero_expected=self._home_hero_expected(preset), hero_index=self._home_hero_index(preset),
+                    run_token=run_token, cells=missing,
+                    expected_rsec_count=len(preset.pages.get("home", ())),
+                    product_cards_expected=self._home_product_cards_expected(preset),
+                    bottom_nav_expected=self._home_bottom_nav_expected(preset),
+                )
                 try:
-                    base_result = json.loads(result_path.read_text(encoding="utf-8"))
-                except json.JSONDecodeError as exc:
-                    raise CommandError(f"W4C: BLOCKED -- malformed base result JSON for {key}: {exc}") from exc
-                any_non_pass = self._validate_base_result_freshness(base_result, run_token=run_token, key=key, version=version)
-                if node_exit != 0 and not any_non_pass:
-                    raise CommandError(
-                        f"W4C: BLOCKED -- base {key} Node exited {node_exit} but the result reports "
-                        "no FAIL/BLOCKED cell (inconsistent)"
+                    node_exit = self._run_logged([node, str(run_mjs_path), manifest_path], cwd=r4_tool_dir, log_path=log_path)
+                    if not result_path.exists():
+                        raise CommandError(f"W4C: BLOCKED -- no result produced for base {key} (node_exit={node_exit})")
+                    try:
+                        base_result = json.loads(result_path.read_text(encoding="utf-8"))
+                    except json.JSONDecodeError as exc:
+                        raise CommandError(f"W4C: BLOCKED -- malformed base result JSON for {key}: {exc}") from exc
+                    any_non_pass = self._validate_base_result_freshness(base_result, run_token=run_token, key=key, version=version)
+                    if node_exit != 0 and not any_non_pass:
+                        raise CommandError(
+                            f"W4C: BLOCKED -- base {key} Node exited {node_exit} but the result reports "
+                            "no FAIL/BLOCKED cell (inconsistent)"
+                        )
+                finally:
+                    Path(manifest_path).unlink(missing_ok=True)
+                cells_recorded_this_run += self._merge_base_into_matrix(matrix_path, key, version, base_result)
+
+            # ---------- THEME TIER 1: one invocation per key, 1 cell each --
+            for key in keys:
+                version = by_key[key]
+                occasion = w4c_fixture["tier1_occasions"][key]
+                cells_recorded_this_run += self._run_one_theme_cell(
+                    store=store, key=key, version=version, occasion=occasion, intensity="balanced",
+                    viewport="desktop", tier="tier1", campaign_root=campaign_root, matrix_path=matrix_path,
+                    node=node, run_mjs_path=run_mjs_path, r4_tool_dir=r4_tool_dir, base_manifest=base_manifest,
+                )
+
+            # ---------- THEME TIER 2: filtered by selected_keys (Round 4), -
+            # budget-capped (Rate-Limit-Aware Campaign Sharding Repair) ----
+            if tier2_budget != 0:
+                tier2_executed = 0
+                for key, occasion, intensity, viewport in self._planned_tier2_cells(keys):
+                    if tier2_budget is not None and tier2_executed >= tier2_budget:
+                        break
+                    version = by_key[key]
+                    recorded = self._run_one_theme_cell(
+                        store=store, key=key, version=version, occasion=occasion, intensity=intensity,
+                        viewport=viewport, tier="tier2", campaign_root=campaign_root, matrix_path=matrix_path,
+                        node=node, run_mjs_path=run_mjs_path, r4_tool_dir=r4_tool_dir, base_manifest=base_manifest,
                     )
-            finally:
-                Path(manifest_path).unlink(missing_ok=True)
-            cells_recorded_this_run += self._merge_base_into_matrix(matrix_path, key, version, base_result)
-
-        # ---------- THEME TIER 1: one invocation per key, 1 cell each -------
-        for key in keys:
-            version = by_key[key]
-            occasion = w4c_fixture["tier1_occasions"][key]
-            cells_recorded_this_run += self._run_one_theme_cell(
-                store=store, key=key, version=version, occasion=occasion, intensity="balanced",
-                viewport="desktop", tier="tier1", campaign_root=campaign_root, matrix_path=matrix_path,
-                node=node, run_mjs_path=run_mjs_path, r4_tool_dir=r4_tool_dir, base_manifest=base_manifest,
-            )
-
-        # ---------- THEME TIER 2: filtered by selected_keys (Round 4) -------
-        for key, occasion, intensity, viewport in self._planned_tier2_cells(keys):
-            version = by_key[key]
-            cells_recorded_this_run += self._run_one_theme_cell(
-                store=store, key=key, version=version, occasion=occasion, intensity=intensity,
-                viewport=viewport, tier="tier2", campaign_root=campaign_root, matrix_path=matrix_path,
-                node=node, run_mjs_path=run_mjs_path, r4_tool_dir=r4_tool_dir, base_manifest=base_manifest,
-            )
+                    cells_recorded_this_run += recorded
+                    if recorded:  # an already-terminal cell returns 0 and never consumes budget
+                        tier2_executed += 1
+        except RateLimitExceeded as exc:
+            raise CommandError(
+                "W4C RATE-LIMIT BLOCKED -- a real production rate limit was exhausted mid-shard "
+                f"(detail: {exc}). selected_keys={keys} "
+                f"cells_recorded_this_invocation={cells_recorded_this_run} "
+                f"campaign_root={campaign_root} -- matrix.json is preserved exactly up to the last "
+                "successfully-merged terminal cell. Do NOT retry immediately in this same process. "
+                "Resume safely with a smaller --only batch and/or --w4c-tier2-budget, in a FRESH "
+                "process, against the SAME campaign root and the SAME git HEAD."
+            ) from exc
 
         aggregate = self._run_final_w4c_aggregator(matrix_path)
         aggregate["cells_recorded_this_run"] = cells_recorded_this_run

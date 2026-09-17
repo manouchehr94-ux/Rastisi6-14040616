@@ -1937,6 +1937,14 @@ class W4CTier2BudgetShardingTests(TestCase):
         self._run_campaign(tier2_budget=4)
         first_batch = set(self._tier2_cells_recorded().keys())
         self.assertEqual(len(first_batch), 4)
+        # A real second invocation is a FRESH ``manage.py`` process -- a
+        # fresh, empty process-local LocMemCache, per Section 1.F -- not a
+        # second call within the same process. Clearing here simulates that
+        # real process boundary; without it this single Django TestCase
+        # process would accumulate BOTH batches' publish/new_draft calls
+        # against the same rate-limit budget, which is exactly the
+        # cross-process isolation this repair's sharding design relies on.
+        cache.clear()
         self._run_campaign(tier2_budget=4)
         second_total = self._tier2_cells_recorded()
         self.assertEqual(len(second_total), 8)
