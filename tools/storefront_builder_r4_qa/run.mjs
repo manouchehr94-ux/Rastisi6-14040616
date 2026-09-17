@@ -4137,23 +4137,66 @@ function w4cShellPasses(health, response) {
   );
 }
 
+// IMPORTANT 4 -- Bottom Navigation is a PASS/FAIL contract, not telemetry.
+// Desktop/tablet: must compute display:none. Mobile: must be visible
+// (non-none) whenever the canonical Template declares a bottom nav variant
+// (manifest-supplied, derived from the live registry -- never a hardcoded
+// key list). A Template that declares no bottom nav is exempt on every
+// viewport.
+function w4cBottomNavOk(bottomNavDisplay, viewport, expected) {
+  if (!expected) return true;
+  if (viewport === 'mobile') return Boolean(bottomNavDisplay) && bottomNavDisplay !== 'none';
+  return !bottomNavDisplay || bottomNavDisplay === 'none';
+}
+
+// IMPORTANT 4 -- bounded accessibility checks (section 10): only controls
+// actually present/exercised on this cell are checked; absent-for-template
+// records 'n/a', never a silent pass. Not a WCAG audit.
+async function w4cMobileNavAccessibility(targetPage, viewport) {
+  if (viewport !== 'mobile') return 'n/a';
+  const burger = targetPage.locator('[aria-controls="mobile-nav-drawer"]').first();
+  if ((await burger.count()) === 0) return 'n/a';
+  const accessibleName = await burger.evaluate(
+    (el) => (el.getAttribute('aria-label') || el.textContent || '').trim().length > 0
+  );
+  return accessibleName ? 'PASS' : 'FAIL';
+}
+
 async function w4cRunHomeCell(context, manifest, viewport) {
   const targetPage = await context.newPage();
   const errors = w4cAttachErrorCollectors(targetPage);
   try {
     const response = await targetPage.goto(manifest.public_url, { waitUntil: 'domcontentloaded', timeout: 20000 });
     const health = await w4cShellHealth(targetPage);
-    const rsecCount = await targetPage.locator('.wrap.sfb-preview-sections .rsec').count();
+    const activeKey = manifest.active_key || {};
+    const rsecLocator = targetPage.locator('.wrap.sfb-preview-sections .rsec');
+    const rsecCount = await rsecLocator.count();
+    const expectedRsecCount = activeKey.expected_rsec_count;
     const cardCount = await targetPage.locator('article.pcard').count();
-    const heroExpected = Boolean(manifest.active_key && manifest.active_key.hero_expected);
-    const heroPresent = (await targetPage.locator('[data-section-key="hero_banner"], .rsec:has-text("")').count()) > 0
-      || (await targetPage.locator('.hero-banner, .rsec-hero').count()) > 0;
+    const cardsExpected = Boolean(activeKey.product_cards_expected);
+    const heroExpected = Boolean(activeKey.hero_expected);
+    const heroIndex = activeKey.hero_index;
+    let heroPresent = false;
+    if (heroExpected && heroIndex != null && heroIndex < rsecCount) {
+      // A real, positional Hero proof (section 6/IMPORTANT 1) -- never a
+      // broad has-text-empty-string fallback: the Hero section's own index in
+      // the live compiled composition, supplied by Python, is checked for
+      // actual rendered media/copy content.
+      const heroHtml = await rsecLocator.nth(heroIndex).innerHTML().catch(() => '');
+      heroPresent = /<img\b|hero-media|hero-text|hero-slide/.test(heroHtml);
+    }
     const heroResult = heroExpected ? (heroPresent ? 'PASS' : 'FAIL') : 'N/A';
     const dead = await targetPage.locator('a[href="#"]').count();
+    const bottomNavExpected = Boolean(activeKey.bottom_nav_expected);
+    const bottomNavOk = w4cBottomNavOk(health.bottomNavDisplay, viewport, bottomNavExpected);
+    const rsecOk = typeof expectedRsecCount !== 'number' || rsecCount === expectedRsecCount;
+    const cardsOk = !cardsExpected || cardCount > 0;
+    const mobileNavA11y = await w4cMobileNavAccessibility(targetPage, viewport);
     const shellOk = w4cShellPasses(health, response);
-    const result = shellOk && dead === 0 && errors.consoleErrors.length === 0
-      && errors.pageErrors.length === 0 && errors.requestFailures.length === 0
-      ? 'PASS' : 'FAIL';
+    const passing = shellOk && dead === 0 && rsecOk && cardsOk && bottomNavOk
+      && (heroResult === 'PASS' || heroResult === 'N/A') && mobileNavA11y !== 'FAIL'
+      && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0 && errors.requestFailures.length === 0;
+    const result = passing ? 'PASS' : 'FAIL';
     if (viewport === 'desktop' || viewport === 'mobile') {
       const shotPath = viewport === 'desktop' ? manifest.home_screenshot_desktop : manifest.home_screenshot_mobile;
       if (shotPath) {
@@ -4167,12 +4210,15 @@ async function w4cRunHomeCell(context, manifest, viewport) {
       overflow: !health.noOverflow,
       header_count: health.headerCount,
       footer_count: health.footerCount,
+      bottom_nav_present: Boolean(health.bottomNavDisplay),
       bottom_nav_display: health.bottomNavDisplay,
       rsec_count: rsecCount,
+      expected_rsec_count: typeof expectedRsecCount === 'number' ? expectedRsecCount : rsecCount,
       product_cards_present: cardCount > 0,
       hero_expected: heroExpected,
       hero_result: heroResult,
       dead_href_count: dead,
+      accessibility_checks: { mobile_nav_opener: mobileNavA11y },
       console_errors: errors.consoleErrors,
       page_errors: errors.pageErrors,
       failed_requests: errors.requestFailures,
@@ -4180,104 +4226,223 @@ async function w4cRunHomeCell(context, manifest, viewport) {
         ? (viewport === 'desktop' ? manifest.home_screenshot_desktop : manifest.home_screenshot_mobile)
         : null,
       result,
+      reason: result === 'PASS' ? undefined : 'see rsec/hero/cards/bottom-nav/error sub-checks',
     };
   } finally {
     await targetPage.close();
   }
 }
 
-async function w4cRunListingCell(context) {
+async function w4cSearchInputAccessibility(targetPage) {
+  const input = targetPage.locator('form[role="search"] input[name="q"]').first();
+  if ((await input.count()) === 0) return 'n/a';
+  const named = await input.evaluate((el) => {
+    const byLabel = el.id && document.querySelector(`label[for="${el.id}"]`);
+    return Boolean(byLabel || el.getAttribute('aria-label') || el.getAttribute('placeholder'));
+  });
+  return named ? 'PASS' : 'FAIL';
+}
+
+async function w4cRunListingCell(context, manifest, viewport) {
   const targetPage = await context.newPage();
   const errors = w4cAttachErrorCollectors(targetPage);
   try {
     const response = await targetPage.goto(`${manifest.origin}/products/`, { waitUntil: 'domcontentloaded', timeout: 20000 });
     const health = await w4cShellHealth(targetPage);
     const cardCount = await targetPage.locator('article.pcard').count();
+    const firstLink = targetPage.locator('article.pcard a.pcard-hitarea[href]').first();
+    let linkResolves = cardCount === 0;
+    let linkHref = null;
+    if (cardCount > 0 && (await firstLink.count()) > 0) {
+      linkHref = await firstLink.getAttribute('href');
+      if (linkHref && linkHref !== '#') {
+        try {
+          const linkResp = await targetPage.request.get(linkHref);
+          linkResolves = linkResp.status() === 200;
+        } catch (_error) { linkResolves = false; }
+      }
+    }
     const dead = await targetPage.locator('a[href="#"]').count();
+    const bottomNavExpected = Boolean(manifest.active_key && manifest.active_key.bottom_nav_expected);
+    const bottomNavOk = w4cBottomNavOk(health.bottomNavDisplay, viewport, bottomNavExpected);
+    const searchA11y = await w4cSearchInputAccessibility(targetPage);
     const shellOk = w4cShellPasses(health, response);
-    const result = shellOk && dead === 0 && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0
-      ? 'PASS' : 'FAIL';
+    const passing = shellOk && cardCount > 0 && dead === 0 && linkResolves && bottomNavOk
+      && searchA11y !== 'FAIL' && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0;
+    const result = passing ? 'PASS' : 'FAIL';
     return {
       http_status: response ? response.status() : null,
       rtl: health.dir === 'rtl',
       overflow: !health.noOverflow,
       header_count: health.headerCount,
       footer_count: health.footerCount,
+      bottom_nav_present: Boolean(health.bottomNavDisplay),
+      bottom_nav_display: health.bottomNavDisplay,
+      rsec_count: 0,
+      expected_rsec_count: 0,
       product_cards_present: cardCount > 0,
       dead_href_count: dead,
+      accessibility_checks: { search_input: searchA11y },
       console_errors: errors.consoleErrors,
       page_errors: errors.pageErrors,
       failed_requests: errors.requestFailures,
       screenshot: null,
       result,
+      reason: result === 'PASS' ? undefined : `cards=${cardCount} linkResolves=${linkResolves} href=${linkHref}`,
     };
   } finally {
     await targetPage.close();
   }
 }
 
-async function w4cRunPdpCell(context, manifest) {
+async function w4cRunPdpCell(context, manifest, viewport) {
   const targetPage = await context.newPage();
   const errors = w4cAttachErrorCollectors(targetPage);
   try {
     const slug = manifest.pdp_product_slug;
-    const response = slug
-      ? await targetPage.goto(`${manifest.origin}/products/${slug}/`, { waitUntil: 'domcontentloaded', timeout: 20000 })
-      : null;
-    const health = slug ? await w4cShellHealth(targetPage) : null;
-    const galleryCount = slug ? await targetPage.locator('img').count() : 0;
-    const shellOk = slug ? w4cShellPasses(health, response) : false;
-    const result = slug && shellOk && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0
-      ? 'PASS' : (slug ? 'FAIL' : 'BLOCKED');
-    return {
-      http_status: response ? response.status() : null,
-      rtl: health ? health.dir === 'rtl' : null,
-      overflow: health ? !health.noOverflow : null,
-      header_count: health ? health.headerCount : 0,
-      footer_count: health ? health.footerCount : 0,
-      gallery_image_count: galleryCount,
-      console_errors: errors.consoleErrors,
-      page_errors: errors.pageErrors,
-      failed_requests: errors.requestFailures,
-      screenshot: null,
-      reason: slug ? undefined : 'no variant-bearing PDP fixture product available',
-      result,
-    };
-  } finally {
-    await targetPage.close();
-  }
-}
-
-async function w4cRunCartCell(context, manifest) {
-  const targetPage = await context.newPage();
-  const errors = w4cAttachErrorCollectors(targetPage);
-  try {
-    const slug = manifest.pdp_product_slug;
-    if (slug) {
-      try {
-        await context.request.post(`${manifest.origin}/cart/add/${slug}/`, {
-          form: { quantity: '1' },
-          headers: { Referer: `${manifest.origin}/products/${slug}/` },
-        });
-      } catch (_error) { /* recorded as a FAIL below via the health check */ }
+    if (!slug) {
+      return {
+        http_status: null, rtl: null, overflow: null, header_count: 0, footer_count: 0,
+        bottom_nav_present: false, bottom_nav_display: null, rsec_count: 0, expected_rsec_count: 0,
+        product_cards_present: false, dead_href_count: 0, accessibility_checks: {},
+        console_errors: [], page_errors: [], failed_requests: [], screenshot: null,
+        result: 'BLOCKED', reason: 'no variant-bearing PDP fixture product available',
+      };
     }
-    const response = await targetPage.goto(`${manifest.origin}/cart/`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    const response = await targetPage.goto(`${manifest.origin}/products/${slug}/`, { waitUntil: 'domcontentloaded', timeout: 20000 });
     const health = await w4cShellHealth(targetPage);
+    const galleryCount = await targetPage.locator('[data-slide]').count();
+    const priceText = (await targetPage.locator('.pricebox .now').first().textContent().catch(() => '') || '').trim();
+    const stockText = (await targetPage.locator('.pricebox .stock').first().textContent().catch(() => '') || '').trim();
+    const variantControls = await targetPage.locator('.opt-block .swatch, .opt-block .size').count();
+    const qtyInput = targetPage.locator('.qty .stepper input[name="quantity"]').first();
+    const qtyPresent = (await qtyInput.count()) > 0;
+    let qtyAdjusted = false;
+    if (qtyPresent) {
+      const before = await qtyInput.inputValue().catch(() => '1');
+      await targetPage.locator('.qty .stepper button').last().click().catch(() => {});
+      await targetPage.waitForTimeout(120);
+      const after = await qtyInput.inputValue().catch(() => before);
+      qtyAdjusted = after !== before;
+    }
+    const addToCartForm = await targetPage.locator('form[hx-post*="/cart/add/"]').count();
+    const tabs = await targetPage.locator('.pdp-tabs [role="tab"]').count();
+    const panels = await targetPage.locator('.pdp-tabs [role="tabpanel"]').count();
+    const tabsOrAccordionOk = viewport === 'mobile' ? panels === 3 : (tabs === 3 && panels === 3);
+    const satc = targetPage.locator('.pdp-satc').first();
+    const satcVisible = (await satc.count()) > 0 ? await satc.isVisible().catch(() => false) : false;
+    const satcOk = viewport === 'mobile' ? satcVisible : !satcVisible;
+    const dead = await targetPage.locator('a[href="#"]').count();
+    const bottomNavExpected = Boolean(manifest.active_key && manifest.active_key.bottom_nav_expected);
+    const bottomNavOk = w4cBottomNavOk(health.bottomNavDisplay, viewport, bottomNavExpected);
     const shellOk = w4cShellPasses(health, response);
-    const result = slug && shellOk && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0
-      ? 'PASS' : (slug ? 'FAIL' : 'BLOCKED');
+    const passing = shellOk && galleryCount > 0 && priceText.length > 0 && stockText.length > 0
+      && variantControls > 0 && qtyPresent && qtyAdjusted && addToCartForm >= 1
+      && tabsOrAccordionOk && satcOk && bottomNavOk && dead === 0
+      && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0;
+    const result = passing ? 'PASS' : 'FAIL';
     return {
       http_status: response ? response.status() : null,
       rtl: health.dir === 'rtl',
       overflow: !health.noOverflow,
       header_count: health.headerCount,
       footer_count: health.footerCount,
+      bottom_nav_present: Boolean(health.bottomNavDisplay),
+      bottom_nav_display: health.bottomNavDisplay,
+      rsec_count: 0,
+      expected_rsec_count: 0,
+      product_cards_present: false,
+      dead_href_count: dead,
+      gallery_image_count: galleryCount,
+      accessibility_checks: {
+        variant_controls: variantControls > 0 ? 'PASS' : 'n/a',
+        quantity_control: qtyPresent ? 'PASS' : 'FAIL',
+      },
       console_errors: errors.consoleErrors,
       page_errors: errors.pageErrors,
       failed_requests: errors.requestFailures,
       screenshot: null,
-      reason: slug ? undefined : 'no variant-bearing PDP fixture product available',
       result,
+      reason: result === 'PASS' ? undefined
+        : `gallery=${galleryCount} price=${JSON.stringify(priceText)} stock=${JSON.stringify(stockText)} `
+          + `variants=${variantControls} qty=${qtyPresent}/${qtyAdjusted} addToCart=${addToCartForm} `
+          + `tabs=${tabs}/${panels} satcOk=${satcOk} bottomNavOk=${bottomNavOk}`,
+    };
+  } finally {
+    await targetPage.close();
+  }
+}
+
+async function w4cRunCartCell(context, manifest, viewport) {
+  const targetPage = await context.newPage();
+  const errors = w4cAttachErrorCollectors(targetPage);
+  try {
+    const slug = manifest.pdp_product_slug;
+    if (!slug) {
+      return {
+        http_status: null, rtl: null, overflow: null, header_count: 0, footer_count: 0,
+        bottom_nav_present: false, bottom_nav_display: null, rsec_count: 0, expected_rsec_count: 0,
+        product_cards_present: false, dead_href_count: 0, accessibility_checks: {},
+        console_errors: [], page_errors: [], failed_requests: [], screenshot: null,
+        result: 'BLOCKED', reason: 'no variant-bearing PDP fixture product available',
+      };
+    }
+    let addStatus = null;
+    try {
+      const addResp = await context.request.post(`${manifest.origin}/cart/add/${slug}/`, {
+        form: { quantity: '1' },
+        headers: { Referer: `${manifest.origin}/products/${slug}/` },
+      });
+      addStatus = addResp.status();
+    } catch (_error) { addStatus = null; }
+    const response = await targetPage.goto(`${manifest.origin}/cart/`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    const health = await w4cShellHealth(targetPage);
+    const items = targetPage.locator('.citem');
+    const itemCount = await items.count();
+    const totalsPresent = (await targetPage.locator('.totals').count()) > 0;
+    const checkoutPresent = (await targetPage.locator('a[href*="checkout"]').count()) > 0;
+    const removePresent = (await targetPage.locator('.citem .rm').count()) > 0;
+    const qtyButtons = targetPage.locator('.citem .stepper button');
+    let quantityUpdateWorked = false;
+    if (itemCount > 0 && (await qtyButtons.count()) > 0) {
+      const totalsBefore = (await targetPage.locator('.totals').first().textContent().catch(() => '') || '').trim();
+      await qtyButtons.last().click().catch(() => {});
+      await targetPage.waitForTimeout(400);
+      const totalsAfter = (await targetPage.locator('.totals').first().textContent().catch(() => '') || '').trim();
+      quantityUpdateWorked = totalsAfter.length > 0 && totalsAfter !== totalsBefore;
+    }
+    const dead = await targetPage.locator('a[href="#"]').count();
+    const bottomNavExpected = Boolean(manifest.active_key && manifest.active_key.bottom_nav_expected);
+    const bottomNavOk = w4cBottomNavOk(health.bottomNavDisplay, viewport, bottomNavExpected);
+    const shellOk = w4cShellPasses(health, response);
+    const passing = shellOk && addStatus != null && addStatus < 400 && itemCount > 0 && totalsPresent
+      && checkoutPresent && removePresent && quantityUpdateWorked && bottomNavOk && dead === 0
+      && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0;
+    const result = passing ? 'PASS' : 'FAIL';
+    return {
+      http_status: response ? response.status() : null,
+      rtl: health.dir === 'rtl',
+      overflow: !health.noOverflow,
+      header_count: health.headerCount,
+      footer_count: health.footerCount,
+      bottom_nav_present: Boolean(health.bottomNavDisplay),
+      bottom_nav_display: health.bottomNavDisplay,
+      rsec_count: 0,
+      expected_rsec_count: 0,
+      product_cards_present: false,
+      dead_href_count: dead,
+      accessibility_checks: {
+        remove_control: removePresent ? 'PASS' : 'FAIL',
+        quantity_control: (await qtyButtons.count()) > 0 ? 'PASS' : 'FAIL',
+      },
+      console_errors: errors.consoleErrors,
+      page_errors: errors.pageErrors,
+      failed_requests: errors.requestFailures,
+      screenshot: null,
+      result,
+      reason: result === 'PASS' ? undefined
+        : `addStatus=${addStatus} items=${itemCount} totals=${totalsPresent} checkout=${checkoutPresent} `
+          + `remove=${removePresent} qtyUpdate=${quantityUpdateWorked}`,
     };
   } finally {
     await targetPage.close();
@@ -4286,16 +4451,19 @@ async function w4cRunCartCell(context, manifest) {
 
 async function w4cRunCell(context, pageClass, viewport, manifest) {
   if (pageClass === 'home') return w4cRunHomeCell(context, manifest, viewport);
-  if (pageClass === 'listing') return w4cRunListingCell(context);
-  if (pageClass === 'pdp') return w4cRunPdpCell(context, manifest);
-  if (pageClass === 'cart') return w4cRunCartCell(context, manifest);
+  if (pageClass === 'listing') return w4cRunListingCell(context, manifest, viewport);
+  if (pageClass === 'pdp') return w4cRunPdpCell(context, manifest, viewport);
+  if (pageClass === 'cart') return w4cRunCartCell(context, manifest, viewport);
   throw new Error(`unknown W4C page_class: ${pageClass}`);
 }
 
 async function w4cBaseCertification(manifest) {
   const browser = await launchSystemBrowser();
   const openContexts = [];
-  const result = { key: manifest.active_key.key, version: manifest.active_key.version, page_classes: {} };
+  const result = {
+    run_token: manifest.run_token, key: manifest.active_key.key, version: manifest.active_key.version,
+    page_classes: {},
+  };
   try {
     for (const cell of manifest.cells) {
       const { page_class: pageClass, viewport } = cell;
@@ -4312,28 +4480,59 @@ async function w4cBaseCertification(manifest) {
     fs.mkdirSync(path.dirname(manifest.result_path), { recursive: true });
     fs.writeFileSync(manifest.result_path, JSON.stringify(result, null, 2), 'utf8');
     const anyFail = Object.values(result.page_classes).some(
-      (byViewport) => Object.values(byViewport).some((cell) => cell.result === 'FAIL')
+      (byViewport) => Object.values(byViewport).some((cell) => cell.result === 'FAIL' || cell.result === 'BLOCKED')
     );
     process.exitCode = anyFail ? 1 : 0;
   }
 }
 
+// IMPORTANT 2 -- verify the RENDERED public Theme identity, never only
+// shell health. ``manifest.expected_theme`` is Python-supplied, read live
+// from the SAME canonical theme_catalog the appearance-authority service
+// itself uses (never a second, hand-maintained copy of these values here).
 async function w4cRunThemeCell(context, manifest) {
   const targetPage = await context.newPage();
   const errors = w4cAttachErrorCollectors(targetPage);
   try {
     const response = await targetPage.goto(manifest.public_url, { waitUntil: 'domcontentloaded', timeout: 20000 });
     const health = await w4cShellHealth(targetPage);
+    const activeKey = manifest.active_key || {};
+    const expected = manifest.expected_theme || {};
+    const rendered = await targetPage.evaluate(() => {
+      const html = document.documentElement;
+      return {
+        theme: html.getAttribute('data-occasion-theme'),
+        tone: html.getAttribute('data-occasion-tone'),
+        intensity: html.getAttribute('data-occasion-intensity'),
+        motif: html.getAttribute('data-occasion-motif'),
+        accent: html.style.getPropertyValue('--occasion-accent').trim(),
+      };
+    });
+    const expectedComponentKey = `theme.${activeKey.occasion}.v1`;
+    const identityOk = rendered.theme === expectedComponentKey
+      && rendered.intensity === activeKey.intensity
+      && rendered.tone === expected.tone
+      && rendered.motif === expected.motif;
+    // Muharram safety: the rendered tone must be exactly "mourning" -- the
+    // one public signal the mourning-safety guarantee in theme_catalog.py
+    // (no festive motif/countdown/sale badge ever constructed for a
+    // mourning entry) is actually observable through. Never a subjective
+    // visual scan.
+    const muharramSafetyOk = activeKey.occasion !== 'muharram' || rendered.tone === 'mourning';
     const shellOk = w4cShellPasses(health, response);
-    const result = shellOk && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0 ? 'PASS' : 'FAIL';
+    const passing = shellOk && identityOk && muharramSafetyOk
+      && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0;
+    const result = passing ? 'PASS' : 'FAIL';
     return {
       http_status: response ? response.status() : null,
       rtl: health.dir === 'rtl',
       overflow: !health.noOverflow,
+      rendered_theme: rendered,
       console_errors: errors.consoleErrors,
       page_errors: errors.pageErrors,
       failed_requests: errors.requestFailures,
       result,
+      reason: result === 'PASS' ? undefined : `rendered=${JSON.stringify(rendered)} expected=${JSON.stringify({ ...expected, componentKey: expectedComponentKey })}`,
     };
   } finally {
     await targetPage.close();
@@ -4343,6 +4542,7 @@ async function w4cRunThemeCell(context, manifest) {
 async function w4cThemeCertification(manifest) {
   const browser = await launchSystemBrowser();
   const result = {
+    run_token: manifest.run_token,
     key: manifest.active_key.key,
     occasion: manifest.active_key.occasion,
     intensity: manifest.active_key.intensity,
@@ -4360,7 +4560,7 @@ async function w4cThemeCertification(manifest) {
     try { await browser.close(); } catch (_error) { /* best-effort */ }
     fs.mkdirSync(path.dirname(manifest.result_path), { recursive: true });
     fs.writeFileSync(manifest.result_path, JSON.stringify(result, null, 2), 'utf8');
-    process.exitCode = result.result === 'FAIL' ? 1 : 0;
+    process.exitCode = (result.result === 'FAIL' || result.result === 'BLOCKED') ? 1 : 0;
   }
 }
 

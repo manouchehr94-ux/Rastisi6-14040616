@@ -267,6 +267,7 @@ class W4CAll50CertificationHarnessTests(TestCase):
         manifest_path = command._write_w4c_base_manifest(
             base={"origin": "http://x", "public_url": "http://x/"},
             key="editorial_jewelry", version="3", result_path=result_path,
+            run_token=command._new_run_token(),
         )
         manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
         staging_home_desktop = str(campaign_root / "screenshots" / "home" / "editorial_jewelry_home_desktop.jpg")
@@ -415,8 +416,7 @@ class W4CControlFlowCardinalityTests(TestCase):
         )
 
         def fake_run_logged(cmd_list, *, cwd, log_path):
-            manifest = json.loads(Path(cmd_list[2]).read_text(encoding="utf-8"))
-            Path(manifest["result_path"]).write_text(json.dumps({"result": "PASS", "page_classes": {}}), encoding="utf-8")
+            _write_node_result(cmd_list[2])
             return 0
 
         with mock.patch.object(Path, "read_text", spy_read_text), \
@@ -752,6 +752,38 @@ def _valid_base_cell(result="PASS", **overrides):
     return cell
 
 
+def _valid_theme_payload(manifest, result="PASS"):
+    active_key = manifest["active_key"]
+    return {
+        "run_token": manifest.get("run_token"), "key": active_key["key"],
+        "occasion": active_key["occasion"], "intensity": active_key["intensity"],
+        "viewport": active_key["viewport"], "tier": active_key["tier"],
+        "http_status": 200, "rtl": True, "overflow": False,
+        "console_errors": [], "page_errors": [], "failed_requests": [], "result": result,
+    }
+
+
+def _write_node_result(manifest_path, *, base_result=None, theme_result=None):
+    """A generic ``_run_logged`` replacement for tests that are not
+    exercising base/theme freshness themselves: writes a valid PASS payload
+    for whichever mode the manifest actually is, so the OTHER loop
+    (base/tier1/tier2) never spuriously fails the freshness/schema
+    validation this repair round added."""
+    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    if manifest.get("mode") == "theme":
+        payload = theme_result if theme_result is not None else _valid_theme_payload(manifest)
+    else:
+        cells = {}
+        for cell_spec in manifest.get("cells", []):
+            cells.setdefault(cell_spec["page_class"], {})[cell_spec["viewport"]] = _valid_base_cell()
+        payload = base_result if base_result is not None else {
+            "run_token": manifest.get("run_token"), "key": manifest["active_key"]["key"],
+            "version": manifest["active_key"]["version"], "page_classes": cells,
+        }
+    Path(manifest["result_path"]).write_text(json.dumps(payload), encoding="utf-8")
+    return manifest
+
+
 class W4CResultFreshnessTests(TestCase):
     """CRITICAL 1 -- never accept a stale result file."""
 
@@ -888,6 +920,16 @@ class W4CResultFreshnessTests(TestCase):
     def test_46_nonzero_exit_with_valid_fresh_fail_result_is_merged_as_fail(self):
         def write_genuine_fail(cmd_list, *, cwd, log_path):
             manifest = json.loads(Path(cmd_list[2]).read_text(encoding="utf-8"))
+            if manifest.get("mode") == "theme":
+                payload = {
+                    "run_token": manifest.get("run_token"), "key": manifest["active_key"]["key"],
+                    "occasion": manifest["active_key"]["occasion"], "intensity": manifest["active_key"]["intensity"],
+                    "viewport": manifest["active_key"]["viewport"], "tier": manifest["active_key"]["tier"],
+                    "http_status": 200, "rtl": True, "overflow": False,
+                    "console_errors": [], "page_errors": [], "failed_requests": [], "result": "PASS",
+                }
+                Path(manifest["result_path"]).write_text(json.dumps(payload), encoding="utf-8")
+                return 0
             cell = _valid_base_cell(result="FAIL")
             payload = {"run_token": manifest.get("run_token"), "key": manifest["active_key"]["key"],
                        "version": manifest["active_key"]["version"],
@@ -957,7 +999,13 @@ class W4CResumeAndMergeTests(TestCase):
                 {"page_classes": {page_class: {viewport: _valid_base_cell()}}},
             )
         node_calls = []
-        with mock.patch.object(Command, "_run_logged", side_effect=lambda *a, **kw: node_calls.append(1) or 0):
+
+        def track_and_write(cmd_list, *, cwd, log_path):
+            node_calls.append(1)
+            _write_node_result(cmd_list[2])
+            return 0
+
+        with mock.patch.object(Command, "_run_logged", side_effect=track_and_write):
             self.command._run_w4c_campaign(
                 store=self.store,
                 w4c_fixture={"templates": [{"key": "editorial_jewelry", "version": "3"}],
@@ -982,14 +1030,8 @@ class W4CResumeAndMergeTests(TestCase):
         seen_manifests = []
 
         def capture_manifest(cmd_list, *, cwd, log_path):
-            manifest = json.loads(Path(cmd_list[2]).read_text(encoding="utf-8"))
+            manifest = _write_node_result(cmd_list[2])
             seen_manifests.append(manifest)
-            cells = {}
-            for cell_spec in manifest.get("cells", []):
-                cells.setdefault(cell_spec["page_class"], {})[cell_spec["viewport"]] = _valid_base_cell()
-            payload = {"run_token": manifest.get("run_token"), "key": manifest["active_key"]["key"],
-                       "version": manifest["active_key"]["version"], "page_classes": cells}
-            Path(manifest["result_path"]).write_text(json.dumps(payload), encoding="utf-8")
             return 0
 
         with mock.patch.object(Command, "_run_logged", side_effect=capture_manifest):
@@ -1050,10 +1092,7 @@ class W4CResumeAndMergeTests(TestCase):
 
         def write_pass(cmd_list, *, cwd, log_path):
             manifest = json.loads(Path(cmd_list[2]).read_text(encoding="utf-8"))
-            payload = {"run_token": manifest.get("run_token"), "key": manifest["active_key"]["key"],
-                       "occasion": manifest["active_key"]["occasion"], "intensity": manifest["active_key"]["intensity"],
-                       "viewport": manifest["active_key"]["viewport"], "tier": manifest["active_key"]["tier"],
-                       "result": "PASS"}
+            payload = _valid_theme_payload(manifest)
             Path(manifest["result_path"]).write_text(json.dumps(payload), encoding="utf-8")
             return 0
 
@@ -1092,10 +1131,7 @@ class W4CThemeCleanupOrderingTests(TestCase):
     def test_53_cleanup_verified_true_only_after_real_cleanup_success(self):
         def write_pass(cmd_list, *, cwd, log_path):
             manifest = json.loads(Path(cmd_list[2]).read_text(encoding="utf-8"))
-            payload = {"run_token": manifest.get("run_token"), "key": manifest["active_key"]["key"],
-                       "occasion": manifest["active_key"]["occasion"], "intensity": manifest["active_key"]["intensity"],
-                       "viewport": manifest["active_key"]["viewport"], "tier": manifest["active_key"]["tier"],
-                       "result": "PASS"}
+            payload = _valid_theme_payload(manifest)
             Path(manifest["result_path"]).write_text(json.dumps(payload), encoding="utf-8")
             return 0
 
@@ -1113,10 +1149,7 @@ class W4CThemeCleanupOrderingTests(TestCase):
     def test_54_cleanup_failure_prevents_any_merge(self):
         def write_pass(cmd_list, *, cwd, log_path):
             manifest = json.loads(Path(cmd_list[2]).read_text(encoding="utf-8"))
-            payload = {"run_token": manifest.get("run_token"), "key": manifest["active_key"]["key"],
-                       "occasion": manifest["active_key"]["occasion"], "intensity": manifest["active_key"]["intensity"],
-                       "viewport": manifest["active_key"]["viewport"], "tier": manifest["active_key"]["tier"],
-                       "result": "PASS"}
+            payload = _valid_theme_payload(manifest)
             Path(manifest["result_path"]).write_text(json.dumps(payload), encoding="utf-8")
             return 0
 
