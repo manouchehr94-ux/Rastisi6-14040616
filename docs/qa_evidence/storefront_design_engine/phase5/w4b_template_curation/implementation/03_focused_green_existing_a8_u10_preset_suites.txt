@@ -1,0 +1,11 @@
+Found 116 test(s).
+Creating test database for alias 'default'...
+System check identified no issues (0 silenced).
+.................................................................[2026-09-16 22:39:00,443] WARNING django.security.csrf: Forbidden (CSRF cookie not set.): /admin-portal/storefront-builder/apply-preset/
+...................................................
+----------------------------------------------------------------------
+Ran 116 tests in 28.396s
+
+OK
+Destroying test database for alias 'default'...
+EXIT_CODE=0

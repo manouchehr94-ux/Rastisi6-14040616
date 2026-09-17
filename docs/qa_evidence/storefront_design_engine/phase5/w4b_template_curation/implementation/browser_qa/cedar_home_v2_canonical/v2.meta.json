@@ -1,0 +1,11 @@
+{
+  "template_key": "cedar_home",
+  "version": "2",
+  "content_hash": "891f79e1f60bc1d3bc9b1a43109d1a8f64e84e2b05273ffc85715969b91fe7e8",
+  "preview_input_fingerprint": "52853cf56320083eeb2f4808e5db2585920da7d0401e957689270bded1e25fd8",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}

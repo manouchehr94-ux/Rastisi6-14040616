@@ -1,0 +1,1021 @@
+Found 18 test(s).
+Skipping setup of unused database(s): default.
+System check identified no issues (0 silenced).
+test_no_speculative_token_added_for_a_rejected_mechanism (apps.storefront_builder.tests.test_w4b_template_curation.CompositionTokenAllowlistTests.test_no_speculative_token_added_for_a_rejected_mechanism) ... ok
+test_only_collection_tiles_is_a_genuinely_new_static_section_token (apps.storefront_builder.tests.test_w4b_template_curation.CompositionTokenAllowlistTests.test_only_collection_tiles_is_a_genuinely_new_static_section_token) ... FAIL
+test_fifty_pairwise_unique_recipe_signatures (apps.storefront_builder.tests.test_w4b_template_curation.DiversityContractTests.test_fifty_pairwise_unique_recipe_signatures) ... ok
+test_added_section_is_exactly_the_approved_one_and_appears_once (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_added_section_is_exactly_the_approved_one_and_appears_once) ... ok
+test_added_section_keys_are_registered_and_home_allowed (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_added_section_keys_are_registered_and_home_allowed) ... ok
+test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) ... 
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='premium_leather_noir') ... FAIL
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='artisan_grain') ... FAIL
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='coastal_product') ... FAIL
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='handmade_luxe') ... FAIL
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='watchmaker_round') ... FAIL
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='horizon_story') ... FAIL
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='silk_editorial') ... FAIL
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='city_classic') ... FAIL
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='kamand_artisan') ... FAIL
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='parnian_editorial') ... FAIL
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='niloufar_glass') ... FAIL
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='beauty_dew') ... FAIL
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='laleh_play') ... FAIL
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='almas_luxury') ... FAIL
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='green_workshop') ... FAIL
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='pine_eco') ... FAIL
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='mirror_beauty') ... FAIL
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='cedar_home') ... FAIL
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='simorgh_market') ... FAIL
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='rayan_tech') ... FAIL
+  test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='harbor_imports') ... FAIL
+test_a8_ready_templates_is_exactly_fifty (apps.storefront_builder.tests.test_w4b_template_curation.ExactFiftyLatestCatalogTests.test_a8_ready_templates_is_exactly_fifty) ... ok
+test_list_ready_templates_is_exactly_fifty (apps.storefront_builder.tests.test_w4b_template_curation.ExactFiftyLatestCatalogTests.test_list_ready_templates_is_exactly_fifty) ... ok
+test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) ... 
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='premium_leather_noir') ... FAIL
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='artisan_grain') ... FAIL
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='coastal_product') ... FAIL
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='handmade_luxe') ... FAIL
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='watchmaker_round') ... FAIL
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='horizon_story') ... FAIL
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='silk_editorial') ... FAIL
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='city_classic') ... FAIL
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='kamand_artisan') ... FAIL
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='parnian_editorial') ... FAIL
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='niloufar_glass') ... FAIL
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='beauty_dew') ... FAIL
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='laleh_play') ... FAIL
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='almas_luxury') ... FAIL
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='green_workshop') ... FAIL
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='pine_eco') ... FAIL
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='mirror_beauty') ... FAIL
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='cedar_home') ... FAIL
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='simorgh_market') ... FAIL
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='rayan_tech') ... FAIL
+  test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='harbor_imports') ... FAIL
+test_no_other_ready_template_received_an_unintended_version_bump (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_no_other_ready_template_received_an_unintended_version_bump) ... ok
+test_historical_v1_definitions_contain_no_forbidden_payload (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalForbiddenPayloadScanTests.test_historical_v1_definitions_contain_no_forbidden_payload) ... ok
+test_full_historical_fingerprint_matches_certified_w4a_capture (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_full_historical_fingerprint_matches_certified_w4a_capture)
+Proves byte-for-byte preservation of the WHOLE LayoutPresetDefinition ... ok
+test_historical_v1_home_skeleton_matches_certified_pre_w4b_source (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_home_skeleton_matches_certified_pre_w4b_source) ... ok
+test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) ... 
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='premium_leather_noir') ... FAIL
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='artisan_grain') ... FAIL
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='coastal_product') ... FAIL
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='handmade_luxe') ... FAIL
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='watchmaker_round') ... FAIL
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='horizon_story') ... FAIL
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='silk_editorial') ... FAIL
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='city_classic') ... FAIL
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='kamand_artisan') ... FAIL
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='parnian_editorial') ... FAIL
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='niloufar_glass') ... FAIL
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='beauty_dew') ... FAIL
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='laleh_play') ... FAIL
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='almas_luxury') ... FAIL
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='green_workshop') ... FAIL
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='pine_eco') ... FAIL
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='mirror_beauty') ... FAIL
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='cedar_home') ... FAIL
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='simorgh_market') ... FAIL
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='rayan_tech') ... FAIL
+  test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='harbor_imports') ... FAIL
+test_added_section_is_immediately_before_newsletter (apps.storefront_builder.tests.test_w4b_template_curation.NewsletterTerminalContractTests.test_added_section_is_immediately_before_newsletter) ... 
+  test_added_section_is_immediately_before_newsletter (apps.storefront_builder.tests.test_w4b_template_curation.NewsletterTerminalContractTests.test_added_section_is_immediately_before_newsletter) (key='niloufar_glass') ... FAIL
+  test_added_section_is_immediately_before_newsletter (apps.storefront_builder.tests.test_w4b_template_curation.NewsletterTerminalContractTests.test_added_section_is_immediately_before_newsletter) (key='beauty_dew') ... FAIL
+  test_added_section_is_immediately_before_newsletter (apps.storefront_builder.tests.test_w4b_template_curation.NewsletterTerminalContractTests.test_added_section_is_immediately_before_newsletter) (key='laleh_play') ... FAIL
+  test_added_section_is_immediately_before_newsletter (apps.storefront_builder.tests.test_w4b_template_curation.NewsletterTerminalContractTests.test_added_section_is_immediately_before_newsletter) (key='almas_luxury') ... FAIL
+  test_added_section_is_immediately_before_newsletter (apps.storefront_builder.tests.test_w4b_template_curation.NewsletterTerminalContractTests.test_added_section_is_immediately_before_newsletter) (key='green_workshop') ... FAIL
+  test_added_section_is_immediately_before_newsletter (apps.storefront_builder.tests.test_w4b_template_curation.NewsletterTerminalContractTests.test_added_section_is_immediately_before_newsletter) (key='pine_eco') ... FAIL
+  test_added_section_is_immediately_before_newsletter (apps.storefront_builder.tests.test_w4b_template_curation.NewsletterTerminalContractTests.test_added_section_is_immediately_before_newsletter) (key='mirror_beauty') ... FAIL
+test_newsletter_stays_the_final_home_section_for_all_seven (apps.storefront_builder.tests.test_w4b_template_curation.NewsletterTerminalContractTests.test_newsletter_stays_the_final_home_section_for_all_seven) ... ok
+test_no_curated_key_gained_a_rejected_mechanism (apps.storefront_builder.tests.test_w4b_template_curation.RejectedMechanismsAbsentFromNewCurationTests.test_no_curated_key_gained_a_rejected_mechanism) ... ok
+test_pre_existing_trust_features_baseline_usage_is_untouched (apps.storefront_builder.tests.test_w4b_template_curation.RejectedMechanismsAbsentFromNewCurationTests.test_pre_existing_trust_features_baseline_usage_is_untouched)
+cedar_home/simorgh_market/rayan_tech/harbor_imports already had ... ok
+
+======================================================================
+FAIL: test_only_collection_tiles_is_a_genuinely_new_static_section_token (apps.storefront_builder.tests.test_w4b_template_curation.CompositionTokenAllowlistTests.test_only_collection_tiles_is_a_genuinely_new_static_section_token)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 290, in test_only_collection_tiles_is_a_genuinely_new_static_section_token
+    self.assertEqual(_STATIC_SECTIONS.get("collection_tiles"), "collection_tiles")
+AssertionError: None != 'collection_tiles'
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='premium_leather_noir')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('her[15 chars]egory_grid', 'product_section', 'image_text') != ('her[15 chars]egory_grid', 'product_section', 'image_text', 'brand_carousel')
+
+Second tuple contains 1 additional elements.
+First extra element 4:
+'brand_carousel'
+
+- ('hero_banner', 'category_grid', 'product_section', 'image_text')
++ ('hero_banner',
++  'category_grid',
++  'product_section',
++  'image_text',
++  'brand_carousel') : premium_leather_noir
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='artisan_grain')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('her[17 chars]ory_grid', 'product_section', 'image_text') != ('her[17 chars]ory_grid', 'product_section', 'image_text', 'collection_tiles')
+
+Second tuple contains 1 additional elements.
+First extra element 4:
+'collection_tiles'
+
+- ('hero_banner', 'category_grid', 'product_section', 'image_text')
++ ('hero_banner',
++  'category_grid',
++  'product_section',
++  'image_text',
++  'collection_tiles') : artisan_grain
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='coastal_product')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('her[17 chars]ory_grid', 'product_section', 'image_text') != ('her[17 chars]ory_grid', 'product_section', 'image_text', 'collection_tiles')
+
+Second tuple contains 1 additional elements.
+First extra element 4:
+'collection_tiles'
+
+- ('hero_banner', 'category_grid', 'product_section', 'image_text')
++ ('hero_banner',
++  'category_grid',
++  'product_section',
++  'image_text',
++  'collection_tiles') : coastal_product
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='handmade_luxe')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('her[15 chars]egory_grid', 'product_section', 'image_text') != ('her[15 chars]egory_grid', 'product_section', 'image_text', 'brand_carousel')
+
+Second tuple contains 1 additional elements.
+First extra element 4:
+'brand_carousel'
+
+- ('hero_banner', 'category_grid', 'product_section', 'image_text')
++ ('hero_banner',
++  'category_grid',
++  'product_section',
++  'image_text',
++  'brand_carousel') : handmade_luxe
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='watchmaker_round')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('her[15 chars]egory_grid', 'product_section', 'image_text') != ('her[15 chars]egory_grid', 'product_section', 'image_text', 'brand_carousel')
+
+Second tuple contains 1 additional elements.
+First extra element 4:
+'brand_carousel'
+
+- ('hero_banner', 'category_grid', 'product_section', 'image_text')
++ ('hero_banner',
++  'category_grid',
++  'product_section',
++  'image_text',
++  'brand_carousel') : watchmaker_round
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='horizon_story')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('hero_banner', 'category_grid', 'product_section', 'image_text') != ('hero_banner', 'category_grid', 'product_section', 'image_text', 'story_rail')
+
+Second tuple contains 1 additional elements.
+First extra element 4:
+'story_rail'
+
+- ('hero_banner', 'category_grid', 'product_section', 'image_text')
++ ('hero_banner', 'category_grid', 'product_section', 'image_text', 'story_rail')
+?                                                                 ++++++++++++++
+ : horizon_story
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='silk_editorial')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('her[17 chars]ory_grid', 'product_section', 'image_text') != ('her[17 chars]ory_grid', 'product_section', 'image_text', 'collection_tiles')
+
+Second tuple contains 1 additional elements.
+First extra element 4:
+'collection_tiles'
+
+- ('hero_banner', 'category_grid', 'product_section', 'image_text')
++ ('hero_banner',
++  'category_grid',
++  'product_section',
++  'image_text',
++  'collection_tiles') : silk_editorial
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='city_classic')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('her[17 chars]ory_grid', 'product_section', 'image_text') != ('her[17 chars]ory_grid', 'product_section', 'image_text', 'collection_tiles')
+
+Second tuple contains 1 additional elements.
+First extra element 4:
+'collection_tiles'
+
+- ('hero_banner', 'category_grid', 'product_section', 'image_text')
++ ('hero_banner',
++  'category_grid',
++  'product_section',
++  'image_text',
++  'collection_tiles') : city_classic
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='kamand_artisan')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('hero_banner', 'category_grid', 'product_section', 'image_text') != ('hero_banner', 'category_grid', 'product_section', 'image_text', 'story_rail')
+
+Second tuple contains 1 additional elements.
+First extra element 4:
+'story_rail'
+
+- ('hero_banner', 'category_grid', 'product_section', 'image_text')
++ ('hero_banner', 'category_grid', 'product_section', 'image_text', 'story_rail')
+?                                                                 ++++++++++++++
+ : kamand_artisan
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='parnian_editorial')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('hero_banner', 'category_grid', 'product_section', 'image_text') != ('hero_banner', 'category_grid', 'product_section', 'image_text', 'story_rail')
+
+Second tuple contains 1 additional elements.
+First extra element 4:
+'story_rail'
+
+- ('hero_banner', 'category_grid', 'product_section', 'image_text')
++ ('hero_banner', 'category_grid', 'product_section', 'image_text', 'story_rail')
+?                                                                 ++++++++++++++
+ : parnian_editorial
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='niloufar_glass')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('her[17 chars]ory_grid', 'product_section', 'newsletter') != ('her[17 chars]ory_grid', 'product_section', 'collection_tiles', 'newsletter')
+
+First differing element 3:
+'newsletter'
+'collection_tiles'
+
+Second tuple contains 1 additional elements.
+First extra element 4:
+'newsletter'
+
+- ('hero_banner', 'category_grid', 'product_section', 'newsletter')
++ ('hero_banner',
++  'category_grid',
++  'product_section',
++  'collection_tiles',
++  'newsletter') : niloufar_glass
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='beauty_dew')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('hero_banner', 'category_grid', 'product_section', 'newsletter') != ('hero_banner', 'category_grid', 'product_section', 'story_rail', 'newsletter')
+
+First differing element 3:
+'newsletter'
+'story_rail'
+
+Second tuple contains 1 additional elements.
+First extra element 4:
+'newsletter'
+
+- ('hero_banner', 'category_grid', 'product_section', 'newsletter')
++ ('hero_banner', 'category_grid', 'product_section', 'story_rail', 'newsletter')
+?                                                     ++++++++++++++
+ : beauty_dew
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='laleh_play')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('her[15 chars]egory_grid', 'product_section', 'newsletter') != ('her[15 chars]egory_grid', 'product_section', 'brand_carousel', 'newsletter')
+
+First differing element 3:
+'newsletter'
+'brand_carousel'
+
+Second tuple contains 1 additional elements.
+First extra element 4:
+'newsletter'
+
+- ('hero_banner', 'category_grid', 'product_section', 'newsletter')
++ ('hero_banner',
++  'category_grid',
++  'product_section',
++  'brand_carousel',
++  'newsletter') : laleh_play
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='almas_luxury')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('hero_banner', 'category_grid', 'product_section', 'newsletter') != ('hero_banner', 'category_grid', 'product_section', 'story_rail', 'newsletter')
+
+First differing element 3:
+'newsletter'
+'story_rail'
+
+Second tuple contains 1 additional elements.
+First extra element 4:
+'newsletter'
+
+- ('hero_banner', 'category_grid', 'product_section', 'newsletter')
++ ('hero_banner', 'category_grid', 'product_section', 'story_rail', 'newsletter')
+?                                                     ++++++++++++++
+ : almas_luxury
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='green_workshop')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('her[29 chars]product_section', 'image_text', 'newsletter') != ('her[29 chars]product_section', 'image_text', 'brand_carousel', 'newsletter')
+
+First differing element 4:
+'newsletter'
+'brand_carousel'
+
+Second tuple contains 1 additional elements.
+First extra element 5:
+'newsletter'
+
+- ('hero_banner', 'category_grid', 'product_section', 'image_text', 'newsletter')
++ ('hero_banner',
++  'category_grid',
++  'product_section',
++  'image_text',
++  'brand_carousel',
++  'newsletter') : green_workshop
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='pine_eco')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('her[31 chars]oduct_section', 'image_text', 'newsletter') != ('her[31 chars]oduct_section', 'image_text', 'collection_tiles', 'newsletter')
+
+First differing element 4:
+'newsletter'
+'collection_tiles'
+
+Second tuple contains 1 additional elements.
+First extra element 5:
+'newsletter'
+
+- ('hero_banner', 'category_grid', 'product_section', 'image_text', 'newsletter')
++ ('hero_banner',
++  'category_grid',
++  'product_section',
++  'image_text',
++  'collection_tiles',
++  'newsletter') : pine_eco
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='mirror_beauty')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('her[25 chars]', 'product_section', 'image_text', 'newsletter') != ('her[25 chars]', 'product_section', 'image_text', 'story_rail', 'newsletter')
+
+First differing element 4:
+'newsletter'
+'story_rail'
+
+Second tuple contains 1 additional elements.
+First extra element 5:
+'newsletter'
+
+- ('hero_banner', 'category_grid', 'product_section', 'image_text', 'newsletter')
++ ('hero_banner',
++  'category_grid',
++  'product_section',
++  'image_text',
++  'story_rail',
++  'newsletter') : mirror_beauty
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='cedar_home')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('her[21 chars]grid', 'product_section', 'trust_features') != ('her[21 chars]grid', 'product_section', 'trust_features', 'collection_tiles')
+
+Second tuple contains 1 additional elements.
+First extra element 4:
+'collection_tiles'
+
+- ('hero_banner', 'category_grid', 'product_section', 'trust_features')
++ ('hero_banner',
++  'category_grid',
++  'product_section',
++  'trust_features',
++  'collection_tiles') : cedar_home
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='simorgh_market')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('her[19 chars]y_grid', 'product_section', 'trust_features') != ('her[19 chars]y_grid', 'product_section', 'trust_features', 'brand_carousel')
+
+Second tuple contains 1 additional elements.
+First extra element 4:
+'brand_carousel'
+
+- ('hero_banner', 'category_grid', 'product_section', 'trust_features')
++ ('hero_banner',
++  'category_grid',
++  'product_section',
++  'trust_features',
++  'brand_carousel') : simorgh_market
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='rayan_tech')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('her[15 chars]egory_grid', 'product_section', 'trust_features') != ('her[15 chars]egory_grid', 'product_section', 'trust_features', 'story_rail')
+
+Second tuple contains 1 additional elements.
+First extra element 4:
+'story_rail'
+
+- ('hero_banner', 'category_grid', 'product_section', 'trust_features')
++ ('hero_banner',
++  'category_grid',
++  'product_section',
++  'trust_features',
++  'story_rail') : rayan_tech
+
+======================================================================
+FAIL: test_latest_v2_home_sequence_matches_approved_matrix_exactly (apps.storefront_builder.tests.test_w4b_template_curation.ExactCompositionMatrixTests.test_latest_v2_home_sequence_matches_approved_matrix_exactly) (key='harbor_imports')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 247, in test_latest_v2_home_sequence_matches_approved_matrix_exactly
+    self.assertEqual(actual, EXPECTED_NEW_HOME_SEQUENCE[key], key)
+AssertionError: Tuples differ: ('her[38 chars]ection', 'product_section', 'trust_features') != ('her[38 chars]ection', 'product_section', 'trust_features', 'brand_carousel')
+
+Second tuple contains 1 additional elements.
+First extra element 5:
+'brand_carousel'
+
+  ('hero_banner',
+   'category_grid',
+   'product_section',
+   'product_section',
+-  'trust_features')
+?                  ^
+
++  'trust_features',
+?                  ^
+
++  'brand_carousel') : harbor_imports
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='premium_leather_noir')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : premium_leather_noir
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='artisan_grain')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : artisan_grain
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='coastal_product')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : coastal_product
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='handmade_luxe')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : handmade_luxe
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='watchmaker_round')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : watchmaker_round
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='horizon_story')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : horizon_story
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='silk_editorial')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : silk_editorial
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='city_classic')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : city_classic
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='kamand_artisan')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : kamand_artisan
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='parnian_editorial')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : parnian_editorial
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='niloufar_glass')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : niloufar_glass
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='beauty_dew')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : beauty_dew
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='laleh_play')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : laleh_play
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='almas_luxury')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : almas_luxury
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='green_workshop')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : green_workshop
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='pine_eco')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : pine_eco
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='mirror_beauty')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : mirror_beauty
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='cedar_home')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : cedar_home
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='simorgh_market')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : simorgh_market
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='rayan_tech')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : rayan_tech
+
+======================================================================
+FAIL: test_all_21_curated_keys_are_now_version_two (apps.storefront_builder.tests.test_w4b_template_curation.ExplicitVersionMapTests.test_all_21_curated_keys_are_now_version_two) (key='harbor_imports')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 165, in test_all_21_curated_keys_are_now_version_two
+    self.assertEqual(latest.version, "2", key)
+AssertionError: '1' != '2'
+- 1
++ 2
+ : harbor_imports
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='premium_leather_noir')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='premium_leather_noir', label_fa='زر', description_fa='قالب آمادهٔ زر با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.centered_brand.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.immersive.v1', 'layout': 'layout.two_column.v1', 'product_view': 'product_view.editorial_grid.v1', 'card': 'card.luxury_dark.v1', 'badge': 'badge.none.v1', 'motion': 'motion.none.v1', 'footer': 'footer.editorial_wordmark.v1', 'bottom_nav': 'bottom_nav.minimal_icons.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 0, 'button_radius': 0, 'density': 'relaxed', 'motion': 'none', 'type_scale': 'large', 'button_style': 'outline', 'image_fit': 'cover', 'image_hover': 'none', 'card_image_crossfade': False, 'card_image_zoom': False, 'content_width': 1100, 'grid_density': 3, 'card_shadow': 'none', 'card_hover': 'none', 'hero_style': 'tall'}, default_palette_slug='theme-black-gold', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'centered_brand'}, footer={'footer_variant': 'editorial_wordmark', 'mobile_nav_variant': 'minimal_icons'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'luxury_showcase'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'atelier_mosaic'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'grid', 'card': {'card_style': 'luxury_dark'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='image_text', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : premium_leather_noir
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='artisan_grain')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='artisan_grain', label_fa='دانه', description_fa='قالب آمادهٔ دانه با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.editorial_masthead.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.typographic.v1', 'layout': 'layout.two_column.v1', 'product_view': 'product_view.editorial_grid.v1', 'card': 'card.editorial_minimal.v1', 'badge': 'badge.none.v1', 'motion': 'motion.none.v1', 'footer': 'footer.brand_story.v1', 'bottom_nav': 'bottom_nav.floating_dock.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 0, 'button_radius': 0, 'density': 'relaxed', 'motion': 'none', 'type_scale': 'large', 'button_style': 'outline', 'image_fit': 'cover', 'image_hover': 'none', 'card_image_crossfade': False, 'card_image_zoom': False, 'content_width': 1100, 'grid_density': 3, 'card_shadow': 'none', 'card_hover': 'none', 'hero_style': 'wide'}, default_palette_slug='olive', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'editorial_masthead'}, footer={'footer_variant': 'brand_story', 'mobile_nav_variant': 'floating_dock'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'split'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'fashion_flat'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'grid', 'card': {'card_style': 'editorial_minimal'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='image_text', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : artisan_grain
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='coastal_product')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='coastal_product', label_fa='موج', description_fa='قالب آمادهٔ موج با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.overlay_transparent.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.product_focus.v1', 'layout': 'layout.four_column.v1', 'product_view': 'product_view.standard_grid.v1', 'card': 'card.standard.v1', 'badge': 'badge.none.v1', 'motion': 'motion.subtle.v1', 'footer': 'footer.centered.v1', 'bottom_nav': 'bottom_nav.wide_cart.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 12, 'button_radius': 12, 'density': 'normal', 'motion': 'subtle', 'type_scale': 'normal', 'button_style': 'filled', 'image_fit': 'cover', 'image_hover': 'zoom', 'card_image_crossfade': False, 'card_image_zoom': True, 'content_width': 1200, 'grid_density': 4, 'card_shadow': 'soft', 'card_hover': 'lift', 'hero_style': 'split'}, default_palette_slug='ocean', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'overlay_transparent'}, footer={'footer_variant': 'centered', 'mobile_nav_variant': 'wide_cart'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'beauty_editorial'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'carousel'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'grid', 'card': {'card_style': 'standard'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='image_text', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : coastal_product
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='handmade_luxe')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='handmade_luxe', label_fa='چرم دست', description_fa='قالب آمادهٔ چرم دست با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.editorial_row.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.editorial_split.v1', 'layout': 'layout.three_column.v1', 'product_view': 'product_view.editorial_grid.v1', 'card': 'card.luxury_dark.v1', 'badge': 'badge.none.v1', 'motion': 'motion.subtle.v1', 'footer': 'footer.brand_story.v1', 'bottom_nav': 'bottom_nav.floating_dock.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 10, 'button_radius': 10, 'density': 'relaxed', 'motion': 'subtle', 'type_scale': 'large', 'button_style': 'filled', 'image_fit': 'cover', 'image_hover': 'zoom', 'card_image_crossfade': False, 'card_image_zoom': True, 'content_width': 1100, 'grid_density': 3, 'card_shadow': 'soft', 'card_hover': 'lift', 'hero_style': 'split'}, default_palette_slug='theme-terracotta-cream', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'editorial_row'}, footer={'footer_variant': 'brand_story', 'mobile_nav_variant': 'floating_dock'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'split'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'fashion_flat'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'grid', 'card': {'card_style': 'luxury_dark'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='image_text', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : handmade_luxe
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='watchmaker_round')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='watchmaker_round', label_fa='ساعت\u200cساز', description_fa='قالب آمادهٔ ساعت\u200cساز با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.centered_brand.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.product_focus.v1', 'layout': 'layout.two_column.v1', 'product_view': 'product_view.editorial_grid.v1', 'card': 'card.portrait_round.v1', 'badge': 'badge.none.v1', 'motion': 'motion.subtle.v1', 'footer': 'footer.centered.v1', 'bottom_nav': 'bottom_nav.minimal_icons.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 12, 'button_radius': 12, 'density': 'relaxed', 'motion': 'subtle', 'type_scale': 'large', 'button_style': 'filled', 'image_fit': 'cover', 'image_hover': 'zoom', 'card_image_crossfade': False, 'card_image_zoom': True, 'content_width': 1100, 'grid_density': 3, 'card_shadow': 'soft', 'card_hover': 'lift', 'hero_style': 'split'}, default_palette_slug='uupm-gold-purple-tech', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'centered_brand'}, footer={'footer_variant': 'centered', 'mobile_nav_variant': 'minimal_icons'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'beauty_editorial'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'fashion_flat'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'grid', 'card': {'card_style': 'portrait_round'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='image_text', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : watchmaker_round
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='horizon_story')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='horizon_story', label_fa='افق', description_fa='قالب آمادهٔ افق با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.overlay_transparent.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.side_offer_slider.v1', 'layout': 'layout.two_column.v1', 'product_view': 'product_view.editorial_grid.v1', 'card': 'card.standard.v1', 'badge': 'badge.none.v1', 'motion': 'motion.subtle.v1', 'footer': 'footer.brand_story.v1', 'bottom_nav': 'bottom_nav.four_item.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 14, 'button_radius': 14, 'density': 'relaxed', 'motion': 'subtle', 'type_scale': 'large', 'button_style': 'soft', 'image_fit': 'cover', 'image_hover': 'zoom', 'card_image_crossfade': False, 'card_image_zoom': True, 'content_width': 1100, 'grid_density': 3, 'card_shadow': 'soft', 'card_hover': 'lift', 'hero_style': 'wide'}, default_palette_slug='peach', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'overlay_transparent'}, footer={'footer_variant': 'brand_story', 'mobile_nav_variant': 'four_item'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'chocolate_carousel'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'carousel'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'grid', 'card': {'card_style': 'standard'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='image_text', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : horizon_story
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='silk_editorial')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='silk_editorial', label_fa='ابریشم', description_fa='قالب آمادهٔ ابریشم با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.editorial_masthead.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.immersive.v1', 'layout': 'layout.two_column.v1', 'product_view': 'product_view.editorial_grid.v1', 'card': 'card.editorial_minimal.v1', 'badge': 'badge.none.v1', 'motion': 'motion.none.v1', 'footer': 'footer.editorial_wordmark.v1', 'bottom_nav': 'bottom_nav.minimal_icons.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 0, 'button_radius': 0, 'density': 'relaxed', 'motion': 'none', 'type_scale': 'large', 'button_style': 'outline', 'image_fit': 'cover', 'image_hover': 'none', 'card_image_crossfade': False, 'card_image_zoom': False, 'content_width': 1100, 'grid_density': 3, 'card_shadow': 'none', 'card_hover': 'none', 'hero_style': 'tall'}, default_palette_slug='atelier-ivory', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'editorial_masthead'}, footer={'footer_variant': 'editorial_wordmark', 'mobile_nav_variant': 'minimal_icons'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'luxury_showcase'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'fashion_flat'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'grid', 'card': {'card_style': 'editorial_minimal'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='image_text', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : silk_editorial
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='city_classic')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='city_classic', label_fa='شهر', description_fa='قالب آمادهٔ شهر با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.centered_brand.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.editorial_split.v1', 'layout': 'layout.four_column.v1', 'product_view': 'product_view.standard_grid.v1', 'card': 'card.standard.v1', 'badge': 'badge.none.v1', 'motion': 'motion.subtle.v1', 'footer': 'footer.brand_story.v1', 'bottom_nav': 'bottom_nav.four_item.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 8, 'button_radius': 8, 'density': 'normal', 'motion': 'subtle', 'type_scale': 'normal', 'button_style': 'filled', 'image_fit': 'cover', 'image_hover': 'zoom', 'card_image_crossfade': False, 'card_image_zoom': True, 'content_width': 1200, 'grid_density': 4, 'card_shadow': 'soft', 'card_hover': 'lift', 'hero_style': 'split'}, default_palette_slug='uupm-professional-navy', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'centered_brand'}, footer={'footer_variant': 'brand_story', 'mobile_nav_variant': 'four_item'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'split'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'circular'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'grid', 'card': {'card_style': 'standard'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='image_text', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : city_classic
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='kamand_artisan')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='kamand_artisan', label_fa='کمند', description_fa='قالب آمادهٔ کمند با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.overlay_transparent.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.editorial_split.v1', 'layout': 'layout.three_column.v1', 'product_view': 'product_view.editorial_grid.v1', 'card': 'card.editorial_minimal.v1', 'badge': 'badge.none.v1', 'motion': 'motion.subtle.v1', 'footer': 'footer.brand_story.v1', 'bottom_nav': 'bottom_nav.floating_dock.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 6, 'button_radius': 6, 'density': 'relaxed', 'motion': 'subtle', 'type_scale': 'large', 'button_style': 'filled', 'image_fit': 'cover', 'image_hover': 'zoom', 'card_image_crossfade': False, 'card_image_zoom': True, 'content_width': 1100, 'grid_density': 3, 'card_shadow': 'soft', 'card_hover': 'lift', 'hero_style': 'split'}, default_palette_slug='terracotta', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'overlay_transparent'}, footer={'footer_variant': 'brand_story', 'mobile_nav_variant': 'floating_dock'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'split'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'fashion_flat'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'grid', 'card': {'card_style': 'editorial_minimal'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='image_text', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : kamand_artisan
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='parnian_editorial')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='parnian_editorial', label_fa='پرنیان', description_fa='قالب آمادهٔ پرنیان با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.editorial_masthead.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.immersive.v1', 'layout': 'layout.two_column.v1', 'product_view': 'product_view.editorial_grid.v1', 'card': 'card.shelf_editorial.v1', 'badge': 'badge.none.v1', 'motion': 'motion.none.v1', 'footer': 'footer.editorial_wordmark.v1', 'bottom_nav': 'bottom_nav.minimal_icons.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 0, 'button_radius': 0, 'density': 'relaxed', 'motion': 'none', 'type_scale': 'large', 'button_style': 'outline', 'image_fit': 'cover', 'image_hover': 'none', 'card_image_crossfade': False, 'card_image_zoom': False, 'content_width': 1100, 'grid_density': 3, 'card_shadow': 'none', 'card_hover': 'none', 'hero_style': 'tall'}, default_palette_slug='uupm-bakery-cream', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'editorial_masthead'}, footer={'footer_variant': 'editorial_wordmark', 'mobile_nav_variant': 'minimal_icons'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'luxury_showcase'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'atelier_mosaic'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'grid', 'card': {'card_style': 'shelf_editorial'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='image_text', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : parnian_editorial
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='niloufar_glass')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='niloufar_glass', label_fa='نیلوفر', description_fa='قالب آمادهٔ نیلوفر با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.floating_compact.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.image_collage.v1', 'layout': 'layout.three_column.v1', 'product_view': 'product_view.standard_grid.v1', 'card': 'card.beauty_glass.v1', 'badge': 'badge.none.v1', 'motion': 'motion.subtle.v1', 'footer': 'footer.centered.v1', 'bottom_nav': 'bottom_nav.raised_cart.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 18, 'button_radius': 18, 'density': 'relaxed', 'motion': 'subtle', 'type_scale': 'large', 'button_style': 'soft', 'image_fit': 'cover', 'image_hover': 'zoom', 'card_image_crossfade': False, 'card_image_zoom': True, 'content_width': 1200, 'grid_density': 3, 'card_shadow': 'soft', 'card_hover': 'lift', 'hero_style': 'tall'}, default_palette_slug='rose', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'floating_compact'}, footer={'footer_variant': 'centered', 'mobile_nav_variant': 'raised_cart'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'atelier_triptych'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'circular'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'grid', 'card': {'card_style': 'beauty_glass'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='newsletter', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : niloufar_glass
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='beauty_dew')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='beauty_dew', label_fa='شبنم', description_fa='قالب آمادهٔ شبنم با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.floating_compact.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.product_focus.v1', 'layout': 'layout.horizontal_rail.v1', 'product_view': 'product_view.carousel.v1', 'card': 'card.beauty_glass.v1', 'badge': 'badge.none.v1', 'motion': 'motion.subtle.v1', 'footer': 'footer.minimal.v1', 'bottom_nav': 'bottom_nav.raised_cart.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 18, 'button_radius': 18, 'density': 'relaxed', 'motion': 'subtle', 'type_scale': 'large', 'button_style': 'soft', 'image_fit': 'cover', 'image_hover': 'zoom', 'card_image_crossfade': False, 'card_image_zoom': True, 'content_width': 1200, 'grid_density': 4, 'card_shadow': 'soft', 'card_hover': 'lift', 'hero_style': 'split'}, default_palette_slug='beauty-magenta', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'floating_compact'}, footer={'footer_variant': 'minimal', 'mobile_nav_variant': 'raised_cart'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'beauty_editorial'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'circular'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'carousel', 'card': {'card_style': 'beauty_glass'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='newsletter', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : beauty_dew
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='laleh_play')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='laleh_play', label_fa='لاله\u200cزار', description_fa='قالب آمادهٔ لاله\u200cزار با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.playful_canopy.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.image_collage.v1', 'layout': 'layout.three_column.v1', 'product_view': 'product_view.standard_grid.v1', 'card': 'card.paper_frame.v1', 'badge': 'badge.none.v1', 'motion': 'motion.dynamic.v1', 'footer': 'footer.playful_wave.v1', 'bottom_nav': 'bottom_nav.five_item.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 22, 'button_radius': 22, 'density': 'relaxed', 'motion': 'dynamic', 'type_scale': 'large', 'button_style': 'soft', 'image_fit': 'cover', 'image_hover': 'zoom', 'card_image_crossfade': True, 'card_image_zoom': True, 'content_width': 1200, 'grid_density': 3, 'card_shadow': 'soft', 'card_hover': 'lift', 'hero_style': 'tall'}, default_palette_slug='sunset', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'playful_canopy'}, footer={'footer_variant': 'playful_wave', 'mobile_nav_variant': 'five_item'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'atelier_triptych'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'carousel'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'grid', 'card': {'card_style': 'paper_frame'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='newsletter', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : laleh_play
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='almas_luxury')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='almas_luxury', label_fa='الماس', description_fa='قالب آمادهٔ الماس با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.floating_compact.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.product_focus.v1', 'layout': 'layout.three_column.v1', 'product_view': 'product_view.editorial_grid.v1', 'card': 'card.shelf_editorial.v1', 'badge': 'badge.none.v1', 'motion': 'motion.subtle.v1', 'footer': 'footer.marketplace_columns.v1', 'bottom_nav': 'bottom_nav.glass_dock.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 18, 'button_radius': 18, 'density': 'relaxed', 'motion': 'subtle', 'type_scale': 'large', 'button_style': 'soft', 'image_fit': 'cover', 'image_hover': 'zoom', 'card_image_crossfade': False, 'card_image_zoom': True, 'content_width': 1200, 'grid_density': 3, 'card_shadow': 'soft', 'card_hover': 'lift', 'hero_style': 'split'}, default_palette_slug='theme-ice-cyan', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'floating_compact'}, footer={'footer_variant': 'marketplace_columns', 'mobile_nav_variant': 'glass_dock'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'beauty_editorial'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'circular'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'grid', 'card': {'card_style': 'shelf_editorial'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='newsletter', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : almas_luxury
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='green_workshop')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='green_workshop', label_fa='سبزه', description_fa='قالب آمادهٔ سبزه با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.compact_menu.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.editorial_split.v1', 'layout': 'layout.three_column.v1', 'product_view': 'product_view.standard_grid.v1', 'card': 'card.standard.v1', 'badge': 'badge.none.v1', 'motion': 'motion.subtle.v1', 'footer': 'footer.brand_story.v1', 'bottom_nav': 'bottom_nav.floating_dock.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 16, 'button_radius': 16, 'density': 'relaxed', 'motion': 'subtle', 'type_scale': 'large', 'button_style': 'soft', 'image_fit': 'cover', 'image_hover': 'zoom', 'card_image_crossfade': False, 'card_image_zoom': True, 'content_width': 1100, 'grid_density': 3, 'card_shadow': 'soft', 'card_hover': 'lift', 'hero_style': 'split'}, default_palette_slug='sage', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'compact_menu'}, footer={'footer_variant': 'brand_story', 'mobile_nav_variant': 'floating_dock'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'split'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'grid'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'grid', 'card': {'card_style': 'standard'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='image_text', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='newsletter', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : green_workshop
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='pine_eco')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='pine_eco', label_fa='کاج', description_fa='قالب آمادهٔ کاج با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.compact_menu.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.editorial_split.v1', 'layout': 'layout.three_column.v1', 'product_view': 'product_view.standard_grid.v1', 'card': 'card.soft_capsule.v1', 'badge': 'badge.none.v1', 'motion': 'motion.subtle.v1', 'footer': 'footer.centered.v1', 'bottom_nav': 'bottom_nav.floating_dock.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 16, 'button_radius': 16, 'density': 'relaxed', 'motion': 'subtle', 'type_scale': 'large', 'button_style': 'soft', 'image_fit': 'cover', 'image_hover': 'zoom', 'card_image_crossfade': False, 'card_image_zoom': True, 'content_width': 1200, 'grid_density': 3, 'card_shadow': 'soft', 'card_hover': 'lift', 'hero_style': 'split'}, default_palette_slug='sage', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'compact_menu'}, footer={'footer_variant': 'centered', 'mobile_nav_variant': 'floating_dock'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'split'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'grid'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'grid', 'card': {'card_style': 'soft_capsule'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='image_text', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='newsletter', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : pine_eco
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='mirror_beauty')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='mirror_beauty', label_fa='آینه', description_fa='قالب آمادهٔ آینه با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.floating_compact.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.product_focus.v1', 'layout': 'layout.three_column.v1', 'product_view': 'product_view.standard_grid.v1', 'card': 'card.beauty_glass.v1', 'badge': 'badge.none.v1', 'motion': 'motion.subtle.v1', 'footer': 'footer.minimal.v1', 'bottom_nav': 'bottom_nav.raised_cart.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 18, 'button_radius': 18, 'density': 'relaxed', 'motion': 'subtle', 'type_scale': 'large', 'button_style': 'soft', 'image_fit': 'cover', 'image_hover': 'zoom', 'card_image_crossfade': False, 'card_image_zoom': True, 'content_width': 1200, 'grid_density': 3, 'card_shadow': 'soft', 'card_hover': 'lift', 'hero_style': 'split'}, default_palette_slug='beauty-magenta', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'floating_compact'}, footer={'footer_variant': 'minimal', 'mobile_nav_variant': 'raised_cart'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'beauty_editorial'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'circular'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'grid', 'card': {'card_style': 'beauty_glass'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='image_text', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='newsletter', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : mirror_beauty
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='cedar_home')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='cedar_home', label_fa='سدر', description_fa='قالب آمادهٔ سدر با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.centered_brand.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.editorial_split.v1', 'layout': 'layout.four_column.v1', 'product_view': 'product_view.standard_grid.v1', 'card': 'card.standard.v1', 'badge': 'badge.none.v1', 'motion': 'motion.subtle.v1', 'footer': 'footer.centered.v1', 'bottom_nav': 'bottom_nav.four_item.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 12, 'button_radius': 12, 'density': 'normal', 'motion': 'subtle', 'type_scale': 'normal', 'button_style': 'filled', 'image_fit': 'cover', 'image_hover': 'zoom', 'card_image_crossfade': False, 'card_image_zoom': True, 'content_width': 1200, 'grid_density': 4, 'card_shadow': 'soft', 'card_hover': 'lift', 'hero_style': 'split'}, default_palette_slug='forest', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'centered_brand'}, footer={'footer_variant': 'centered', 'mobile_nav_variant': 'four_item'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'split'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'grid'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'grid', 'card': {'card_style': 'standard'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='trust_features', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : cedar_home
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='simorgh_market')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='simorgh_market', label_fa='سیمرغ', description_fa='قالب آمادهٔ سیمرغ با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.centered_brand.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.promo_bento.v1', 'layout': 'layout.four_column.v1', 'product_view': 'product_view.standard_grid.v1', 'card': 'card.marketplace_price.v1', 'badge': 'badge.sale.v1', 'motion': 'motion.subtle.v1', 'footer': 'footer.marketplace_columns.v1', 'bottom_nav': 'bottom_nav.five_item.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 8, 'button_radius': 8, 'density': 'normal', 'motion': 'subtle', 'type_scale': 'normal', 'button_style': 'filled', 'image_fit': 'cover', 'image_hover': 'zoom', 'card_image_crossfade': False, 'card_image_zoom': True, 'content_width': 1320, 'grid_density': 4, 'card_shadow': 'soft', 'card_hover': 'lift', 'hero_style': 'wide'}, default_palette_slug='royal', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'centered_brand'}, footer={'footer_variant': 'marketplace_columns', 'mobile_nav_variant': 'five_item'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'chocolate_carousel'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'circular'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'grid', 'card': {'card_style': 'marketplace_price'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='trust_features', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : simorgh_market
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='rayan_tech')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='rayan_tech', label_fa='رایان', description_fa='قالب آمادهٔ رایان با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.marketplace_search.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.product_focus.v1', 'layout': 'layout.four_column.v1', 'product_view': 'product_view.standard_grid.v1', 'card': 'card.technical_spec.v1', 'badge': 'badge.none.v1', 'motion': 'motion.subtle.v1', 'footer': 'footer.app_download.v1', 'bottom_nav': 'bottom_nav.four_item.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 6, 'button_radius': 6, 'density': 'compact', 'motion': 'subtle', 'type_scale': 'compact', 'button_style': 'filled', 'image_fit': 'cover', 'image_hover': 'zoom', 'card_image_crossfade': False, 'card_image_zoom': True, 'content_width': 1320, 'grid_density': 4, 'card_shadow': 'soft', 'card_hover': 'lift', 'hero_style': 'split'}, default_palette_slug='theme-midnight-electric', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'marketplace_search'}, footer={'footer_variant': 'app_download', 'mobile_nav_variant': 'four_item'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'beauty_editorial'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'grid'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'grid', 'card': {'card_style': 'technical_spec'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='trust_features', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : rayan_tech
+
+======================================================================
+FAIL: test_historical_v1_resolves_and_is_not_the_latest_object (apps.storefront_builder.tests.test_w4b_template_curation.HistoricalPreservationTests.test_historical_v1_resolves_and_is_not_the_latest_object) (key='harbor_imports')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 188, in test_historical_v1_resolves_and_is_not_the_latest_object
+    self.assertIsNot(latest, historical, key)
+AssertionError: unexpectedly identical: LayoutPresetDefinition(key='harbor_imports', label_fa='بندر', description_fa='قالب آمادهٔ بندر با دی\u200cان\u200cای کامل طراحی فروشگاه.', version='1', is_ready_template=True, store_appearance={'schema_version': 1, 'selections': {'header': 'header.marketplace_search.v1', 'mega_menu': 'mega_menu.none.v1', 'hero': 'hero.campaign_mosaic.v1', 'layout': 'layout.four_column.v1', 'product_view': 'product_view.standard_grid.v1', 'card': 'card.shipping_label.v1', 'badge': 'badge.sale.v1', 'motion': 'motion.subtle.v1', 'footer': 'footer.marketplace_columns.v1', 'bottom_nav': 'bottom_nav.four_item.v1', 'theme': 'theme.none.v1'}, 'settings': {}}, appearance={'font': 'Vazirmatn', 'radius': 6, 'button_radius': 6, 'density': 'compact', 'motion': 'subtle', 'type_scale': 'compact', 'button_style': 'filled', 'image_fit': 'cover', 'image_hover': 'zoom', 'card_image_crossfade': False, 'card_image_zoom': True, 'content_width': 1320, 'grid_density': 4, 'card_shadow': 'soft', 'card_hover': 'lift', 'hero_style': 'tall'}, default_palette_slug='navy', header={'sticky': True, 'announcement_enabled': False, 'header_variant': 'marketplace_search'}, footer={'footer_variant': 'marketplace_columns', 'mobile_nav_variant': 'four_item'}, pages={'home': (PresetSectionEntry(section_key='hero_banner', settings={'hero_style': 'atelier_triptych'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='category_grid', settings={'display_mode': 'grid'}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'newest', 'display_mode': 'grid', 'card': {'card_style': 'shipping_label'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_section', settings={'data_source': 'discounted', 'display_mode': 'grid', 'card': {'card_style': 'shipping_label'}}, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='trust_features', settings=None, row_key='', row_span=12, container_settings=None)), 'product_detail': (PresetSectionEntry(section_key='product_main', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='product_description', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='related_products', settings=None, row_key='', row_span=12, container_settings=None)), 'listing': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'collection': (PresetSectionEntry(section_key='collection_header', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='collection_products', settings=None, row_key='', row_span=12, container_settings=None)), 'search': (PresetSectionEntry(section_key='product_listing', settings=None, row_key='', row_span=12, container_settings=None),), 'cart': (PresetSectionEntry(section_key='cart_items', settings=None, row_key='', row_span=12, container_settings=None), PresetSectionEntry(section_key='cart_summary', settings=None, row_key='', row_span=12, container_settings=None))}, compatible_families=None) : harbor_imports
+
+======================================================================
+FAIL: test_added_section_is_immediately_before_newsletter (apps.storefront_builder.tests.test_w4b_template_curation.NewsletterTerminalContractTests.test_added_section_is_immediately_before_newsletter) (key='niloufar_glass')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 282, in test_added_section_is_immediately_before_newsletter
+    self.assertEqual(sequence[-2], EXPECTED_ADDED_SECTION[key], key)
+AssertionError: 'product_section' != 'collection_tiles'
+- product_section
++ collection_tiles
+ : niloufar_glass
+
+======================================================================
+FAIL: test_added_section_is_immediately_before_newsletter (apps.storefront_builder.tests.test_w4b_template_curation.NewsletterTerminalContractTests.test_added_section_is_immediately_before_newsletter) (key='beauty_dew')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 282, in test_added_section_is_immediately_before_newsletter
+    self.assertEqual(sequence[-2], EXPECTED_ADDED_SECTION[key], key)
+AssertionError: 'product_section' != 'story_rail'
+- product_section
++ story_rail
+ : beauty_dew
+
+======================================================================
+FAIL: test_added_section_is_immediately_before_newsletter (apps.storefront_builder.tests.test_w4b_template_curation.NewsletterTerminalContractTests.test_added_section_is_immediately_before_newsletter) (key='laleh_play')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 282, in test_added_section_is_immediately_before_newsletter
+    self.assertEqual(sequence[-2], EXPECTED_ADDED_SECTION[key], key)
+AssertionError: 'product_section' != 'brand_carousel'
+- product_section
++ brand_carousel
+ : laleh_play
+
+======================================================================
+FAIL: test_added_section_is_immediately_before_newsletter (apps.storefront_builder.tests.test_w4b_template_curation.NewsletterTerminalContractTests.test_added_section_is_immediately_before_newsletter) (key='almas_luxury')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 282, in test_added_section_is_immediately_before_newsletter
+    self.assertEqual(sequence[-2], EXPECTED_ADDED_SECTION[key], key)
+AssertionError: 'product_section' != 'story_rail'
+- product_section
++ story_rail
+ : almas_luxury
+
+======================================================================
+FAIL: test_added_section_is_immediately_before_newsletter (apps.storefront_builder.tests.test_w4b_template_curation.NewsletterTerminalContractTests.test_added_section_is_immediately_before_newsletter) (key='green_workshop')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 282, in test_added_section_is_immediately_before_newsletter
+    self.assertEqual(sequence[-2], EXPECTED_ADDED_SECTION[key], key)
+AssertionError: 'image_text' != 'brand_carousel'
+- image_text
++ brand_carousel
+ : green_workshop
+
+======================================================================
+FAIL: test_added_section_is_immediately_before_newsletter (apps.storefront_builder.tests.test_w4b_template_curation.NewsletterTerminalContractTests.test_added_section_is_immediately_before_newsletter) (key='pine_eco')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 282, in test_added_section_is_immediately_before_newsletter
+    self.assertEqual(sequence[-2], EXPECTED_ADDED_SECTION[key], key)
+AssertionError: 'image_text' != 'collection_tiles'
+- image_text
++ collection_tiles
+ : pine_eco
+
+======================================================================
+FAIL: test_added_section_is_immediately_before_newsletter (apps.storefront_builder.tests.test_w4b_template_curation.NewsletterTerminalContractTests.test_added_section_is_immediately_before_newsletter) (key='mirror_beauty')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4b_template_curation.py", line 282, in test_added_section_is_immediately_before_newsletter
+    self.assertEqual(sequence[-2], EXPECTED_ADDED_SECTION[key], key)
+AssertionError: 'image_text' != 'story_rail'
+- image_text
++ story_rail
+ : mirror_beauty
+
+----------------------------------------------------------------------
+Ran 18 tests in 0.028s
+
+FAILED (failures=71)
+
+=== RED PROOF METADATA ===
+Command: /usr/bin/python3 manage.py test apps.storefront_builder.tests.test_w4b_template_curation --settings=shop_core.settings -v 2
+Run against unmodified production code (apps/ still byte-identical to certified 707dd631e851bdd13173bf3950489142f3e526b1 at this point in the branch history).
+Exit code: 1
+Tests run: 18
+Failures: 71
+Failing test methods (5, all for the expected reasons — production curation not yet implemented):
+  - test_all_21_curated_keys_are_now_version_two (versions still "1")
+  - test_historical_v1_resolves_and_is_not_the_latest_object (v1 IS the only/latest version today, so historical is latest)
+  - test_latest_v2_home_sequence_matches_approved_matrix_exactly (Home composition not yet curated)
+  - test_added_section_is_immediately_before_newsletter (nothing added yet)
+  - test_only_collection_tiles_is_a_genuinely_new_static_section_token (_STATIC_SECTIONS entry not yet added)
+All other test methods (fingerprint match, historical forbidden-payload scan, diversity 50/50, registered/home-allowed section keys, no-speculative-token, rejected-mechanisms-absent) already pass against the certified base, as expected — they assert invariants the certified source already satisfies or that this repo's own real section_registry already supports independent of the W4B recipe change.

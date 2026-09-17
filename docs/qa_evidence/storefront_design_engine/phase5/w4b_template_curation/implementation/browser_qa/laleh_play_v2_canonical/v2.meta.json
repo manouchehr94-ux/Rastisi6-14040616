@@ -1,0 +1,11 @@
+{
+  "template_key": "laleh_play",
+  "version": "2",
+  "content_hash": "e2ada95f8050e78b8cbc4b0d8ea34d83f4bc09bb3406d13a20026ff606a5f23d",
+  "preview_input_fingerprint": "eb47b0704337f515428b3a11c88eea4e331db71fb750952ea0a0d33c09f560da",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}

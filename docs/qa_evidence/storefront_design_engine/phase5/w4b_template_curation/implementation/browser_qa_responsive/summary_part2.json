@@ -1,0 +1,404 @@
+[
+  {
+    "key": "pine_eco",
+    "version": "2",
+    "viewports": {
+      "desktop": {
+        "status": 200,
+        "dir": "rtl",
+        "horizontal_overflow": false,
+        "added_section_element_count": 6,
+        "added_section_hrefs": [
+          "/collections/%DA%A9%DB%8C%D9%81-%D9%88-%D8%A7%DA%A9%D8%B3%D8%B3%D9%88%D8%B1%DB%8C/",
+          "/collections/%DA%A9%D9%81%D8%B4-%D9%88-%DA%A9%D8%AA%D8%A7%D9%86%DB%8C/",
+          "/collections/%D8%A7%D9%86%D8%AA%D8%AE%D8%A7%D8%A8-%D9%81%D8%B5%D9%84/",
+          "/collections/%D8%AA%D8%AE%D9%81%DB%8C%D9%81%D9%87%D8%A7%DB%8C-%D9%85%D9%86%D8%AA%D8%AE%D8%A8/",
+          "/collections/%D9%BE%D8%B1%D9%81%D8%B1%D9%88%D8%B4%D9%87%D8%A7/",
+          "/collections/%D8%AC%D8%AF%DB%8C%D8%AF%D8%AA%D8%B1%DB%8C%D9%86%D9%87%D8%A7/"
+        ],
+        "added_section_has_dead_href": false,
+        "console_errors": [],
+        "page_errors": [],
+        "failed_requests": [],
+        "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_design_engine/phase5/w4b_template_curation/implementation/browser_qa_responsive/pine_eco_v2_desktop.jpg"
+      },
+      "tablet": {
+        "status": 200,
+        "dir": "rtl",
+        "horizontal_overflow": false,
+        "added_section_element_count": 6,
+        "added_section_hrefs": [
+          "/collections/%DA%A9%DB%8C%D9%81-%D9%88-%D8%A7%DA%A9%D8%B3%D8%B3%D9%88%D8%B1%DB%8C/",
+          "/collections/%DA%A9%D9%81%D8%B4-%D9%88-%DA%A9%D8%AA%D8%A7%D9%86%DB%8C/",
+          "/collections/%D8%A7%D9%86%D8%AA%D8%AE%D8%A7%D8%A8-%D9%81%D8%B5%D9%84/",
+          "/collections/%D8%AA%D8%AE%D9%81%DB%8C%D9%81%D9%87%D8%A7%DB%8C-%D9%85%D9%86%D8%AA%D8%AE%D8%A8/",
+          "/collections/%D9%BE%D8%B1%D9%81%D8%B1%D9%88%D8%B4%D9%87%D8%A7/",
+          "/collections/%D8%AC%D8%AF%DB%8C%D8%AF%D8%AA%D8%B1%DB%8C%D9%86%D9%87%D8%A7/"
+        ],
+        "added_section_has_dead_href": false,
+        "console_errors": [],
+        "page_errors": [],
+        "failed_requests": [],
+        "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_design_engine/phase5/w4b_template_curation/implementation/browser_qa_responsive/pine_eco_v2_tablet.jpg"
+      },
+      "mobile": {
+        "status": 200,
+        "dir": "rtl",
+        "horizontal_overflow": false,
+        "added_section_element_count": 6,
+        "added_section_hrefs": [
+          "/collections/%DA%A9%DB%8C%D9%81-%D9%88-%D8%A7%DA%A9%D8%B3%D8%B3%D9%88%D8%B1%DB%8C/",
+          "/collections/%DA%A9%D9%81%D8%B4-%D9%88-%DA%A9%D8%AA%D8%A7%D9%86%DB%8C/",
+          "/collections/%D8%A7%D9%86%D8%AA%D8%AE%D8%A7%D8%A8-%D9%81%D8%B5%D9%84/",
+          "/collections/%D8%AA%D8%AE%D9%81%DB%8C%D9%81%D9%87%D8%A7%DB%8C-%D9%85%D9%86%D8%AA%D8%AE%D8%A8/",
+          "/collections/%D9%BE%D8%B1%D9%81%D8%B1%D9%88%D8%B4%D9%87%D8%A7/",
+          "/collections/%D8%AC%D8%AF%DB%8C%D8%AF%D8%AA%D8%B1%DB%8C%D9%86%D9%87%D8%A7/"
+        ],
+        "added_section_has_dead_href": false,
+        "console_errors": [],
+        "page_errors": [],
+        "failed_requests": [],
+        "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_design_engine/phase5/w4b_template_curation/implementation/browser_qa_responsive/pine_eco_v2_mobile.jpg"
+      }
+    }
+  },
+  {
+    "key": "mirror_beauty",
+    "version": "2",
+    "viewports": {
+      "desktop": {
+        "status": 200,
+        "dir": "rtl",
+        "horizontal_overflow": false,
+        "added_section_element_count": 10,
+        "added_section_hrefs": [
+          "/products/?category=کتانی-رانینگ",
+          "/products/?category=کتانی-کژوال",
+          "/products/?category=شلوار-کژوال",
+          "/products/?category=شلوار-جین",
+          "/products/?category=کاپشن-و-بامبر",
+          "/products/?category=ژاکت-چرم-و-اورشرت",
+          "/products/?category=کفش-زنانه",
+          "/products/?category=صندل-و-دمپایی",
+          "/products/?category=کیف-دستی-و-tote",
+          "/products/?category=کیف-دوشی-و-مجلسی"
+        ],
+        "added_section_has_dead_href": false,
+        "console_errors": [],
+        "page_errors": [],
+        "failed_requests": [],
+        "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_design_engine/phase5/w4b_template_curation/implementation/browser_qa_responsive/mirror_beauty_v2_desktop.jpg"
+      },
+      "tablet": {
+        "status": 200,
+        "dir": "rtl",
+        "horizontal_overflow": false,
+        "added_section_element_count": 10,
+        "added_section_hrefs": [
+          "/products/?category=کتانی-رانینگ",
+          "/products/?category=کتانی-کژوال",
+          "/products/?category=شلوار-کژوال",
+          "/products/?category=شلوار-جین",
+          "/products/?category=کاپشن-و-بامبر",
+          "/products/?category=ژاکت-چرم-و-اورشرت",
+          "/products/?category=کفش-زنانه",
+          "/products/?category=صندل-و-دمپایی",
+          "/products/?category=کیف-دستی-و-tote",
+          "/products/?category=کیف-دوشی-و-مجلسی"
+        ],
+        "added_section_has_dead_href": false,
+        "console_errors": [],
+        "page_errors": [],
+        "failed_requests": [],
+        "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_design_engine/phase5/w4b_template_curation/implementation/browser_qa_responsive/mirror_beauty_v2_tablet.jpg"
+      },
+      "mobile": {
+        "status": 200,
+        "dir": "rtl",
+        "horizontal_overflow": false,
+        "added_section_element_count": 10,
+        "added_section_hrefs": [
+          "/products/?category=کتانی-رانینگ",
+          "/products/?category=کتانی-کژوال",
+          "/products/?category=شلوار-کژوال",
+          "/products/?category=شلوار-جین",
+          "/products/?category=کاپشن-و-بامبر",
+          "/products/?category=ژاکت-چرم-و-اورشرت",
+          "/products/?category=کفش-زنانه",
+          "/products/?category=صندل-و-دمپایی",
+          "/products/?category=کیف-دستی-و-tote",
+          "/products/?category=کیف-دوشی-و-مجلسی"
+        ],
+        "added_section_has_dead_href": false,
+        "console_errors": [],
+        "page_errors": [],
+        "failed_requests": [],
+        "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_design_engine/phase5/w4b_template_curation/implementation/browser_qa_responsive/mirror_beauty_v2_mobile.jpg"
+      }
+    }
+  },
+  {
+    "key": "cedar_home",
+    "version": "2",
+    "viewports": {
+      "desktop": {
+        "status": 200,
+        "dir": "rtl",
+        "horizontal_overflow": false,
+        "added_section_element_count": 6,
+        "added_section_hrefs": [
+          "/collections/%DA%A9%DB%8C%D9%81-%D9%88-%D8%A7%DA%A9%D8%B3%D8%B3%D9%88%D8%B1%DB%8C/",
+          "/collections/%DA%A9%D9%81%D8%B4-%D9%88-%DA%A9%D8%AA%D8%A7%D9%86%DB%8C/",
+          "/collections/%D8%A7%D9%86%D8%AA%D8%AE%D8%A7%D8%A8-%D9%81%D8%B5%D9%84/",
+          "/collections/%D8%AA%D8%AE%D9%81%DB%8C%D9%81%D9%87%D8%A7%DB%8C-%D9%85%D9%86%D8%AA%D8%AE%D8%A8/",
+          "/collections/%D9%BE%D8%B1%D9%81%D8%B1%D9%88%D8%B4%D9%87%D8%A7/",
+          "/collections/%D8%AC%D8%AF%DB%8C%D8%AF%D8%AA%D8%B1%DB%8C%D9%86%D9%87%D8%A7/"
+        ],
+        "added_section_has_dead_href": false,
+        "console_errors": [],
+        "page_errors": [],
+        "failed_requests": [],
+        "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_design_engine/phase5/w4b_template_curation/implementation/browser_qa_responsive/cedar_home_v2_desktop.jpg"
+      },
+      "tablet": {
+        "status": 200,
+        "dir": "rtl",
+        "horizontal_overflow": false,
+        "added_section_element_count": 6,
+        "added_section_hrefs": [
+          "/collections/%DA%A9%DB%8C%D9%81-%D9%88-%D8%A7%DA%A9%D8%B3%D8%B3%D9%88%D8%B1%DB%8C/",
+          "/collections/%DA%A9%D9%81%D8%B4-%D9%88-%DA%A9%D8%AA%D8%A7%D9%86%DB%8C/",
+          "/collections/%D8%A7%D9%86%D8%AA%D8%AE%D8%A7%D8%A8-%D9%81%D8%B5%D9%84/",
+          "/collections/%D8%AA%D8%AE%D9%81%DB%8C%D9%81%D9%87%D8%A7%DB%8C-%D9%85%D9%86%D8%AA%D8%AE%D8%A8/",
+          "/collections/%D9%BE%D8%B1%D9%81%D8%B1%D9%88%D8%B4%D9%87%D8%A7/",
+          "/collections/%D8%AC%D8%AF%DB%8C%D8%AF%D8%AA%D8%B1%DB%8C%D9%86%D9%87%D8%A7/"
+        ],
+        "added_section_has_dead_href": false,
+        "console_errors": [],
+        "page_errors": [],
+        "failed_requests": [],
+        "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_design_engine/phase5/w4b_template_curation/implementation/browser_qa_responsive/cedar_home_v2_tablet.jpg"
+      },
+      "mobile": {
+        "status": 200,
+        "dir": "rtl",
+        "horizontal_overflow": false,
+        "added_section_element_count": 6,
+        "added_section_hrefs": [
+          "/collections/%DA%A9%DB%8C%D9%81-%D9%88-%D8%A7%DA%A9%D8%B3%D8%B3%D9%88%D8%B1%DB%8C/",
+          "/collections/%DA%A9%D9%81%D8%B4-%D9%88-%DA%A9%D8%AA%D8%A7%D9%86%DB%8C/",
+          "/collections/%D8%A7%D9%86%D8%AA%D8%AE%D8%A7%D8%A8-%D9%81%D8%B5%D9%84/",
+          "/collections/%D8%AA%D8%AE%D9%81%DB%8C%D9%81%D9%87%D8%A7%DB%8C-%D9%85%D9%86%D8%AA%D8%AE%D8%A8/",
+          "/collections/%D9%BE%D8%B1%D9%81%D8%B1%D9%88%D8%B4%D9%87%D8%A7/",
+          "/collections/%D8%AC%D8%AF%DB%8C%D8%AF%D8%AA%D8%B1%DB%8C%D9%86%D9%87%D8%A7/"
+        ],
+        "added_section_has_dead_href": false,
+        "console_errors": [],
+        "page_errors": [],
+        "failed_requests": [],
+        "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_design_engine/phase5/w4b_template_curation/implementation/browser_qa_responsive/cedar_home_v2_mobile.jpg"
+      }
+    }
+  },
+  {
+    "key": "simorgh_market",
+    "version": "2",
+    "viewports": {
+      "desktop": {
+        "status": 200,
+        "dir": "rtl",
+        "horizontal_overflow": false,
+        "added_section_element_count": 6,
+        "added_section_hrefs": [
+          "/products/?brand=demo-motion",
+          "/products/?brand=demo-urban",
+          "/products/?brand=demo-denim",
+          "/products/?brand=demo-layer",
+          "/products/?brand=demo-carry",
+          "/products/?brand=demo-muse"
+        ],
+        "added_section_has_dead_href": false,
+        "console_errors": [],
+        "page_errors": [],
+        "failed_requests": [],
+        "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_design_engine/phase5/w4b_template_curation/implementation/browser_qa_responsive/simorgh_market_v2_desktop.jpg"
+      },
+      "tablet": {
+        "status": 200,
+        "dir": "rtl",
+        "horizontal_overflow": false,
+        "added_section_element_count": 6,
+        "added_section_hrefs": [
+          "/products/?brand=demo-motion",
+          "/products/?brand=demo-urban",
+          "/products/?brand=demo-denim",
+          "/products/?brand=demo-layer",
+          "/products/?brand=demo-carry",
+          "/products/?brand=demo-muse"
+        ],
+        "added_section_has_dead_href": false,
+        "console_errors": [],
+        "page_errors": [],
+        "failed_requests": [],
+        "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_design_engine/phase5/w4b_template_curation/implementation/browser_qa_responsive/simorgh_market_v2_tablet.jpg"
+      },
+      "mobile": {
+        "status": 200,
+        "dir": "rtl",
+        "horizontal_overflow": false,
+        "added_section_element_count": 6,
+        "added_section_hrefs": [
+          "/products/?brand=demo-motion",
+          "/products/?brand=demo-urban",
+          "/products/?brand=demo-denim",
+          "/products/?brand=demo-layer",
+          "/products/?brand=demo-carry",
+          "/products/?brand=demo-muse"
+        ],
+        "added_section_has_dead_href": false,
+        "console_errors": [],
+        "page_errors": [],
+        "failed_requests": [],
+        "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_design_engine/phase5/w4b_template_curation/implementation/browser_qa_responsive/simorgh_market_v2_mobile.jpg"
+      }
+    }
+  },
+  {
+    "key": "rayan_tech",
+    "version": "2",
+    "viewports": {
+      "desktop": {
+        "status": 200,
+        "dir": "rtl",
+        "horizontal_overflow": false,
+        "added_section_element_count": 10,
+        "added_section_hrefs": [
+          "/products/?category=کتانی-رانینگ",
+          "/products/?category=کتانی-کژوال",
+          "/products/?category=شلوار-کژوال",
+          "/products/?category=شلوار-جین",
+          "/products/?category=کاپشن-و-بامبر",
+          "/products/?category=ژاکت-چرم-و-اورشرت",
+          "/products/?category=کفش-زنانه",
+          "/products/?category=صندل-و-دمپایی",
+          "/products/?category=کیف-دستی-و-tote",
+          "/products/?category=کیف-دوشی-و-مجلسی"
+        ],
+        "added_section_has_dead_href": false,
+        "console_errors": [],
+        "page_errors": [],
+        "failed_requests": [],
+        "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_design_engine/phase5/w4b_template_curation/implementation/browser_qa_responsive/rayan_tech_v2_desktop.jpg"
+      },
+      "tablet": {
+        "status": 200,
+        "dir": "rtl",
+        "horizontal_overflow": false,
+        "added_section_element_count": 10,
+        "added_section_hrefs": [
+          "/products/?category=کتانی-رانینگ",
+          "/products/?category=کتانی-کژوال",
+          "/products/?category=شلوار-کژوال",
+          "/products/?category=شلوار-جین",
+          "/products/?category=کاپشن-و-بامبر",
+          "/products/?category=ژاکت-چرم-و-اورشرت",
+          "/products/?category=کفش-زنانه",
+          "/products/?category=صندل-و-دمپایی",
+          "/products/?category=کیف-دستی-و-tote",
+          "/products/?category=کیف-دوشی-و-مجلسی"
+        ],
+        "added_section_has_dead_href": false,
+        "console_errors": [],
+        "page_errors": [],
+        "failed_requests": [],
+        "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_design_engine/phase5/w4b_template_curation/implementation/browser_qa_responsive/rayan_tech_v2_tablet.jpg"
+      },
+      "mobile": {
+        "status": 200,
+        "dir": "rtl",
+        "horizontal_overflow": false,
+        "added_section_element_count": 10,
+        "added_section_hrefs": [
+          "/products/?category=کتانی-رانینگ",
+          "/products/?category=کتانی-کژوال",
+          "/products/?category=شلوار-کژوال",
+          "/products/?category=شلوار-جین",
+          "/products/?category=کاپشن-و-بامبر",
+          "/products/?category=ژاکت-چرم-و-اورشرت",
+          "/products/?category=کفش-زنانه",
+          "/products/?category=صندل-و-دمپایی",
+          "/products/?category=کیف-دستی-و-tote",
+          "/products/?category=کیف-دوشی-و-مجلسی"
+        ],
+        "added_section_has_dead_href": false,
+        "console_errors": [],
+        "page_errors": [],
+        "failed_requests": [],
+        "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_design_engine/phase5/w4b_template_curation/implementation/browser_qa_responsive/rayan_tech_v2_mobile.jpg"
+      }
+    }
+  },
+  {
+    "key": "harbor_imports",
+    "version": "2",
+    "viewports": {
+      "desktop": {
+        "status": 200,
+        "dir": "rtl",
+        "horizontal_overflow": false,
+        "added_section_element_count": 6,
+        "added_section_hrefs": [
+          "/products/?brand=demo-motion",
+          "/products/?brand=demo-urban",
+          "/products/?brand=demo-denim",
+          "/products/?brand=demo-layer",
+          "/products/?brand=demo-carry",
+          "/products/?brand=demo-muse"
+        ],
+        "added_section_has_dead_href": false,
+        "console_errors": [],
+        "page_errors": [],
+        "failed_requests": [],
+        "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_design_engine/phase5/w4b_template_curation/implementation/browser_qa_responsive/harbor_imports_v2_desktop.jpg"
+      },
+      "tablet": {
+        "status": 200,
+        "dir": "rtl",
+        "horizontal_overflow": false,
+        "added_section_element_count": 6,
+        "added_section_hrefs": [
+          "/products/?brand=demo-motion",
+          "/products/?brand=demo-urban",
+          "/products/?brand=demo-denim",
+          "/products/?brand=demo-layer",
+          "/products/?brand=demo-carry",
+          "/products/?brand=demo-muse"
+        ],
+        "added_section_has_dead_href": false,
+        "console_errors": [],
+        "page_errors": [],
+        "failed_requests": [],
+        "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_design_engine/phase5/w4b_template_curation/implementation/browser_qa_responsive/harbor_imports_v2_tablet.jpg"
+      },
+      "mobile": {
+        "status": 200,
+        "dir": "rtl",
+        "horizontal_overflow": false,
+        "added_section_element_count": 6,
+        "added_section_hrefs": [
+          "/products/?brand=demo-motion",
+          "/products/?brand=demo-urban",
+          "/products/?brand=demo-denim",
+          "/products/?brand=demo-layer",
+          "/products/?brand=demo-carry",
+          "/products/?brand=demo-muse"
+        ],
+        "added_section_has_dead_href": false,
+        "console_errors": [],
+        "page_errors": [],
+        "failed_requests": [],
+        "screenshot": "/home/user/Rastisi6-14040616/docs/qa_evidence/storefront_design_engine/phase5/w4b_template_curation/implementation/browser_qa_responsive/harbor_imports_v2_mobile.jpg"
+      }
+    }
+  }
+]

@@ -1,0 +1,26 @@
+$ git rev-parse HEAD
+779368e6bc0a5ca7dac4f85e472c5bfb11fbc6e8
+
+$ git status --short
+?? docs/qa_evidence/storefront_design_engine/phase5/w4b_template_curation/implementation/11_final_clean_status_evidence.txt
+(exit=0, empty output = clean)
+
+$ git diff --check
+EXIT=0
+
+$ git diff --cached --check
+EXIT=0
+
+$ /usr/bin/python3 --version
+Python 3.11.15
+
+$ /usr/bin/python3 -c "import django; print(django.get_version())"
+5.2.17
+
+$ /usr/bin/python3 manage.py check --settings=shop_core.settings
+System check identified no issues (0 silenced).
+EXIT=0
+
+$ /usr/bin/python3 manage.py makemigrations --check --dry-run --settings=shop_core.settings
+No changes detected
+EXIT=0

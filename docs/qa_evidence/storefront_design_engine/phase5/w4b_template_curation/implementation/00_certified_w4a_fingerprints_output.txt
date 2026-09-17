@@ -1,0 +1,25 @@
+CERTIFIED_W4A_FINGERPRINT = {
+    ('premium_leather_noir', '1'): 'e85be9baa87fa763de5bd42afe93d99b97e39e0272904d62de980cf5d35436bb',
+    ('artisan_grain', '1'): '925876abfe18d9c98ca0f27c141e97db2e863314a80b28c58c7a9baeec85adf3',
+    ('coastal_product', '1'): '57c28aa59c54bad100ff8135e70c869becf3afcdcc479688955307e1549cdb5f',
+    ('handmade_luxe', '1'): '20c0a51ccbd43fc5463e8d35aa9dc11138e0016de3838875dec494f197388049',
+    ('watchmaker_round', '1'): 'e5289689e89d7e9499e58d6c3092a966940f7565d0da61299e76ded05b2e58a3',
+    ('horizon_story', '1'): 'e1d735561d53de0020a5a1edf9d84da57c59914d01ba4f05abcd3d358269bf7b',
+    ('silk_editorial', '1'): '191ae7f1792d38a44b1e2015ee009acd30e5f79a43834dca986cbba6f65753bb',
+    ('city_classic', '1'): '3b0e5ffd5fb4b81a28e3c5d0103ef999bdfa3094a32e71fcc9f14d81e7729949',
+    ('kamand_artisan', '1'): 'e51f203924bcf7e712e649e22755a9a6513f7b4bd7c0db383072685fb2de60a7',
+    ('parnian_editorial', '1'): '01239db408071a37fc4839f0ebec82c1f4c1d62ed8ea8aa646a0c106431b562b',
+    ('niloufar_glass', '1'): '1c7673d5add223a809486f9886704acf0b8e4f94d05a29ea83c1f796056c219a',
+    ('beauty_dew', '1'): '8569ba1aa10d45e27bfd14a2d22ecd86edebc78f37b2b162e16988a10c7a97bc',
+    ('laleh_play', '1'): '4772d1e19c5bcb31258050a7d71f2486130f887ba9f94e6fce2f6cbb5cce0aaa',
+    ('almas_luxury', '1'): '8262096804f5b281c907343723d66f8716efe43c5e175bc3bca28614cc333cf8',
+    ('green_workshop', '1'): '99576f38fe583ac46dcc5253a08d86f0bd002f4b917b01a021a9163175dddedb',
+    ('pine_eco', '1'): '41c6ab3c83b50b4e0169b8f02906239ee885a49dae3f56fd551f7eb04db78b15',
+    ('mirror_beauty', '1'): '6e29eec91232a00e040ae0fe2646ec85c6744220bfa6035411ea74784c5b2488',
+    ('cedar_home', '1'): '4585f014a7d40ce50abe6070a917eaf773fb22341da244f3fd2aeaf66d9be5ef',
+    ('simorgh_market', '1'): '1a5a9c4f026ae0c8f12769d6870dde90cadc7e0eba53c4191e3591ec7bf9cd20',
+    ('rayan_tech', '1'): '1614c1659f58ae11c634b815952b6258553475b00d8d03e6724a4e680fb4b2e0',
+    ('harbor_imports', '1'): 'c9e65804bf919bf0ecee57cef6f4f4d126c6bba20659752f18c5022c7dbd417f',
+}
+
+TOTAL: 21
