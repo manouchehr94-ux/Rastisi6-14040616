@@ -913,3 +913,28 @@ separate — 50 + 104 = 154 total invocations, 704 cells unchanged), §3.6/§3.7
 and the `_validate_or_init_campaign_matrix` schema/base-SHA guard), and
 §3.10 (the W4C-only final-status path, which never reads
 `r4-browser-result.json`).
+
+## 13. Repair Round 4 — plan-internal consistency only, no new source facts
+
+Round 4 fixed three remaining internal-consistency defects, again entirely
+within the plan document, reusing facts already established above:
+
+1. §3.2's Tier-2 loop previously ran unconditionally for
+   `("warm_boutique", "beauty_dew")` regardless of `--only`, breaking
+   subset/resumability semantics — now filtered by `selected_keys`, with
+   exact cardinality worked out per `--only` shape (§3.2's new table).
+2. §12/Task 6 previously let RED case 16 and the evidence contract point at
+   the FINAL repository `home_gallery/` path as if it were written live
+   during the campaign — screenshots now stage under the external campaign
+   root (`{CAMPAIGN_REPORT_ROOT}/screenshots/home/`) during execution and
+   are materialized into the repository only after the campaign's
+   aggregator confirms 704/704 with zero missing/duplicate cells.
+3. Task 6's Gallery-refresh step previously claimed to reuse "the same
+   already-running local server" on port 8765 from Task 4 — false, since
+   `qa_storefront_builder_r4`'s own existing, unmodified outer `finally`
+   already stops that server and restores the SQLite backup before
+   `handle()` returns (§10.B). Task 6 now runs a staleness check first
+   (`resolve_real_screenshot`/`preview_input_fingerprint`, §11.6) and starts
+   a dedicated, separate runserver on port 8766 ONLY when stale keys exist,
+   stopping it afterward — never claimed to be, and never conflated with,
+   the W4C certification server.

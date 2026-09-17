@@ -207,8 +207,11 @@ for key in selected_keys:
     occasion, intensity = w4c_fixture["tier1_occasions"][key], "balanced"
     _run_one_theme_cell(store, key, occasion, intensity, viewport="desktop", campaign_root=campaign_root, matrix_path=matrix_path)
 
-# ---------- THEME TIER 2: 54 invocations, 1 cell each = 54 cells ----------
-for key in ("warm_boutique", "beauty_dew"):
+# ---------- THEME TIER 2: up to 54 invocations, 1 cell each -- FILTERED BY selected_keys (Important 1, Round 4) ----------
+TIER2_KEYS = ("warm_boutique", "beauty_dew")
+for key in selected_keys:                    # NEVER an unconditional ("warm_boutique", "beauty_dew") loop --
+    if key not in TIER2_KEYS:                # a --only batch that excludes both Tier-2 keys must run ZERO Tier-2 cells
+        continue
     for occasion in ("nowruz", "ramadan", "muharram"):
         for intensity in ("subtle", "balanced", "strong"):
             for viewport in ("desktop", "tablet", "mobile"):
@@ -243,17 +246,39 @@ def _run_one_theme_cell(self, store, key, occasion, intensity, viewport, campaig
         self._theme_cleanup_and_verify(store)   # section 3.6 -- ALWAYS runs; raising here is BLOCKING (Important 2C)
 ```
 
-Node is invoked **154 times total** for a full campaign — **50 base
+Node is invoked **154 times total for a FULL 50-key campaign** — **50 base
 invocations** (one per Template, each covering exactly 12 cells) **+ 104
 Theme invocations** (one per Theme cell, each covering exactly 1 cell) — a
 fresh browser process per invocation (the same anti-cache-leak isolation
 `capture_ready_template_previews.py` already established as necessary).
-**Certification cells remain exactly 704** (600 base + 50 Tier-1 + 54
-Tier-2) — invocation count and cell count are two different numbers by
-design (12 cells share one base invocation; each Theme cell gets its own
-invocation), and this document never conflates them again. This mirrors the
-existing `_run_logged`/`subprocess.Popen` mechanism exactly (harness
-inventory §10.B) — called 154 times in two loops instead of once.
+**Certification cells for a full campaign remain exactly 704** (600 base +
+50 Tier-1 + 54 Tier-2) — invocation count and cell count are two different
+numbers by design (12 cells share one base invocation; each Theme cell gets
+its own invocation), and this document never conflates them again. This
+mirrors the existing `_run_logged`/`subprocess.Popen` mechanism exactly
+(harness inventory §10.B) — called 154 times in two loops instead of once.
+
+**Repair note (Round 4, Important 1):** the prior draft's Tier-2 loop
+(`for key in ("warm_boutique", "beauty_dew"): ...`) ran unconditionally,
+regardless of `--only` — a `--only editorial_jewelry` batch would still have
+executed all 54 Tier-2 cells for two Templates never selected, breaking
+subset semantics, resumability, and no-overwrite-of-PASSed-evidence. The
+corrected loop above iterates `selected_keys` and `continue`s past any key
+not in `TIER2_KEYS`, so Tier-2 cells run ONLY when a Tier-2 key is actually
+in the batch. Exact cardinalities per invocation shape:
+
+| `--only` selection | base cells | Tier-1 Theme | Tier-2 Theme | total cells | Node invocations |
+|---|---|---|---|---|---|
+| `editorial_jewelry` (a non-Tier-2 key) | 12 | 1 | 0 | 13 | 2 (1 base + 1 Tier-1) |
+| `warm_boutique` | 12 | 1 | 27 | 40 | 29 (1 base + 1 Tier-1 + 27 Tier-2) |
+| `beauty_dew` | 12 | 1 | 27 | 40 | 29 |
+| full 50-key campaign (no `--only`) | 600 | 50 | 54 | 704 | 154 |
+
+A `--only` batch never executes a Theme cell for a key it did not select —
+including Tier-2 cells for `warm_boutique`/`beauty_dew` when neither is in
+that batch's `selected_keys` — so a later, unrelated `--only` batch can
+never overwrite an already-recorded Tier-2 result file (§3.9's unique
+per-cell paths mean it would not even collide if it somehow tried).
 
 Per Important 2C: an ordinary assertion FAILure inside any base or Theme
 cell's result does NOT stop the campaign — remaining Templates/cells still
@@ -965,13 +990,34 @@ Required artifacts:
    Templates, one Home Desktop screenshot (`<key>_home_desktop.jpg`, 1440×900)
    AND one Home Mobile screenshot (`<key>_home_mobile.jpg`, 390×844) — mandatory,
    for W5 review, which explicitly requires Desktop + Mobile inspection
-   including the Bottom Navigation axis. Repaired (Round 2, Important 4):
-   sourced DIRECTLY from that Template's own `--w4c-all50` certification
-   Home cells (§3.7/§4), which already run at exactly these two viewports —
-   never from `capture_ready_template_previews.py`'s `--full-qa` mode, whose
-   own canonical Home-Desktop viewport is a confirmed, different 1440×1100
+   including the Bottom Navigation axis. Sourced DIRECTLY from that
+   Template's own `--w4c-all50` base certification Home cells (§3.2/§3.7),
+   which already run at exactly these two viewports — never from
+   `capture_ready_template_previews.py`'s `--full-qa` mode, whose own
+   canonical Home-Desktop viewport is a confirmed, different 1440×1100
    (harness inventory §11.6), not a substitutable capture. Home Tablet is
    exercised in `matrix.json` but not gallery-retained.
+
+   **Two-stage contract (repaired — Round 4, Important 2):** during the
+   live campaign, each base invocation writes its two Home screenshots to a
+   STAGING path under the external campaign root —
+   `{CAMPAIGN_REPORT_ROOT}/screenshots/home/<key>_home_desktop.jpg` /
+   `..._home_mobile.jpg` — referenced by that Template's own
+   `w4c-results/base/<key>.json`. No campaign-in-progress screenshot is ever
+   written directly into the Git repository. AFTER the campaign completes
+   (§15's aggregator reports `total_cells_recorded == 704`,
+   `missing_cells == []`, `duplicate_cells == []`), Task 6 (§17) copies
+   exactly those 100 staged files — one Desktop + one Mobile per Template,
+   read from each Template's own base result JSON, never re-captured — into
+   `docs/qa_evidence/storefront_design_engine/phase5/w4_certification/home_gallery/`
+   as the final, committed evidence. A final evidence gate (Task 6) then
+   verifies: `home_gallery/` file count `== 100`; all 50 keys have both a
+   Desktop and a Mobile file; and every final file traces back to a cell
+   whose `matrix.json` entry recorded `result: "PASS"` for that Template's
+   Home/desktop or Home/mobile cell (a staged screenshot from a FAILing Home
+   cell is never promoted into the gallery silently — a FAIL there is
+   itself a certification blocker handled by §4/§11, not hidden by omission
+   from the gallery).
 3. `gallery_index.md` — a single 100-row-referencing, 50-Template index
    (key, label_fa, Desktop thumbnail reference, Mobile thumbnail reference,
    rendered-identity summary including Bottom-Nav style) suitable for
@@ -1249,12 +1295,19 @@ never a second harness invocation path):
       mocked `clear_theme` that leaves a non-`theme.none.v1` state) halts
       the per-Template loop immediately and marks the run `BLOCKED` — no
       further Template in the batch is processed after the raise.
-  16. `_build_w4c_fixture`/the per-Template loop records, for each of the 50
-      keys, a Home-Desktop and Home-Mobile screenshot path under
-      `docs/qa_evidence/storefront_design_engine/phase5/w4_certification/home_gallery/`
-      (100 total paths) sourced from that Template's own W4C certification
-      cell — never from `capture_ready_template_previews.py`'s output paths
-      (`apps/storefront_builder/static/ready_template_previews/**`).
+  16. **(repaired — Round 4, Important 2)** every base result JSON
+      (`{CAMPAIGN_REPORT_ROOT}/w4c-results/base/<key>.json`) records exactly
+      one Home-Desktop and one Home-Mobile screenshot path, both under the
+      CAMPAIGN root's staging tree
+      (`{CAMPAIGN_REPORT_ROOT}/screenshots/home/<key>_home_desktop.jpg` /
+      `..._home_mobile.jpg`, §12/§3.9) — never under the final repository
+      evidence tree
+      (`docs/qa_evidence/storefront_design_engine/phase5/w4_certification/home_gallery/`,
+      which does not exist until Task 6 runs after the campaign completes)
+      and never under `capture_ready_template_previews.py`'s output paths
+      (`apps/storefront_builder/static/ready_template_previews/**`). This
+      test asserts the STAGING path shape only; it never requires a
+      repository evidence file to exist during a live campaign run.
 
   **Added in Repair Round 3** (§3.2/§3.6/§3.7/§3.9/§3.10 execution
   control-flow closure):
@@ -1313,13 +1366,39 @@ never a second harness invocation path):
       `result_path`/`log_path` values are pairwise unique across a
       representative set of calls.
 
-  All 26 FAIL on the current certified base (`3a4fe907...`) because the
+  **Added in Repair Round 4** (§3.2 `--only`-must-filter-Tier-2 fix):
+
+  27. A `selected_keys` subset excluding both `warm_boutique` and
+      `beauty_dew` (e.g. `["editorial_jewelry"]`) produces zero Tier-2
+      invocations and zero Tier-2 result files — assert the Tier-2 loop
+      body is never entered for such a batch.
+  28. `selected_keys = ["warm_boutique"]` alone produces exactly 27 Tier-2
+      invocations (3 occasions × 3 intensities × 3 viewports), all for
+      `warm_boutique`, and zero for `beauty_dew`.
+  29. `selected_keys = ["beauty_dew"]` alone produces exactly 27 Tier-2
+      invocations, all for `beauty_dew`, and zero for `warm_boutique`.
+  30. The full 50-key fixture (`selected_keys` = all 50) still produces
+      exactly 54 Tier-2 invocations total (27 + 27) — a regression guard
+      proving the per-key filter does not accidentally under- or
+      over-count when every key happens to be selected.
+  31. Running batch A (`--only warm_boutique`, producing 27 Tier-2 result
+      files) followed by batch B (`--only editorial_jewelry`, which does
+      not touch Tier-2 at all) leaves all 27 of batch A's Tier-2 result
+      files byte-identical (mtime and content) after batch B completes —
+      proving an unrelated `--only` batch cannot rewrite Tier-2 evidence it
+      never executed.
+
+  29 of these 31 cases are feature-contract assertions and are expected RED
+  (FAIL) on the current certified base (`3a4fe907...`), because the
   `--w4c-all50` mode, `_build_w4c_fixture`, `_apply_and_verify_published`,
-  `_theme_cleanup_and_verify`, the aggregator, and the Hero/gallery-sourcing
-  contracts do not exist yet — this is the valid RED state. Cases 8 and 21
-  are the two explicit non-interference regression guards and are expected
-  to PASS immediately (proving the ordinary R4 QA path is architecturally
-  independent of the new W4C code before any of it is even written).
+  `_theme_cleanup_and_verify`, the Tier-2 filter, the aggregator, and the
+  Hero/gallery-staging contracts do not exist yet. Cases 8 and 21 are
+  deliberate exceptions: they are non-interference/regression guards
+  asserting the EXISTING, unmodified non-W4C behavior, and are expected to
+  PASS (GREEN) immediately, before any W4C code is written — this is not a
+  contradiction of the RED state above; it is the explicit proof that the
+  ordinary R4 QA path is architecturally independent of the new W4C code
+  from the very first commit of this test file.
 
   **Exact focused test command:**
   ```
@@ -1365,26 +1444,64 @@ never a second harness invocation path):
 - [ ] Task 5 — Run the visual-distinctness clustering pass (§11) against the
   real Home Desktop+Mobile captures; resolve or escalate any `NEEDS REPAIR`
   finding before proceeding.
-- [ ] Task 6 — Populate `home_gallery/` (§12) directly from the 50 Home
-  Desktop (1440×900) + 50 Home Mobile (390×844) screenshots each Template's
-  own base certification invocation (§3.2/§3.7) already captured into
-  `/var/tmp/rastisi_w4c_campaign/w4c-results/base/<key>.json`'s referenced
-  screenshot paths during Task 4's campaign — never from
+- [ ] **Task 6 — Materialize the Home gallery, then handle static Gallery
+  staleness separately** (repaired — Round 4, Important 2 + 3):
+
+  **6a. Materialize final Home-gallery evidence (repairs Important 2).**
+  Only after Task 4's campaign aggregator (§15) reports
+  `total_cells_recorded == 704`, `missing_cells == []`,
+  `duplicate_cells == []`: for each of the 50 keys, read
+  `{CAMPAIGN_REPORT_ROOT}/w4c-results/base/<key>.json`, confirm its Home
+  Desktop and Home Mobile cells both recorded `result: "PASS"`, and copy
+  the two staged screenshot files
+  (`{CAMPAIGN_REPORT_ROOT}/screenshots/home/<key>_home_desktop.jpg` /
+  `..._home_mobile.jpg`) into
+  `docs/qa_evidence/storefront_design_engine/phase5/w4_certification/home_gallery/`
+  — never re-captured, never sourced from
   `capture_ready_template_previews.py` (§3.8), whose own canonical
-  viewport, 1440×1100, is a different, non-substitutable capture.
-  Separately, and only afterward: for each of the 50 keys, check
-  `template_preview_service.resolve_real_screenshot(preset)` /
-  `preview_input_fingerprint(preset)` (harness inventory §11.6) against the
-  currently-stored static Gallery asset; where — and only where — the stored
-  fingerprint no longer matches (i.e. the asset is genuinely stale), run
-  ```
-  python manage.py capture_ready_template_previews --base-url http://127.0.0.1:8765 --only <key> --settings=shop_core.settings
-  ```
-  to refresh it (port `8765` matches the campaign's own `qa_storefront_builder_r4`
-  runserver port from Task 4 — this command targets the SAME already-running
-  local server, never a separate one). Record in `execution_report.md` the
-  exact list of keys found stale and refreshed, and the (expected, larger)
-  list found current and left untouched — never blindly refresh all 50.
+  viewport, 1440×1100, is a different, non-substitutable capture. **Final
+  evidence gate:** after copying, verify `home_gallery/` contains exactly
+  100 files, all 50 keys have both a Desktop and a Mobile file, and every
+  copied file's originating cell was `PASS` in `matrix.json` — any FAIL
+  here blocks Task 6 from proceeding to 6b (a Home FAIL is a certification
+  blocker in its own right, per §4/§11, not a Task-6 concern to paper over).
+
+  **6b. Static Gallery staleness check and, only if needed, a SEPARATE
+  refresh server (repairs Important 3).** The `qa_storefront_builder_r4`
+  runserver from Task 4 is NOT available here — that command's existing,
+  unmodified outer `finally` stops its runserver and restores the SQLite DB
+  backup before `handle()` returns (harness inventory §10.B), so by the
+  time Task 6 runs, no server from Task 4 is listening on port `8765` or
+  any other port. Reusing "port 8765" here would be false, and this plan no
+  longer claims it.
+
+  1. For all 50 keys, check `template_preview_service.resolve_real_screenshot(preset)`
+     / `preview_input_fingerprint(preset)` (harness inventory §11.6)
+     against the currently-stored static Gallery asset. Produce two exact
+     lists: `CURRENT_STATIC_PREVIEWS` and `STALE_STATIC_PREVIEWS`.
+  2. If `STALE_STATIC_PREVIEWS` is empty: record
+     `STATIC GALLERY REFRESH: NOT REQUIRED` in `execution_report.md` and
+     stop — do NOT start any server, do NOT run
+     `capture_ready_template_previews` at all.
+  3. Otherwise, run a SEPARATE, deliberate Gallery-refresh lifecycle — NOT
+     the W4C certification server, and never claimed to be:
+     ```
+     python manage.py seed_ready_template_fashion_demo --settings=shop_core.settings   # ensure fixture current, idempotent
+     python manage.py runserver 127.0.0.1:8766 --settings=shop_core.settings &         # dedicated Gallery-refresh port, distinct from 8765
+     # wait until http://127.0.0.1:8766/ answers (poll, confirmed ready) before proceeding
+     for key in STALE_STATIC_PREVIEWS:
+         python manage.py capture_ready_template_previews --base-url http://127.0.0.1:8766 --only <key> --settings=shop_core.settings
+     # verify each refreshed asset's new preview_input_fingerprint now matches (no longer stale)
+     kill %1   # stop the dedicated port-8766 server in a finally-equivalent cleanup — never leave it running
+     ```
+  4. Record in `execution_report.md` the exact `STALE_STATIC_PREVIEWS` keys
+     refreshed and the (expected, larger) `CURRENT_STATIC_PREVIEWS` list
+     left untouched — never blindly refresh all 50.
+  5. This refresh step is entirely separate from and CANNOT affect
+     `matrix.json` or the campaign's PASS/FAIL result — W4C browser
+     certification already completed (6a's gate) before this maintenance
+     step runs. Any Gallery-refresh failure here is reported on its own in
+     `execution_report.md` and must never rewrite `matrix.json`.
 - [ ] Task 7 — Produce all remaining evidence artifacts (§12).
 - [ ] Task 8 — Full regression comparison (§14) against the certified W4B
   baseline. Exact commands:
