@@ -17,6 +17,8 @@ Implementation Round 1 directive ("DO NOT RUN THE 704-CELL CAMPAIGN YET").
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import tempfile
 from pathlib import Path
 from unittest import mock
@@ -1738,3 +1740,98 @@ class W4CCampaignProvenanceTests(TestCase):
         preset_service.apply_preset_with_checkpoint(self.store, preset)
         layout_service.publish(self.store)
         return preset
+
+
+# =============================================================================
+# Accessibility Closure Round -- IMPORTANT 1: accessibility_checks must GATE
+# the cell's own result. "FAIL" recorded but non-gating (repair round 2's
+# own, since-superseded design) is the exact defect this round repairs.
+# =============================================================================
+class W4CAccessibilityGatingTests(TestCase):
+    def setUp(self):
+        self.source = (
+            Path(r4_mod.__file__).resolve().parents[4]
+            / "tools" / "storefront_builder_r4_qa" / "run.mjs"
+        ).read_text(encoding="utf-8")
+
+    def _body(self, fn_name):
+        start = self.source.index(f"function {fn_name}")
+        end = min(
+            self.source.index("\nasync function", start + 1) if "\nasync function" in self.source[start + 1:] else len(self.source),
+            self.source.index("\nfunction ", start + 1) if "\nfunction " in self.source[start + 1:] else len(self.source),
+        )
+        return self.source[start:end]
+
+    def _extract_helper(self, name):
+        """Extract a standalone (non-async) helper function's full source,
+        by brace-counting from its opening ``{`` -- unlike ``_body`` (which
+        stops at the next sibling function), this must capture exactly ONE
+        function so it can be executed standalone under Node."""
+        start = self.source.index(f"function {name}")
+        open_brace = self.source.index("{", start)
+        depth = 0
+        for i in range(open_brace, len(self.source)):
+            if self.source[i] == "{":
+                depth += 1
+            elif self.source[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return self.source[start:i + 1]
+        raise AssertionError(f"unbalanced braces extracting {name}")
+
+    def _run_helper_against_cases(self, cases):
+        """Genuine behavioral proof (not just source-grep): extracts the
+        real w4cAccessibilityChecksPass function verbatim from run.mjs,
+        executes it under the real Node the harness itself uses, and
+        returns its actual return values for the given input objects."""
+        helper_src = self._extract_helper("w4cAccessibilityChecksPass")
+        script = helper_src + "\nconsole.log(JSON.stringify(" + json.dumps(cases) + ".map(w4cAccessibilityChecksPass)));"
+        fd, tmp_path = tempfile.mkstemp(suffix=".mjs")
+        os.close(fd)
+        try:
+            Path(tmp_path).write_text(script, encoding="utf-8")
+            result = subprocess.run(["node", tmp_path], capture_output=True, text=True, timeout=20)
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+        if result.returncode != 0:
+            raise AssertionError(f"node execution failed: {result.stderr}")
+        return json.loads(result.stdout.strip())
+
+    # -- 1A: the shared helper exists and is genuinely correct -------------
+    def test_98_accessibility_helper_exists(self):
+        self.assertIn("function w4cAccessibilityChecksPass", self.source)
+
+    def test_99_accessibility_helper_true_when_all_pass_or_na(self):
+        results = self._run_helper_against_cases([
+            {"a": "PASS", "b": "n/a"}, {"a": "PASS", "b": "PASS"}, {"a": "n/a", "b": "n/a"},
+        ])
+        self.assertEqual(results, [True, True, True])
+
+    def test_100_accessibility_helper_false_when_any_fail(self):
+        results = self._run_helper_against_cases([
+            {"a": "PASS", "b": "FAIL"}, {"a": "FAIL"}, {"a": "FAIL", "b": "FAIL"},
+        ])
+        self.assertEqual(results, [False, False, False])
+
+    # -- 1B: every Base cell's passing computation actually uses it --------
+    def test_101_home_accessibility_gates_passing(self):
+        body = self._body("w4cRunHomeCell")
+        self.assertIn("w4cAccessibilityChecksPass", body)
+
+    def test_102_listing_accessibility_gates_passing(self):
+        body = self._body("w4cRunListingCell")
+        self.assertIn("w4cAccessibilityChecksPass", body)
+
+    def test_103_pdp_accessibility_gates_passing(self):
+        body = self._body("w4cRunPdpCell")
+        self.assertIn("w4cAccessibilityChecksPass", body)
+
+    def test_104_cart_accessibility_gates_passing(self):
+        body = self._body("w4cRunCartCell")
+        self.assertIn("w4cAccessibilityChecksPass", body)
+
+    def test_105_theme_cell_unaffected_no_admin_accessibility_controls(self):
+        """Theme's public path exposes no admin accessibility controls in
+        this matrix -- it must NOT gain the new gate."""
+        body = self._body("w4cRunThemeCell")
+        self.assertNotIn("w4cAccessibilityChecksPass", body)
