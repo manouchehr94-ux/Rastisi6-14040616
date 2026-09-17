@@ -1543,15 +1543,18 @@ class Command(BaseCommand):
             for i, spec in enumerate(a8_ready_templates._SPECS)
         }
         # The PDP/Cart cells exercise real quantity-adjustment and add-to-cart
-        # flows, so the fixture product must actually be purchasable -- reusing
-        # the same "has inventory" predicate as
-        # product_completion_service._has_inventory for a VARIABLE product
-        # (never a second, hand-rolled stock rule).
+        # flows against whichever variant the storefront pre-selects as the
+        # DEFAULT (storefront_variant_service: is_default=True, else the
+        # first by display_order/id -- never necessarily the one with stock).
+        # Rather than duplicate that selection logic here, require every
+        # active, non-obsolete variant to be in stock, so any variant the
+        # storefront could pick as default is purchasable.
         pdp_product = (
             Product.objects.filter(
                 store=store, product_type=Product.ProductType.VARIABLE,
                 variants__is_active=True, variants__is_obsolete=False, variants__stock__gt=0,
             )
+            .exclude(variants__is_active=True, variants__is_obsolete=False, variants__stock=0)
             .distinct().order_by("id").first()
         )
         return {

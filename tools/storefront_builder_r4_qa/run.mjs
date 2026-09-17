@@ -4267,8 +4267,17 @@ async function w4cRunListingCell(context, manifest, viewport) {
       if (linkHref && linkHref !== '#') {
         try {
           const absoluteHref = /^https?:\/\//.test(linkHref) ? linkHref : `${manifest.origin}${linkHref}`;
-          const linkResp = await targetPage.request.get(absoluteHref);
-          linkResolves = linkResp.status() === 200;
+          // manifest.origin is a W4C-only fake customer-facing host, mapped to
+          // 127.0.0.1 solely via Chromium's own --host-resolver-rules launch
+          // flag (see launchSystemBrowser) -- targetPage.request is a
+          // Node-level HTTP client that never goes through Chromium's network
+          // stack, so it cannot resolve that host at all. Running fetch()
+          // inside the page's own JS context uses the browser's resolver.
+          const status = await targetPage.evaluate(
+            (url) => fetch(url, { credentials: 'same-origin' }).then((r) => r.status),
+            absoluteHref,
+          );
+          linkResolves = status === 200;
         } catch (_error) { linkResolves = false; }
       }
     }
@@ -4397,13 +4406,26 @@ async function w4cRunCartCell(context, manifest, viewport) {
         result: 'BLOCKED', reason: 'no variant-bearing PDP fixture product available',
       };
     }
+    // manifest.origin is a W4C-only fake customer-facing host, mapped to
+    // 127.0.0.1 solely via Chromium's own --host-resolver-rules launch flag
+    // (see launchSystemBrowser) -- context.request/targetPage.request never
+    // goes through that resolution, so the POST has to run inside the
+    // page's own JS context (same technique as the Listing cell's link
+    // check). Load the PDP first so the csrftoken cookie is set.
+    await targetPage.goto(`${manifest.origin}/products/${slug}/`, { waitUntil: 'domcontentloaded', timeout: 20000 });
     let addStatus = null;
     try {
-      const addResp = await context.request.post(`${manifest.origin}/cart/add/${slug}/`, {
-        form: { quantity: '1' },
-        headers: { Referer: `${manifest.origin}/products/${slug}/` },
-      });
-      addStatus = addResp.status();
+      addStatus = await targetPage.evaluate(async ({ origin, productSlug }) => {
+        const match = document.cookie.match(/(?:^|; )csrftoken=([^;]*)/);
+        const csrfToken = match ? decodeURIComponent(match[1]) : '';
+        const resp = await fetch(`${origin}/cart/add/${productSlug}/`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'X-CSRFToken': csrfToken, 'HX-Request': 'true' },
+          body: new URLSearchParams({ quantity: '1' }),
+        });
+        return resp.status;
+      }, { origin: manifest.origin, productSlug: slug });
     } catch (_error) { addStatus = null; }
     const response = await targetPage.goto(`${manifest.origin}/cart/`, { waitUntil: 'domcontentloaded', timeout: 20000 });
     const health = await w4cShellHealth(targetPage);

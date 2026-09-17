@@ -250,6 +250,39 @@ class W4CAll50CertificationHarnessTests(TestCase):
         fixture = Command()._build_w4c_fixture(self.store)
         self.assertEqual(fixture["pdp_product_id"], in_stock.pk)
 
+    # -- 14c (smoke-round bug regression, section 11) ---------------------
+    def test_14c_pdp_fixture_rejects_product_with_any_out_of_stock_variant(self):
+        """storefront_variant_service picks the DEFAULT variant as
+        ``is_default=True`` else the first by (display_order, id) -- never
+        necessarily an in-stock one. A product with a mix of in-stock and
+        out-of-stock variants (found via the bounded editorial_jewelry
+        browser smoke) can still present an out-of-stock default variant on
+        the PDP even though "some" variant has stock. The fixture must
+        require EVERY active variant to be in stock, not just one."""
+        from decimal import Decimal
+
+        from apps.catalog.models import Category, Product, ProductVariant, Vendor
+
+        vendor = Vendor.objects.create(store=self.store, name="فروشنده", slug="w4c-mixed-vendor")
+        category = Category.objects.create(store=self.store, name="دسته", slug="w4c-mixed-cat")
+        mixed = Product.objects.create(
+            store=self.store, vendor=vendor, category=category, name="کالای مخلوط",
+            slug="w4c-mixed-product", sku="W4C-MIXED", price=Decimal("100000"),
+            product_type=Product.ProductType.VARIABLE,
+        )
+        ProductVariant.objects.create(product=mixed, attribute="سایز", value="41", stock=0)
+        ProductVariant.objects.create(product=mixed, attribute="سایز", value="42", stock=10)
+        all_in_stock = Product.objects.create(
+            store=self.store, vendor=vendor, category=category, name="کالای کاملا موجود",
+            slug="w4c-all-in-stock-product", sku="W4C-ALL-IN-STOCK", price=Decimal("100000"),
+            product_type=Product.ProductType.VARIABLE,
+        )
+        ProductVariant.objects.create(product=all_in_stock, attribute="سایز", value="41", stock=10)
+        ProductVariant.objects.create(product=all_in_stock, attribute="سایز", value="42", stock=10)
+
+        fixture = Command()._build_w4c_fixture(self.store)
+        self.assertEqual(fixture["pdp_product_id"], all_in_stock.pk)
+
     # -- 15 --------------------------------------------------------------
     def test_15_theme_cleanup_failure_halts_run_immediately_and_blocks(self):
         self._publish("editorial_jewelry")
@@ -1271,3 +1304,11 @@ class W4CBrowserContractSourceTests(TestCase):
         body = self.source[start:end]
         self.assertIn("rendered.theme === activeKey.occasion", body)
         self.assertNotIn("rendered.theme === expectedComponentKey", body)
+
+    def test_64_cart_add_runs_inside_the_page_never_context_request(self):
+        start = self.source.index("function w4cRunCartCell")
+        end = self.source.index("\nasync function", start + 1)
+        body = self.source[start:end]
+        self.assertNotIn("context.request.post", body)
+        self.assertIn("targetPage.evaluate", body)
+        self.assertIn("csrftoken", body)
