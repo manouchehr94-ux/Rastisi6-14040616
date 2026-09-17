@@ -126,6 +126,78 @@ proves the exact section-presence delta unambiguously and
 deterministically (a browser recapture of v1 could only reconfirm what
 the registry-level test already guarantees byte-for-byte).
 
+## Independent Review Repair Round 1 — superseded conclusion
+
+The "Latest-vs-historical visible comparison" section above substituted a
+registry/DOM-level test proof for the browser-level v1-vs-v2 comparison the
+approved implementation contract required for each of the 21 curated keys.
+**The Independent Architect rejected that substitution** (Repair Round 1,
+IMPORTANT finding 1): a registry test proves the section is absent/present
+in the compiled `LayoutPresetDefinition`, but does not itself prove what a
+real browser renders.
+
+That gap has since been closed. A real v1-vs-v2 browser comparison was
+executed for all 21 curated keys at Desktop 1440×900, using
+`get_layout_preset_version(key, "1")` and `get_layout_preset(key)` through
+the same canonical apply/publish path and the same shared demo Store,
+with the added-section presence verified two independent ways per pair:
+a page-wide count of the mechanism's own content selector (`a.brand-tile`
+/ `a.pcard` / `.story-item` — each confirmed by source inspection to
+render in exactly one section template across the whole storefront+catalog
+template tree, so an unscoped count cannot be confused with an unrelated
+section) and a positional cross-check against the exact, registry-known
+Home section_key sequence (`EXPECTED_NEW_HOME_SEQUENCE` /
+`CERTIFIED_OLD_HOME_SEQUENCE` / `EXPECTED_ADDED_SECTION`, read directly
+from the already-green `test_w4b_template_curation.py` contract, never
+re-derived or guessed).
+
+**Result: 21/21 pairs PASS.** Historical (v1) added-section count = 0 for
+all 21 keys; latest (v2) added-section count > 0 for all 21 keys, with the
+positional check confirming the element sits at the exact expected
+`.rsec` index. Zero console/page/failed-request errors, zero horizontal
+overflow, `dir="rtl"` on both versions, HTTP 200 on both versions, for all
+21 pairs.
+
+Full evidence: `browser_qa_history/summary.json` (21 entries, every field
+listed in the repair directive) and 42 paired screenshots
+(`browser_qa_history/<key>_v1_desktop.jpg` / `<key>_v2_desktop.jpg`).
+Consolidated in `12_independent_review_browser_repair_summary.md`.
+
+This supersedes the "unnecessary spend" conclusion above — that
+conclusion is left in place (not deleted, per the review directive's
+no-history-rewriting rule) as the honest record of what was originally
+decided and why it was insufficient.
+
+## Independent Review Repair Round 1 — expanded latest-v2 acceptance matrix
+
+Separately, the Independent Architect found (Repair Round 1, IMPORTANT
+finding 2) that the original 63-check responsive matrix above did not
+verify Header/Footer exactly-once, the Bottom-Nav responsive contract,
+core Home content presence, absence of functional duplication, or real
+primary-link resolution. A second, expanded 21×3 run
+(`browser_qa_responsive_repair/summary.json`) added all of these checks,
+reusing the same canonical apply/publish path and shared demo Store:
+
+| Check | Result |
+|---|---|
+| HTTP 200 | 63/63 |
+| `dir="rtl"` | 63/63 |
+| Horizontal overflow | 0/63 |
+| Header (`<header>`) exactly once | 63/63 |
+| Footer (`<footer>`) exactly once | 63/63 |
+| Bottom Nav (`.gmn`) hidden at Desktop/Tablet (`display:none`) | 42/42 |
+| Bottom Nav (`.gmn`) visible at Mobile | 21/21 |
+| Core Home content (`.rsec` count == exact registry composition length) | 63/63 |
+| Added section present, no functional duplication (exactly 1 `.rsec` block contains it) | 63/63 |
+| Real primary-link resolution (first added-section link, HTTP 200) | 21/21 |
+| Dead placeholder `href="#"` | 0/63 |
+| Newsletter present at the terminal `.rsec` index (7 keys × 3 viewports) | 21/21 |
+| Console errors | 0/63 |
+| Page errors | 0/63 |
+| Failed requests | 0/63 |
+
+Full detail: `12_independent_review_browser_repair_summary.md`.
+
 ## Note on an operational mistake (caught and fully corrected)
 
 While cleaning up the canonical tool's per-key output from

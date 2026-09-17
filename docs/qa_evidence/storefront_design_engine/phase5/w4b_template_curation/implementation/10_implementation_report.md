@@ -86,8 +86,45 @@ reverted via `git checkout --`, zero data loss, no commit ever contained
 the deletion. Documented in full in `06_bounded_browser_qa_summary.md`
 under "Note on an operational mistake."
 
+## Independent Review Repair Round 1 (QA/evidence only)
+
+Reviewed PR head `f5114d838f4509f016046c6fd537bab3e91879c4`. CRITICAL 0 /
+IMPORTANT 3 / PRODUCTION BLOCKER 0. No production or Django test code was
+reopened or changed. Findings addressed:
+
+1. **Missing v1-vs-v2 browser comparison.** The original evidence
+   substituted a registry/DOM-level test for the required browser-level
+   before/after comparison — rejected. A real v1-vs-v2 browser comparison
+   was run for all 21 curated keys at Desktop 1440×900 through the same
+   canonical apply/publish path: **21/21 pairs PASS**, historical
+   added-section count = 0 for all 21, latest added-section count > 0 for
+   all 21, positional cross-check against the registry-known composition
+   confirmed. Evidence: `browser_qa_history/` +
+   `12_independent_review_browser_repair_summary.md` §1.
+2. **Incomplete latest-v2 acceptance matrix.** Re-ran the 21×3 responsive
+   matrix with Header/Footer exactly-once, the Bottom-Nav responsive
+   contract, core Home content presence, no functional duplication, real
+   primary-link resolution, and the newsletter-terminal check added:
+   **63/63 PASS**. Evidence: `browser_qa_responsive_repair/` +
+   `12_independent_review_browser_repair_summary.md` §2.
+3. **Self-contradictory clean evidence.** `11_final_clean_status_evidence.txt`
+   captured its own `git status --short` output showing itself as
+   untracked, which is not valid proof of a clean worktree. That file is
+   marked SUPERSEDED (kept, not deleted or rewritten — see the review
+   directive's no-history-rewriting rule). Corrected sequence: captured
+   to a temp path outside the repository, verified genuinely empty
+   `git status --short`, then written to
+   `13_final_clean_status_review_repair.txt` and committed alone.
+
+Because no `apps/`, `tools/`, `migrations/`, or Django test file changed
+in this repair, all previously-captured test evidence remains valid and
+was reused without re-running: W4B contract tests 19/19, A8/U10 focused
+suites 116/116, full `apps.storefront_builder.tests` 3235/30F/2E/4skip,
+W4B-only failure/error identities = 0, changed pre-existing reasons = 0.
+
 ## Status
 
-All 12 implementation-plan tasks complete. Ready for the final
-clean-status evidence capture and PR creation. This report does not
-authorize merge; W4B remains open pending Independent Architect review.
+All implementation-plan tasks complete, plus Independent Review Repair
+Round 1 (QA/evidence only). Ready for Independent Architect merge review.
+This report does not authorize merge; W4B remains open pending that
+review.
