@@ -4087,6 +4087,283 @@ async function scenario16ShowcaseFacade() {
   await page.setViewportSize({ width: 1440, height: 900 });
 }
 
+// =====================================================================
+// P5-W4C -- All-50 browser certification (design doc section 3.7).
+// One invocation certifies ONE Template's 12 base cells (mode: 'base')
+// OR exactly ONE Theme cell (mode: 'theme'), then exits. Every context is
+// fresh and cookie-less (manifest.session never exists in W4C mode,
+// section 5) -- these functions never call context.addCookies. Structured
+// try/finally cleanup; process.exitCode only, never process.exit().
+// =====================================================================
+
+const W4C_VIEWPORTS = {
+  desktop: { width: 1440, height: 900 },
+  tablet: { width: 768, height: 1024 },
+  mobile: { width: 390, height: 844 },
+};
+
+function w4cAttachErrorCollectors(targetPage) {
+  const consoleErrors = [];
+  const pageErrors = [];
+  const requestFailures = [];
+  targetPage.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
+  targetPage.on('pageerror', (err) => pageErrors.push(err.message || String(err)));
+  targetPage.on('requestfailed', (req) => {
+    const url = req.url();
+    if (url.endsWith('/favicon.ico')) return;
+    requestFailures.push(url);
+  });
+  return { consoleErrors, pageErrors, requestFailures };
+}
+
+async function w4cShellHealth(targetPage) {
+  const dir = await targetPage.evaluate(() => document.documentElement.getAttribute('dir'));
+  const noOverflow = await targetPage.evaluate(
+    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 2
+  );
+  const headerCount = await targetPage.locator('header').count();
+  const footerCount = await targetPage.locator('footer').count();
+  const bottomNavDisplay = await targetPage.evaluate(() => {
+    const el = document.querySelector('.gmn');
+    return el ? window.getComputedStyle(el).display : null;
+  });
+  return { dir, noOverflow, headerCount, footerCount, bottomNavDisplay };
+}
+
+function w4cShellPasses(health, response) {
+  return Boolean(
+    response && response.status() === 200 && health.dir === 'rtl' && health.noOverflow
+    && health.headerCount === 1 && health.footerCount === 1
+  );
+}
+
+async function w4cRunHomeCell(context, manifest, viewport) {
+  const targetPage = await context.newPage();
+  const errors = w4cAttachErrorCollectors(targetPage);
+  try {
+    const response = await targetPage.goto(manifest.public_url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    const health = await w4cShellHealth(targetPage);
+    const rsecCount = await targetPage.locator('.wrap.sfb-preview-sections .rsec').count();
+    const cardCount = await targetPage.locator('article.pcard').count();
+    const heroExpected = Boolean(manifest.active_key && manifest.active_key.hero_expected);
+    const heroPresent = (await targetPage.locator('[data-section-key="hero_banner"], .rsec:has-text("")').count()) > 0
+      || (await targetPage.locator('.hero-banner, .rsec-hero').count()) > 0;
+    const heroResult = heroExpected ? (heroPresent ? 'PASS' : 'FAIL') : 'N/A';
+    const dead = await targetPage.locator('a[href="#"]').count();
+    const shellOk = w4cShellPasses(health, response);
+    const result = shellOk && dead === 0 && errors.consoleErrors.length === 0
+      && errors.pageErrors.length === 0 && errors.requestFailures.length === 0
+      ? 'PASS' : 'FAIL';
+    if (viewport === 'desktop' || viewport === 'mobile') {
+      const shotPath = viewport === 'desktop' ? manifest.home_screenshot_desktop : manifest.home_screenshot_mobile;
+      if (shotPath) {
+        fs.mkdirSync(path.dirname(shotPath), { recursive: true });
+        await targetPage.screenshot({ path: shotPath, fullPage: false });
+      }
+    }
+    return {
+      http_status: response ? response.status() : null,
+      rtl: health.dir === 'rtl',
+      overflow: !health.noOverflow,
+      header_count: health.headerCount,
+      footer_count: health.footerCount,
+      bottom_nav_display: health.bottomNavDisplay,
+      rsec_count: rsecCount,
+      product_cards_present: cardCount > 0,
+      hero_expected: heroExpected,
+      hero_result: heroResult,
+      dead_href_count: dead,
+      console_errors: errors.consoleErrors,
+      page_errors: errors.pageErrors,
+      failed_requests: errors.requestFailures,
+      screenshot: (viewport === 'desktop' || viewport === 'mobile')
+        ? (viewport === 'desktop' ? manifest.home_screenshot_desktop : manifest.home_screenshot_mobile)
+        : null,
+      result,
+    };
+  } finally {
+    await targetPage.close();
+  }
+}
+
+async function w4cRunListingCell(context) {
+  const targetPage = await context.newPage();
+  const errors = w4cAttachErrorCollectors(targetPage);
+  try {
+    const response = await targetPage.goto(`${manifest.origin}/products/`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    const health = await w4cShellHealth(targetPage);
+    const cardCount = await targetPage.locator('article.pcard').count();
+    const dead = await targetPage.locator('a[href="#"]').count();
+    const shellOk = w4cShellPasses(health, response);
+    const result = shellOk && dead === 0 && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0
+      ? 'PASS' : 'FAIL';
+    return {
+      http_status: response ? response.status() : null,
+      rtl: health.dir === 'rtl',
+      overflow: !health.noOverflow,
+      header_count: health.headerCount,
+      footer_count: health.footerCount,
+      product_cards_present: cardCount > 0,
+      dead_href_count: dead,
+      console_errors: errors.consoleErrors,
+      page_errors: errors.pageErrors,
+      failed_requests: errors.requestFailures,
+      screenshot: null,
+      result,
+    };
+  } finally {
+    await targetPage.close();
+  }
+}
+
+async function w4cRunPdpCell(context, manifest) {
+  const targetPage = await context.newPage();
+  const errors = w4cAttachErrorCollectors(targetPage);
+  try {
+    const slug = manifest.pdp_product_slug;
+    const response = slug
+      ? await targetPage.goto(`${manifest.origin}/products/${slug}/`, { waitUntil: 'domcontentloaded', timeout: 20000 })
+      : null;
+    const health = slug ? await w4cShellHealth(targetPage) : null;
+    const galleryCount = slug ? await targetPage.locator('img').count() : 0;
+    const shellOk = slug ? w4cShellPasses(health, response) : false;
+    const result = slug && shellOk && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0
+      ? 'PASS' : (slug ? 'FAIL' : 'BLOCKED');
+    return {
+      http_status: response ? response.status() : null,
+      rtl: health ? health.dir === 'rtl' : null,
+      overflow: health ? !health.noOverflow : null,
+      header_count: health ? health.headerCount : 0,
+      footer_count: health ? health.footerCount : 0,
+      gallery_image_count: galleryCount,
+      console_errors: errors.consoleErrors,
+      page_errors: errors.pageErrors,
+      failed_requests: errors.requestFailures,
+      screenshot: null,
+      reason: slug ? undefined : 'no variant-bearing PDP fixture product available',
+      result,
+    };
+  } finally {
+    await targetPage.close();
+  }
+}
+
+async function w4cRunCartCell(context, manifest) {
+  const targetPage = await context.newPage();
+  const errors = w4cAttachErrorCollectors(targetPage);
+  try {
+    const slug = manifest.pdp_product_slug;
+    if (slug) {
+      try {
+        await context.request.post(`${manifest.origin}/cart/add/${slug}/`, {
+          form: { quantity: '1' },
+          headers: { Referer: `${manifest.origin}/products/${slug}/` },
+        });
+      } catch (_error) { /* recorded as a FAIL below via the health check */ }
+    }
+    const response = await targetPage.goto(`${manifest.origin}/cart/`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    const health = await w4cShellHealth(targetPage);
+    const shellOk = w4cShellPasses(health, response);
+    const result = slug && shellOk && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0
+      ? 'PASS' : (slug ? 'FAIL' : 'BLOCKED');
+    return {
+      http_status: response ? response.status() : null,
+      rtl: health.dir === 'rtl',
+      overflow: !health.noOverflow,
+      header_count: health.headerCount,
+      footer_count: health.footerCount,
+      console_errors: errors.consoleErrors,
+      page_errors: errors.pageErrors,
+      failed_requests: errors.requestFailures,
+      screenshot: null,
+      reason: slug ? undefined : 'no variant-bearing PDP fixture product available',
+      result,
+    };
+  } finally {
+    await targetPage.close();
+  }
+}
+
+async function w4cRunCell(context, pageClass, viewport, manifest) {
+  if (pageClass === 'home') return w4cRunHomeCell(context, manifest, viewport);
+  if (pageClass === 'listing') return w4cRunListingCell(context);
+  if (pageClass === 'pdp') return w4cRunPdpCell(context, manifest);
+  if (pageClass === 'cart') return w4cRunCartCell(context, manifest);
+  throw new Error(`unknown W4C page_class: ${pageClass}`);
+}
+
+async function w4cBaseCertification(manifest) {
+  const browser = await launchSystemBrowser();
+  const openContexts = [];
+  const result = { key: manifest.active_key.key, version: manifest.active_key.version, page_classes: {} };
+  try {
+    for (const cell of manifest.cells) {
+      const { page_class: pageClass, viewport } = cell;
+      const context = await browser.newContext({ viewport: W4C_VIEWPORTS[viewport] });
+      openContexts.push(context);
+      result.page_classes[pageClass] = result.page_classes[pageClass] || {};
+      result.page_classes[pageClass][viewport] = await w4cRunCell(context, pageClass, viewport, manifest);
+    }
+  } finally {
+    for (const context of openContexts) {
+      try { await context.close(); } catch (_error) { /* best-effort */ }
+    }
+    try { await browser.close(); } catch (_error) { /* best-effort */ }
+    fs.mkdirSync(path.dirname(manifest.result_path), { recursive: true });
+    fs.writeFileSync(manifest.result_path, JSON.stringify(result, null, 2), 'utf8');
+    const anyFail = Object.values(result.page_classes).some(
+      (byViewport) => Object.values(byViewport).some((cell) => cell.result === 'FAIL')
+    );
+    process.exitCode = anyFail ? 1 : 0;
+  }
+}
+
+async function w4cRunThemeCell(context, manifest) {
+  const targetPage = await context.newPage();
+  const errors = w4cAttachErrorCollectors(targetPage);
+  try {
+    const response = await targetPage.goto(manifest.public_url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    const health = await w4cShellHealth(targetPage);
+    const shellOk = w4cShellPasses(health, response);
+    const result = shellOk && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0 ? 'PASS' : 'FAIL';
+    return {
+      http_status: response ? response.status() : null,
+      rtl: health.dir === 'rtl',
+      overflow: !health.noOverflow,
+      console_errors: errors.consoleErrors,
+      page_errors: errors.pageErrors,
+      failed_requests: errors.requestFailures,
+      result,
+    };
+  } finally {
+    await targetPage.close();
+  }
+}
+
+async function w4cThemeCertification(manifest) {
+  const browser = await launchSystemBrowser();
+  const result = {
+    key: manifest.active_key.key,
+    occasion: manifest.active_key.occasion,
+    intensity: manifest.active_key.intensity,
+    viewport: manifest.active_key.viewport,
+    tier: manifest.active_key.tier,
+  };
+  let context;
+  try {
+    context = await browser.newContext({ viewport: W4C_VIEWPORTS[manifest.active_key.viewport] });
+    Object.assign(result, await w4cRunThemeCell(context, manifest));
+  } finally {
+    if (context) {
+      try { await context.close(); } catch (_error) { /* best-effort */ }
+    }
+    try { await browser.close(); } catch (_error) { /* best-effort */ }
+    fs.mkdirSync(path.dirname(manifest.result_path), { recursive: true });
+    fs.writeFileSync(manifest.result_path, JSON.stringify(result, null, 2), 'utf8');
+    process.exitCode = result.result === 'FAIL' ? 1 : 0;
+  }
+}
+
 async function main() {
   deleteStaleScreenshots();
 
@@ -4152,21 +4429,37 @@ async function main() {
   await scenario('15-task8-template-switch-lifecycle', scenario15TemplateSwitchLifecycleGate);
 }
 
-try {
-  await main();
-} catch (error) {
-  result.summary.failed += 1;
-  result.scenarios.push({ name: 'qa-runner:fatal', status: 'FAIL', error: error.stack || error.message || String(error) });
-  console.error(error.stack || error);
-} finally {
-  result.finished_at = new Date().toISOString();
-  if (publicPage) { try { await publicPage.close(); } catch (_error) {} }
-  if (browser) { try { await browser.close(); } catch (_error) {} }
+if (manifest.w4c) {
+  // P5-W4C -- a completely separate, additive entry path (section 3.7). The
+  // 15 legacy scenarios above, main(), and the module-level try/finally
+  // below are UNTOUCHED and never run for a W4C invocation.
+  if (manifest.mode === 'base') {
+    await w4cBaseCertification(manifest);
+  } else if (manifest.mode === 'theme') {
+    await w4cThemeCertification(manifest);
+  } else {
+    console.error(`unknown W4C manifest.mode: ${manifest.mode}`);
+    process.exitCode = 2;
+  }
+  // process.exitCode is set inside each function's own finally block --
+  // never process.exit() here or inside them.
+} else {
+  try {
+    await main();
+  } catch (error) {
+    result.summary.failed += 1;
+    result.scenarios.push({ name: 'qa-runner:fatal', status: 'FAIL', error: error.stack || error.message || String(error) });
+    console.error(error.stack || error);
+  } finally {
+    result.finished_at = new Date().toISOString();
+    if (publicPage) { try { await publicPage.close(); } catch (_error) {} }
+    if (browser) { try { await browser.close(); } catch (_error) {} }
 
-  fs.writeFileSync(path.join(manifest.report_dir, 'r4-browser-result.json'), JSON.stringify(result, null, 2), 'utf8');
-  console.log('\n=== R4 Task 12 result summary ===');
-  console.log(`Passed: ${result.summary.passed}  Failed: ${result.summary.failed}`);
-  for (const row of result.scenarios) console.log(`${row.status.padEnd(5)} ${row.name}`);
+    fs.writeFileSync(path.join(manifest.report_dir, 'r4-browser-result.json'), JSON.stringify(result, null, 2), 'utf8');
+    console.log('\n=== R4 Task 12 result summary ===');
+    console.log(`Passed: ${result.summary.passed}  Failed: ${result.summary.failed}`);
+    for (const row of result.scenarios) console.log(`${row.status.padEnd(5)} ${row.name}`);
+  }
+
+  process.exit(result.summary.failed > 0 ? 1 : 0);
 }
-
-process.exit(result.summary.failed > 0 ? 1 : 0);

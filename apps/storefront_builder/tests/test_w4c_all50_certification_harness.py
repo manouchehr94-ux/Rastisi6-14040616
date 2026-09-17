@@ -78,7 +78,8 @@ class W4CAll50CertificationHarnessTests(TestCase):
     def test_03_w4c_all50_calls_w4c_fixture_never_legacy_sandbox(self):
         user = self._make_qa_user()
         command = Command()
-        with mock.patch.object(Command, "_prepare_w4c_certification_fixture", return_value={}) as w4c_fixture, \
+        with mock.patch.object(r4_mod.settings, "DEBUG", True), \
+             mock.patch.object(Command, "_prepare_w4c_certification_fixture", return_value={}) as w4c_fixture, \
              mock.patch.object(Command, "_prepare_r4_sandbox") as legacy_sandbox, \
              mock.patch.object(Command, "_run_w4c_campaign", return_value={
                  "total_cells_recorded": 0, "missing_cells": [], "duplicate_cells": [],
@@ -203,10 +204,11 @@ class W4CAll50CertificationHarnessTests(TestCase):
 
     # -- 14 --------------------------------------------------------------
     def test_14_tier1_occasion_cycle_matches_deterministic_spec_order(self):
+        from apps.storefront_builder import a8_ready_templates
+
         fixture = Command()._build_w4c_fixture(self.store)
-        presets = lpr.list_ready_templates()
         cycle = ("nowruz", "ramadan", "muharram")
-        expected = {p.key: cycle[i % 3] for i, p in enumerate(presets)}
+        expected = {spec.key: cycle[i % 3] for i, spec in enumerate(a8_ready_templates._SPECS)}
         self.assertEqual(fixture["tier1_occasions"], expected)
         self.assertEqual(len(fixture["tier1_occasions"]), 50)
         # Spot-check against section 1.1's literal table.
@@ -277,6 +279,7 @@ class W4CAll50CertificationHarnessTests(TestCase):
     # ---------------------------------------------------------------
     def _make_qa_user(self):
         from django.contrib.auth import get_user_model
+        from django.utils import timezone
 
         from apps.stores.models import StoreMembership
 
@@ -284,7 +287,11 @@ class W4CAll50CertificationHarnessTests(TestCase):
         user, _ = User.objects.get_or_create(username="w4c_test_owner", defaults={"is_staff": True})
         StoreMembership.objects.get_or_create(
             store=self.store, user=user,
-            defaults={"role": StoreMembership.Role.OWNER, "status": StoreMembership.MembershipStatus.ACTIVE},
+            defaults={
+                "role": StoreMembership.Role.OWNER,
+                "status": StoreMembership.MembershipStatus.ACTIVE,
+                "accepted_at": timezone.now(),
+            },
         )
         return user
 
