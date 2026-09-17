@@ -4284,18 +4284,24 @@ async function w4cVariantTransitionCheck(targetPage) {
   const controls = targetPage.locator('.opt-block .swatch, .opt-block .size');
   const count = await controls.count();
   if (count < 2) return { attempted: false, changed: false, controlCount: count };
-  const before = await targetPage.evaluate(() => {
-    const skuEl = document.querySelector('.pricebox .sku-line');
-    return {
-      sku: skuEl ? skuEl.textContent.trim() : null,
-      price: (document.querySelector('.pricebox .now') || {}).textContent || null,
-      activeIndex: Array.from(document.querySelectorAll('.opt-block .swatch, .opt-block .size'))
-        .findIndex((el) => el.classList.contains('active')),
-    };
+  // Each ``.opt-block`` is one AXIS (color/size/...), and EVERY axis has its
+  // own currently-active value -- a product with axes rendered side by side
+  // (e.g. a single-value color axis alongside a 5-value size axis) has
+  // MULTIPLE active controls, one per axis, not just one overall. Tracking
+  // only the first active index (as opposed to the full active SET) means a
+  // "different" pick can land on an axis's OWN already-selected value,
+  // which never changes anything -- the real bug this fixed after the
+  // bounded smoke caught it on exactly such a product.
+  const readState = () => ({
+    sku: (document.querySelector('.pricebox .sku-line') || {}).textContent?.trim() || null,
+    price: (document.querySelector('.pricebox .now') || {}).textContent || null,
+    activeIndices: Array.from(document.querySelectorAll('.opt-block .swatch, .opt-block .size'))
+      .reduce((acc, el, i) => { if (el.classList.contains('active')) acc.push(i); return acc; }, []),
   });
+  const before = await targetPage.evaluate(readState);
   let target = null;
   for (let i = 0; i < count; i += 1) {
-    if (i === before.activeIndex) continue;
+    if (before.activeIndices.includes(i)) continue;
     const candidate = controls.nth(i);
     const unavailable = await candidate.evaluate((el) => el.classList.contains('unavailable'));
     if (!unavailable) { target = candidate; break; }
@@ -4303,19 +4309,9 @@ async function w4cVariantTransitionCheck(targetPage) {
   if (!target) return { attempted: false, changed: false, controlCount: count };
   await target.click().catch(() => {});
   await targetPage.waitForTimeout(200);
-  const after = await targetPage.evaluate(() => {
-    const skuEl = document.querySelector('.pricebox .sku-line');
-    return {
-      sku: skuEl ? skuEl.textContent.trim() : null,
-      price: (document.querySelector('.pricebox .now') || {}).textContent || null,
-      activeIndex: Array.from(document.querySelectorAll('.opt-block .swatch, .opt-block .size'))
-        .findIndex((el) => el.classList.contains('active')),
-    };
-  });
-  const changed = after.activeIndex !== before.activeIndex
-    && after.activeIndex >= 0
-    && (after.sku !== before.sku || after.price !== before.price || true);
-  return { attempted: true, changed: after.activeIndex !== before.activeIndex, controlCount: count, before, after };
+  const after = await targetPage.evaluate(readState);
+  const changed = JSON.stringify(after.activeIndices) !== JSON.stringify(before.activeIndices);
+  return { attempted: true, changed, controlCount: count, before, after };
 }
 
 // Round 2 repair (2B) -- the REAL canonical Add-to-Cart flow: click the

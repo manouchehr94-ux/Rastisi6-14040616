@@ -1425,6 +1425,20 @@ class W4CPdpInteractionContractTests(TestCase):
         # must still be source-backed, on the real Alpine-driven markup.
         self.assertIn(".opt-block .swatch, .opt-block .size", self.source)
 
+    def test_70b_variant_transition_tracks_every_axis_active_control(self):
+        """Smoke-round bug regression: a product with a single-value axis
+        (e.g. one color) alongside a multi-value axis (e.g. 5 sizes) has
+        MULTIPLE currently-active controls, one per axis -- tracking only
+        the first active index (instead of the full active set) can pick
+        the axis's OWN already-selected value as the "different" target,
+        which never changes anything. Found via the real editorial_jewelry
+        smoke against product FSH-003 (1 color x 5 sizes)."""
+        start = self.source.index("function w4cVariantTransitionCheck")
+        end = self.source.index("\nasync function", start + 1)
+        body = self.source[start:end]
+        self.assertIn("activeIndices", body)
+        self.assertNotIn("activeIndex:", body)
+
     def test_71_pdp_add_to_cart_presence_alone_is_insufficient(self):
         body = self._body("w4cRunPdpCell")
         self.assertNotIn("addToCartForm >= 1", body)
