@@ -889,5 +889,27 @@ static Gallery asset is stale iff any of: the registry entry's appearance/
 palette/header/footer/composition changed, `preset.version` changed (also
 changes the storage path itself), the Demo Store's media manifest changed,
 or the seed command's own source changed — this is the exact, source-backed
-test plan §16 Task 6 applies before deciding whether to refresh a given
-key's static Gallery asset.
+test the implementation plan's §17 Task 6 applies before deciding whether
+to refresh a given key's static Gallery asset.
+
+## 12. Repair Round 3 — execution control-flow closure (design consistency only, no new source facts)
+
+Round 3 addressed four internal-consistency defects in the implementation
+plan's OWN control-flow design (Node invocation cardinality contradiction,
+unsafe `process.exit()` usage, a null-check ordering bug, and an undefined
+campaign report root) — all four are resolved entirely within
+`docs/superpowers/plans/2026-09-17-phase5-w4c-all50-browser-certification.md`
+§3.2–§3.10, reusing exactly the source facts already established in §10–§11
+above (the `_run_logged`/`subprocess.Popen` mechanism, `StorefrontLayout`'s
+real published-state chain, `_build_manifest`'s single-`host` computation,
+the `main()` dispatch insertion point). No new source file was read for
+this round; the fix is confined to making this document's own design
+internally consistent with the facts it had already gathered. See the plan
+document's repair notes at §3.2 (base vs. Theme invocations are now fully
+separate — 50 + 104 = 154 total invocations, 704 cells unchanged), §3.6/§3.7
+(no `process.exit()`; structured `try/finally` browser cleanup in both new
+`run.mjs` functions), §3.9 (the one stable, external campaign report root
+`/var/tmp/rastisi_w4c_campaign`, unique per-invocation result/log paths,
+and the `_validate_or_init_campaign_matrix` schema/base-SHA guard), and
+§3.10 (the W4C-only final-status path, which never reads
+`r4-browser-result.json`).
