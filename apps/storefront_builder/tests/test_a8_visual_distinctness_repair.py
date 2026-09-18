@@ -21,10 +21,51 @@ _REPAIR_PAIRS = (
 
 _ABOVE_FOLD_AXES = ("header", "hero", "layout", "product_view", "bottom_nav")
 
+# Pre-existing (not introduced by this repair, not part of this round's
+# authorized scope) 4-axis near-collisions that share the same rendered
+# hero_style -- discovered as a side effect of building the stricter
+# check below. Recorded here, not silently ignored, and explicitly
+# excluded from the "no NEW collision" assertions until a future,
+# separately-authorized round addresses them.
+_PRE_EXISTING_OUT_OF_SCOPE_4AXIS_COLLISIONS = frozenset({
+    frozenset({"cedar_home", "city_classic"}),
+    frozenset({"handmade_luxe", "mist_quiet"}),
+    frozenset({"tower_department", "harbor_imports"}),
+})
+
 
 def _above_fold_signature(preset):
     selections = preset.store_appearance["selections"]
     return tuple(selections[axis] for axis in _ABOVE_FOLD_AXES)
+
+
+def _rendered_hero_style(preset):
+    """The REAL hero_style the hero_banner section actually renders with
+    (read off the built preset's own pages["home"], not re-derived from a
+    private mapping) -- this is what the browser actually shows, and is
+    exactly the axis that let parnian_editorial's first repair attempt
+    (hero=editorial_split) silently collide with artisan_grain's
+    hero=typographic: both resolve to the same hero_style even though
+    the two hero *keys* differ syntactically."""
+    for entry in preset.pages.get("home", ()):
+        if entry.section_key == "hero_banner":
+            return entry.settings["hero_style"]
+    return None
+
+
+def _rendered_above_fold_signature(preset):
+    """Header + REAL rendered hero_style (not the raw hero key) + layout
+    + product_view -- deliberately excludes bottom_nav, which is a
+    Mobile-only element invisible in the Desktop above-the-fold view.
+    This is the stricter signature that actually caught the
+    artisan_grain regression the raw-hero-key check missed."""
+    selections = preset.store_appearance["selections"]
+    return (
+        selections["header"],
+        _rendered_hero_style(preset),
+        selections["layout"],
+        selections["product_view"],
+    )
 
 
 class RepairTargetsAreNowVersionThreeTests(SimpleTestCase):
@@ -162,3 +203,58 @@ class CatalogIntegrityAfterRepairTests(SimpleTestCase):
             collisions, [],
             f"repair must not introduce any NEW above-the-fold collision: {collisions}",
         )
+
+    def test_no_new_rendered_hero_style_collision_among_all_fifty(self):
+        # Code-review finding: a raw-hero-KEY-only check is insufficient --
+        # different hero keys (e.g. "editorial_split" and "typographic")
+        # can resolve to the identical rendered hero_style. This checks the
+        # REAL rendered hero_style off each preset's own built pages, which
+        # is what a browser actually shows.
+        signatures = {}
+        collisions = []
+        for preset in lpr.list_ready_templates():
+            sig = _rendered_above_fold_signature(preset)
+            if sig in signatures:
+                collisions.append(frozenset({signatures[sig], preset.key}))
+            else:
+                signatures[sig] = preset.key
+        new_collisions = [
+            pair for pair in collisions
+            if pair not in _PRE_EXISTING_OUT_OF_SCOPE_4AXIS_COLLISIONS
+        ]
+        self.assertEqual(
+            new_collisions, [],
+            "repair must not introduce any NEW rendered-hero-style collision "
+            f"(pre-existing, out-of-scope ones are allowed): {new_collisions}",
+        )
+        for target_key, anchor_key in _REPAIR_PAIRS:
+            with self.subTest(pair=(target_key, anchor_key)):
+                self.assertNotEqual(
+                    _rendered_hero_style(lpr.get_layout_preset(target_key)),
+                    _rendered_hero_style(lpr.get_layout_preset(anchor_key)),
+                    f"{target_key} must render a genuinely different hero_style "
+                    f"than {anchor_key}, not just a different hero key",
+                )
+
+
+class AppearanceHeroStyleIsIntentionallyRecomputedTests(SimpleTestCase):
+    """The page-level appearance.hero_style (tall/split/wide) is derived
+    from the hero family independently of the hero_banner's own
+    hero_style. Swapping hero families changes this too -- pinned here
+    explicitly so it's a verified, intentional part of the repair rather
+    than an unverified side effect (code-review finding)."""
+
+    def test_green_workshop_appearance_hero_style_unchanged_group(self):
+        # editorial_split and product_focus are both in the "split" group.
+        preset = lpr.get_layout_preset("green_workshop")
+        self.assertEqual(preset.appearance["hero_style"], "split")
+
+    def test_laleh_play_appearance_hero_style_moves_tall_to_wide(self):
+        # image_collage ("tall") -> typographic ("wide").
+        preset = lpr.get_layout_preset("laleh_play")
+        self.assertEqual(preset.appearance["hero_style"], "wide")
+
+    def test_parnian_editorial_appearance_hero_style_moves_tall_to_beauty_split_group(self):
+        # immersive ("tall") -> product_focus ("split").
+        preset = lpr.get_layout_preset("parnian_editorial")
+        self.assertEqual(preset.appearance["hero_style"], "split")

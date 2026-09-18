@@ -293,9 +293,16 @@ _SPECS = (
     # immersive hero panel/photo/headline/CTA, identical header). v3
     # keeps parnian_editorial's own header/layout/card/footer/bottom_nav/
     # palette unchanged and switches only the hero family (immersive ->
-    # editorial_split) -- a genuinely different rendered hero, still an
+    # product_focus) -- a genuinely different rendered hero, still an
     # editorial/refined treatment. silk_editorial itself is untouched.
-    _RecipeSpec("parnian_editorial", "3", "پرنیان", "editorial_masthead", "editorial_split", "two_column", "editorial_grid", "shelf_editorial", "none", "none", "editorial_wordmark", "minimal_icons", "uupm-bakery-cream", "Vazirmatn", "relaxed", 1100, 0, ("hero", "arch_categories", "product_grid", "brand_story", "community_gallery")),
+    # NOTE: an earlier attempt used "editorial_split" here, but that
+    # resolves to the same rendered hero_style ("split") as
+    # artisan_grain's "typographic" hero while sharing the same header
+    # (editorial_masthead), layout (two_column) and product_view
+    # (editorial_grid) -- a code-review finding that would have silently
+    # recreated this exact defect against a different, unchecked sibling.
+    # product_focus avoids this (verified against all 50).
+    _RecipeSpec("parnian_editorial", "3", "پرنیان", "editorial_masthead", "product_focus", "two_column", "editorial_grid", "shelf_editorial", "none", "none", "editorial_wordmark", "minimal_icons", "uupm-bakery-cream", "Vazirmatn", "relaxed", 1100, 0, ("hero", "arch_categories", "product_grid", "brand_story", "community_gallery")),
     _RecipeSpec("racer_tech", "1", "تک‌سوار", "promo_bar", "media_feature", "horizontal_rail", "carousel", "technical_spec", "sale", "dynamic", "marketplace_columns", "wide_cart", "uupm-gaming-neon", "Vazirmatn", "compact", 1320, 6, ("ticker", "hero", "chip_categories", "product_rail", "sale_products")),
     _RecipeSpec("ferdowsi_department", "1", "فردوسی", "centered_brand", "campaign_mosaic", "featured_split", "featured_wall", "marketplace_price", "sale", "subtle", "marketplace_columns", "five_item", "uupm-burgundy-gold", "Vazirmatn", "normal", 1320, 8, ("hero", "tile_categories", "featured_products", "product_grid", "brands", "trust_features")),
     _RecipeSpec("anniversary_mosaic", "1", "پنجاه", "editorial_row", "promo_bento", "bento_grid", "bento", "catalog_index", "sale", "dynamic", "editorial_wordmark", "floating_dock", "uupm-creative-pink", "Vazirmatn", "normal", 1320, 12, ("ticker", "hero", "circular_categories", "bento_products", "testimonials", "newsletter")),
