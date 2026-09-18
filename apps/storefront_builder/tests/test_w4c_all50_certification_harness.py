@@ -515,9 +515,20 @@ class W4CControlFlowCardinalityTests(TestCase):
             _write_node_result(cmd_list[2])
             return 0
 
+        # This test isolates itself entirely from real Store-mutation
+        # side effects (no seeded catalog, no real publish) -- Pilot
+        # Findings Closure's _canonical_home_contract needs a real
+        # published version to query, so it is mocked here alongside the
+        # other Store-state operations this test already stubs out; the
+        # exact returned shape is irrelevant to what this test verifies
+        # (CRITICAL 1's never-opens-a-legacy-result-file contract).
         with mock.patch.object(Path, "read_text", spy_read_text), \
              mock.patch.object(Command, "_run_logged", side_effect=fake_run_logged), \
              mock.patch.object(Command, "_apply_and_verify_published"), \
+             mock.patch.object(Command, "_canonical_home_contract", return_value={
+                 "expected_rsec_count": 0, "hero_expected": False,
+                 "hero_index": None, "product_cards_expected": False,
+             }), \
              mock.patch.object(Command, "_verify_theme_is_none"), \
              mock.patch.object(Command, "_verify_published_theme"), \
              mock.patch.object(Command, "_theme_cleanup_and_verify"), \
@@ -2107,17 +2118,28 @@ class W4CRateLimitControlledDiagnosticTests(TestCase):
 # Command._canonical_home_contract does not exist yet.
 # =============================================================================
 class W4CCanonicalHomeExpectationTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        # A real catalog is required: product_grid/product_rail/etc. all
+        # map to the SAME optional product_section context key, which
+        # render_service.hide_empty_public_sections legitimately drops
+        # when genuinely empty (real production behavior, not a bug) --
+        # exactly the same real Store/catalog fixture the actual W4C
+        # campaign seeds before running any cell.
+        from django.core.management import call_command
+
+        call_command("seed_ready_template_fashion_demo")
+        cls.store = Store.objects.get(slug="rasti-mode-demo")
+
     def setUp(self):
         cache.clear()
         self.command = Command()
 
     def _published_contract_for(self, key):
-        slug = f"w4c-home-contract-{key}".replace("_", "-")
-        store = Store.objects.create(name=f"فروشگاه {key}", slug=slug, admin_subdomain=slug)
         preset = lpr.get_layout_preset(key)
-        preset_service.apply_preset_with_checkpoint(store, preset)
-        layout_service.publish(store)
-        return store, preset, self.command._canonical_home_contract(store)
+        preset_service.apply_preset_with_checkpoint(self.store, preset)
+        layout_service.publish(self.store)
+        return self.store, preset, self.command._canonical_home_contract(self.store)
 
     def test_1_premium_leather_expected_section_count_is_canonical_not_raw(self):
         _, preset, contract = self._published_contract_for("premium_leather")

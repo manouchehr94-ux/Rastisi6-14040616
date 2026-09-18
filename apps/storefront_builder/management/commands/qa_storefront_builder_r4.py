@@ -28,7 +28,7 @@ from apps.storefront_builder import layout_preset_registry as lpr
 from apps.storefront_builder import section_registry
 from apps.storefront_builder.section_registry import BRAND_CAROUSEL_DISPLAY_MODES
 from apps.storefront_builder.models import StorefrontEditHistoryEntry, StorefrontLayout
-from apps.storefront_builder.services import appearance_authority_service, container_service, layout_service, preset_service
+from apps.storefront_builder.services import appearance_authority_service, container_service, layout_service, preset_service, render_service
 from apps.storefront_builder.storefront_appearance.persistence import load_store_appearance_manifest
 from apps.stores.models import Store, StoreMembership
 
@@ -1671,6 +1671,33 @@ class Command(BaseCommand):
     def _home_bottom_nav_expected(self, preset) -> bool:
         return bool(preset.footer and preset.footer.get("mobile_nav_variant"))
 
+    def _canonical_home_contract(self, store: Store) -> dict:
+        """Pilot Findings Closure (IMPORTANT 1) -- the W4C Home expectation
+        must come from the SAME canonical published render pipeline the
+        public storefront uses, never the raw pre-filter recipe
+        (``preset.pages["home"]``). That raw recipe still contains
+        ``hidden_from_library`` entries (e.g. the ``ticker`` token compiles
+        to ``announcement_bar``, superseded by the header's own
+        notification region) that ``preset_service.apply_preset`` filters
+        out BEFORE ever writing a ``StorefrontSection`` row -- see
+        ``source_inventory_and_reclassification.md``. Reusing the exact
+        same two calls the live public Home page itself makes
+        (``storefront_context_service.py``'s own sequence) means this can
+        never duplicate or drift from that filtering/emptiness logic; no
+        second hidden-section list, no Template-key special case."""
+        layout = layout_service.get_or_create_layout(store)
+        home_page = layout.published_version.home_page()
+        items = render_service.build_page_render_items(home_page, store)
+        items = render_service.hide_empty_public_sections(items)
+        section_keys = [item["section"].section_key for item in items]
+        hero_index = section_keys.index(W4C_HERO_SECTION_KEY) if W4C_HERO_SECTION_KEY in section_keys else None
+        return {
+            "expected_rsec_count": len(items),
+            "hero_expected": hero_index is not None,
+            "hero_index": hero_index,
+            "product_cards_expected": "product_section" in section_keys,
+        }
+
     def _apply_and_verify_published(self, store: Store, preset) -> None:
         """Section 3.4 — exact apply/publish/verify sequence. Checks
         ``published_version is None``/status FIRST, raising a controlled
@@ -2275,16 +2302,21 @@ class Command(BaseCommand):
                     continue  # IMPORTANT 3 -- fully recorded already; skip Node entirely
                 preset = lpr.get_layout_preset(key)
                 self._ensure_published_with_recovery(store, preset, matrix_path)
+                # Pilot Findings Closure (IMPORTANT 1) -- the Home expectation
+                # comes from the canonical published render pipeline (the
+                # SAME sections the public page will actually show), never
+                # the raw pre-filter recipe -- see _canonical_home_contract.
+                home_contract = self._canonical_home_contract(store)
                 result_path = self._w4c_base_result_path(campaign_root, key)
                 log_path = self._w4c_base_log_path(campaign_root, key)
                 result_path.unlink(missing_ok=True)  # CRITICAL 1 -- never read a stale file
                 run_token = self._new_run_token()
                 manifest_path = self._write_w4c_base_manifest(
                     base=base_manifest, key=key, version=version, result_path=result_path,
-                    hero_expected=self._home_hero_expected(preset), hero_index=self._home_hero_index(preset),
+                    hero_expected=home_contract["hero_expected"], hero_index=home_contract["hero_index"],
                     run_token=run_token, cells=missing,
-                    expected_rsec_count=len(preset.pages.get("home", ())),
-                    product_cards_expected=self._home_product_cards_expected(preset),
+                    expected_rsec_count=home_contract["expected_rsec_count"],
+                    product_cards_expected=home_contract["product_cards_expected"],
                     bottom_nav_expected=self._home_bottom_nav_expected(preset),
                 )
                 try:
