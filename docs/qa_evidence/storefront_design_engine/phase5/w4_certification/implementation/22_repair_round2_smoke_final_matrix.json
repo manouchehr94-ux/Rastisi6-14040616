@@ -1,0 +1,507 @@
+{
+  "_meta": {
+    "schema_version": "w4c-matrix-v1",
+    "certified_base_sha": "3a4fe9070584655548bae5a9bb574f3415bbf580",
+    "total_cells_expected": 704,
+    "duplicate_cells": [],
+    "recovered_state_events": [
+      {
+        "at": "2026-09-17T15:51:39.572889",
+        "event": "published Template drift repaired for editorial_jewelry v3"
+      }
+    ],
+    "w4c_branch_head_sha": "5fedd5097aacd3c6d9c22bb46b23cbdb1dfa4a47",
+    "run_started_at": "2026-09-17T15:51:39.274314",
+    "run_finished_at": null
+  },
+  "templates": {
+    "editorial_jewelry": {
+      "key": "editorial_jewelry",
+      "version": "3",
+      "page_classes": {
+        "home": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 5,
+            "expected_rsec_count": 5,
+            "product_cards_present": true,
+            "hero_expected": true,
+            "hero_result": "PASS",
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "mobile_nav_opener": "n/a"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/w4c_smoke_r2c/screenshots/home/editorial_jewelry_home_desktop.jpg",
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 5,
+            "expected_rsec_count": 5,
+            "product_cards_present": true,
+            "hero_expected": true,
+            "hero_result": "PASS",
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "mobile_nav_opener": "n/a"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 5,
+            "expected_rsec_count": 5,
+            "product_cards_present": true,
+            "hero_expected": true,
+            "hero_result": "PASS",
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "mobile_nav_opener": "n/a"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/w4c_smoke_r2c/screenshots/home/editorial_jewelry_home_mobile.jpg",
+            "result": "PASS"
+          }
+        },
+        "listing": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": true,
+            "dead_href_count": 0,
+            "listing_controls": {
+              "sort": {
+                "present": true,
+                "interacted": true,
+                "urlHasSort": true
+              },
+              "filter": {
+                "present": true
+              },
+              "pagination": {
+                "present": true,
+                "labelledNav": true,
+                "numericLinks": 1
+              }
+            },
+            "accessibility_checks": {
+              "search_input": "PASS",
+              "sort_control": "FAIL",
+              "category_filter": "FAIL",
+              "product_card": "PASS",
+              "quick_view": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/w4c_smoke_r2c/screenshots/representative/editorial_jewelry_listing_desktop.jpg",
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": true,
+            "dead_href_count": 0,
+            "listing_controls": {
+              "sort": {
+                "present": true,
+                "interacted": true,
+                "urlHasSort": false
+              },
+              "filter": {
+                "present": true
+              },
+              "pagination": {
+                "present": true,
+                "labelledNav": true,
+                "numericLinks": 1
+              }
+            },
+            "accessibility_checks": {
+              "search_input": "PASS",
+              "sort_control": "FAIL",
+              "category_filter": "FAIL",
+              "product_card": "PASS",
+              "quick_view": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": true,
+            "dead_href_count": 0,
+            "listing_controls": {
+              "sort": {
+                "present": true,
+                "interacted": true,
+                "urlHasSort": false
+              },
+              "filter": {
+                "present": true
+              },
+              "pagination": {
+                "present": true,
+                "labelledNav": true,
+                "numericLinks": 1
+              }
+            },
+            "accessibility_checks": {
+              "search_input": "PASS",
+              "sort_control": "FAIL",
+              "category_filter": "FAIL",
+              "product_card": "PASS",
+              "quick_view": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          }
+        },
+        "pdp": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "gallery_image_count": 3,
+            "variant_transition": {
+              "attempted": true,
+              "changed": true,
+              "controlCount": 6,
+              "before": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-39",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  1
+                ]
+              },
+              "after": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-40",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  2
+                ]
+              }
+            },
+            "real_add_to_cart": {
+              "present": true,
+              "before": "۰",
+              "after": "۲",
+              "changed": true
+            },
+            "real_navigation": {
+              "attempted": true,
+              "href": "/",
+              "resolved": true
+            },
+            "accessibility_checks": {
+              "variant_control": "FAIL",
+              "quantity_control": "PASS",
+              "add_to_cart": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/w4c_smoke_r2c/screenshots/representative/editorial_jewelry_pdp_desktop.jpg",
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "gallery_image_count": 3,
+            "variant_transition": {
+              "attempted": true,
+              "changed": true,
+              "controlCount": 6,
+              "before": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-39",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  1
+                ]
+              },
+              "after": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-40",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  2
+                ]
+              }
+            },
+            "real_add_to_cart": {
+              "present": true,
+              "before": "۰",
+              "after": "۲",
+              "changed": true
+            },
+            "real_navigation": {
+              "attempted": true,
+              "href": "/",
+              "resolved": true
+            },
+            "accessibility_checks": {
+              "variant_control": "FAIL",
+              "quantity_control": "PASS",
+              "add_to_cart": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "gallery_image_count": 3,
+            "variant_transition": {
+              "attempted": true,
+              "changed": true,
+              "controlCount": 6,
+              "before": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-39",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  1
+                ]
+              },
+              "after": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-40",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  2
+                ]
+              }
+            },
+            "real_add_to_cart": {
+              "present": true,
+              "before": "۰",
+              "after": "۲",
+              "changed": true
+            },
+            "real_navigation": {
+              "attempted": true,
+              "href": "/",
+              "resolved": true
+            },
+            "accessibility_checks": {
+              "variant_control": "FAIL",
+              "quantity_control": "PASS",
+              "add_to_cart": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          }
+        },
+        "cart": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "real_remove": {
+              "attempted": true,
+              "before": 1,
+              "after": 0,
+              "removed": true
+            },
+            "free_shipping_goal": "PASS",
+            "accessibility_checks": {
+              "quantity_control": "PASS",
+              "remove_control": "PASS",
+              "checkout": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/w4c_smoke_r2c/screenshots/representative/editorial_jewelry_cart_desktop.jpg",
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "real_remove": {
+              "attempted": true,
+              "before": 1,
+              "after": 0,
+              "removed": true
+            },
+            "free_shipping_goal": "PASS",
+            "accessibility_checks": {
+              "quantity_control": "PASS",
+              "remove_control": "PASS",
+              "checkout": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "real_remove": {
+              "attempted": true,
+              "before": 1,
+              "after": 0,
+              "removed": true
+            },
+            "free_shipping_goal": "PASS",
+            "accessibility_checks": {
+              "quantity_control": "PASS",
+              "remove_control": "PASS",
+              "checkout": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          }
+        }
+      },
+      "theme": {
+        "tier1_cell": {
+          "occasion": "nowruz",
+          "intensity": "balanced",
+          "viewport": "desktop",
+          "run_token": "92c212cd9c6806eb5f8647f791cf1e9e",
+          "key": "editorial_jewelry",
+          "tier": "tier1",
+          "http_status": 200,
+          "rtl": true,
+          "overflow": false,
+          "rendered_theme": {
+            "theme": "nowruz",
+            "tone": "festive",
+            "intensity": "balanced",
+            "motif": "spring_blossom",
+            "accent": "#1FA67A"
+          },
+          "console_errors": [],
+          "page_errors": [],
+          "failed_requests": [],
+          "screenshot": null,
+          "result": "PASS",
+          "cleanup_verified": true
+        },
+        "tier2_cells": {}
+      }
+    }
+  }
+}

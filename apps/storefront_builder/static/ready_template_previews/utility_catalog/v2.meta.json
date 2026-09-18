@@ -1,0 +1,11 @@
+{
+  "template_key": "utility_catalog",
+  "version": "2",
+  "content_hash": "a8950cc5e5c34c57f28732425bd214631d43845147c327c7ca8f79747976276a",
+  "preview_input_fingerprint": "01a5019f1141ba32281c250ba74119ab00453f7b2009faf782c2ee0846f87857",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}

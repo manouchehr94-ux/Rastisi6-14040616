@@ -248,7 +248,14 @@ _SPECS = (
     _RecipeSpec("handmade_luxe", "2", "چرم دست", "editorial_row", "editorial_split", "three_column", "editorial_grid", "luxury_dark", "none", "subtle", "brand_story", "floating_dock", "theme-terracotta-cream", "Vazirmatn", "relaxed", 1100, 10, ("hero", "indexed_categories", "product_grid", "brand_story", "brands")),
     _RecipeSpec("niloufar_glass", "2", "نیلوفر", "floating_compact", "image_collage", "three_column", "standard_grid", "beauty_glass", "none", "subtle", "centered", "raised_cart", "rose", "Vazirmatn", "relaxed", 1200, 18, ("hero", "circular_categories", "product_grid", "collection_tiles", "newsletter")),
     _RecipeSpec("tool_finder", "1", "آچار", "marketplace_search", "none", "four_column", "standard_grid", "technical_spec", "none", "none", "marketplace_columns", "four_item", "navy", "Arial", "compact", 1320, 4, ("tile_categories", "product_grid", "trust_features")),
-    _RecipeSpec("green_workshop", "2", "سبزه", "compact_menu", "editorial_split", "three_column", "standard_grid", "standard", "none", "subtle", "brand_story", "floating_dock", "sage", "Vazirmatn", "relaxed", 1100, 16, ("hero", "tile_categories", "product_grid", "brand_story", "brands", "newsletter")),
+    # P5-W4C rendered visual distinctness repair -- v2 was materially
+    # indistinguishable from pine_eco above the fold (identical header,
+    # hero, layout, product_view, bottom_nav). v3 keeps green_workshop's
+    # own header/layout/card/footer/bottom_nav/palette/density unchanged
+    # and switches only the hero family (editorial_split -> product_focus)
+    # -- a genuinely different rendered hero component, not a palette/
+    # font/radius change. pine_eco itself is untouched.
+    _RecipeSpec("green_workshop", "3", "سبزه", "compact_menu", "product_focus", "three_column", "standard_grid", "standard", "none", "subtle", "brand_story", "floating_dock", "sage", "Vazirmatn", "relaxed", 1100, 16, ("hero", "tile_categories", "product_grid", "brand_story", "brands", "newsletter")),
     _RecipeSpec("tower_department", "1", "برج", "marketplace_search", "campaign_mosaic", "four_column", "standard_grid", "marketplace_price", "sale", "dynamic", "marketplace_columns", "five_item", "theme-crimson-charcoal", "Vazirmatn", "compact", 1500, 8, ("hero", "tile_categories", "product_grid", "sale_products", "trust_features")),
     _RecipeSpec("beauty_dew", "2", "شبنم", "floating_compact", "product_focus", "horizontal_rail", "carousel", "beauty_glass", "none", "subtle", "minimal", "raised_cart", "beauty-magenta", "Vazirmatn", "relaxed", 1200, 18, ("hero", "circular_categories", "product_rail", "community_gallery", "newsletter")),
     _RecipeSpec("fashion_promo_catalog", "8", "تندر", "promo_bar", "promo_bento", "dense_five", "dense_grid", "price_first", "sale", "dynamic", "marketplace_columns", "raised_cart", "magenta-pop", "Vazirmatn", "compact", 1500, 8, ("hero", "chip_categories", "sale_products", "product_grid")),
@@ -257,7 +264,14 @@ _SPECS = (
     _RecipeSpec("silk_editorial", "2", "ابریشم", "editorial_masthead", "immersive", "two_column", "editorial_grid", "editorial_minimal", "none", "none", "editorial_wordmark", "minimal_icons", "atelier-ivory", "Vazirmatn", "relaxed", 1100, 0, ("hero", "indexed_categories", "product_grid", "brand_story", "collection_tiles")),
     _RecipeSpec("tuska_bento", "1", "توسکا", "compact_menu", "promo_bento", "bento_grid", "bento", "luxury_dark", "sale", "dynamic", "minimal", "four_item", "plum", "Vazirmatn", "normal", 1200, 12, ("hero", "tile_categories", "bento_products", "testimonials")),
     _RecipeSpec("rayan_tech", "2", "رایان", "marketplace_search", "product_focus", "four_column", "standard_grid", "technical_spec", "none", "subtle", "app_download", "four_item", "theme-midnight-electric", "Vazirmatn", "compact", 1320, 6, ("hero", "tile_categories", "product_grid", "service_strip", "community_gallery")),
-    _RecipeSpec("laleh_play", "2", "لاله‌زار", "playful_canopy", "image_collage", "three_column", "standard_grid", "paper_frame", "none", "dynamic", "playful_wave", "five_item", "sunset", "Vazirmatn", "relaxed", 1200, 22, ("hero", "chip_categories", "product_grid", "brands", "newsletter")),
+    # P5-W4C rendered visual distinctness repair -- v2 was materially
+    # indistinguishable from playful_lifestyle above the fold (identical
+    # arch-cutout hero composition/photos/copy, identical header). v3
+    # keeps laleh_play's own header/layout/card/footer/bottom_nav/palette
+    # unchanged and switches only the hero family (image_collage ->
+    # typographic) -- a genuinely different rendered hero, still a bold
+    # playful headline treatment. playful_lifestyle itself is untouched.
+    _RecipeSpec("laleh_play", "3", "لاله‌زار", "playful_canopy", "typographic", "three_column", "standard_grid", "paper_frame", "none", "dynamic", "playful_wave", "five_item", "sunset", "Vazirmatn", "relaxed", 1200, 22, ("hero", "chip_categories", "product_grid", "brands", "newsletter")),
     _RecipeSpec("city_classic", "2", "شهر", "centered_brand", "editorial_split", "four_column", "standard_grid", "standard", "none", "subtle", "brand_story", "four_item", "uupm-professional-navy", "Vazirmatn", "normal", 1200, 8, ("hero", "circular_categories", "product_grid", "brand_story", "collection_tiles")),
     _RecipeSpec("collection_index", "1", "کلکسیون", "compact_drawer", "none", "catalog_list", "catalog_list", "catalog_index", "none", "none", "minimal", "minimal_icons", "catalog-colorful", "Arial", "compact", 1100, 0, ("indexed_categories", "product_list", "editorial_note")),
     _RecipeSpec("kamand_artisan", "2", "کمند", "overlay_transparent", "editorial_split", "three_column", "editorial_grid", "editorial_minimal", "none", "subtle", "brand_story", "floating_dock", "terracotta", "Vazirmatn", "relaxed", 1100, 6, ("hero", "indexed_categories", "product_grid", "brand_story", "community_gallery")),
@@ -274,7 +288,21 @@ _SPECS = (
     _RecipeSpec("charcoal_grill", "1", "زغال", "promo_bar", "product_focus", "four_column", "standard_grid", "bold_outline", "sale", "dynamic", "bold_columns", "wide_cart", "theme-graphite-orange", "Vazirmatn", "compact", 1200, 0, ("hero", "chip_categories", "product_grid", "sale_products")),
     _RecipeSpec("calligraphy_paper", "1", "خط", "compact_drawer", "immersive", "catalog_list", "catalog_list", "editorial_minimal", "none", "none", "editorial_wordmark", "minimal_icons", "mono", "Vazirmatn", "relaxed", 1100, 0, ("hero", "indexed_categories", "product_list", "brand_story")),
     _RecipeSpec("harbor_imports", "2", "بندر", "marketplace_search", "campaign_mosaic", "four_column", "standard_grid", "shipping_label", "sale", "subtle", "marketplace_columns", "four_item", "navy", "Vazirmatn", "compact", 1320, 6, ("hero", "tile_categories", "product_grid", "sale_products", "trust_features", "brands")),
-    _RecipeSpec("parnian_editorial", "2", "پرنیان", "editorial_masthead", "immersive", "two_column", "editorial_grid", "shelf_editorial", "none", "none", "editorial_wordmark", "minimal_icons", "uupm-bakery-cream", "Vazirmatn", "relaxed", 1100, 0, ("hero", "arch_categories", "product_grid", "brand_story", "community_gallery")),
+    # P5-W4C rendered visual distinctness repair -- v2 was materially
+    # indistinguishable from silk_editorial above the fold (identical
+    # immersive hero panel/photo/headline/CTA, identical header). v3
+    # keeps parnian_editorial's own header/layout/card/footer/bottom_nav/
+    # palette unchanged and switches only the hero family (immersive ->
+    # product_focus) -- a genuinely different rendered hero, still an
+    # editorial/refined treatment. silk_editorial itself is untouched.
+    # NOTE: an earlier attempt used "editorial_split" here, but that
+    # resolves to the same rendered hero_style ("split") as
+    # artisan_grain's "typographic" hero while sharing the same header
+    # (editorial_masthead), layout (two_column) and product_view
+    # (editorial_grid) -- a code-review finding that would have silently
+    # recreated this exact defect against a different, unchecked sibling.
+    # product_focus avoids this (verified against all 50).
+    _RecipeSpec("parnian_editorial", "3", "پرنیان", "editorial_masthead", "product_focus", "two_column", "editorial_grid", "shelf_editorial", "none", "none", "editorial_wordmark", "minimal_icons", "uupm-bakery-cream", "Vazirmatn", "relaxed", 1100, 0, ("hero", "arch_categories", "product_grid", "brand_story", "community_gallery")),
     _RecipeSpec("racer_tech", "1", "تک‌سوار", "promo_bar", "media_feature", "horizontal_rail", "carousel", "technical_spec", "sale", "dynamic", "marketplace_columns", "wide_cart", "uupm-gaming-neon", "Vazirmatn", "compact", 1320, 6, ("ticker", "hero", "chip_categories", "product_rail", "sale_products")),
     _RecipeSpec("ferdowsi_department", "1", "فردوسی", "centered_brand", "campaign_mosaic", "featured_split", "featured_wall", "marketplace_price", "sale", "subtle", "marketplace_columns", "five_item", "uupm-burgundy-gold", "Vazirmatn", "normal", 1320, 8, ("hero", "tile_categories", "featured_products", "product_grid", "brands", "trust_features")),
     _RecipeSpec("anniversary_mosaic", "1", "پنجاه", "editorial_row", "promo_bento", "bento_grid", "bento", "catalog_index", "sale", "dynamic", "editorial_wordmark", "floating_dock", "uupm-creative-pink", "Vazirmatn", "normal", 1320, 12, ("ticker", "hero", "circular_categories", "bento_products", "testimonials", "newsletter")),
@@ -323,6 +351,15 @@ _HISTORICAL_SPECS = (
     _RecipeSpec("mirror_beauty", "1", "آینه", "floating_compact", "product_focus", "three_column", "standard_grid", "beauty_glass", "none", "subtle", "minimal", "raised_cart", "beauty-magenta", "Vazirmatn", "relaxed", 1200, 18, ("hero", "circular_categories", "product_grid", "brand_story", "newsletter")),
     _RecipeSpec("harbor_imports", "1", "بندر", "marketplace_search", "campaign_mosaic", "four_column", "standard_grid", "shipping_label", "sale", "subtle", "marketplace_columns", "four_item", "navy", "Vazirmatn", "compact", 1320, 6, ("hero", "tile_categories", "product_grid", "sale_products", "trust_features")),
     _RecipeSpec("parnian_editorial", "1", "پرنیان", "editorial_masthead", "immersive", "two_column", "editorial_grid", "shelf_editorial", "none", "none", "editorial_wordmark", "minimal_icons", "uupm-bakery-cream", "Vazirmatn", "relaxed", 1100, 0, ("hero", "arch_categories", "product_grid", "brand_story")),
+    # P5-W4C rendered visual distinctness repair -- exact, byte-for-byte
+    # outgoing version-2 rows for the three keys just moved to version 3
+    # above, preserved verbatim through the same register_layout_preset
+    # authority so v2 stays resolvable forever via
+    # get_layout_preset_version(key, "2") -- mirroring the existing v1
+    # preservation pattern already used throughout this tuple.
+    _RecipeSpec("green_workshop", "2", "سبزه", "compact_menu", "editorial_split", "three_column", "standard_grid", "standard", "none", "subtle", "brand_story", "floating_dock", "sage", "Vazirmatn", "relaxed", 1100, 16, ("hero", "tile_categories", "product_grid", "brand_story", "brands", "newsletter")),
+    _RecipeSpec("laleh_play", "2", "لاله‌زار", "playful_canopy", "image_collage", "three_column", "standard_grid", "paper_frame", "none", "dynamic", "playful_wave", "five_item", "sunset", "Vazirmatn", "relaxed", 1200, 22, ("hero", "chip_categories", "product_grid", "brands", "newsletter")),
+    _RecipeSpec("parnian_editorial", "2", "پرنیان", "editorial_masthead", "immersive", "two_column", "editorial_grid", "shelf_editorial", "none", "none", "editorial_wordmark", "minimal_icons", "uupm-bakery-cream", "Vazirmatn", "relaxed", 1100, 0, ("hero", "arch_categories", "product_grid", "brand_story", "community_gallery")),
 )
 
 for _historical_spec in _HISTORICAL_SPECS:

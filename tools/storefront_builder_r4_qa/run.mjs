@@ -2853,7 +2853,16 @@ async function phase3Task6FamilyGate() {
 // explains rich_text is a genuinely different Inspector CONTROL type, not a
 // sharing case) — so each gets exactly one new shared scenario function.
 function finalRemediationFixture() {
-  const fx = manifest.phase3_fixture && manifest.phase3_fixture.final_remediation_families;
+  // FINAL_REMEDIATION_SCALAR_EDITS (below) is a MODULE-SCOPE array literal
+  // that calls this function eagerly at import time, for every manifest
+  // shape -- including the default (non-phase3) and W4C manifests, which
+  // never carry `phase3_fixture` at all. Its real values are consumed only
+  // inside phase3FinalRemediationFamilyGate, itself only ever invoked when
+  // `manifest.phase3` is true (main()'s own `if (manifest.phase3)` guard) --
+  // so a genuinely missing fixture is only ever a real problem THERE, never
+  // at module load for a manifest that was never going to run this gate.
+  if (!manifest.phase3_fixture) return {};
+  const fx = manifest.phase3_fixture.final_remediation_families;
   assert(fx && typeof fx === 'object', 'manifest.phase3_fixture.final_remediation_families is missing');
   return fx;
 }
@@ -4087,6 +4096,1007 @@ async function scenario16ShowcaseFacade() {
   await page.setViewportSize({ width: 1440, height: 900 });
 }
 
+// =====================================================================
+// P5-W4C -- All-50 browser certification (design doc section 3.7).
+// One invocation certifies ONE Template's 12 base cells (mode: 'base')
+// OR exactly ONE Theme cell (mode: 'theme'), then exits. Every context is
+// fresh and cookie-less (manifest.session never exists in W4C mode,
+// section 5) -- these functions never call context.addCookies. Structured
+// try/finally cleanup; process.exitCode only, never process.exit().
+// =====================================================================
+
+const W4C_VIEWPORTS = {
+  desktop: { width: 1440, height: 900 },
+  tablet: { width: 768, height: 1024 },
+  mobile: { width: 390, height: 844 },
+};
+
+function w4cAttachErrorCollectors(targetPage) {
+  const consoleErrors = [];
+  const pageErrors = [];
+  const requestFailures = [];
+  targetPage.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
+  targetPage.on('pageerror', (err) => pageErrors.push(err.message || String(err)));
+  targetPage.on('requestfailed', (req) => {
+    const url = req.url();
+    if (url.endsWith('/favicon.ico')) return;
+    requestFailures.push(url);
+  });
+  return { consoleErrors, pageErrors, requestFailures };
+}
+
+async function w4cShellHealth(targetPage) {
+  const dir = await targetPage.evaluate(() => document.documentElement.getAttribute('dir'));
+  const noOverflow = await targetPage.evaluate(
+    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 2
+  );
+  const headerCount = await targetPage.locator('header').count();
+  const footerCount = await targetPage.locator('footer').count();
+  const bottomNavDisplay = await targetPage.evaluate(() => {
+    const el = document.querySelector('.gmn');
+    return el ? window.getComputedStyle(el).display : null;
+  });
+  return { dir, noOverflow, headerCount, footerCount, bottomNavDisplay };
+}
+
+function w4cShellPasses(health, response) {
+  return Boolean(
+    response && response.status() === 200 && health.dir === 'rtl' && health.noOverflow
+    && health.headerCount === 1 && health.footerCount === 1
+  );
+}
+
+// IMPORTANT 4 -- Bottom Navigation is a PASS/FAIL contract, not telemetry.
+// Desktop/tablet: must compute display:none. Mobile: must be visible
+// (non-none) whenever the canonical Template declares a bottom nav variant
+// (manifest-supplied, derived from the live registry -- never a hardcoded
+// key list). A Template that declares no bottom nav is exempt on every
+// viewport.
+function w4cBottomNavOk(bottomNavDisplay, viewport, expected) {
+  if (!expected) return true;
+  if (viewport === 'mobile') return Boolean(bottomNavDisplay) && bottomNavDisplay !== 'none';
+  return !bottomNavDisplay || bottomNavDisplay === 'none';
+}
+
+// IMPORTANT 4 -- bounded accessibility checks (section 10): only controls
+// actually present/exercised on this cell are checked; absent-for-template
+// records 'n/a', never a silent pass. Not a WCAG audit.
+//
+// Round 2 repair (4A) -- accessible-name-only was insufficient: the
+// approved contract also requires aria-expanded to toggle, Escape to
+// close, and (reusing public_task5_qa.mjs's own Drawer contract) focus to
+// return to the opener -- a present-but-broken control must never
+// silently PASS just because it has a label.
+async function w4cMobileNavAccessibility(targetPage, viewport) {
+  if (viewport !== 'mobile') return 'n/a';
+  const burger = targetPage.locator('[aria-controls="mobile-nav-drawer"]').first();
+  if ((await burger.count()) === 0) return 'n/a';
+  const accessibleName = await burger.evaluate(
+    (el) => (el.getAttribute('aria-label') || el.textContent || '').trim().length > 0
+  );
+  if (!accessibleName) return 'FAIL';
+  const keyboardFocusable = await burger.evaluate(
+    (el) => el.tabIndex >= 0 || ['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName)
+  );
+  if (!keyboardFocusable) return 'FAIL';
+  const initialExpanded = await burger.getAttribute('aria-expanded');
+  await burger.click().catch(() => {});
+  await targetPage.waitForTimeout(300);
+  const drawer = targetPage.locator('#mobile-nav-drawer[role="dialog"]');
+  const opened = await drawer.isVisible().catch(() => false);
+  const afterOpenExpanded = await burger.getAttribute('aria-expanded');
+  const expandedToggled = initialExpanded !== afterOpenExpanded && afterOpenExpanded === 'true';
+  await targetPage.keyboard.press('Escape');
+  await targetPage.waitForTimeout(300);
+  const closedAfterEscape = !(await drawer.isVisible().catch(() => false));
+  const focusReturned = await targetPage.evaluate(
+    () => !!(document.activeElement && document.activeElement.getAttribute('aria-controls') === 'mobile-nav-drawer')
+  );
+  return (opened && expandedToggled && closedAfterEscape && focusReturned) ? 'PASS' : 'FAIL';
+}
+
+// Round 2 repair (4C) -- Product Card primary link / Quick View trigger:
+// accessible name, keyboard focusability. Reuses public_task5_qa.mjs's own
+// selectors (.pcard-qv-trigger) -- absent-for-this-card-style is 'n/a'.
+async function w4cProductCardAccessibility(targetPage) {
+  const link = targetPage.locator('article.pcard a.pcard-hitarea[href]').first();
+  if ((await link.count()) === 0) return { card_link: 'n/a', quick_view: 'n/a' };
+  const cardOk = await link.evaluate((el) => {
+    const named = Boolean((el.getAttribute('aria-label') || el.textContent || '').trim());
+    const focusable = el.tabIndex >= 0 || el.tagName === 'A';
+    return named && focusable;
+  });
+  let quickView = 'n/a';
+  const qv = targetPage.locator('.pcard-qv-trigger').first();
+  if ((await qv.count()) > 0) {
+    const qvOk = await qv.evaluate((el) => {
+      const named = Boolean((el.getAttribute('aria-label') || el.textContent || '').trim());
+      const focusable = el.tabIndex >= 0 || ['A', 'BUTTON'].includes(el.tagName);
+      return named && focusable;
+    });
+    quickView = qvOk ? 'PASS' : 'FAIL';
+  }
+  return { card_link: cardOk ? 'PASS' : 'FAIL', quick_view: quickView };
+}
+
+// Round 2 repair (3A) -- Listing sort/filter/pagination: source-backed
+// selectors from storefront_builder/sections/product_listing.html (the one
+// shared section every Ready Template's Listing page composes), reusing
+// public_task7_qa.mjs's own pagination contract. Bounded: presence +
+// wiring + one real interaction where the canonical UI exposes it; absent
+// -for-this-rendered-page is recorded, never invented.
+async function w4cListingControlsCheck(targetPage) {
+  const sortSelect = targetPage.locator('select[name="sort"]').first();
+  let sort = { present: false };
+  if ((await sortSelect.count()) > 0) {
+    const before = await sortSelect.evaluate((el) => el.value);
+    const otherValue = await sortSelect.evaluate((el, currentValue) => {
+      const opt = Array.from(el.options).find((o) => o.value !== currentValue);
+      return opt ? opt.value : null;
+    }, before);
+    let interacted = false;
+    if (otherValue != null) {
+      await sortSelect.selectOption(otherValue).catch(() => {});
+      await targetPage.waitForTimeout(500);
+      interacted = true;
+    }
+    sort = { present: true, interacted, urlHasSort: /[?&]sort=/.test(targetPage.url()) };
+  }
+  const categorySelect = targetPage.locator('select[name="category"]').first();
+  const filter = { present: (await categorySelect.count()) > 0 };
+  const pagination = await targetPage.locator('.pagination').first().evaluate((nav) => ({
+    present: true,
+    labelledNav: nav.tagName.toLowerCase() === 'nav' && Boolean(nav.getAttribute('aria-label')),
+    numericLinks: nav.querySelectorAll('a[aria-label^="صفحه"]').length,
+  })).catch(() => ({ present: false }));
+  return { sort, filter, pagination };
+}
+
+// Round 2 repair (4B) -- accessible-name checks for the sort/category
+// controls above. RECORDED, never gating the cell's overall PASS/FAIL:
+// storefront_builder/sections/product_listing.html's <select name="sort"/
+// "category"/"brand"> controls currently carry no label/aria-label/title
+// at all (a genuine, pre-existing production markup gap discovered via
+// this exact contract -- fixing it is a production-template change
+// outside this repair round's two authorized harness files, per section
+// 8's "STOP and report" instruction; flagged in the round's own report,
+// not silently hidden by gating the whole Listing cell on it).
+async function w4cListingControlAccessibility(targetPage) {
+  async function nameOf(selector) {
+    const el = targetPage.locator(selector).first();
+    if ((await el.count()) === 0) return 'n/a';
+    const named = await el.evaluate((node) => {
+      const byLabel = node.id && document.querySelector(`label[for="${node.id}"]`);
+      return Boolean(byLabel || node.getAttribute('aria-label') || node.getAttribute('title'));
+    });
+    return named ? 'PASS' : 'FAIL';
+  }
+  return { sort_control: await nameOf('select[name="sort"]'), category_filter: await nameOf('select[name="category"]') };
+}
+
+// Round 2 repair (2A) -- a real variant TRANSITION, never mere control
+// presence. Reuses the live Alpine-driven markup
+// (storefront_builder/sections/product_main.html's variantSelector):
+// .opt-block .swatch/.size toggle `active` and reactively update
+// .pricebox .now/.stock/.sku-line -- no page reload. Clicks the first
+// available (`:not(.unavailable)`), not-already-`active` control.
+async function w4cVariantTransitionCheck(targetPage) {
+  const controls = targetPage.locator('.opt-block .swatch, .opt-block .size');
+  const count = await controls.count();
+  if (count < 2) return { attempted: false, changed: false, controlCount: count };
+  // Each ``.opt-block`` is one AXIS (color/size/...), and EVERY axis has its
+  // own currently-active value -- a product with axes rendered side by side
+  // (e.g. a single-value color axis alongside a 5-value size axis) has
+  // MULTIPLE active controls, one per axis, not just one overall. Tracking
+  // only the first active index (as opposed to the full active SET) means a
+  // "different" pick can land on an axis's OWN already-selected value,
+  // which never changes anything -- the real bug this fixed after the
+  // bounded smoke caught it on exactly such a product.
+  const readState = () => ({
+    sku: (document.querySelector('.pricebox .sku-line') || {}).textContent?.trim() || null,
+    price: (document.querySelector('.pricebox .now') || {}).textContent || null,
+    activeIndices: Array.from(document.querySelectorAll('.opt-block .swatch, .opt-block .size'))
+      .reduce((acc, el, i) => { if (el.classList.contains('active')) acc.push(i); return acc; }, []),
+  });
+  const before = await targetPage.evaluate(readState);
+  let target = null;
+  for (let i = 0; i < count; i += 1) {
+    if (before.activeIndices.includes(i)) continue;
+    const candidate = controls.nth(i);
+    const unavailable = await candidate.evaluate((el) => el.classList.contains('unavailable'));
+    if (!unavailable) { target = candidate; break; }
+  }
+  if (!target) return { attempted: false, changed: false, controlCount: count };
+  await target.click().catch(() => {});
+  await targetPage.waitForTimeout(200);
+  const after = await targetPage.evaluate(readState);
+  const changed = JSON.stringify(after.activeIndices) !== JSON.stringify(before.activeIndices);
+  return { attempted: true, changed, controlCount: count, before, after };
+}
+
+// Round 2 repair (2B) -- the REAL canonical Add-to-Cart flow: click the
+// actual rendered form/button (desktop .pdp-actions .btn-primary or, at
+// mobile, .pdp-satc-btn -- both are the SAME single cart:add form per
+// public_task8_qa.mjs's own wiring proof) and observe the real HTMX-swapped
+// #cart-count badge change -- never a raw fetch(), never direct DB access.
+async function w4cRealAddToCart(targetPage) {
+  const before = (await targetPage.locator('#cart-count').first().textContent().catch(() => '') || '').trim();
+  const candidates = [
+    targetPage.locator('.pdp-actions .btn-primary').first(),
+    targetPage.locator('.pdp-satc-btn').first(),
+  ];
+  let button = null;
+  for (const candidate of candidates) {
+    if ((await candidate.count()) > 0 && (await candidate.isVisible().catch(() => false))) { button = candidate; break; }
+  }
+  if (!button) return { present: false, before, after: before, changed: false };
+  await button.click().catch(() => {});
+  await targetPage.waitForTimeout(500);
+  const after = (await targetPage.locator('#cart-count').first().textContent().catch(() => '') || '').trim();
+  return { present: true, before, after, changed: after !== before };
+}
+
+// Round 2 repair (2C) -- real navigation: any real, non-placeholder link
+// on the page resolves HTTP 200, verified via an in-page fetch() (same
+// browser-resolver technique the Listing cell's link check already uses --
+// manifest.origin is a fake host only Chromium's own launch flag maps).
+async function w4cRealNavigationCheck(targetPage, manifest) {
+  const link = targetPage.locator('a[href]:not([href="#"]):not([href^="javascript:"])').first();
+  if ((await link.count()) === 0) return { attempted: false, resolved: false };
+  const href = await link.getAttribute('href');
+  if (!href) return { attempted: false, resolved: false };
+  const absoluteHref = /^https?:\/\//.test(href) ? href : `${manifest.origin}${href.startsWith('/') ? href : `/${href}`}`;
+  try {
+    const status = await targetPage.evaluate(
+      (url) => fetch(url, { credentials: 'same-origin' }).then((r) => r.status),
+      absoluteHref,
+    );
+    return { attempted: true, href, resolved: status === 200 };
+  } catch (_error) {
+    return { attempted: true, href, resolved: false };
+  }
+}
+
+// Round 2 repair (4D) -- PDP variant/quantity/Add-to-Cart accessibility:
+// accessible name, semantic element or ARIA-equivalent, keyboard-operable.
+async function w4cPdpControlAccessibility(targetPage) {
+  const variantControl = targetPage.locator('.opt-block .swatch, .opt-block .size').first();
+  let variant = 'n/a';
+  if ((await variantControl.count()) > 0) {
+    const ok = await variantControl.evaluate((el) => {
+      const named = Boolean(el.getAttribute('title') || (el.textContent || '').trim());
+      const focusable = el.tabIndex >= 0 || el.tagName === 'BUTTON';
+      return named && focusable;
+    });
+    variant = ok ? 'PASS' : 'FAIL';
+  }
+  const qtyInput = targetPage.locator('.qty .stepper input[name="quantity"]').first();
+  let quantity = 'n/a';
+  if ((await qtyInput.count()) > 0) {
+    const ok = await qtyInput.evaluate((el) => el.tagName === 'INPUT' && el.tabIndex >= 0);
+    quantity = ok ? 'PASS' : 'FAIL';
+  }
+  const addToCart = targetPage.locator('.pdp-actions .btn-primary').first();
+  let addToCartA11y = 'n/a';
+  if ((await addToCart.count()) > 0) {
+    const ok = await addToCart.evaluate((el) => {
+      const named = Boolean((el.textContent || '').trim() || el.getAttribute('aria-label'));
+      const semantic = el.tagName === 'BUTTON';
+      return named && semantic;
+    });
+    addToCartA11y = ok ? 'PASS' : 'FAIL';
+  }
+  return { variant_control: variant, quantity_control: quantity, add_to_cart: addToCartA11y };
+}
+
+// Round 2 repair (3B) -- the real Cart remove action, never presence-only:
+// invoke .citem .rm and prove the item count actually decreases.
+// Pilot Findings Closure (IMPORTANT 2) -- the pilot's editorial_jewelry
+// Cart tablet FAIL did not reproduce in 3/3 fresh repetitions (suspected
+// harness flakiness, not a confirmed production defect -- see
+// cart_reproduction.md). Root cause: this helper decided removed/not-
+// removed from a SINGLE observation at a fixed, arbitrary 500ms delay,
+// and silently swallowed any click() exception -- a real remove that
+// completes even slightly later than 500ms was indistinguishable from a
+// genuine production failure. Repaired to a bounded, condition-based
+// wait (poll the real DOM count until it drops below `before`, or a firm
+// timeout elapses -- never forever) and full diagnostics: click success/
+// failure is never swallowed, and the return value distinguishes click
+// failure, HTMX request/response observation, DOM swap observation, the
+// historical 500ms-mark count (kept only for direct before/after
+// comparison against this repair's own evidence, never itself the
+// pass/fail decision), and the eventual bounded-wait count. The success
+// criterion remains exactly `after < before`, using the SAME canonical
+// `.citem .rm` HTMX control -- no second Cart implementation.
+async function w4cCartRealRemove(targetPage) {
+  const items = targetPage.locator('.citem');
+  const before = await items.count();
+  if (before === 0) {
+    return {
+      attempted: false, before, after: before, removed: false,
+      click_error: null, htmx_request_observed: false, http_status: null,
+      dom_swap_observed: false, after_at_500ms: before, after_eventual: before,
+      elapsed_ms: null,
+    };
+  }
+  const container = targetPage.locator('#cart-container');
+  const htmlBefore = await container.innerHTML().catch(() => null);
+  // Code review (Pilot Findings Closure) -- the FIRST POST observed after
+  // the listener attaches is the click's own direct HTMX effect; the last
+  // one could belong to an unrelated later request (a retry, a second
+  // interaction, telemetry) still in flight when the bounded wait ends.
+  const responses = [];
+  const onResponse = (response) => {
+    if (response.request().method() === 'POST') responses.push(response);
+  };
+  targetPage.on('response', onResponse);
+  const startedAt = Date.now();
+  let clickError = null;
+  try {
+    await targetPage.locator('.citem .rm').first().click();
+  } catch (error) {
+    clickError = error && error.message ? error.message : String(error);
+  }
+  let afterAt500ms = before;
+  let afterEventual = before;
+  // Code review -- a failed click cannot have triggered the HTMX swap, so
+  // don't spend up to ~5s waiting/polling for a DOM change that a broken
+  // click could never produce; read the real (unchanged) count once and
+  // return immediately.
+  if (clickError === null) {
+    // Diagnostic snapshot at the OLD fixed-delay observation point -- kept
+    // for direct comparison, never itself the pass/fail decision.
+    await targetPage.waitForTimeout(500);
+    afterAt500ms = await items.count();
+    // Bounded condition-based wait: keep polling past the old fixed point
+    // until the real DOM count genuinely drops below `before`, or a firm
+    // timeout elapses.
+    const deadline = startedAt + 5000;
+    afterEventual = afterAt500ms;
+    while (afterEventual >= before && Date.now() < deadline) {
+      await targetPage.waitForTimeout(150);
+      afterEventual = await items.count();
+    }
+  } else {
+    afterAt500ms = await items.count();
+    afterEventual = afterAt500ms;
+  }
+  const elapsedMs = Date.now() - startedAt;
+  targetPage.off('response', onResponse);
+  const htmlAfter = await container.innerHTML().catch(() => null);
+  const firstResponse = responses.length > 0 ? responses[0] : null;
+  const removed = afterEventual < before;
+  return {
+    attempted: true,
+    before,
+    after: afterEventual,
+    removed,
+    click_error: clickError,
+    htmx_request_observed: responses.length > 0,
+    http_status: firstResponse ? firstResponse.status() : null,
+    dom_swap_observed: htmlBefore !== null && htmlAfter !== null && htmlBefore !== htmlAfter,
+    after_at_500ms: afterAt500ms,
+    after_eventual: afterEventual,
+    // Code review -- always report the real elapsed time, including on
+    // timeout: distinguishing "timed out almost immediately" from "timed
+    // out right at the boundary" is exactly what this diagnostic exists
+    // to preserve for flakiness triage; nulling it on failure discarded
+    // that.
+    elapsed_ms: elapsedMs,
+  };
+}
+
+// Round 2 repair (3C) -- Free-Shipping Goal: never a second pricing engine
+// in JS. manifest.expected_free_shipping_state ("goal"/"success"/"n/a") is
+// computed once, server-side, from ShopSettings.free_shipping_threshold +
+// pricing_service.resolve_effective_price (see
+// Command._w4c_expected_free_shipping_state) -- this only VERIFIES the
+// rendered .fsg state (public_w1_qa.mjs's own markers) matches it.
+async function w4cFreeShippingGoalCheck(targetPage, expectedState) {
+  if (expectedState === 'n/a') return 'n/a';
+  const fsg = targetPage.locator('.fsg').first();
+  const present = (await fsg.count()) > 0;
+  if (!present) return 'FAIL';
+  const kind = await fsg.evaluate((el) => (
+    el.classList.contains('fsg--success') ? 'success' : (el.classList.contains('fsg--goal') ? 'goal' : 'other')
+  ));
+  return kind === expectedState ? 'PASS' : 'FAIL';
+}
+
+// Round 2 repair (4E) -- Cart quantity/remove/checkout accessibility.
+async function w4cCartControlAccessibility(targetPage) {
+  const qtyButton = targetPage.locator('.citem .stepper button').first();
+  let quantity = 'n/a';
+  if ((await qtyButton.count()) > 0) {
+    const ok = await qtyButton.evaluate((el) => el.tagName === 'BUTTON' && el.tabIndex >= 0);
+    quantity = ok ? 'PASS' : 'FAIL';
+  }
+  const removeButton = targetPage.locator('.citem .rm').first();
+  let remove = 'n/a';
+  if ((await removeButton.count()) > 0) {
+    const ok = await removeButton.evaluate((el) => {
+      const named = Boolean((el.getAttribute('aria-label') || el.textContent || '').trim());
+      const focusable = el.tabIndex >= 0 || ['A', 'BUTTON'].includes(el.tagName);
+      return named && focusable;
+    });
+    remove = ok ? 'PASS' : 'FAIL';
+  }
+  const checkout = targetPage.locator('a[href*="checkout"]').first();
+  let checkoutA11y = 'n/a';
+  if ((await checkout.count()) > 0) {
+    const ok = await checkout.evaluate((el) => Boolean((el.textContent || '').trim()) && el.tagName === 'A');
+    checkoutA11y = ok ? 'PASS' : 'FAIL';
+  }
+  return { quantity_control: quantity, remove_control: remove, checkout: checkoutA11y };
+}
+
+// Round 2 repair (5E) -- a screenshot REQUIRED by the evidence contract
+// that cannot be written must BLOCK the cell, never silently continue
+// with screenshot=null while some other verdict stands.
+async function w4cCaptureRequiredScreenshot(targetPage, shotPath) {
+  try {
+    fs.mkdirSync(path.dirname(shotPath), { recursive: true });
+    await targetPage.screenshot({ path: shotPath, fullPage: false });
+    return { ok: true, path: shotPath };
+  } catch (error) {
+    return { ok: false, path: shotPath, error: error && error.message ? error.message : String(error) };
+  }
+}
+
+// Accessibility Closure Round -- ONE shared truthfulness verdict for every
+// Base cell's own accessibility_checks object: "PASS" and "n/a" never
+// block; ANY "FAIL" anywhere in the object means the accessibility gate
+// itself fails. Repair round 2 recorded these checks but never let a FAIL
+// prevent result="PASS" -- exactly the defect this round repairs. No
+// second accessibility engine, no new runner: this is the single helper
+// every one of w4cRunHomeCell/w4cRunListingCell/w4cRunPdpCell/
+// w4cRunCartCell calls (never w4cRunThemeCell -- Theme's public path
+// exposes no admin accessibility controls in this matrix).
+function w4cAccessibilityChecksPass(checks) {
+  return Object.values(checks).every((value) => value !== 'FAIL');
+}
+
+async function w4cRunHomeCell(context, manifest, viewport) {
+  const targetPage = await context.newPage();
+  const errors = w4cAttachErrorCollectors(targetPage);
+  try {
+    const response = await targetPage.goto(manifest.public_url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    const health = await w4cShellHealth(targetPage);
+    const activeKey = manifest.active_key || {};
+    const rsecLocator = targetPage.locator('.wrap.sfb-preview-sections .rsec');
+    const rsecCount = await rsecLocator.count();
+    const expectedRsecCount = activeKey.expected_rsec_count;
+    const cardCount = await targetPage.locator('article.pcard').count();
+    const cardsExpected = Boolean(activeKey.product_cards_expected);
+    const heroExpected = Boolean(activeKey.hero_expected);
+    const heroIndex = activeKey.hero_index;
+    let heroPresent = false;
+    if (heroExpected && heroIndex != null && heroIndex < rsecCount) {
+      // A real, positional Hero proof (section 6/IMPORTANT 1) -- never a
+      // broad has-text-empty-string fallback: the Hero section's own index in
+      // the live compiled composition, supplied by Python, is checked for
+      // actual rendered media/copy content.
+      const heroHtml = await rsecLocator.nth(heroIndex).innerHTML().catch(() => '');
+      heroPresent = /<img\b|hero-media|hero-text|hero-slide/.test(heroHtml);
+    }
+    const heroResult = heroExpected ? (heroPresent ? 'PASS' : 'FAIL') : 'N/A';
+    const dead = await targetPage.locator('a[href="#"]').count();
+    const bottomNavExpected = Boolean(activeKey.bottom_nav_expected);
+    const bottomNavOk = w4cBottomNavOk(health.bottomNavDisplay, viewport, bottomNavExpected);
+    const rsecOk = typeof expectedRsecCount !== 'number' || rsecCount === expectedRsecCount;
+    const cardsOk = !cardsExpected || cardCount > 0;
+    const mobileNavA11y = await w4cMobileNavAccessibility(targetPage, viewport);
+    const homeA11yChecks = { mobile_nav_opener: mobileNavA11y };
+    const homeA11yOk = w4cAccessibilityChecksPass(homeA11yChecks);
+    const shellOk = w4cShellPasses(health, response);
+    let passing = shellOk && dead === 0 && rsecOk && cardsOk && bottomNavOk
+      && (heroResult === 'PASS' || heroResult === 'N/A') && homeA11yOk
+      && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0 && errors.requestFailures.length === 0;
+    let result = passing ? 'PASS' : 'FAIL';
+    let reason = result === 'PASS' ? undefined
+      : `see rsec/hero/cards/bottom-nav/error sub-checks; accessibility_ok=${homeA11yOk}`;
+    let screenshot = null;
+    if (viewport === 'desktop' || viewport === 'mobile') {
+      const shotPath = viewport === 'desktop' ? manifest.home_screenshot_desktop : manifest.home_screenshot_mobile;
+      if (shotPath) {
+        const shot = await w4cCaptureRequiredScreenshot(targetPage, shotPath);
+        if (shot.ok) {
+          screenshot = shot.path;
+        } else {
+          result = 'BLOCKED';
+          reason = `required Home screenshot write failed: ${shot.error}`;
+        }
+      }
+    }
+    return {
+      http_status: response ? response.status() : null,
+      rtl: health.dir === 'rtl',
+      overflow: !health.noOverflow,
+      header_count: health.headerCount,
+      footer_count: health.footerCount,
+      bottom_nav_present: Boolean(health.bottomNavDisplay),
+      bottom_nav_display: health.bottomNavDisplay,
+      rsec_count: rsecCount,
+      expected_rsec_count: typeof expectedRsecCount === 'number' ? expectedRsecCount : rsecCount,
+      product_cards_present: cardCount > 0,
+      hero_expected: heroExpected,
+      hero_result: heroResult,
+      dead_href_count: dead,
+      accessibility_checks: homeA11yChecks,
+      console_errors: errors.consoleErrors,
+      page_errors: errors.pageErrors,
+      failed_requests: errors.requestFailures,
+      screenshot,
+      result,
+      reason,
+    };
+  } finally {
+    await targetPage.close();
+  }
+}
+
+async function w4cSearchInputAccessibility(targetPage) {
+  const input = targetPage.locator('form[role="search"] input[name="q"]').first();
+  if ((await input.count()) === 0) return 'n/a';
+  const named = await input.evaluate((el) => {
+    const byLabel = el.id && document.querySelector(`label[for="${el.id}"]`);
+    return Boolean(byLabel || el.getAttribute('aria-label') || el.getAttribute('placeholder'));
+  });
+  return named ? 'PASS' : 'FAIL';
+}
+
+async function w4cRunListingCell(context, cell, manifest, viewport) {
+  const targetPage = await context.newPage();
+  const errors = w4cAttachErrorCollectors(targetPage);
+  try {
+    const response = await targetPage.goto(`${manifest.origin}/products/`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    const health = await w4cShellHealth(targetPage);
+    const cardCount = await targetPage.locator('article.pcard').count();
+    const firstLink = targetPage.locator('article.pcard a.pcard-hitarea[href]').first();
+    let linkResolves = cardCount === 0;
+    let linkHref = null;
+    if (cardCount > 0 && (await firstLink.count()) > 0) {
+      linkHref = await firstLink.getAttribute('href');
+      if (linkHref && linkHref !== '#') {
+        try {
+          const absoluteHref = /^https?:\/\//.test(linkHref) ? linkHref : `${manifest.origin}${linkHref}`;
+          // manifest.origin is a W4C-only fake customer-facing host, mapped to
+          // 127.0.0.1 solely via Chromium's own --host-resolver-rules launch
+          // flag (see launchSystemBrowser) -- targetPage.request is a
+          // Node-level HTTP client that never goes through Chromium's network
+          // stack, so it cannot resolve that host at all. Running fetch()
+          // inside the page's own JS context uses the browser's resolver.
+          const status = await targetPage.evaluate(
+            (url) => fetch(url, { credentials: 'same-origin' }).then((r) => r.status),
+            absoluteHref,
+          );
+          linkResolves = status === 200;
+        } catch (_error) { linkResolves = false; }
+      }
+    }
+    const dead = await targetPage.locator('a[href="#"]').count();
+    const bottomNavExpected = Boolean(manifest.active_key && manifest.active_key.bottom_nav_expected);
+    const bottomNavOk = w4cBottomNavOk(health.bottomNavDisplay, viewport, bottomNavExpected);
+    const searchA11y = await w4cSearchInputAccessibility(targetPage);
+    // Round 2 repair (3A/4B) -- sort/filter/pagination presence + bounded
+    // interaction, and (4C) Product Card / Quick View accessibility.
+    // Accessibility Closure Round -- these now GATE the cell via
+    // w4cAccessibilityChecksPass below, same as every other Base cell;
+    // see w4cListingControlAccessibility's own comment for the genuine,
+    // pre-existing production markup gap this contract discovered (a
+    // production defect, not a harness one -- repaired separately, in
+    // the two authorized production template files).
+    const controls = await w4cListingControlsCheck(targetPage);
+    const controlA11y = await w4cListingControlAccessibility(targetPage);
+    const cardA11y = await w4cProductCardAccessibility(targetPage);
+    const listingA11yChecks = {
+      search_input: searchA11y, sort_control: controlA11y.sort_control,
+      category_filter: controlA11y.category_filter, product_card: cardA11y.card_link,
+      quick_view: cardA11y.quick_view,
+    };
+    const listingA11yOk = w4cAccessibilityChecksPass(listingA11yChecks);
+    const shellOk = w4cShellPasses(health, response);
+    let passing = shellOk && cardCount > 0 && dead === 0 && linkResolves && bottomNavOk
+      && listingA11yOk && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0
+      && errors.requestFailures.length === 0;
+    let result = passing ? 'PASS' : 'FAIL';
+    let reason = result === 'PASS' ? undefined
+      : `cards=${cardCount} linkResolves=${linkResolves} href=${linkHref} accessibility_ok=${listingA11yOk}`;
+    let screenshot = null;
+    const shotPath = viewport === 'desktop' && result === 'PASS'
+      ? cell.representative_screenshot : (result !== 'PASS' ? cell.failure_screenshot : null);
+    if (shotPath) {
+      const shot = await w4cCaptureRequiredScreenshot(targetPage, shotPath);
+      if (shot.ok) {
+        screenshot = shot.path;
+      } else {
+        result = 'BLOCKED';
+        reason = `required Listing screenshot write failed: ${shot.error}`;
+      }
+    }
+    return {
+      http_status: response ? response.status() : null,
+      rtl: health.dir === 'rtl',
+      overflow: !health.noOverflow,
+      header_count: health.headerCount,
+      footer_count: health.footerCount,
+      bottom_nav_present: Boolean(health.bottomNavDisplay),
+      bottom_nav_display: health.bottomNavDisplay,
+      rsec_count: 0,
+      expected_rsec_count: 0,
+      product_cards_present: cardCount > 0,
+      dead_href_count: dead,
+      listing_controls: controls,
+      accessibility_checks: listingA11yChecks,
+      console_errors: errors.consoleErrors,
+      page_errors: errors.pageErrors,
+      failed_requests: errors.requestFailures,
+      screenshot,
+      result,
+      reason,
+    };
+  } finally {
+    await targetPage.close();
+  }
+}
+
+async function w4cRunPdpCell(context, cell, manifest, viewport) {
+  const targetPage = await context.newPage();
+  const errors = w4cAttachErrorCollectors(targetPage);
+  try {
+    const slug = manifest.pdp_product_slug;
+    if (!slug) {
+      return {
+        http_status: null, rtl: null, overflow: null, header_count: 0, footer_count: 0,
+        bottom_nav_present: false, bottom_nav_display: null, rsec_count: 0, expected_rsec_count: 0,
+        product_cards_present: false, dead_href_count: 0, accessibility_checks: {},
+        console_errors: [], page_errors: [], failed_requests: [], screenshot: null,
+        result: 'BLOCKED', reason: 'no variant-bearing PDP fixture product available',
+      };
+    }
+    const response = await targetPage.goto(`${manifest.origin}/products/${slug}/`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    const health = await w4cShellHealth(targetPage);
+    const galleryCount = await targetPage.locator('[data-slide]').count();
+    const priceText = (await targetPage.locator('.pricebox .now').first().textContent().catch(() => '') || '').trim();
+    const stockText = (await targetPage.locator('.pricebox .stock').first().textContent().catch(() => '') || '').trim();
+    // Round 2 repair (2A) -- a real variant TRANSITION, not mere presence.
+    const variantTransition = await w4cVariantTransitionCheck(targetPage);
+    const qtyInput = targetPage.locator('.qty .stepper input[name="quantity"]').first();
+    const qtyPresent = (await qtyInput.count()) > 0;
+    let qtyAdjusted = false;
+    if (qtyPresent) {
+      const before = await qtyInput.inputValue().catch(() => '1');
+      await targetPage.locator('.qty .stepper button').last().click().catch(() => {});
+      await targetPage.waitForTimeout(120);
+      const after = await qtyInput.inputValue().catch(() => before);
+      qtyAdjusted = after !== before;
+    }
+    const tabs = await targetPage.locator('.pdp-tabs [role="tab"]').count();
+    const panels = await targetPage.locator('.pdp-tabs [role="tabpanel"]').count();
+    const tabsOrAccordionOk = viewport === 'mobile' ? panels === 3 : (tabs === 3 && panels === 3);
+    const satc = targetPage.locator('.pdp-satc').first();
+    const satcVisible = (await satc.count()) > 0 ? await satc.isVisible().catch(() => false) : false;
+    const satcOk = viewport === 'mobile' ? satcVisible : !satcVisible;
+    // Round 2 repair (2C) -- real navigation, before the mutating
+    // Add-to-Cart click below (fetch() only, no navigation away).
+    const realNavigation = await w4cRealNavigationCheck(targetPage, manifest);
+    // Round 2 repair (2B) -- the REAL canonical Add-to-Cart flow, last,
+    // since it's the one mutation in this cell.
+    const realAddToCart = await w4cRealAddToCart(targetPage);
+    const pdpA11y = await w4cPdpControlAccessibility(targetPage);
+    const pdpA11yOk = w4cAccessibilityChecksPass(pdpA11y);
+    const dead = await targetPage.locator('a[href="#"]').count();
+    const bottomNavExpected = Boolean(manifest.active_key && manifest.active_key.bottom_nav_expected);
+    const bottomNavOk = w4cBottomNavOk(health.bottomNavDisplay, viewport, bottomNavExpected);
+    const shellOk = w4cShellPasses(health, response);
+    let passing = shellOk && galleryCount > 0 && priceText.length > 0 && stockText.length > 0
+      && variantTransition.attempted && variantTransition.changed
+      && qtyPresent && qtyAdjusted && realAddToCart.present && realAddToCart.changed
+      && realNavigation.attempted && realNavigation.resolved
+      && tabsOrAccordionOk && satcOk && bottomNavOk && dead === 0 && pdpA11yOk
+      && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0
+      && errors.requestFailures.length === 0;
+    let result = passing ? 'PASS' : 'FAIL';
+    let reason = result === 'PASS' ? undefined
+      : `gallery=${galleryCount} price=${JSON.stringify(priceText)} stock=${JSON.stringify(stockText)} `
+        + `variantTransition=${JSON.stringify(variantTransition)} qty=${qtyPresent}/${qtyAdjusted} `
+        + `realAddToCart=${JSON.stringify(realAddToCart)} realNavigation=${JSON.stringify(realNavigation)} `
+        + `tabs=${tabs}/${panels} satcOk=${satcOk} bottomNavOk=${bottomNavOk} accessibility_ok=${pdpA11yOk}`;
+    let screenshot = null;
+    const shotPath = viewport === 'desktop' && result === 'PASS'
+      ? cell.representative_screenshot : (result !== 'PASS' ? cell.failure_screenshot : null);
+    if (shotPath) {
+      const shot = await w4cCaptureRequiredScreenshot(targetPage, shotPath);
+      if (shot.ok) {
+        screenshot = shot.path;
+      } else {
+        result = 'BLOCKED';
+        reason = `required PDP screenshot write failed: ${shot.error}`;
+      }
+    }
+    return {
+      http_status: response ? response.status() : null,
+      rtl: health.dir === 'rtl',
+      overflow: !health.noOverflow,
+      header_count: health.headerCount,
+      footer_count: health.footerCount,
+      bottom_nav_present: Boolean(health.bottomNavDisplay),
+      bottom_nav_display: health.bottomNavDisplay,
+      rsec_count: 0,
+      expected_rsec_count: 0,
+      product_cards_present: false,
+      dead_href_count: dead,
+      gallery_image_count: galleryCount,
+      variant_transition: variantTransition,
+      real_add_to_cart: realAddToCart,
+      real_navigation: realNavigation,
+      accessibility_checks: pdpA11y,
+      console_errors: errors.consoleErrors,
+      page_errors: errors.pageErrors,
+      failed_requests: errors.requestFailures,
+      screenshot,
+      result,
+      reason,
+    };
+  } finally {
+    await targetPage.close();
+  }
+}
+
+async function w4cRunCartCell(context, cell, manifest, viewport) {
+  const targetPage = await context.newPage();
+  const errors = w4cAttachErrorCollectors(targetPage);
+  try {
+    const slug = manifest.pdp_product_slug;
+    if (!slug) {
+      return {
+        http_status: null, rtl: null, overflow: null, header_count: 0, footer_count: 0,
+        bottom_nav_present: false, bottom_nav_display: null, rsec_count: 0, expected_rsec_count: 0,
+        product_cards_present: false, dead_href_count: 0, accessibility_checks: {},
+        console_errors: [], page_errors: [], failed_requests: [], screenshot: null,
+        result: 'BLOCKED', reason: 'no variant-bearing PDP fixture product available',
+      };
+    }
+    // manifest.origin is a W4C-only fake customer-facing host, mapped to
+    // 127.0.0.1 solely via Chromium's own --host-resolver-rules launch flag
+    // (see launchSystemBrowser) -- context.request/targetPage.request never
+    // goes through that resolution, so the POST has to run inside the
+    // page's own JS context (same technique as the Listing cell's link
+    // check). Load the PDP first so the csrftoken cookie is set.
+    await targetPage.goto(`${manifest.origin}/products/${slug}/`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    let addStatus = null;
+    try {
+      addStatus = await targetPage.evaluate(async ({ origin, productSlug }) => {
+        const match = document.cookie.match(/(?:^|; )csrftoken=([^;]*)/);
+        const csrfToken = match ? decodeURIComponent(match[1]) : '';
+        const resp = await fetch(`${origin}/cart/add/${productSlug}/`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'X-CSRFToken': csrfToken, 'HX-Request': 'true' },
+          body: new URLSearchParams({ quantity: '1' }),
+        });
+        return resp.status;
+      }, { origin: manifest.origin, productSlug: slug });
+    } catch (_error) { addStatus = null; }
+    const response = await targetPage.goto(`${manifest.origin}/cart/`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    const health = await w4cShellHealth(targetPage);
+    const items = targetPage.locator('.citem');
+    const itemCount = await items.count();
+    const totalsPresent = (await targetPage.locator('.totals').count()) > 0;
+    const checkoutPresent = (await targetPage.locator('a[href*="checkout"]').count()) > 0;
+    const qtyButtons = targetPage.locator('.citem .stepper button');
+    let quantityUpdateWorked = false;
+    if (itemCount > 0 && (await qtyButtons.count()) > 0) {
+      const totalsBefore = (await targetPage.locator('.totals').first().textContent().catch(() => '') || '').trim();
+      await qtyButtons.last().click().catch(() => {});
+      await targetPage.waitForTimeout(400);
+      const totalsAfter = (await targetPage.locator('.totals').first().textContent().catch(() => '') || '').trim();
+      quantityUpdateWorked = totalsAfter.length > 0 && totalsAfter !== totalsBefore;
+    }
+    // Round 2 repair (3C) -- Free-Shipping Goal, verified against the
+    // Python-computed expected state, BEFORE the remove step below empties
+    // the cart (the goal widget's state depends on cart contents).
+    const freeShippingGoal = await w4cFreeShippingGoalCheck(targetPage, manifest.expected_free_shipping_state);
+    // Round 2 repair (4E) -- accessibility, BEFORE the destructive remove
+    // step below (found via the smoke: checking quantity/remove controls
+    // AFTER removing the only item left every check 'n/a').
+    const cartA11y = await w4cCartControlAccessibility(targetPage);
+    const cartA11yOk = w4cAccessibilityChecksPass(cartA11y);
+    // Round 2 repair (3B) -- add -> verify -> quantity update -> verify ->
+    // remove -> verify removal, deterministically ordered, last.
+    const realRemove = await w4cCartRealRemove(targetPage);
+    const dead = await targetPage.locator('a[href="#"]').count();
+    const bottomNavExpected = Boolean(manifest.active_key && manifest.active_key.bottom_nav_expected);
+    const bottomNavOk = w4cBottomNavOk(health.bottomNavDisplay, viewport, bottomNavExpected);
+    const shellOk = w4cShellPasses(health, response);
+    let passing = shellOk && addStatus != null && addStatus < 400 && itemCount > 0 && totalsPresent
+      && checkoutPresent && quantityUpdateWorked
+      && realRemove.attempted && realRemove.removed
+      && freeShippingGoal !== 'FAIL' && cartA11yOk
+      && bottomNavOk && dead === 0
+      && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0
+      && errors.requestFailures.length === 0;
+    let result = passing ? 'PASS' : 'FAIL';
+    let reason = result === 'PASS' ? undefined
+      : `addStatus=${addStatus} items=${itemCount} totals=${totalsPresent} checkout=${checkoutPresent} `
+        + `qtyUpdate=${quantityUpdateWorked} realRemove=${JSON.stringify(realRemove)} `
+        + `freeShippingGoal=${freeShippingGoal} accessibility_ok=${cartA11yOk}`;
+    let screenshot = null;
+    const shotPath = viewport === 'desktop' && result === 'PASS'
+      ? cell.representative_screenshot : (result !== 'PASS' ? cell.failure_screenshot : null);
+    if (shotPath) {
+      const shot = await w4cCaptureRequiredScreenshot(targetPage, shotPath);
+      if (shot.ok) {
+        screenshot = shot.path;
+      } else {
+        result = 'BLOCKED';
+        reason = `required Cart screenshot write failed: ${shot.error}`;
+      }
+    }
+    return {
+      http_status: response ? response.status() : null,
+      rtl: health.dir === 'rtl',
+      overflow: !health.noOverflow,
+      header_count: health.headerCount,
+      footer_count: health.footerCount,
+      bottom_nav_present: Boolean(health.bottomNavDisplay),
+      bottom_nav_display: health.bottomNavDisplay,
+      rsec_count: 0,
+      expected_rsec_count: 0,
+      product_cards_present: false,
+      dead_href_count: dead,
+      real_remove: realRemove,
+      free_shipping_goal: freeShippingGoal,
+      accessibility_checks: cartA11y,
+      console_errors: errors.consoleErrors,
+      page_errors: errors.pageErrors,
+      failed_requests: errors.requestFailures,
+      screenshot,
+      result,
+      reason,
+    };
+  } finally {
+    await targetPage.close();
+  }
+}
+
+async function w4cRunCell(context, cell, viewport, manifest) {
+  const pageClass = cell.page_class;
+  if (pageClass === 'home') return w4cRunHomeCell(context, manifest, viewport);
+  if (pageClass === 'listing') return w4cRunListingCell(context, cell, manifest, viewport);
+  if (pageClass === 'pdp') return w4cRunPdpCell(context, cell, manifest, viewport);
+  if (pageClass === 'cart') return w4cRunCartCell(context, cell, manifest, viewport);
+  throw new Error(`unknown W4C page_class: ${pageClass}`);
+}
+
+async function w4cBaseCertification(manifest) {
+  const browser = await launchSystemBrowser();
+  const openContexts = [];
+  const result = {
+    run_token: manifest.run_token, key: manifest.active_key.key, version: manifest.active_key.version,
+    page_classes: {},
+  };
+  try {
+    for (const cell of manifest.cells) {
+      const { page_class: pageClass, viewport } = cell;
+      const context = await browser.newContext({ viewport: W4C_VIEWPORTS[viewport] });
+      openContexts.push(context);
+      result.page_classes[pageClass] = result.page_classes[pageClass] || {};
+      result.page_classes[pageClass][viewport] = await w4cRunCell(context, cell, viewport, manifest);
+    }
+  } finally {
+    for (const context of openContexts) {
+      try { await context.close(); } catch (_error) { /* best-effort */ }
+    }
+    try { await browser.close(); } catch (_error) { /* best-effort */ }
+    fs.mkdirSync(path.dirname(manifest.result_path), { recursive: true });
+    fs.writeFileSync(manifest.result_path, JSON.stringify(result, null, 2), 'utf8');
+    const anyFail = Object.values(result.page_classes).some(
+      (byViewport) => Object.values(byViewport).some((cell) => cell.result === 'FAIL' || cell.result === 'BLOCKED')
+    );
+    process.exitCode = anyFail ? 1 : 0;
+  }
+}
+
+// IMPORTANT 2 -- verify the RENDERED public Theme identity, never only
+// shell health. ``manifest.expected_theme`` is Python-supplied, read live
+// from the SAME canonical theme_catalog the appearance-authority service
+// itself uses (never a second, hand-maintained copy of these values here).
+async function w4cRunThemeCell(context, manifest) {
+  const targetPage = await context.newPage();
+  const errors = w4cAttachErrorCollectors(targetPage);
+  try {
+    const response = await targetPage.goto(manifest.public_url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    const health = await w4cShellHealth(targetPage);
+    const activeKey = manifest.active_key || {};
+    const expected = manifest.expected_theme || {};
+    const rendered = await targetPage.evaluate(() => {
+      const html = document.documentElement;
+      return {
+        theme: html.getAttribute('data-occasion-theme'),
+        tone: html.getAttribute('data-occasion-tone'),
+        intensity: html.getAttribute('data-occasion-intensity'),
+        motif: html.getAttribute('data-occasion-motif'),
+        accent: html.style.getPropertyValue('--occasion-accent').trim(),
+      };
+    });
+    // apps/core/context_processors.py sets data-occasion-theme to the raw
+    // occasion key (_overlay.occasion_key), never the full component key --
+    // so the rendered marker is compared against activeKey.occasion, not a
+    // constructed "theme.<occasion>.v1" string.
+    const expectedComponentKey = `theme.${activeKey.occasion}.v1`;
+    const identityOk = rendered.theme === activeKey.occasion
+      && rendered.intensity === activeKey.intensity
+      && rendered.tone === expected.tone
+      && rendered.motif === expected.motif;
+    // Muharram safety: the rendered tone must be exactly "mourning" -- the
+    // one public signal the mourning-safety guarantee in theme_catalog.py
+    // (no festive motif/countdown/sale badge ever constructed for a
+    // mourning entry) is actually observable through. Never a subjective
+    // visual scan.
+    const muharramSafetyOk = activeKey.occasion !== 'muharram' || rendered.tone === 'mourning';
+    const shellOk = w4cShellPasses(health, response);
+    let passing = shellOk && identityOk && muharramSafetyOk
+      && errors.consoleErrors.length === 0 && errors.pageErrors.length === 0
+      && errors.requestFailures.length === 0;
+    let result = passing ? 'PASS' : 'FAIL';
+    let reason = result === 'PASS' ? undefined : `rendered=${JSON.stringify(rendered)} expected=${JSON.stringify({ ...expected, componentKey: expectedComponentKey })}`;
+    // IMPORTANT 5D -- Tier-1 screenshot only on FAIL/BLOCKED; Tier-2 always
+    // retained, regardless of PASS/FAIL (the small, deliberately deep
+    // sample).
+    let screenshot = null;
+    const needsScreenshot = activeKey.tier === 'tier2' || (activeKey.tier === 'tier1' && result !== 'PASS');
+    if (needsScreenshot && manifest.theme_screenshot_path) {
+      const shot = await w4cCaptureRequiredScreenshot(targetPage, manifest.theme_screenshot_path);
+      if (shot.ok) {
+        screenshot = shot.path;
+      } else {
+        result = 'BLOCKED';
+        reason = `required Theme screenshot write failed: ${shot.error}`;
+      }
+    }
+    return {
+      http_status: response ? response.status() : null,
+      rtl: health.dir === 'rtl',
+      overflow: !health.noOverflow,
+      rendered_theme: rendered,
+      console_errors: errors.consoleErrors,
+      page_errors: errors.pageErrors,
+      failed_requests: errors.requestFailures,
+      screenshot,
+      result,
+      reason,
+    };
+  } finally {
+    await targetPage.close();
+  }
+}
+
+async function w4cThemeCertification(manifest) {
+  const browser = await launchSystemBrowser();
+  const result = {
+    run_token: manifest.run_token,
+    key: manifest.active_key.key,
+    occasion: manifest.active_key.occasion,
+    intensity: manifest.active_key.intensity,
+    viewport: manifest.active_key.viewport,
+    tier: manifest.active_key.tier,
+  };
+  let context;
+  try {
+    context = await browser.newContext({ viewport: W4C_VIEWPORTS[manifest.active_key.viewport] });
+    Object.assign(result, await w4cRunThemeCell(context, manifest));
+  } finally {
+    if (context) {
+      try { await context.close(); } catch (_error) { /* best-effort */ }
+    }
+    try { await browser.close(); } catch (_error) { /* best-effort */ }
+    fs.mkdirSync(path.dirname(manifest.result_path), { recursive: true });
+    fs.writeFileSync(manifest.result_path, JSON.stringify(result, null, 2), 'utf8');
+    process.exitCode = (result.result === 'FAIL' || result.result === 'BLOCKED') ? 1 : 0;
+  }
+}
+
 async function main() {
   deleteStaleScreenshots();
 
@@ -4152,21 +5162,37 @@ async function main() {
   await scenario('15-task8-template-switch-lifecycle', scenario15TemplateSwitchLifecycleGate);
 }
 
-try {
-  await main();
-} catch (error) {
-  result.summary.failed += 1;
-  result.scenarios.push({ name: 'qa-runner:fatal', status: 'FAIL', error: error.stack || error.message || String(error) });
-  console.error(error.stack || error);
-} finally {
-  result.finished_at = new Date().toISOString();
-  if (publicPage) { try { await publicPage.close(); } catch (_error) {} }
-  if (browser) { try { await browser.close(); } catch (_error) {} }
+if (manifest.w4c) {
+  // P5-W4C -- a completely separate, additive entry path (section 3.7). The
+  // 15 legacy scenarios above, main(), and the module-level try/finally
+  // below are UNTOUCHED and never run for a W4C invocation.
+  if (manifest.mode === 'base') {
+    await w4cBaseCertification(manifest);
+  } else if (manifest.mode === 'theme') {
+    await w4cThemeCertification(manifest);
+  } else {
+    console.error(`unknown W4C manifest.mode: ${manifest.mode}`);
+    process.exitCode = 2;
+  }
+  // process.exitCode is set inside each function's own finally block --
+  // never process.exit() here or inside them.
+} else {
+  try {
+    await main();
+  } catch (error) {
+    result.summary.failed += 1;
+    result.scenarios.push({ name: 'qa-runner:fatal', status: 'FAIL', error: error.stack || error.message || String(error) });
+    console.error(error.stack || error);
+  } finally {
+    result.finished_at = new Date().toISOString();
+    if (publicPage) { try { await publicPage.close(); } catch (_error) {} }
+    if (browser) { try { await browser.close(); } catch (_error) {} }
 
-  fs.writeFileSync(path.join(manifest.report_dir, 'r4-browser-result.json'), JSON.stringify(result, null, 2), 'utf8');
-  console.log('\n=== R4 Task 12 result summary ===');
-  console.log(`Passed: ${result.summary.passed}  Failed: ${result.summary.failed}`);
-  for (const row of result.scenarios) console.log(`${row.status.padEnd(5)} ${row.name}`);
+    fs.writeFileSync(path.join(manifest.report_dir, 'r4-browser-result.json'), JSON.stringify(result, null, 2), 'utf8');
+    console.log('\n=== R4 Task 12 result summary ===');
+    console.log(`Passed: ${result.summary.passed}  Failed: ${result.summary.failed}`);
+    for (const row of result.scenarios) console.log(`${row.status.padEnd(5)} ${row.name}`);
+  }
+
+  process.exit(result.summary.failed > 0 ? 1 : 0);
 }
-
-process.exit(result.summary.failed > 0 ? 1 : 0);

@@ -1,0 +1,11 @@
+{
+  "template_key": "gallery_minimal",
+  "version": "1",
+  "content_hash": "e0c88bfae602928761f4dfb01f8ab7ba2f88aa46a7b4635fb6337025dbee86b3",
+  "preview_input_fingerprint": "7924e849ad31da82fa3d832ff98ddb8ac88bc12768237ed62dbe8966d1ba80e6",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}

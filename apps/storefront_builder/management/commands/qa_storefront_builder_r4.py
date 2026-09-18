@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import secrets
 import shutil
 import socket
 import sqlite3
@@ -16,16 +17,49 @@ from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connections
 from django.test import Client
 
 from apps.catalog.models import Brand, Category, Product, Vendor
+from apps.core.services.rate_limit import RateLimitExceeded
+from apps.storefront_builder import layout_preset_registry as lpr
 from apps.storefront_builder import section_registry
 from apps.storefront_builder.section_registry import BRAND_CAROUSEL_DISPLAY_MODES
-from apps.storefront_builder.models import StorefrontEditHistoryEntry
-from apps.storefront_builder.services import container_service, layout_service
+from apps.storefront_builder.models import StorefrontEditHistoryEntry, StorefrontLayout
+from apps.storefront_builder.services import appearance_authority_service, container_service, layout_service, preset_service, render_service
+from apps.storefront_builder.storefront_appearance.persistence import load_store_appearance_manifest
 from apps.stores.models import Store, StoreMembership
+
+# -- P5-W4C (Implementation Round 1) -- bounded --w4c-all50 extension of
+# this SAME command. See docs/superpowers/plans/2026-09-17-phase5-w4c-all50-
+# browser-certification.md sections 1/3/9/13/15 for the approved contract
+# these constants encode. -------------------------------------------------
+W4C_MATRIX_SCHEMA_VERSION = "w4c-matrix-v1"
+W4C_CERTIFIED_BASE_SHA = "3a4fe9070584655548bae5a9bb574f3415bbf580"
+W4C_TOTAL_CELLS_EXPECTED = 704
+W4C_PAGE_CLASSES = ("home", "listing", "pdp", "cart")
+W4C_VIEWPORTS = ("desktop", "tablet", "mobile")
+W4C_TIER1_OCCASION_CYCLE = ("nowruz", "ramadan", "muharram")
+W4C_TIER2_KEYS = ("warm_boutique", "beauty_dew")
+W4C_TIER2_OCCASIONS = ("nowruz", "ramadan", "muharram")
+W4C_TIER2_INTENSITIES = ("subtle", "balanced", "strong")
+W4C_HERO_SECTION_KEY = "hero_banner"
+
+# -- Code Review Repair Round 1 -- CRITICAL 1 (never accept a stale result
+# file) / IMPORTANT 4 (matrix schema validator). -------------------------
+W4C_VALID_CELL_RESULTS = frozenset({"PASS", "FAIL", "BLOCKED"})
+W4C_REQUIRED_BASE_CELL_FIELDS = (
+    "http_status", "rtl", "overflow", "header_count", "footer_count",
+    "bottom_nav_present", "bottom_nav_display", "rsec_count", "expected_rsec_count",
+    "product_cards_present", "dead_href_count", "console_errors", "page_errors",
+    "failed_requests", "accessibility_checks", "result", "screenshot",
+)
+W4C_REQUIRED_THEME_RESULT_FIELDS = (
+    "http_status", "rtl", "overflow", "console_errors", "page_errors",
+    "failed_requests", "result", "screenshot",
+)
 
 
 def _png_swatch(color):
@@ -157,6 +191,54 @@ class Command(BaseCommand):
                 "success. Never pass this for a real QA run."
             ),
         )
+        parser.add_argument(
+            "--w4c-all50",
+            action="store_true",
+            help=(
+                "P5-W4C -- opt-in all-50-Ready-Template browser certification "
+                "campaign (704 cells). Bypasses the legacy R4 sandbox in favor "
+                "of a real published-Template fixture. Off by default -- "
+                "existing R4 QA scenarios/behavior are completely unchanged."
+            ),
+        )
+        parser.add_argument(
+            "--only",
+            default="",
+            help=(
+                "P5-W4C only -- a comma-separated subset of Ready Template keys "
+                "to certify in this invocation (base + Theme cells alike). Has "
+                "no effect unless --w4c-all50 is also passed."
+            ),
+        )
+        parser.add_argument(
+            "--w4c-tier2-budget",
+            type=int,
+            default=None,
+            help=(
+                "Rate-limit-aware campaign sharding repair -- caps how many "
+                "currently-missing Tier-2 Theme cells (across --only's selected "
+                "keys) THIS process attempts, in the existing deterministic "
+                "Tier-2 order. 0 runs none; omitted preserves the existing "
+                "unbounded behavior. Already-terminal Tier-2 cells never "
+                "consume budget. Only valid with --w4c-all50."
+            ),
+        )
+
+    @staticmethod
+    def _validate_w4c_tier2_budget(options):
+        """Rate-limit-aware campaign sharding repair -- validates
+        ``--w4c-tier2-budget`` without requiring the full, heavy ``handle()``
+        machinery (real server/browser/user), so this is directly unit-
+        testable. Returns the resolved budget (``None`` means unbounded,
+        preserving the pre-repair behavior)."""
+        budget = options.get("w4c_tier2_budget")
+        if budget is None:
+            return None
+        if not options.get("w4c_all50"):
+            raise CommandError("--w4c-tier2-budget requires --w4c-all50")
+        if budget < 0:
+            raise CommandError("--w4c-tier2-budget must be >= 0")
+        return budget
 
     def handle(self, *args, **options):
         if not settings.DEBUG:
@@ -177,6 +259,16 @@ class Command(BaseCommand):
                 "(optionally with R4_QA_ONLY_SCENARIO=task6-showcase to run only "
                 "the Task-6 scenario)."
             )
+
+        if options["w4c_all50"] and options["showcase"]:
+            raise CommandError("--w4c-all50 and --showcase are mutually exclusive.")
+        if options["w4c_all50"] and not options["report_dir"]:
+            raise CommandError(
+                "--w4c-all50 requires --report-dir (the shared CAMPAIGN_REPORT_ROOT "
+                "every invocation of one campaign must pass) -- it never falls back "
+                "to a fresh, unshared timestamp directory."
+            )
+        tier2_budget = self._validate_w4c_tier2_budget(options)
 
         base_dir = Path(settings.BASE_DIR).resolve()
         shared_tool_dir = base_dir / "tools" / "storefront_builder_qa"
@@ -243,62 +335,109 @@ class Command(BaseCommand):
         server_log_handle = None
         runtime_manifest_path = None
         browser_exit = 1
+        w4c_aggregate = None
         try:
-            fixture = self._prepare_r4_sandbox(
-                store, user, phase3=options["phase3"], showcase=options["showcase"],
-            )
-
-            if options["phase3"]:
-                tenant_negatives = self._phase3_tenant_negatives(store)
-                (report_dir / "tenant_negatives.json").write_text(
-                    json.dumps(tenant_negatives, ensure_ascii=False, indent=2), encoding="utf-8",
+            if options["w4c_all50"]:
+                fixture = self._prepare_w4c_certification_fixture(store)
+                w4c_fixture = self._build_w4c_fixture(store)
+                base_manifest = self._build_manifest(
+                    store=store,
+                    port=options["port"],
+                    session_cookie=None,
+                    report_dir=report_dir,
+                    headed=options["headed"],
+                    browser_channel=options["browser_channel"],
+                    w4c_all50=True,
                 )
-                self.stdout.write(self.style.WARNING(f"Tenant/unauthorized negatives: {tenant_negatives}"))
+                base_manifest["pdp_product_slug"] = w4c_fixture["pdp_product_slug"]
+                base_manifest["expected_free_shipping_state"] = w4c_fixture["expected_free_shipping_state"]
+                (report_dir / "fixture.json").write_text(json.dumps(fixture, ensure_ascii=False, indent=2), encoding="utf-8")
 
-            if options["simulate_failure_after_backup"]:
-                raise CommandError(
-                    "Simulated failure after backup AND after sandbox prep "
-                    "(--simulate-failure-after-backup). This is expected: it exists to "
-                    "prove the `finally` restore below actually undoes real DB changes "
-                    "(the sandbox prep above just cleared/rewrote Draft sections) on a "
-                    "failure path, not only after a clean exit."
+                self.stdout.write(self.style.MIGRATE_HEADING("W4C all-50 browser certification"))
+                server_log_handle = (report_dir / "runserver.log").open("w", encoding="utf-8", errors="replace")
+                server_proc = subprocess.Popen(
+                    [sys.executable, "manage.py", "runserver", f"127.0.0.1:{options['port']}", "--noreload"],
+                    cwd=base_dir,
+                    stdout=server_log_handle,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    env={**os.environ, "PYTHONUNBUFFERED": "1"},
+                )
+                if not self._wait_for_port(options["port"], server_proc, timeout=20):
+                    raise CommandError(f"W4C runserver did not come up; log: {report_dir / 'runserver.log'}")
+
+                selected_keys = (
+                    [k.strip() for k in options["only"].split(",") if k.strip()]
+                    if options["only"] else None
+                )
+                w4c_aggregate = self._run_w4c_campaign(
+                    store=store,
+                    w4c_fixture=w4c_fixture,
+                    selected_keys=selected_keys,
+                    campaign_root=report_dir,
+                    node=node,
+                    run_mjs_path=node_script,
+                    r4_tool_dir=r4_tool_dir,
+                    base_manifest=base_manifest,
+                    tier2_budget=tier2_budget,
+                )
+                browser_exit = 0
+            else:
+                fixture = self._prepare_r4_sandbox(
+                    store, user, phase3=options["phase3"], showcase=options["showcase"],
                 )
 
-            session_cookie = self._make_session_cookie(user)
-            manifest = self._build_manifest(
-                store=store,
-                port=options["port"],
-                session_cookie=session_cookie,
-                report_dir=report_dir,
-                headed=options["headed"],
-                browser_channel=options["browser_channel"],
-                phase3=options["phase3"],
-                phase3_fixture=fixture.get("phase3") if options["phase3"] else None,
-                showcase=options["showcase"],
-            )
-            fd, runtime_manifest_path = tempfile.mkstemp(prefix="rastisi-r4-qa-", suffix=".json")
-            os.close(fd)
-            Path(runtime_manifest_path).write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-            (report_dir / "fixture.json").write_text(json.dumps(fixture, ensure_ascii=False, indent=2), encoding="utf-8")
+                if options["phase3"]:
+                    tenant_negatives = self._phase3_tenant_negatives(store)
+                    (report_dir / "tenant_negatives.json").write_text(
+                        json.dumps(tenant_negatives, ensure_ascii=False, indent=2), encoding="utf-8",
+                    )
+                    self.stdout.write(self.style.WARNING(f"Tenant/unauthorized negatives: {tenant_negatives}"))
 
-            self.stdout.write(self.style.MIGRATE_HEADING("R4 Phase-1 vertical-slice browser QA"))
-            server_log_handle = (report_dir / "runserver.log").open("w", encoding="utf-8", errors="replace")
-            server_proc = subprocess.Popen(
-                [sys.executable, "manage.py", "runserver", f"127.0.0.1:{options['port']}", "--noreload"],
-                cwd=base_dir,
-                stdout=server_log_handle,
-                stderr=subprocess.STDOUT,
-                text=True,
-                env={**os.environ, "PYTHONUNBUFFERED": "1"},
-            )
-            if not self._wait_for_port(options["port"], server_proc, timeout=20):
-                raise CommandError(f"R4 QA runserver did not come up; log: {report_dir / 'runserver.log'}")
+                if options["simulate_failure_after_backup"]:
+                    raise CommandError(
+                        "Simulated failure after backup AND after sandbox prep "
+                        "(--simulate-failure-after-backup). This is expected: it exists to "
+                        "prove the `finally` restore below actually undoes real DB changes "
+                        "(the sandbox prep above just cleared/rewrote Draft sections) on a "
+                        "failure path, not only after a clean exit."
+                    )
 
-            browser_exit = self._run_logged(
-                [node, str(node_script), runtime_manifest_path],
-                cwd=r4_tool_dir,
-                log_path=report_dir / "browser.log",
-            )
+                session_cookie = self._make_session_cookie(user)
+                manifest = self._build_manifest(
+                    store=store,
+                    port=options["port"],
+                    session_cookie=session_cookie,
+                    report_dir=report_dir,
+                    headed=options["headed"],
+                    browser_channel=options["browser_channel"],
+                    phase3=options["phase3"],
+                    phase3_fixture=fixture.get("phase3") if options["phase3"] else None,
+                    showcase=options["showcase"],
+                )
+                fd, runtime_manifest_path = tempfile.mkstemp(prefix="rastisi-r4-qa-", suffix=".json")
+                os.close(fd)
+                Path(runtime_manifest_path).write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+                (report_dir / "fixture.json").write_text(json.dumps(fixture, ensure_ascii=False, indent=2), encoding="utf-8")
+
+                self.stdout.write(self.style.MIGRATE_HEADING("R4 Phase-1 vertical-slice browser QA"))
+                server_log_handle = (report_dir / "runserver.log").open("w", encoding="utf-8", errors="replace")
+                server_proc = subprocess.Popen(
+                    [sys.executable, "manage.py", "runserver", f"127.0.0.1:{options['port']}", "--noreload"],
+                    cwd=base_dir,
+                    stdout=server_log_handle,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    env={**os.environ, "PYTHONUNBUFFERED": "1"},
+                )
+                if not self._wait_for_port(options["port"], server_proc, timeout=20):
+                    raise CommandError(f"R4 QA runserver did not come up; log: {report_dir / 'runserver.log'}")
+
+                browser_exit = self._run_logged(
+                    [node, str(node_script), runtime_manifest_path],
+                    cwd=r4_tool_dir,
+                    log_path=report_dir / "browser.log",
+                )
         finally:
             if server_proc is not None:
                 self._stop_process(server_proc)
@@ -330,6 +469,36 @@ class Command(BaseCommand):
             self.stdout.write(style(f"Local database restored — pre={pre_run_sha256} post={post_restore_sha256} match={restored_ok}"))
             if not restored_ok:
                 raise CommandError("DB restore verification FAILED — pre-run and post-restore SHA-256 do not match.")
+
+        if options["w4c_all50"]:
+            aggregate = w4c_aggregate
+            campaign_complete = (
+                aggregate["total_cells_recorded"] == W4C_TOTAL_CELLS_EXPECTED
+                and not aggregate["missing_cells"]
+                and not aggregate["duplicate_cells"]
+            )
+            if not campaign_complete:
+                if not options["only"]:
+                    raise CommandError(f"W4C: INCOMPLETE -- full run did not record all 704 cells -- {aggregate}")
+                self.stdout.write(self.style.SUCCESS(
+                    "W4C BATCH COMPLETE -- CAMPAIGN INCOMPLETE -- "
+                    f"selected_keys={options['only']}, "
+                    f"cells_recorded_this_run={aggregate['cells_recorded_this_run']}, "
+                    f"cumulative_total_cells_recorded={aggregate['total_cells_recorded']}/{W4C_TOTAL_CELLS_EXPECTED}, "
+                    f"cumulative_missing={len(aggregate['missing_cells'])}, "
+                    f"cumulative_fail_count={aggregate['fail_count']}, "
+                    f"cumulative_blocked_count={aggregate['blocked_count']}"
+                ))
+                return
+            if aggregate["fail_count"] > 0 or aggregate["blocked_count"] > 0:
+                raise CommandError(
+                    f"W4C: certification did not pass -- {aggregate['fail_count']} FAIL, "
+                    f"{aggregate['blocked_count']} BLOCKED"
+                )
+            self.stdout.write(self.style.SUCCESS(
+                f"W4C: {W4C_TOTAL_CELLS_EXPECTED}/{W4C_TOTAL_CELLS_EXPECTED} cells recorded, 0 FAIL, 0 BLOCKED -- PASS"
+            ))
+            return
 
         browser_result_path = report_dir / "r4-browser-result.json"
         browser_payload = None
@@ -1264,28 +1433,35 @@ class Command(BaseCommand):
             "tile_variants": list(tile_variants),
         }
 
-    def _build_manifest(self, *, store, port, session_cookie, report_dir, headed, browser_channel, phase3=False, phase3_fixture=None, showcase=False):
+    def _build_manifest(self, *, store, port, session_cookie, report_dir, headed, browser_channel, phase3=False, phase3_fixture=None, showcase=False, w4c_all50=False):
         # Phase 5 Task 6 (--showcase) — reach the editor via the Store's
         # ADMIN-SUBDOMAIN host (``<admin_subdomain>.rastisi.localhost``, mapped
         # to 127.0.0.1 by the runner's chromium --host-resolver-rules), so a
         # multi-Store sandbox resolves the target Store instead of failing the
         # 127.0.0.1 single-Store compatibility fallback. The admin portal
         # resolves the Store by its admin_subdomain — no StoreDomain seeding is
-        # involved. The default (non-showcase) run keeps the 127.0.0.1 origin
-        # and cookie domain byte-for-byte unchanged.
-        host = (
-            f"{store.admin_subdomain}{self.SHOWCASE_QA_HOST_SUFFIX}"
-            if showcase else "127.0.0.1"
-        )
+        # involved. The default (non-showcase, non-W4C) run keeps the
+        # 127.0.0.1 origin and cookie domain byte-for-byte unchanged.
+        #
+        # P5-W4C (design doc section 3.5) — a third, mutually-exclusive
+        # branch: the REAL customer-facing Store host, so run.mjs's public
+        # certification cells resolve the actual public storefront (never
+        # raw 127.0.0.1, never the admin-subdomain host showcase mode uses).
+        if showcase:
+            host = f"{store.admin_subdomain}{self.SHOWCASE_QA_HOST_SUFFIX}"
+        elif w4c_all50:
+            host = f"shop-{store.admin_subdomain}.{settings.RASTISI_ADMIN_DOMAIN_SUFFIX}"
+        else:
+            host = "127.0.0.1"
         origin = f"http://{host}:{port}"
         cookie_domain = host
         same_site = str(settings.SESSION_COOKIE_SAMESITE or "Lax").capitalize()
         if same_site not in {"Lax", "Strict", "None"}:
             same_site = "Lax"
-        return {
+        manifest = {
             "origin": origin,
             # The host the runner must map to 127.0.0.1 (None for a normal run).
-            "resolver_host": host if showcase else None,
+            "resolver_host": host if (showcase or w4c_all50) else None,
             "builder_url": f"{origin}/admin-portal/storefront-builder/r4/",
             "public_url": f"{origin}/",
             "report_dir": str(report_dir),
@@ -1301,7 +1477,14 @@ class Command(BaseCommand):
             # populated on a --phase3 run; None (absent-shaped) otherwise, so
             # the default R3 manifest is byte-identical to before.
             "phase3_fixture": phase3_fixture,
-            "session": {
+            "store": {"id": store.pk, "name": store.name, "slug": store.slug},
+        }
+        if not w4c_all50:
+            # P5-W4C (section 5/9) — no W4C manifest of any kind (base or
+            # Theme cell) ever carries a "session" key. Every W4C Store-state
+            # transition is a Python ORM/service call (section 3.1); the
+            # browser only ever observes ANONYMOUS public traffic.
+            manifest["session"] = {
                 "name": settings.SESSION_COOKIE_NAME,
                 "value": session_cookie,
                 "domain": cookie_domain,
@@ -1309,9 +1492,8 @@ class Command(BaseCommand):
                 "httpOnly": bool(settings.SESSION_COOKIE_HTTPONLY),
                 "secure": bool(settings.SESSION_COOKIE_SECURE),
                 "sameSite": same_site,
-            },
-            "store": {"id": store.pk, "name": store.name, "slug": store.slug},
-        }
+            }
+        return manifest
 
     @staticmethod
     def _port_is_free(port: int) -> bool:
@@ -1361,3 +1543,848 @@ class Command(BaseCommand):
                 log.write(line)
                 log.flush()
             return process.wait()
+
+    # =====================================================================
+    # P5-W4C (Implementation Round 1) — bounded --w4c-all50 extension.
+    # Design doc: docs/superpowers/plans/2026-09-17-phase5-w4c-all50-
+    # browser-certification.md. Never invoked unless --w4c-all50 is passed;
+    # the entire non-W4C path above is untouched by any method below.
+    # =====================================================================
+
+    def _prepare_w4c_certification_fixture(self, store: Store) -> dict:
+        """Section 3.3 — bypasses ``_prepare_r4_sandbox`` entirely. Never
+        wipes ``published_version``/``draft_version`` and never deletes
+        Home ``Section``/``Container`` rows — W4C needs a real, Ready-
+        Template-published starting state per Template, not a from-scratch
+        publish transition to observe."""
+        call_command("seed_ready_template_fashion_demo")
+        return {"store_slug": store.slug, "seed_command": "seed_ready_template_fashion_demo"}
+
+    def _build_w4c_fixture(self, store: Store) -> dict:
+        """Section 2/3.2 — read live from the registry, never a hardcoded
+        literal. ``tier1_occasions`` cycles nowruz/ramadan/muharram over the
+        SAME live, deterministic ``a8_ready_templates._SPECS`` source order
+        (section 1.1) -- NOT ``list_ready_templates()``'s dict-iteration
+        order, which does not match ``_SPECS``'s definition order once the
+        W4B historical-spec registrations are mixed in."""
+        from apps.storefront_builder import a8_ready_templates
+
+        presets = lpr.list_ready_templates()
+        templates = [{"key": p.key, "version": p.version} for p in presets]
+        tier1_occasions = {
+            spec.key: W4C_TIER1_OCCASION_CYCLE[i % len(W4C_TIER1_OCCASION_CYCLE)]
+            for i, spec in enumerate(a8_ready_templates._SPECS)
+        }
+        # The PDP/Cart cells exercise real quantity-adjustment and add-to-cart
+        # flows against whichever variant the storefront pre-selects as the
+        # DEFAULT (storefront_variant_service: is_default=True, else the
+        # first by display_order/id -- never necessarily the one with stock).
+        # Rather than duplicate that selection logic here, require every
+        # active, non-obsolete variant to be in stock, so any variant the
+        # storefront could pick as default is purchasable.
+        candidates = (
+            Product.objects.filter(
+                store=store, product_type=Product.ProductType.VARIABLE,
+                variants__is_active=True, variants__is_obsolete=False, variants__stock__gt=0,
+            )
+            .exclude(variants__is_active=True, variants__is_obsolete=False, variants__stock=0)
+            .distinct().order_by("id")
+        )
+        pdp_product = None
+        for candidate in candidates:
+            # IMPORTANT 2A (repair round 2) -- a single-variant product can
+            # never exercise a real variant TRANSITION; require at least 2
+            # purchasable choices.
+            if candidate.variants.filter(is_active=True, is_obsolete=False).count() >= 2:
+                pdp_product = candidate
+                break
+
+        expected_free_shipping_state = self._w4c_expected_free_shipping_state(store, pdp_product)
+
+        return {
+            "templates": templates,
+            "tier1_occasions": tier1_occasions,
+            "tier2_keys": list(W4C_TIER2_KEYS),
+            "pdp_product_id": pdp_product.pk if pdp_product else None,
+            "pdp_product_slug": pdp_product.slug if pdp_product else None,
+            "expected_free_shipping_state": expected_free_shipping_state,
+        }
+
+    def _w4c_expected_free_shipping_state(self, store: Store, product) -> str:
+        """IMPORTANT 3C (repair round 2) -- never a second pricing engine in
+        JS: the expected Free-Shipping Goal state is computed HERE, once,
+        from the same canonical services the real cart uses
+        (``ShopSettings.free_shipping_threshold``,
+        ``pricing_service.resolve_effective_price``), and merely verified
+        (not recomputed) by run.mjs. ``product.requires_shipping`` is the
+        exact same field ``shipping_service.cart_requires_shipping`` reads
+        per cart item -- reading it directly here is not a second rule."""
+        if product is None or not product.requires_shipping:
+            return "n/a"
+        from apps.catalog.services.pricing_service import resolve_effective_price
+        from apps.core.models import ShopSettings, ShopSettingsNotProvisionedError
+
+        try:
+            threshold = ShopSettings.load(store=store).free_shipping_threshold
+        except ShopSettingsNotProvisionedError:
+            return "n/a"
+        # The exact same default-variant selection
+        # apps.catalog.services.storefront_variant_service uses (never a
+        # second variant-selection rule) -- the real add-to-cart click adds
+        # whichever variant the storefront itself pre-selects as default.
+        default_variant = (
+            product.variants.filter(is_default=True).first()
+            or product.variants.order_by("display_order", "id").first()
+        )
+        price = resolve_effective_price(product, default_variant)
+        return "success" if price >= threshold else "goal"
+
+    def _home_hero_expected(self, preset) -> bool:
+        """Section 6 — data-driven, never a hardcoded key list: derived from
+        the live compiled Home composition, not the raw recipe token."""
+        return any(entry.section_key == W4C_HERO_SECTION_KEY for entry in preset.pages.get("home", ()))
+
+    def _home_hero_index(self, preset):
+        """IMPORTANT 1 (repaired) -- the Hero section's 0-based position
+        within the live compiled Home composition. The public page has no
+        ``data-section-key`` (that attribute is preview-only, see
+        ``responsive_section_wrapper.html``), and not every Hero variant
+        template shares one common CSS class (``hero_banner_luxury.html``/
+        ``hero_banner_atelier.html`` do not carry a bare ``.hero`` class the
+        way ``hero_banner.html``/``_split``/``_beauty``/``_chocolate`` do) --
+        so a real, universal Hero proof must be positional, computed from
+        the SAME live registry data every other W4C check already uses,
+        never a broad text-content selector."""
+        for index, entry in enumerate(preset.pages.get("home", ())):
+            if entry.section_key == W4C_HERO_SECTION_KEY:
+                return index
+        return None
+
+    def _home_product_cards_expected(self, preset) -> bool:
+        """IMPORTANT 1 (repaired) -- data-driven, mirrors ``_home_hero_expected``.
+        Every product-bearing composition token
+        (``product_grid``/``sale_products``/``product_rail``/``product_list``/
+        ``bento_products``/``featured_products``) compiles to the SAME
+        ``product_section`` section key (``a8_ready_templates._product_entry``)."""
+        return any(entry.section_key == "product_section" for entry in preset.pages.get("home", ()))
+
+    def _home_bottom_nav_expected(self, preset) -> bool:
+        return bool(preset.footer and preset.footer.get("mobile_nav_variant"))
+
+    def _canonical_home_contract(self, store: Store) -> dict:
+        """Pilot Findings Closure (IMPORTANT 1) -- the W4C Home expectation
+        must come from the SAME canonical published render pipeline the
+        public storefront uses, never the raw pre-filter recipe
+        (``preset.pages["home"]``). That raw recipe still contains
+        ``hidden_from_library`` entries (e.g. the ``ticker`` token compiles
+        to ``announcement_bar``, superseded by the header's own
+        notification region) that ``preset_service.apply_preset`` filters
+        out BEFORE ever writing a ``StorefrontSection`` row -- see
+        ``source_inventory_and_reclassification.md``. Reusing the exact
+        same two calls the live public Home page itself makes
+        (``storefront_context_service.py``'s own sequence) means this can
+        never duplicate or drift from that filtering/emptiness logic; no
+        second hidden-section list, no Template-key special case."""
+        layout = layout_service.get_or_create_layout(store)
+        home_page = layout.published_version.home_page()
+        items = render_service.build_page_render_items(home_page, store)
+        items = render_service.hide_empty_public_sections(items)
+        section_keys = [item["section"].section_key for item in items]
+        hero_index = section_keys.index(W4C_HERO_SECTION_KEY) if W4C_HERO_SECTION_KEY in section_keys else None
+        return {
+            "expected_rsec_count": len(items),
+            "hero_expected": hero_index is not None,
+            "hero_index": hero_index,
+            "product_cards_expected": "product_section" in section_keys,
+        }
+
+    def _apply_and_verify_published(self, store: Store, preset) -> None:
+        """Section 3.4 — exact apply/publish/verify sequence. Checks
+        ``published_version is None``/status FIRST, raising a controlled
+        ``CommandError``, before ever dereferencing ``template_provenance``
+        (the exact ordering bug the design review flagged)."""
+        preset_service.apply_preset_with_checkpoint(store, preset)
+        layout_service.publish(store)
+        layout = StorefrontLayout.objects.get(store=store)
+        pv = layout.published_version
+        if pv is None or pv.status != pv.Status.PUBLISHED:
+            raise CommandError(f"W4C: {preset.key} v{preset.version} has no valid published version")
+        template = (pv.template_provenance or {}).get("template") or {}
+        if template.get("key") != preset.key or template.get("version") != preset.version:
+            raise CommandError(f"W4C: {preset.key} v{preset.version} did not verify as published (found {template})")
+
+    def _verify_theme_is_none(self, store: Store) -> None:
+        layout = StorefrontLayout.objects.get(store=store)
+        pv = layout.published_version
+        if pv is None or pv.status != pv.Status.PUBLISHED:
+            raise CommandError("W4C: no valid published version -- cannot verify Theme state")
+        manifest = load_store_appearance_manifest(pv)
+        if manifest.selections.get("theme") != "theme.none.v1":
+            raise CommandError(f"W4C: expected theme.none.v1, found {manifest.selections.get('theme')}")
+
+    def _verify_published_theme(self, store: Store, occasion_component_key: str, intensity: str) -> None:
+        layout = StorefrontLayout.objects.get(store=store)
+        pv = layout.published_version
+        if pv is None or pv.status != pv.Status.PUBLISHED:
+            raise CommandError("W4C: no valid published version -- cannot verify Theme state")
+        manifest = load_store_appearance_manifest(pv)
+        if (
+            manifest.selections.get("theme") != occasion_component_key
+            or manifest.settings.get("theme", {}).get("intensity") != intensity
+        ):
+            raise CommandError(f"W4C: Theme did not verify as published ({occasion_component_key}/{intensity})")
+
+    def _theme_cleanup_and_verify(self, store: Store) -> None:
+        """Section 3.6 — Python-owned, failure-safe. Called from a Python
+        ``try/finally`` around every Theme cell. If THIS raises, the entire
+        run halts immediately (section 3.2's Important-2C exception) and is
+        reported BLOCKED."""
+        draft = layout_service.get_or_create_draft(store)
+        appearance_authority_service.clear_theme(version=draft)
+        layout_service.publish(store)
+        self._verify_theme_is_none(store)
+
+    # -- cardinality helpers (section 1/3.2) ---------------------------------
+    def _base_cell_matrix(self):
+        return tuple((page_class, viewport) for page_class in W4C_PAGE_CLASSES for viewport in W4C_VIEWPORTS)
+
+    def _planned_tier2_cells(self, selected_keys):
+        """Section 3.2 (repaired, Round 4 Important 1) — a ``--only`` batch
+        NEVER runs a Tier-2 cell for a key it did not select, including
+        warm_boutique/beauty_dew when neither is in ``selected_keys``."""
+        cells = []
+        for key in selected_keys:
+            if key not in W4C_TIER2_KEYS:
+                continue
+            for occasion in W4C_TIER2_OCCASIONS:
+                for intensity in W4C_TIER2_INTENSITIES:
+                    for viewport in W4C_VIEWPORTS:
+                        cells.append((key, occasion, intensity, viewport))
+        return cells
+
+    # -- unique per-cell result/log paths (section 3.9) ----------------------
+    def _w4c_base_result_path(self, campaign_root, key: str) -> Path:
+        return Path(campaign_root) / "w4c-results" / "base" / f"{key}.json"
+
+    def _w4c_base_log_path(self, campaign_root, key: str) -> Path:
+        return Path(campaign_root) / "logs" / "base" / f"{key}.log"
+
+    def _w4c_theme_result_path(self, campaign_root, key: str, occasion: str, intensity: str, viewport: str, tier: str) -> Path:
+        # A ``tier`` segment disambiguates warm_boutique/beauty_dew's Tier-1
+        # cell from a Tier-2 cell that happens to land on the exact same
+        # occasion/intensity/viewport triple -- both are separate
+        # invocations (section 3.2) and must never collide on disk.
+        return Path(campaign_root) / "w4c-results" / "theme" / f"{key}__{tier}__{occasion}__{intensity}__{viewport}.json"
+
+    def _w4c_theme_log_path(self, campaign_root, key: str, occasion: str, intensity: str, viewport: str, tier: str) -> Path:
+        return Path(campaign_root) / "logs" / "theme" / f"{key}__{tier}__{occasion}__{intensity}__{viewport}.log"
+
+    def _w4c_home_screenshot_paths(self, campaign_root, key: str) -> tuple[str, str]:
+        base = Path(campaign_root) / "screenshots" / "home"
+        return (str(base / f"{key}_home_desktop.jpg"), str(base / f"{key}_home_mobile.jpg"))
+
+    # -- evidence-capture staging paths (Code Review Repair Round 2,
+    # IMPORTANT 5) -- deterministic, under CAMPAIGN_REPORT_ROOT only; never
+    # final repository evidence (that promotion is a separate, later task,
+    # per section 6/§12's two-stage contract, not this repair round). -------
+    def _w4c_representative_screenshot_path(self, campaign_root, key: str, page_class: str) -> str:
+        return str(Path(campaign_root) / "screenshots" / "representative" / f"{key}_{page_class}_desktop.jpg")
+
+    def _w4c_failure_screenshot_path(self, campaign_root, key: str, page_class: str, viewport: str) -> str:
+        return str(Path(campaign_root) / "screenshots" / "failures" / f"{key}_{page_class}_{viewport}_FAIL.jpg")
+
+    def _w4c_theme_screenshot_path(self, campaign_root, key: str, occasion: str, intensity: str, viewport: str, tier: str) -> str:
+        return str(
+            Path(campaign_root) / "screenshots" / "theme"
+            / f"{key}__{tier}__{occasion}__{intensity}__{viewport}.jpg"
+        )
+
+    # -- manifest writers (section 3.2/3.7) -----------------------------------
+    def _write_w4c_base_manifest(self, *, base: dict, key: str, version: str, result_path: Path,
+                                  hero_expected: bool = False, hero_index=None, run_token: str, cells=None,
+                                  expected_rsec_count=None, product_cards_expected: bool = False,
+                                  bottom_nav_expected: bool = False) -> str:
+        campaign_root = result_path.parents[2]
+        home_desktop, home_mobile = self._w4c_home_screenshot_paths(campaign_root, key)
+        cells_list = []
+        for page_class, viewport in (cells if cells is not None else self._base_cell_matrix()):
+            entry = {"page_class": page_class, "viewport": viewport}
+            if page_class != "home":
+                entry["representative_screenshot"] = (
+                    self._w4c_representative_screenshot_path(campaign_root, key, page_class)
+                    if viewport == "desktop" else None
+                )
+                entry["failure_screenshot"] = self._w4c_failure_screenshot_path(campaign_root, key, page_class, viewport)
+            cells_list.append(entry)
+        manifest = dict(base)
+        manifest.update({
+            "w4c": True,
+            "mode": "base",
+            "run_token": run_token,
+            "active_key": {
+                "key": key, "version": version, "hero_expected": bool(hero_expected),
+                "hero_index": hero_index, "expected_rsec_count": expected_rsec_count,
+                "product_cards_expected": bool(product_cards_expected),
+                "bottom_nav_expected": bool(bottom_nav_expected),
+            },
+            "result_path": str(result_path),
+            "cells": cells_list,
+            "home_screenshot_desktop": home_desktop,
+            "home_screenshot_mobile": home_mobile,
+        })
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        Path(home_desktop).parent.mkdir(parents=True, exist_ok=True)
+        fd, manifest_path = tempfile.mkstemp(prefix="rastisi-w4c-base-", suffix=".json")
+        os.close(fd)
+        Path(manifest_path).write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        return manifest_path
+
+    def _write_w4c_theme_manifest(self, *, base: dict, key: str, version: str, occasion: str, intensity: str,
+                                   viewport: str, tier: str, result_path: Path, run_token: str,
+                                   expected_theme: dict | None = None) -> str:
+        # IMPORTANT 5D -- Tier-1 screenshot only on FAIL/BLOCKED, Tier-2
+        # always retained; Node decides which by inspecting active_key.tier
+        # + its own computed result, this path is just where it lands.
+        theme_screenshot_path = self._w4c_theme_screenshot_path(
+            result_path.parents[2], key, occasion, intensity, viewport, tier,
+        )
+        manifest = dict(base)
+        manifest.update({
+            "w4c": True,
+            "mode": "theme",
+            "run_token": run_token,
+            "active_key": {
+                "key": key, "version": version, "occasion": occasion,
+                "intensity": intensity, "viewport": viewport, "tier": tier,
+            },
+            "expected_theme": expected_theme,
+            "result_path": str(result_path),
+            "theme_screenshot_path": theme_screenshot_path,
+        })
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        fd, manifest_path = tempfile.mkstemp(prefix="rastisi-w4c-theme-", suffix=".json")
+        os.close(fd)
+        Path(manifest_path).write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        return manifest_path
+
+    # -- freshness/identity/schema validation (Code Review Repair Round 1,
+    # CRITICAL 1) -------------------------------------------------------------
+    @staticmethod
+    def _new_run_token() -> str:
+        return secrets.token_hex(16)
+
+    # -- campaign/harness git provenance (Code Review Repair Round 2,
+    # IMPORTANT 6) -- pure primitives; the actual dirty/mismatch REJECTION
+    # behavior lives in _validate_or_init_campaign_matrix, under TDD below.
+    @staticmethod
+    def _current_git_head() -> str:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=str(Path(settings.BASE_DIR).resolve()),
+            capture_output=True, text=True, check=True,
+        )
+        return result.stdout.strip()
+
+    @staticmethod
+    def _tracked_worktree_is_dirty() -> bool:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"], cwd=str(Path(settings.BASE_DIR).resolve()),
+            capture_output=True, text=True, check=True,
+        )
+        return bool(result.stdout.strip())
+
+    def _validate_base_cell_schema(self, cell, *, context: str) -> None:
+        if not isinstance(cell, dict):
+            raise CommandError(f"W4C: malformed base cell at {context}: {cell!r}")
+        missing = [field for field in W4C_REQUIRED_BASE_CELL_FIELDS if field not in cell]
+        if missing:
+            raise CommandError(f"W4C: base cell at {context} is missing required fields {missing}: {cell!r}")
+        if cell["result"] not in W4C_VALID_CELL_RESULTS:
+            raise CommandError(f"W4C: base cell at {context} has an invalid result {cell['result']!r}")
+        if cell["result"] != "PASS" and not cell.get("reason"):
+            raise CommandError(f"W4C: base cell at {context} is not PASS but has no reason: {cell!r}")
+
+    def _validate_base_result_freshness(self, result, *, run_token: str, key: str, version: str) -> bool:
+        """CRITICAL 1 -- proves ``result`` was written by THIS invocation, for
+        THIS Template, never a stale/foreign file left over from a prior run.
+        Returns whether any cell is non-PASS (for exit-code consistency)."""
+        if not isinstance(result, dict):
+            raise CommandError(f"W4C: malformed base result for {key} (not a JSON object)")
+        if result.get("run_token") != run_token:
+            raise CommandError(f"W4C: stale/foreign base result for {key} -- run_token mismatch")
+        if result.get("key") != key or result.get("version") != version:
+            raise CommandError(
+                f"W4C: base result identity mismatch for {key} v{version}: "
+                f"found key={result.get('key')!r} version={result.get('version')!r}"
+            )
+        page_classes = result.get("page_classes")
+        if not isinstance(page_classes, dict) or not page_classes:
+            raise CommandError(f"W4C: base result for {key} has no page_classes")
+        any_non_pass = False
+        for page_class, by_viewport in page_classes.items():
+            if not isinstance(by_viewport, dict) or not by_viewport:
+                raise CommandError(f"W4C: base result for {key}/{page_class} is malformed")
+            for viewport, cell in by_viewport.items():
+                self._validate_base_cell_schema(cell, context=f"{key}/{page_class}/{viewport}")
+                if cell["result"] != "PASS":
+                    any_non_pass = True
+        return any_non_pass
+
+    def _validate_theme_result_freshness(self, result, *, run_token: str, key: str, occasion: str,
+                                          intensity: str, viewport: str, tier: str) -> bool:
+        if not isinstance(result, dict):
+            raise CommandError(f"W4C: malformed theme result for {key} (not a JSON object)")
+        if result.get("run_token") != run_token:
+            raise CommandError(f"W4C: stale/foreign theme result for {key} -- run_token mismatch")
+        identity = (result.get("key"), result.get("occasion"), result.get("intensity"),
+                    result.get("viewport"), result.get("tier"))
+        if identity != (key, occasion, intensity, viewport, tier):
+            raise CommandError(
+                f"W4C: theme result identity mismatch for {key}/{tier}/{occasion}/{intensity}/{viewport}: "
+                f"found {identity}"
+            )
+        missing = [field for field in W4C_REQUIRED_THEME_RESULT_FIELDS if field not in result]
+        if missing:
+            raise CommandError(f"W4C: theme result for {key}/{tier} is missing required fields {missing}: {result!r}")
+        if result["result"] not in W4C_VALID_CELL_RESULTS:
+            raise CommandError(f"W4C: theme result for {key}/{tier} has an invalid result {result['result']!r}")
+        return result["result"] != "PASS"
+
+    def _w4c_expected_theme_dom(self, occasion: str) -> dict:
+        """Section 3.1/W2 -- the real, live, source-backed public DOM proof
+        of a rendered occasion Theme (``templates/base.html``'s
+        ``data-occasion-*``/``--occasion-accent`` attributes). Reads the
+        SAME canonical ``theme_catalog`` the appearance-authority service
+        itself uses -- never a second, hand-maintained copy of these
+        per-occasion values in the Node runner."""
+        from apps.storefront_builder import theme_catalog
+
+        entry = next(o for o in theme_catalog.list_theme_occasions() if o.occasion_key == occasion)
+        return {"tone": entry.tone, "accent": entry.accent, "motif": entry.motif}
+
+    # -- campaign matrix (section 3.9/3.10/13/15) -----------------------------
+    def _validate_or_init_campaign_matrix(self, matrix_path: Path) -> None:
+        """IMPORTANT 6 (repair round 2) -- a fresh matrix binds itself to the
+        exact harness git HEAD and refuses to be created against a dirty
+        tracked worktree (never certify uncommitted harness code); a
+        resumed matrix requires the CURRENT HEAD to still match, so two
+        batches executed under different harness code can never be merged
+        into one matrix.json."""
+        matrix_path = Path(matrix_path)
+        if not matrix_path.exists():
+            if self._tracked_worktree_is_dirty():
+                raise CommandError(
+                    "W4C: tracked worktree is dirty -- refusing to start a real W4C "
+                    "campaign against uncommitted harness code. Commit or discard the "
+                    "changes, then re-run."
+                )
+            from datetime import datetime as _dt
+
+            matrix_path.parent.mkdir(parents=True, exist_ok=True)
+            matrix_path.write_text(json.dumps({
+                "_meta": {
+                    "schema_version": W4C_MATRIX_SCHEMA_VERSION,
+                    "certified_base_sha": W4C_CERTIFIED_BASE_SHA,
+                    "total_cells_expected": W4C_TOTAL_CELLS_EXPECTED,
+                    "duplicate_cells": [],
+                    "recovered_state_events": [],
+                    "w4c_branch_head_sha": self._current_git_head(),
+                    "run_started_at": _dt.now().isoformat(),
+                    "run_finished_at": None,
+                },
+                "templates": {},
+            }, indent=2), encoding="utf-8")
+            return
+        existing = json.loads(matrix_path.read_text(encoding="utf-8"))
+        meta = existing.get("_meta", {})
+        if meta.get("schema_version") != W4C_MATRIX_SCHEMA_VERSION or meta.get("certified_base_sha") != W4C_CERTIFIED_BASE_SHA:
+            raise CommandError(
+                f"W4C: {matrix_path} belongs to a different campaign/schema "
+                f"({meta.get('schema_version')!r}/{meta.get('certified_base_sha')!r}) -- "
+                "use a different --report-dir to start a new campaign; never silently merge across roots"
+            )
+        current_head = self._current_git_head()
+        if meta.get("w4c_branch_head_sha") != current_head:
+            raise CommandError(
+                f"W4C: {matrix_path} was recorded at harness HEAD "
+                f"{meta.get('w4c_branch_head_sha')!r} but the current tracked HEAD is "
+                f"{current_head!r} -- use a fresh --report-dir for a campaign under a "
+                "new code head; never mix evidence from two source heads."
+            )
+
+    def _load_matrix(self, matrix_path: Path) -> dict:
+        return json.loads(Path(matrix_path).read_text(encoding="utf-8"))
+
+    def _save_matrix(self, matrix_path: Path, matrix: dict) -> None:
+        matrix_path = Path(matrix_path)
+        fd, tmp_path = tempfile.mkstemp(prefix="rastisi-w4c-matrix-", dir=str(matrix_path.parent))
+        os.close(fd)
+        Path(tmp_path).write_text(json.dumps(matrix, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp_path, matrix_path)
+
+    def _merge_base_into_matrix(self, matrix_path: Path, key: str, version: str, base_result: dict) -> int:
+        """IMPORTANT 3 (repaired) -- insert-only. A cell that already carries
+        ANY terminal result (PASS, FAIL, or BLOCKED alike -- never just
+        "already PASS") is never overwritten by ordinary resume; the
+        conflicting attempt is recorded in ``_meta.duplicate_cells`` and
+        skipped. A genuine recheck is a separate, explicitly-invoked mode
+        that does not exist in W4C today."""
+        matrix = self._load_matrix(matrix_path)
+        entry = matrix["templates"].setdefault(key, {"key": key, "version": version, "page_classes": {}, "theme": {"tier1_cell": None, "tier2_cells": {}}})
+        entry["version"] = version
+        recorded = 0
+        for page_class, by_viewport in (base_result.get("page_classes") or {}).items():
+            entry["page_classes"].setdefault(page_class, {})
+            for viewport, cell in by_viewport.items():
+                existing_cell = entry["page_classes"][page_class].get(viewport)
+                if existing_cell is not None and existing_cell.get("result") in W4C_VALID_CELL_RESULTS:
+                    matrix["_meta"].setdefault("duplicate_cells", []).append(f"base::{key}::{page_class}::{viewport}")
+                    continue
+                entry["page_classes"][page_class][viewport] = cell
+                recorded += 1
+        self._save_matrix(matrix_path, matrix)
+        return recorded
+
+    def _merge_theme_into_matrix(self, matrix_path: Path, key: str, version: str, occasion: str, intensity: str,
+                                  viewport: str, tier: str, theme_result: dict) -> int:
+        matrix = self._load_matrix(matrix_path)
+        entry = matrix["templates"].setdefault(key, {"key": key, "version": version, "page_classes": {}, "theme": {"tier1_cell": None, "tier2_cells": {}}})
+        entry["version"] = version
+        entry.setdefault("theme", {"tier1_cell": None, "tier2_cells": {}})
+        cell_payload = {"occasion": occasion, "intensity": intensity, "viewport": viewport, **theme_result}
+        if tier == "tier1":
+            existing = entry["theme"].get("tier1_cell")
+            if existing is not None and existing.get("result") in W4C_VALID_CELL_RESULTS:
+                matrix["_meta"].setdefault("duplicate_cells", []).append(f"theme::tier1::{key}")
+                self._save_matrix(matrix_path, matrix)
+                return 0
+            entry["theme"]["tier1_cell"] = cell_payload
+        else:
+            slot = f"{occasion}__{intensity}__{viewport}"
+            existing = entry["theme"].setdefault("tier2_cells", {}).get(slot)
+            if existing is not None and existing.get("result") in W4C_VALID_CELL_RESULTS:
+                matrix["_meta"].setdefault("duplicate_cells", []).append(f"theme::tier2::{key}::{slot}")
+                self._save_matrix(matrix_path, matrix)
+                return 0
+            entry["theme"]["tier2_cells"][slot] = cell_payload
+        self._save_matrix(matrix_path, matrix)
+        return 1
+
+    # -- resume: execute only missing cells (Code Review Repair Round 1,
+    # IMPORTANT 3) -------------------------------------------------------------
+    def _missing_base_cells(self, matrix: dict, key: str) -> list:
+        entry = matrix.get("templates", {}).get(key, {})
+        page_classes = entry.get("page_classes", {})
+        missing = []
+        for page_class, viewport in self._base_cell_matrix():
+            cell = page_classes.get(page_class, {}).get(viewport)
+            if cell is None or cell.get("result") not in W4C_VALID_CELL_RESULTS:
+                missing.append((page_class, viewport))
+        return missing
+
+    def _cell_already_recorded_theme(self, matrix: dict, key: str, occasion: str, intensity: str,
+                                      viewport: str, tier: str) -> bool:
+        entry = matrix.get("templates", {}).get(key, {})
+        theme = entry.get("theme", {})
+        if tier == "tier1":
+            cell = theme.get("tier1_cell")
+        else:
+            cell = (theme.get("tier2_cells") or {}).get(f"{occasion}__{intensity}__{viewport}")
+        return bool(cell and cell.get("result") in W4C_VALID_CELL_RESULTS)
+
+    def _record_recovered_state_event(self, matrix_path: Path, message: str) -> None:
+        from datetime import datetime as _dt
+
+        matrix = self._load_matrix(matrix_path)
+        matrix["_meta"].setdefault("recovered_state_events", []).append(
+            {"at": _dt.now().isoformat(), "event": message}
+        )
+        self._save_matrix(matrix_path, matrix)
+
+    def _ensure_published_with_recovery(self, store: Store, preset, matrix_path: Path) -> None:
+        layout = layout_service.get_or_create_layout(store)
+        pv = layout.published_version
+        template = (pv.template_provenance or {}).get("template") if pv else None
+        already_correct = bool(
+            pv is not None and pv.status == pv.Status.PUBLISHED
+            and template and template.get("key") == preset.key and template.get("version") == preset.version
+        )
+        self._apply_and_verify_published(store, preset)
+        if not already_correct:
+            self._record_recovered_state_event(
+                matrix_path, f"published Template drift repaired for {preset.key} v{preset.version}",
+            )
+
+    def _theme_currently_none(self, store: Store) -> bool:
+        layout = layout_service.get_or_create_layout(store)
+        pv = layout.published_version
+        manifest = load_store_appearance_manifest(pv) if (pv and pv.status == pv.Status.PUBLISHED) else None
+        return bool(manifest and manifest.selections.get("theme") == "theme.none.v1")
+
+    def _ensure_theme_none_with_recovery(self, store: Store, matrix_path: Path, *, known_drifted: bool) -> None:
+        """``known_drifted`` must be captured by the CALLER before any other
+        Store-state operation for this cell runs (in particular, before
+        ``_ensure_published_with_recovery``'s own Template reapplication,
+        which -- as a side effect of restoring the preset's own baseline
+        appearance manifest -- can silently reset a drifted Theme back to
+        ``theme.none.v1`` on its own). Capturing drift state up front means
+        this is logged correctly regardless of which step ultimately fixes
+        it, and this function always performs a real, explicit cleanup for
+        a known-drifted cell rather than relying on that side effect."""
+        if not known_drifted:
+            self._verify_theme_is_none(store)
+            return
+        self._theme_cleanup_and_verify(store)
+        self._record_recovered_state_event(matrix_path, "published Theme drift repaired to theme.none.v1")
+
+    def _all_expected_w4c_cell_ids(self) -> set:
+        presets = lpr.list_ready_templates()
+        keys = [p.key for p in presets]
+        tier1_occasions = {
+            p.key: W4C_TIER1_OCCASION_CYCLE[i % len(W4C_TIER1_OCCASION_CYCLE)]
+            for i, p in enumerate(presets)
+        }
+        ids = set()
+        for key in keys:
+            for page_class, viewport in self._base_cell_matrix():
+                ids.add(f"base::{key}::{page_class}::{viewport}")
+            ids.add(f"theme::tier1::{key}")
+        for key, occasion, intensity, viewport in self._planned_tier2_cells(list(W4C_TIER2_KEYS)):
+            ids.add(f"theme::tier2::{key}::{occasion}__{intensity}__{viewport}")
+        return ids
+
+    def _run_final_w4c_aggregator(self, matrix_path: Path) -> dict:
+        """Section 15/3.10 — the SAME aggregator, run on every invocation
+        (full or ``--only``-partial). Recomputes real coverage from the
+        matrix's own content -- never trusts a possibly-stale claimed
+        count."""
+        matrix = self._load_matrix(matrix_path)
+        expected = self._all_expected_w4c_cell_ids()
+        recorded_ids = set()
+        fail_count = 0
+        blocked_count = 0
+        for key, entry in matrix.get("templates", {}).items():
+            for page_class, by_viewport in (entry.get("page_classes") or {}).items():
+                for viewport, cell in by_viewport.items():
+                    recorded_ids.add(f"base::{key}::{page_class}::{viewport}")
+                    if cell.get("result") == "FAIL":
+                        fail_count += 1
+                    elif cell.get("result") == "BLOCKED":
+                        blocked_count += 1
+            theme = entry.get("theme") or {}
+            tier1_cell = theme.get("tier1_cell")
+            if tier1_cell:
+                recorded_ids.add(f"theme::tier1::{key}")
+                if tier1_cell.get("result") == "FAIL":
+                    fail_count += 1
+                elif tier1_cell.get("result") == "BLOCKED":
+                    blocked_count += 1
+            for slot, cell in (theme.get("tier2_cells") or {}).items():
+                recorded_ids.add(f"theme::tier2::{key}::{slot}")
+                if cell.get("result") == "FAIL":
+                    fail_count += 1
+                elif cell.get("result") == "BLOCKED":
+                    blocked_count += 1
+        missing = sorted(expected - recorded_ids)
+        duplicate_cells = list((matrix.get("_meta") or {}).get("duplicate_cells", []))
+        return {
+            "total_cells_recorded": len(recorded_ids & expected),
+            "missing_cells": missing,
+            "duplicate_cells": duplicate_cells,
+            "fail_count": fail_count,
+            "blocked_count": blocked_count,
+        }
+
+    # -- one Theme cell (section 3.2/3.6) -------------------------------------
+    def _run_one_theme_cell(self, *, store, key, version, occasion, intensity, viewport, tier,
+                             campaign_root, matrix_path, node, run_mjs_path, r4_tool_dir, base_manifest) -> int:
+        # IMPORTANT 3 (repaired) -- resume executes only missing cells: an
+        # already-terminal cell is skipped entirely, before touching Store
+        # state at all.
+        matrix = self._load_matrix(matrix_path)
+        if self._cell_already_recorded_theme(matrix, key, occasion, intensity, viewport, tier):
+            return 0
+
+        result_path = self._w4c_theme_result_path(campaign_root, key, occasion, intensity, viewport, tier)
+        log_path = self._w4c_theme_log_path(campaign_root, key, occasion, intensity, viewport, tier)
+        theme_result = None
+        try:
+            preset = lpr.get_layout_preset(key)
+            # Captured BEFORE the Template-recovery step below, whose own
+            # preset-baseline reapplication can otherwise silently reset a
+            # drifted Theme back to none as a side effect and hide genuine
+            # drift from the Theme-recovery log.
+            theme_was_drifted = not self._theme_currently_none(store)
+            self._ensure_published_with_recovery(store, preset, matrix_path)
+            self._ensure_theme_none_with_recovery(store, matrix_path, known_drifted=theme_was_drifted)
+            draft = layout_service.get_or_create_draft(store)
+            occasion_component_key = f"theme.{occasion}.v1"
+            appearance_authority_service.apply_theme(version=draft, component_key=occasion_component_key, intensity=intensity)
+            layout_service.publish(store)
+            self._verify_published_theme(store, occasion_component_key, intensity)
+            # CRITICAL 1 -- never accept a stale result file: unlink any
+            # previous file for this exact cell before invoking Node, and
+            # bind this invocation to a fresh, unique run_token.
+            result_path.unlink(missing_ok=True)
+            run_token = self._new_run_token()
+            manifest_path = self._write_w4c_theme_manifest(
+                base=base_manifest, key=key, version=version, occasion=occasion, intensity=intensity,
+                viewport=viewport, tier=tier, result_path=result_path, run_token=run_token,
+                expected_theme=self._w4c_expected_theme_dom(occasion),
+            )
+            try:
+                node_exit = self._run_logged([node, str(run_mjs_path), manifest_path], cwd=r4_tool_dir, log_path=log_path)
+                if not result_path.exists():
+                    raise CommandError(
+                        f"W4C: BLOCKED -- no result produced for theme cell {key}/{tier}/{occasion}/"
+                        f"{intensity}/{viewport} (node_exit={node_exit})"
+                    )
+                try:
+                    theme_result = json.loads(result_path.read_text(encoding="utf-8"))
+                except json.JSONDecodeError as exc:
+                    raise CommandError(
+                        f"W4C: BLOCKED -- malformed theme result JSON for {key}/{tier}: {exc}"
+                    ) from exc
+                any_non_pass = self._validate_theme_result_freshness(
+                    theme_result, run_token=run_token, key=key, occasion=occasion,
+                    intensity=intensity, viewport=viewport, tier=tier,
+                )
+                if node_exit != 0 and not any_non_pass:
+                    raise CommandError(
+                        f"W4C: BLOCKED -- theme cell {key}/{tier} Node exited {node_exit} but the "
+                        "result reports no FAIL/BLOCKED (inconsistent)"
+                    )
+            finally:
+                Path(manifest_path).unlink(missing_ok=True)
+        finally:
+            # Always runs, whether the try block above passed, FAILed, or
+            # raised. If cleanup itself raises, the run halts immediately
+            # (section 3.2's Important-2C exception) -- BLOCKED, and the
+            # cell above is NEVER merged (IMPORTANT 2: cleanup_verified must
+            # never be a lie).
+            self._theme_cleanup_and_verify(store)
+        # Reached ONLY when nothing above raised, including cleanup.
+        theme_result["cleanup_verified"] = True
+        return self._merge_theme_into_matrix(
+            matrix_path, key, version, occasion, intensity, viewport, tier, theme_result,
+        )
+
+    # -- the full campaign orchestration (section 3.2) ------------------------
+    def _run_w4c_campaign(self, *, store, w4c_fixture, selected_keys, campaign_root, node,
+                           run_mjs_path, r4_tool_dir, base_manifest, tier2_budget=None) -> dict:
+        campaign_root = Path(campaign_root)
+        matrix_path = campaign_root / "matrix.json"
+        self._validate_or_init_campaign_matrix(matrix_path)
+
+        all_templates = w4c_fixture["templates"]
+        by_key = {t["key"]: t["version"] for t in all_templates}
+        keys = list(selected_keys) if selected_keys else [t["key"] for t in all_templates]
+        cells_recorded_this_run = 0
+
+        # Rate-Limit-Aware Campaign Sharding Repair -- the real production
+        # storefront_layout.{new_draft,publish} controls are never bypassed
+        # or raised (Architect decision, binding). An unexpected
+        # RateLimitExceeded here means this process's shard genuinely
+        # exhausted a real budget: it must become one controlled,
+        # informative CommandError -- never a raw traceback, never a
+        # partially-executed cell silently merged as PASS, and it must stop
+        # this process immediately. matrix.json already only ever gains a
+        # cell via a successful, fully-validated merge above, so simply
+        # letting this propagate (as a CommandError, not the raw exception)
+        # leaves it exactly at the last successfully-merged terminal cell;
+        # the caller's own outer DB-restore ``finally`` still runs untouched.
+        try:
+            # ---------- BASE: one invocation per key, only missing cells ---
+            for key in keys:
+                version = by_key[key]
+                matrix = self._load_matrix(matrix_path)
+                missing = self._missing_base_cells(matrix, key)
+                if not missing:
+                    continue  # IMPORTANT 3 -- fully recorded already; skip Node entirely
+                preset = lpr.get_layout_preset(key)
+                self._ensure_published_with_recovery(store, preset, matrix_path)
+                # Pilot Findings Closure (IMPORTANT 1) -- the Home expectation
+                # comes from the canonical published render pipeline (the
+                # SAME sections the public page will actually show), never
+                # the raw pre-filter recipe -- see _canonical_home_contract.
+                home_contract = self._canonical_home_contract(store)
+                result_path = self._w4c_base_result_path(campaign_root, key)
+                log_path = self._w4c_base_log_path(campaign_root, key)
+                result_path.unlink(missing_ok=True)  # CRITICAL 1 -- never read a stale file
+                run_token = self._new_run_token()
+                manifest_path = self._write_w4c_base_manifest(
+                    base=base_manifest, key=key, version=version, result_path=result_path,
+                    hero_expected=home_contract["hero_expected"], hero_index=home_contract["hero_index"],
+                    run_token=run_token, cells=missing,
+                    expected_rsec_count=home_contract["expected_rsec_count"],
+                    product_cards_expected=home_contract["product_cards_expected"],
+                    bottom_nav_expected=self._home_bottom_nav_expected(preset),
+                )
+                try:
+                    node_exit = self._run_logged([node, str(run_mjs_path), manifest_path], cwd=r4_tool_dir, log_path=log_path)
+                    if not result_path.exists():
+                        raise CommandError(f"W4C: BLOCKED -- no result produced for base {key} (node_exit={node_exit})")
+                    try:
+                        base_result = json.loads(result_path.read_text(encoding="utf-8"))
+                    except json.JSONDecodeError as exc:
+                        raise CommandError(f"W4C: BLOCKED -- malformed base result JSON for {key}: {exc}") from exc
+                    any_non_pass = self._validate_base_result_freshness(base_result, run_token=run_token, key=key, version=version)
+                    if node_exit != 0 and not any_non_pass:
+                        raise CommandError(
+                            f"W4C: BLOCKED -- base {key} Node exited {node_exit} but the result reports "
+                            "no FAIL/BLOCKED cell (inconsistent)"
+                        )
+                finally:
+                    Path(manifest_path).unlink(missing_ok=True)
+                cells_recorded_this_run += self._merge_base_into_matrix(matrix_path, key, version, base_result)
+
+            # ---------- THEME TIER 1: one invocation per key, 1 cell each --
+            for key in keys:
+                version = by_key[key]
+                occasion = w4c_fixture["tier1_occasions"][key]
+                cells_recorded_this_run += self._run_one_theme_cell(
+                    store=store, key=key, version=version, occasion=occasion, intensity="balanced",
+                    viewport="desktop", tier="tier1", campaign_root=campaign_root, matrix_path=matrix_path,
+                    node=node, run_mjs_path=run_mjs_path, r4_tool_dir=r4_tool_dir, base_manifest=base_manifest,
+                )
+
+            # ---------- THEME TIER 2: filtered by selected_keys (Round 4), -
+            # budget-capped (Rate-Limit-Aware Campaign Sharding Repair) ----
+            if tier2_budget != 0:
+                tier2_executed = 0
+                for key, occasion, intensity, viewport in self._planned_tier2_cells(keys):
+                    if tier2_budget is not None and tier2_executed >= tier2_budget:
+                        break
+                    version = by_key[key]
+                    recorded = self._run_one_theme_cell(
+                        store=store, key=key, version=version, occasion=occasion, intensity=intensity,
+                        viewport=viewport, tier="tier2", campaign_root=campaign_root, matrix_path=matrix_path,
+                        node=node, run_mjs_path=run_mjs_path, r4_tool_dir=r4_tool_dir, base_manifest=base_manifest,
+                    )
+                    cells_recorded_this_run += recorded
+                    if recorded:  # an already-terminal cell returns 0 and never consumes budget
+                        tier2_executed += 1
+        except RateLimitExceeded as exc:
+            raise CommandError(
+                "W4C RATE-LIMIT BLOCKED -- a real production rate limit was exhausted mid-shard "
+                f"(detail: {exc}). selected_keys={keys} "
+                f"cells_recorded_this_invocation={cells_recorded_this_run} "
+                f"campaign_root={campaign_root} -- matrix.json is preserved exactly up to the last "
+                "successfully-merged terminal cell. Do NOT retry immediately in this same process. "
+                "Resume safely with a smaller --only batch and/or --w4c-tier2-budget, in a FRESH "
+                "process, against the SAME campaign root and the SAME git HEAD."
+            ) from exc
+
+        aggregate = self._run_final_w4c_aggregator(matrix_path)
+        aggregate["cells_recorded_this_run"] = cells_recorded_this_run
+        campaign_truly_complete = (
+            aggregate["total_cells_recorded"] == W4C_TOTAL_CELLS_EXPECTED
+            and not aggregate["missing_cells"] and not aggregate["duplicate_cells"]
+        )
+        if campaign_truly_complete:
+            matrix = self._load_matrix(matrix_path)
+            if not matrix["_meta"].get("run_finished_at"):
+                from datetime import datetime as _dt
+
+                matrix["_meta"]["run_finished_at"] = _dt.now().isoformat()
+                self._save_matrix(matrix_path, matrix)
+        return aggregate

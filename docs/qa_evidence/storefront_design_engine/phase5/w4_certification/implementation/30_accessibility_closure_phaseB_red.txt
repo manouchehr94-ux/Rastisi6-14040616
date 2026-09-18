@@ -1,0 +1,240 @@
+Found 26 test(s).
+Skipping setup of unused database(s): default.
+System check identified no issues (0 silenced).
+test_1_q_search_input_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_1_q_search_input_has_aria_label_both_branches) ... 
+  test_1_q_search_input_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_1_q_search_input_has_aria_label_both_branches) (layout='sidebar_dense', control='q') ... FAIL
+  test_1_q_search_input_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_1_q_search_input_has_aria_label_both_branches) (layout='standard', control='q') ... FAIL
+test_2_category_select_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_2_category_select_has_aria_label_both_branches) ... 
+  test_2_category_select_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_2_category_select_has_aria_label_both_branches) (layout='sidebar_dense', control='category') ... FAIL
+  test_2_category_select_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_2_category_select_has_aria_label_both_branches) (layout='standard', control='category') ... FAIL
+test_3_brand_select_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_3_brand_select_has_aria_label_both_branches) ... 
+  test_3_brand_select_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_3_brand_select_has_aria_label_both_branches) (layout='sidebar_dense', control='brand') ... FAIL
+  test_3_brand_select_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_3_brand_select_has_aria_label_both_branches) (layout='standard', control='brand') ... FAIL
+test_4_min_price_input_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_4_min_price_input_has_aria_label_both_branches) ... 
+  test_4_min_price_input_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_4_min_price_input_has_aria_label_both_branches) (layout='sidebar_dense', control='min_price') ... FAIL
+  test_4_min_price_input_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_4_min_price_input_has_aria_label_both_branches) (layout='standard', control='min_price') ... FAIL
+test_5_max_price_input_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_5_max_price_input_has_aria_label_both_branches) ... 
+  test_5_max_price_input_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_5_max_price_input_has_aria_label_both_branches) (layout='sidebar_dense', control='max_price') ... FAIL
+  test_5_max_price_input_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_5_max_price_input_has_aria_label_both_branches) (layout='standard', control='max_price') ... FAIL
+test_6_sort_select_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_6_sort_select_has_aria_label_both_branches) ... 
+  test_6_sort_select_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_6_sort_select_has_aria_label_both_branches) (layout='sidebar_dense', control='sort') ... FAIL
+  test_6_sort_select_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_6_sort_select_has_aria_label_both_branches) (layout='standard', control='sort') ... FAIL
+test_7_discounted_checkbox_already_has_a_label_wrapper_untouched (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_7_discounted_checkbox_already_has_a_label_wrapper_untouched)
+Regression guard -- the two checkboxes were never flagged as ... ok
+test_10_multi_axis_swatch_has_role_button (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_10_multi_axis_swatch_has_role_button) ... FAIL
+test_11_multi_axis_swatch_has_tabindex_zero (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_11_multi_axis_swatch_has_tabindex_zero) ... FAIL
+test_12_multi_axis_swatch_has_dynamic_aria_label (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_12_multi_axis_swatch_has_dynamic_aria_label) ... FAIL
+test_13_multi_axis_swatch_has_aria_pressed_matching_active_state (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_13_multi_axis_swatch_has_aria_pressed_matching_active_state) ... FAIL
+test_14_multi_axis_swatch_enter_invokes_same_selection_function (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_14_multi_axis_swatch_enter_invokes_same_selection_function) ... FAIL
+test_15_multi_axis_swatch_space_invokes_same_selection_function (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_15_multi_axis_swatch_space_invokes_same_selection_function) ... FAIL
+test_16_multi_axis_swatch_click_still_present_unchanged (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_16_multi_axis_swatch_click_still_present_unchanged) ... ok
+test_17_multi_axis_swatch_title_and_visual_state_preserved (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_17_multi_axis_swatch_title_and_visual_state_preserved) ... ok
+test_20_legacy_swatch_has_role_button (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_20_legacy_swatch_has_role_button) ... FAIL
+test_21_legacy_swatch_has_tabindex_zero (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_21_legacy_swatch_has_tabindex_zero) ... FAIL
+test_22_legacy_swatch_has_dynamic_aria_label (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_22_legacy_swatch_has_dynamic_aria_label) ... FAIL
+test_23_legacy_swatch_has_aria_pressed_matching_active_state (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_23_legacy_swatch_has_aria_pressed_matching_active_state) ... FAIL
+test_24_legacy_swatch_enter_invokes_same_selection_function (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_24_legacy_swatch_enter_invokes_same_selection_function) ... FAIL
+test_25_legacy_swatch_space_invokes_same_selection_function (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_25_legacy_swatch_space_invokes_same_selection_function) ... FAIL
+test_26_legacy_swatch_click_still_present_unchanged (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_26_legacy_swatch_click_still_present_unchanged) ... ok
+test_27_legacy_swatch_title_and_visual_state_preserved (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_27_legacy_swatch_title_and_visual_state_preserved) ... ok
+test_30_multi_axis_size_button_path_unchanged (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_30_multi_axis_size_button_path_unchanged) ... ok
+test_31_legacy_size_button_path_unchanged (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_31_legacy_size_button_path_unchanged) ... ok
+test_32_no_second_alpine_component_introduced (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_32_no_second_alpine_component_introduced)
+Key invariant -- mouse click and keyboard Enter/Space must ... ok
+
+======================================================================
+FAIL: test_1_q_search_input_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_1_q_search_input_has_aria_label_both_branches) (layout='sidebar_dense', control='q')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 99, in _assert_accessible_name_in_both_branches
+    self.assertIn(
+AssertionError: 'aria-label="جستجوی محصولات"' not found in '<input class="plp-inp" type="text" name="q" placeholder="نام کالا، برند یا دسته..." value="{{ query }}">' : sidebar_dense layout: name="q" control is missing aria-label="جستجوی محصولات"; found tag: '<input class="plp-inp" type="text" name="q" placeholder="نام کالا، برند یا دسته..." value="{{ query }}">'
+
+======================================================================
+FAIL: test_1_q_search_input_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_1_q_search_input_has_aria_label_both_branches) (layout='standard', control='q')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 99, in _assert_accessible_name_in_both_branches
+    self.assertIn(
+AssertionError: 'aria-label="جستجوی محصولات"' not found in '<input class="plp-inp" type="text" name="q" placeholder="نام کالا، برند یا دسته..." value="{{ query }}">' : standard layout: name="q" control is missing aria-label="جستجوی محصولات"; found tag: '<input class="plp-inp" type="text" name="q" placeholder="نام کالا، برند یا دسته..." value="{{ query }}">'
+
+======================================================================
+FAIL: test_2_category_select_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_2_category_select_has_aria_label_both_branches) (layout='sidebar_dense', control='category')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 99, in _assert_accessible_name_in_both_branches
+    self.assertIn(
+AssertionError: 'aria-label="دسته\u200cبندی"' not found in '<select class="plp-inp" name="category">' : sidebar_dense layout: name="category" control is missing aria-label="دسته‌بندی"; found tag: '<select class="plp-inp" name="category">'
+
+======================================================================
+FAIL: test_2_category_select_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_2_category_select_has_aria_label_both_branches) (layout='standard', control='category')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 99, in _assert_accessible_name_in_both_branches
+    self.assertIn(
+AssertionError: 'aria-label="دسته\u200cبندی"' not found in '<select class="plp-inp" name="category">' : standard layout: name="category" control is missing aria-label="دسته‌بندی"; found tag: '<select class="plp-inp" name="category">'
+
+======================================================================
+FAIL: test_3_brand_select_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_3_brand_select_has_aria_label_both_branches) (layout='sidebar_dense', control='brand')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 99, in _assert_accessible_name_in_both_branches
+    self.assertIn(
+AssertionError: 'aria-label="برند"' not found in '<select class="plp-inp" name="brand">' : sidebar_dense layout: name="brand" control is missing aria-label="برند"; found tag: '<select class="plp-inp" name="brand">'
+
+======================================================================
+FAIL: test_3_brand_select_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_3_brand_select_has_aria_label_both_branches) (layout='standard', control='brand')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 99, in _assert_accessible_name_in_both_branches
+    self.assertIn(
+AssertionError: 'aria-label="برند"' not found in '<select class="plp-inp" name="brand">' : standard layout: name="brand" control is missing aria-label="برند"; found tag: '<select class="plp-inp" name="brand">'
+
+======================================================================
+FAIL: test_4_min_price_input_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_4_min_price_input_has_aria_label_both_branches) (layout='sidebar_dense', control='min_price')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 99, in _assert_accessible_name_in_both_branches
+    self.assertIn(
+AssertionError: 'aria-label="حداقل قیمت"' not found in '<input class="plp-inp" type="number" name="min_price" placeholder="از" min="0" value="{{ min_price }}">' : sidebar_dense layout: name="min_price" control is missing aria-label="حداقل قیمت"; found tag: '<input class="plp-inp" type="number" name="min_price" placeholder="از" min="0" value="{{ min_price }}">'
+
+======================================================================
+FAIL: test_4_min_price_input_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_4_min_price_input_has_aria_label_both_branches) (layout='standard', control='min_price')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 99, in _assert_accessible_name_in_both_branches
+    self.assertIn(
+AssertionError: 'aria-label="حداقل قیمت"' not found in '<input class="plp-inp" type="number" name="min_price" placeholder="از" min="0" value="{{ min_price }}">' : standard layout: name="min_price" control is missing aria-label="حداقل قیمت"; found tag: '<input class="plp-inp" type="number" name="min_price" placeholder="از" min="0" value="{{ min_price }}">'
+
+======================================================================
+FAIL: test_5_max_price_input_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_5_max_price_input_has_aria_label_both_branches) (layout='sidebar_dense', control='max_price')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 99, in _assert_accessible_name_in_both_branches
+    self.assertIn(
+AssertionError: 'aria-label="حداکثر قیمت"' not found in '<input class="plp-inp" type="number" name="max_price" placeholder="تا" min="0" value="{{ max_price }}">' : sidebar_dense layout: name="max_price" control is missing aria-label="حداکثر قیمت"; found tag: '<input class="plp-inp" type="number" name="max_price" placeholder="تا" min="0" value="{{ max_price }}">'
+
+======================================================================
+FAIL: test_5_max_price_input_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_5_max_price_input_has_aria_label_both_branches) (layout='standard', control='max_price')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 99, in _assert_accessible_name_in_both_branches
+    self.assertIn(
+AssertionError: 'aria-label="حداکثر قیمت"' not found in '<input class="plp-inp" type="number" name="max_price" placeholder="تا" min="0" value="{{ max_price }}">' : standard layout: name="max_price" control is missing aria-label="حداکثر قیمت"; found tag: '<input class="plp-inp" type="number" name="max_price" placeholder="تا" min="0" value="{{ max_price }}">'
+
+======================================================================
+FAIL: test_6_sort_select_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_6_sort_select_has_aria_label_both_branches) (layout='sidebar_dense', control='sort')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 99, in _assert_accessible_name_in_both_branches
+    self.assertIn(
+AssertionError: 'aria-label="مرتب\u200cسازی"' not found in '<select class="plp-sort-select" name="sort">' : sidebar_dense layout: name="sort" control is missing aria-label="مرتب‌سازی"; found tag: '<select class="plp-sort-select" name="sort">'
+
+======================================================================
+FAIL: test_6_sort_select_has_aria_label_both_branches (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CListingAccessibleNameRepairTests.test_6_sort_select_has_aria_label_both_branches) (layout='standard', control='sort')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 99, in _assert_accessible_name_in_both_branches
+    self.assertIn(
+AssertionError: 'aria-label="مرتب\u200cسازی"' not found in '<select class="plp-inp" name="sort">' : standard layout: name="sort" control is missing aria-label="مرتب‌سازی"; found tag: '<select class="plp-inp" name="sort">'
+
+======================================================================
+FAIL: test_10_multi_axis_swatch_has_role_button (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_10_multi_axis_swatch_has_role_button)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 157, in test_10_multi_axis_swatch_has_role_button
+    self.assertIn('role="button"', tag)
+AssertionError: 'role="button"' not found in '<div class="swatch" :class="{ active: selected[axis.id] === v.id, unavailable: !isValueAvailable(axis.id, v.id) }"\n                       :style="\'background:\' + v.color_hex" :title="v.label"\n                       @click="selectAxisValue(axis.id, v.id)"></div>'
+
+======================================================================
+FAIL: test_11_multi_axis_swatch_has_tabindex_zero (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_11_multi_axis_swatch_has_tabindex_zero)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 161, in test_11_multi_axis_swatch_has_tabindex_zero
+    self.assertIn('tabindex="0"', tag)
+AssertionError: 'tabindex="0"' not found in '<div class="swatch" :class="{ active: selected[axis.id] === v.id, unavailable: !isValueAvailable(axis.id, v.id) }"\n                       :style="\'background:\' + v.color_hex" :title="v.label"\n                       @click="selectAxisValue(axis.id, v.id)"></div>'
+
+======================================================================
+FAIL: test_12_multi_axis_swatch_has_dynamic_aria_label (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_12_multi_axis_swatch_has_dynamic_aria_label)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 165, in test_12_multi_axis_swatch_has_dynamic_aria_label
+    self.assertIn(':aria-label="v.label"', tag)
+AssertionError: ':aria-label="v.label"' not found in '<div class="swatch" :class="{ active: selected[axis.id] === v.id, unavailable: !isValueAvailable(axis.id, v.id) }"\n                       :style="\'background:\' + v.color_hex" :title="v.label"\n                       @click="selectAxisValue(axis.id, v.id)"></div>'
+
+======================================================================
+FAIL: test_13_multi_axis_swatch_has_aria_pressed_matching_active_state (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_13_multi_axis_swatch_has_aria_pressed_matching_active_state)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 169, in test_13_multi_axis_swatch_has_aria_pressed_matching_active_state
+    self.assertIn(':aria-pressed="selected[axis.id] === v.id"', tag)
+AssertionError: ':aria-pressed="selected[axis.id] === v.id"' not found in '<div class="swatch" :class="{ active: selected[axis.id] === v.id, unavailable: !isValueAvailable(axis.id, v.id) }"\n                       :style="\'background:\' + v.color_hex" :title="v.label"\n                       @click="selectAxisValue(axis.id, v.id)"></div>'
+
+======================================================================
+FAIL: test_14_multi_axis_swatch_enter_invokes_same_selection_function (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_14_multi_axis_swatch_enter_invokes_same_selection_function)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 173, in test_14_multi_axis_swatch_enter_invokes_same_selection_function
+    self.assertIn('@keydown.enter.prevent="selectAxisValue(axis.id, v.id)"', tag)
+AssertionError: '@keydown.enter.prevent="selectAxisValue(axis.id, v.id)"' not found in '<div class="swatch" :class="{ active: selected[axis.id] === v.id, unavailable: !isValueAvailable(axis.id, v.id) }"\n                       :style="\'background:\' + v.color_hex" :title="v.label"\n                       @click="selectAxisValue(axis.id, v.id)"></div>'
+
+======================================================================
+FAIL: test_15_multi_axis_swatch_space_invokes_same_selection_function (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_15_multi_axis_swatch_space_invokes_same_selection_function)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 177, in test_15_multi_axis_swatch_space_invokes_same_selection_function
+    self.assertIn('@keydown.space.prevent="selectAxisValue(axis.id, v.id)"', tag)
+AssertionError: '@keydown.space.prevent="selectAxisValue(axis.id, v.id)"' not found in '<div class="swatch" :class="{ active: selected[axis.id] === v.id, unavailable: !isValueAvailable(axis.id, v.id) }"\n                       :style="\'background:\' + v.color_hex" :title="v.label"\n                       @click="selectAxisValue(axis.id, v.id)"></div>'
+
+======================================================================
+FAIL: test_20_legacy_swatch_has_role_button (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_20_legacy_swatch_has_role_button)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 196, in test_20_legacy_swatch_has_role_button
+    self.assertIn('role="button"', tag)
+AssertionError: 'role="button"' not found in '<div class="swatch" :class="{ active: selectedVariantId === v.id, unavailable: !v.is_purchasable }"\n                       :style="\'background:\' + v.color_hex" :title="v.label"\n                       @click="selectLegacy(v.id)"></div>'
+
+======================================================================
+FAIL: test_21_legacy_swatch_has_tabindex_zero (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_21_legacy_swatch_has_tabindex_zero)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 200, in test_21_legacy_swatch_has_tabindex_zero
+    self.assertIn('tabindex="0"', tag)
+AssertionError: 'tabindex="0"' not found in '<div class="swatch" :class="{ active: selectedVariantId === v.id, unavailable: !v.is_purchasable }"\n                       :style="\'background:\' + v.color_hex" :title="v.label"\n                       @click="selectLegacy(v.id)"></div>'
+
+======================================================================
+FAIL: test_22_legacy_swatch_has_dynamic_aria_label (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_22_legacy_swatch_has_dynamic_aria_label)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 204, in test_22_legacy_swatch_has_dynamic_aria_label
+    self.assertIn(':aria-label="v.label"', tag)
+AssertionError: ':aria-label="v.label"' not found in '<div class="swatch" :class="{ active: selectedVariantId === v.id, unavailable: !v.is_purchasable }"\n                       :style="\'background:\' + v.color_hex" :title="v.label"\n                       @click="selectLegacy(v.id)"></div>'
+
+======================================================================
+FAIL: test_23_legacy_swatch_has_aria_pressed_matching_active_state (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_23_legacy_swatch_has_aria_pressed_matching_active_state)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 208, in test_23_legacy_swatch_has_aria_pressed_matching_active_state
+    self.assertIn(':aria-pressed="selectedVariantId === v.id"', tag)
+AssertionError: ':aria-pressed="selectedVariantId === v.id"' not found in '<div class="swatch" :class="{ active: selectedVariantId === v.id, unavailable: !v.is_purchasable }"\n                       :style="\'background:\' + v.color_hex" :title="v.label"\n                       @click="selectLegacy(v.id)"></div>'
+
+======================================================================
+FAIL: test_24_legacy_swatch_enter_invokes_same_selection_function (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_24_legacy_swatch_enter_invokes_same_selection_function)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 212, in test_24_legacy_swatch_enter_invokes_same_selection_function
+    self.assertIn('@keydown.enter.prevent="selectLegacy(v.id)"', tag)
+AssertionError: '@keydown.enter.prevent="selectLegacy(v.id)"' not found in '<div class="swatch" :class="{ active: selectedVariantId === v.id, unavailable: !v.is_purchasable }"\n                       :style="\'background:\' + v.color_hex" :title="v.label"\n                       @click="selectLegacy(v.id)"></div>'
+
+======================================================================
+FAIL: test_25_legacy_swatch_space_invokes_same_selection_function (apps.storefront_builder.tests.test_w4c_accessibility_production_repair.W4CPdpSwatchKeyboardRepairTests.test_25_legacy_swatch_space_invokes_same_selection_function)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_w4c_accessibility_production_repair.py", line 216, in test_25_legacy_swatch_space_invokes_same_selection_function
+    self.assertIn('@keydown.space.prevent="selectLegacy(v.id)"', tag)
+AssertionError: '@keydown.space.prevent="selectLegacy(v.id)"' not found in '<div class="swatch" :class="{ active: selectedVariantId === v.id, unavailable: !v.is_purchasable }"\n                       :style="\'background:\' + v.color_hex" :title="v.label"\n                       @click="selectLegacy(v.id)"></div>'
+
+----------------------------------------------------------------------
+Ran 26 tests in 0.005s
+
+FAILED (failures=24)

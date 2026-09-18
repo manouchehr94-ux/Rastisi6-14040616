@@ -1,0 +1,11 @@
+{
+  "template_key": "tower_department",
+  "version": "1",
+  "content_hash": "5787b28e078d2fa8d54b1b42800ba2398861b7bb4908a19f54ac20c5303a3ebd",
+  "preview_input_fingerprint": "e5d269a0871a132e6c9dc5c592108910eb1d39b1b7fa38b07307bc5bddc80ee7",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}
