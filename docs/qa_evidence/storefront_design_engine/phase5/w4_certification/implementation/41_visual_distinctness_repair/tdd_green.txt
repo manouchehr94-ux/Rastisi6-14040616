@@ -1,0 +1,21 @@
+Found 13 test(s).
+Skipping setup of unused database(s): default.
+System check identified no issues (0 silenced).
+test_anchors_are_completely_untouched (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.AboveFoldIdentityNoLongerMatchesAnchorTests.test_anchors_are_completely_untouched) ... ok
+test_each_repaired_target_differs_from_its_anchor_above_the_fold (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.AboveFoldIdentityNoLongerMatchesAnchorTests.test_each_repaired_target_differs_from_its_anchor_above_the_fold) ... ok
+test_the_difference_includes_hero_not_palette_font_radius_alone (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.AboveFoldIdentityNoLongerMatchesAnchorTests.test_the_difference_includes_hero_not_palette_font_radius_alone) ... ok
+test_canonical_keys_are_still_exactly_the_same_fifty (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.CatalogIntegrityAfterRepairTests.test_canonical_keys_are_still_exactly_the_same_fifty) ... ok
+test_canonical_ready_template_count_remains_fifty (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.CatalogIntegrityAfterRepairTests.test_canonical_ready_template_count_remains_fifty) ... ok
+test_no_new_above_fold_collision_introduced_among_all_fifty (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.CatalogIntegrityAfterRepairTests.test_no_new_above_fold_collision_introduced_among_all_fifty) ... ok
+test_green_workshop_v2_and_v1_both_resolvable (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.OutgoingHistoryRemainsResolvableTests.test_green_workshop_v2_and_v1_both_resolvable) ... ok
+test_laleh_play_v2_and_v1_both_resolvable (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.OutgoingHistoryRemainsResolvableTests.test_laleh_play_v2_and_v1_both_resolvable) ... ok
+test_outgoing_v2_specs_are_byte_identical_to_the_old_certified_v2 (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.OutgoingHistoryRemainsResolvableTests.test_outgoing_v2_specs_are_byte_identical_to_the_old_certified_v2) ... ok
+test_parnian_editorial_v2_and_v1_both_resolvable (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.OutgoingHistoryRemainsResolvableTests.test_parnian_editorial_v2_and_v1_both_resolvable) ... ok
+test_green_workshop_latest_is_v3 (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.RepairTargetsAreNowVersionThreeTests.test_green_workshop_latest_is_v3) ... ok
+test_laleh_play_latest_is_v3 (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.RepairTargetsAreNowVersionThreeTests.test_laleh_play_latest_is_v3) ... ok
+test_parnian_editorial_latest_is_v3 (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.RepairTargetsAreNowVersionThreeTests.test_parnian_editorial_latest_is_v3) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.002s
+
+OK

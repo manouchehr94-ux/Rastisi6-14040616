@@ -1,0 +1,125 @@
+Found 13 test(s).
+Skipping setup of unused database(s): default.
+System check identified no issues (0 silenced).
+test_anchors_are_completely_untouched (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.AboveFoldIdentityNoLongerMatchesAnchorTests.test_anchors_are_completely_untouched) ... ok
+test_each_repaired_target_differs_from_its_anchor_above_the_fold (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.AboveFoldIdentityNoLongerMatchesAnchorTests.test_each_repaired_target_differs_from_its_anchor_above_the_fold) ... 
+  test_each_repaired_target_differs_from_its_anchor_above_the_fold (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.AboveFoldIdentityNoLongerMatchesAnchorTests.test_each_repaired_target_differs_from_its_anchor_above_the_fold) (pair=('green_workshop', 'pine_eco')) ... FAIL
+  test_each_repaired_target_differs_from_its_anchor_above_the_fold (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.AboveFoldIdentityNoLongerMatchesAnchorTests.test_each_repaired_target_differs_from_its_anchor_above_the_fold) (pair=('laleh_play', 'playful_lifestyle')) ... FAIL
+  test_each_repaired_target_differs_from_its_anchor_above_the_fold (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.AboveFoldIdentityNoLongerMatchesAnchorTests.test_each_repaired_target_differs_from_its_anchor_above_the_fold) (pair=('parnian_editorial', 'silk_editorial')) ... FAIL
+test_the_difference_includes_hero_not_palette_font_radius_alone (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.AboveFoldIdentityNoLongerMatchesAnchorTests.test_the_difference_includes_hero_not_palette_font_radius_alone) ... 
+  test_the_difference_includes_hero_not_palette_font_radius_alone (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.AboveFoldIdentityNoLongerMatchesAnchorTests.test_the_difference_includes_hero_not_palette_font_radius_alone) (pair=('green_workshop', 'pine_eco')) ... FAIL
+  test_the_difference_includes_hero_not_palette_font_radius_alone (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.AboveFoldIdentityNoLongerMatchesAnchorTests.test_the_difference_includes_hero_not_palette_font_radius_alone) (pair=('laleh_play', 'playful_lifestyle')) ... FAIL
+  test_the_difference_includes_hero_not_palette_font_radius_alone (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.AboveFoldIdentityNoLongerMatchesAnchorTests.test_the_difference_includes_hero_not_palette_font_radius_alone) (pair=('parnian_editorial', 'silk_editorial')) ... FAIL
+test_canonical_keys_are_still_exactly_the_same_fifty (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.CatalogIntegrityAfterRepairTests.test_canonical_keys_are_still_exactly_the_same_fifty) ... ok
+test_canonical_ready_template_count_remains_fifty (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.CatalogIntegrityAfterRepairTests.test_canonical_ready_template_count_remains_fifty) ... ok
+test_no_new_above_fold_collision_introduced_among_all_fifty (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.CatalogIntegrityAfterRepairTests.test_no_new_above_fold_collision_introduced_among_all_fifty) ... FAIL
+test_green_workshop_v2_and_v1_both_resolvable (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.OutgoingHistoryRemainsResolvableTests.test_green_workshop_v2_and_v1_both_resolvable) ... ok
+test_laleh_play_v2_and_v1_both_resolvable (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.OutgoingHistoryRemainsResolvableTests.test_laleh_play_v2_and_v1_both_resolvable) ... ok
+test_outgoing_v2_specs_are_byte_identical_to_the_old_certified_v2 (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.OutgoingHistoryRemainsResolvableTests.test_outgoing_v2_specs_are_byte_identical_to_the_old_certified_v2) ... ok
+test_parnian_editorial_v2_and_v1_both_resolvable (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.OutgoingHistoryRemainsResolvableTests.test_parnian_editorial_v2_and_v1_both_resolvable) ... ok
+test_green_workshop_latest_is_v3 (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.RepairTargetsAreNowVersionThreeTests.test_green_workshop_latest_is_v3) ... FAIL
+test_laleh_play_latest_is_v3 (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.RepairTargetsAreNowVersionThreeTests.test_laleh_play_latest_is_v3) ... FAIL
+test_parnian_editorial_latest_is_v3 (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.RepairTargetsAreNowVersionThreeTests.test_parnian_editorial_latest_is_v3) ... FAIL
+
+======================================================================
+FAIL: test_each_repaired_target_differs_from_its_anchor_above_the_fold (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.AboveFoldIdentityNoLongerMatchesAnchorTests.test_each_repaired_target_differs_from_its_anchor_above_the_fold) (pair=('green_workshop', 'pine_eco'))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_a8_visual_distinctness_repair.py", line 103, in test_each_repaired_target_differs_from_its_anchor_above_the_fold
+    self.assertNotEqual(
+AssertionError: ('header.compact_menu.v1', 'hero.editorial_split.v1', 'layout.three_column.v1', 'product_view.standard_grid.v1', 'bottom_nav.floating_dock.v1') == ('header.compact_menu.v1', 'hero.editorial_split.v1', 'layout.three_column.v1', 'product_view.standard_grid.v1', 'bottom_nav.floating_dock.v1') : green_workshop v3 must no longer match pine_eco on all major visible above-the-fold axes
+
+======================================================================
+FAIL: test_each_repaired_target_differs_from_its_anchor_above_the_fold (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.AboveFoldIdentityNoLongerMatchesAnchorTests.test_each_repaired_target_differs_from_its_anchor_above_the_fold) (pair=('laleh_play', 'playful_lifestyle'))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_a8_visual_distinctness_repair.py", line 103, in test_each_repaired_target_differs_from_its_anchor_above_the_fold
+    self.assertNotEqual(
+AssertionError: ('header.playful_canopy.v1', 'hero.image_collage.v1', 'layout.three_column.v1', 'product_view.standard_grid.v1', 'bottom_nav.five_item.v1') == ('header.playful_canopy.v1', 'hero.image_collage.v1', 'layout.three_column.v1', 'product_view.standard_grid.v1', 'bottom_nav.five_item.v1') : laleh_play v3 must no longer match playful_lifestyle on all major visible above-the-fold axes
+
+======================================================================
+FAIL: test_each_repaired_target_differs_from_its_anchor_above_the_fold (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.AboveFoldIdentityNoLongerMatchesAnchorTests.test_each_repaired_target_differs_from_its_anchor_above_the_fold) (pair=('parnian_editorial', 'silk_editorial'))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_a8_visual_distinctness_repair.py", line 103, in test_each_repaired_target_differs_from_its_anchor_above_the_fold
+    self.assertNotEqual(
+AssertionError: ('header.editorial_masthead.v1', 'hero.immersive.v1', 'layout.two_column.v1', 'product_view.editorial_grid.v1', 'bottom_nav.minimal_icons.v1') == ('header.editorial_masthead.v1', 'hero.immersive.v1', 'layout.two_column.v1', 'product_view.editorial_grid.v1', 'bottom_nav.minimal_icons.v1') : parnian_editorial v3 must no longer match silk_editorial on all major visible above-the-fold axes
+
+======================================================================
+FAIL: test_the_difference_includes_hero_not_palette_font_radius_alone (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.AboveFoldIdentityNoLongerMatchesAnchorTests.test_the_difference_includes_hero_not_palette_font_radius_alone) (pair=('green_workshop', 'pine_eco'))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_a8_visual_distinctness_repair.py", line 116, in test_the_difference_includes_hero_not_palette_font_radius_alone
+    self.assertNotEqual(
+AssertionError: 'hero.editorial_split.v1' == 'hero.editorial_split.v1' : green_workshop v3 must use a different hero component than pine_eco, not merely a different palette/font/radius
+
+======================================================================
+FAIL: test_the_difference_includes_hero_not_palette_font_radius_alone (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.AboveFoldIdentityNoLongerMatchesAnchorTests.test_the_difference_includes_hero_not_palette_font_radius_alone) (pair=('laleh_play', 'playful_lifestyle'))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_a8_visual_distinctness_repair.py", line 116, in test_the_difference_includes_hero_not_palette_font_radius_alone
+    self.assertNotEqual(
+AssertionError: 'hero.image_collage.v1' == 'hero.image_collage.v1' : laleh_play v3 must use a different hero component than playful_lifestyle, not merely a different palette/font/radius
+
+======================================================================
+FAIL: test_the_difference_includes_hero_not_palette_font_radius_alone (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.AboveFoldIdentityNoLongerMatchesAnchorTests.test_the_difference_includes_hero_not_palette_font_radius_alone) (pair=('parnian_editorial', 'silk_editorial'))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_a8_visual_distinctness_repair.py", line 116, in test_the_difference_includes_hero_not_palette_font_radius_alone
+    self.assertNotEqual(
+AssertionError: 'hero.immersive.v1' == 'hero.immersive.v1' : parnian_editorial v3 must use a different hero component than silk_editorial, not merely a different palette/font/radius
+
+======================================================================
+FAIL: test_no_new_above_fold_collision_introduced_among_all_fifty (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.CatalogIntegrityAfterRepairTests.test_no_new_above_fold_collision_introduced_among_all_fifty)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_a8_visual_distinctness_repair.py", line 161, in test_no_new_above_fold_collision_introduced_among_all_fifty
+    self.assertEqual(
+AssertionError: Lists differ: [('playful_lifestyle', 'laleh_play'), ('gr[63 chars]al')] != []
+
+First list contains 3 additional elements.
+First extra element 0:
+('playful_lifestyle', 'laleh_play')
+
++ []
+- [('playful_lifestyle', 'laleh_play'),
+-  ('green_workshop', 'pine_eco'),
+-  ('silk_editorial', 'parnian_editorial')] : repair must not introduce any NEW above-the-fold collision: [('playful_lifestyle', 'laleh_play'), ('green_workshop', 'pine_eco'), ('silk_editorial', 'parnian_editorial')]
+
+======================================================================
+FAIL: test_green_workshop_latest_is_v3 (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.RepairTargetsAreNowVersionThreeTests.test_green_workshop_latest_is_v3)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_a8_visual_distinctness_repair.py", line 32, in test_green_workshop_latest_is_v3
+    self.assertEqual(lpr.get_layout_preset("green_workshop").version, "3")
+AssertionError: '2' != '3'
+- 2
++ 3
+
+
+======================================================================
+FAIL: test_laleh_play_latest_is_v3 (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.RepairTargetsAreNowVersionThreeTests.test_laleh_play_latest_is_v3)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_a8_visual_distinctness_repair.py", line 35, in test_laleh_play_latest_is_v3
+    self.assertEqual(lpr.get_layout_preset("laleh_play").version, "3")
+AssertionError: '2' != '3'
+- 2
++ 3
+
+
+======================================================================
+FAIL: test_parnian_editorial_latest_is_v3 (apps.storefront_builder.tests.test_a8_visual_distinctness_repair.RepairTargetsAreNowVersionThreeTests.test_parnian_editorial_latest_is_v3)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_a8_visual_distinctness_repair.py", line 38, in test_parnian_editorial_latest_is_v3
+    self.assertEqual(lpr.get_layout_preset("parnian_editorial").version, "3")
+AssertionError: '2' != '3'
+- 2
++ 3
+
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.004s
+
+FAILED (failures=10)
