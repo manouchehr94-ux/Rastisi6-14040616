@@ -1,23 +1,29 @@
 # W4C Final Certification Campaign -- Failure Summary
 
-CAMPAIGN_HEAD: `1e4efad80fbfc998cfd05d79658955193e1799d5`
+FINAL_CAMPAIGN_HEAD: `0d2ab09ed40c9df566b9bc551e3065ecf95ce281` (repaired source)
 
 FAIL: 0
 BLOCKED: 0
-NEEDS REPAIR: 6 (rendered visual distinctness closure round; see visual_distinctness_matrix.md)
+NEEDS REPAIR: 0
 
-No FAIL or BLOCKED browser cell was recorded across all 704 cells of the final certification campaign; that result is unchanged.
+No FAIL or BLOCKED browser cell was recorded across all 704 cells of this
+final certification campaign, run against the repaired source
+(`green_workshop`, `laleh_play`, `parnian_editorial` bumped v2 -> v3).
 
-The rendered visual distinctness closure round (grounded in the actual Home Desktop+Mobile evidence, not configuration signatures alone) found 3 genuine NEEDS REPAIR pairs, 6 Templates total:
+## History
 
-| Template | Cell | Reason | Evidence path | Recommended repair owner |
-|---|---|---|---|---|
-| `pine_eco` | Home (Desktop+Mobile) | Materially indistinguishable from `green_workshop` -- identical hero, promo-block section, header nav items, and Mobile bottom-nav rendering; only `card` and `footer` config differ, neither visible above the fold | `home_gallery/pine_eco_home_desktop.jpg`, `home_gallery/pine_eco_home_mobile.jpg` | Design/Template curation |
-| `green_workshop` | Home (Desktop+Mobile) | Same pair as above | `home_gallery/green_workshop_home_desktop.jpg`, `home_gallery/green_workshop_home_mobile.jpg` | Design/Template curation |
-| `playful_lifestyle` | Home (Desktop) | Materially indistinguishable from `laleh_play` -- identical arch-cutout hero composition/photos/headline/CTA/header nav; only background/accent palette (mint vs sunset) differs | `home_gallery/playful_lifestyle_home_desktop.jpg` | Design/Template curation |
-| `laleh_play` | Home (Desktop) | Same pair as above | `home_gallery/laleh_play_home_desktop.jpg` | Design/Template curation |
-| `silk_editorial` | Home (Desktop) | Materially indistinguishable from `parnian_editorial` -- identical hero panel (photo/headline/CTA); only header bar colour and page background tone differ | `home_gallery/silk_editorial_home_desktop.jpg` | Design/Template curation |
-| `parnian_editorial` | Home (Desktop) | Same pair as above | `home_gallery/parnian_editorial_home_desktop.jpg` | Design/Template curation |
+The original 704-cell campaign (`CAMPAIGN_HEAD`
+`1e4efad80fbfc998cfd05d79658955193e1799d5`) also recorded 0 FAIL/0 BLOCKED,
+but a subsequent rendered visual distinctness closure round found 3 genuine
+NEEDS REPAIR pairs (6 Templates) materially indistinguishable above the
+fold: `pine_eco`/`green_workshop`, `playful_lifestyle`/`laleh_play`,
+`silk_editorial`/`parnian_editorial`. That finding is preserved historically
+in git (see the `implementation/41_visual_distinctness_repair/` and earlier
+evidence).
 
-Per this round's binding rules, none of these Templates' production code/registries were modified this round.
-
+Those 3 pairs were then repaired (targeted v2->v3 bump for exactly one
+Template per pair, anchors untouched) and this final 704-cell campaign was
+run against the repaired source to recertify it end-to-end. The rebuilt
+rendered visual distinctness review (`visual_distinctness_matrix.md`) now
+finds all 50 Templates PASS, including all 3 repaired pairs confirmed
+DISTINCT on real rendered evidence. **NEEDS REPAIR is now 0.**

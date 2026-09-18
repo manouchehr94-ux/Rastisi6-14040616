@@ -1,51 +1,45 @@
-# P5-W4C Final All-50 Certification Campaign — Execution Report
+# P5-W4C Final Repaired-Source 704-Cell Recertification — Execution Report
 
 ## Provenance
 
-- Full CAMPAIGN_HEAD: `1e4efad80fbfc998cfd05d79658955193e1799d5`
-- Final evidence HEAD (this report's own commit's parent chain): `ee469a3579db0b6269b50726ac3517eb5cf79fe3`
+- FINAL_CAMPAIGN_HEAD: `0d2ab09ed40c9df566b9bc551e3065ecf95ce281`
+- Production repair head: `6074424b99cd922a28fe3187fef10a53931e535b`
+- Final exact source/test head: `c31e07ed8a5cab241e53d1ed7fb905637f1af79e`
 - Certified official base: `3a4fe9070584655548bae5a9bb574f3415bbf580` (`origin/feature/phase5-design-expansion`, unchanged throughout)
-- Campaign root: `/tmp/rastisi_w4c_final_1e4efad8_attempt2` (external, not committed)
-- Discarded root (preserved, not certifiable): `/tmp/rastisi_w4c_final_1e4efad8` — Attempt 1, killed mid-shard-02 by an unsafe `nohup`/`disown` detachment before its own DB-restore step ran (see "Attempt 1" below)
-- Run started (Attempt 2): `2026-09-18T12:53:59.677746`
-- Run finished (Attempt 2): `2026-09-18T14:26:12.557749`
+- Campaign root: `/tmp/rastisi_w4c_final_repaired_0d2ab09e` (external, not committed; fresh — never reused from a prior campaign root)
+- Run started: `2026-09-18T20:39:47Z`
+- Run finished: `2026-09-18T21:49:32Z`
 
-## Attempt 1 (preserved, not certifiable)
+## Relationship to the old 704 campaign
 
-Shards 02-13 were first launched via a detached (`nohup ... & disown`)
-batch script on the assumption it would survive independently of the
-launching tool call. The sandbox instead tore down the whole process
-group when that tool call ended, killing shard 02 mid-run — before its
-own `finally`-style DB-restore/cleanup step executed. This left
-`db.sqlite3` mutated relative to its own pre-shard-02 safety backup
-(verified via SHA256 mismatch: current `dc7d358f...` vs. backup
-`d008ecf5...`), and `matrix.json` in that root ended up with 3 partial,
-unverified template entries (`playful_lifestyle`, `utility_catalog`,
-`editorial_jewelry` — 12 cells each — the 4th shard-02 key,
-`dark_digital`, was mutated via drift-repair but never got any cell
-written before the kill). Per Independent Architect instruction: the
-root is preserved exactly as-is at `/tmp/rastisi_w4c_final_1e4efad8`,
-never edited, never resumed, and explicitly excluded from certification.
-`db.sqlite3` was restored from that shard's own verified backup
-(hash-confirmed equal) before Attempt 2 began.
+The previous 704-cell campaign (`CAMPAIGN_HEAD`
+`1e4efad80fbfc998cfd05d79658955193e1799d5`) certified a source that a later
+rendered visual distinctness closure round found to have 3 genuine
+above-the-fold collisions (6 Templates, 3 pairs). That old campaign's
+matrix, evidence, and result remain historical for that source head only
+and are preserved in git history — **not modified, not reused** by this
+round. This report documents the **new, separate** 704-cell campaign run
+against the source after the targeted repair (`green_workshop`,
+`laleh_play`, `parnian_editorial` bumped v2 -> v3) plus a 3-key static
+Gallery preview refresh.
 
 ## Ready Template count
 
-50 / 50 (canonical order sourced from `layout_preset_registry.list_ready_templates()`, printed and verified unique before the campaign)
+50 / 50 (canonical order sourced from `layout_preset_registry.list_ready_templates()`, printed and verified unique before the campaign; recorded in `implementation/42_final_repaired_source_recertification/shard_plan.json`)
 
 ## Cell breakdown
 
-- Base cells: 600 / 600
-- Theme Tier 1: 50 / 50
-- Theme Tier 2: 54 / 54
+- Base cells: 600 / 600 (PASS 600, FAIL 0, BLOCKED 0)
+- Theme Tier 1: 50 / 50 (PASS 50, cleanup_verified 50)
+- Theme Tier 2: 54 / 54 (27 `warm_boutique` + 27 `beauty_dew`; PASS 54, cleanup_verified 54)
 - Total cells: 704 / 704
 
-## Process / invocation counts (Attempt 2, the certified run)
+## Process / invocation counts
 
-- Base+Tier1 shards: 13 (12 shards of 4 keys + 1 final shard of 2 keys), each a single real tracked `run_in_background` `manage.py` process — never detached, never parallel
+- Base+Tier1 shards: 13 (12 shards of 4 keys + 1 final shard of 2 keys), `--w4c-tier2-budget 0` each
 - Tier-2 shards: 14 (`--only warm_boutique,beauty_dew --w4c-tier2-budget 4`, 13 shards of 4 cells + 1 final shard of 2 cells)
 - Total `manage.py qa_storefront_builder_r4` processes: 27
-- Node invocations: 8 per full 4-key Base+Tier1 shard, 4 for the final 2-key shard, 1 per Tier-2 shard-worth of missing cells actually run — consistent with the harness's own per-shard reporting; exact per-cell provenance is recorded in `matrix.json`
+- Every process was a single real tracked `run_in_background: true` Bash call — never `nohup`/`disown`, never parallel. Each shard's completion was independently verified (exit code, cell count, `matrix._meta.w4c_branch_head_sha`, `duplicate_cells == []`, SQLite backup/restore hash match, no `RateLimitExceeded`, git HEAD/worktree clean) before the next shard was launched.
 
 ## Certification truthfulness gate
 
@@ -54,11 +48,14 @@ never edited, never resumed, and explicitly excluded from certification.
 - BLOCKED: 0
 - Missing: 0 (704/704 recorded)
 - Duplicates: 0
-- Accessibility FAIL: 0
-- Console errors on any PASS cell (favicon excluded, no new exclusion created): 0
-- Page errors on any PASS cell: 0
-- Failed requests on any PASS cell (favicon excluded): 0
-- Theme cleanup verified: 104 / 104
+- Accessibility FAIL: 0 (1800 accessibility checks recorded, 0 FAIL)
+- Console errors on any cell: 0
+- Page errors on any cell: 0
+- Failed requests on any cell: 0
+- Theme cleanup verified: 104 / 104 (50 Tier-1 + 54 Tier-2)
+- `matrix._meta.w4c_branch_head_sha`: `0d2ab09ed40c9df566b9bc551e3065ecf95ce281` (== FINAL_CAMPAIGN_HEAD)
+- `matrix._meta.certified_base_sha`: `3a4fe9070584655548bae5a9bb574f3415bbf580` (== official base)
+- SQLite restore: PASS on every one of the 27 processes (`pre=d008ecf5...` `post=d008ecf5...` `match=True` each time, plus independently re-verified by this session after each shard)
 
 ## Evidence counts
 
@@ -68,105 +65,59 @@ never edited, never resumed, and explicitly excluded from certification.
 - Representative PDP Desktop: 50 / 50
 - Representative Cart Desktop: 50 / 50
 - Tier-2 Theme screenshots: 54 / 54
-- Failure screenshots required: 0 (0 FAIL cells)
+- Failure screenshots required: 0 (0 FAIL cells) — confirmed no `failures/` directory was populated
+- Every recorded screenshot path in `matrix.json` (304 total) verified to exist on disk
 
-## Visual distinctness
+## Static Ready-Template Gallery (3-key v3 refresh)
 
-**SUPERSEDED.** The structural-signature-only method below was the first
-pass; per Independent Architect correction ("Rendered Visual Distinctness
-Closure" round), it did not satisfy the binding rendered-evidence contract
-and was replaced by a review grounded in the actual Home Desktop+Mobile
-captures. See "Rendered visual distinctness closure" below for the
-current, authoritative verdict.
+Before this campaign, `green_workshop`/`laleh_play`/`parnian_editorial`
+were repaired to v3 but their committed static previews were still v2
+(`resolve_real_screenshot()` therefore fell back to the placeholder SVG for
+those 3 keys). This round refreshed exactly those 3 keys' real previews:
 
-<details><summary>Original (superseded) structural-signature pass</summary>
+- `db.sqlite3` backed up (SHA256 `d008ecf5...`) and restored byte-identical after the refresh.
+- Captured sequentially (`--only <key>`, one at a time, no parallel captures) via the existing, unmodified `capture_ready_template_previews.py` against a dedicated port-8766 `runserver` (never the W4C certification server on 8765).
+- `resolve_real_screenshot()` now resolves a fresh, current v3 real screenshot for all 3 keys.
+- Exactly 6 new tracked files: 3× `.webp` + 3× `.meta.json`.
+- The other 47 Templates' previews were untouched.
 
-VERDICT: PASS. Method: structural signature (header, hero-family-or-
-intentional-absence, layout, product card style, footer, bottom
-navigation) computed from each Template's real `store_appearance`
-selections, deliberately excluding palette/font/radius/motion/badge.
-50/50 unique signatures across all 50 canonical Templates — 0 structural
-collisions. Spot-checked against real Home Desktop screenshots for the
-largest single-axis (layout-only) collision group.
+## Rendered visual distinctness
 
-</details>
+**Rebuilt from this final campaign's own evidence** (not reused from the
+earlier closure round, and not a config-signature-only decision — see
+`visual_distinctness_matrix.md`/`.json`).
 
-## Rendered visual distinctness closure (authoritative)
+- Rendered PASS: 50 / 50
+- NEEDS REPAIR: 0 / 50
+- MANUAL REVIEW REQUIRED: 0 / 50
+- Config-only PASS decisions: 0 / 50
+- `green_workshop` vs `pine_eco`: **DISTINCT**
+- `laleh_play` vs `playful_lifestyle`: **DISTINCT**
+- `parnian_editorial` vs `silk_editorial`: **DISTINCT**
+- `green_workshop` vs `parnian_editorial` (both share the `product_focus`/`beauty_editorial` hero family): confirmed distinguishable from each other via header, layout, product_view, and page background.
 
-**VERDICT: NEEDS REPAIR.** Every one of the 50 Templates' real Home
-Desktop (1440x900) and Mobile (390x844) captures in `home_gallery/` was
-directly viewed (contact sheets covering all 50 on both viewports, plus
-individual full-resolution re-fetches for every Template in a 6+-member
-hero-component family and every algorithmically-detected exact match on
-header+hero+layout+product_view+bottom_nav). Configured selections are
-retained only as supporting metadata, per instruction.
+## Architecture / duplication audit
 
-- Reviewed Desktop: 50/50. Reviewed Mobile: 50/50.
-- Rendered PASS: 44/50.
-- MANUAL REVIEW REQUIRED: 0.
-- NEEDS REPAIR: 6/50 (3 pairs): `pine_eco`/`green_workshop` (Mobile
-  screenshots are byte-identical (same SHA256 blob); Desktop screenshots are
-  different blobs but were judged visually indistinguishable above the
-  fold), `playful_lifestyle`/`laleh_play`
-  (identical arch-hero composition/photos/copy, palette-only difference),
-  `silk_editorial`/`parnian_editorial` (identical hero panel, header-color/
-  page-tone-only difference).
-- Config-only PASS decisions: 0.
+CLEAN — see `architecture_duplication_audit.md`. No second registry,
+version-history authority, renderer, browser harness, preset-apply
+authority, publish authority, Theme owner, Cart implementation,
+ProductCard system, Bottom Navigation system, search backend, or tenant
+resolver. The visual repair introduced zero Template-name-specific
+CSS/render branches.
 
-Important finding recorded: hero photography/headline/CTA copy is
-Store-level demo content shared by every Template using the same hero
-component (e.g. all 7 `hero.editorial_split.v1` Templates render the
-literal same jacket/jacket/shoe photos and headline) — expected given one
-shared demo catalog, not itself a defect, but it means real distinguishing
-power for a shared-hero cluster comes from header structure, secondary-
-section composition, and Mobile bottom-navigation, not hero photography.
+## Post-campaign gates
 
-Footer limitation recorded: all 50 captures are single-viewport screenshots
-at initial load; the footer is below the fold on every Template and was
-never reached by any of the 50 captures. `observed_footer` is `NOT_VISIBLE`
-for all 50 rather than inferring an uncaptured appearance.
-
-Per this round's binding rule, `needs_repair_count > 0` downgrades the W4C
-final certification status to **NEEDS REPAIR** on visual-distinctness
-grounds. The 704/704 real browser certification result itself (FAIL=0,
-BLOCKED=0, accessibility FAIL=0, 0 unexpected errors, Theme cleanup
-104/104) is unaffected and remains frozen/accepted. See
-`visual_distinctness_matrix.md`/`.json` (now containing per-Template
-`observed_*` fields, evidence paths, and rendered verdicts for all 50) and
-`failure_summary.md` for full detail.
-
-## Static Ready-Template Gallery staleness
-
-- STATIC GALLERY STALE KEYS: 50 / 50 (8 version-mismatched: `premium_leather`, `dense_marketplace`, `warm_boutique`, `fashion_promo_catalog`, `playful_lifestyle`, `utility_catalog`, `editorial_jewelry`, `dark_digital`; 42 never previously captured at any version)
-- STATIC GALLERY REFRESH: **COMPLETE**
-- Refreshed via the existing, unmodified `capture_ready_template_previews.py`, against a separate `runserver` on port 8766 (never the certification server), one key at a time, sequentially
-- DB PRE-REFRESH SHA256: `d008ecf54d4ad8e73c0aa44a443d1ceeb87f958a0d5c4097b7d831dea1b6efad`
-- DB BACKUP SHA256: `d008ecf54d4ad8e73c0aa44a443d1ceeb87f958a0d5c4097b7d831dea1b6efad` (`/tmp/rastisi_gallery_refresh_db_backup_20260918T121642Z.sqlite3`)
-- DB POST-RESTORE SHA256: `d008ecf54d4ad8e73c0aa44a443d1ceeb87f958a0d5c4097b7d831dea1b6efad`
-- DB RESTORE MATCH: **YES**
-- Post-refresh freshness re-check: 50/50 keys resolve fresh via `resolve_real_screenshot`
-- `capture_ready_template_previews.py` itself: unmodified
-
-## SQLite restore results
-
-PASS for every one of the 27 certification `manage.py` processes in
-Attempt 2 (each process's own `pre=...post=...match=True` log line,
-independently re-verified against `sha256sum db.sqlite3` after every
-single shard before the next one started) and for the Gallery refresh's
-before/after backup-restore cycle.
-
-## Official base SHA
-
-`3a4fe9070584655548bae5a9bb574f3415bbf580` — unchanged throughout.
+`test_w4c_all50_certification_harness` + `test_w4c_accessibility_production_repair`
+(166 tests), `test_ready_template_real_previews` (32 tests),
+`test_qa_harness_contract` (4 tests), `test_a8_visual_distinctness_repair`
++ `test_w4b_template_curation` (36 tests) — all GREEN. `node --check
+tools/storefront_builder_r4_qa/run.mjs` OK. `manage.py check`: 0 issues.
+`manage.py makemigrations --check --dry-run`: no changes. `git diff
+--check`: OK. The full 3418-test suite was **not** re-run this round —
+production/harness/test source is frozen at `c31e07ed8a5cab241e53d1ed7fb905637f1af79e`
+and was already accepted clean (0 new/changed failures) against that exact
+head.
 
 ## W5 status
 
-NOT STARTED. `gallery_index.md` is recorded as a W5 handoff artifact only.
-
-## Source/harness changes
-
-None. `qa_storefront_builder_r4.py`, `run.mjs`, the Ready Template
-registry, `preset_service.py`, `layout_service.py`, and all production
-rate limits are byte-identical to `CAMPAIGN_HEAD`. Every commit in this
-round touches only `docs/qa_evidence/...` and
-`apps/storefront_builder/static/ready_template_previews/...`.
+**NOT STARTED.**
