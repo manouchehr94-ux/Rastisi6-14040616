@@ -1,0 +1,11 @@
+{
+  "template_key": "tuska_bento",
+  "version": "1",
+  "content_hash": "3a3e48133ee05f2ec0436e07f973a5a5d85216cc77c700ef81395ccf62b9ad52",
+  "preview_input_fingerprint": "f5c3f2a7ada306274b4a2efe42960953737c1efd41806c6c260f9bd2528b4e86",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}

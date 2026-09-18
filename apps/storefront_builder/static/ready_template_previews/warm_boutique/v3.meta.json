@@ -1,0 +1,11 @@
+{
+  "template_key": "warm_boutique",
+  "version": "3",
+  "content_hash": "01e1a3fe706f84f0620b2a5ff1a1baf346a2870fdf79b527e19356bc1b91759b",
+  "preview_input_fingerprint": "a37544831911194ccb2eb809c8f9e88d0cfff5baac4da12bed6d7386d3bb7f87",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}

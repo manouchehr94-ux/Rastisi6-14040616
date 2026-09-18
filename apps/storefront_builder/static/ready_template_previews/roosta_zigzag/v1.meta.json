@@ -1,0 +1,11 @@
+{
+  "template_key": "roosta_zigzag",
+  "version": "1",
+  "content_hash": "52faca5732f0802e85e34ab260b22d33e1fbccb61cc1e3d3535369c273835a6e",
+  "preview_input_fingerprint": "3ef4d50210dcbdf46e553c4f84648fc603cf7d47d3afe6ec1d920b96cafbfe4c",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}

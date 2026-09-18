@@ -1,0 +1,11 @@
+{
+  "template_key": "mist_quiet",
+  "version": "1",
+  "content_hash": "2e5fb5f6ebd6b67b1ecbd993d6584a66d6cbf5e8b7cf72fe8343ec85382bcf15",
+  "preview_input_fingerprint": "88e4f2d7a78a3ca6944687b975dc43f23685c57688e3dfc13a076642fd93fe93",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}
