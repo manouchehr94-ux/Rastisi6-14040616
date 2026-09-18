@@ -23,7 +23,7 @@
         "home_gallery/green_workshop_home_mobile.jpg"
       ],
       "axes_shared": "ALL of: header, hero, layout, product_view, bottom_nav (and, for silk_editorial/parnian_editorial and pine_eco/green_workshop, badge/motion/font/radius/density too)",
-      "axes_visibly_different": "None visible above the fold for pine_eco/green_workshop -- the Desktop and Mobile captures are indistinguishable; card style and footer differ only in configuration, neither is visible in either capture.",
+      "axes_visibly_different": "None visible above the fold -- Mobile screenshots are byte-identical (same SHA256 blob: 78a873a2...); Desktop screenshots are different blobs (61308dc1... vs 574c36c2...) but were judged visually indistinguishable above the fold. Card style and footer differ only in configuration, neither visible in either capture.",
       "verdict": "NEEDS_REPAIR",
       "rationale": "Materially indistinguishable in the actual rendered Home Desktop+Mobile evidence except for palette/cosmetic differences that are not visible above the fold, per the binding rendered-evidence contract."
     },
@@ -651,7 +651,7 @@
       "desktop_evidence_path": "home_gallery/green_workshop_home_desktop.jpg",
       "mobile_evidence_path": "home_gallery/green_workshop_home_mobile.jpg",
       "observed_header": "OBSERVED: white header, full long nav list, GREEN search button",
-      "observed_hero_or_intentional_absence": "OBSERVED: byte-for-byte identical hero to pine_eco on both Desktop and Mobile -- same photos, frame, headline, CTA; identical promo-blocks section in the same order; same header structure/nav items",
+      "observed_hero_or_intentional_absence": "OBSERVED: visually indistinguishable hero from pine_eco on Desktop (different JPEG blobs, same visible content); Mobile hero screenshot is byte-identical (same SHA256 blob) -- same photos, frame, headline, CTA; identical promo-blocks section in the same order; same header structure/nav items",
       "observed_layout_composition": "OBSERVED: hero -> promo blocks -> grid, structurally identical to pine_eco",
       "observed_product_card_style": "OBSERVED: standard cards (config differs from pine_eco's soft_capsule, but not visible above the fold)",
       "observed_density": "OBSERVED: relaxed",
@@ -1191,7 +1191,7 @@
       "desktop_evidence_path": "home_gallery/pine_eco_home_desktop.jpg",
       "mobile_evidence_path": "home_gallery/pine_eco_home_mobile.jpg",
       "observed_header": "OBSERVED: white/cream header, full long nav list, GREEN search button",
-      "observed_hero_or_intentional_absence": "OBSERVED: byte-for-byte identical hero to green_workshop on both Desktop and Mobile",
+      "observed_hero_or_intentional_absence": "OBSERVED: visually indistinguishable hero from green_workshop on Desktop (different JPEG blobs, same visible content); Mobile hero screenshot is byte-identical (same SHA256 blob)",
       "observed_layout_composition": "OBSERVED: hero -> promo blocks -> grid, structurally identical to green_workshop",
       "observed_product_card_style": "OBSERVED: soft_capsule cards (not visible above the fold)",
       "observed_density": "OBSERVED: relaxed",

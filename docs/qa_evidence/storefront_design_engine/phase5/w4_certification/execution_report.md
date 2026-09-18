@@ -104,8 +104,10 @@ retained only as supporting metadata, per instruction.
 - Reviewed Desktop: 50/50. Reviewed Mobile: 50/50.
 - Rendered PASS: 44/50.
 - MANUAL REVIEW REQUIRED: 0.
-- NEEDS REPAIR: 6/50 (3 pairs): `pine_eco`/`green_workshop` (Desktop+Mobile
-  screenshot-identical above the fold), `playful_lifestyle`/`laleh_play`
+- NEEDS REPAIR: 6/50 (3 pairs): `pine_eco`/`green_workshop` (Mobile
+  screenshots are byte-identical (same SHA256 blob); Desktop screenshots are
+  different blobs but were judged visually indistinguishable above the
+  fold), `playful_lifestyle`/`laleh_play`
   (identical arch-hero composition/photos/copy, palette-only difference),
   `silk_editorial`/`parnian_editorial` (identical hero panel, header-color/
   page-tone-only difference).

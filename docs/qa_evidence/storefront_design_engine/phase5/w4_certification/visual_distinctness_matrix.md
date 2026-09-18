@@ -32,7 +32,7 @@ All 50 Home captures are single-viewport screenshots taken at initial load (1440
 - Desktop evidence: `home_gallery/pine_eco_home_desktop.jpg`, `home_gallery/green_workshop_home_desktop.jpg`
 - Mobile evidence: `home_gallery/pine_eco_home_mobile.jpg`, `home_gallery/green_workshop_home_mobile.jpg`
 - Axes shared: ALL of: header, hero, layout, product_view, bottom_nav (and, for silk_editorial/parnian_editorial and pine_eco/green_workshop, badge/motion/font/radius/density too)
-- Axes visibly different: None visible above the fold for pine_eco/green_workshop -- the Desktop and Mobile captures are indistinguishable; card style and footer differ only in configuration, neither is visible in either capture.
+- Axes visibly different: None visible above the fold -- Mobile screenshots are byte-identical (same SHA256 blob: 78a873a2...); Desktop screenshots are different blobs (61308dc1... vs 574c36c2...) but were judged visually indistinguishable above the fold. Card style and footer differ only in configuration, neither visible in either capture.
 - Verdict: **NEEDS_REPAIR**
 - Rationale: Materially indistinguishable in the actual rendered Home Desktop+Mobile evidence except for palette/cosmetic differences that are not visible above the fold, per the binding rendered-evidence contract.
 
@@ -81,7 +81,7 @@ No other pair or cluster in the remaining 44 Templates was found to be materiall
 | 19 | `handmade_luxe` | PASS | OBSERVED: dark maroon/brown full-width header bar -- distinct from the cream/white headers... | OBSERVED: same editorial_split hero content as warm_boutique/cedar_home/green_workshop/pin... | NOT_VISIBLE in this capture |
 | 20 | `niloufar_glass` | PASS | OBSERVED: light header over a warm terracotta/rust hero band... | OBSERVED: same arch-cutout 3-product hero family as playful_lifestyle/laleh_play/mina_comm... | OBSERVED: magenta/purple circular floating cart button |
 | 21 | `tool_finder` | PASS | OBSERVED: light blue-gray header, dark navy search button... | OBSERVED: intentional absence confirmed (hero_expected=False in certified matrix.json); op... | OBSERVED: teal square highlighted icon |
-| 22 | `green_workshop` | NEEDS_REPAIR | OBSERVED: white header, full long nav list, GREEN search button... | OBSERVED: byte-for-byte identical hero to pine_eco on both Desktop and Mobile -- same phot... | OBSERVED: floating dock, identical to pine_eco on the captured Mobile evidence |
+| 22 | `green_workshop` | NEEDS_REPAIR | OBSERVED: white header, full long nav list, GREEN search button... | OBSERVED: visually indistinguishable hero from pine_eco on Desktop (different JPEG blobs, ... | OBSERVED: floating dock, identical to pine_eco on the captured Mobile evidence |
 | 23 | `tower_department` | PASS | OBSERVED: dark header, arched-cutout hero on a crimson/red background -- campaign_mosaic-f... | OBSERVED: 3 arch-cutout products, red background... | NOT_VISIBLE in this capture |
 | 24 | `beauty_dew` | PASS | OBSERVED: dark header (floating_compact family)... | OBSERVED: product_focus-family hero, dark ground, promo blocks below... | OBSERVED: red/crimson circular floating cart button -- distinct accent colour from coastal_product/rayan_tech's own product_focus siblings |
 | 25 | `horizon_story` | PASS | OBSERVED: light header... | OBSERVED: side_offer_slider hero -- unique among all 50 (single-key family), single image ... | OBSERVED: flat dark bar |
@@ -101,7 +101,7 @@ No other pair or cluster in the remaining 44 Templates was found to be materiall
 | 39 | `night_catalog` | PASS | OBSERVED: dark header... | OBSERVED: quiet-family hero on a dark ground -- same restrained composition as literary_ca... | NOT_VISIBLE in this capture |
 | 40 | `watchmaker_round` | PASS | OBSERVED: dark header... | OBSERVED: product_focus-family hero, dark ground, circular/round accent motifs... | NOT_VISIBLE in this capture |
 | 41 | `kite_playful` | PASS | OBSERVED: orange header bar... | OBSERVED: same arch-cutout 3-product hero family as playful_lifestyle/laleh_play/niloufar_... | OBSERVED: purple circular floating cart button |
-| 42 | `pine_eco` | NEEDS_REPAIR | OBSERVED: white/cream header, full long nav list, GREEN search button... | OBSERVED: byte-for-byte identical hero to green_workshop on both Desktop and Mobile... | OBSERVED: floating dock, identical to green_workshop on the captured Mobile evidence |
+| 42 | `pine_eco` | NEEDS_REPAIR | OBSERVED: white/cream header, full long nav list, GREEN search button... | OBSERVED: visually indistinguishable hero from green_workshop on Desktop (different JPEG b... | OBSERVED: floating dock, identical to green_workshop on the captured Mobile evidence |
 | 43 | `mirror_beauty` | PASS | OBSERVED: dark purple/violet header... | OBSERVED: product_focus-family hero, dark violet ground... | NOT_VISIBLE in this capture |
 | 44 | `charcoal_grill` | PASS | OBSERVED: dark header... | OBSERVED: product_focus-family hero, dark charcoal ground... | NOT_VISIBLE in this capture |
 | 45 | `calligraphy_paper` | PASS | OBSERVED: warm olive/tan header... | OBSERVED: same hero.immersive.v1 split-hero family as editorial_jewelry/premium_leather_no... | NOT_VISIBLE in this capture |
