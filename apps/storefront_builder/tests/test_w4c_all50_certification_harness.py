@@ -2084,3 +2084,91 @@ class W4CRateLimitControlledDiagnosticTests(TestCase):
         matrix = json.loads(self.matrix_path.read_text(encoding="utf-8"))
         self.assertIn("dense_marketplace", matrix["templates"])
         self.assertNotIn("premium_leather", matrix["templates"])
+
+
+# =============================================================================
+# Pilot Findings Closure — IMPORTANT 1: canonical Home render expectation
+#
+# The bounded rate-limit-sharding pilot found premium_leather's Home cell
+# genuinely FAILing with rsec_count=3 vs expected_rsec_count=4
+# (39_rate_limit_sharding_repair/pilot_summary.md). Source inspection
+# (source_inventory_and_reclassification.md) confirmed this is a harness
+# expectation bug, not a rendering regression: premium_leather's raw
+# recipe token "ticker" compiles to "announcement_bar", which is
+# hidden_from_library=True (the header's own announcement-bar setting
+# already covers this capability) -- preset_service.apply_preset filters
+# every hidden_from_library entry BEFORE writing the Draft, so the
+# canonically-published Home page genuinely has 3 real Sections, never 4.
+# The pre-repair _home_hero_index()/expected_rsec_count also walk the raw
+# recipe, which is off-by-one for every ticker-before-Hero Template
+# (street_drop/racer_tech/anniversary_mosaic).
+#
+# These tests are genuinely RED against the pre-repair head:
+# Command._canonical_home_contract does not exist yet.
+# =============================================================================
+class W4CCanonicalHomeExpectationTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.command = Command()
+
+    def _published_contract_for(self, key):
+        slug = f"w4c-home-contract-{key}".replace("_", "-")
+        store = Store.objects.create(name=f"فروشگاه {key}", slug=slug, admin_subdomain=slug)
+        preset = lpr.get_layout_preset(key)
+        preset_service.apply_preset_with_checkpoint(store, preset)
+        layout_service.publish(store)
+        return store, preset, self.command._canonical_home_contract(store)
+
+    def test_1_premium_leather_expected_section_count_is_canonical_not_raw(self):
+        _, preset, contract = self._published_contract_for("premium_leather")
+        self.assertEqual(len(preset.pages["home"]), 4)  # raw recipe, for contrast
+        self.assertEqual(contract["expected_rsec_count"], 3)  # canonical published count
+
+    def test_2_hidden_from_library_entry_never_contributes_to_expected_count(self):
+        store, _, contract = self._published_contract_for("premium_leather")
+        layout = layout_service.get_or_create_layout(store)
+        real_section_keys = list(
+            layout.published_version.home_page().sections.filter(is_active=True)
+            .values_list("section_key", flat=True)
+        )
+        self.assertNotIn("announcement_bar", real_section_keys)
+        self.assertEqual(len(real_section_keys), 3)
+        self.assertEqual(contract["expected_rsec_count"], len(real_section_keys))
+
+    def test_3_street_drop_hero_index_is_canonical(self):
+        _, preset, contract = self._published_contract_for("street_drop")
+        self.assertEqual(preset.pages["home"][1].section_key, "hero_banner")  # raw index 1
+        self.assertTrue(contract["hero_expected"])
+        self.assertEqual(contract["hero_index"], 0)  # canonical: ticker filtered out
+
+    def test_4_racer_tech_hero_index_is_canonical(self):
+        _, preset, contract = self._published_contract_for("racer_tech")
+        self.assertEqual(preset.pages["home"][1].section_key, "hero_banner")
+        self.assertTrue(contract["hero_expected"])
+        self.assertEqual(contract["hero_index"], 0)
+
+    def test_5_anniversary_mosaic_hero_index_is_canonical(self):
+        _, preset, contract = self._published_contract_for("anniversary_mosaic")
+        self.assertEqual(preset.pages["home"][1].section_key, "hero_banner")
+        self.assertTrue(contract["hero_expected"])
+        self.assertEqual(contract["hero_index"], 0)
+
+    def test_6_normal_template_without_filtered_section_keeps_same_count_and_order(self):
+        _, preset, contract = self._published_contract_for("editorial_jewelry")
+        raw_keys = [e.section_key for e in preset.pages["home"]]
+        self.assertNotIn("announcement_bar", raw_keys)  # editorial_jewelry has no ticker
+        self.assertEqual(contract["expected_rsec_count"], len(raw_keys))
+        self.assertEqual(contract["hero_index"], raw_keys.index("hero_banner"))
+        self.assertEqual(contract["hero_index"], 0)
+
+    def test_7_product_cards_expected_from_canonical_sequence(self):
+        _, _, contract = self._published_contract_for("street_drop")
+        self.assertTrue(contract["product_cards_expected"])
+
+    def test_8_no_hardcoded_template_key_exception_in_source(self):
+        source = Path(r4_mod.__file__).read_text(encoding="utf-8")
+        start = source.index("_canonical_home_contract")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        self.assertNotIn('"premium_leather"', body)
+        self.assertNotIn("'premium_leather'", body)
