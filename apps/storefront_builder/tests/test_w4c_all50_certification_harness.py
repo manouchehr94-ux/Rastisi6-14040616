@@ -2194,3 +2194,178 @@ class W4CCanonicalHomeExpectationTests(TestCase):
         body = source[start:end]
         self.assertNotIn('"premium_leather"', body)
         self.assertNotIn("'premium_leather'", body)
+
+
+# =============================================================================
+# Pilot Findings Closure — IMPORTANT 2: Cart tablet remove synchronization
+#
+# 3/3 fresh repetitions of the real bounded smoke did NOT reproduce the
+# pilot's tablet remove failure (cart_reproduction.md) -- treated as
+# suspected harness flakiness per Section 7, not solved. The existing
+# w4cCartRealRemove helper's own contract is genuinely weak: it swallows
+# any click() exception (`.catch(() => {})`) and decides removed/not-
+# removed from a SINGLE observation at a fixed, arbitrary 500ms delay --
+# a real remove that completes at, say, 700ms would be recorded as a
+# false FAIL under the old code, indistinguishable from an actual
+# production defect.
+#
+# These tests prove genuine BEHAVIORAL correctness (not source-grep) by
+# extracting the real async helper verbatim from run.mjs, executing it
+# under real Node against a fake Playwright-shaped page whose DOM state
+# changes on a scripted timeline, and asserting on its actual returned
+# diagnostics -- the same real-Node-execution technique the Accessibility
+# Closure round established for pure-logic helpers, extended here to an
+# async, page-interacting one via a minimal fake page.
+# =============================================================================
+class W4CCartRemoveDiagnosticsTests(TestCase):
+    def setUp(self):
+        self.source = (
+            Path(r4_mod.__file__).resolve().parents[4]
+            / "tools" / "storefront_builder_r4_qa" / "run.mjs"
+        ).read_text(encoding="utf-8")
+
+    def _extract_async_function(self, name):
+        """Brace-counting extraction of exactly ONE async function's full
+        source, verbatim -- mirrors W4CAccessibilityGatingTests._extract_helper
+        but for ``async function {name}`` instead of a plain function."""
+        start = self.source.index(f"async function {name}")
+        open_brace = self.source.index("{", start)
+        depth = 0
+        for i in range(open_brace, len(self.source)):
+            if self.source[i] == "{":
+                depth += 1
+            elif self.source[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return self.source[start:i + 1]
+        raise AssertionError(f"unbalanced braces extracting {name}")
+
+    FAKE_PAGE_HARNESS = r"""
+function makeFakePage({ initialCount, removalDelayMs, neverRemoves, clickThrows, responses }) {
+  let citemCount = initialCount;
+  let containerHtml = 'html-v0';
+  const responseHandlers = new Set();
+  let scheduled = false;
+  function scheduleRemovalIfNeeded() {
+    if (scheduled || neverRemoves) return;
+    scheduled = true;
+    setTimeout(() => { citemCount = Math.max(0, citemCount - 1); containerHtml = 'html-v1'; }, removalDelayMs);
+  }
+  const locatorFor = (selector) => ({
+    count: async () => (selector === '.citem' || selector === '.citem .rm' ? citemCount : 0),
+    first() { return this; },
+    click: async () => {
+      if (clickThrows) throw new Error('simulated click failure');
+      scheduleRemovalIfNeeded();
+      for (const resp of (responses || [])) {
+        setTimeout(() => { for (const h of [...responseHandlers]) h(resp); }, resp.delayMs || 10);
+      }
+    },
+    innerHTML: async () => containerHtml,
+  });
+  return {
+    locator: (selector) => locatorFor(selector),
+    on(event, handler) { if (event === 'response') responseHandlers.add(handler); },
+    off(event, handler) { if (event === 'response') responseHandlers.delete(handler); },
+    waitForTimeout: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  };
+}
+function fakeResponse({ status = 200, url = '/cart/item/1/remove/', delayMs = 10 } = {}) {
+  return { delayMs, request: () => ({ method: () => 'POST' }), status: () => status, url: () => url };
+}
+"""
+
+    def _run_scenario(self, helper_name, config):
+        helper_src = self._extract_async_function(helper_name)
+        script = (
+            self.FAKE_PAGE_HARNESS
+            + helper_src
+            + "\n(async () => {"
+            + f"\n  const page = makeFakePage({json.dumps(config)});"
+            + f"\n  const result = await {helper_name}(page);"
+            + "\n  console.log(JSON.stringify(result));"
+            + "\n})();"
+        )
+        # responses need real function values (fakeResponse()), so build them
+        # separately rather than through JSON for the 'responses' key.
+        if config.get("responses"):
+            responses_js = "[" + ",".join(
+                "fakeResponse(" + json.dumps(r) + ")" for r in config["responses"]
+            ) + "]"
+            script = script.replace(
+                json.dumps(config["responses"]), responses_js,
+            )
+        fd, tmp_path = tempfile.mkstemp(suffix=".mjs")
+        os.close(fd)
+        try:
+            Path(tmp_path).write_text(script, encoding="utf-8")
+            result = subprocess.run(["node", tmp_path], capture_output=True, text=True, timeout=20)
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+        if result.returncode != 0:
+            raise AssertionError(f"node execution failed: {result.stderr}")
+        return json.loads(result.stdout.strip())
+
+    def test_1_click_failure_is_not_silently_swallowed(self):
+        result = self._run_scenario("w4cCartRealRemove", {
+            "initialCount": 1, "removalDelayMs": 50, "neverRemoves": False,
+            "clickThrows": True, "responses": [],
+        })
+        self.assertIsNotNone(result.get("click_error"))
+
+    def test_2_remove_success_not_decided_solely_at_500ms(self):
+        # Genuinely removed, but only AFTER the old fixed 500ms mark.
+        result = self._run_scenario("w4cCartRealRemove", {
+            "initialCount": 1, "removalDelayMs": 1200, "neverRemoves": False,
+            "clickThrows": False, "responses": [{"status": 200}],
+        })
+        self.assertEqual(result.get("after_at_500ms"), 1)  # not yet removed at the old mark
+        self.assertTrue(result["removed"])  # but the bounded eventual wait catches it
+        self.assertEqual(result["after_eventual"], 0)
+
+    def test_3_bounded_eventual_dom_removal_passes(self):
+        result = self._run_scenario("w4cCartRealRemove", {
+            "initialCount": 1, "removalDelayMs": 50, "neverRemoves": False,
+            "clickThrows": False, "responses": [{"status": 200}],
+        })
+        self.assertTrue(result["removed"])
+        self.assertEqual(result["before"], 1)
+        self.assertEqual(result["after"], 0)
+        self.assertIsNotNone(result.get("elapsed_ms"))
+
+    def test_4_bounded_timeout_with_unchanged_count_fails(self):
+        result = self._run_scenario("w4cCartRealRemove", {
+            "initialCount": 1, "removalDelayMs": 999999, "neverRemoves": True,
+            "clickThrows": False, "responses": [{"status": 200}],
+        })
+        self.assertFalse(result["removed"])
+        self.assertEqual(result["before"], 1)
+        self.assertEqual(result["after"], 1)
+
+    def test_5_before_one_after_zero_is_removed_true(self):
+        result = self._run_scenario("w4cCartRealRemove", {
+            "initialCount": 1, "removalDelayMs": 50, "neverRemoves": False,
+            "clickThrows": False, "responses": [],
+        })
+        self.assertEqual(result["before"], 1)
+        self.assertEqual(result["after"], 0)
+        self.assertTrue(result["removed"])
+
+    def test_6_before_one_after_one_after_timeout_is_removed_false(self):
+        result = self._run_scenario("w4cCartRealRemove", {
+            "initialCount": 1, "removalDelayMs": 999999, "neverRemoves": True,
+            "clickThrows": False, "responses": [],
+        })
+        self.assertEqual(result["before"], 1)
+        self.assertEqual(result["after"], 1)
+        self.assertFalse(result["removed"])
+
+    def test_7_diagnostics_preserve_request_and_click_information(self):
+        result = self._run_scenario("w4cCartRealRemove", {
+            "initialCount": 1, "removalDelayMs": 50, "neverRemoves": False,
+            "clickThrows": False, "responses": [{"status": 200}],
+        })
+        self.assertTrue(result.get("htmx_request_observed"))
+        self.assertEqual(result.get("http_status"), 200)
+        self.assertTrue(result.get("dom_swap_observed"))
+        self.assertIsNone(result.get("click_error"))
