@@ -4391,14 +4391,79 @@ async function w4cPdpControlAccessibility(targetPage) {
 
 // Round 2 repair (3B) -- the real Cart remove action, never presence-only:
 // invoke .citem .rm and prove the item count actually decreases.
+// Pilot Findings Closure (IMPORTANT 2) -- the pilot's editorial_jewelry
+// Cart tablet FAIL did not reproduce in 3/3 fresh repetitions (suspected
+// harness flakiness, not a confirmed production defect -- see
+// cart_reproduction.md). Root cause: this helper decided removed/not-
+// removed from a SINGLE observation at a fixed, arbitrary 500ms delay,
+// and silently swallowed any click() exception -- a real remove that
+// completes even slightly later than 500ms was indistinguishable from a
+// genuine production failure. Repaired to a bounded, condition-based
+// wait (poll the real DOM count until it drops below `before`, or a firm
+// timeout elapses -- never forever) and full diagnostics: click success/
+// failure is never swallowed, and the return value distinguishes click
+// failure, HTMX request/response observation, DOM swap observation, the
+// historical 500ms-mark count (kept only for direct before/after
+// comparison against this repair's own evidence, never itself the
+// pass/fail decision), and the eventual bounded-wait count. The success
+// criterion remains exactly `after < before`, using the SAME canonical
+// `.citem .rm` HTMX control -- no second Cart implementation.
 async function w4cCartRealRemove(targetPage) {
   const items = targetPage.locator('.citem');
   const before = await items.count();
-  if (before === 0) return { attempted: false, before, after: before, removed: false };
-  await targetPage.locator('.citem .rm').first().click().catch(() => {});
+  if (before === 0) {
+    return {
+      attempted: false, before, after: before, removed: false,
+      click_error: null, htmx_request_observed: false, http_status: null,
+      dom_swap_observed: false, after_at_500ms: before, after_eventual: before,
+      elapsed_ms: null,
+    };
+  }
+  const container = targetPage.locator('#cart-container');
+  const htmlBefore = await container.innerHTML().catch(() => null);
+  const responses = [];
+  const onResponse = (response) => {
+    if (response.request().method() === 'POST') responses.push(response);
+  };
+  targetPage.on('response', onResponse);
+  const startedAt = Date.now();
+  let clickError = null;
+  try {
+    await targetPage.locator('.citem .rm').first().click();
+  } catch (error) {
+    clickError = error && error.message ? error.message : String(error);
+  }
+  // Diagnostic snapshot at the OLD fixed-delay observation point -- kept
+  // for direct comparison, never itself the pass/fail decision.
   await targetPage.waitForTimeout(500);
-  const after = await targetPage.locator('.citem').count();
-  return { attempted: true, before, after, removed: after < before };
+  const afterAt500ms = await items.count();
+  // Bounded condition-based wait: keep polling past the old fixed point
+  // until the real DOM count genuinely drops below `before`, or a firm
+  // timeout elapses.
+  const deadline = startedAt + 5000;
+  let afterEventual = afterAt500ms;
+  while (afterEventual >= before && Date.now() < deadline) {
+    await targetPage.waitForTimeout(150);
+    afterEventual = await items.count();
+  }
+  const elapsedMs = Date.now() - startedAt;
+  targetPage.off('response', onResponse);
+  const htmlAfter = await container.innerHTML().catch(() => null);
+  const lastResponse = responses.length > 0 ? responses[responses.length - 1] : null;
+  const removed = afterEventual < before;
+  return {
+    attempted: true,
+    before,
+    after: afterEventual,
+    removed,
+    click_error: clickError,
+    htmx_request_observed: responses.length > 0,
+    http_status: lastResponse ? lastResponse.status() : null,
+    dom_swap_observed: htmlBefore !== null && htmlAfter !== null && htmlBefore !== htmlAfter,
+    after_at_500ms: afterAt500ms,
+    after_eventual: afterEventual,
+    elapsed_ms: removed ? elapsedMs : null,
+  };
 }
 
 // Round 2 repair (3C) -- Free-Shipping Goal: never a second pricing engine
