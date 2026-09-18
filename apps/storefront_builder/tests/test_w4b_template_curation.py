@@ -156,13 +156,26 @@ class ExactFiftyLatestCatalogTests(SimpleTestCase):
         self.assertEqual(len(lpr.list_ready_templates()), 50)
 
 
+# P5-W4C rendered-visual-distinctness repair (source HEAD
+# 6074424b99cd922a28fe3187fef10a53931e535b) intentionally bumped exactly
+# these 3 of the 21 W4B-curated keys from "2" to "3" to fix a real
+# above-the-fold rendered-hero collision against their pair anchor. See
+# apps/storefront_builder/tests/test_a8_visual_distinctness_repair.py.
+_W4C_VISUAL_REPAIR_VERSION_THREE_KEYS = frozenset({
+    "green_workshop", "laleh_play", "parnian_editorial",
+})
+
+
 class ExplicitVersionMapTests(SimpleTestCase):
     def test_all_21_curated_keys_are_now_version_two(self):
         for key in CURATED_KEYS:
             with self.subTest(key=key):
                 latest = lpr.get_layout_preset(key)
                 self.assertIsNotNone(latest, key)
-                self.assertEqual(latest.version, "2", key)
+                expected_version = (
+                    "3" if key in _W4C_VISUAL_REPAIR_VERSION_THREE_KEYS else "2"
+                )
+                self.assertEqual(latest.version, expected_version, key)
 
     def test_no_other_ready_template_received_an_unintended_version_bump(self):
         expected_non_curated_versions = {
