@@ -72,16 +72,66 @@ never edited, never resumed, and explicitly excluded from certification.
 
 ## Visual distinctness
 
-VERDICT: **PASS**. Method: structural signature (header, hero-family-or-
+**SUPERSEDED.** The structural-signature-only method below was the first
+pass; per Independent Architect correction ("Rendered Visual Distinctness
+Closure" round), it did not satisfy the binding rendered-evidence contract
+and was replaced by a review grounded in the actual Home Desktop+Mobile
+captures. See "Rendered visual distinctness closure" below for the
+current, authoritative verdict.
+
+<details><summary>Original (superseded) structural-signature pass</summary>
+
+VERDICT: PASS. Method: structural signature (header, hero-family-or-
 intentional-absence, layout, product card style, footer, bottom
 navigation) computed from each Template's real `store_appearance`
 selections, deliberately excluding palette/font/radius/motion/badge.
 50/50 unique signatures across all 50 canonical Templates — 0 structural
-collisions, 0 NEEDS REPAIR clusters, 0 unresolved MANUAL REVIEW REQUIRED
-findings. Spot-checked against real Home Desktop screenshots for the
-largest single-axis (layout-only) collision group and confirmed genuinely
-distinct rendered identities beyond configuration labels. See
-`visual_distinctness_matrix.md`/`.json`.
+collisions. Spot-checked against real Home Desktop screenshots for the
+largest single-axis (layout-only) collision group.
+
+</details>
+
+## Rendered visual distinctness closure (authoritative)
+
+**VERDICT: NEEDS REPAIR.** Every one of the 50 Templates' real Home
+Desktop (1440x900) and Mobile (390x844) captures in `home_gallery/` was
+directly viewed (contact sheets covering all 50 on both viewports, plus
+individual full-resolution re-fetches for every Template in a 6+-member
+hero-component family and every algorithmically-detected exact match on
+header+hero+layout+product_view+bottom_nav). Configured selections are
+retained only as supporting metadata, per instruction.
+
+- Reviewed Desktop: 50/50. Reviewed Mobile: 50/50.
+- Rendered PASS: 44/50.
+- MANUAL REVIEW REQUIRED: 0.
+- NEEDS REPAIR: 6/50 (3 pairs): `pine_eco`/`green_workshop` (Desktop+Mobile
+  screenshot-identical above the fold), `playful_lifestyle`/`laleh_play`
+  (identical arch-hero composition/photos/copy, palette-only difference),
+  `silk_editorial`/`parnian_editorial` (identical hero panel, header-color/
+  page-tone-only difference).
+- Config-only PASS decisions: 0.
+
+Important finding recorded: hero photography/headline/CTA copy is
+Store-level demo content shared by every Template using the same hero
+component (e.g. all 7 `hero.editorial_split.v1` Templates render the
+literal same jacket/jacket/shoe photos and headline) — expected given one
+shared demo catalog, not itself a defect, but it means real distinguishing
+power for a shared-hero cluster comes from header structure, secondary-
+section composition, and Mobile bottom-navigation, not hero photography.
+
+Footer limitation recorded: all 50 captures are single-viewport screenshots
+at initial load; the footer is below the fold on every Template and was
+never reached by any of the 50 captures. `observed_footer` is `NOT_VISIBLE`
+for all 50 rather than inferring an uncaptured appearance.
+
+Per this round's binding rule, `needs_repair_count > 0` downgrades the W4C
+final certification status to **NEEDS REPAIR** on visual-distinctness
+grounds. The 704/704 real browser certification result itself (FAIL=0,
+BLOCKED=0, accessibility FAIL=0, 0 unexpected errors, Theme cleanup
+104/104) is unaffected and remains frozen/accepted. See
+`visual_distinctness_matrix.md`/`.json` (now containing per-Template
+`observed_*` fields, evidence paths, and rendered verdicts for all 50) and
+`failure_summary.md` for full detail.
 
 ## Static Ready-Template Gallery staleness
 

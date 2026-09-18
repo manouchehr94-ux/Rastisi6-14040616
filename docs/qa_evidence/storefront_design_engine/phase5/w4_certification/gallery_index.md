@@ -2,6 +2,8 @@
 
 All 50 canonical Ready Templates, sourced from the real final 704-cell certification campaign (`CAMPAIGN_HEAD` `1e4efad80fbfc998cfd05d79658955193e1799d5`). This is a W5 handoff artifact — **W5 has NOT been started.**
 
+**Rendered visual distinctness closure (authoritative, supersedes any configuration-signature-only claim below): NEEDS REPAIR.** 6 of the 50 Templates below (`pine_eco`, `green_workshop`, `playful_lifestyle`, `laleh_play`, `silk_editorial`, `parnian_editorial`) were found materially indistinguishable in their actual rendered Home Desktop+Mobile evidence, in 3 pairs — see `visual_distinctness_matrix.md`/`.json` and `failure_summary.md` for the grounded rationale and evidence paths per pair. The "rendered identity summary" column below is configuration metadata only, not a rendered-evidence verdict, and must not be read as implying distinctness on its own.
+
 | # | key | Persian label | Desktop Home | Mobile Home | rendered identity summary |
 |---|---|---|---|---|---|
 | 1 | `dense_marketplace` | بازار مکس | `home_gallery/dense_marketplace_home_desktop.jpg` | `home_gallery/dense_marketplace_home_mobile.jpg` | header=header.marketplace_search.v1; hero=hero.promo_bento.v1; layout=layout.dense_five.v1; card=card.marketplace_price.v1; footer=footer.marketplace_columns.v1; bottom_nav=bottom_nav.five_item.v1 |
