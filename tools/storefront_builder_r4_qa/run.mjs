@@ -4421,6 +4421,10 @@ async function w4cCartRealRemove(targetPage) {
   }
   const container = targetPage.locator('#cart-container');
   const htmlBefore = await container.innerHTML().catch(() => null);
+  // Code review (Pilot Findings Closure) -- the FIRST POST observed after
+  // the listener attaches is the click's own direct HTMX effect; the last
+  // one could belong to an unrelated later request (a retry, a second
+  // interaction, telemetry) still in flight when the bounded wait ends.
   const responses = [];
   const onResponse = (response) => {
     if (response.request().method() === 'POST') responses.push(response);
@@ -4433,23 +4437,34 @@ async function w4cCartRealRemove(targetPage) {
   } catch (error) {
     clickError = error && error.message ? error.message : String(error);
   }
-  // Diagnostic snapshot at the OLD fixed-delay observation point -- kept
-  // for direct comparison, never itself the pass/fail decision.
-  await targetPage.waitForTimeout(500);
-  const afterAt500ms = await items.count();
-  // Bounded condition-based wait: keep polling past the old fixed point
-  // until the real DOM count genuinely drops below `before`, or a firm
-  // timeout elapses.
-  const deadline = startedAt + 5000;
-  let afterEventual = afterAt500ms;
-  while (afterEventual >= before && Date.now() < deadline) {
-    await targetPage.waitForTimeout(150);
-    afterEventual = await items.count();
+  let afterAt500ms = before;
+  let afterEventual = before;
+  // Code review -- a failed click cannot have triggered the HTMX swap, so
+  // don't spend up to ~5s waiting/polling for a DOM change that a broken
+  // click could never produce; read the real (unchanged) count once and
+  // return immediately.
+  if (clickError === null) {
+    // Diagnostic snapshot at the OLD fixed-delay observation point -- kept
+    // for direct comparison, never itself the pass/fail decision.
+    await targetPage.waitForTimeout(500);
+    afterAt500ms = await items.count();
+    // Bounded condition-based wait: keep polling past the old fixed point
+    // until the real DOM count genuinely drops below `before`, or a firm
+    // timeout elapses.
+    const deadline = startedAt + 5000;
+    afterEventual = afterAt500ms;
+    while (afterEventual >= before && Date.now() < deadline) {
+      await targetPage.waitForTimeout(150);
+      afterEventual = await items.count();
+    }
+  } else {
+    afterAt500ms = await items.count();
+    afterEventual = afterAt500ms;
   }
   const elapsedMs = Date.now() - startedAt;
   targetPage.off('response', onResponse);
   const htmlAfter = await container.innerHTML().catch(() => null);
-  const lastResponse = responses.length > 0 ? responses[responses.length - 1] : null;
+  const firstResponse = responses.length > 0 ? responses[0] : null;
   const removed = afterEventual < before;
   return {
     attempted: true,
@@ -4458,11 +4473,16 @@ async function w4cCartRealRemove(targetPage) {
     removed,
     click_error: clickError,
     htmx_request_observed: responses.length > 0,
-    http_status: lastResponse ? lastResponse.status() : null,
+    http_status: firstResponse ? firstResponse.status() : null,
     dom_swap_observed: htmlBefore !== null && htmlAfter !== null && htmlBefore !== htmlAfter,
     after_at_500ms: afterAt500ms,
     after_eventual: afterEventual,
-    elapsed_ms: removed ? elapsedMs : null,
+    // Code review -- always report the real elapsed time, including on
+    // timeout: distinguishing "timed out almost immediately" from "timed
+    // out right at the boundary" is exactly what this diagnostic exists
+    // to preserve for flakiness triage; nulling it on failure discarded
+    // that.
+    elapsed_ms: elapsedMs,
   };
 }
 

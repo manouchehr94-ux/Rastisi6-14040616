@@ -2369,3 +2369,47 @@ function fakeResponse({ status = 200, url = '/cart/item/1/remove/', delayMs = 10
         self.assertEqual(result.get("http_status"), 200)
         self.assertTrue(result.get("dom_swap_observed"))
         self.assertIsNone(result.get("click_error"))
+
+    # -- code-review fixes (Pilot Findings Closure) --------------------------
+
+    def test_8_elapsed_ms_reported_even_on_timeout(self):
+        """A timed-out cell's elapsed_ms must still be reported -- it is
+        exactly what distinguishes 'timed out almost immediately' from
+        'timed out right at the boundary' for flakiness triage; nulling it
+        on failure would discard that."""
+        result = self._run_scenario("w4cCartRealRemove", {
+            "initialCount": 1, "removalDelayMs": 999999, "neverRemoves": True,
+            "clickThrows": False, "responses": [],
+        })
+        self.assertFalse(result["removed"])
+        self.assertIsNotNone(result.get("elapsed_ms"))
+        self.assertGreaterEqual(result["elapsed_ms"], 5000)
+
+    def test_9_click_failure_returns_immediately_without_wasting_the_wait(self):
+        """A failed click cannot have triggered the HTMX swap -- the helper
+        must not still spend the full ~5s bounded wait/poll hoping for a
+        DOM change a broken click could never produce."""
+        result = self._run_scenario("w4cCartRealRemove", {
+            "initialCount": 1, "removalDelayMs": 50, "neverRemoves": False,
+            "clickThrows": True, "responses": [],
+        })
+        self.assertIsNotNone(result.get("click_error"))
+        self.assertFalse(result["removed"])
+        self.assertLess(result["elapsed_ms"], 1000)
+
+    def test_10_http_status_attributed_to_the_first_post_not_the_last(self):
+        """The first POST observed after the listener attaches is the
+        click's own direct HTMX effect; a later, unrelated POST (a retry,
+        a second interaction, telemetry) that arrives before the listener
+        detaches must never override it. removalDelayMs is set past both
+        response timers so the listener is still attached when each fires."""
+        result = self._run_scenario("w4cCartRealRemove", {
+            "initialCount": 1, "removalDelayMs": 4500, "neverRemoves": False,
+            "clickThrows": False,
+            "responses": [
+                {"status": 200, "delayMs": 20},
+                {"status": 500, "delayMs": 4000},
+            ],
+        })
+        self.assertTrue(result["removed"])
+        self.assertEqual(result.get("http_status"), 200)
