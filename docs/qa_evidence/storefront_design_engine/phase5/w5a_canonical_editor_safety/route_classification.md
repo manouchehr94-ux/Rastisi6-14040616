@@ -39,12 +39,11 @@ Legend: **Guarded** = wrapped with `_require_legacy_editor_active` (fails `Http4
 | `storefront-builder-undo` | `storefront_undo` | POST | `r4_mutation_service` (shared) | `/r4/history/` | `test_legacy_undo_fails_closed` |
 | `storefront-builder-redo` | `storefront_redo` | POST | `r4_mutation_service` (shared) | `/r4/history/` | `test_legacy_redo_fails_closed` |
 | `storefront-builder-publish` | `storefront_publish` | POST | `layout_service.publish` (shared) | `/r4/publish/` | `test_legacy_publish_fails_closed` |
+| `storefront-builder-section-collapse` | `storefront_section_collapse_toggle` | POST | direct | none | `test_section_collapse_toggle_fails_closed`, `test_section_collapse_toggle_blocked_request_mutates_nothing`, `test_section_collapse_toggle_still_works_when_pinned_back` |
 
-**Explicit exclusion, verified NOT guarded (source-justified, matching the binding master plan):**
+**Independent-Review repair (round 2) — corrected misclassification:** `storefront_section_collapse_toggle` was previously listed below as a "justified unguarded exclusion" on the theory that it writes only a cosmetic, render-inert field. The Independent Architect proved this wrong by direct source inspection: `collapsed_in_editor` is a member of `edit_history_service._SECTION_FIELDS`, and the view is decorated with `@_record_edit_history`, so it **is** a persisted Draft mutation that participates in Draft snapshots/history exactly like `storefront_section_toggle`. It is now guarded with the same shared `_require_legacy_editor_active` decorator, in the guarded-routes table above, not excluded.
 
-| Route name | View | Reason |
-|---|---|---|
-| `storefront-builder-section-collapse` | `storefront_section_collapse_toggle` | Writes only `collapsed_in_editor` — a cosmetic editor-local field, zero render effect. Master plan §5: "READ/UI-ONLY... CANONICAL KEEP, not part of the write-surface risk." Proven still reachable under R4 by `test_section_collapse_toggle_is_not_blocked`. |
+**Re-audited (round 2) — every other `require_POST`/GET+POST view in `views.py` that calls `.save()`/`.delete()`/`.update()` on a model was walked via AST and confirmed guarded** (no second collapse-toggle-style false exclusion exists). `storefront_apply_layout_preset` (the Ready Template Apply route) is the one other unguarded mutation route found in this sweep; it is correctly Class B (see below) — its own dedicated test (`test_ready_template_apply_remains_reachable`) and `code_review.md`'s prior investigation both already establish this deliberately.
 
 ## Class B — shared canonical capabilities (verified NOT blocked)
 
@@ -58,7 +57,7 @@ Legend: **Guarded** = wrapped with `_require_legacy_editor_active` (fails `Http4
 | `storefront-builder-container-state` | `storefront_container_state_partial` | read-only, not guarded, unaffected |
 | `storefront-builder-section-product-search` | `storefront_section_product_search` | read-only, not guarded, unaffected |
 | `storefront-builder-edit-history-state` | `storefront_edit_history_state` | read-only, not guarded, unaffected |
-| `storefront-builder-section-media-*` (6 routes) | `media_views.py` | separate module, not touched |
+| `storefront-builder-section-media-*` (6 routes) | `media_views.py` | Re-audited (round 2): confirmed genuinely shared, not redundant — `editor.html`'s R4 branch and `section_media_list_body.html`/`section_media_form_body.html` render `hx-get`/`hx-post` calls to these SAME routes (with an `HX-R4-Inline` header variant for R4's embedded rendering), and no separate R4-native media mutation type exists in `r4_mutation_service.py`. Both editors share one media-management surface; guarding it would break R4, not just R3. |
 | `storefront-builder-editor` | `storefront_editor` (page shell) | pre-existing template-conditional logic, unaffected by the guard |
 
 ## History browser — read-only, unconditionally reachable
@@ -74,12 +73,13 @@ Legend: **Guarded** = wrapped with `_require_legacy_editor_active` (fails `Http4
 | `storefront-builder-restore` | `storefront_restore` | Guarded (404) — `test_legacy_restore_fails_closed` | Unchanged — `test_legacy_restore_still_works_when_pinned_back` | `storefront-builder-r4-restore` → `storefront_r4_restore` → `r4_mutation_service.restore_version_safe` → **unmodified** `layout_service.restore_version()` |
 | `storefront-builder-apply-industry-layout` | `storefront_apply_industry_layout` | Guarded (404) — `test_legacy_industry_apply_fails_closed` | Unchanged — `test_legacy_industry_apply_still_works_when_pinned_back` | `storefront-builder-r4-apply-industry-layout` → `storefront_r4_apply_industry_layout` → `r4_mutation_service.apply_industry_layout_safe` → **unmodified** `layout_service.apply_industry_layout()` |
 
-New R4-safe endpoints fully tested: `R4SafeRestoreTests` (7 tests: matching-precondition success with/without an active Draft, stale-precondition rejection in both directions, cross-store fail-closed, canonical-service delegation, `r4_editor_enabled` requirement) and `R4SafeIndustryApplyTests` (9 tests: same shape plus the already-published confirm/force gate). `ClassCConcurrencyBoundaryTests` proves the stale-revision check and the Draft-identity replacement happen inside one lock-protected transaction (no row is touched when the precondition fails).
+New R4-safe endpoints fully tested: `R4SafeRestoreTests` (11 tests) and `R4SafeIndustryApplyTests` (14 tests: same shape plus the already-published confirm/force gate) — matching-precondition success with/without an active Draft, same-identity-wrong-revision rejection in both directions, the ABA hazard (wrong identity with a coincidentally-matching revision), negative/non-integer/inconsistent-null-pairing precondition-shape rejection (400), cross-store fail-closed, canonical-service delegation, `r4_editor_enabled` requirement, and rate-limit exhaustion translated to a controlled 429. `ClassCConcurrencyBoundaryTests` proves the identity+revision check and the Draft-identity replacement happen inside one lock-protected transaction (no row is touched when the precondition fails).
 
 ## Summary
 
-- Class A routes inventoried: **31** (30 guarded mutation routes + 1 explicit, source-justified, still-unguarded read/UI-only exclusion).
+- Class A routes inventoried: **31**, all 31 now **guarded** — 0 exclusions. (Round 2 correction: `storefront-builder-section-collapse` was previously counted as a justified unguarded exclusion; the Independent Architect proved it is a real persisted Draft mutation, so it is now guarded like every other Class-A route.)
 - Class A routes writable under R4 after implementation: **0**.
 - Class B canonical routes accidentally blocked: **0**.
 - Class C unsafe legacy writes left available under R4: **0** (both converged to a stale-write-protected, tenant-scoped R4-safe boundary; legacy paths themselves also fail closed under R4).
 - Every route above has an explicit disposition and, except the History browser and the untouched Class-B partials (which carry no mutation risk to begin with), a corresponding test in `test_phase5_w5a_canonical_editor_safety.py`.
+- Round-2 re-audit: every `require_POST`/GET+POST view in `views.py` calling `.save()`/`.delete()`/`.update()` was enumerated via AST and cross-checked against the guard — no further false exclusion found.

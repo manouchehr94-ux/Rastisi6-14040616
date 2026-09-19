@@ -57,9 +57,13 @@ if (!manifestPath) {
   process.exit(2);
 }
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-const { admin_host, username, password, published_version_pk, report_dir } = manifest;
+const {
+  admin_host, username, password, published_version_pk, report_dir,
+  r3_admin_host, r3_section_pk,
+} = manifest;
 const port = manifest.port || new URL(manifest.origin).port;
 const origin = `http://${admin_host}:${port}`;
+const r3Origin = r3_admin_host ? `http://${r3_admin_host}:${port}` : null;
 fs.mkdirSync(report_dir, { recursive: true });
 
 const results = [];
@@ -112,38 +116,55 @@ async function main() {
     record('4. History browser readable under R4', historyResp.status() === 200, `status=${historyResp.status()}`);
     if (historyResp.status() !== 200) await page.screenshot({ path: path.join(report_dir, '04-history-FAIL.png'), fullPage: true });
 
+    // Real current Draft identity/revision precondition, read straight off
+    // the server-rendered Restore button — the same values a real client
+    // would capture at render time (Independent-Review repair: the wire
+    // contract now binds to BOTH, not revision alone).
+    const currentPrecondition = await page.evaluate(() => {
+      const btn = document.querySelector('[data-r4-restore-button]');
+      if (!btn) return null;
+      const rawId = btn.getAttribute('data-r4-base-draft-id');
+      const rawRevision = btn.getAttribute('data-r4-base-revision');
+      return {
+        base_draft_id: rawId === 'null' ? null : parseInt(rawId, 10),
+        base_revision: rawRevision === 'null' ? null : parseInt(rawRevision, 10),
+      };
+    });
+    record('4b. History page renders both base_draft_id and base_revision preconditions', currentPrecondition !== null, JSON.stringify(currentPrecondition));
+
     // 6. Stale Restore rejected FIRST, while state is still known-fresh —
-    // a deliberately wrong base_revision, via direct fetch from the
-    // authenticated page context (real browser fetch, real cookies/CSRF).
-    // Run before any successful mutation so this check's precondition is
-    // unambiguous, not confounded by an earlier successful Restore/Apply
-    // having already changed the Draft this script is about to act on.
+    // a deliberately wrong (nonexistent) Draft identity, via direct fetch
+    // from the authenticated page context (real browser fetch, real
+    // cookies/CSRF). Run before any successful mutation so this check's
+    // precondition is unambiguous, not confounded by an earlier successful
+    // Restore/Apply having already changed the Draft this script is about
+    // to act on.
     const staleResult = await page.evaluate(async ({ pk }) => {
       const csrftoken = (document.cookie.match(/(?:^|; )csrftoken=([^;]+)/) || [])[1] || '';
       const resp = await fetch(`/admin-portal/storefront-builder/r4/restore/${pk}/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ base_revision: 999999 }),
+        body: JSON.stringify({ base_draft_id: 999999, base_revision: 999999 }),
       });
       return { status: resp.status, body: await resp.json() };
     }, { pk: published_version_pk });
     record('6. Stale Restore rejected with 409 + no mutation', staleResult.status === 409 && staleResult.body.code === 'stale_revision', JSON.stringify(staleResult));
 
-    // 10. Cross-tenant/nonexistent version fails closed — same known-fresh
-    // base_revision (0, matching the live Draft this run's fixture setup
-    // created), so the request passes the precondition check and actually
-    // reaches the version-ownership lookup, which must then reject the
-    // nonexistent/foreign PK on its own merits (400 version_not_found) —
-    // not be masked by an unrelated precondition mismatch.
-    const crossTenant = await page.evaluate(async () => {
+    // 10. Cross-tenant/nonexistent version fails closed — the REAL current
+    // precondition (captured above), so the request passes the
+    // precondition check and actually reaches the version-ownership
+    // lookup, which must then reject the nonexistent/foreign PK on its own
+    // merits (400 version_not_found) — not be masked by an unrelated
+    // precondition mismatch.
+    const crossTenant = await page.evaluate(async (precondition) => {
       const csrftoken = (document.cookie.match(/(?:^|; )csrftoken=([^;]+)/) || [])[1] || '';
       const resp = await fetch('/admin-portal/storefront-builder/r4/restore/999999999/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ base_revision: 0 }),
+        body: JSON.stringify(precondition),
       });
       return { status: resp.status, body: await resp.json() };
-    });
+    }, currentPrecondition);
     record('10. Cross-tenant/nonexistent version fails closed', crossTenant.status === 400 && crossTenant.body.code === 'version_not_found', JSON.stringify(crossTenant));
 
     // 5. R4-safe Restore completes through the real UI (button, real
@@ -181,7 +202,7 @@ async function main() {
         const resp = await fetch('/admin-portal/storefront-builder/r4/apply-industry-layout/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-          body: JSON.stringify({ base_revision: 999999 }),
+          body: JSON.stringify({ base_draft_id: 999999, base_revision: 999999 }),
         });
         return { status: resp.status, body: await resp.json() };
       });
@@ -204,12 +225,53 @@ async function main() {
       record('7b. R4-safe Industry-Layout-Apply completes through the real UI', applyResp.status() === 200, `status=${applyResp.status()} body=${applyBodyText}`);
     }
 
-    // 3. R3-pinned Store still operates through the rollback editor —
-    // verified separately via the Django test suite
-    // (R3PinnedClassCRollbackPreservedTests, ClassARollbackStillWorksTests)
-    // since it requires a second Store fixture; recorded here for
-    // completeness of the required scenario list.
-    record('3. R3-pinned rollback editor (verified via Django test suite, not re-driven in browser here)', true, 'see R3PinnedClassCRollbackPreservedTests / ClassARollbackStillWorksTests');
+    // 3. R3-pinned Store still operates through the real rollback editor —
+    // Independent-Review repair: previously only verified via the Django
+    // test suite; the Architect required a REAL browser scenario. The same
+    // logged-in user also owns a second, r4_editor_enabled=False Store
+    // (see qa_setup.py); navigate straight to its admin host (session
+    // cookie carries over — Store resolution is per-request Host header,
+    // not per-session) and execute one real legacy Class-A write.
+    if (r3Origin && r3_section_pk) {
+      // Django's session cookie is host-scoped (no shared SESSION_COOKIE_
+      // DOMAIN across admin subdomains), so the R4 Store's session does
+      // NOT carry over to this different admin_subdomain host — a fresh,
+      // real login (same form, same user) is required here, exactly as
+      // the very first scenario above did for the R4 host.
+      await page.goto(`${r3Origin}/admin-portal/login/`, { waitUntil: 'domcontentloaded' });
+      await page.fill('input[name="username"]', username);
+      await page.fill('input[name="password"]', password);
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+        page.click('button[type="submit"], input[type="submit"]'),
+      ]);
+
+      const r3EditorResp = await page.goto(`${r3Origin}/admin-portal/storefront-builder/`, { waitUntil: 'domcontentloaded' });
+      const r3EditorOk = r3EditorResp.status() === 200 && page.url().startsWith(r3Origin);
+      record('3a. R3-pinned Store opens the real rollback editor', r3EditorOk, `status=${r3EditorResp.status()} url=${page.url()}`);
+
+      const toggleUrl = `${r3Origin}/admin-portal/storefront-builder/sections/${r3_section_pk}/toggle/`;
+      const toggleResult = await page.evaluate(async ({ url }) => {
+        const csrftoken = (document.cookie.match(/(?:^|; )csrftoken=([^;]+)/) || [])[1] || '';
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': csrftoken },
+        });
+        return { status: resp.status, ok: resp.ok };
+      }, { url: toggleUrl });
+      record(
+        '3b. A real legacy Class-A write (section toggle) succeeds (not 404) on the R3-pinned Store',
+        toggleResult.status !== 404 && toggleResult.ok,
+        JSON.stringify(toggleResult),
+      );
+      // The resulting Draft-state change (section.is_active flipped) is
+      // verified directly against the database by the Python fixture
+      // script immediately after this run — see w5a_browser_qa_r3_verify.py
+      // and browser_qa.md for that result, matching the established
+      // "Python owns Store-state verification" convention.
+    } else {
+      record('3. R3-pinned rollback editor real-browser scenario', false, 'manifest missing r3_admin_host/r3_section_pk');
+    }
   } catch (error) {
     record('UNEXPECTED ERROR', false, error.stack || String(error));
     await page.screenshot({ path: path.join(report_dir, 'unexpected-error.png'), fullPage: true }).catch(() => {});
