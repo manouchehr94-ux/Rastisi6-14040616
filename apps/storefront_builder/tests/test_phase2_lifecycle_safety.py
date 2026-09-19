@@ -282,6 +282,12 @@ class LegacyEditMakesConcurrentR4BaseRevisionStaleTests(StorefrontBuilderViewsTe
 
     def test_legacy_edit_makes_prior_r4_base_revision_stale(self):
         # An R4 client observes the current revision as its base_revision.
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         self.draft.refresh_from_db()
         r4_base_revision = self.draft.edit_revision
 
@@ -766,6 +772,12 @@ class LegacyLifecycleRouteTargetingTests(_LifecycleTargetsMixin):
         # A GET to the appearance editor resolves the caller's OWN active
         # draft; a foreign caller only ever sees their own draft, never the
         # target store's versions.
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         foreign_appearance_before = dict(self.foreign_draft.appearance_config or {})
         own_appearance_before = dict(self.own_draft.appearance_config or {})
 
@@ -784,6 +796,12 @@ class LegacyLifecycleRouteTargetingTests(_LifecycleTargetsMixin):
         # None of these can name a Published/Archived version; a foreign
         # caller's undo/redo/discard only affects the foreign draft, never
         # the target store's active draft or its published/archived rows.
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         own_draft_pk = self.own_draft.pk
         published_pk = self.published.pk
         archived_pk = self.archived.pk
@@ -1454,6 +1472,12 @@ class LegacySectionStructureLockNegativeTests(_StructureLockMatrixMixin):
         return resp
 
     def test_legacy_section_remove_on_locked_section_is_refused(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         locked = self._add_section(order=0, is_locked=True)
         self._add_section(order=1)
         self._place_each_section_in_own_container()
@@ -1463,6 +1487,12 @@ class LegacySectionStructureLockNegativeTests(_StructureLockMatrixMixin):
         self.assertTrue(StorefrontSection.objects.filter(pk=locked.pk).exists())
 
     def test_legacy_section_move_on_locked_section_is_refused(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         locked = self._add_section(order=0, is_locked=True)
         self._add_section(order=1)
         self._place_each_section_in_own_container()
@@ -1475,6 +1505,12 @@ class LegacySectionStructureLockNegativeTests(_StructureLockMatrixMixin):
         self.assertEqual(locked.order, order_before)
 
     def test_legacy_section_move_toward_locked_neighbor_is_refused(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         mover = self._add_section(order=0)
         locked_neighbor = self._add_section(order=1, is_locked=True)
         self._place_each_section_in_own_container()
@@ -1487,6 +1523,12 @@ class LegacySectionStructureLockNegativeTests(_StructureLockMatrixMixin):
         self.assertEqual(mover.order, order_before)
 
     def test_legacy_section_reorder_cannot_move_locked_section(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         locked = self._add_section(order=0, is_locked=True)
         other = self._add_section(order=1)
         self._place_each_section_in_own_container()
@@ -1499,6 +1541,12 @@ class LegacySectionStructureLockNegativeTests(_StructureLockMatrixMixin):
         self.assertEqual(locked.order, 0)
 
     def test_legacy_block_move_on_locked_section_is_refused(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         locked = self._add_section(order=0, is_locked=True)
         self._add_section(order=1)
         self._place_each_section_in_own_container()
@@ -1511,6 +1559,12 @@ class LegacySectionStructureLockNegativeTests(_StructureLockMatrixMixin):
         self.assertTrue(locked.is_locked)
 
     def test_legacy_block_remove_on_locked_section_is_refused(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         locked = self._add_section(order=0, is_locked=True)
         self._place_each_section_in_own_container()
 
@@ -1611,6 +1665,12 @@ class LegacyStructureLockPositiveTests(_StructureLockMatrixMixin):
              "show_on_tablet": "on", "show_on_mobile": "on"})
 
     def test_settings_edit_on_locked_section_succeeds(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         locked = self._add_section(order=0, settings={"body_html": "<p>قبل</p>"}, is_locked=True)
         self._place_each_section_in_own_container()
 
@@ -1621,6 +1681,12 @@ class LegacyStructureLockPositiveTests(_StructureLockMatrixMixin):
         self.assertTrue(locked.is_locked)  # content edit never unlocks
 
     def test_toggle_active_on_locked_section_succeeds(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         locked = self._add_section(order=0, is_locked=True)
         active_before = locked.is_active
         resp = self.client.post(
@@ -1642,6 +1708,12 @@ class LegacyStructureLockPositiveTests(_StructureLockMatrixMixin):
 
     def test_lock_toggle_on_locked_section_unlocks_it(self):
         # The lock toggle itself must never be blocked by the lock.
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         locked = self._add_section(order=0, is_locked=True)
         resp = self.client.post(
             reverse("dashboard:storefront-builder-section-lock", args=[locked.pk]))
@@ -1650,6 +1722,12 @@ class LegacyStructureLockPositiveTests(_StructureLockMatrixMixin):
         self.assertFalse(locked.is_locked)
 
     def test_duplicate_of_locked_section_succeeds_and_creates_new_section(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         locked = self._add_section(order=0, is_locked=True)
         self._place_each_section_in_own_container()
         count_before = self.home.sections.count()
@@ -1741,6 +1819,12 @@ class BaselineResetLockRefusalTests(_StructureLockMatrixMixin):
         )
 
     def test_reset_page_view_shows_lock_message_and_leaves_page_intact(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         self._apply_ready_template()
         home = self.draft.get_page(StorefrontPage.PageType.HOME)
         first = home.sections.order_by("order").first()
@@ -1795,6 +1879,12 @@ class LegacyInPlaceResetRevisionCoherenceTests(_StructureLockMatrixMixin):
         return home.sections.order_by("order").first()
 
     def test_section_field_reset_real_change_advances_revision_by_one(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         self._apply_ready_template()
         section = self._baseline_home_section()
         # Find a scalar baseline field and mutate it away from baseline first.
@@ -1822,6 +1912,12 @@ class LegacyInPlaceResetRevisionCoherenceTests(_StructureLockMatrixMixin):
         self.assertEqual(self._history_count(), history_before + 1)
 
     def test_section_field_reset_noop_advances_nothing(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         self._apply_ready_template()
         section = self._baseline_home_section()
         snapshot = self.draft.template_baseline_snapshot
@@ -1843,6 +1939,12 @@ class LegacyInPlaceResetRevisionCoherenceTests(_StructureLockMatrixMixin):
         self.assertEqual(self._history_count(), history_before)
 
     def test_appearance_field_reset_real_change_advances_revision_by_one(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         self._apply_ready_template()
         snapshot = self.draft.template_baseline_snapshot
         baseline_appearance = snapshot["appearance"]
@@ -1873,6 +1975,12 @@ class LegacyInPlaceResetRevisionCoherenceTests(_StructureLockMatrixMixin):
         self.assertEqual(self._history_count(), history_before + 1)
 
     def test_appearance_field_reset_noop_advances_nothing(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         self._apply_ready_template()
         # Just applied — appearance already equals baseline; reset is a no-op.
         revision_before = self._revision()
@@ -2195,6 +2303,12 @@ class FullLifecycleConvergenceTests(_CrossEntryConvergenceMixin):
         }
 
     def test_full_lifecycle_end_state_converges_across_entry_points(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         legacy_end_state = self._run_lifecycle_via_legacy()
 
         # Rebuild a clean world for the R4 run so the two are independent and
@@ -2223,6 +2337,12 @@ class FullLifecycleConvergenceTests(_CrossEntryConvergenceMixin):
             legacy_end_state["promoted_status"], StorefrontLayoutVersion.Status.PUBLISHED)
 
     def test_undo_redo_after_restore_is_revision_monotonic_and_manifest_intact_both_paths(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         """The full sequence continues past restore into undo/redo and the
         revision stays monotonic across the WHOLE sequence, via BOTH the
         legacy and the R4 history endpoints, with the manifest intact."""
@@ -2298,6 +2418,12 @@ class MixedSequenceSafeOrderingTests(_CrossEntryConvergenceMixin):
 
     def test_legacy_edit_then_stale_r4_replay_is_rejected_and_mutates_nothing(self):
         # An R4 client captures the current revision as its base.
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         r4_base = self._revision()
 
         # A legacy edit lands on section A, advancing the shared token.
@@ -2334,6 +2460,12 @@ class MixedSequenceSafeOrderingTests(_CrossEntryConvergenceMixin):
         # publisher who captured an older base_revision; the stale legacy
         # publish (which routes through the shared stale-aware publish) is
         # refused and mutates nothing.
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         legacy_base = self._revision()
 
         # R4 edit lands, advancing the shared token.
@@ -2365,6 +2497,12 @@ class MixedSequenceSafeOrderingTests(_CrossEntryConvergenceMixin):
         # writes all succeed and the token advances monotonically by exactly
         # one per real change — no false stale rejection when clients are
         # correctly ordered.
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         r0 = self._revision()
 
         # legacy edit (reads current, writes) → +1
@@ -2443,6 +2581,12 @@ class RecoveryMediaIntegrityTests(_CrossEntryConvergenceMixin):
         self.assertTrue(MediaAsset.objects.filter(pk=asset.pk).exists())
 
     def test_manifest_and_referenced_media_survive_undo_redo(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         expected_manifest = self._ready_manifest()
         appearance_persistence.persist_store_appearance_manifest(self.draft, expected_manifest)
         self.draft.refresh_from_db()
@@ -2471,6 +2615,12 @@ class RecoveryMediaIntegrityTests(_CrossEntryConvergenceMixin):
         self._assert_asset_protected(asset)
 
     def test_manifest_and_referenced_media_survive_restore(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         expected_manifest = self._ready_manifest()
         appearance_persistence.persist_store_appearance_manifest(self.draft, expected_manifest)
         self.draft.refresh_from_db()

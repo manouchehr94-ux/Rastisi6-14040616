@@ -386,6 +386,12 @@ class SectionDuplicateMediaTests(TestCase):
         self.draft.sections.all().delete()
 
     def test_duplicating_hero_section_duplicates_placements_sharing_the_asset(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         section = StorefrontSection.objects.create(version=self.draft, section_key="hero_banner", order=0)
         asset = MediaAsset.objects.create(store=self.store, image=_img())
         original_slide = HeroSlide.objects.create(
@@ -410,6 +416,12 @@ class SectionDuplicateMediaTests(TestCase):
         self.assertEqual(original_slide.title, "اسلاید اصلی")
 
     def test_duplicating_non_media_section_does_not_error(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         section = StorefrontSection.objects.create(version=self.draft, section_key="rich_text", order=0)
         resp = self.client.post(reverse("dashboard:storefront-builder-section-duplicate", args=[section.pk]))
         self.assertEqual(resp.status_code, 200)

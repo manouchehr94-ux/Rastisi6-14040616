@@ -188,6 +188,12 @@ class SectionDuplicateStaysOnSamePageTests(TestCase):
         self.draft.home_page().sections.all().delete()
 
     def test_duplicate_gets_new_stable_id_and_stays_on_same_page(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         home = self.draft.home_page()
         section = StorefrontSection.objects.create(page=home, section_key="rich_text", order=0)
 

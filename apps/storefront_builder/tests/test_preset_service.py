@@ -523,6 +523,12 @@ class StaleColorOverridesClearedOnApplyTests(PresetServiceTestCase):
         self.assertFalse(config.get("color_overrides_customized", False))
 
     def test_dashboard_color_save_view_flags_a_genuine_override_as_customized(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         svc.get_or_create_draft(self.store, user=self.staff)
         response = self.admin_client.post(
             reverse("dashboard:storefront-builder-appearance"),
@@ -534,6 +540,12 @@ class StaleColorOverridesClearedOnApplyTests(PresetServiceTestCase):
         self.assertEqual(draft.appearance_config.get("color_overrides", {}).get("primary"), "#112233")
 
     def test_dashboard_reset_all_overrides_clears_the_customized_flag(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         draft = svc.get_or_create_draft(self.store, user=self.staff)
         draft.appearance_config = {
             **draft.effective_appearance_config(),
