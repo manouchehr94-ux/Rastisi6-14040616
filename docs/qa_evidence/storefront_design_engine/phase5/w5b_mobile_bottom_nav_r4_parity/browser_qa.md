@@ -97,7 +97,7 @@ result of this section.
    now-stale captured revision — which is correctly rejected with `409
    stale_revision`.
 
-## Conclusion
+## Conclusion (round 1)
 
 Every step of the required 18-step real mobile-viewport merchant journey
 passes against the actual, running R4 Builder — registry-driven options,
@@ -105,3 +105,176 @@ independent-field mutation acceptance, sibling Footer-variant isolation,
 Undo/Redo round-trip, Draft-Preview/Public lifecycle around Publish, a
 second Store's fresh-Draft `hidden` default, and stale-revision rejection
 are all demonstrated live, not just via Django `TestCase` assertions.
+
+---
+
+# Round 2 — Independent Architect browser-evidence repair
+
+The Independent Architect's review of PR #14 accepted the production
+implementation (CRITICAL 0, IMPORTANT 1, BLOCKING MINOR 2 — all three
+findings against round 1's **browser evidence**, not the production code).
+This section documents that repair. Round 1's record above is preserved
+unmodified, per the repair directive's explicit instruction not to rewrite
+or erase it.
+
+Raw console output: `browser_qa_console_repair.txt`. Structured result:
+`browser_qa_results_repair.json`. Screenshots: `screenshots/`.
+
+**Repair scope: QA script + evidence/docs only.** No production file, no
+Django test file, and no migration was touched — confirmed by `git diff
+--check` and a file-list diff against the pre-repair PR head (see
+`final_report.md`).
+
+## The four original defects
+
+1. **Desktop/default viewport incorrectly described as a "real mobile
+   viewport."** The script opened both the admin and public browser
+   contexts with `browser.newContext({ baseURL: ... })` — no `viewport`,
+   `isMobile`, or `deviceScaleFactor`. The storefront's own CSS
+   (`apps/storefront_builder/static/css/storefront_builder.css`) makes
+   viewport width the ONE thing that gates Bottom Nav visibility:
+   ```
+   .gmn,.gmn-spacer{display:none}
+   @media(max-width:680px){ .gmn{display:block; ...} ... }
+   ```
+   so a check that never actually ran at `<= 680px` proved nothing about
+   mobile rendering, regardless of what markup existed in the DOM.
+2. **The Public-after-Publish check proved markup presence, not mobile
+   visibility.** `publicAfterHtml.includes('data-mobile-nav="four_item"')`
+   is a raw-HTML substring match; it says nothing about `display`,
+   bounding box, or the actual browser context's viewport width.
+3. **The Footer-sibling assertion was logically too weak.**
+   `footerVariantValue === 'legacy_default' || footerVariantValue.length >
+   0` — the second clause makes almost any non-empty Footer variant value
+   pass, including one that had genuinely changed.
+4. **The "registry-driven options" assertion only enforced 3 of the 9
+   variants the evidence prose claimed were verified** (`hidden`,
+   `four_item`, `floating_dock`), even though the console happened to
+   print all 9.
+
+## Fixes applied (QA script only)
+
+1. **Draft Preview mobile viewport**: confirmed by direct source read
+   (`r4_editor.js`'s device switcher, `r4_editor.css`) that
+   `[data-r4-device="mobile"]` already resizes the SAME `#r4PreviewFrame`
+   iframe to a genuine `390px`-wide CSS box (`data-mobile-viewport-width
+   ="390"` in `editor.html`) — not a second mechanism. The script now
+   explicitly asserts `window.innerWidth <= 680` **inside that iframe's
+   own document** after every device-mode switch, rather than trusting
+   the topbar button's `aria-pressed` state alone.
+   **Public storefront mobile viewport**: the public page is a plain
+   top-level page (no iframe/device-switcher wrapper), so its own browser
+   context is now opened with a real `viewport: {width: 390, height:
+   844}` — a deterministic, unemulated viewport (no UA/branding spoofing),
+   per the directive's preferred shape.
+2. **Real DOM/computed-style visibility checks**, added as a shared
+   `checkMobileNavVisibility()` helper used for both Draft Preview and
+   Public: markup presence (`[data-mobile-nav="<variant>"]` exists),
+   `getComputedStyle(el).display !== 'none'`, a non-zero
+   `boundingBox()`, the `.gmn-bar` nav element's own Playwright
+   `isVisible()`, and a rendered `.gmn-item` count (`>= 3`). Applied at
+   Draft Preview (step 8), Redo (step 13), and Public-after-Publish (step
+   16) — never source-HTML string matching alone. A parallel
+   `checkMobileNavAbsent()` helper (no `[data-mobile-nav]` element at all)
+   is used for the `hidden` variant's true no-op case (Undo → step 11,
+   fresh second-Store Draft → step 17), since
+   `.../global_mobile_nav/hidden.html` renders nothing regardless of
+   viewport.
+3. **Footer-variant before/after comparison**: `footerVariantBefore` is
+   now captured right after the registry-options check (step 4b), before
+   the Bottom-Nav-only mutation; `footerVariantAfter` is captured right
+   after (step 9's data), and the assertion is exact equality
+   (`footerVariantBefore === footerVariantAfter`), with both values
+   recorded in evidence.
+4. **Exact 9-of-9 registry comparison**: the Python fixture
+   (`/tmp/w5a-evidence/w5b_qa_setup.py`) now derives the expected variant
+   keys directly from `global_region_registry.list_global_variants(
+   GLOBAL_MOBILE_NAV_REGION)` — the SAME canonical registry the
+   production read-projection uses — and prints them as
+   `EXPECTED_MOBILE_NAV_VARIANTS=...`, which is passed into the QA
+   manifest's `expected_mobile_nav_variants` array. The script diffs the
+   actual selector's option values against that registry-derived list and
+   requires `missing = []` AND `unexpected = []` AND `actualCount ===
+   expectedCount (9)`. No second hardcoded 9-key list exists anywhere in
+   the QA script.
+
+## A fifth defect found BY the strengthened checks themselves
+
+Making the Redo assertion a real visibility check (fix #2 above)
+immediately caught a genuine gap in the QA script's own journey, not
+previously visible under the old markup-only check: **Undo and Redo each
+trigger a full `window.location.reload()`** (confirmed in `r4_editor.js`),
+which resets the server-rendered device-switcher state back to `desktop`
+— so after Redo's reload, the preview iframe was back at full (>680px)
+width, and the Bottom Nav markup, though present in the DOM (server-
+rendered unconditionally), was genuinely `display:none` with a zero
+bounding box. First run after the fix: `FAIL — 13. ... {"markupPresent":
+true,"computedVisible":false,"nonzeroBounds":false,...,"display":"none",
+"box":null}`. Fixed by re-clicking `[data-r4-device="mobile"]` (and
+waiting for `window.innerWidth <= 680` inside the iframe) after every
+reload-triggering action (steps 6, 10/11, 12/13), matching how a real
+merchant would need to re-select mobile preview after any full-page
+reload. This is exactly the class of false-positive/false-negative the
+Architect's directive was concerned about — proof that the repair's
+stronger checks are load-bearing, not cosmetic.
+
+## Round-2 result
+
+**23/23 PASS** (round 1's 16 assertions decompose into 23 under the
+strengthened checks — the added granularity is 4a/9's before/after
+capture plus 8b/8c/8d, 16a/16c/16d/16e as separate named checks per the
+directive's required report fields; no round-1 coverage was removed).
+
+| # | Check | Result | Key data |
+|---|---|---|---|
+| 1 | R4 Builder opens | PASS | |
+| 2 | Global Design panel opens | PASS | |
+| 3 | Persian label present | PASS | |
+| 4 | Selector options match registry EXACTLY (9/9) | PASS | missing=[], unexpected=[] |
+| 5 | `footer.update` mutation accepted | PASS | new_revision=1 |
+| 6 | Undo enabled after reload | PASS | |
+| 7 | Draft Preview REAL mobile viewport | PASS | innerWidth=390 |
+| 8a | Draft mobile nav markup | PASS | |
+| 8b | Draft mobile nav computed visibility | PASS | display=block |
+| 8c | Draft mobile nav nonzero bounds | PASS | 370×64 |
+| 8d | Draft nav item count >= 3 | PASS | itemCount=4 |
+| 9 | Footer variant preserved (exact before===after) | PASS | legacy_default === legacy_default |
+| 11 | Undo restores hidden (no markup at all) | PASS | |
+| 13 | Redo restores visible four_item | PASS | display=block, 370×64 |
+| 14 | Public unchanged before Publish | PASS | |
+| 15 | Publish clicked | PASS | |
+| 16a | Public REAL mobile viewport | PASS | innerWidth=390 |
+| 16b | Public mobile nav markup after Publish | PASS | |
+| 16c | Public mobile nav computed visibility | PASS | display=block |
+| 16d | Public mobile nav nonzero bounds | PASS | 370×64 |
+| 16e | Public nav item count >= 3 | PASS | itemCount=4 |
+| 17 | Fresh Draft hidden, REAL mobile viewport, no markup | PASS | innerWidth=390 |
+| 18 | Stale mutation rejected (409) | PASS | stale_revision |
+
+## Screenshot evidence
+
+- `screenshots/01-draft-preview-mobile-four_item.png` — R4 Draft Preview,
+  mobile device mode, `four_item` Bottom Nav visibly rendered at the
+  bottom of the canvas (4 icons: account/cart/catalog/home).
+- `screenshots/02-public-mobile-four_item.png` — Public storefront after
+  Publish, real 390×844 viewport, the same `four_item` Bottom Nav visibly
+  rendered at the bottom.
+- `screenshots/03-fresh-draft-hidden-mobile.png` — a second, untouched
+  Store's fresh Draft, mobile device mode: no Bottom Nav bar rendered at
+  all (only the editor chrome).
+
+All three were visually reviewed and confirm what the DOM/computed-style
+assertions report.
+
+## Round-2 conclusion
+
+The production implementation was already correct — every defect found in
+this round was in the QA script's own assertions, not in
+`r4_mutation_service.py`, `r4_views.py`, `r4/editor.html`, or any Django
+test. With genuine mobile-viewport contexts and real DOM/computed-style
+visibility checks, the Bottom Nav is now proven to be actually visible
+(not merely present in markup) on both Draft Preview and the Public
+storefront after Publish, the `hidden` variant is proven to render no nav
+surface at all at a real mobile width (not just "hidden by desktop CSS"),
+the Footer variant is proven byte-exact unchanged, and all 9 registered
+variants are proven present with zero missing and zero unexpected.

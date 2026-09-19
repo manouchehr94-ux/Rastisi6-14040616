@@ -7,7 +7,48 @@
 // no second harness.
 //
 // Usage: node w5b_mobile_bottom_nav_r4_parity_qa.mjs <manifest.json>
-//   manifest: { origin, admin_host, public_host, admin_host_2, username, password, report_dir }
+//   manifest: { origin, admin_host, public_host, admin_host_2, username,
+//               password, report_dir, expected_mobile_nav_variants }
+//
+// ---------------------------------------------------------------------
+// Independent Architect browser-evidence repair (round 2 of W5B browser
+// QA). The original run's evidence was accepted at the production/test
+// level but rejected for four browser-evidence defects, all fixed here
+// (QA script + evidence only — no production/Django-test file touched):
+//
+//   1. The admin/public browser contexts never set a real mobile
+//      viewport, so "mobile" assertions were really running at the
+//      default desktop context width. The storefront's own CSS
+//      (`.gmn,.gmn-spacer{display:none}` by default, only shown inside
+//      `@media(max-width:680px)`) makes viewport width the ONE thing
+//      that actually gates Bottom Nav visibility — so a desktop-width
+//      check proves nothing about mobile rendering.
+//   2. The Public-after-Publish check only grepped raw HTML for
+//      `data-mobile-nav="four_item"` — markup presence is not the same
+//      as the element actually being visible at a real mobile width.
+//   3. The Footer-sibling assertion accepted almost any non-empty value
+//      (`=== 'legacy_default' || .length > 0`), which would pass even if
+//      the Footer variant HAD changed.
+//   4. The "registry-driven options" check only verified 3 representative
+//      keys were present, while the evidence prose claimed all 9 were.
+//
+// Fixes: (1) the Draft Preview iframe already becomes a genuine 390px-wide
+// CSS box via the existing `[data-r4-device="mobile"]` switcher (confirmed
+// by direct source read of r4_editor.js/r4_editor.css) — this script now
+// explicitly asserts `window.innerWidth <= 680` *inside that iframe's own
+// document* rather than assuming it; the Public-storefront browser context
+// is now opened with a real `viewport: {width: 390, height: 844}` (no
+// second harness, no emulated UA/branding — just a real narrow viewport).
+// (2) Bottom Nav visibility is now asserted via real DOM/computed-style
+// checks (`getComputedStyle(el).display`, `boundingBox()`, Playwright
+// `isVisible()` on the nav bar, and a minimum rendered nav-item count) —
+// never source-HTML string matching alone. (3) the Footer variant is now
+// captured before AND after the mobile-nav-only mutation and compared for
+// exact equality. (4) the actual selector option list is now diffed
+// (missing/unexpected, both required empty) against a registry-derived
+// expected list supplied by the Python fixture (`EXPECTED_MOBILE_NAV_
+// VARIANTS`, read via `global_region_registry.list_global_variants(...)`)
+// — never a second hardcoded 9-key list inside this script.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -53,10 +94,16 @@ if (!manifestPath) {
 }
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const { admin_host, public_host, admin_host_2, username, password, report_dir } = manifest;
+const expectedVariants = manifest.expected_mobile_nav_variants;
+if (!Array.isArray(expectedVariants) || expectedVariants.length === 0) {
+  console.error('manifest.expected_mobile_nav_variants must be a non-empty array, derived from GLOBAL_MOBILE_NAV_REGION by the Python fixture.');
+  process.exit(2);
+}
 const port = manifest.port || new URL(manifest.origin).port;
 const origin = `http://${admin_host}:${port}`;
 const publicOrigin = `http://${public_host}:${port}`;
 const origin2 = `http://${admin_host_2}:${port}`;
+const MOBILE_VIEWPORT = { width: 390, height: 844 };
 fs.mkdirSync(report_dir, { recursive: true });
 
 const results = [];
@@ -90,6 +137,48 @@ async function waitForPreviewFrameReady(page, { timeout = 5000 } = {}) {
     await page.waitForTimeout(150);
   }
   return frame;
+}
+
+// Real DOM/computed-style visibility check for the Bottom Nav — never
+// source-HTML string matching. Works against either a Playwright Frame
+// (Draft Preview iframe) or Page (Public storefront).
+async function checkMobileNavVisibility(frameOrPage, variantKey) {
+  const root = frameOrPage.locator(`[data-mobile-nav="${variantKey}"]`).first();
+  const markupPresent = (await root.count()) > 0;
+  if (!markupPresent) {
+    return { markupPresent, computedVisible: false, nonzeroBounds: false, itemCount: 0, display: null, box: null };
+  }
+  const display = await root.evaluate((el) => getComputedStyle(el).display).catch(() => null);
+  const box = await root.boundingBox().catch(() => null);
+  const nonzeroBounds = !!box && box.width > 0 && box.height > 0;
+  const barVisible = await frameOrPage
+    .locator(`[data-mobile-nav="${variantKey}"] .gmn-bar`)
+    .first()
+    .isVisible()
+    .catch(() => false);
+  const itemCount = await frameOrPage
+    .locator(`[data-mobile-nav="${variantKey}"] .gmn-item`)
+    .count()
+    .catch(() => 0);
+  return {
+    markupPresent,
+    computedVisible: display !== 'none' && barVisible,
+    nonzeroBounds,
+    itemCount,
+    display,
+    box,
+  };
+}
+
+// Confirms NO Bottom Nav markup is rendered at all — for the `hidden`
+// variant (a true no-op template) and for Undo restoring `hidden`.
+async function checkMobileNavAbsent(frameOrPage) {
+  const count = await frameOrPage.locator('[data-mobile-nav]').count().catch(() => -1);
+  return count === 0;
+}
+
+async function innerWidthOf(frameOrPage) {
+  return frameOrPage.evaluate(() => window.innerWidth);
 }
 
 async function main() {
@@ -126,12 +215,25 @@ async function main() {
     const bodyText = await page.content();
     record('3. "ناوبری پایین موبایل" label present', bodyText.includes('ناوبری پایین موبایل'));
 
-    // 4. Selector options are registry-driven (spot-check a representative
-    // spread: hidden, a conventional multi-item variant, a structurally
-    // distinct one).
+    // 4. Selector options match the canonical registry EXACTLY (not just
+    // "contains a representative spread"). Expected keys come from the
+    // Python fixture's own read of GLOBAL_MOBILE_NAV_REGION — never a
+    // second hardcoded list in this script.
     const optionValues = await page.$$eval('#r4GlobalMobileNavVariant option', (opts) => opts.map((o) => o.value));
-    const hasAll = ['hidden', 'four_item', 'floating_dock'].every((k) => optionValues.includes(k));
-    record('4. Selector options are registry-driven', hasAll, JSON.stringify(optionValues));
+    const actualSorted = [...optionValues].sort();
+    const expectedSorted = [...expectedVariants].sort();
+    const missing = expectedSorted.filter((k) => !actualSorted.includes(k));
+    const unexpected = actualSorted.filter((k) => !expectedSorted.includes(k));
+    const exactMatch = missing.length === 0 && unexpected.length === 0 && actualSorted.length === expectedSorted.length;
+    record(
+      '4. Selector options match the registry EXACTLY (9/9, no missing, no unexpected)',
+      exactMatch,
+      JSON.stringify({ expectedCount: expectedSorted.length, actualCount: actualSorted.length, missing, unexpected, actual: optionValues }),
+    );
+
+    // 4b. Footer variant BEFORE the Bottom-Nav-only mutation (captured now,
+    // compared after, per the sibling-isolation repair).
+    const footerVariantBefore = await page.$eval('#r4GlobalFooterVariant', (el) => el.value);
 
     // 5. Switch to a non-hidden registered variant.
     const [mutationResp] = await Promise.all([
@@ -164,19 +266,47 @@ async function main() {
     const undoEnabled = await page.$eval('#r4UndoButton', (b) => !b.disabled);
     record('6. Save completes (Undo becomes enabled after reload)', undoEnabled);
 
-    // 7. Switch Preview to Mobile.
+    // 9 (captured here, recorded after Undo/Redo below). Footer variant
+    // AFTER the Bottom-Nav-only mutation — compared for EXACT equality
+    // against footerVariantBefore, not merely "non-empty".
+    const footerVariantAfter = await page.$eval('#r4GlobalFooterVariant', (el) => el.value);
+
+    // 7. Switch Preview to Mobile — and PROVE it, by reading
+    // window.innerWidth INSIDE the preview iframe's own document, not just
+    // the topbar toggle's aria-pressed state. The iframe becomes a real
+    // 390px-wide CSS box via r4_editor.js's device switcher (confirmed by
+    // source read), so this must resolve to <= 680 for a genuine mobile
+    // viewport, matching storefront_builder.css's own `@media(max-width:
+    // 680px)` gate on `.gmn` visibility.
     await page.click('[data-r4-device="mobile"]');
     const deviceAttr = await page.$eval('.r4-preview-canvas', (el) => el.getAttribute('data-r4-device'));
-    record('7. Preview switched to mobile device mode', deviceAttr === 'mobile');
-
-    // 8. Selected Bottom Nav is rendered in Preview.
     let frame = await waitForPreviewFrameReady(page);
-    let frameHtml = frame ? await frame.content() : '';
-    record('8. Preview shows the new Bottom Nav variant', frameHtml.includes('data-mobile-nav="four_item"'));
+    const draftPreviewInnerWidth = frame ? await innerWidthOf(frame) : null;
+    const draftPreviewIsMobileWidth = typeof draftPreviewInnerWidth === 'number' && draftPreviewInnerWidth <= 680;
+    record(
+      '7. Preview switched to a REAL mobile viewport (window.innerWidth <= 680 inside the Draft Preview document)',
+      deviceAttr === 'mobile' && draftPreviewIsMobileWidth,
+      `data-r4-device=${deviceAttr}, draftPreview.innerWidth=${draftPreviewInnerWidth}`,
+    );
 
-    // 9. Footer variant did not change.
-    const footerVariantValue = await page.$eval('#r4GlobalFooterVariant', (el) => el.value);
-    record('9. Footer variant unchanged', footerVariantValue === 'legacy_default' || footerVariantValue.length > 0, footerVariantValue);
+    // 8. Selected Bottom Nav is ACTUALLY VISIBLE in Draft Preview at the
+    // real mobile viewport — markup + computed style + non-zero bounds +
+    // rendered nav bar/items, not source-HTML string matching.
+    const draftVis = await checkMobileNavVisibility(frame, 'four_item');
+    record('8a. DRAFT MOBILE NAV MARKUP', draftVis.markupPresent, JSON.stringify(draftVis));
+    record('8b. DRAFT MOBILE NAV COMPUTED VISIBILITY', draftVis.computedVisible, `display=${draftVis.display}`);
+    record('8c. DRAFT MOBILE NAV NONZERO BOUNDS', draftVis.nonzeroBounds, JSON.stringify(draftVis.box));
+    record('8d. Draft Preview renders the expected nav items (>= 3)', draftVis.itemCount >= 3, `itemCount=${draftVis.itemCount}`);
+    await page.locator('.r4-preview-canvas').screenshot({ path: path.join(report_dir, '01-draft-preview-mobile-four_item.png') }).catch(() => {});
+
+    // 9. Footer variant did NOT change as a side effect of the
+    // Bottom-Nav-only mutation — exact before/after equality, not merely
+    // "some non-empty value".
+    record(
+      '9. Footer variant preserved (exact before === after, not merely non-empty)',
+      footerVariantBefore === footerVariantAfter,
+      JSON.stringify({ footerVariantBefore, footerVariantAfter }),
+    );
 
     // 10. Undo (its own click handler reloads the whole page on success —
     // wait for that navigation rather than a fixed timeout).
@@ -184,27 +314,55 @@ async function main() {
       page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 8000 }).catch(() => null),
       page.click('#r4UndoButton'),
     ]);
-    // 11. Previous Bottom Nav (hidden — renders no marker) returns.
+    // 11. Previous Bottom Nav (hidden — a true no-op template, so NO
+    // [data-mobile-nav] element at all) returns. NOTE: Undo's own click
+    // handler does a full `window.location.reload()` (same mechanism as
+    // step 6), which resets the device switcher's server-rendered initial
+    // state back to "desktop" — so the mobile view must be re-selected
+    // after every such reload, not assumed to persist. Re-clicking mobile
+    // here is not load-bearing for THIS assertion (checkMobileNavAbsent
+    // does not depend on viewport width, since the `hidden` variant's
+    // renderer emits no `[data-mobile-nav]` element at any width — see
+    // step 13's comment for why it IS load-bearing there), but keeps the
+    // journey a continuous mobile-preview session.
+    await page.click('[data-r4-device="mobile"]').catch(() => {});
     frame = await waitForPreviewFrameReady(page);
-    frameHtml = frame ? await frame.content() : '';
-    record('11. Undo restores the previous (hidden) Bottom Nav', !frameHtml.includes('data-mobile-nav="four_item"'));
+    const undoAbsent = await checkMobileNavAbsent(frame);
+    record('11. Undo restores the previous (hidden) Bottom Nav — no [data-mobile-nav] element at all', undoAbsent);
 
     // 12. Redo (its own click handler also reloads the whole page on success).
     await Promise.all([
       page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 8000 }).catch(() => null),
       page.click('#r4RedoButton'),
     ]);
-    // 13. New Bottom Nav returns.
+    // 13. New Bottom Nav returns — same real visibility check as step 8.
+    // Re-select mobile device FIRST: this reload also resets the device
+    // switcher to "desktop", and at desktop width the iframe is full-width
+    // (> 680px), so storefront_builder.css's own `.gmn,.gmn-spacer{display:
+    // none}` default (only overridden inside `@media(max-width:680px)`)
+    // applies — the markup would still be present in the DOM (server-
+    // rendered unconditionally) but genuinely NOT visible, which is exactly
+    // the class of false-positive the Independent Architect's repair
+    // directive called out. Confirmed by re-running this check before this
+    // fix: markup was present but `display:none` / zero bounds at the
+    // stale desktop width.
+    await page.click('[data-r4-device="mobile"]');
     frame = await waitForPreviewFrameReady(page);
-    frameHtml = frame ? await frame.content() : '';
-    record('13. Redo restores the changed Bottom Nav', frameHtml.includes('data-mobile-nav="four_item"'));
+    await frame.waitForFunction(() => window.innerWidth <= 680, { timeout: 3000 }).catch(() => {});
+    const redoVis = await checkMobileNavVisibility(frame, 'four_item');
+    record(
+      '13. Redo restores the changed Bottom Nav (markup + computed visibility + nonzero bounds)',
+      redoVis.markupPresent && redoVis.computedVisible && redoVis.nonzeroBounds,
+      JSON.stringify(redoVis),
+    );
 
-    // 14. Public unchanged before Publish.
-    const publicContext = await browser.newContext({ baseURL: publicOrigin });
+    // 14. Public unchanged before Publish (existence check is sufficient
+    // here — proving an absence needs no visibility assertion).
+    const publicContext = await browser.newContext({ baseURL: publicOrigin, viewport: MOBILE_VIEWPORT });
     const publicPage = await publicContext.newPage();
     const publicBefore = await publicPage.goto(`${publicOrigin}/`, { waitUntil: 'domcontentloaded' });
-    const publicBeforeHtml = await publicPage.content();
-    record('14. Public storefront unchanged before Publish', !publicBeforeHtml.includes('data-mobile-nav="four_item"'), `status=${publicBefore.status()}`);
+    const publicBeforeAbsent = await checkMobileNavAbsent(publicPage);
+    record('14. Public storefront unchanged before Publish (no Bottom Nav rendered yet)', publicBeforeAbsent, `status=${publicBefore.status()}`);
 
     // 15. Publish (no confirm() dialog on this button — only Discard has
     // one; a successful Publish reloads the page onto the next Draft).
@@ -217,13 +375,29 @@ async function main() {
     }
     record('15. Publish clicked and editor reloaded', publishBtn !== null);
 
-    // 16. Public now uses the new Bottom Nav.
+    // 16. Public storefront, at a REAL mobile viewport (390x844 browser
+    // context — this is a plain top-level page, not an iframe the R4
+    // device switcher resizes, so it needs its own real viewport), ACTUALLY
+    // RENDERS the new Bottom Nav visibly after Publish.
     const publicAfterResp = await publicPage.goto(`${publicOrigin}/`, { waitUntil: 'domcontentloaded' });
-    const publicAfterHtml = await publicPage.content();
-    record('16. Public storefront reflects the new Bottom Nav after Publish', publicAfterHtml.includes('data-mobile-nav="four_item"'), `status=${publicAfterResp.status()}`);
+    const publicInnerWidth = await innerWidthOf(publicPage);
+    const publicIsMobileWidth = publicInnerWidth <= 680;
+    record('16a. PUBLIC MOBILE VIEWPORT (window.innerWidth <= 680)', publicIsMobileWidth, `publicPage.innerWidth=${publicInnerWidth}`);
+    const publicVis = await checkMobileNavVisibility(publicPage, 'four_item');
+    record('16b. PUBLIC MOBILE NAV MARKUP AFTER PUBLISH', publicVis.markupPresent, JSON.stringify(publicVis));
+    record('16c. PUBLIC MOBILE NAV COMPUTED VISIBILITY', publicVis.computedVisible, `display=${publicVis.display}`);
+    record('16d. PUBLIC MOBILE NAV NONZERO BOUNDS', publicVis.nonzeroBounds, JSON.stringify(publicVis.box));
+    record('16e. Public renders the expected nav items (>= 3)', publicVis.itemCount >= 3, `itemCount=${publicVis.itemCount}, status=${publicAfterResp.status()}`);
+    await publicPage.screenshot({ path: path.join(report_dir, '02-public-mobile-four_item.png') }).catch(() => {});
     await publicContext.close();
 
-    // 17. A fresh Draft (second Store) defaults to hidden — Preview shows no nav.
+    // 17. A fresh Draft (second, untouched Store) defaults to `hidden` —
+    // verified at a REAL mobile viewport (the same 390px device-switcher
+    // mechanism as step 7), confirming NO Bottom Nav markup at all (the
+    // canonical `hidden` renderer is a true no-op template — see
+    // apps/storefront_builder/templates/storefront_builder/partials/
+    // global_mobile_nav/hidden.html), not merely "hidden by desktop CSS".
+    let hiddenPreviewInnerWidth = null;
     if (admin_host_2) {
       const context2 = await browser.newContext({ baseURL: origin2 });
       const page2 = await context2.newPage();
@@ -236,10 +410,16 @@ async function main() {
       ]);
       await page2.goto(`${origin2}/admin-portal/storefront-builder/r4/`, { waitUntil: 'networkidle' });
       await page2.click('[data-r4-device="mobile"]');
-      await page2.waitForTimeout(400);
-      const frame2 = previewFrame(page2);
-      const frame2Html = frame2 ? await frame2.content() : '';
-      record('17. Fresh Draft (hidden default) shows no Bottom Nav markup', !frame2Html.includes('data-mobile-nav='));
+      const frame2 = await waitForPreviewFrameReady(page2);
+      hiddenPreviewInnerWidth = frame2 ? await innerWidthOf(frame2) : null;
+      const hiddenIsMobileWidth = typeof hiddenPreviewInnerWidth === 'number' && hiddenPreviewInnerWidth <= 680;
+      const hiddenAbsent = frame2 ? await checkMobileNavAbsent(frame2) : false;
+      record(
+        '17. Fresh Draft (hidden default) at a REAL mobile viewport shows no Bottom Nav markup at all',
+        hiddenIsMobileWidth && hiddenAbsent,
+        `innerWidth=${hiddenPreviewInnerWidth}, absent=${hiddenAbsent}`,
+      );
+      await page2.locator('.r4-preview-canvas').screenshot({ path: path.join(report_dir, '03-fresh-draft-hidden-mobile.png') }).catch(() => {});
       await context2.close();
     } else {
       record('17. Fresh Draft hidden-default scenario', false, 'manifest missing admin_host_2');
