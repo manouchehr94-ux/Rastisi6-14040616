@@ -1,5 +1,9 @@
 # W5C — Browser QA (Real Merchant Journey)
 
+**Repaired by the Independent Architect's review — see "Round 2" near
+the end of this document for the corrected, authoritative 28/28 result
+(the route and dialog JS both changed since round 1's 25/25 run).**
+
 Script: `tools/storefront_builder_r4_qa/w5c_ready_template_preview_ux_qa.mjs`
 (reuses the existing `tools/storefront_builder_r4_qa/` conventions — same
 Chromium/`playwright-core` resolution, same `--host-resolver-rules=MAP *
@@ -134,7 +138,7 @@ assertions report — including the merchant Store's empty-catalog state
 products" empty state rather than an error) versus the Demo Store's real
 seeded content.
 
-## Conclusion
+## Conclusion (Round 1)
 
 Every step of the required merchant journey passes against the actual,
 running Gallery and live-preview route — 50/50 Ready Templates wired,
@@ -144,3 +148,93 @@ document (768/390 exact), a genuine visible difference between Merchant
 and Demo data, zero Draft mutation across the whole session (verified
 directly against the database, not inferred), and a working keyboard/
 focus-trap accessibility contract.
+
+---
+
+# Round 2 — Independent Architect repair (AUTHORITATIVE)
+
+The Preview route and dialog JS both changed since round 1 (GET-only,
+no-bootstrap Demo mode, Escape-from-inside-iframe), so the browser QA
+was rerun from a clean fixture. Raw console output:
+`browser_qa_console_repair.txt`. Structured result:
+`browser_qa_results_repair.json`. Non-mutation proof, this time covering
+BOTH data modes' real Drafts: `w5c_draft_before_repair.json` /
+`w5c_draft_after_repair.json` (the Merchant Draft) and
+`w5c_demo_draft_before.json` / `w5c_demo_draft_after.json` (the REAL
+seeded Demo Draft) — all four byte-identical pairwise.
+
+## Result
+
+**28/28 PASS** (round 1's 25 assertions plus 3 new: the iframe-focus
+setup check, the Escape-while-focus-is-inside-the-iframe assertion, and
+the "normal Escape still works afterward" reopen check).
+
+## Fixture note (why the fixed route now needs an explicit seed step)
+
+The repaired Demo mode correctly stops silently bootstrapping a Draft —
+so this run first seeded the canonical Demo Store via `manage.py
+apply_golden_reference_storefront`, which (as of this same repair — see
+`code_review.md`'s round-2 finding #1) now leaves a real, usable Draft
+behind automatically. Verified directly before running the browser
+script:
+
+```
+draft: نسخه 2 — پیش‌نویس   (layout_service.get_existing_draft(demo_store) — no longer None)
+```
+
+## New: Escape while focus is inside the preview iframe
+
+1. Reopened the dialog (same `mina_community` template, Merchant mode).
+2. Focused a real, always-present element INSIDE the iframe's own
+   document — the live-preview banner's "بازگشت به گالری" link.
+3. Confirmed focus is genuinely inside the iframe from BOTH sides: the
+   parent document's `document.activeElement` is the `<iframe>` element
+   itself, AND the iframe's own `document.activeElement.tagName` is `A`
+   — `{"focusIsInsideIframe":true,"frameActiveTag":"A"}`.
+4. Pressed Escape.
+5. Confirmed the dialog closed (`open:false`, `aria-hidden:"true"`) AND
+   focus returned to the exact Gallery trigger that originally opened
+   it — `{"focusReturnedAfterIframeEscape":true}`.
+6. Reopened once more and confirmed normal parent-focus Escape still
+   works after that cycle.
+
+This is a genuinely separate test from the pre-existing parent-dialog
+Escape test (which focuses the dialog's OWN "open in new tab" link, a
+parent-document element, before pressing Escape) — the two together now
+prove Escape closes the dialog from every place keyboard focus can
+actually be while it is open.
+
+## Screenshot evidence
+
+Retained from round 1 (`screenshots/01-gallery.png` through
+`05-preview-demo-mode.png`) — the visual UI is unchanged by this repair
+(no markup/CSS change, only the route's method/persistence contract and
+the Escape-handling JS changed), so no new screenshots were captured.
+Truthfully noted here per the repair directive's own allowance.
+
+## Non-mutation proof, both data modes, against the real database
+
+```
+Merchant Draft (pk=3) before: {"edit_revision": 0, "history_count": 0, "pk": 3, "template_provenance": {}}
+Merchant Draft (pk=3) after:  {"edit_revision": 0, "history_count": 0, "pk": 3, "template_provenance": {}}
+
+Demo Draft (pk=2) before: {"edit_revision": 0, "history_count": 0, "pk": 2, "template_provenance": {"engine": {"schema_version": 1}, "template": {"key": "fashion_promo_catalog", "version": "8"}}}
+Demo Draft (pk=2) after:  {"edit_revision": 0, "history_count": 0, "pk": 2, "template_provenance": {"engine": {"schema_version": 1}, "template": {"key": "fashion_promo_catalog", "version": "8"}}}
+```
+
+Byte-identical for both. Round 1 only snapshotted the Merchant Draft
+while Demo mode rendered from a different Store (the directive's own
+finding #C) — Round 2 closes that gap by snapshotting the REAL Demo
+Draft too, across the same full session (open, both data-source
+switches, all 3 devices, parent Escape, iframe-focus Escape, retargeting
+to two more templates, Close button).
+
+## Conclusion (Round 2)
+
+Every contract from Round 1 still holds, PLUS: the Preview route is
+proven GET-only in practice (browser session only ever issues GET
+navigations to it, consistent with the Django-level 405 tests), Demo
+mode's real seeded Draft is proven never mutated (not just the Merchant
+one), and Escape now closes the dialog correctly whether keyboard focus
+is among the dialog's own parent-document controls or inside the
+same-origin preview iframe's content.
