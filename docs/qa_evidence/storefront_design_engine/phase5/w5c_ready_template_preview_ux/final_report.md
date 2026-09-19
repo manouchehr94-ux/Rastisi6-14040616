@@ -147,8 +147,11 @@ an earlier one). Zero migrations. Full breakdown: `source_diff.md`.
 
 ## PR
 
-Opened after this report — see the push/PR step following this
-document's commit.
+**PR #15** — https://github.com/manouchehr94-ux/Rastisi6-14040616/pull/15
+— state: **OPEN**, not draft, not merged, `mergeable_state: clean`.
+Head `55fd1384`, base `feature/phase5-design-expansion` at exact SHA
+`3125a3250b1284ba216ac8c125257b7e48aaf0bf` (unchanged since W5C
+authorization).
 
 ## W5D started
 
@@ -156,7 +159,7 @@ document's commit.
 
 ## Worktree
 
-**Clean** at final HEAD `a9073391` (confirmed via `git status
+**Clean** at final HEAD `55fd1384` (confirmed via `git status
 --porcelain`).
 
 ## Final status
