@@ -1701,6 +1701,14 @@ class LegacyStructureLockPositiveTests(_StructureLockMatrixMixin):
         self.assertTrue(locked.is_locked)
 
     def test_collapse_toggle_on_locked_section_succeeds(self):
+        # P5-W5A Independent-Review repair: storefront_section_collapse_
+        # toggle is now correctly classified as Class A (it persists
+        # collapsed_in_editor and participates in Draft history), so it
+        # too now fails closed under r4_editor_enabled=True -- pin
+        # explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         locked = self._add_section(order=0, is_locked=True)
         collapsed_before = locked.collapsed_in_editor
         resp = self.client.post(
@@ -2296,11 +2304,13 @@ class FullLifecycleConvergenceTests(_CrossEntryConvergenceMixin):
         # r4_editor_enabled=True; the R4-safe endpoint is its canonical
         # replacement, converging onto the same, unmodified
         # layout_service.restore_version(). No active Draft exists right
-        # after publish, so base_revision is None (the documented "no Draft"
-        # precondition).
+        # after publish, so base_draft_id/base_revision are both None (the
+        # documented "no Draft" precondition — P5-W5A Independent-Review
+        # repair: the wire contract now binds to Draft identity too, not
+        # revision alone).
         restore_resp = self.client.post(
             reverse("dashboard:storefront-builder-r4-restore", args=[published_version_id]),
-            data=json.dumps({"base_revision": None}),
+            data=json.dumps({"base_draft_id": None, "base_revision": None}),
             content_type="application/json",
         )
         self.assertEqual(restore_resp.status_code, 200, restore_resp.content)
