@@ -3,6 +3,10 @@
 Status: DISCOVERY ONLY — no production code changed.
 Source commit: `81abb435c6421197117f8f570993b64ca485d4af`.
 
+**Revision note (Architect repair round)**: added a "W5 Merchant Journey Certification Plan" section at the end of this document, recording the binding requirement that W5's final certification exercise real admin Builder journeys (not just re-run the W4C rendering-certification harness).
+
+**Revision note (Final Architecture Correction round, minor)**: Journey G's evidence owner was corrected. Bottom Navigation's future write path is `footer.update` → `_apply_footer_update()` → `appearance_authority_service.apply_footer_variant()` (per the W5B corrected technical scope), not `_apply_appearance_component_update` (which is the generic single-component-family mutation path used by Hero/Product View/Card/Badge, an unrelated family group). The journey table below is corrected accordingly.
+
 Each journey is traced from the current UI through backend and persistence, using the authorities documented in `authority_map.md` and `current_state_inventory.md`.
 
 ---
@@ -75,6 +79,35 @@ Trace:
 |---|---|---|
 | A — Browse all 50 | YES | none (minor: no lightbox, no device-toggle on pre-apply preview) |
 | B — Apply Template X | YES | none |
-| C — Apply then change only Header | YES | none (Header specifically is COMPLETE; other families lack a *persistent* single-family control, though the isolation mechanism works whenever reached) |
+| C — Apply then change only Header | YES | none (Header specifically is COMPLETE; Hero/Product View/Card/Badge are Design-Lab-only by binding product decision, not a gap — see the main plan §7) |
 | D — Design Lab experimentation | YES | none |
 | E — Preview Desktop/Mobile then Publish | YES | device switcher not available on the pre-apply Gallery preview (same as A) |
+
+---
+
+## W5 Merchant Journey Certification Plan
+
+**Binding requirement (Independent Architect, W5 repair round)**: the W4C harness certifies **storefront rendering** (the 704-cell Ready-Template matrix). It does not exercise the merchant's actual **Builder UX** click-path. W5's final certification (workstream W5E) must be merchant-UX-aware and exercise real browser journeys, reusing the existing R4 QA/browser infrastructure (`tools/storefront_builder_r4_qa/run.mjs`, `qa_storefront_builder_r4.py`) — **no second certification harness**.
+
+The following journeys (A-P) are the required scope for W5E, to be automated as an extension of the existing harness:
+
+| # | Journey | Depends on |
+|---|---|---|
+| A | Merchant opens the canonical R4 Builder | existing R4 editor |
+| B | Merchant browses all 50 Ready Templates | existing Gallery (already certified as merchant-facing in this discovery) |
+| C | Merchant opens a Ready Template preview | existing `storefront_template_live_preview` |
+| D | Merchant uses pre-apply device preview | **W5C** (new capability — this journey step doesn't exist to certify until W5C ships) |
+| E | Merchant applies a Ready Template to Draft | existing `apply_preset()` path |
+| F | Merchant changes Bottom Navigation independently | **W5B** (new capability) |
+| G | Bottom Nav changes independently: `mobile_nav_variant` changes; unrelated `footer_config` fields remain unchanged; the typed `bottom_nav` manifest selection is synchronized; unrelated Store Appearance selections (Header, Palette, etc.) remain unchanged; the `footer_variant` selection is not accidentally changed when only Bottom Nav is changed | `footer.update` → `_apply_footer_update()` → `appearance_authority_service.apply_footer_variant()` (corrected owner — **not** `_apply_appearance_component_update`, which is the unrelated generic single-family mutation path used by Hero/Product View/Card/Badge) |
+| H | Undo restores the prior Bottom Nav variant | existing shared `_run_history_command`, newly exercised for this family |
+| I | Redo restores the new Bottom Nav variant | same |
+| J | Merchant runs a Design Lab experiment without creating Draft history spam | existing Design Lab (already certified as history-clean in this discovery) |
+| K | Merchant applies one Design Lab candidate | existing `design_lab.apply_candidate` |
+| L | Merchant previews Desktop/Mobile | existing device switcher |
+| M | Merchant Publishes | existing `layout_service.publish()` |
+| N | Public storefront reflects the Published state | existing `build_universal_storefront_context()` |
+| O | A stale revision receives the expected 409 conflict behavior | existing `R4StaleRevision`/`_lock_active_draft`, newly exercised for the Bottom-Nav mutation specifically |
+| P | Cross-Store/tenant attempts fail closed | existing `resolve_store_for_service`/tenant-scoped queries, newly exercised for the Bottom-Nav mutation specifically |
+
+**Regression scope decision (not hard-coded)**: whether the full 704-cell matrix must be rerun at W5 closure depends on which actual rendering surfaces W5A-D touch. W5A (server-side eligibility guard) and W5B/C (mutation-contract + UI additions reusing existing renderers) are not expected to change any Ready-Template rendering path, so a full rerun is likely unnecessary — but this must be confirmed against the actual W5 diff at W5E's implementation time, not assumed here. A targeted regression subset (the families/routes actually touched) is the expected default; escalate to a full rerun only if the diff review at that time shows a rendering-path change.

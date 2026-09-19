@@ -2,8 +2,12 @@
 
 Status: **DISCOVERY AND PLANNING ONLY — no W5 implementation has started.**
 Official starting branch: `feature/phase5-design-expansion`
-Official starting HEAD (checkpoint honored): `81abb435c6421197117f8f570993b64ca485d4af`
-W4C merge commit: `742fda5e88ec7c0bdd5bf17c6c7f4e839fde82f6` (PR #12, MERGED, APPROVED)
+Official checkpoint HEAD: `81abb435c6421197117f8f570993b64ca485d4af` (W4C merge, PR #12, MERGED, APPROVED)
+Discovery-documentation commit (evidence/planning only, 0 production files): `2c00b015421781e42eae6ad1e57884a5d464299f`
+
+**Revision note**: this document was repaired following an Independent Architect review of the initial discovery. The Architect accepted the fact-finding but required (1) a correction to the process record below, (2) two binding architectural decisions be recorded rather than left open, (3) a corrected technical scope for the Bottom Navigation gap, (4) explicit dispositions for the inert `layout`/`mega_menu` families, (5) an explicit merchant-journey certification plan, and (6) a reordered workstream sequence that closes architectural risk before UI expansion. All are incorporated below. **No code has changed as a result of this repair round — this is a planning-document-only revision.**
+
+**Final Architecture Correction note**: a second Architect pass found the repaired W5A plan still contained a real contradiction — it described "only one active mutation surface" while simultaneously treating the legacy Restore and Industry-Layout-Apply endpoints as an unconditional, unprotected exception to that policy. Direct re-reading of `layout_service.restore_version()` and `layout_service.apply_industry_layout()` confirmed both are genuinely mutating (each deletes the current Draft and creates a new one, with no stale-write check) and cannot be grouped with the truly read-only History browser. §5 and §8 (W5A) below are corrected to a three-class route model (A/B/C); §"Merchant Journey Certification Plan" cross-references in `merchant_journeys.md` are corrected for the Bottom-Nav journey's actual write path. **Still no code changed — planning-document-only.**
 
 Supporting evidence (read alongside this document):
 - `docs/qa_evidence/storefront_design_engine/phase5/w5_discovery/current_state_inventory.md`
@@ -13,203 +17,237 @@ Supporting evidence (read alongside this document):
 
 ---
 
-## 0. A note on how this discovery was conducted
+## 0. Process record — corrected
 
-The local checkout of `feature/phase5-design-expansion` was found, at the start of this round, to be **107 commits behind** `origin/feature/phase5-design-expansion` — still sitting at the P5-W2 merge point, missing all P5-W3 (Design Lab), P5-W4A (public shell convergence), P5-W4B (template curation) and P5-W4C (all-50 certification) work on disk. `origin/feature/phase5-design-expansion` itself was found to be exactly at the expected checkpoint `81abb435c6421197117f8f570993b64ca485d4af`.
+The initial discovery round's closing report stated "no new commits were created." **That statement is superseded and was accurate only at the moment it was written; it became false immediately afterward.** The corrected, truthful record is:
 
-Per the safety-gate rules (no reset/rebase/stash/clean, report and stop if HEAD has moved), the situation was reported and a **pure fast-forward** (a strict ancestor advance — local had zero commits not already on origin, so nothing could be discarded) was proposed and explicitly approved by the Product Owner before being applied. The local checkout now matches the checkpoint exactly (`git status --short` clean, `HEAD == 81abb435...`). All research below was additionally cross-verified against an isolated read-only worktree pinned to the checkpoint commit before the fast-forward, so no finding depends on the timing of that sync.
+- One documentation/evidence-only commit, `2c00b015421781e42eae6ad1e57884a5d464299f`, was created **after** the initial no-commit report, at the explicit direction of this repository's stop-hook tooling (which requires untracked files to be committed and pushed before a turn ends) — not autonomously initiated ahead of that requirement.
+- That commit contains **exactly the five discovery documents** listed above (four evidence files + this plan). `git show --stat 2c00b015` confirms: 5 files changed, all under `docs/`, 0 files under `apps/`, 0 migrations, 0 templates, 0 JS/CSS.
+- **Production code changes introduced by that commit: 0.**
+- No historical W4C evidence (`docs/qa_evidence/storefront_design_engine/phase5/w4_certification/...`) was altered, reset, or rewritten. The commit is purely additive.
+- **No reset or history rewrite is required or has been performed.** The commit stands as an accurate, permanent record of the discovery round; this repair round adds a further commit-free revision on top of it (per the current binding instruction: do not commit, do not push, in this round).
 
-The Graphify graph present in the repository (`graphify-out/graph.json`) was found to be stale — built against the old pre-fast-forward commit — and was **not used** as a source of truth for this discovery; all findings are direct source reads/greps against the checkpoint commit, cited by exact file and function/class name.
+This correction affects only §11 (git/process history) of this plan; no other discovery finding is invalidated by it.
 
 ---
 
 ## 1. What already exists (do not rebuild)
 
-Full detail in `current_state_inventory.md` and `authority_map.md`. Headline findings:
+Full detail in `current_state_inventory.md` and `authority_map.md`. Unchanged from the initial discovery — the Architect's review accepted this fact-finding:
 
-- **The R4 Builder is the live, authoritative merchant Storefront Builder** (`/admin-portal/storefront-builder/r4/`), default-enabled for every Store. A legacy "R3" surface remains wired in only as an explicit, flagged rollback valve, sharing all underlying services.
-- **The 50-Template Gallery already exists and is fully merchant-facing**: real page, real nav entry, all 50 templates, real static preview screenshots, real Apply-to-Draft flow with content preservation, provenance tracking, and Demo-vs-merchant-data preview modes. This is not QA tooling — it is production.
-- **The canonical Apply-to-Draft flow is a single, well-tested authority** (`preset_service.apply_preset()`) reached from three legitimate entry points (Gallery form, R4 full-apply mutation, R4 content-preserving template-switch), never copying catalog/business data.
-- **Design Lab already exists and is fully implemented**: transient candidate state, Random Mix (compatibility-scoped, not raw Cartesian), per-family locks, Compare, Return-to-original-DNA, and a real Apply-to-Draft path — all reusing the canonical renderer, mutation dispatcher, and component registry. This is P5-W3, already merged.
-- **Reversible Theme Overlay already exists and is the most thoroughly tested family in the system** — this is P5-W2, already merged.
-- **There is exactly one shared renderer** for Preview, Design Lab preview, non-destructive template preview, and the public storefront — verified with no violations found.
-- **6 of 16 Store-Appearance families are COMPLETE vertical slices today** (Header, Motion, Footer, Palette, Typography, Density, Radius, Content Width, Theme — that's actually 9; see the gap matrix for the exact per-family table). The remaining families are registered and rendered, but reachable only through Design Lab/whole-template Apply, not through a persistent, always-on Normal-Builder control.
+- **The R4 Builder is the live, authoritative merchant Storefront Builder** (`/admin-portal/storefront-builder/r4/`), default-enabled for every Store. A legacy "R3" surface remains wired in — see §3 below for the now-binding disposition of that surface.
+- **The 50-Template Gallery already exists and is fully merchant-facing**: real page, real nav entry, all 50 templates, real static preview screenshots, real Apply-to-Draft flow with content preservation, provenance tracking, and Demo-vs-merchant-data preview modes.
+- **The canonical Apply-to-Draft flow is a single, well-tested authority** (`preset_service.apply_preset()`), never copying catalog/business data.
+- **Design Lab already exists and is fully implemented** (P5-W3, already merged): transient candidate state, compatibility-scoped Random Mix, per-family locks, Compare, Return-to-original-DNA, and a real Apply-to-Draft path.
+- **Reversible Theme Overlay already exists** (P5-W2, already merged) and is the most thoroughly tested family in the system.
+- **There is exactly one shared renderer** for Preview, Design Lab preview, non-destructive template preview, and the public storefront.
+- **9 of 16 Store-Appearance families are COMPLETE vertical slices today**: Header, Motion, Footer, Palette, Typography, Density, Radius, Content Width, Theme.
 
-## 2. What is built but not yet merchant-visible
+## 2. What is built but not yet merchant-visible through the canonical editor
 
-- **Hero, Product View, Product Card (family-level), Badge**: full registry + renderer + Design-Lab wiring, but no persistent selector in the Normal Builder's Global Design panel. A merchant reaches these only via Design Lab or by re-applying a whole template.
-- **Mobile Bottom Navigation**: real registry and real renderer for both Preview and Public, but the canonical R4 `footer.update` mutation contract does not accept the `mobile_nav_variant` field — a merchant on the default R4 editor literally cannot change it directly; only the legacy editor (or Design Lab) can. This is the single highest-priority closable gap found in this discovery (see gap_matrix.md).
-- **Template provenance**: recorded on every Apply, never surfaced to the merchant in any UI.
+- **Mobile Bottom Navigation** has a real registry and a real renderer for both Preview and Public, but the canonical R4 editor cannot change it — see the corrected technical scope in §5 below (this is deeper than a missing allowlist entry).
+- **Template provenance** is recorded on every Apply but never surfaced to the merchant in any UI (low-priority, not a workstream by itself).
 
-## 3. What exists only as dead/placeholder registry
+## 3. Design-Lab-only by intentional product boundary — NOT a defect
 
-- **Mega Menu** as an independent, switchable family: the registry has exactly one component (`mega_menu.none.v1`). The real mega-menu experience is owned by specific Header variants, not by this family. This is a product-decision gap, not an engineering gap — see §4.
-- **The typed `layout` (composition) family**: registered with 9 variants, but zero render consumers were found anywhere in the codebase. A separate, fully working per-container layout system (2/3/4-column rows) already covers the practical merchant need — the typed `layout` family appears to be unused scaffolding.
+Per the binding Builder-vs-Lab decision (§7 below), **Hero, Product View, Product Card (family-level), and Badge are correctly Design-Lab-only for W5.** These four families have full registries, renderers, and Design-Lab wiring; the merchant already has access to them through the already-implemented Advanced Design Lab. This is not a missing capability and must not be listed as a defect in the gap matrix. A future UX study may promote any of them to the Normal Builder; that is out of scope for W5.
 
-## 4. Architectural findings requiring an explicit W5 decision
+## 4. Reserved/inert registry entries — binding disposition
 
-Two duplication findings from `authority_map.md`, both documented/intentional states rather than accidents, but both need a Product-Owner-level decision before W5 IA work proceeds:
+- **The typed Store Appearance `layout` (composition) family**: registered with 9 variants, but zero render consumers exist anywhere in the codebase. A separate, real, fully working per-Container layout system (2/3/4-column rows) already covers the actual merchant need for page composition. **Binding disposition**: the typed `layout` family is **reserved/inert** for W5 — it must not be advertised to merchants as a functioning independent control, and W5 must **not** build a second store-wide composition renderer merely to activate it (that would be exactly the kind of duplication this initiative exists to prevent). Existing manifests/Ready-Template recipes that reference `layout` selections must continue to validate and load without error — nothing about existing persisted data changes. The real, canonical mechanism for composition remains the per-Container layout system.
+- **The typed Store Appearance `mega_menu` family**: registry has exactly one component, `mega_menu.none.v1`. The real mega-menu presentation today is owned by specific **Header** variants, not by an independently switchable family. **Binding disposition**: `mega_menu` is **reserved/compatibility state** for W5 — not advertised as an independent merchant control, and W5 must not build a second navigation/menu authority just to populate this registry. If independent Mega Menu customization is authorized in a future phase, it must reuse the existing Header/navigation rendering architecture, declare Header capability compatibility, and avoid a second navigation authority — it is explicitly not a W5 deliverable.
 
-1. **R3/R4 dual mutation surface.** R4 is default and canonical; R3 remains a flagged, wired-in rollback valve with two capabilities (restore/history browser, industry-vertical preset installer) that have no R4 equivalent. Legacy write endpoints remain server-reachable without stale-write protection regardless of the flag. **Decision needed**: keep R3 permanently as a documented safety valve (acceptable, but the gap should be named), or use W5 to close the remaining capability gaps and retire R3's write surface.
-2. **Two "Template" registries sharing a name.** The 50 Ready Templates (this initiative) and a separate, older 10-item style-token registry (`appearance_registry.TEMPLATE_REGISTRY`, exposed as `template_slug`) both live in the R4 editor's Appearance panel and can silently override overlapping fields (font/density/radius/width) with no coupling or warning. **Decision needed**: rename one concept (e.g. "Style Pack" for the 10-item set) before W5 gives either concept more prominence in the IA.
+Neither disposition requires removing the registry entries (removal risks breaking manifest/Ready-Template-recipe compatibility) — both are "leave registered, document as reserved, do not build around" decisions.
 
 ---
 
-## 5. Simple Builder vs. Design Lab boundary (§15)
+## 5. Binding architectural decision — R3/R4 single-active-write-surface policy (corrected)
 
-Derived from the actual R4 UX already shipped, not invented from scratch. The existing editor already embodies most of this split:
+This is now a **W5 architectural prerequisite**, not an end-of-W5 cleanup item. **Binding policy, final wording: when R4 is active for a Store, no R3-editor-specific unprotected write endpoint may mutate that Store's Draft.** A unique capability that previously existed only on a legacy page must either (a) be read-only, or (b) be converged onto a canonical R4-safe write boundary. The policy is **not** solved by keeping any unsafe mutating exception, however narrow.
 
-**NORMAL BUILDER (what's already there, kept as the default surface):**
-- Ready Template picker (all 50, switch-with-content-preservation)
-- Global Design: Palette, Typography, Density, Radius, Content Width, Motion (all already COMPLETE, always-on controls)
-- Header, Footer (already COMPLETE, always-on controls)
-- Theme/Occasion (already COMPLETE)
-- Section/Page structure editing (Structure panel, Storefront Showcase facade)
-- Preview (device switcher), Undo/Redo, Publish
+- **R4 remains canonical and default.**
+- R3's full write surface may remain available **only** for Stores explicitly pinned to `r4_editor_enabled = False` — the rollback mechanism, unweakened.
 
-**ADVANCED DESIGN LAB (already exists, stays the "everything else" surface):**
-- Hero, Product View, Product Card, Badge, Mobile Bottom Nav (the PARTIAL families — until/unless a Product Owner decision promotes any of them to a Normal Builder control)
-- Random Mix, per-family locks, Compare, Return-to-original-DNA
-- Full component-library exploration
+### Legacy route inventory and classification (corrected)
 
-This matches the spec's §23 boundary almost exactly as already implemented; the only real IA question W5 needs to answer is **whether any of the five PARTIAL families should be promoted to a persistent Normal Builder control** (most likely candidate: Mobile Bottom Nav, since it's mobile-navigation-critical and currently has the R4-editor gap described in §2).
+A prior, code-verified audit already exists and was re-read for this repair: `docs/qa_evidence/storefront_appearance_convergence/phase4/legacy_disposition.md`. Its findings, re-confirmed against the current W4C checkpoint source, classify every legacy surface. **This round corrected two rows** that a prior pass had wrongly merged: History and Restore are not one capability, and Industry-Layout-Apply is mutating with the same risk profile as Restore, not a read-only-adjacent item.
 
-## 6. Proposed W5 information architecture (§16)
+| Legacy surface | Classification | Current-code disposition |
+|---|---|---|
+| `storefront_discard` (bare discard) | MUTATING — HAS R4 EQUIVALENT | Already **RETIRED**: zero live UI callers, R4's `storefront-builder/r4/discard/` is the proven replacement |
+| Settings save (all section types), Container/Cell/Row composition (add/settings/layout/move/remove), Section toggle/lock, Granular reset family (section/field/page/header/footer/storefront-to-baseline), Full Appearance/Header/Footer editor forms | MUTATING — HAS R4 EQUIVALENT | R4 has **full, re-verified functional parity** for every one of these; the legacy views/forms are functionally redundant. `editor.html` already stopped rendering their UI for any Store on the live R4 default — but the underlying URLs carry no server-side `r4_editor_enabled` gate. This is **Class A** below. |
+| Undo / Redo / Publish | MUTATING — HAS R4 EQUIVALENT (already converged) | Already share the exact same `r4_mutation_service._run_history_command`/`layout_service.publish` — no separate legacy implementation exists to gate |
+| Section collapse toggle | READ/UI-ONLY | Editor-session UI convenience, no persisted state — **CANONICAL KEEP** |
+| **History browser** (`storefront-builder-history` / `storefront_history`) | **READ ONLY — CANONICAL KEEP (corrected)** | Confirmed by direct source read: no `@require_POST`, only calls `layout_service.list_versions()` and renders a list — never mutates the Draft. Safe unconditionally under R4. |
+| **Restore Version** (`storefront-builder-restore` / `storefront_restore`) | **MUTATING — LEGACY-ONLY, REQUIRES CONVERGENCE (corrected)** | Confirmed by direct source read of `layout_service.restore_version()`: deletes the current Draft, creates a new one, reassigns `layout.draft_version` — a real Draft-identity replacement, with **no `base_revision`/stale-write check**. Cannot be an unconditional exception. **Class C below.** |
+| **Industry-vertical layout preset installer** (`storefront_apply_industry_layout`) | **MUTATING — LEGACY-ONLY, REQUIRES CONVERGENCE (corrected)** | Confirmed by direct source read of `layout_service.apply_industry_layout()`: identical Draft-replacement pattern to `restore_version()` (its own docstring says "exactly like restore_version"), same absence of a stale-write check. **Class C below.** |
+| Ready Template gallery / apply | MUTATING — dual, both canonical | `apply_preset_with_checkpoint` (legacy entry) and `appearance.template.apply` (R4 entry) converge on `preset_service.apply_preset()` — not a retirement candidate. Lives in `views.py` alongside Class A routes but **must not** be caught by a module-wide guard. **Class B below.** |
+| Section-scoped media CRUD, Global Hero/Banner admin | MUTATING — shared/legitimate | Already single shared authority (a separate module, `media_views.py`) — **CANONICAL KEEP**, unaffected by any guard scoped to `views.py` |
 
-The existing R4 Builder shell already owns this navigation shape; W5 should evolve it, not replace it:
+### Corrected W5A architecture — three route/capability classes
 
-```
-Storefront Builder (existing R4 shell, apps/storefront_builder/r4_views.py)
-  Structure (existing: sections/containers/Showcase facade)
-  Design
-    Ready Templates          — EXISTS (Gallery), needs: in-page lightbox, device preview on pre-apply preview
-    Colors & Typography      — EXISTS (Palette/Typography/Density/Radius/Width)
-    Header                   — EXISTS
-    Footer                   — EXISTS
-    Mobile Navigation        — GAP: needs promotion from legacy-only to R4 (§2 priority fix)
-    [Hero / Products / Cards — pending the promotion decision in §5]
-  Advanced Design Lab        — EXISTS, unchanged
-  Preview                    — EXISTS
-  Publish                    — EXISTS
-```
+**Class A — R3-editor-only redundant mutations** (settings save, container/row composition, toggle/lock, granular resets, appearance/header/footer forms). For `r4_editor_enabled=True`: fail closed via **one shared eligibility guard**. For `r4_editor_enabled=False`: remain available unchanged as the rollback editor.
 
-No second application shell is proposed or needed — everything above already lives inside the one existing R4 editor template and its existing panel structure.
+**Class B — shared canonical non-R3 capabilities.** A route is not Class A merely because its view function lives in `apps/storefront_builder/views.py`. Ready Template Gallery/Apply and `storefront_preview` are concrete, confirmed examples — real, shared, canonical, and must never be disabled by a broad module-level assumption. The Class A guard must be an **explicit route allowlist/denylist**, never "everything in this module."
+
+**Class C — legacy-only mutating capabilities requiring convergence** (Restore Version, Industry Layout Apply). Both are real, still-required, no-R4-equivalent capabilities — but neither may remain a permanently unprotected mutating exception once R4 is active, since that directly contradicts the single-active-write-surface policy. **Disposition**: for `r4_editor_enabled=True`, each must be reachable only through a new, thin **canonical R4-safe mutation/replacement boundary**, reusing the exact pattern R4's own existing "replace Draft identity" actions already use — `storefront_r4_reset_storefront` and `storefront_r4_switch_template` both already validate `layout.r4_editor_enabled`, parse a JSON body, and reject any `base_revision` that isn't a valid non-negative integer, *before* calling into the underlying replacement service. Concretely: new R4 endpoint/action → `base_revision`/active-Draft validation → tenant/store validation → **calls the existing, unmodified `layout_service.restore_version()` / `layout_service.apply_industry_layout()`** → new revision returned, client reloads (same contract shape as Reset Storefront/Switch Template). **No new restore or industry-layout business logic — the existing service functions are reused verbatim.** For `r4_editor_enabled=False`, the original legacy POST endpoints remain the rollback path, unchanged.
+
+**No implementation happens in this round.** This corrected three-class model is recorded as the shape of the future W5A workstream (§8).
 
 ---
 
-## 7. W5 architecture self-review (§22)
+## 6. Binding terminology decision — "Ready Template" vs. "Style Pack"
 
-Checked against every item on RastiSi's forbidden-duplication list before finalizing this plan:
+The two merchant-facing concepts that were both being called "Template" (see `authority_map.md` Finding #2) are no longer to share that name.
 
-- Second renderer? **No** — the plan explicitly reuses the single verified renderer chain.
-- Second Draft? **No** — every proposed workstream writes through the existing `StorefrontLayoutVersion`/`apply_mutation` boundary.
-- Second Store Appearance state? **No** — proposed family promotions (e.g. Bottom Nav) reuse the existing `storefront_appearance` typed manifest and `r4_mutation_service` dispatcher; the fix is adding an allowed patch key and a UI selector, not new state.
-- Second Ready Template registry? **No** — Gallery/preview improvements reuse `layout_preset_registry`/`a8_ready_templates.py` verbatim.
-- Second mutation path? **No** — no new mutation types beyond widening `footer.update`'s allowed-keys set (or an equally narrow, single-purpose addition) are proposed.
-- Separate mobile builder? **No** — the plan explicitly keeps one responsive shell.
-- Lab-only production model? **No** — every family promotion moves a Design-Lab-reachable capability into the Normal Builder using the *same* underlying mutation; nothing new is invented for Lab-only use.
-- Demo-data copying? **No** — confirmed absent today (see current_state_inventory.md §4); no workstream below touches the Apply pipeline's catalog-preservation guarantee.
-- Redundant UI implementation / functionality that already exists? **This is the primary risk this discovery was built to catch.** The workstreams below are deliberately scoped to close *named, verified* gaps (Bottom Nav's R4 mutation gap, Gallery device-preview, Mega Menu product decision, `layout` family disposition) rather than re-implementing anything already complete (Header, Footer, Palette, Typography, Density, Radius, Content Width, Motion, Theme, Design Lab, the 50-template browser, or the Apply flow).
+| Concept | Canonical English term | Canonical Persian term | Underlying code (unchanged) |
+|---|---|---|---|
+| The 50 layout/design recipes (this initiative) | **Ready Template** | **قالب آماده** | `layout_preset_registry.py`, `a8_ready_templates.py` — no rename |
+| The 10-item style-token bundle (font/radius/density/motion/etc.) | **Style Pack** | **بستهٔ سبک** | `appearance_registry.TEMPLATE_REGISTRY`, `template_slug` — no rename |
 
-No corrections to the plan were needed as a result of this review.
+**Binding constraints**:
+- Do **not** rename the persisted `template_slug` field or the `TEMPLATE_REGISTRY`/`TemplateDefinition` internal names in this phase merely for terminology — that would require a migration-adjacent internal rename for zero merchant-facing benefit and violates the "zero migrations" default.
+- The rename applies to **merchant-facing labels, documentation, and new/updated tests only** — e.g. the R4 editor's `templates` choice list (fed from `appearance_registry.list_templates()`) should be labeled "بستهٔ سبک" / "Style Pack" in the UI, while the Ready Template Gallery and its 50 entries keep the "قالب آماده" / "Ready Template" label they already use.
+- Internal compatibility naming (the field is still called `template_slug` in code, the registry is still `appearance_registry.TEMPLATE_REGISTRY`) must be documented clearly wherever this distinction matters (this document, `authority_map.md`, and future code comments introduced by any workstream touching this area) so a future engineer isn't confused by the code/label mismatch.
 
 ---
 
-## 8. Proposed W5 workstream decomposition (§17)
+## 7. Binding decision — Normal Builder vs. Design Lab boundary
 
-Named for traceability; not pre-approved, and deliberately does **not** include a workstream for anything already complete.
+**Promote Mobile Bottom Navigation to the Normal Builder.** It is a high-value, mobile-storefront-critical control and has a real, closable R4 gap (§8, W5B).
 
-### W5A — Bottom Navigation R4 Parity (highest-priority closable gap)
-- **Problem**: merchants on the canonical R4 editor cannot change Mobile Bottom Navigation directly; the R4 mutation contract itself excludes the field.
-- **PO-visible outcome**: a real Bottom-Nav selector appears in the R4 editor's footer group; changing it works exactly like Header/Footer today.
-- **Existing code reused**: `_apply_footer_update`, `global_region_registry`'s 7 bottom_nav variants, `global_renderer_template`, the existing footer-group UI pattern.
-- **Exact missing code**: add `mobile_nav_variant` to `_FOOTER_UPDATE_ALLOWED_PATCH_KEYS` in `r4_mutation_service.py`; add a `#r4GlobalMobileNav` selector to `r4/editor.html`'s footer group, mirroring the existing `#r4GlobalFooterVariant` pattern.
-- **Architectural authorities used**: existing `footer.update` mutation, existing stale-write/tenant guards — no new mutation type.
-- **Explicit non-goals**: no change to the legacy editor's existing (working) selector; no new registry entries.
-- **Dependencies**: none — self-contained.
-- **TDD strategy**: extend the existing `footer.update` mutation test suite with a Bottom-Nav-specific case; add a Playwright smoke check that the R4 editor's new selector round-trips through Preview → Publish → Public identically to the legacy editor's existing behavior.
-- **Browser QA strategy**: reuse the W4C harness pattern — verify no regression in the 704-cell certification baseline; add targeted Bottom-Nav-selector interaction coverage.
-- **Security/tenant risks**: none beyond the existing footer-update guards (already tenant/stale-write protected).
-- **Duplication risk**: none — one field addition to one existing allowed-keys set.
-- **Definition of done**: merchant can change Bottom Nav from the R4 editor; Undo/Redo, Preview, and Public all reflect it; zero migrations.
+**Do not promote Hero, Product View, Product Card, or Badge during W5.** They remain accessible through the already-implemented Advanced Design Lab. This is a deliberate product boundary, not a missing capability — see §3 above and the corrected gap matrix. A future UX study may revisit this; it is out of scope for W5.
 
-### W5B — Ready Template Gallery Polish
-- **Problem**: pre-apply template preview has no in-page lightbox and no device (Desktop/Tablet/Mobile) toggle.
+This decision keeps the Normal Builder simple (per the R4 architecture's own §23 mandate: a merchant should be able to swap Header 08→14 "without seeing or understanding the entire combinatorial engine") while ensuring the one family with a genuine mobile-navigation stake gets a real fix.
+
+---
+
+## 8. Revised W5 workstream decomposition
+
+Reordered so architectural convergence happens **before** additional merchant UI expansion, per the binding instruction. Workstreams for already-complete functionality are not reintroduced.
+
+### W5A — Canonical Editor Safety / Architecture Closure (prerequisite — goes first, corrected)
+- **Problem**: two structurally different mutation-safety guarantees (R4's stale-write-protected dispatcher vs. R3's unprotected direct-write views) currently coexist against the same Draft for any Store, and the legacy write endpoints remain server-reachable regardless of the per-Store editor flag — including two mutating capabilities (Restore Version, Industry Layout Apply) that a prior planning pass incorrectly treated as safe unconditional exceptions.
+- **PO-visible outcome**: for a Store on the R4 default, no legacy endpoint can mutate its Draft unprotected — Class A redundant routes fail closed, Class C capabilities (Restore, Industry Layout Apply) work through a new R4-safe entry point with the same stale-write/tenant guarantees as every other R4 mutation, and Class B shared canonical routes (Ready Template Gallery/Apply, `storefront_preview`) are explicitly unaffected. A Store explicitly pinned to legacy keeps its full rollback capability, including Restore/Industry-Layout-Apply, unchanged. Merchant-facing labels distinguish "Ready Template" from "Style Pack." The `layout`/`mega_menu` families are documented as reserved, not silently left ambiguous.
+- **Existing code reused**: 100% of the underlying services (container_service, row_service, section_data_service, appearance_authority_service, layout_service — including `restore_version()`/`apply_industry_layout()` **unmodified**, edit_history_service, preset_service) — no service is rewritten. The new Class C entry points reuse the exact `r4_editor_enabled` + JSON body + validated `base_revision` pattern already implemented in `storefront_r4_reset_storefront`/`storefront_r4_switch_template`.
+- **Exact missing code**:
+  - Class A: one shared server-side eligibility guard (single decorator/check) restricting an **explicit list** of Class A routes to `r4_editor_enabled=False` Stores.
+  - Class B: no code change — an explicit exclusion list (or the guard's own allowlist design) ensures Ready Template Gallery/Apply and `storefront_preview` are never touched.
+  - Class C: two new, thin R4 endpoints/actions (one for Restore, one for Industry Layout Apply) that validate `base_revision`/tenant scope exactly like `storefront_r4_reset_storefront` does, then call the existing `layout_service.restore_version()`/`apply_industry_layout()` verbatim.
+  - Label-only changes for the Style Pack rename; a documentation/comment update marking `layout`/`mega_menu` as reserved in their registry definitions.
+- **Architectural authorities used**: existing `StorefrontLayout.r4_editor_enabled` flag; existing `base_revision`/`edit_revision` stale-write mechanism; no new flag, no new model field, no new service.
+- **Explicit non-goals**: no removal of any legacy view function; no removal of rollback capability for pinned-back Stores (Restore/Industry-Layout-Apply included); no new restore or industry-layout business logic (the existing service functions are reused verbatim, never duplicated); no registry-entry deletion for `layout`/`mega_menu`; no rename of `template_slug`; no module-wide (`views.py`-level) guard.
+- **Dependencies**: none technical.
+- **TDD strategy** (corrected, ten required cases):
+  - A. For `r4_editor_enabled=True`: Class A redundant POST mutation routes fail closed.
+  - B. For `r4_editor_enabled=False`: rollback Class A mutations remain functional, unchanged.
+  - C. Class B shared canonical surfaces (Ready Template Gallery/Apply, `storefront_preview`) are **not** accidentally blocked merely because their view functions live in `views.py`.
+  - D. History browser remains readable under R4 (never blocked — it's read-only).
+  - E. Restore under R4 uses the new canonical stale-aware replacement entry point successfully.
+  - F. A stale Restore attempt (wrong `base_revision`) cannot replace a newer Draft — rejected with a 409-shaped response, same as other R4 replace-identity actions.
+  - G. Industry-Layout Apply under R4 uses the new canonical stale-aware replacement entry point successfully.
+  - H. A stale Industry-Layout-Apply attempt cannot replace a newer Draft.
+  - I. Cross-Store Restore and Industry-Layout-Apply attempts fail closed (tenant isolation), for both the legacy and the new R4 entry points.
+  - J. No second Restore or Industry-Layout implementation is created — the new R4 endpoints assert they call the existing `layout_service` functions, not a reimplementation.
+- **Browser QA strategy**: extend existing legacy-editor Playwright/QA coverage with the pinned-back-Store case (Class A) and a new R4-editor Restore/Industry-Layout-Apply smoke path (Class C); no new harness.
+- **Security/tenant risks**: this workstream *reduces* risk (closes two genuinely unprotected mutating write paths, not just the previously-identified Class A ones) rather than introducing any.
+- **Duplication risk**: none — one shared guard for Class A (never per-view logic), Class B is explicitly carved out by name, and Class C reuses existing services and the existing R4 replace-identity request pattern verbatim.
+- **Definition of done**: single-active-write-surface policy holds with **no unprotected mutating exception of any kind**; History browser stays read-only and always reachable; Restore and Industry-Layout-Apply are R4-safe when R4 is active and unchanged as rollback-only when it isn't; Ready Template Gallery/Apply and `storefront_preview` are provably unaffected; Style Pack terminology recorded in UI copy; `layout`/`mega_menu` documented as reserved; zero migrations.
+
+### W5B — Mobile Bottom Navigation R4 Parity
+- **Problem**: corrected technical scope (see `gap_matrix.md` and `current_state_inventory.md` for full detail) — merely allow-listing `mobile_nav_variant` is insufficient; the value is never applied to the mutation candidate, and the R4 Global Design read projection has no `mobile_nav_variants` choice list.
+- **PO-visible outcome**: merchant can change Mobile Bottom Navigation from the canonical R4 editor, exactly like Header/Footer today.
+- **Existing code reused**: `appearance_authority_service.apply_footer_variant()` (already accepts `mobile_nav_variant` and already owns syncing both `footer` and `bottom_nav` typed-manifest families in one call); `global_region_registry.GLOBAL_MOBILE_NAV_REGION`/`list_global_variants()` (already exists, just not called from `_build_global_design_context()`); the existing generic `data-r4-global-field`/`data-r4-global-mutation="footer.update"` front-end mechanism (already used for `footer_variant` in the exact same panel).
+- **Exact missing code** (six concrete points, corrected from the initial under-scoped proposal):
+  - A. Add `mobile_nav_variant` to `_FOOTER_UPDATE_ALLOWED_PATCH_KEYS` in `r4_mutation_service.py`.
+  - B. Inside `_apply_footer_update()`, explicitly apply the posted value — `if "mobile_nav_variant" in patch: candidate["mobile_nav_variant"] = patch["mobile_nav_variant"]` — **before** `validate_footer_config()` is called. (Confirmed by direct source read: today `candidate = dict(draft.effective_footer_config())` seeds the existing value, but no branch in the function ever overwrites it from `patch`, so a client-submitted change would currently be silently dropped even if the key were allow-listed.)
+  - C. Add a `mobile_nav_variants` entry to `_build_global_design_context()` in `r4_views.py`, built the same way `header_variants`/`footer_variants` already are: `list_global_variants(global_region_registry.GLOBAL_MOBILE_NAV_REGION)` (this constant already exists in `global_region_registry.py`).
+  - D. Add a `<select data-r4-global-field="mobile_nav_variant">` inside the existing `<section data-r4-global-mutation="footer.update">` block in `r4/editor.html`'s footer group — confirmed the existing generic JS change handler (which reads `data-r4-global-mutation`/`data-r4-global-field` and posts to the already-wired `footer.update` mutation) requires **no new JS sender**; this is the same mechanism `footer_variant`'s own selector already uses in the same section.
+  - E. Extend the existing `footer.update` mutation test suite to assert `mobile_nav_variant` round-trips into both `StorefrontLayoutVersion.footer_config` and the typed `bottom_nav` manifest selection via `appearance_authority_service.apply_footer_variant()` (already the shared owner of both).
+  - F. Prove, via existing test patterns (no new test infrastructure): stale-write protection (`base_revision` mismatch → 409), tenant isolation (cross-Store rejection), Undo restoring the prior Bottom Nav variant, Redo restoring the new one, Preview reflecting the change, Publish carrying it to Public, and correct mobile-viewport rendering.
+- **Non-goals**: no new Bottom-Nav-specific JS mutation sender; no new mutation type; no change to the legacy footer editor (which already has this control and keeps working).
+- **Dependencies**: none — self-contained, and safe to build on top of W5A (though not blocked by it at the code level).
+- **Duplication risk**: none — reuses every existing authority exactly as Header/Footer already do.
+- **Definition of done**: merchant changes Bottom Nav from the R4 editor; F's full list of guarantees holds; zero migrations.
+
+### W5C — Ready Template Preview UX
+- **Problem**: pre-apply Gallery preview has no in-page lightbox and no Desktop/Tablet/Mobile toggle.
 - **PO-visible outcome**: merchant can enlarge a template preview in-page and toggle device sizes before applying.
-- **Existing code reused**: `ready_template_live_preview.html`, `storefront_template_live_preview` view, the existing device-switcher pattern already built for the in-editor Draft preview.
-- **Exact missing code**: a modal/lightbox wrapper for the existing preview link; port the existing device-switcher markup/JS onto the Gallery preview page (same iframe-scaling technique, no new renderer).
-- **Non-goals**: no new preview renderer, no new preview route.
-- **Dependencies**: none.
-- **Duplication risk**: none, provided the device switcher is copied/reused, not reinvented.
+- **Existing code reused**: `ready_template_live_preview.html`, `storefront_template_live_preview` view, `build_candidate_render_items` (already the shared, non-duplicated renderer for this path), and — critically — the **existing** device-preview presentation behavior already built for the in-editor Draft preview, extracted/reused rather than reimplemented as a second JS device-state mechanism.
+- **Exact missing code**: a modal/lightbox wrapper around the existing preview link; port/extract the existing device-switcher markup and JS logic onto the Gallery preview page.
+- **Non-goals**: no second preview renderer, no second preview route, no duplicated device-state authority — the Architect's explicit constraint.
+- **Duplication risk**: none, provided the device-switcher logic is extracted and reused, not rewritten twice.
 - **Definition of done**: Gallery preview supports in-page enlarge + 3-viewport toggle; zero migrations.
 
-### W5C — Mega Menu & `layout` Family Disposition (product decision, minimal code)
-- **Problem**: two registered "families" (`mega_menu`, `layout`) are currently non-functional placeholders that could mislead future development or merchant expectations.
-- **PO-visible outcome**: a documented, explicit decision — either (a) formally mark both as non-production/reserved-for-future in the registry with a code comment and remove any merchant-facing implication that they're switchable today, or (b) scope real variants/renderer wiring for one or both as a future workstream.
-- **Existing code reused**: registry definitions as-is.
-- **Non-goals**: do not silently leave them as-is without a decision — that risks a future engineer building against `layout` assuming it renders.
-- **Dependencies**: Product Owner decision first; code change (if any) is small.
-- **Definition of done**: registry entries are either wired to a real renderer or explicitly documented as reserved/inert; zero migrations either way.
+### W5D — Merchant Design IA Closure
+- **Problem**: after W5A-C, the editor's navigation/labels/help text need a final pass so the terminology decision (§6) and boundary decision (§7) are consistently reflected.
+- **PO-visible outcome**: consistent "Ready Template" vs. "Style Pack" labeling everywhere; Bottom Nav sits naturally alongside Header/Footer in the Global Design panel; Advanced Design Lab remains clearly the home for Hero/Product View/Card/Badge unless a future decision changes that.
+- **Existing code reused**: the existing R4 editor shell and its existing panel structure — no second shell.
+- **Non-goals**: no promotion of Hero/Product View/Card/Badge (§7); no new application shell.
+- **Definition of done**: labels/nav/help text consistent; no functional change beyond copy and navigation grouping.
 
-### W5D — Family Promotion Decision for Hero/Product View/Card/Badge
-- **Problem**: four PARTIAL families are fully built but reachable only via Design Lab.
-- **PO-visible outcome**: Product Owner decides which (if any) graduate to a persistent Normal Builder control, following the §5 boundary rule (don't put 13 heroes/19 cards on one giant screen).
-- **Existing code reused**: 100% — registries, renderers, and the generic `appearance.component.update` mutation already work; only a UI selector (mirroring Header/Footer's existing pattern) would be added per promoted family.
-- **Non-goals**: no new registry entries, no new mutation types.
-- **Dependencies**: Product Owner decision.
-- **Definition of done**: for each promoted family, a selector exists in the Normal Builder; non-promoted families remain Design-Lab-only by design, not by gap.
-
-### W5E — R3/R4 and "Template" Naming Disposition
-- **Problem**: the two architectural findings in §4 need an explicit decision before further IA work risks compounding them.
-- **PO-visible outcome**: a documented decision recorded (e.g. in this plan's changelog or a follow-up ADR) on (a) R3's long-term status and (b) a rename for one "Template" concept.
-- **Dependencies**: none technical; Product Owner input required.
-- **Definition of done**: decision recorded; if a rename is chosen, it is planned as its own small, isolated workstream (UI label + docs only, no registry restructuring) to avoid scope creep into this discovery round.
-
-### W5F — End-to-End Certification Refresh
-- **Problem**: any of W5A-D touch merchant-facing surfaces the W4C harness already certifies.
-- **PO-visible outcome**: confidence that W5 changes didn't regress the 704-cell certified baseline.
-- **Existing code reused**: the entire W4C harness (`tools/storefront_builder_r4_qa/run.mjs`, `qa_storefront_builder_r4.py`).
-- **Non-goals**: no new harness, no new matrix shape — extend the existing one only if a new merchant-facing control (e.g. Bottom Nav selector) needs its own interaction assertion.
-- **Definition of done**: harness re-run clean against the W5 head; new interaction coverage added only for genuinely new controls (W5A/B).
+### W5E — Merchant Journey Browser Certification
+- **Problem**: the existing W4C harness certifies storefront **rendering**, not Builder **UX**. W5's changes are Builder-UX changes and need their own certification exercising real admin journeys.
+- **PO-visible outcome**: confidence that W5A-D work end-to-end for a real merchant, not just at the unit-test level.
+- **Existing code reused**: `tools/storefront_builder_r4_qa/run.mjs` and `qa_storefront_builder_r4.py` — extended, not duplicated.
+- **Non-goals**: no second certification harness.
+- **Scope**: see the full merchant-journey certification plan in `merchant_journeys.md` §"W5 Merchant Journey Certification Plan" (journeys A-P, covering Builder access, Gallery browsing, pre-apply device preview, Template Apply, independent Bottom Nav mutation with sibling-isolation proof, Undo/Redo, Design-Lab-without-history-spam, Design-Lab Apply, device preview, Publish, Public reflection, stale-revision conflict behavior, and cross-tenant fail-closed behavior).
+- **Whether to rerun the full 704-cell matrix**: not hard-coded into this plan. That decision should be made at W5E's own implementation time based on which actual rendering surfaces W5A-D touched — if no Ready-Template rendering path changed (likely, since W5A-D are Builder-UX/mutation-contract changes, not renderer changes), a full 704-cell rerun is probably unnecessary and a targeted regression subset suffices; this must be re-assessed against the actual diff, not assumed now.
+- **Definition of done**: journeys A-P pass; regression scope matches what was actually touched.
 
 ---
 
-## 9. Recommended first W5 implementation slice (§18)
+## 8a. Self-review — the contradiction check (Final Architecture Correction round)
 
-**W5A — Bottom Navigation R4 Parity.**
+Before finalizing this correction, the plan was re-checked against the specific contradiction the Architect flagged:
 
-Why it goes first: it is the single gap in this entire discovery that is (a) small — one allowed-key addition plus one UI selector mirroring an existing pattern, (b) vertical — touches mutation contract, UI, and render output for a real user-visible capability, (c) testable — extends existing, well-understood test suites, (d) merchant-visible — closes a real capability gap for mobile-first storefronts, and (e) architecture-safe — reuses every existing authority with zero new concepts, zero new mutation types, and zero migrations. Every other proposed workstream either requires a Product Owner decision first (W5C, W5D, W5E) or is lower-priority polish (W5B) or is a downstream verification step (W5F).
+- **"Only one active mutation surface" while allowing an unprotected legacy Restore/Industry-Layout mutator under R4?** No longer present. §5's corrected policy wording is unconditional: no R3-editor-specific unprotected write endpoint may mutate a Store's Draft when R4 is active. Restore and Industry Layout Apply are Class C — they converge onto a canonical R4-safe boundary rather than remaining exceptions. Only the truly read-only History browser is exempted, because it never mutates anything.
+- **Can the Class A guard accidentally block legitimate shared merchant surfaces purely because they live in `views.py`?** No — §5's Class B is an explicit, named carve-out (Ready Template Gallery/Apply, `storefront_preview`), and the W5A TDD plan's item C is a dedicated test asserting exactly this never regresses. The guard is specified as an explicit route allowlist/denylist, never a module-wide check.
+
+Both checks pass. No further correction identified in this pass.
+
+---
+
+## 9. Recommended first implementation workstream
+
+**W5A — Canonical Editor Safety / Architecture Closure.**
+
+This supersedes the initial discovery's recommendation of the Bottom Nav fix as the first slice. The Architect's binding instruction is explicit: the R3/R4 write-surface risk **must not be deferred to the end of W5** and **must close before ordinary W5 UI expansion**. W5A is architecture-safe (reuses every existing service, adds one shared guard rather than per-view checks), reversible (a flag-driven guard, not a deletion), and testable in isolation from W5B-E. W5B (Bottom Nav) remains the next logical step immediately after, since it is fully scoped and has no dependency on W5A at the code level, but W5A is the one that must not wait.
 
 **This is not being implemented in this round.** No implementation branch has been created.
 
 ---
 
-## 10. Persian summary for the Product Owner (§19)
+## 10. Persian summary for the Product Owner
 
 ### توضیح برای صاحب فروشگاه
 
 **۱. امروز صاحب فروشگاه واقعاً چه امکانات طراحی‌ای دارد؟**
 
-صاحب فروشگاه امروز می‌تواند: هر ۵۰ قالب آماده را مرور کند و با اطلاعات نمایشی یا اطلاعات واقعی فروشگاه خودش پیش‌نمایش بگیرد؛ یک قالب را روی طرح پیش‌نویس (Draft) خودش اعمال کند بدون این‌که محصولات، دسته‌بندی‌ها یا قیمت‌هایش تغییر کند؛ هدر، فوتر، رنگ‌بندی، فونت، تراکم چیدمان، گردی گوشه‌ها، عرض محتوا، حرکت (Motion) و تم‌های مناسبتی (نوروز، رمضان، محرم و...) را مستقل از هم تغییر دهد؛ از «آزمایشگاه طراحی» (Design Lab) برای امتحان کردن ترکیب‌های تصادفی هدر/هیرو/کارت/فوتر استفاده کند بدون این‌که هر کلیک آزمایشی در تاریخچهٔ فروشگاهش ثبت شود؛ تغییرات را Undo/Redo کند؛ پیش‌نمایش دسکتاپ/موبایل بگیرد؛ و در نهایت با یک کلیک منتشر (Publish) کند.
+صاحب فروشگاه امروز می‌تواند: هر ۵۰ قالب آماده را مرور کند؛ یک قالب را روی طرح پیش‌نویس خودش اعمال کند بدون تغییر محصولات و قیمت‌ها؛ هدر، فوتر، رنگ‌بندی، فونت، تراکم، گردی گوشه‌ها، عرض محتوا، حرکت، و تم‌های مناسبتی را مستقل تغییر دهد؛ از آزمایشگاه طراحی برای امتحان هیرو/کارت محصول/نشان تبلیغاتی/نویگیشن پایین موبایل استفاده کند بدون آلوده‌شدن تاریخچهٔ فروشگاه؛ Undo/Redo کند؛ پیش‌نمایش بگیرد؛ و منتشر کند.
 
 **۲. چه چیزهایی پشت صحنه ساخته شده ولی هنوز در اختیار صاحب فروشگاه نیست؟**
 
-چهار خانوادهٔ طراحی — هیرو (بخش اصلی بالای صفحه)، نحوهٔ نمایش محصولات، طرح کارت محصول، و نشان‌های تبلیغاتی (Badge) — به‌طور کامل ساخته و تست شده‌اند، اما صاحب فروشگاه فقط از طریق «آزمایشگاه طراحی» یا با اعمال یک قالب کامل جدید به آن‌ها دسترسی دارد، نه با یک دکمهٔ ثابت و همیشه در دسترس مثل هدر و فوتر.
+نویگیشن پایین صفحه در موبایل به‌طور کامل ساخته شده اما در ویرایشگر اصلی و پیش‌فرض قابل تغییر نیست. همچنین یک ریسک معماری کشف شد: دو ویرایشگر (جدید و قدیمی) هنوز هر دو می‌توانند هم‌زمان روی یک فروشگاه تغییر ایجاد کنند، که باید پیش از هر توسعهٔ دیگری بسته شود.
 
 **۳. W5 قرار است دقیقاً چه چیزی به محصول اضافه کند؟**
 
-مهم‌ترین بخش W5 یک اصلاح مشخص است: «نویگیشن پایین صفحه در موبایل» (Bottom Navigation) در ویرایشگر اصلی و پیش‌فرض فروشگاه اصلاً قابل تغییر نیست — فقط از ویرایشگر قدیمی یا آزمایشگاه طراحی قابل دسترسی است. W5 این را در ویرایشگر اصلی هم در دسترس می‌کند. علاوه بر آن، W5 پیش‌نمایش قالب‌ها را کمی بهتر می‌کند (بزرگ‌نمایی در همان صفحه، پیش‌نمایش موبایل/دسکتاپ پیش از انتخاب قالب)، و دو تصمیم محصولی را از شما می‌خواهد: آیا «منوی مگا» (Mega Menu) باید یک قابلیت واقعی و مستقل شود یا همان‌طور که هست (وابسته به انتخاب هدر) بماند؛ و آیا نام دو مفهوم مختلف که هر دو «Template» نامیده می‌شوند باید برای جلوگیری از سردرگمی تغییر کند.
+اولویت اول W5 یک اصلاح معماری است، نه یک ویژگی جدید: اطمینان از این‌که برای هر فروشگاه فقط یک ویرایشگر می‌تواند تغییر واقعی ایجاد کند (ویرایشگر قدیمی فقط برای فروشگاه‌هایی که صراحتاً به آن بازگردانده شده‌اند باقی می‌ماند). پس از آن: نویگیشن پایین موبایل به ویرایشگر اصلی اضافه می‌شود؛ پیش‌نمایش قالب‌ها کمی بهتر می‌شود؛ و دو تصمیم اسمی نهایی می‌شود — «قالب آماده» برای ۵۰ قالب، و «بستهٔ سبک» برای مجموعهٔ قدیمی‌تر ۱۰ سبک ظاهری، تا این دو با هم اشتباه گرفته نشوند.
+
+هیرو، طرح نمایش محصول، طرح کارت محصول، و نشان تبلیغاتی **در W5 به ویرایشگر اصلی اضافه نمی‌شوند** — این یک نقص نیست، بلکه تصمیمی آگاهانه است: صاحب فروشگاه از قبل از طریق «آزمایشگاه طراحی پیشرفته» به همهٔ آن‌ها دسترسی دارد، و نگه‌داشتن ویرایشگر اصلی ساده، یک اصل طراحی محصول است.
 
 **۴. وقتی W5 تمام شود، صاحب فروشگاه چه کارهایی می‌تواند انجام دهد؟**
 
-همهٔ امکانات فعلی، به‌علاوه: تغییر مستقیم نویگیشن پایین موبایل از ویرایشگر اصلی؛ پیش‌نمایش بهتر قالب‌ها پیش از انتخاب؛ و (بسته به تصمیم شما) احتمالاً امکان انتخاب مستقیم هیرو/کارت محصول/نشان تبلیغاتی بدون نیاز به ورود به آزمایشگاه طراحی.
+همهٔ امکانات فعلی، به‌علاوه تغییر مستقیم نویگیشن پایین موبایل از ویرایشگر اصلی، پیش‌نمایش بهتر قالب‌ها، و اطمینان معماری از این‌که هیچ تغییری از یک ویرایشگر «قدیمی و فراموش‌شده» به‌طور پنهانی روی فروشگاهش اثر نمی‌گذارد.
 
 **۵. بعد از W5 چه بخش‌هایی از کل RastiSi هنوز باقی می‌ماند؟**
 
-W5 فقط تجربهٔ طراحی فروشگاه را کامل می‌کند. بخش‌های دیگر RastiSi — مثل سیستم سفارش، پرداخت، حمل‌ونقل، مدیریت موجودی، گزارش‌ها، و بازاریابی — بخشی از این فاز (Phase 5) نیستند و در فازهای بعدی بررسی خواهند شد. همچنین، تصمیم دربارهٔ آیندهٔ ویرایشگر قدیمی (R3) و تغییر نام احتمالی یکی از دو مفهوم «Template» باید توسط شما گرفته شود؛ این‌ها هنوز باز هستند.
+W5 فقط تجربهٔ طراحی فروشگاه را تکمیل می‌کند. سفارش، پرداخت، حمل‌ونقل، موجودی، گزارش‌ها و بازاریابی بخشی از این فاز نیستند. همچنین ارتقای احتمالی هیرو/کارت محصول/نشان تبلیغاتی به ویرایشگر اصلی، تصمیمی است که آگاهانه به آینده موکول شده و نیازمند یک مطالعهٔ تجربهٔ کاربری جداگانه است.
 
 ---
 
-## 11. Change policy compliance
+## 11. Change policy compliance (corrected)
 
-No production code, migrations, models, views, URLs, templates, JavaScript, CSS, services, registries, Ready Template definitions, renderer, mutation service, or Draft/Published behavior was modified during this discovery round. The only repository changes are this document and the four evidence documents listed at the top, plus a git-history-safe fast-forward of the local branch checkout to the already-existing, already-merged origin checkpoint (see §0) — no new commits were created.
+**This repair round**: no production code, migrations, models, views, URLs, templates, JavaScript, CSS, services, registries, Ready Template definitions, renderer, mutation service, or Draft/Published behavior was modified. Only the five discovery/planning documents were revised. Per the explicit instruction for this round, **nothing was committed and nothing was pushed** — the working tree carries these edits as uncommitted changes pending Product Owner/Architect review.
+
+**Corrected historical record for the prior round**: one documentation-only commit (`2c00b015`, 5 files, 0 production files) was created and pushed after the initial discovery's "no commits" report, at the direction of repository tooling that requires untracked files to be committed before a turn ends (see §0). This is now the accurate, permanent record.

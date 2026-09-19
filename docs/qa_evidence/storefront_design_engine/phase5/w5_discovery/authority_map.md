@@ -4,6 +4,10 @@ Status: DISCOVERY ONLY — no production code changed.
 Source commit: `81abb435c6421197117f8f570993b64ca485d4af` (official W4C merge checkpoint, `feature/phase5-design-expansion`).
 Method: direct source reading/grep against the checkpoint (no reliance on the stale Graphify graph — see note in the main discovery plan).
 
+**Revision note (Architect repair round)**: both duplicate findings below were reviewed by the Independent Architect and are now **binding decisions**, not open questions — see the "BINDING POLICY"/"BINDING DECISION" headers in each section, and the new §3 legacy-route classification table built from the existing Phase-4 `legacy_disposition.md` ledger.
+
+**Revision note (Final Architecture Correction round)**: the prior repair round incorrectly grouped "restore/history browser" as one CANONICAL KEEP mutating exception, and did not separately flag "industry-vertical layout preset apply" as mutating. Direct re-reading of `layout_service.restore_version()` and `layout_service.apply_industry_layout()` confirms **both are genuinely mutating** (each deletes the current Draft and creates a new one, with no `base_revision`/stale-write check) — neither can be left as an unconditional unprotected exception under the single-active-write-surface policy. §2a below is corrected accordingly, and a new §2c records the three-class route model (A/B/C) this correction requires.
+
 This document answers RastiSi's central architectural risk for W5: **is there exactly one canonical owner per concept, or has duplication crept in?**
 
 ---
@@ -33,9 +37,9 @@ This document answers RastiSi's central architectural risk for W5: **is there ex
 
 ## 2. Duplicate / parallel authorities found
 
-**Total: 2 findings, both flagged as W5 architectural prerequisites for a Product Owner decision — neither is silent/accidental duplication, both are documented, intentional states, but both need an explicit W5 disposition.**
+**Total: 2 findings. Both have now received a binding Independent Architect decision (see below) — neither is silent/accidental duplication, both were documented, intentional states, and both now have an explicit, recorded W5 disposition.**
 
-### W5 ARCHITECTURAL PREREQUISITE — DUPLICATE FOUND #1: Editor/Mutation entry-point surface (R3 vs R4)
+### W5 ARCHITECTURAL PREREQUISITE — DUPLICATE FOUND #1: Editor/Mutation entry-point surface (R3 vs R4) — BINDING POLICY RECORDED
 
 - **A**: `apps/storefront_builder/views.py` ("R3", legacy) — routes under `storefront-builder/...`
 - **B**: `apps/storefront_builder/r4_views.py` + `services/r4_mutation_service.py` ("R4", current default) — routes under `storefront-builder/r4/...`
@@ -44,16 +48,65 @@ This document answers RastiSi's central architectural risk for W5: **is there ex
 - When the flag is `True` (default), the legacy `editor.html` collapses to a "go to R4" redirect card for most features, **except** two capabilities with no R4 equivalent that remain reachable: (a) restore/history browser, (b) internal industry-vertical layout preset installer. Both are explicitly marked "CANONICAL KEEP" in `docs/qa_evidence/storefront_appearance_convergence/phase4/legacy_disposition.md`, not competing editors.
 - Underlying low-level services (container_service, row_service, section_data_service, appearance_authority_service, layout_service, edit_history_service, preset_service) **are shared** — business logic itself is not duplicated.
 - **What is duplicated**: the transaction/safety boundary. R4 mutations go through the single optimistic-concurrency dispatcher (`base_revision` stale-write check, atomic `edit_revision` bump). R3's per-action views write directly to the Draft (`draft.save()`) with **no base_revision/stale-write protection**, and remain server-side reachable via direct POST regardless of the UI flag (only the UI is gated for most legacy endpoints, not the endpoint itself).
-- **Verdict**: a live, intentionally-flagged, well-documented rollback mechanism — not accidental dead code. But two structurally different mutation-safety guarantees coexist against the same Draft depending on a per-Store flag. **W5 should make an explicit decision**: formally retire the R3 write surface (keep only the two CANONICAL KEEP legacy-only capabilities, ported into R4 or left as documented exceptions), or keep it permanently as a safety valve with its gap acknowledged.
+- **Verdict**: a live, intentionally-flagged, well-documented rollback mechanism — not accidental dead code. But two structurally different mutation-safety guarantees coexist against the same Draft depending on a per-Store flag.
 
-### W5 ARCHITECTURAL PREREQUISITE — DUPLICATE FOUND #2: Two independently-selectable "Template" concepts
+**BINDING POLICY (Independent Architect, W5 repair round, corrected in the Final Architecture Correction round)**: for any given Store, only one mutating editor surface may be active. R4 remains canonical/default. When `r4_editor_enabled = True`, **no R3-editor-specific unprotected write endpoint may mutate that Store's Draft** — this includes Class A redundant editor writes AND Class C legacy-only capabilities (Restore, Industry Layout Apply); neither may be left as an unprotected exception. A unique capability that previously existed only on a legacy page must either (a) be read-only (History browser — already true, no change needed), or (b) be converged onto a canonical R4-safe write boundary (Restore, Industry Layout Apply — see §2c Class C). R3's full write surface may remain available **only** for Stores explicitly pinned to `r4_editor_enabled = False` — that is the rollback mechanism, and it is not weakened by this policy. This closure is now a W5 prerequisite (workstream W5A), not an end-of-W5 cleanup item.
+
+### 2a. Legacy route inventory (built from the existing Phase-4 audit, re-verified against the W4C checkpoint)
+
+A prior, code-verified ledger already performs exactly this classification: `docs/qa_evidence/storefront_appearance_convergence/phase4/legacy_disposition.md` (re-verified through its own "Pre-Task-10 CORRECTIVE closure" pass). Re-confirmed relevant rows against current checkpoint source:
+
+| Legacy surface | Classification | Disposition today |
+|---|---|---|
+| `storefront_discard` | MUTATING — HAS R4 EQUIVALENT | **Already RETIRED** — zero live UI callers, R4's `/r4/discard/` is the proven replacement |
+| Settings save (all section types) | MUTATING — HAS R4 EQUIVALENT | Full re-verified parity; legacy form functionally redundant |
+| Container/Cell/Row composition (add/settings/layout/move/remove) | MUTATING — HAS R4 EQUIVALENT | Full re-verified parity (field-reachable, not just backend-accepted) |
+| Section toggle/lock | MUTATING — HAS R4 EQUIVALENT | `section.toggle_active`/`toggle_locked` proven equivalent |
+| Granular reset family (section/field/page/header/footer/storefront-to-baseline) | MUTATING — HAS R4 EQUIVALENT | All six have proven R4 mutation-type equivalents |
+| Full Appearance/Header/Footer editor forms | MUTATING — HAS R4 EQUIVALENT | Zero remaining R4-unreachable fields (closed by a prior Phase-4 remediation) |
+| Undo / Redo / Publish | MUTATING — HAS R4 EQUIVALENT (already converged) | Share the exact same `r4_mutation_service._run_history_command`/`layout_service.publish` — no separate legacy implementation exists |
+| **History browser** (`storefront-builder-history` / `storefront_history`) | **READ ONLY — CANONICAL KEEP** | No `@require_POST`; only calls `layout_service.list_versions()`/`get_or_create_layout()` and renders a list. No Draft mutation. No R4 equivalent exists (R4's own "history" is session-scoped Undo/Redo only, a different capability from browsing an old **published** version). Safe to remain reachable under R4 unconditionally — it never writes. |
+| **Restore Version** (`storefront-builder-restore` / `storefront_restore`) | **MUTATING — LEGACY-ONLY, REQUIRES R4-SAFE CONVERGENCE (corrected this round)** | `@require_POST`, calls `layout_service.restore_version(store, pk, user=...)`. Direct source read confirms: if a Draft already exists it is **deleted** (`old_draft.delete()`), a **new** `StorefrontLayoutVersion` is created, and `layout.draft_version` is reassigned to it — a genuine Draft-identity replacement. Takes **no `base_revision`** from the request and performs no stale-write check. **This is not a safe unconditional exception** — see §2c Class C. |
+| **Industry-vertical layout preset installer** (`storefront_apply_industry_layout`) | **MUTATING — LEGACY-ONLY, REQUIRES R4-SAFE CONVERGENCE (corrected this round)** | `@require_POST`, calls `layout_service.apply_industry_layout(store, industry_template, user=..., force=...)`. Direct source read confirms the **identical** Draft-replacement pattern as `restore_version()` (delete old Draft if present, create new one, reassign `layout.draft_version`) — its own docstring says "درست مثل restore_version" ("exactly like restore_version"). No `base_revision`, no stale-write check. **Also requires §2c Class C convergence, not an unconditional exception.** |
+| Ready Template gallery / apply | MUTATING — dual, both canonical | `apply_preset_with_checkpoint` (legacy entry) and `appearance.template.apply` (R4 entry) are two legitimate entry points converging on the same `preset_service.apply_preset()` — not a retirement candidate. **This route lives in `views.py` alongside the redundant legacy routes above but must NOT be gated by a module-wide guard** — see §2c Class B. |
+| Section-scoped media CRUD, Global Hero/Banner admin | MUTATING — shared/legitimate | Already single shared authority (`media_views.py`, a separate module) / legitimate compatibility mirror — **CANONICAL KEEP**, unaffected by any `views.py`-scoped guard |
+
+**Important nuance re-confirmed by this repair round**: `editor.html` already stopped **rendering** the redundant legacy UI panels for any Store on the R4 default (`r4_editor_enabled=True`) — only a minimal compatibility surface (links to R4, restore/history, and the industry-preset form if applicable) renders in that case. **What the Phase-4 audit did not close, and what remains the actual "parallel write surface" risk**: the underlying legacy view **endpoints** (URLs) for the "HAS R4 EQUIVALENT" rows, **and separately for Restore and Industry-Layout-Apply**, are ordinary Django views with no server-side check tying them to `r4_editor_enabled` and, for the latter two, no stale-write check at all — removing the UI link does not remove the URL's ability to accept a direct POST. This gap is the concrete substance of W5A.
+
+### 2c. Corrected route/capability classification — Class A / B / C
+
+The prior round's "one shared guard, plus an unconditional exemption for two CANONICAL KEEP views" framing was itself unsafe (it would have left Restore and Industry-Layout-Apply as permanently unprotected mutating exceptions) and over-broad (a guard scoped to "everything in `views.py`" would also catch Ready Template Gallery/Apply, which is a shared canonical surface, not a legacy redundancy). The corrected model splits every legacy route into exactly three classes:
+
+**Class A — R3-editor-only redundant mutations.** Legacy section edits, container/row edits, appearance/header/footer form writes, granular reset equivalents, and the legacy publish/undo/redo entry points (already-converged, per §2 above) where R4 fully owns the merchant editor flow. **Disposition**: for `r4_editor_enabled=True`, these must fail closed via **one shared eligibility guard** (a single decorator/check, not per-view logic). For `r4_editor_enabled=False`, they remain available as the rollback editor, unchanged.
+
+**Class B — shared canonical non-R3 capabilities.** A route is **not** Class A merely because its view function happens to live in `apps/storefront_builder/views.py`. Examples confirmed in this discovery: the Ready Template Gallery and its Apply form (`storefront_template_gallery`, `storefront_apply_layout_preset`, `storefront_template_live_preview`), and `storefront_preview` (the shared Draft-preview route also used by the R4 editor's own iframe and by Design Lab). **Disposition**: the Class A guard must be an **explicit route/capability allowlist or denylist**, never a blanket "this module = legacy" assumption — a broad `views.py`-level guard would incorrectly disable these.
+
+**Class C — legacy-only mutating capabilities requiring convergence.** Restore Version and Industry Layout Apply. Both are real, still-required capabilities (no R4 equivalent exists), but neither may remain a permanently unprotected mutating exception once R4 is the active editor — that would directly contradict "only one active mutation surface." **Disposition**: for `r4_editor_enabled=True`, each must be reachable only through a **canonical R4-safe mutation/replacement boundary** — reusing the exact `base_revision`-gated, tenant-scoped pattern R4's own existing "replace Draft identity" actions already use (`storefront_r4_reset_storefront` and `storefront_r4_switch_template` — both already validate `layout.r4_editor_enabled`, parse a JSON body, and reject any `base_revision` that isn't a valid non-negative integer, *before* calling into the underlying replacement service). Concretely: a new R4 endpoint/action per capability → validates `base_revision` against the active Draft's `edit_revision` (or absence of a Draft) and tenant/store scope exactly like those two existing actions → **then calls the existing, unmodified `layout_service.restore_version()` / `layout_service.apply_industry_layout()`** → returns the new revision, client reloads (same contract shape as Reset Storefront/Switch Template). **No new restore or industry-layout business logic is created** — only a thin, canonical R4-safe entry point reusing the existing service functions verbatim. For `r4_editor_enabled=False`, the original legacy POST endpoints remain available unchanged as part of the rollback editor.
+
+**Safest disposition, updated (planning only, not implemented)**: Class A gets one shared eligibility guard; Class B is explicitly exempted from that guard by name (never by module); Class C gets a new thin R4-safe wrapper per capability, reusing the existing service functions, while the legacy POST endpoints remain the rollback path for `r4_editor_enabled=False` Stores only.
+
+### W5 ARCHITECTURAL PREREQUISITE — DUPLICATE FOUND #2: Two independently-selectable "Template" concepts — BINDING DECISION RECORDED
 
 - **A**: `apps/storefront_builder/appearance_registry.py::TEMPLATE_REGISTRY` — 10 pure style-token bundles (modern/marketplace/minimal/boutique/luxury/tech/editorial/compact/playful/glass — font, radius, density, motion, card_shadow, hero_style, etc.), selected via `appearance_config["template_slug"]`.
 - **B**: `layout_preset_registry.py` + `a8_ready_templates.py` — the 50 Ready Templates (the subject of this entire W5 discovery).
 - Both are actively wired into the **same** R4 Inspector payload and the **same** `appearance.update` mutation (`r4_mutation_service.py` L845-848, L887-888, comment: "exact R3 precedence") — not a legacy leftover.
 - Several fields a Ready Template's recipe sets (font/density/width/radius, via `_RecipeSpec`) are the **same fields** the 10-item `TEMPLATE_REGISTRY` can independently override afterward via `template_slug` — with no coupling or warning between the two pickers.
 - This is architecturally coherent (disjoint `appearance_config` sub-keys, neither corrupts the other), but the **shared name "Template" for two unrelated, overlapping-scope registries is a real merchant- and PO-facing confusion risk**.
-- **Recommendation for W5**: rename one concept (e.g. the 10-item `appearance_registry` set → "Style Pack") to remove the naming collision before exposing both more prominently in a merchant-facing IA.
+**BINDING DECISION (Independent Architect, W5 repair round)**: the two concepts are renamed at the **product/merchant-facing level only**:
+
+| Concept | Canonical English | Canonical Persian | Internal code (unchanged) |
+|---|---|---|---|
+| The 50 layout/design recipes | **Ready Template** | قالب آماده | `layout_preset_registry.py`, `a8_ready_templates.py` |
+| The 10-item style-token bundle | **Style Pack** | بستهٔ سبک | `appearance_registry.TEMPLATE_REGISTRY`, `template_slug` (unchanged) |
+
+Do **not** rename the persisted `template_slug` field or `TEMPLATE_REGISTRY`/`TemplateDefinition` internally in this phase — no migration-adjacent rename for terminology alone. The rename is scoped to merchant-facing labels, documentation, and new/updated tests. This internal/external naming split must be documented wherever it matters (this file, the main plan, and any future code comment touching `appearance_registry.py`) so it isn't mistaken for an oversight.
+
+### 2b. Reserved/inert registry entries — binding disposition
+
+Two further registry entries were found registered but non-functional as independent merchant controls. Neither is a duplicate-authority risk by itself, but both risk being mistaken for active capabilities if left undocumented:
+
+- **Typed `layout` (composition) family** — 9 registered variants, **zero render consumers found anywhere**. A separate, real, working per-Container layout system (2/3/4-column rows) already serves the actual merchant need. **Binding disposition**: reserved/inert. W5 must not build a second store-wide composition renderer merely to activate this family — that would itself be exactly the kind of duplication this audit exists to catch. Existing manifests/Ready-Template recipes referencing `layout` selections must continue to load without error; nothing about persisted data changes.
+- **Typed `mega_menu` family** — registry has exactly one component (`mega_menu.none.v1`); real mega-menu presentation is Header-variant-owned. **Binding disposition**: reserved/compatibility state. Any future independent Mega Menu support must reuse the existing Header/navigation rendering architecture and declare Header capability compatibility — never a second navigation authority. Not a W5 deliverable.
 
 ---
 
@@ -72,8 +125,11 @@ This document answers RastiSi's central architectural risk for W5: **is there ex
 
 ## 4. Key files for W5 planning attention
 
-- `apps/dashboard/urls.py` (L219-329) — the dual-routing evidence for Finding #1
+- `apps/dashboard/urls.py` (L219-329) — the dual-routing evidence for Finding #1, and the full legacy route list used to build §2a's table
 - `apps/storefront_builder/models.py` (L211-220) — the `r4_editor_enabled` flag
 - `apps/storefront_builder/templates/dashboard/storefront_builder/editor.html` (L1-39) — conditional legacy-shell logic
-- `apps/storefront_builder/services/r4_mutation_service.py` — the dispatcher and its "R3 never calls this module" boundary
-- `apps/storefront_builder/appearance_registry.py` vs `layout_preset_registry.py` — the two "Template" registries for Finding #2
+- `apps/storefront_builder/services/r4_mutation_service.py` — the dispatcher, its "R3 never calls this module" boundary, and (L1009-1050) the `_FOOTER_UPDATE_ALLOWED_PATCH_KEYS`/`_apply_footer_update` code central to the corrected Bottom-Nav scope (see `gap_matrix.md`)
+- `apps/storefront_builder/appearance_registry.py` vs `layout_preset_registry.py` — the two registries behind the Ready Template / Style Pack decision
+- `docs/qa_evidence/storefront_appearance_convergence/phase4/legacy_disposition.md` — the pre-existing, code-verified legacy-route ledger this repair round built §2a from
+- `apps/storefront_builder/services/layout_service.py` (L905-933 `restore_version()`, L1048-1078 `apply_industry_layout()`) — direct source confirmation that both delete-and-replace the active Draft with no stale-write check, central to the Final Architecture Correction's Class C finding
+- `apps/storefront_builder/r4_views.py` (`storefront_r4_reset_storefront` L1425+, `storefront_r4_switch_template` L1461+) — the existing R4 "replace Draft identity" pattern (`r4_editor_enabled` check + JSON body + validated non-negative-integer `base_revision`, all before calling the replacement service) that the Class C convergence for Restore/Industry-Layout-Apply should reuse verbatim
