@@ -272,6 +272,16 @@ urlpatterns = [
         storefront_builder_r4_views.storefront_r4_switch_template,
         name="storefront-builder-r4-switch-template",
     ),
+    path(
+        "storefront-builder/r4/restore/<int:pk>/",
+        storefront_builder_r4_views.storefront_r4_restore,
+        name="storefront-builder-r4-restore",
+    ),
+    path(
+        "storefront-builder/r4/apply-industry-layout/",
+        storefront_builder_r4_views.storefront_r4_apply_industry_layout,
+        name="storefront-builder-r4-apply-industry-layout",
+    ),
     path("storefront-builder/templates/", storefront_builder_views.storefront_template_gallery, name="storefront-builder-templates"),
     path(
         "storefront-builder/templates/<slug:key>/preview/",

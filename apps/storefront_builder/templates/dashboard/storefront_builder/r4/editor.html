@@ -338,13 +338,13 @@
         <section class="r4-global-design-group" data-r4-global-mutation="appearance.update">
           <h4>ظاهر کلی <span class="r4-field-scope r4-field-scope--global" data-r4-scope="global-group">سراسری — کل فروشگاه</span></h4>
 
-          <label class="r4-field-sublabel" for="r4GlobalTemplate">قالب</label>
+          <label class="r4-field-sublabel" for="r4GlobalTemplate">بستهٔ سبک</label>
           <select id="r4GlobalTemplate" class="r4-control" data-r4-global-field="template_slug">
             {% for t in global_design.templates %}
             <option value="{{ t.slug }}" {% if t.slug == global_design.appearance.template_slug %}selected{% endif %}>{{ t.label_fa }}</option>
             {% endfor %}
           </select>
-          {% if storefront_has_baseline %}<button type="button" data-r4-global-reset-field="template_slug" aria-label="بازنشانی قالب به قالب" class="r4-icon-btn">↺</button>{% endif %}
+          {% if storefront_has_baseline %}<button type="button" data-r4-global-reset-field="template_slug" aria-label="بازنشانی بستهٔ سبک به قالب" class="r4-icon-btn">↺</button>{% endif %}
 
           <label class="r4-field-sublabel" for="r4GlobalPalette">پالت رنگی</label>
           <select id="r4GlobalPalette" class="r4-control" data-r4-global-field="palette_slug">

@@ -187,6 +187,15 @@ class MobileBottomNavEditorTests(TestCase):
         StoreMembership.objects.create(store=self.store, user=self.user, role=StoreMembership.Role.OWNER, status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now())
         self.client = Client(HTTP_HOST=ADMIN_HOST)
         self.client.login(username="dark_v2_editor", password="pass12345")
+        # P5-W5A — both tests below deliberately exercise the LEGACY
+        # full-page footer form (see the second test's own comment); per
+        # the binding single-active-write-surface policy this legacy POST
+        # is now fail-closed for a Store on the R4 default and remains
+        # available only for a Store explicitly pinned back — exactly the
+        # rollback scenario these tests are actually testing.
+        layout = layout_service.get_or_create_layout(self.store)
+        layout.r4_editor_enabled = False
+        layout.save(update_fields=["r4_editor_enabled"])
 
     @override_settings(ALLOWED_HOSTS=[ADMIN_HOST, "testserver"])
     def test_footer_editor_round_trips_mobile_navigation_variant(self):

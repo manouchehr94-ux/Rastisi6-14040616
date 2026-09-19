@@ -1455,6 +1455,115 @@ def storefront_r4_reset_storefront(request):
     return JsonResponse({"ok": True})
 
 
+def _read_class_c_base_revision(payload):
+    """P5-W5A — Class C's ``base_revision`` accepts ``null`` (the client
+    believes no Draft is currently active) in addition to a non-negative
+    int (the client believes an active Draft exists with exactly that
+    revision) — unlike every other R4 replace-identity action, which
+    always assumes an active Draft. Returns ``(True, value)`` on a valid
+    shape, ``(False, None)`` otherwise."""
+    if "base_revision" not in payload:
+        return False, None
+    value = payload["base_revision"]
+    if value is None:
+        return True, None
+    if _is_strict_int(value) and value >= 0:
+        return True, value
+    return False, None
+
+
+@require_POST
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
+def storefront_r4_restore(request, pk):
+    """P5-W5A Class C — the canonical R4-safe Restore Version entry point.
+    Same contract shape as every other whole-Draft-identity-replacing R4
+    action above; delegates to ``r4_mutation_service.restore_version_safe``,
+    which itself delegates to the existing, unmodified ``layout_service.
+    restore_version()`` — never a second restore implementation. The
+    legacy ``storefront_restore`` POST remains the rollback path for a
+    Store explicitly pinned to ``r4_editor_enabled=False`` only."""
+    store = resolve_store_for_service(request)
+    layout = layout_service.get_or_create_layout(store)
+    if not layout.r4_editor_enabled:
+        raise Http404
+
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({"ok": False, "code": "malformed_json"}, status=400)
+
+    if not isinstance(payload, dict):
+        return JsonResponse({"ok": False, "code": "invalid_request_shape"}, status=400)
+
+    valid, base_revision = _read_class_c_base_revision(payload)
+    if not valid:
+        return JsonResponse({"ok": False, "code": "invalid_base_revision"}, status=400)
+
+    try:
+        r4_mutation_service.restore_version_safe(
+            store=store, actor=request.user, base_revision=base_revision, version_id=pk,
+        )
+    except r4_mutation_service.R4StaleRevision as exc:
+        return JsonResponse(
+            {"ok": False, "code": "stale_revision", "current_revision": exc.current_revision},
+            status=409,
+        )
+    except r4_mutation_service.R4MutationError as exc:
+        return JsonResponse({"ok": False, "code": str(exc)}, status=400)
+
+    return JsonResponse({"ok": True})
+
+
+@require_POST
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
+def storefront_r4_apply_industry_layout(request):
+    """P5-W5A Class C — the canonical R4-safe Apply Industry Layout entry
+    point. Delegates to ``r4_mutation_service.apply_industry_layout_safe``,
+    which itself delegates to the existing, unmodified ``layout_service.
+    apply_industry_layout()`` — never a second implementation. The legacy
+    ``storefront_apply_industry_layout`` POST remains the rollback path
+    for a Store explicitly pinned to ``r4_editor_enabled=False`` only."""
+    store = resolve_store_for_service(request)
+    layout = layout_service.get_or_create_layout(store)
+    if not layout.r4_editor_enabled:
+        raise Http404
+    if getattr(store, "industry_installation", None) is None:
+        # Same convention the legacy ``storefront_apply_industry_layout``
+        # already uses for this exact condition — a Store with no
+        # installation of its own has nothing to apply, tenant-scoped.
+        raise Http404
+
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({"ok": False, "code": "malformed_json"}, status=400)
+
+    if not isinstance(payload, dict):
+        return JsonResponse({"ok": False, "code": "invalid_request_shape"}, status=400)
+
+    valid, base_revision = _read_class_c_base_revision(payload)
+    if not valid:
+        return JsonResponse({"ok": False, "code": "invalid_base_revision"}, status=400)
+
+    force = bool(payload.get("force", False))
+
+    try:
+        r4_mutation_service.apply_industry_layout_safe(
+            store=store, actor=request.user, base_revision=base_revision, force=force,
+        )
+    except r4_mutation_service.R4StaleRevision as exc:
+        return JsonResponse(
+            {"ok": False, "code": "stale_revision", "current_revision": exc.current_revision},
+            status=409,
+        )
+    except r4_mutation_service.R4MutationError as exc:
+        return JsonResponse({"ok": False, "code": str(exc)}, status=400)
+
+    return JsonResponse({"ok": True})
+
+
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)

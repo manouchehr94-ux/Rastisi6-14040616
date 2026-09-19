@@ -62,6 +62,31 @@ def _resolve_store(request):
     return resolve_store_for_service(request)
 
 
+def _require_legacy_editor_active(view_func):
+    """P5-W5A — the ONE shared eligibility guard for Class A (R3-editor-only
+    redundant mutation routes, per the approved master plan's binding
+    single-active-write-surface policy). For any given Store, only one
+    mutating editor surface may be active: when ``r4_editor_enabled=True``
+    (the live default), these routes fail closed with the SAME convention
+    already used by R4 itself for wrong-editor-mode routes (``raise
+    Http404`` — see ``storefront_r4_reset_storefront``/``storefront_r4_
+    switch_template``/``storefront_r4_design_lab``); when explicitly pinned
+    to ``False``, they remain the rollback editor, unchanged. Applied only
+    to an explicit, named route list — never a module-wide "everything in
+    views.py is legacy" assumption, so shared canonical capabilities
+    (Ready Template Gallery/Apply, Draft Preview, History browser, media)
+    are never accidentally caught. Placed AFTER staff/permission decorators
+    so authentication/authorization behavior is unchanged either way."""
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        store = _resolve_store(request)
+        layout = layout_service.get_or_create_layout(store)
+        if layout.r4_editor_enabled:
+            raise Http404
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
 def _history_before(draft):
     return edit_history_service.snapshot_draft(draft)
 
@@ -451,6 +476,7 @@ def _container_state_changed_response(request, *, page_type, container_id=None, 
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("افزودن چیدمان")
 def storefront_container_add(request):
     store = _resolve_store(request)
@@ -476,6 +502,7 @@ def storefront_container_add(request):
 
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("تنظیم چیدمان")
 def storefront_container_settings(request, pk):
     container = _get_scoped_container(request, pk)
@@ -542,6 +569,7 @@ def storefront_container_settings(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("تغییر شکل چیدمان")
 def storefront_container_layout(request, pk):
     container = _get_scoped_container(request, pk)
@@ -560,6 +588,7 @@ def storefront_container_layout(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("جابه‌جایی چیدمان")
 def storefront_container_move(request, pk):
     container = _get_scoped_container(request, pk)
@@ -589,6 +618,7 @@ def storefront_container_move(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("حذف چیدمان خالی")
 def storefront_container_remove(request, pk):
     container = _get_scoped_container(request, pk)
@@ -610,6 +640,7 @@ def storefront_container_remove(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("افزودن محتوا به خانه")
 def storefront_cell_add_section(request):
     store = _resolve_store(request)
@@ -686,6 +717,7 @@ def storefront_cell_add_section(request):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("خالی کردن خانه")
 def storefront_cell_clear(request, pk):
     """خالی‌کردنِ کاملِ یک خانه — معنایِ ثابت‌شده‌یِ این endpoint («این
@@ -738,6 +770,7 @@ def storefront_cell_clear(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("افزودن بخش")
 def storefront_section_add(request):
     store = _resolve_store(request)
@@ -842,6 +875,7 @@ def _get_scoped_section(request, pk):
 
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("ویرایش تنظیمات بخش")
 def storefront_section_settings(request, pk):
     """فرم ویرایش تنظیمات — فقط برای انواعی که واقعاً محتوای قابل‌تنظیم
@@ -1452,6 +1486,7 @@ def storefront_section_product_search(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("تغییر چیدمان ردیف")
 def storefront_section_row_layout(request, pk):
     """Apply or replace one safe merchant-facing row preset.
@@ -1710,6 +1745,7 @@ def storefront_section_row_layout(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("حذف بخش")
 @transaction.atomic
 def storefront_section_remove(request, pk):
@@ -1758,6 +1794,7 @@ def storefront_section_remove(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("نمایش/مخفی کردن بخش")
 def storefront_section_toggle(request, pk):
     section = _get_scoped_section(request, pk)
@@ -1783,6 +1820,7 @@ def storefront_section_collapse_toggle(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("قفل/بازکردن بخش")
 def storefront_section_lock_toggle(request, pk):
     """قفل/بازکردنِ یک بخش — Phase 1 (spec §37). دقیقاً همان الگویِ
@@ -1798,6 +1836,7 @@ def storefront_section_lock_toggle(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("تکرار بخش")
 @transaction.atomic
 def storefront_section_duplicate(request, pk):
@@ -1855,6 +1894,7 @@ def storefront_section_duplicate(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("جابه‌جایی بلاک")
 def storefront_block_move(request, pk):
     """Move/reorder one V3 Block without touching page-level Section order.
@@ -1918,6 +1958,7 @@ def storefront_block_move(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("حذف بلاک")
 def storefront_block_remove(request, pk):
     """Delete exactly one Block from a Cell and keep sibling Blocks/layout."""
@@ -1953,6 +1994,7 @@ def storefront_block_remove(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("بازچینی بخش‌ها")
 def storefront_section_reorder(request):
     """قرارداد یکسان با سایر endpointهای reorder موجود (product-image،
@@ -2009,6 +2051,7 @@ def storefront_section_reorder(request):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("جابه‌جایی بخش")
 @transaction.atomic
 def storefront_section_move(request, pk):
@@ -2087,6 +2130,7 @@ def storefront_edit_history_state(request):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 def storefront_undo(request):
     return _legacy_history_command(request, "undo")
 
@@ -2094,6 +2138,7 @@ def storefront_undo(request):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 def storefront_redo(request):
     return _legacy_history_command(request, "redo")
 
@@ -2124,6 +2169,7 @@ def _legacy_history_command(request, command: str) -> JsonResponse:
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 def storefront_publish(request):
     """L02 — legacy publish reaches the SAME lifecycle guarantee as R4
     ``publish_draft`` by delegating to the shared ``layout_service.publish``
@@ -2444,6 +2490,7 @@ def storefront_apply_layout_preset(request):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("بازنشانی بخش به قالب")
 def storefront_section_reset(request, pk):
     """RESET SECTION — بازنشانیِ یک section به baselineِ Ready Template.
@@ -2468,6 +2515,7 @@ def storefront_section_reset(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("بازنشانی فیلد بخش به قالب")
 def storefront_section_field_reset(request, pk):
     """RESET FIELD / RESET COMPONENT — یک کلیدِ مشخص از ``settings`` این
@@ -2491,6 +2539,7 @@ def storefront_section_field_reset(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("بازنشانی تنظیم ظاهر به قالب")
 def storefront_appearance_field_reset(request):
     """RESET FIELD برایِ یک کلیدِ سطحِ‌بالایِ appearance_config (مثلاً
@@ -2512,6 +2561,7 @@ def storefront_appearance_field_reset(request):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("بازنشانی هدر به قالب")
 def storefront_header_reset(request):
     """RESET HEADER — فقط هدر؛ فوتر/صفحات دست‌نخورده می‌مانند. Proportional
@@ -2532,6 +2582,7 @@ def storefront_header_reset(request):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("بازنشانی فوتر به قالب")
 def storefront_footer_reset(request):
     """RESET FOOTER — فقط فوتر؛ هدر/صفحات دست‌نخورده می‌مانند."""
@@ -2550,6 +2601,7 @@ def storefront_footer_reset(request):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("بازنشانی صفحه به قالب")
 def storefront_page_reset(request):
     """RESET PAGE — بازنشانیِ کاملِ ترکیبِ یک صفحه به baseline؛ صفحاتِ
@@ -2580,6 +2632,7 @@ def storefront_page_reset(request):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("بازنشانی کل فروشگاه به قالب")
 def storefront_reset_to_baseline(request):
     """RESET STOREFRONT — بازنشانیِ کاملِ فروشگاه (ظاهر + هدر + فوتر + هر
@@ -2602,6 +2655,7 @@ def storefront_reset_to_baseline(request):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 def storefront_apply_industry_layout(request):
     """چیدمان پیشنهادیِ صنفِ نصب‌شده‌ی این فروشگاه را در یک Draft جدید اعمال
     می‌کند. اگر فروشگاه از قبل یک نسخه‌ی منتشرشده دارد، بدون
@@ -2630,6 +2684,7 @@ def storefront_apply_industry_layout(request):
 
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("ویرایش ظاهر سایت")
 def storefront_appearance_editor(request):
     """پنلِ «ظاهر سایت» — هابِ Template/Palette/رنگ‌های سفارشی/فونت و
@@ -2884,6 +2939,7 @@ def _extract_footer_extra_blocks_raw(request) -> list[dict]:
 
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("ویرایش هدر")
 def storefront_header_editor(request):
     store = _resolve_store(request)
@@ -2931,6 +2987,7 @@ def storefront_header_editor(request):
 
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("ویرایش فوتر")
 def storefront_footer_editor(request):
     store = _resolve_store(request)
@@ -2992,14 +3049,25 @@ def storefront_history(request):
     store = _resolve_store(request)
     versions = layout_service.list_versions(store)
     layout = layout_service.get_or_create_layout(store)
+    # P5-W5A — when R4 is active, the Restore button below must post
+    # through the new canonical R4-safe endpoint instead of the legacy
+    # (now fail-closed under R4) POST; that endpoint needs the client's
+    # expected current-state precondition, captured at render time. A
+    # race between render and click is a normal, already-handled stale-
+    # write conflict (409, reload and retry), not a TOCTOU gap.
+    current_draft_revision = (
+        layout.draft_version.edit_revision if layout.draft_version_id else None
+    )
     return render(request, "dashboard/storefront_builder/history.html", {
         "active_page": "storefront_builder", "versions": versions, "layout": layout,
+        "current_draft_revision": current_draft_revision,
     })
 
 
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 def storefront_restore(request, pk):
     store = _resolve_store(request)
     try:

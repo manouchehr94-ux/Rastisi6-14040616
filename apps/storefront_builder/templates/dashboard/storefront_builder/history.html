@@ -21,10 +21,19 @@
       <td>{{ version.published_at|date:"Y/m/d H:i"|default:"—" }}</td>
       <td>
         {% if version.status != "draft" %}
-        <form method="post" action="{% url 'dashboard:storefront-builder-restore' version.pk %}" onsubmit="return confirm('محتوای نسخه #{{ version.version_number }} در یک پیش‌نویس جدید بازگردانی شود؟')" style="display:inline">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-sm">بازگردانی به پیش‌نویس جدید</button>
-        </form>
+          {% if layout.r4_editor_enabled %}
+          <button type="button" class="btn btn-sm" data-r4-restore-button
+                  data-r4-restore-url="{% url 'dashboard:storefront-builder-r4-restore' version.pk %}"
+                  data-r4-base-revision="{% if current_draft_revision is None %}null{% else %}{{ current_draft_revision }}{% endif %}"
+                  data-r4-confirm="محتوای نسخه #{{ version.version_number }} در یک پیش‌نویس جدید بازگردانی شود؟">
+            بازگردانی به پیش‌نویس جدید
+          </button>
+          {% else %}
+          <form method="post" action="{% url 'dashboard:storefront-builder-restore' version.pk %}" onsubmit="return confirm('محتوای نسخه #{{ version.version_number }} در یک پیش‌نویس جدید بازگردانی شود؟')" style="display:inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm">بازگردانی به پیش‌نویس جدید</button>
+          </form>
+          {% endif %}
         {% endif %}
       </td>
     </tr>
@@ -35,4 +44,33 @@
   </table></div>
 </div>
 <a href="{% url 'dashboard:storefront-builder-editor' %}" class="btn" style="margin-top:14px;display:inline-block">بازگشت به ادیتور</a>
+{% if layout.r4_editor_enabled %}
+<script>
+document.querySelectorAll('[data-r4-restore-button]').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    if (!confirm(btn.getAttribute('data-r4-confirm'))) { return; }
+    var revisionRaw = btn.getAttribute('data-r4-base-revision');
+    var baseRevision = revisionRaw === 'null' ? null : parseInt(revisionRaw, 10);
+    fetch(btn.getAttribute('data-r4-restore-url'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '',
+      },
+      body: JSON.stringify({base_revision: baseRevision}),
+    }).then(function (resp) {
+      if (resp.status === 409) {
+        alert('این صفحه قدیمی شده — لطفاً صفحه را دوباره بارگذاری کنید و امتحان کنید');
+        return;
+      }
+      if (!resp.ok) {
+        alert('بازگردانی ناموفق بود');
+        return;
+      }
+      window.location.href = "{% url 'dashboard:storefront-builder-editor' %}";
+    });
+  });
+});
+</script>
+{% endif %}
 {% endblock %}

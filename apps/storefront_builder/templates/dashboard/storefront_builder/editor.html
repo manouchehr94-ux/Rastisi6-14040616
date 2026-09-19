@@ -48,12 +48,45 @@ below.
 <div class="card" style="margin-top:14px">
   <h3>چیدمان پیشنهادی صنف</h3>
   <p>چیدمان پیشنهادیِ صنفِ نصب‌شده روی این فروشگاه را در یک پیش‌نویس جدید اعمال کن.</p>
-  <form method="post" action="{% url 'dashboard:storefront-builder-apply-industry-layout' %}"
-        {% if layout.published_version_id %}onsubmit="if(!confirm('اعمال چیدمان پیشنهادی، Draft فعلی را جایگزین می‌کند. ادامه می‌دهید؟')){return false;} this.confirm.value='1'; return true;"{% endif %}>
-    {% csrf_token %}<input type="hidden" name="confirm" value="0">
-    <button type="submit" class="btn">چیدمان پیشنهادی صنف</button>
-  </form>
+  <button type="button" class="btn" id="r4IndustryApplyButton"
+          data-r4-apply-url="{% url 'dashboard:storefront-builder-r4-apply-industry-layout' %}"
+          data-r4-base-revision="{{ draft.edit_revision }}"
+          {% if layout.published_version_id %}data-r4-confirm="اعمال چیدمان پیشنهادی، Draft فعلی را جایگزین می‌کند. ادامه می‌دهید؟"{% endif %}>
+    چیدمان پیشنهادی صنف
+  </button>
 </div>
+<script>
+(function () {
+  var btn = document.getElementById('r4IndustryApplyButton');
+  if (!btn) { return; }
+  btn.addEventListener('click', function () {
+    var confirmMsg = btn.getAttribute('data-r4-confirm');
+    var force = false;
+    if (confirmMsg) {
+      if (!confirm(confirmMsg)) { return; }
+      force = true;
+    }
+    fetch(btn.getAttribute('data-r4-apply-url'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '',
+      },
+      body: JSON.stringify({base_revision: parseInt(btn.getAttribute('data-r4-base-revision'), 10), force: force}),
+    }).then(function (resp) {
+      if (resp.status === 409) {
+        alert('این صفحه قدیمی شده — لطفاً صفحه را دوباره بارگذاری کنید و امتحان کنید');
+        return;
+      }
+      if (!resp.ok) {
+        alert('اعمال چیدمان صنف ناموفق بود');
+        return;
+      }
+      window.location.reload();
+    });
+  });
+})();
+</script>
 {% endif %}
 {% else %}
 <div class="sfb-shell sfb-prototype-shell sfb-v3-shell sfb-v22-workspace sfb-r3-shell"
