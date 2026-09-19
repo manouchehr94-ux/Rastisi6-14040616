@@ -139,8 +139,11 @@ new test file (+454 lines, 24 tests). Zero migrations. Full breakdown:
 
 ## PR
 
-Not yet opened as of this report — see push/PR step following this
-document's commit.
+**PR #14** — https://github.com/manouchehr94-ux/Rastisi6-14040616/pull/14
+— state: **OPEN**, not draft, not merged, `mergeable_state: clean`.
+Head `243effe9`, base `feature/phase5-design-expansion` at exact SHA
+`e8a0a33841cf1eff289f76588d95491558ba9348` (unchanged since W5B
+authorization).
 
 ## W5C started
 
@@ -148,7 +151,7 @@ document's commit.
 
 ## Worktree
 
-**Clean** at final HEAD `94193557` (confirmed via `git status
+**Clean** at final HEAD `243effe9` (confirmed via `git status
 --porcelain`).
 
 ## Final status
