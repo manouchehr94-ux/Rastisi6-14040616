@@ -108,6 +108,18 @@ class LiveDemoTemplatePreviewTestCase(TestCase):
     def setUpTestData(cls):
         from io import StringIO
         call_command("apply_golden_reference_storefront", stdout=StringIO())
+        # P5-W5C Independent Architect repair — apply_golden_reference_
+        # storefront both applies AND PUBLISHES the Demo Store's Draft
+        # (layout_service.publish() sets layout.draft_version = None), and
+        # the live-preview route's Demo mode now correctly resolves its
+        # candidate via the non-creating get_existing_draft (it never
+        # bootstraps a Draft on a bare GET, mirroring Merchant mode). Every
+        # test in this module needs an active Demo Draft to preview against,
+        # so create the real, expected post-publish Draft here once — the
+        # same real action a merchant/platform operator would take, not
+        # something Preview itself is allowed to do.
+        demo_store = Store.objects.get(slug=RASTI_MODE_DEMO_STORE_SLUG)
+        svc.get_or_create_draft(demo_store)
 
     def setUp(self):
         cache.clear()

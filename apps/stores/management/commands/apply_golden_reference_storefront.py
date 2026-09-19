@@ -32,7 +32,7 @@ from io import StringIO
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 
-from apps.storefront_builder.services import golden_reference_service
+from apps.storefront_builder.services import golden_reference_service, layout_service
 from apps.stores.management.commands.seed_ready_template_fashion_demo import (
     STORE_SLUG,
 )
@@ -91,6 +91,19 @@ class Command(BaseCommand):
         published = golden_reference_service.apply_golden_reference_storefront(store)
         home = published.home_page()
         section_order = list(home.sections.order_by("order").values_list("section_key", flat=True))
+
+        # Step 3 (P5-W5C Independent Architect repair) — leave a fresh,
+        # editable Draft after publishing, exactly like a real merchant's
+        # Publish action does. The Ready Template Gallery's live-preview
+        # route (Demo mode) reads an EXISTING Draft only and never
+        # bootstraps one itself (Preview must create zero persistence) —
+        # so the canonical Demo Store must already have one ready, the
+        # same way `get_or_create_draft` already keeps a merchant's own
+        # Store always Draft-ready the moment they open their Gallery.
+        # `publish()` sets `layout.draft_version = None`; without this
+        # step the Demo Store would be un-previewable immediately after
+        # every fresh seed/deploy.
+        layout_service.get_or_create_draft(store)
 
         self.stdout.write(
             self.style.SUCCESS(

@@ -12,7 +12,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.templatetags.static import static
 from django.urls import reverse
 from django.views.decorators.clickjacking import xframe_options_sameorigin
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from apps.dashboard.decorators import permission_required, staff_required
 from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
@@ -2333,14 +2333,33 @@ def storefront_template_gallery(request):
 RASTI_MODE_DEMO_STORE_SLUG = "rasti-mode-demo"
 
 
+@require_GET
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@xframe_options_sameorigin
 def storefront_template_live_preview(request, key):
     """Live, non-mutating Ready Template preview for Demo or Merchant data.
 
     Phase 5 Task 2 established this ONE preview route, Task-1 candidate
     resolution and the shared renderer.  Task 3 keeps that architecture and
     adds only a data-context choice:
+
+    P5-W5C explicitly overrides ``xframe_options_sameorigin`` for the same
+    reason ``storefront_preview`` already does: this view is now
+    intentionally embedded inside the Ready Template Gallery's own in-page
+    preview ``<iframe>`` (``template_gallery_preview.js``); the global
+    default DENY (no ``X_FRAME_OPTIONS`` set, ``XFrameOptionsMiddleware``'s
+    own fallback) remains untouched for every other view.
+
+    P5-W5C Independent Architect repair — ``@require_GET`` makes the
+    "GET-only" claim this view already made actually true (a bare POST now
+    gets a controlled 405 instead of silently being accepted); and Demo
+    mode's candidate resolution was changed from ``get_or_create_draft`` to
+    the SAME non-creating ``get_existing_draft`` Merchant mode already
+    used, closing a real gap where a GET request could bootstrap a Draft
+    for the canonical Demo Store if one didn't exist yet. Both modes now
+    share the identical "read an existing Draft or fail closed with 404"
+    contract — Preview creates ZERO persistence in either data mode.
 
     * default: the canonical ``rasti-mode-demo`` Store (Task-2 behavior),
     * ``?data=merchant``: the Store resolved by the existing canonical
@@ -2383,7 +2402,18 @@ def storefront_template_live_preview(request, key):
                 "ابتدا دستورِ مدیریتیِ seed_ready_template_fashion_demo (یا "
                 "apply_golden_reference_storefront) را اجرا کنید."
             ) from exc
-        candidate_base_version = layout_service.get_or_create_draft(preview_store)
+        # P5-W5C Independent Architect repair — a read-only Preview must
+        # never bootstrap a Draft for the Demo Store either, mirroring
+        # Merchant mode exactly: fail closed with 404 if the canonical
+        # Demo Store exists but has no active Draft yet, rather than
+        # silently creating one via get_or_create_draft.
+        candidate_base_version = layout_service.get_existing_draft(preview_store)
+        if candidate_base_version is None:
+            raise Http404(
+                "فروشگاهِ نمایشیِ کانونیِ «rasti-mode-demo» هنوز پیش‌نویسِ "
+                "فعالی ندارد — ابتدا دستورِ مدیریتیِ "
+                "apply_golden_reference_storefront را اجرا کنید."
+            )
 
     candidate = preset_service.resolve_preset_candidate(candidate_base_version, preset)
 

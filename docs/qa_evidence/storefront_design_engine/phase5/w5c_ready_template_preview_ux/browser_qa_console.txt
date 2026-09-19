@@ -1,0 +1,27 @@
+PASS — 2. Gallery opens — http://w5c-qa.rastisi.localhost:8765/admin-portal/storefront-builder/templates/
+PASS — 3. Exactly 50 Ready Template cards present — cardCount=50, expected=50
+PASS — 3b. Every registered key has a wired preview trigger — missing=[]
+PASS — 7. Dialog is visible — {"open":true,"ariaHidden":"false","title":"پیش‌نمایشِ قالبِ «مینا»","frameSrc":"http://w5c-qa.rastisi.localhost:8765/admin-portal/storefront-builder/templates/mina_community/preview/?data=merchant","frameCount":1}
+PASS — 8. Dialog title contains the template label — پیش‌نمایشِ قالبِ «مینا»
+PASS — 9. Exactly one preview iframe exists — frameCount=1
+PASS — 10. Iframe URL is the canonical live-preview route (merchant default) — http://w5c-qa.rastisi.localhost:8765/admin-portal/storefront-builder/templates/mina_community/preview/?data=merchant
+PASS — 12. Iframe URL has data=merchant — http://w5c-qa.rastisi.localhost:8765/admin-portal/storefront-builder/templates/mina_community/preview/?data=merchant
+PASS — 13. Preview banner identifies Merchant-data mode — found
+PASS — 16. Desktop device state + natural presentation — {"desktopPressed":"true","desktopFrameStyle":{"width":"","transform":""}}
+PASS — 18. Tablet iframe document width ≈ 768 — innerWidth=768
+PASS — 20. Mobile iframe document width ≈ 390 — innerWidth=390
+PASS — 21. Mobile: non-zero rendered body, no error page — {"bodyBox":{"x":445,"y":165.203125,"width":390,"height":480},"looksLikeErrorPage":false}
+PASS — 23. Same single iframe element reused after data-source switch — frameCount=1
+PASS — 24. Canonical preview URL now Demo mode (no data=merchant) — http://w5c-qa.rastisi.localhost:8765/admin-portal/storefront-builder/templates/mina_community/preview/
+PASS — 25. Preview banner identifies Rasti Mode Demo data — found
+PASS — 27. Switched back to Merchant — http://w5c-qa.rastisi.localhost:8765/admin-portal/storefront-builder/templates/mina_community/preview/?data=merchant
+PASS — Accessibility: Tab wraps from last to first focusable (focus trap) — closeBtnId=qaCloseBtnProbe
+PASS — 29-30. Escape closes dialog and restores focus to the trigger — {"state":{"open":false,"ariaHidden":"true","title":"پیش‌نمایشِ قالبِ «مینا»","frameSrc":"about:blank","frameCount":1},"focusReturnedToTrigger":true}
+PASS — 31-32. Retargeting to a second template shows the NEW template, not stale content — http://w5c-qa.rastisi.localhost:8765/admin-portal/storefront-builder/templates/dense_marketplace/preview/?data=merchant
+PASS — 32b. Second template iframe loads successfully
+PASS — 33. Close button closes the dialog
+PASS — Representative coverage: third (late) template retargets + loads — http://w5c-qa.rastisi.localhost:8765/admin-portal/storefront-builder/templates/anniversary_mosaic/preview/?data=merchant
+PASS — 34. Existing Apply control(s) still present — applyFormCount=50
+PASS — Keyboard: Enter on a focused trigger opens the dialog — {"open":true,"ariaHidden":"false","title":"پیش‌نمایشِ قالبِ «پنجاه»","frameSrc":"http://w5c-qa.rastisi.localhost:8765/admin-portal/storefront-builder/templates/anniversary_mosaic/preview/?data=merchant","frameCount":1}
+
+25/25 PASS
