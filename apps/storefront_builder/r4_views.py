@@ -11,6 +11,7 @@ from django.views.decorators.http import require_GET, require_POST
 from apps.catalog.models import Brand, Category, MerchantCollection
 from apps.catalog.services.collection_service import searchable_products
 from apps.content.models import Menu
+from apps.core.services.rate_limit import RateLimitExceeded
 from apps.dashboard.decorators import permission_required, staff_required
 from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
 from apps.stores.resolution import resolve_store_for_service
@@ -1455,21 +1456,38 @@ def storefront_r4_reset_storefront(request):
     return JsonResponse({"ok": True})
 
 
-def _read_class_c_base_revision(payload):
-    """P5-W5A — Class C's ``base_revision`` accepts ``null`` (the client
-    believes no Draft is currently active) in addition to a non-negative
-    int (the client believes an active Draft exists with exactly that
-    revision) — unlike every other R4 replace-identity action, which
-    always assumes an active Draft. Returns ``(True, value)`` on a valid
-    shape, ``(False, None)`` otherwise."""
-    if "base_revision" not in payload:
-        return False, None
-    value = payload["base_revision"]
-    if value is None:
-        return True, None
-    if _is_strict_int(value) and value >= 0:
-        return True, value
-    return False, None
+def _read_class_c_precondition(payload):
+    """P5-W5A Independent-Review repair — Class C's precondition binds to
+    BOTH the expected Draft identity (``base_draft_id``) and its revision
+    (``base_revision``), never revision alone: ``edit_revision`` defaults
+    to 0 on every newly created Draft row, so a revision-only check is
+    vulnerable to an ABA hazard where a stale client's captured revision
+    coincidentally matches a DIFFERENT Draft that replaced the one it
+    actually observed. Valid shapes:
+
+    - ``base_draft_id=null`` AND ``base_revision=null`` — the client
+      believes no Draft is currently active.
+    - ``base_draft_id=<positive int>`` AND ``base_revision=<non-negative
+      int>`` — the client believes exactly that Draft is active at
+      exactly that revision.
+
+    Any other combination (one null paired with a non-null, a negative or
+    non-integer id/revision) is an invalid precondition shape. Returns
+    ``(True, draft_id, base_revision)`` on a valid shape, ``(False, None,
+    None)`` otherwise."""
+    if "base_draft_id" not in payload or "base_revision" not in payload:
+        return False, None, None
+    draft_id = payload["base_draft_id"]
+    base_revision = payload["base_revision"]
+    if draft_id is None and base_revision is None:
+        return True, None, None
+    if draft_id is None or base_revision is None:
+        return False, None, None
+    if not _is_strict_int(draft_id) or draft_id <= 0:
+        return False, None, None
+    if not _is_strict_int(base_revision) or base_revision < 0:
+        return False, None, None
+    return True, draft_id, base_revision
 
 
 @require_POST
@@ -1496,17 +1514,29 @@ def storefront_r4_restore(request, pk):
     if not isinstance(payload, dict):
         return JsonResponse({"ok": False, "code": "invalid_request_shape"}, status=400)
 
-    valid, base_revision = _read_class_c_base_revision(payload)
+    valid, base_draft_id, base_revision = _read_class_c_precondition(payload)
     if not valid:
-        return JsonResponse({"ok": False, "code": "invalid_base_revision"}, status=400)
+        return JsonResponse({"ok": False, "code": "invalid_precondition"}, status=400)
 
     try:
         r4_mutation_service.restore_version_safe(
-            store=store, actor=request.user, base_revision=base_revision, version_id=pk,
+            store=store, actor=request.user,
+            base_draft_id=base_draft_id, base_revision=base_revision, version_id=pk,
         )
+    except RateLimitExceeded:
+        # P5-W5A Independent-Review repair — the existing, unmodified
+        # ``storefront_layout.restore`` limit (enforced inside
+        # ``layout_service.restore_version()``, before any Draft row is
+        # touched) previously escaped this JSON endpoint as an
+        # unhandled 500; translated to a controlled 429, no new limiter.
+        return JsonResponse({"ok": False, "code": "rate_limited"}, status=429)
     except r4_mutation_service.R4StaleRevision as exc:
         return JsonResponse(
-            {"ok": False, "code": "stale_revision", "current_revision": exc.current_revision},
+            {
+                "ok": False, "code": "stale_revision",
+                "current_revision": exc.current_revision,
+                "current_draft_id": exc.current_draft_id,
+            },
             status=409,
         )
     except r4_mutation_service.R4MutationError as exc:
@@ -1543,9 +1573,9 @@ def storefront_r4_apply_industry_layout(request):
     if not isinstance(payload, dict):
         return JsonResponse({"ok": False, "code": "invalid_request_shape"}, status=400)
 
-    valid, base_revision = _read_class_c_base_revision(payload)
+    valid, base_draft_id, base_revision = _read_class_c_precondition(payload)
     if not valid:
-        return JsonResponse({"ok": False, "code": "invalid_base_revision"}, status=400)
+        return JsonResponse({"ok": False, "code": "invalid_precondition"}, status=400)
 
     # Strict JSON-boolean check — never a truthy-string coercion. A client
     # explicitly confirming "never silently overwrite" must send the JSON
@@ -1558,11 +1588,23 @@ def storefront_r4_apply_industry_layout(request):
 
     try:
         r4_mutation_service.apply_industry_layout_safe(
-            store=store, actor=request.user, base_revision=base_revision, force=force,
+            store=store, actor=request.user,
+            base_draft_id=base_draft_id, base_revision=base_revision, force=force,
         )
+    except RateLimitExceeded:
+        # P5-W5A Independent-Review repair — the existing, unmodified
+        # ``storefront_layout.new_draft`` limit (enforced inside
+        # ``layout_service.apply_industry_layout()``, before any Draft
+        # row is touched) previously escaped this JSON endpoint as an
+        # unhandled 500; translated to a controlled 429, no new limiter.
+        return JsonResponse({"ok": False, "code": "rate_limited"}, status=429)
     except r4_mutation_service.R4StaleRevision as exc:
         return JsonResponse(
-            {"ok": False, "code": "stale_revision", "current_revision": exc.current_revision},
+            {
+                "ok": False, "code": "stale_revision",
+                "current_revision": exc.current_revision,
+                "current_draft_id": exc.current_draft_id,
+            },
             status=409,
         )
     except r4_mutation_service.R4MutationError as exc:

@@ -1806,11 +1806,17 @@ def storefront_section_toggle(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("جمع/باز کردن بخش")
 def storefront_section_collapse_toggle(request, pk):
-    """جمع‌کردن/بازکردن کارت یک بخش داخل ادیتور — فقط UI، مستقل از
-    is_active (A3). ``_get_scoped_section`` تضمین می‌کند فقط بخش‌های
-    همین فروشگاه و فقط در نسخه Draft قابل تغییرند."""
+    """جمع‌کردن/بازکردن کارت یک بخش داخل ادیتور — یک نوشتنِ واقعی روی
+    Draft است (``collapsed_in_editor`` در ``_SECTION_FIELDS`` است و در
+    تاریخچه/عکس‌فوری Draft شرکت می‌کند)، نه صرفاً UI بی‌اثر — P5-W5A
+    Independent-Review repair: قبلاً به‌اشتباه به‌عنوان استثنایِ
+    Class A طبقه‌بندی شده بود؛ اکنون مثل ``storefront_section_toggle``
+    گارد می‌شود. مستقل از is_active (A3). ``_get_scoped_section``
+    تضمین می‌کند فقط بخش‌های همین فروشگاه و فقط در نسخه Draft قابل
+    تغییرند."""
     section = _get_scoped_section(request, pk)
     section.collapsed_in_editor = not section.collapsed_in_editor
     section.save(update_fields=["collapsed_in_editor", "updated_at"])
@@ -3055,11 +3061,19 @@ def storefront_history(request):
     # expected current-state precondition, captured at render time. A
     # race between render and click is a normal, already-handled stale-
     # write conflict (409, reload and retry), not a TOCTOU gap.
+    #
+    # Independent-Review repair: the precondition binds to BOTH the
+    # Draft's identity and its revision — a revision-only capture is an
+    # ABA hazard (edit_revision defaults to 0 on every new Draft row, so a
+    # stale client could otherwise match an unrelated Draft that replaced
+    # the one it actually observed).
+    current_draft_id = layout.draft_version_id
     current_draft_revision = (
-        layout.draft_version.edit_revision if layout.draft_version_id else None
+        layout.draft_version.edit_revision if current_draft_id else None
     )
     return render(request, "dashboard/storefront_builder/history.html", {
         "active_page": "storefront_builder", "versions": versions, "layout": layout,
+        "current_draft_id": current_draft_id,
         "current_draft_revision": current_draft_revision,
     })
 

@@ -50,6 +50,7 @@ below.
   <p>چیدمان پیشنهادیِ صنفِ نصب‌شده روی این فروشگاه را در یک پیش‌نویس جدید اعمال کن.</p>
   <button type="button" class="btn" id="r4IndustryApplyButton"
           data-r4-apply-url="{% url 'dashboard:storefront-builder-r4-apply-industry-layout' %}"
+          data-r4-base-draft-id="{{ draft.pk }}"
           data-r4-base-revision="{{ draft.edit_revision }}"
           {% if layout.published_version_id %}data-r4-confirm="اعمال چیدمان پیشنهادی، Draft فعلی را جایگزین می‌کند. ادامه می‌دهید؟"{% endif %}>
     چیدمان پیشنهادی صنف
@@ -72,7 +73,11 @@ below.
         'Content-Type': 'application/json',
         'X-CSRFToken': (document.cookie.match(/(?:^|; )csrftoken=([^;]+)/) || [])[1] || '',
       },
-      body: JSON.stringify({base_revision: parseInt(btn.getAttribute('data-r4-base-revision'), 10), force: force}),
+      body: JSON.stringify({
+        base_draft_id: parseInt(btn.getAttribute('data-r4-base-draft-id'), 10),
+        base_revision: parseInt(btn.getAttribute('data-r4-base-revision'), 10),
+        force: force,
+      }),
     }).then(function (resp) {
       if (resp.status === 409) {
         alert('این صفحه قدیمی شده — لطفاً صفحه را دوباره بارگذاری کنید و امتحان کنید');

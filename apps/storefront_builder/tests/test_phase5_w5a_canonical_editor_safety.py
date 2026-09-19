@@ -148,14 +148,14 @@ class ClassARedundantRoutesFailClosedTests(R4EnabledCase):
         layout = svc.get_or_create_layout(self.store)
         self.assertFalse(layout.uses_visual_storefront_layout)
 
-    def test_section_collapse_toggle_is_not_blocked(self):
-        """Explicit, source-justified exclusion (master plan §5): this
-        view writes only a cosmetic editor-local field with zero render
-        effect, and the master plan classifies it CANONICAL KEEP / not
-        part of the write-surface risk. Must remain reachable even under
-        R4 — proves the guard's route list is precise, not overbroad."""
-        section = self.store  # placeholder to keep import graph light
-        del section
+    def test_section_collapse_toggle_fails_closed(self):
+        """P5-W5A Independent-Review repair: the Architect proved this is
+        NOT a cosmetic-only write — ``collapsed_in_editor`` is in
+        ``edit_history_service._SECTION_FIELDS`` and the view is decorated
+        with ``@_record_edit_history``, so it participates in Draft
+        snapshots/history exactly like ``storefront_section_toggle``. The
+        prior "justified unguarded exclusion" classification was wrong;
+        this is Class A like every other section mutation route."""
         from apps.storefront_builder.models import StorefrontSection
 
         draft = svc.get_or_create_draft(self.store)
@@ -164,7 +164,34 @@ class ClassARedundantRoutesFailClosedTests(R4EnabledCase):
         if section_obj is None:
             self.skipTest("no default home section fixture available")
         resp = self.client.post(reverse("dashboard:storefront-builder-section-collapse", args=[section_obj.pk]))
-        self.assertNotEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_section_collapse_toggle_blocked_request_mutates_nothing(self):
+        """B — the blocked collapse-toggle POST changes neither the
+        section's persisted collapse state, the Draft's edit_revision, nor
+        its edit-history entry count."""
+        from apps.storefront_builder.models import StorefrontEditHistoryEntry, StorefrontSection
+
+        draft = svc.get_or_create_draft(self.store)
+        page = draft.pages.filter(page_type="home").first()
+        section_obj = StorefrontSection.objects.filter(page=page).first()
+        if section_obj is None:
+            self.skipTest("no default home section fixture available")
+        before_collapsed = section_obj.collapsed_in_editor
+        before_revision = draft.edit_revision
+        before_history_count = StorefrontEditHistoryEntry.objects.filter(draft_version=draft).count()
+
+        resp = self.client.post(reverse("dashboard:storefront-builder-section-collapse", args=[section_obj.pk]))
+        self.assertEqual(resp.status_code, 404)
+
+        section_obj.refresh_from_db()
+        draft.refresh_from_db()
+        self.assertEqual(section_obj.collapsed_in_editor, before_collapsed)
+        self.assertEqual(draft.edit_revision, before_revision)
+        self.assertEqual(
+            StorefrontEditHistoryEntry.objects.filter(draft_version=draft).count(),
+            before_history_count,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +216,25 @@ class ClassARollbackStillWorksTests(StorefrontBuilderViewsTestCase):
     def test_appearance_editor_still_works_when_pinned_back(self):
         resp = self.client.get(reverse("dashboard:storefront-builder-appearance"))
         self.assertEqual(resp.status_code, 200)
+
+    def test_section_collapse_toggle_still_works_when_pinned_back(self):
+        """C — P5-W5A Independent-Review repair: an R3-pinned Store keeps
+        the legacy collapse toggle fully functional (the guard only fails
+        closed under r4_editor_enabled=True)."""
+        from apps.storefront_builder.models import StorefrontSection
+
+        draft = svc.get_or_create_draft(self.store)
+        page = draft.pages.filter(page_type="home").first()
+        section_obj = StorefrontSection.objects.filter(page=page).first()
+        if section_obj is None:
+            self.skipTest("no default home section fixture available")
+        before_collapsed = section_obj.collapsed_in_editor
+
+        resp = self.client.post(reverse("dashboard:storefront-builder-section-collapse", args=[section_obj.pk]))
+        self.assertNotEqual(resp.status_code, 404)
+
+        section_obj.refresh_from_db()
+        self.assertNotEqual(section_obj.collapsed_in_editor, before_collapsed)
 
 
 # ---------------------------------------------------------------------------
@@ -303,22 +349,22 @@ class R4SafeRestoreTests(R4EnabledCase):
     def _restore_url(self, pk):
         return reverse("dashboard:storefront-builder-r4-restore", args=[pk])
 
-    def _post_restore(self, pk, base_revision):
+    def _post_restore(self, pk, base_draft_id, base_revision):
         return self.client.post(
             self._restore_url(pk),
-            data=json.dumps({"base_revision": base_revision}),
+            data=json.dumps({"base_draft_id": base_draft_id, "base_revision": base_revision}),
             content_type="application/json",
         )
 
     def test_r4_safe_restore_succeeds_with_matching_precondition_no_active_draft(self):
         """H — no-active-Draft contract: nothing open yet, client correctly
-        expects None, restore proceeds."""
+        expects null/null, restore proceeds."""
         svc.get_or_create_draft(self.store)
         v1 = svc.publish(self.store)
         layout = svc.get_or_create_layout(self.store)
         self.assertIsNone(layout.draft_version_id)
 
-        resp = self._post_restore(v1.pk, None)
+        resp = self._post_restore(v1.pk, None, None)
 
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.json()["ok"])
@@ -326,19 +372,21 @@ class R4SafeRestoreTests(R4EnabledCase):
         self.assertIsNotNone(layout.draft_version_id)
 
     def test_r4_safe_restore_succeeds_with_matching_active_draft_revision(self):
-        """F — an active Draft exists and the client's expectation matches."""
+        """F — an active Draft exists and the client's expectation (SAME
+        identity, SAME revision) matches."""
         svc.get_or_create_draft(self.store)
         v1 = svc.publish(self.store)
         draft = svc.get_or_create_draft(self.store)
 
-        resp = self._post_restore(v1.pk, draft.edit_revision)
+        resp = self._post_restore(v1.pk, draft.pk, draft.edit_revision)
 
         self.assertEqual(resp.status_code, 200)
         layout = svc.get_or_create_layout(self.store)
         self.assertNotEqual(layout.draft_version_id, draft.pk)
 
     def test_r4_safe_restore_rejects_stale_active_draft_precondition(self):
-        """G — stale precondition: 409, and the newer Draft is untouched."""
+        """G — same Draft identity, wrong (stale) revision: 409, and the
+        newer Draft is untouched."""
         svc.get_or_create_draft(self.store)
         v1 = svc.publish(self.store)
         draft = svc.get_or_create_draft(self.store)
@@ -346,10 +394,11 @@ class R4SafeRestoreTests(R4EnabledCase):
         draft.edit_revision += 1
         draft.save(update_fields=["edit_revision"])
 
-        resp = self._post_restore(v1.pk, stale)
+        resp = self._post_restore(v1.pk, draft.pk, stale)
 
         self.assertEqual(resp.status_code, 409)
         self.assertEqual(resp.json()["code"], "stale_revision")
+        self.assertEqual(resp.json()["current_draft_id"], draft.pk)
         layout = svc.get_or_create_layout(self.store)
         self.assertEqual(layout.draft_version_id, draft.pk)
         self.assertTrue(
@@ -357,17 +406,81 @@ class R4SafeRestoreTests(R4EnabledCase):
         )
 
     def test_r4_safe_restore_rejects_stale_no_draft_precondition(self):
-        """H (conflict branch) — client expected no Draft, but one now
-        exists (created concurrently); must reject, never silently
+        """H (conflict branch) — client expected no Draft (null/null), but
+        one now exists (created concurrently); must reject, never silently
         overwrite it."""
         svc.get_or_create_draft(self.store)
         v1 = svc.publish(self.store)
         svc.get_or_create_draft(self.store)
 
-        resp = self._post_restore(v1.pk, None)
+        resp = self._post_restore(v1.pk, None, None)
 
         self.assertEqual(resp.status_code, 409)
         self.assertEqual(resp.json()["code"], "stale_revision")
+
+    def test_r4_safe_restore_rejects_wrong_draft_id_with_coincidentally_equal_revision(self):
+        """Independent-Review repair — ABA hazard: Draft A is replaced by
+        an unrelated Draft B whose ``edit_revision`` also happens to be 0
+        (every new Draft row starts at 0). A stale client that still
+        believes Draft A (id + revision 0) is active must be rejected even
+        though the REVISION alone would coincidentally match Draft B's —
+        the precondition binds to IDENTITY first, not revision alone."""
+        draft_a = svc.get_or_create_draft(self.store)
+        self.assertEqual(draft_a.edit_revision, 0)
+        draft_a_id = draft_a.pk
+        svc.publish(self.store)
+        v1 = StorefrontLayoutVersion.objects.get(pk=draft_a_id)
+
+        # Draft A is replaced by an unrelated Draft B (also starts at
+        # revision 0) — e.g. another restore/industry-apply/reset landed
+        # first.
+        draft_b = svc.get_or_create_draft(self.store)
+        self.assertEqual(draft_b.edit_revision, 0)
+        self.assertNotEqual(draft_b.pk, draft_a_id)
+
+        # The stale client still believes Draft A (id draft_a_id) is
+        # active at revision 0 — REVISION matches Draft B's too, but
+        # IDENTITY does not.
+        resp = self._post_restore(v1.pk, draft_a_id, 0)
+
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.json()["code"], "stale_revision")
+        self.assertEqual(resp.json()["current_draft_id"], draft_b.pk)
+        layout = svc.get_or_create_layout(self.store)
+        self.assertEqual(layout.draft_version_id, draft_b.pk)
+        self.assertTrue(
+            StorefrontLayoutVersion.objects.filter(
+                pk=draft_b.pk, status=StorefrontLayoutVersion.Status.DRAFT,
+            ).exists(),
+            "Draft B must not be deleted/replaced by the stale request against Draft A",
+        )
+
+    def test_r4_safe_restore_rejects_negative_and_non_integer_precondition_values(self):
+        """Reject controlled 400, never a 500/silent coercion, for a
+        negative or non-integer id/revision."""
+        svc.get_or_create_draft(self.store)
+        v1 = svc.publish(self.store)
+
+        for bad_draft_id, bad_revision in [(-1, 0), (1, -1), ("x", 0), (1, "x")]:
+            resp = self._post_restore(v1.pk, bad_draft_id, bad_revision)
+            self.assertEqual(resp.status_code, 400, (bad_draft_id, bad_revision))
+            self.assertEqual(resp.json()["code"], "invalid_precondition")
+
+    def test_r4_safe_restore_rejects_inconsistent_null_pairing(self):
+        """Reject controlled 400 when only one of base_draft_id/
+        base_revision is null — never treat that as a valid Case A or
+        Case B precondition."""
+        svc.get_or_create_draft(self.store)
+        v1 = svc.publish(self.store)
+
+        resp = self._post_restore(v1.pk, None, 0)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()["code"], "invalid_precondition")
+
+        draft = svc.get_or_create_draft(self.store)
+        resp = self._post_restore(v1.pk, draft.pk, None)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()["code"], "invalid_precondition")
 
     def test_r4_safe_restore_cross_store_fails_closed(self):
         """I — a version belonging to a different Store can never be
@@ -378,7 +491,7 @@ class R4SafeRestoreTests(R4EnabledCase):
         svc.get_or_create_draft(other_store)
         other_version = svc.publish(other_store)
 
-        resp = self._post_restore(other_version.pk, None)
+        resp = self._post_restore(other_version.pk, None, None)
 
         self.assertIn(resp.status_code, (400, 404))
         layout = svc.get_or_create_layout(self.store)
@@ -390,7 +503,7 @@ class R4SafeRestoreTests(R4EnabledCase):
         already produces, not a second hand-rolled implementation."""
         svc.get_or_create_draft(self.store)
         v1 = svc.publish(self.store)
-        resp = self._post_restore(v1.pk, None)
+        resp = self._post_restore(v1.pk, None, None)
         self.assertEqual(resp.status_code, 200)
         layout = svc.get_or_create_layout(self.store)
         self.assertEqual(layout.draft_version.source, StorefrontLayoutVersion.Source.RESTORED)
@@ -399,8 +512,29 @@ class R4SafeRestoreTests(R4EnabledCase):
         _disable_r4(self.store)
         svc.get_or_create_draft(self.store)
         v1 = svc.publish(self.store)
-        resp = self._post_restore(v1.pk, None)
+        resp = self._post_restore(v1.pk, None, None)
         self.assertEqual(resp.status_code, 404)
+
+    def test_r4_safe_restore_rate_limit_exhaustion_returns_controlled_response(self):
+        """The EXISTING, unmodified ``storefront_layout.restore`` rate
+        limit (enforced inside ``layout_service.restore_version()``, before
+        any Draft row is touched) must be translated to a controlled 429,
+        never an unhandled 500 — and must not be loosened or duplicated."""
+        from apps.storefront_builder.services import layout_service
+
+        svc.get_or_create_draft(self.store)
+        v1 = svc.publish(self.store)
+        original = layout_service._RESTORE_RATE_LIMIT
+        layout_service._RESTORE_RATE_LIMIT = dict(max_attempts=0, window_seconds=3600)
+        try:
+            resp = self._post_restore(v1.pk, None, None)
+        finally:
+            layout_service._RESTORE_RATE_LIMIT = original
+
+        self.assertEqual(resp.status_code, 429)
+        self.assertEqual(resp.json()["code"], "rate_limited")
+        layout = svc.get_or_create_layout(self.store)
+        self.assertIsNone(layout.draft_version_id, "rate-limit rejection must not create/replace a Draft")
 
 
 # ---------------------------------------------------------------------------
@@ -419,10 +553,10 @@ class R4SafeIndustryApplyTests(R4EnabledCase):
     def _apply_url(self):
         return reverse("dashboard:storefront-builder-r4-apply-industry-layout")
 
-    def _post_apply(self, base_revision, force=False):
+    def _post_apply(self, base_draft_id, base_revision, force=False):
         return self.client.post(
             self._apply_url(),
-            data=json.dumps({"base_revision": base_revision, "force": force}),
+            data=json.dumps({"base_draft_id": base_draft_id, "base_revision": base_revision, "force": force}),
             content_type="application/json",
         )
 
@@ -432,7 +566,7 @@ class R4SafeIndustryApplyTests(R4EnabledCase):
         layout = svc.get_or_create_layout(self.store)
         self.assertIsNone(layout.draft_version_id)
 
-        resp = self._post_apply(None)
+        resp = self._post_apply(None, None)
 
         self.assertEqual(resp.status_code, 200)
         layout.refresh_from_db()
@@ -443,24 +577,26 @@ class R4SafeIndustryApplyTests(R4EnabledCase):
         self._install_template()
         draft = svc.get_or_create_draft(self.store)
 
-        resp = self._post_apply(draft.edit_revision)
+        resp = self._post_apply(draft.pk, draft.edit_revision)
 
         self.assertEqual(resp.status_code, 200)
         layout = svc.get_or_create_layout(self.store)
         self.assertNotEqual(layout.draft_version_id, draft.pk)
 
     def test_r4_safe_industry_apply_rejects_stale_precondition(self):
-        """L — 409, and the newer Draft is untouched."""
+        """L — same Draft identity, wrong (stale) revision: 409, and the
+        newer Draft is untouched."""
         self._install_template()
         draft = svc.get_or_create_draft(self.store)
         stale = draft.edit_revision
         draft.edit_revision += 1
         draft.save(update_fields=["edit_revision"])
 
-        resp = self._post_apply(stale)
+        resp = self._post_apply(draft.pk, stale)
 
         self.assertEqual(resp.status_code, 409)
         self.assertEqual(resp.json()["code"], "stale_revision")
+        self.assertEqual(resp.json()["current_draft_id"], draft.pk)
         layout = svc.get_or_create_layout(self.store)
         self.assertEqual(layout.draft_version_id, draft.pk)
 
@@ -468,16 +604,71 @@ class R4SafeIndustryApplyTests(R4EnabledCase):
         self._install_template()
         svc.get_or_create_draft(self.store)
 
-        resp = self._post_apply(None)
+        resp = self._post_apply(None, None)
 
         self.assertEqual(resp.status_code, 409)
+
+    def test_r4_safe_industry_apply_rejects_aba_stale_draft_identity_even_with_matching_revision(self):
+        """Independent-Review repair — ABA hazard, Industry-Apply variant:
+        Draft A (revision 0) is replaced by unrelated Draft B (also
+        revision 0). A stale client still expecting Draft A must be
+        rejected even though the revision alone coincidentally matches;
+        Draft B remains active and is not deleted/replaced."""
+        self._install_template()
+        draft_a = svc.get_or_create_draft(self.store)
+        self.assertEqual(draft_a.edit_revision, 0)
+        draft_a_id = draft_a.pk
+
+        # Draft A is replaced by an unrelated Draft B: publish clears the
+        # active-Draft pointer, and the next get_or_create_draft creates a
+        # brand-new Draft row, which also starts at revision 0.
+        svc.publish(self.store)
+        draft_b = svc.get_or_create_draft(self.store)
+        self.assertEqual(draft_b.edit_revision, 0)
+        self.assertNotEqual(draft_b.pk, draft_a_id)
+
+        # The stale client still believes Draft A (id draft_a_id) is
+        # active at revision 0 — REVISION matches Draft B's too, but
+        # IDENTITY does not.
+        resp = self._post_apply(draft_a_id, 0)
+
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.json()["code"], "stale_revision")
+        self.assertEqual(resp.json()["current_draft_id"], draft_b.pk)
+        layout = svc.get_or_create_layout(self.store)
+        self.assertEqual(layout.draft_version_id, draft_b.pk)
+        self.assertTrue(
+            StorefrontLayoutVersion.objects.filter(
+                pk=draft_b.pk, status=StorefrontLayoutVersion.Status.DRAFT,
+            ).exists(),
+            "Draft B must not be deleted/replaced by the stale request against Draft A",
+        )
+        self.assertNotEqual(layout.draft_version.source, StorefrontLayoutVersion.Source.INDUSTRY_TEMPLATE)
+
+    def test_r4_safe_industry_apply_rejects_negative_and_non_integer_precondition_values(self):
+        self._install_template()
+        for bad_draft_id, bad_revision in [(-1, 0), (1, -1), ("x", 0), (1, "x")]:
+            resp = self._post_apply(bad_draft_id, bad_revision)
+            self.assertEqual(resp.status_code, 400, (bad_draft_id, bad_revision))
+            self.assertEqual(resp.json()["code"], "invalid_precondition")
+
+    def test_r4_safe_industry_apply_rejects_inconsistent_null_pairing(self):
+        self._install_template()
+        resp = self._post_apply(None, 0)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()["code"], "invalid_precondition")
+
+        draft = svc.get_or_create_draft(self.store)
+        resp = self._post_apply(draft.pk, None)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()["code"], "invalid_precondition")
 
     def test_r4_safe_industry_apply_requires_confirm_when_already_published(self):
         self._install_template()
         svc.get_or_create_draft(self.store)
         published = svc.publish(self.store)
 
-        resp = self._post_apply(None, force=False)
+        resp = self._post_apply(None, None, force=False)
 
         self.assertEqual(resp.status_code, 400)
         layout = svc.get_or_create_layout(self.store)
@@ -489,7 +680,7 @@ class R4SafeIndustryApplyTests(R4EnabledCase):
         svc.get_or_create_draft(self.store)
         svc.publish(self.store)
 
-        resp = self._post_apply(None, force=True)
+        resp = self._post_apply(None, None, force=True)
 
         self.assertEqual(resp.status_code, 200)
         layout = svc.get_or_create_layout(self.store)
@@ -507,7 +698,7 @@ class R4SafeIndustryApplyTests(R4EnabledCase):
 
         resp = self.client.post(
             self._apply_url(),
-            data=json.dumps({"base_revision": None, "force": "false"}),
+            data=json.dumps({"base_draft_id": None, "base_revision": None, "force": "false"}),
             content_type="application/json",
         )
 
@@ -532,7 +723,7 @@ class R4SafeIndustryApplyTests(R4EnabledCase):
             store=other_store, industry_template=template, installed_version=template.version,
         )
 
-        resp = self._post_apply(None)
+        resp = self._post_apply(None, None)
 
         self.assertEqual(resp.status_code, 404)
         layout = svc.get_or_create_layout(self.store)
@@ -541,7 +732,7 @@ class R4SafeIndustryApplyTests(R4EnabledCase):
     def test_r4_safe_industry_apply_delegates_to_existing_canonical_service(self):
         """P"""
         self._install_template()
-        resp = self._post_apply(None)
+        resp = self._post_apply(None, None)
         self.assertEqual(resp.status_code, 200)
         layout = svc.get_or_create_layout(self.store)
         self.assertEqual(layout.draft_version.source, StorefrontLayoutVersion.Source.INDUSTRY_TEMPLATE)
@@ -549,8 +740,29 @@ class R4SafeIndustryApplyTests(R4EnabledCase):
     def test_r4_safe_industry_apply_requires_r4_editor_enabled(self):
         _disable_r4(self.store)
         self._install_template()
-        resp = self._post_apply(None)
+        resp = self._post_apply(None, None)
         self.assertEqual(resp.status_code, 404)
+
+    def test_r4_safe_industry_apply_rate_limit_exhaustion_returns_controlled_response(self):
+        """The EXISTING, unmodified ``storefront_layout.new_draft`` rate
+        limit (enforced inside ``layout_service.apply_industry_layout()``,
+        before any Draft row is touched) must be translated to a
+        controlled 429, never an unhandled 500 — and must not be loosened
+        or duplicated."""
+        from apps.storefront_builder.services import layout_service
+
+        self._install_template()
+        original = layout_service._NEW_DRAFT_RATE_LIMIT
+        layout_service._NEW_DRAFT_RATE_LIMIT = dict(max_attempts=0, window_seconds=3600)
+        try:
+            resp = self._post_apply(None, None)
+        finally:
+            layout_service._NEW_DRAFT_RATE_LIMIT = original
+
+        self.assertEqual(resp.status_code, 429)
+        self.assertEqual(resp.json()["code"], "rate_limited")
+        layout = svc.get_or_create_layout(self.store)
+        self.assertIsNone(layout.draft_version_id, "rate-limit rejection must not create/replace a Draft")
 
 
 # ---------------------------------------------------------------------------
@@ -570,7 +782,8 @@ class ClassCConcurrencyBoundaryTests(R4EnabledCase):
 
         with self.assertRaises(r4_mutation_service.R4StaleRevision):
             r4_mutation_service.restore_version_safe(
-                store=self.store, actor=self.staff, base_revision=stale, version_id=v1.pk,
+                store=self.store, actor=self.staff,
+                base_draft_id=draft.pk, base_revision=stale, version_id=v1.pk,
             )
         layout = svc.get_or_create_layout(self.store)
         self.assertEqual(layout.draft_version_id, draft.pk)
@@ -591,7 +804,7 @@ class ClassCConcurrencyBoundaryTests(R4EnabledCase):
 
         with self.assertRaises(r4_mutation_service.R4StaleRevision):
             r4_mutation_service.apply_industry_layout_safe(
-                store=self.store, actor=self.staff, base_revision=stale,
+                store=self.store, actor=self.staff, base_draft_id=draft.pk, base_revision=stale,
             )
         layout = svc.get_or_create_layout(self.store)
         self.assertEqual(layout.draft_version_id, draft.pk)
