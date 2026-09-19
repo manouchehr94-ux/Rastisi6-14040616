@@ -55,10 +55,12 @@ in each evidence file's own round-2 section.
 
 ## Class A / B / C implementation (final)
 
-- **Class A** — **31 routes, all 31 guarded, 0 exclusions** (round-2
+- **Class A** — **32 routes, all 32 guarded, 0 exclusions** (round-2
   correction: `storefront_section_collapse_toggle` moved from "justified
-  exclusion" into the guarded table). Guarded by the same single shared
-  decorator, `_require_legacy_editor_active`, applied to an explicit
+  exclusion" into the guarded table, and the prior "31" total corrected
+  to the actual source-verified count — `_require_legacy_editor_active`
+  decorates 34 functions in `views.py` total: 32 Class A + 2 legacy Class
+  C). Guarded by the same single shared decorator, applied to an explicit
   route list — never module-wide.
 - **Class B** (Ready Template Gallery/Apply, Draft Preview, History
   browser, media) — verified never blocked. Round-2 re-audit confirmed
@@ -82,7 +84,7 @@ subsequent `layout_service` call: no TOCTOU gap. Round-2: identity is
 checked before revision, closing the ABA hazard; a mismatch on either
 raises `R4StaleRevision` with both `current_revision` and
 `current_draft_id`. Full wire contract in `concurrency_contract.md`,
-exercised by 25 tests across `R4SafeRestoreTests` (11),
+exercised by 27 tests across `R4SafeRestoreTests` (11),
 `R4SafeIndustryApplyTests` (14), and `ClassCConcurrencyBoundaryTests` (2).
 
 ## Class-A route audit (final)

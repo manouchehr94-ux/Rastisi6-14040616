@@ -77,7 +77,7 @@ New R4-safe endpoints fully tested: `R4SafeRestoreTests` (11 tests) and `R4SafeI
 
 ## Summary
 
-- Class A routes inventoried: **31**, all 31 now **guarded** — 0 exclusions. (Round 2 correction: `storefront-builder-section-collapse` was previously counted as a justified unguarded exclusion; the Independent Architect proved it is a real persisted Draft mutation, so it is now guarded like every other Class-A route.)
+- Class A routes inventoried: **32**, all 32 now **guarded** — 0 exclusions. (Round 2 correction: `storefront-builder-section-collapse` was previously counted as a justified unguarded exclusion, and the total was previously misstated as 31; the Independent Architect proved by direct source inspection that `_require_legacy_editor_active` decorates 34 functions in `views.py` total — 32 Class A + 2 legacy Class C [`storefront_restore`, `storefront_apply_industry_layout`] — so `storefront-builder-section-collapse` is now guarded like every other Class-A route, and the Class-A table above correctly lists 32 rows.)
 - Class A routes writable under R4 after implementation: **0**.
 - Class B canonical routes accidentally blocked: **0**.
 - Class C unsafe legacy writes left available under R4: **0** (both converged to a stale-write-protected, tenant-scoped R4-safe boundary; legacy paths themselves also fail closed under R4).
