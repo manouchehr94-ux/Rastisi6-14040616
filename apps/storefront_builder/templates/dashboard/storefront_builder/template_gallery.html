@@ -14,7 +14,7 @@
   .tpl-swatch-row span{flex:1}
   .tpl-thumb{aspect-ratio:300/188;width:100%;overflow:hidden;background:var(--bg);border-bottom:1px solid var(--line)}
   .tpl-thumb svg{display:block;width:100%;height:100%}
-  .tpl-thumb a{display:block;width:100%;height:100%}
+  .tpl-thumb a{display:block;width:100%;height:100%;cursor:zoom-in}
   .tpl-thumb img{display:block;width:100%;height:100%;object-fit:cover;object-position:top center}
   .tpl-card-body{padding:16px;display:flex;flex-direction:column;gap:8px;flex:1}
   .tpl-card-title{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -27,6 +27,27 @@
   .tpl-card-actions button{width:100%}
   .tpl-empty-swatch{background:repeating-linear-gradient(45deg,var(--bg),var(--bg) 6px,var(--line) 6px,var(--line) 7px)}
   .tpl-gallery-footer{margin-top:26px;text-align:center}
+
+  /* P5-W5C — in-page Ready Template Preview dialog. ONE shared instance,
+     reused by every card's trigger; presentation-only, mirrors R4's own
+     device-switcher width contract (1200/768/390) independently (see the
+     implementation plan's §11 reuse-vs-duplication decision). */
+  .tpl-preview-overlay{position:fixed;inset:0;z-index:1000;display:none;align-items:center;justify-content:center;background:rgba(15,15,20,.6);padding:16px}
+  .tpl-preview-overlay.is-open{display:flex}
+  .tpl-preview-dialog{width:min(1100px,100%);height:min(88vh,900px);background:var(--card);border-radius:16px;border:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.35)}
+  .tpl-preview-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line)}
+  .tpl-preview-header strong{font-size:15px}
+  .tpl-preview-close{border:1px solid var(--line);background:var(--bg);border-radius:10px;width:32px;height:32px;display:grid;place-items:center;cursor:pointer;flex:0 0 auto}
+  .tpl-preview-controls{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:10px 18px;border-bottom:1px solid var(--line);background:var(--bg)}
+  .tpl-preview-toggle-group{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .tpl-preview-toggle-group button{border:0;background:var(--card);color:inherit;padding:6px 12px;font-size:12.5px;cursor:pointer;border-inline-start:1px solid var(--line)}
+  .tpl-preview-toggle-group button:first-child{border-inline-start:0}
+  .tpl-preview-toggle-group button[aria-pressed="true"]{background:var(--violet);color:#fff}
+  .tpl-preview-canvas{flex:1 1 auto;min-height:0;display:flex;overflow:auto;background:var(--bg);padding:10px}
+  .tpl-preview-canvas iframe{flex:1 1 auto;width:100%;height:100%;border:0;background:#fff;border-radius:8px}
+  .tpl-preview-canvas[data-tpl-preview-device="tablet"] iframe,
+  .tpl-preview-canvas[data-tpl-preview-device="mobile"] iframe{flex:0 0 auto;height:auto}
+  .tpl-preview-footer{display:flex;align-items:center;justify-content:flex-end;padding:10px 18px;border-top:1px solid var(--line);font-size:12.5px}
 </style>
 {% endblock %}
 
@@ -38,7 +59,13 @@
     <div class="tpl-card{% if card.is_current %} is-current{% endif %}">
       <div class="tpl-thumb" role="img" aria-label="پیش‌نمایشِ چیدمانِ قالبِ «{{ preset.label_fa }}»">
         {% if card.thumbnail_kind == "screenshot" %}
-        <a href="{{ card.thumbnail_url }}" target="_blank" rel="noopener" title="مشاهده‌ی پیش‌نمایشِ بزرگ‌تر (بدونِ اعمالِ قالب)">
+        <a href="{% url 'dashboard:storefront-builder-template-live-preview' key=preset.key %}?data=merchant"
+           data-tpl-preview-trigger
+           data-tpl-preview-url-demo="{% url 'dashboard:storefront-builder-template-live-preview' key=preset.key %}"
+           data-tpl-preview-url-merchant="{% url 'dashboard:storefront-builder-template-live-preview' key=preset.key %}?data=merchant"
+           data-tpl-preview-default-mode="merchant"
+           data-tpl-preview-label="{{ preset.label_fa }}"
+           title="پیش‌نمایشِ زنده‌ی این قالب — بدونِ اعمال">
           <img src="{{ card.thumbnail_url }}" alt="پیش‌نمایشِ واقعیِ فروشگاهِ نمایشیِ Rasti Mode با قالبِ «{{ preset.label_fa }}»" loading="lazy">
         </a>
         {% else %}
@@ -67,13 +94,21 @@
         <div class="tpl-card-actions">
           <a class="sfb-v3-ghost-btn" style="display:block;text-align:center;margin-bottom:8px"
              href="{% url 'dashboard:storefront-builder-template-live-preview' key=preset.key %}"
-             target="_blank" rel="noopener"
+             data-tpl-preview-trigger
+             data-tpl-preview-url-demo="{% url 'dashboard:storefront-builder-template-live-preview' key=preset.key %}"
+             data-tpl-preview-url-merchant="{% url 'dashboard:storefront-builder-template-live-preview' key=preset.key %}?data=merchant"
+             data-tpl-preview-default-mode="demo"
+             data-tpl-preview-label="{{ preset.label_fa }}"
              title="پیش‌نمایشِ زنده‌ی این قالب با داده‌های نمایشیِ Rasti Mode Demo — بدونِ اعمال">
             مشاهده با اطلاعات نمایشی
           </a>
           <a class="sfb-v3-ghost-btn" style="display:block;text-align:center;margin-bottom:8px"
              href="{% url 'dashboard:storefront-builder-template-live-preview' key=preset.key %}?data=merchant"
-             target="_blank" rel="noopener"
+             data-tpl-preview-trigger
+             data-tpl-preview-url-demo="{% url 'dashboard:storefront-builder-template-live-preview' key=preset.key %}"
+             data-tpl-preview-url-merchant="{% url 'dashboard:storefront-builder-template-live-preview' key=preset.key %}?data=merchant"
+             data-tpl-preview-default-mode="merchant"
+             data-tpl-preview-label="{{ preset.label_fa }}"
              title="پیش‌نمایشِ زنده‌ی این قالب با اطلاعات واقعی فروشگاه شما — بدونِ اعمال">
             مشاهده با اطلاعات فروشگاه من
           </a>
@@ -102,5 +137,52 @@
   <div class="tpl-gallery-footer">
     <a class="sfb-v3-ghost-btn" href="{% url 'dashboard:storefront-builder-editor' %}">ادامه در ویرایشگرِ پیشرفته ←</a>
   </div>
+
+  {% comment %}
+  P5-W5C — the ONE shared, in-page Ready Template Preview dialog. Every
+  card's preview trigger (screenshot + both "مشاهده..." links) retargets
+  this SAME dialog/iframe via template_gallery_preview.js — never a
+  per-card dialog, never a second iframe, never a new route/renderer. The
+  iframe always loads the existing canonical
+  ``dashboard:storefront-builder-template-live-preview`` route (Demo or
+  ``?data=merchant``); Desktop/Tablet/Mobile only resizes/scales that same
+  iframe (R4's own 1200/768/390 contract, reimplemented independently —
+  see the plan's §11).
+  {% endcomment %}
+  <div class="tpl-preview-overlay" data-tpl-preview-root aria-hidden="true">
+    <div class="tpl-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="tplPreviewTitle">
+      <header class="tpl-preview-header">
+        <strong id="tplPreviewTitle" data-tpl-preview-title>پیش‌نمایشِ قالب</strong>
+        <button type="button" class="tpl-preview-close" data-tpl-preview-close aria-label="بستنِ پیش‌نمایش">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </header>
+      <div class="tpl-preview-controls">
+        <div class="tpl-preview-toggle-group" role="group" aria-label="منبعِ داده‌یِ پیش‌نمایش">
+          <button type="button" data-tpl-preview-datasource="merchant" aria-pressed="true">اطلاعات فروشگاه من</button>
+          <button type="button" data-tpl-preview-datasource="demo" aria-pressed="false">اطلاعات نمایشی</button>
+        </div>
+        <div class="tpl-preview-toggle-group" role="group" aria-label="اندازه‌یِ نمایشِ پیش‌نمایش">
+          <button type="button" data-tpl-preview-device="desktop" aria-pressed="true">دسکتاپ</button>
+          <button type="button" data-tpl-preview-device="tablet" aria-pressed="false">تبلت</button>
+          <button type="button" data-tpl-preview-device="mobile" aria-pressed="false">موبایل</button>
+        </div>
+      </div>
+      <div class="tpl-preview-canvas" data-tpl-preview-canvas data-tpl-preview-device="desktop">
+        <iframe data-tpl-preview-frame
+                title="پیش‌نمایشِ زنده‌یِ قالب"
+                data-desktop-viewport-width="1200"
+                data-tablet-viewport-width="768"
+                data-mobile-viewport-width="390"></iframe>
+      </div>
+      <footer class="tpl-preview-footer">
+        <a data-tpl-preview-new-tab href="#" target="_blank" rel="noopener">بازکردن در تبِ جدید ↗</a>
+      </footer>
+    </div>
+  </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'storefront_builder/template_gallery_preview.js' %}"></script>
 {% endblock %}

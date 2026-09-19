@@ -2335,12 +2335,20 @@ RASTI_MODE_DEMO_STORE_SLUG = "rasti-mode-demo"
 
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@xframe_options_sameorigin
 def storefront_template_live_preview(request, key):
     """Live, non-mutating Ready Template preview for Demo or Merchant data.
 
     Phase 5 Task 2 established this ONE preview route, Task-1 candidate
     resolution and the shared renderer.  Task 3 keeps that architecture and
     adds only a data-context choice:
+
+    P5-W5C explicitly overrides ``xframe_options_sameorigin`` for the same
+    reason ``storefront_preview`` already does: this view is now
+    intentionally embedded inside the Ready Template Gallery's own in-page
+    preview ``<iframe>`` (``template_gallery_preview.js``); the global
+    default DENY (no ``X_FRAME_OPTIONS`` set, ``XFrameOptionsMiddleware``'s
+    own fallback) remains untouched for every other view.
 
     * default: the canonical ``rasti-mode-demo`` Store (Task-2 behavior),
     * ``?data=merchant``: the Store resolved by the existing canonical
