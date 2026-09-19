@@ -95,7 +95,78 @@ Both classes of bug were fixed precisely (see commit `6019a82e`) and
 verified: (a) the 33 tests across all affected classes pass together with
 no collateral breakage of sibling tests, (b) a broader 943-test sanity
 sweep across the originally-affected 17 files plus the W5A suite, showed
-zero new identities versus baseline, and (c) this document's final,
-uncontended, exact-source run confirms zero new/missing/changed at full
-scale. The contaminated run's output file was not used for any pass/fail
-determination.
+zero new identities versus baseline, and (c) round 1's final exact-source
+run confirmed zero new/missing/changed at full scale (`3468 tests,
+failures=30, errors=2, skipped=1`, at HEAD `6019a82e`). The contaminated
+run's output file was not used for any pass/fail determination.
+
+## Round 2 — Independent-Review repair final run
+
+The Independent Architect's PR review of #13 found IMPORTANT 2 / BLOCKING
+MINOR 1 (collapse-toggle misclassification, the Class-C ABA hazard, and an
+unhandled 500 on rate-limit exhaustion — see `code_review.md`). Fixing them
+added 10 more W5A regression tests (50 → 60) and touched `views.py`,
+`r4_views.py`, `r4_mutation_service.py`, two templates, and 18 test files
+(2 more pinned test methods on top of round 1's 88, surfaced by the newly
+guarded collapse-toggle route and the changed Class-C wire contract —
+see `code_review.md`'s round-2 section and commits `0edc258c`/`128afd19`).
+
+- Command: `python manage.py test apps.storefront_builder.tests --settings=shop_core.settings -v 2`
+- HEAD: `128afd19` (branch `feature/phase5-w5a-canonical-editor-safety`).
+- Run cleanly with **no concurrent process** touching the shared SQLite test
+  database (confirmed via `ps`/`git status` immediately before starting).
+- **Result: `Ran 3478 tests in 2323.931s` — `FAILED (failures=30, errors=2,
+  skipped=1)`.**
+- Test count increased by exactly 60 versus the original baseline
+  (3418 → 3478), matching the 60 W5A tests now in
+  `test_phase5_w5a_canonical_editor_safety.py` (50 from round 1 + 10 new
+  round-2 regression tests), all of which pass.
+
+### Identity comparison (round 2)
+
+```
+NEW FAILURE/ERROR IDENTITIES:              0
+MISSING UNEXPLAINED HISTORICAL IDENTITIES: 0
+```
+
+`diff` of the sorted 32-identity baseline list against the sorted
+32-identity round-2 final list is **byte-for-byte identical** (same
+outcome as round 1).
+
+### Reason-level comparison (round 2)
+
+- **27 of 32** byte-identical to baseline.
+- **5 of 32** differ only in the same embedded, non-deterministic HTML
+  response body noted in round 1 (`test_builder_preview_has_nav_but_never_
+  live_cart_count_badge`, `test_fullscreen_button_is_in_v3_topbar_with_
+  device_and_zoom_controls`, `test_version_palette_and_global_variants`,
+  `test_public_home_renders_functional_mobile_nav_and_real_routes`,
+  `test_header_footer_variant_labels_shown_for_updated_preset`) — same
+  file, same line, same exception type, same assertion-message prefix,
+  reconfirmed by direct comparison against round 1's own final run.
+
+```
+CHANGED HISTORICAL FAILURE/ERROR REASONS: 0
+```
+
+### Two more regressions found and fixed en route to this clean run
+
+A 1047-test focused sanity sweep run before this final full-suite pass
+(after the round-2 production fixes but before the exact-source run)
+surfaced 2 new-vs-baseline identities, both caused by the round-2 fixes
+themselves, not the original W5A implementation:
+
+1. `FullLifecycleConvergenceTests._run_lifecycle_via_r4`'s Restore call
+   (added in round 1) still sent the pre-repair bare `{"base_revision":
+   null}` payload; the round-2 Class-C wire-contract change rejected it as
+   `invalid_precondition` (missing `base_draft_id`). Fixed by adding
+   `base_draft_id: null` alongside it.
+2. `LegacyStructureLockPositiveTests.test_collapse_toggle_on_locked_
+   section_succeeds` exercises the legacy collapse-toggle route directly
+   without pinning `r4_editor_enabled=False`; it never needed the pin
+   before because the route was unguarded, and now does, matching its
+   sibling tests in the same class.
+
+Both fixed in commit `128afd19`, verified via a 141-test targeted re-check,
+then a full 1047-test sanity-sweep re-run showing 0 new identities versus
+baseline, before this document's final exact-source run.
