@@ -1010,8 +1010,13 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
 #: remediation (Gap 1) — further widened to ``extra_blocks``/``responsive``
 #: (previously deliberately deferred as legacy-only compound repeater/
 #: per-device UI); the legacy footer form no longer has any field R4 lacks.
+#: P5-W5B — widened once more to ``mobile_nav_variant``: Mobile Bottom
+#: Navigation is a third global chrome region (``GLOBAL_MOBILE_NAV_REGION``)
+#: whose selector already lives inside this same versioned ``footer_config``
+#: JSON and was already validated/synced on every save — it simply could
+#: never be CHANGED by a merchant through R4 before this.
 _FOOTER_UPDATE_ALLOWED_PATCH_KEYS = frozenset(
-    {"footer_variant", "extra_blocks", "responsive"} | set(FOOTER_TOGGLE_FIELDS)
+    {"footer_variant", "mobile_nav_variant", "extra_blocks", "responsive"} | set(FOOTER_TOGGLE_FIELDS)
 )
 
 
@@ -1025,6 +1030,8 @@ def _apply_footer_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
     candidate = dict(draft.effective_footer_config())
     if "footer_variant" in patch:
         candidate["footer_variant"] = patch["footer_variant"]
+    if "mobile_nav_variant" in patch:
+        candidate["mobile_nav_variant"] = patch["mobile_nav_variant"]
     for field in FOOTER_TOGGLE_FIELDS:
         if field in patch:
             candidate[field] = patch[field]
