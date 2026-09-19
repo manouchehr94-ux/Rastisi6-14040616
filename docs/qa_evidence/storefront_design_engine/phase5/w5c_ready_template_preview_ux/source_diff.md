@@ -71,3 +71,70 @@ own device-switcher implementation, per the plan's §11 decision.
 No model field was added, removed, or altered.
 `manage.py makemigrations --check --dry-run` reports "No changes
 detected".
+
+---
+
+# Round 2 — Independent Architect repair diff
+
+Diff: `git diff 2ebdc38ea868ceb5eae6a6696560cc4835fe6410..HEAD` (base =
+the pre-repair PR head).
+
+```
+ apps/storefront_builder/static/storefront_builder/template_gallery_preview.js         |  27 +
+ apps/storefront_builder/tests/test_phase5_w5c_ready_template_preview_ux.py            | 187 +++
+ apps/storefront_builder/tests/test_task2_live_demo_template_preview.py                |  12 +
+ apps/storefront_builder/views.py                                                       |  26 +-
+ apps/stores/management/commands/apply_golden_reference_storefront.py                   |  15 +-
+ (+ evidence docs, ~1200 lines, docs-only)
+ 18 files changed, 1462 insertions(+), 5 deletions(-)
+```
+
+## Production code (2 files, non-test, non-management-command)
+
+- **`apps/storefront_builder/views.py`** (+26/-2): `storefront_template_
+  live_preview` gains `@require_GET` and its Demo-mode candidate
+  resolution changes from `get_or_create_draft` to `get_existing_draft`
+  (with a new 404 branch matching Merchant mode's existing one), plus
+  docstring justification. No other line changed.
+- **`apps/storefront_builder/static/storefront_builder/template_gallery_preview.js`**
+  (+27): one new `frame.addEventListener('load', ...)` block attaching
+  an Escape handler to each newly-loaded iframe document. No other
+  function changed.
+
+## Production code (1 management command)
+
+- **`apps/stores/management/commands/apply_golden_reference_storefront.py`**
+  (+15/-1): one new step after publishing — `layout_service.
+  get_or_create_draft(store)` — so the canonical Demo Store always has a
+  usable Draft immediately after seeding, matching the Preview route's
+  new no-bootstrap contract. Idempotent, consistent with the command's
+  existing idempotency guarantee.
+
+## Test code
+
+- **`apps/storefront_builder/tests/test_phase5_w5c_ready_template_preview_ux.py`**
+  (+187, 8 new tests across 4 new classes): `PreviewMethodContractTests`
+  (POST → 405, both modes), `DemoPreviewNoBootstrapTests` (a Demo Store
+  with no Draft still 404s and creates zero persistence — proven against
+  the DB), `SeededDemoPreviewNonMutationTests` (a real seeded Demo Draft
+  is never mutated, including repeated loads), and
+  `MerchantPreviewNoBootstrapRegressionTests`.
+- **`apps/storefront_builder/tests/test_task2_live_demo_template_preview.py`**
+  (+12 in `setUpTestData`): the pre-existing, otherwise-unmodified shared
+  fixture now explicitly creates a fresh Demo Draft after
+  `apply_golden_reference_storefront` publishes — required once Demo
+  mode correctly stopped silently bootstrapping one. See
+  `non_mutation_proof.md`'s round-2 section for the full account
+  (7 failures before this fixture fix, 20/20 after).
+
+## Zero migrations (still)
+
+`manage.py makemigrations --check --dry-run` reports "No changes
+detected" at the final repaired HEAD.
+
+## Zero new preview routes / renderers / mutation types (still)
+
+The repair touches only the existing route's method restriction and
+candidate-resolution call, the existing dialog's Escape handling, and
+one seeding command's post-publish step — no new URL, template, or
+mutation type anywhere in this diff.
