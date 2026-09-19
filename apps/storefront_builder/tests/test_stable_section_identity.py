@@ -100,6 +100,12 @@ class StableIdDuplicateTests(TestCase):
         self.draft.sections.all().delete()
 
     def test_duplicate_receives_a_different_stable_id(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         section = StorefrontSection.objects.create(version=self.draft, section_key="rich_text", order=0)
         original_stable_id = section.stable_id
 

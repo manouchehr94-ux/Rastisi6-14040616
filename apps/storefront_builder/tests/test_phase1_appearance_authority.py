@@ -927,6 +927,12 @@ class ExplicitLocalVariantMarkerTests(Phase1AppearanceAuthorityBase):
         )
 
     def test_legacy_genuine_variant_change_marks_explicit(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         resp = self._post_legacy_hero(hero_style="split")
         self.assertEqual(resp.status_code, 302)
         self.hero.refresh_from_db()
@@ -937,6 +943,12 @@ class ExplicitLocalVariantMarkerTests(Phase1AppearanceAuthorityBase):
         # Re-submit the SAME variant value (the form always includes it) while
         # changing only an unrelated control — historical marker state must not
         # transition to explicit.
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         resp = self._post_legacy_hero(hero_style="overlay", autoplay=True)
         self.assertEqual(resp.status_code, 302)
         self.assertNotIn("variant_explicit", self._section_overrides())

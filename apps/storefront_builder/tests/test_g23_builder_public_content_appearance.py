@@ -218,6 +218,12 @@ class DefectCSectionBackgroundTests(_GoldenBase):
 
     # 1. MUTATION / PERSISTENCE ----------------------------------------
     def test_palette_mode_persists_when_only_mode_selected(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         """A merchant selecting a palette background whose companion field is
         left at its natural default MUST persist as palette — not silently
         downgrade to theme (the observed 'nothing changes')."""
@@ -232,6 +238,12 @@ class DefectCSectionBackgroundTests(_GoldenBase):
                          "palette selection silently downgraded to theme (Defect C)")
 
     def test_custom_color_mode_persists_when_only_mode_selected(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         _, home = self._draft_home()
         sec = self._bg_section(home)
         self._post_settings(sec, {"background_mode": "color"})
@@ -241,6 +253,12 @@ class DefectCSectionBackgroundTests(_GoldenBase):
 
     # 2. PREVIEW RENDER ------------------------------------------------
     def test_palette_background_changes_preview_render(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         _, home = self._draft_home()
         sec = self._bg_section(home)
         self._post_settings(sec, {"background_mode": "palette", "background_palette_role": "tone-2"})
@@ -249,6 +267,12 @@ class DefectCSectionBackgroundTests(_GoldenBase):
         self.assertIn('data-palette-role="tone-2"', preview)
 
     def test_color_mode_without_color_paints_no_background(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         """G2.3 review follow-up: selecting 'custom color' but never picking a
         colour must keep the mode (no silent theme downgrade) yet paint NO
         background — never a surprise hardcoded red. The wrapper only emits an
@@ -264,6 +288,12 @@ class DefectCSectionBackgroundTests(_GoldenBase):
         self.assertNotIn("#F53247", preview)
 
     def test_palette_pattern_without_role_persists_with_default_role(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         """The empty-companion defaulting must apply to BOTH palette modes."""
         _, home = self._draft_home()
         sec = self._bg_section(home)
@@ -278,6 +308,12 @@ class DefectCSectionBackgroundTests(_GoldenBase):
 
     # 4. CUSTOM COLOR INDEPENDENCE -------------------------------------
     def test_custom_color_renders_independent_hex(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         _, home = self._draft_home()
         sec = self._bg_section(home)
         self._post_settings(sec, {"background_mode": "color", "background_color": "#123456"})
@@ -288,6 +324,12 @@ class DefectCSectionBackgroundTests(_GoldenBase):
 
     # 5. PUBLISH / PUBLIC ----------------------------------------------
     def test_background_survives_publish_into_public(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         _, home = self._draft_home()
         sec = self._bg_section(home)
         self._post_settings(sec, {"background_mode": "palette", "background_palette_role": "tone-3"})

@@ -478,6 +478,12 @@ class FooterEditorRegressionTests(TestCase):
 
     @override_settings(ALLOWED_HOSTS=[ADMIN_HOST, "testserver"])
     def test_post_with_unknown_footer_variant_key_is_rejected(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         resp = self.client.post(reverse("dashboard:storefront-builder-footer"), {
             "show_copyright": "on", "footer_variant": "totally_made_up_variant",
         })
@@ -487,6 +493,12 @@ class FooterEditorRegressionTests(TestCase):
 
     @override_settings(ALLOWED_HOSTS=[ADMIN_HOST, "testserver"])
     def test_post_with_valid_footer_variant_round_trips(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         resp = self.client.post(reverse("dashboard:storefront-builder-footer"), {
             "show_copyright": "on", "footer_variant": "premium_columns",
         })
@@ -499,6 +511,12 @@ class FooterEditorRegressionTests(TestCase):
 
     @override_settings(ALLOWED_HOSTS=[ADMIN_HOST, "testserver"])
     def test_switching_footer_variant_does_not_erase_footer_content_settings(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         """Changing the visual variant must be independent from footer
         content — an unrelated content toggle (show_about) must survive a
         footer_variant change made in a separate request."""

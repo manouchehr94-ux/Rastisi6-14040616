@@ -247,8 +247,17 @@ class CardFamilyReconciliationTests(GroupFReconciliationBase):
         )
 
     def test_explicit_local_card_style_wins_over_later_manifest_selection(self):
+        # P5-W5A: the legacy route now fails closed under r4_editor_enabled=
+        # True (binding policy) -- flip to legacy editor mode for this one
+        # call, then back to R4 mode (the base fixture's own setUp default)
+        # for the R4 component-update call that follows.
+        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         r1 = self._post_legacy_product_section_settings(self.product_section, card_style="minimal")
         self.assertEqual(r1.status_code, 302)
+        _w5a_layout.r4_editor_enabled = True
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         self.product_section.refresh_from_db()
         self.assertTrue(
             self.product_section.settings.get("appearance_overrides", {}).get("card_style_explicit")
@@ -269,6 +278,13 @@ class CardFamilyReconciliationTests(GroupFReconciliationBase):
         # member was in APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS, so
         # validate_settings silently dropped the whole appearance_overrides
         # block (marker included) on the very next unrelated legacy save.
+        # P5-W5A: both legacy calls below now fail closed under
+        # r4_editor_enabled=True (binding policy) -- flip to legacy editor
+        # mode for the two legacy resaves, then back to R4 mode (the base
+        # fixture's own setUp default) for the R4 component-update call.
+        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         r1 = self._post_legacy_product_section_settings(self.product_section, card_style="minimal")
         self.assertEqual(r1.status_code, 302)
         self.product_section.refresh_from_db()
@@ -284,6 +300,8 @@ class CardFamilyReconciliationTests(GroupFReconciliationBase):
             },
         )
         self.assertEqual(r2.status_code, 302)
+        _w5a_layout.r4_editor_enabled = True
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         self.product_section.refresh_from_db()
         self.assertTrue(
             self.product_section.settings.get("appearance_overrides", {}).get("card_style_explicit"),
@@ -299,8 +317,17 @@ class CardFamilyReconciliationTests(GroupFReconciliationBase):
     def test_card_style_explicit_marker_survives_unrelated_r4_patch(self):
         # Same durability contract, exercised through the R4 mutation
         # endpoint (clean_section_schema_patch) instead of the legacy form.
+        # P5-W5A: the legacy route now fails closed under r4_editor_enabled=
+        # True (binding policy) -- flip to legacy editor mode for the one
+        # legacy call, then back to R4 mode (the base fixture's own setUp
+        # default) for the R4 calls that follow.
+        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         r1 = self._post_legacy_product_section_settings(self.product_section, card_style="minimal")
         self.assertEqual(r1.status_code, 302)
+        _w5a_layout.r4_editor_enabled = True
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         self.product_section.refresh_from_db()
         self.assertTrue(
             self.product_section.settings.get("appearance_overrides", {}).get("card_style_explicit")
@@ -323,6 +350,12 @@ class CardFamilyReconciliationTests(GroupFReconciliationBase):
         # The legacy form always submits card_style on every POST; presence
         # is not intent — only a genuine change marks the override, same
         # "presence is not intent" rule as the variant marker.
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         resp = self._post_legacy_product_section_settings(self.product_section, card_style="standard")
         self.assertEqual(resp.status_code, 302)
         self.product_section.refresh_from_db()

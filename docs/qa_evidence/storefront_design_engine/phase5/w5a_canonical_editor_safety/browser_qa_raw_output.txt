@@ -1,0 +1,25 @@
+PASS — 1. R4 Builder opens for an R4-enabled Store — http://w5a-qa.rastisi.localhost:8765/admin-portal/storefront-builder/r4/
+  [console.error] Failed to load resource: the server responded with a status of 404 (Not Found)
+PASS — 2. Legacy Class-A footer editor fails closed (404) under R4 — status=404
+PASS — 9. Ready Template Gallery remains reachable + labeled "Ready Template" — status=200
+PASS — 4. History browser readable under R4 — status=200
+PASS — 4b. History page renders both base_draft_id and base_revision preconditions — {"base_draft_id":5,"base_revision":0}
+  [debug request] POST http://w5a-qa.rastisi.localhost:8765/admin-portal/storefront-builder/r4/restore/1/ body= {"base_draft_id":999999,"base_revision":999999}
+  [console.error] Failed to load resource: the server responded with a status of 409 (Conflict)
+PASS — 6. Stale Restore rejected with 409 + no mutation — {"status":409,"body":{"ok":false,"code":"stale_revision","current_revision":0,"current_draft_id":5}}
+  [debug request] POST http://w5a-qa.rastisi.localhost:8765/admin-portal/storefront-builder/r4/restore/999999999/ body= {"base_draft_id":5,"base_revision":0}
+  [console.error] Failed to load resource: the server responded with a status of 400 (Bad Request)
+PASS — 10. Cross-tenant/nonexistent version fails closed — {"status":400,"body":{"ok":false,"code":"version_not_found"}}
+PASS — 5a. History page renders the new R4-safe Restore button (not the legacy <form>)
+  [debug request] POST http://w5a-qa.rastisi.localhost:8765/admin-portal/storefront-builder/r4/restore/1/ body= {"base_draft_id":5,"base_revision":0}
+PASS — 5b. R4-safe Restore completes through the real UI/action — http://w5a-qa.rastisi.localhost:8765/admin-portal/storefront-builder/
+PASS — 7a. R4-active editor renders the new Industry-Layout-Apply button
+  [debug request] POST http://w5a-qa.rastisi.localhost:8765/admin-portal/storefront-builder/r4/apply-industry-layout/ body= {"base_draft_id":999999,"base_revision":999999}
+  [console.error] Failed to load resource: the server responded with a status of 409 (Conflict)
+PASS — 8. Stale Industry-Layout-Apply rejected with 409 + no mutation — {"status":409,"body":{"ok":false,"code":"stale_revision","current_revision":0,"current_draft_id":6}}
+  [debug request] POST http://w5a-qa.rastisi.localhost:8765/admin-portal/storefront-builder/r4/apply-industry-layout/ body= {"base_draft_id":6,"base_revision":0,"force":true}
+PASS — 7b. R4-safe Industry-Layout-Apply completes through the real UI — status=200 body=<unreadable>
+PASS — 3a. R3-pinned Store opens the real rollback editor — status=200 url=http://w5a-qa-r3.rastisi.localhost:8765/admin-portal/storefront-builder/
+PASS — 3b. A real legacy Class-A write (section toggle) succeeds (not 404) on the R3-pinned Store — {"status":200,"ok":true}
+
+14/14 PASS

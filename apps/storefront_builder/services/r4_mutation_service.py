@@ -57,8 +57,12 @@ class R4MutationError(ValueError):
 
 
 class R4StaleRevision(R4MutationError):
-    def __init__(self, current_revision: int):
+    def __init__(self, current_revision: int, *, current_draft_id: int | None = None):
         self.current_revision = current_revision
+        # P5-W5A Independent-Review repair — Class C's ABA fix additionally
+        # reports which Draft is actually current; every other R4 mutation
+        # action still constructs this with the single positional arg only.
+        self.current_draft_id = current_draft_id
         super().__init__("stale_revision")
 
 
@@ -1376,3 +1380,99 @@ def switch_template(
         return preset_service.switch_template_preserving_content(store, preset, user=actor)
     except preset_service.InvalidPresetError as exc:
         raise R4MutationError("invalid_appearance_template") from exc
+
+
+def _lock_layout_for_identity_replacement(*, store, expected_draft_id, expected_base_revision):
+    """P5-W5A — the concurrency boundary for Class-C whole-Draft-identity
+    replacement operations (Restore Version, Apply Industry Layout) that,
+    unlike every other Draft-identity-replacing action above, may
+    legitimately be invoked when NO Draft is currently active (e.g. a
+    Store with only a Published version, restoring an old one for the
+    first time). ``_lock_active_draft`` cannot be reused unmodified here:
+    it unconditionally raises ``no_active_draft`` when none exists.
+
+    P5-W5A Independent-Review repair — the precondition binds to BOTH the
+    expected Draft IDENTITY and its revision, never revision alone: since
+    ``edit_revision`` defaults to 0 on every newly created Draft row, a
+    revision-only check is vulnerable to an ABA hazard — a stale client
+    that observed Draft A at revision 0 would incorrectly pass the check
+    against an unrelated Draft B that replaced it, also at revision 0,
+    silently discarding B. ``expected_draft_id``/``expected_base_revision``
+    are BOTH ``None`` (the client believes there is no active Draft) or
+    BOTH set — a positive Draft pk and its non-negative ``edit_revision``
+    (the client believes exactly that Draft is active at exactly that
+    revision) — the caller validates this shape before invoking this
+    function. Locks the SAME ``StorefrontLayout`` row every other
+    Draft-identity-replacing action locks; the caller is responsible for
+    running inside its own ``@transaction.atomic`` so the lock is held
+    through the entire check-then-replace sequence — never released
+    between the precondition check and the actual replacement."""
+    layout = StorefrontLayout.objects.select_for_update().get(store=store)
+
+    if expected_draft_id is None:
+        # Case B — client expects no active Draft.
+        if layout.draft_version_id is not None:
+            current = StorefrontLayoutVersion.objects.get(pk=layout.draft_version_id)
+            raise R4StaleRevision(current.edit_revision, current_draft_id=current.pk)
+        return layout
+
+    # Case A — client expects Draft `expected_draft_id` at exactly
+    # `expected_base_revision`. A DIFFERENT current Draft (or none at all)
+    # is stale regardless of what its own revision happens to be — this is
+    # what closes the ABA hazard a revision-only check could not.
+    if layout.draft_version_id != expected_draft_id:
+        current_revision = None
+        if layout.draft_version_id is not None:
+            current_revision = StorefrontLayoutVersion.objects.filter(
+                pk=layout.draft_version_id,
+            ).values_list("edit_revision", flat=True).first()
+        raise R4StaleRevision(current_revision, current_draft_id=layout.draft_version_id)
+
+    try:
+        draft = StorefrontLayoutVersion.objects.get(
+            pk=layout.draft_version_id,
+            layout=layout,
+            status=StorefrontLayoutVersion.Status.DRAFT,
+        )
+    except StorefrontLayoutVersion.DoesNotExist:
+        raise R4StaleRevision(None, current_draft_id=None) from None
+    if draft.edit_revision != expected_base_revision:
+        raise R4StaleRevision(draft.edit_revision, current_draft_id=draft.pk)
+    return layout
+
+
+@transaction.atomic
+def restore_version_safe(*, store, actor, base_draft_id, base_revision, version_id) -> StorefrontLayoutVersion:
+    """P5-W5A Class C — the canonical R4-safe replacement boundary around
+    the existing, UNMODIFIED ``layout_service.restore_version()``. Never a
+    second restore implementation: this function only locks, validates the
+    precondition, and delegates."""
+    _lock_layout_for_identity_replacement(
+        store=store, expected_draft_id=base_draft_id, expected_base_revision=base_revision,
+    )
+    try:
+        return layout_service.restore_version(store, version_id, user=actor)
+    except layout_service.CrossStoreVersionError as exc:
+        raise R4MutationError("version_not_found") from exc
+
+
+@transaction.atomic
+def apply_industry_layout_safe(
+    *, store, actor, base_draft_id, base_revision, force: bool = False,
+) -> StorefrontLayoutVersion:
+    """P5-W5A Class C — the canonical R4-safe replacement boundary around
+    the existing, UNMODIFIED ``layout_service.apply_industry_layout()``.
+    Never a second industry-layout implementation: this function only
+    locks, validates the precondition, and delegates."""
+    _lock_layout_for_identity_replacement(
+        store=store, expected_draft_id=base_draft_id, expected_base_revision=base_revision,
+    )
+    installation = getattr(store, "industry_installation", None)
+    if installation is None:
+        raise R4MutationError("no_industry_installation")
+    try:
+        return layout_service.apply_industry_layout(
+            store, installation.industry_template, user=actor, force=force,
+        )
+    except layout_service.StorefrontAlreadyPublishedError as exc:
+        raise R4MutationError("storefront_already_published") from exc

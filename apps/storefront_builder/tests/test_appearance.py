@@ -264,11 +264,23 @@ class AppearanceEditorViewTests(TestCase):
         self.client.login(username="appearance_owner", password="pass12345")
 
     def test_get_renders_hub(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         resp = self.client.get(reverse("dashboard:storefront-builder-appearance"))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "ظاهر سایت")
 
     def test_post_saves_color_override_to_draft_not_live_shopsettings(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         shop_before = ShopSettings.load(store=self.store)
         original_primary = shop_before.primary_color
 
@@ -286,6 +298,12 @@ class AppearanceEditorViewTests(TestCase):
         self.assertEqual(shop_after.primary_color, original_primary)
 
     def test_hub_no_longer_has_standalone_template_card(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         """Phase 8 P0-7 — کارتِ مستقلِ «قالب فروشگاه» و گالریِ آن از هابِ
         ظاهر حذف شده‌اند؛ پیش‌تنظیم/پالت/تنظیماتِ بیشتر جایگزینش شده‌اند."""
         resp = self.client.get(reverse("dashboard:storefront-builder-appearance"))
@@ -295,6 +313,12 @@ class AppearanceEditorViewTests(TestCase):
         self.assertIn("پیش‌تنظیمِ صفحه‌آرایی", body)
 
     def test_advanced_panel_has_new_structural_controls(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         resp = self.client.get(reverse("dashboard:storefront-builder-appearance"))
         body = resp.content.decode()
         self.assertIn("عرض محتوای سایت", body)
@@ -304,6 +328,12 @@ class AppearanceEditorViewTests(TestCase):
         self.assertIn("سبک هیرو", body)
 
     def test_post_saves_type_scale_to_draft(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         resp = self.client.post(reverse("dashboard:storefront-builder-appearance"), {
             "template_slug": "modern", "font": "Vazirmatn", "radius": "18", "button_radius": "12",
             "density": "normal", "motion": "subtle", "type_scale": "large",
@@ -313,6 +343,12 @@ class AppearanceEditorViewTests(TestCase):
         self.assertEqual(draft.appearance_config["type_scale"], "large")
 
     def test_invalid_color_shows_error_without_saving(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         draft_before = svc.get_or_create_draft(self.store)
         original = dict(draft_before.appearance_config or {})
         resp = self.client.post(reverse("dashboard:storefront-builder-appearance"), {
@@ -501,6 +537,12 @@ class PaletteOverrideWorkflowTests(TestCase):
         }
 
     def test_selecting_palette_sets_all_coordinated_colors(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         draft = svc.get_or_create_draft(self.store)
         self.client.post(reverse("dashboard:storefront-builder-appearance"), {
             **self._base_fields(draft), "palette_slug": "ocean",
@@ -511,6 +553,12 @@ class PaletteOverrideWorkflowTests(TestCase):
         self.assertEqual(colors, appearance_registry.get_palette("ocean").colors)
 
     def test_overriding_only_text_preserves_rest_of_palette(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         draft = svc.get_or_create_draft(self.store)
         self.client.post(reverse("dashboard:storefront-builder-appearance"), {
             **self._base_fields(draft), "palette_slug": "ocean",
@@ -527,6 +575,12 @@ class PaletteOverrideWorkflowTests(TestCase):
             self.assertEqual(colors[key], base[key], key)
 
     def test_reset_one_color_restores_only_that_key(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         draft = svc.get_or_create_draft(self.store)
         self.client.post(reverse("dashboard:storefront-builder-appearance"), {
             **self._base_fields(draft), "palette_slug": "ocean", "color_text": "#000000", "color_primary": "#00FF00",
@@ -542,6 +596,12 @@ class PaletteOverrideWorkflowTests(TestCase):
         self.assertEqual(overrides["primary"], "#00FF00")
 
     def test_reset_all_overrides_clears_everything_but_keeps_palette(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         draft = svc.get_or_create_draft(self.store)
         self.client.post(reverse("dashboard:storefront-builder-appearance"), {
             **self._base_fields(draft), "palette_slug": "ocean", "color_text": "#000000", "color_primary": "#00FF00",
@@ -556,6 +616,12 @@ class PaletteOverrideWorkflowTests(TestCase):
         self.assertEqual(draft.appearance_config["palette_slug"], "ocean")
 
     def test_switching_palette_clears_previous_overrides(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         draft = svc.get_or_create_draft(self.store)
         self.client.post(reverse("dashboard:storefront-builder-appearance"), {
             **self._base_fields(draft), "palette_slug": "ocean", "color_text": "#000000",
@@ -615,6 +681,12 @@ class TemplateSwitchViewTests(TestCase):
         self.client.login(username="template_owner", password="pass12345")
 
     def test_switching_template_with_no_palette_selected_does_not_crash(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         """رگرسیونِ باگِ واقعی: حلقه‌ی فرمِ گالریِ قالب یک‌بار مقدارِ
         Noneِ پایتون را به‌صورتِ رشته‌ی literal «None» در فیلدِ مخفیِ
         palette_slug رندر می‌کرد — این تست دقیقاً همان سناریو (فروشگاهی
@@ -632,6 +704,12 @@ class TemplateSwitchViewTests(TestCase):
         self.assertIsNone(draft.appearance_config.get("palette_slug"))
 
     def test_switching_template_applies_its_own_presentation_defaults(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         """رگرسیون: کلیک روی کارتِ یک Templateِ دیگر در گالری باید
         پیش‌فرض‌هایِ *همان* Template (فونت/گردی/تراکم/حرکت/مقیاسِ متن)
         را اعمال کند — حتی اگر مقادیرِ فرم (مثلاً فیلدهایِ مخفیِ گالری)
@@ -674,6 +752,12 @@ class TemplateSwitchViewTests(TestCase):
         self.assertEqual(config["radius"], 5)
 
     def test_switching_template_preserves_color_overrides(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         draft = svc.get_or_create_draft(self.store)
         draft.appearance_config = svc.validate_appearance_config({"color_overrides": {"text": "#123123"}})
         draft.save(update_fields=["appearance_config"])

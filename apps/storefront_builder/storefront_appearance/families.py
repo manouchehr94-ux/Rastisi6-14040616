@@ -16,6 +16,17 @@ _FAMILY_DEFINITIONS = (
         renderer_role="global_region",
         capabilities={"responsive", "rtl"},
     ),
+    # P5-W5A — RESERVED / COMPATIBILITY STATE (binding master-plan
+    # disposition, docs/superpowers/plans/
+    # 2026-09-19-phase5-w5-merchant-design-experience-discovery.md §4).
+    # Registered with exactly one component (mega_menu.none.v1) — real
+    # mega-menu presentation today is owned by specific Header variants,
+    # not by this family. Do NOT add a second component here to make it
+    # "look complete"; independent Mega Menu customization is explicitly
+    # out of scope until a future Product decision authorizes it, and any
+    # such future work must reuse the existing Header/navigation
+    # rendering architecture rather than create a second navigation
+    # authority.
     ComponentFamilyDefinition(
         key="mega_menu",
         label_fa="مگامنو",
@@ -33,6 +44,17 @@ _FAMILY_DEFINITIONS = (
         renderer_role="section_variant",
         capabilities={"responsive", "rtl"},
     ),
+    # P5-W5A — RESERVED / INERT (binding master-plan disposition, docs/
+    # superpowers/plans/2026-09-19-phase5-w5-merchant-design-experience-
+    # discovery.md §4). No renderer anywhere in the codebase currently
+    # consumes a non-default selection from this family — the real,
+    # working merchant composition control is the separate per-Container
+    # layout system (``StorefrontContainer.layout_key``), not this typed
+    # family. Do NOT build a second store-wide composition renderer
+    # merely to activate this family; that would duplicate the container
+    # system's existing responsibility. Existing manifests/Ready-Template
+    # recipes that reference a ``layout`` selection must keep validating
+    # and loading unchanged — this family stays registered, just inert.
     ComponentFamilyDefinition(
         key="layout",
         label_fa="چیدمان و ترکیب‌بندی",
