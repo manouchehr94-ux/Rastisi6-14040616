@@ -1,0 +1,87 @@
+{
+  "total": 16,
+  "pass": 16,
+  "fail": 0,
+  "results": [
+    {
+      "name": "1. R4 Builder opens",
+      "ok": true,
+      "detail": "http://w5b-qa.rastisi.localhost:8765/admin-portal/storefront-builder/r4/"
+    },
+    {
+      "name": "2. Global Design panel opens",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "3. \"ناوبری پایین موبایل\" label present",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "4. Selector options are registry-driven",
+      "ok": true,
+      "detail": "[\"hidden\",\"luxury_floating_cart\",\"four_item\",\"five_item\",\"raised_cart\",\"floating_dock\",\"glass_dock\",\"minimal_icons\",\"wide_cart\"]"
+    },
+    {
+      "name": "5. footer.update mutation accepted (200, ok, revision advanced)",
+      "ok": true,
+      "detail": "{\"status\":200,\"ok\":true,\"new_revision\":1}"
+    },
+    {
+      "name": "6. Save completes (Undo becomes enabled after reload)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "7. Preview switched to mobile device mode",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "8. Preview shows the new Bottom Nav variant",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "9. Footer variant unchanged",
+      "ok": true,
+      "detail": "legacy_default"
+    },
+    {
+      "name": "11. Undo restores the previous (hidden) Bottom Nav",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "13. Redo restores the changed Bottom Nav",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "14. Public storefront unchanged before Publish",
+      "ok": true,
+      "detail": "status=200"
+    },
+    {
+      "name": "15. Publish clicked and editor reloaded",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "16. Public storefront reflects the new Bottom Nav after Publish",
+      "ok": true,
+      "detail": "status=200"
+    },
+    {
+      "name": "17. Fresh Draft (hidden default) shows no Bottom Nav markup",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "18. Stale mutation rejected (409)",
+      "ok": true,
+      "detail": "{\"capturedRevision\":0,\"advanceResult\":{\"status\":200,\"body\":{\"ok\":true,\"new_revision\":1,\"mutation_type\":\"footer.update\"}},\"staleResult\":{\"status\":409,\"body\":{\"ok\":false,\"code\":\"stale_revision\",\"current_revision\":1}}}"
+    }
+  ]
+}

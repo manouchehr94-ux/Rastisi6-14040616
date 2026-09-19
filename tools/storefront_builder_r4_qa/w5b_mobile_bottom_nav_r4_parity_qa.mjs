@@ -69,6 +69,29 @@ function previewFrame(page) {
   return page.frames().find((f) => f.url().includes('/storefront-builder/preview/'));
 }
 
+// After a full top-level navigation (Undo/Redo/Publish each reload the
+// whole page on success), the preview <iframe> is a brand-new frame that
+// needs its own load to finish before its content() reflects the
+// post-navigation Draft state — polling avoids a race against a fixed
+// timeout.
+async function waitForPreviewFrameReady(page, { timeout = 5000 } = {}) {
+  const deadline = Date.now() + timeout;
+  let frame = null;
+  while (Date.now() < deadline) {
+    frame = previewFrame(page);
+    if (frame) {
+      try {
+        await frame.waitForLoadState('domcontentloaded', { timeout: 1500 });
+        return frame;
+      } catch {
+        // frame navigated away mid-wait; retry
+      }
+    }
+    await page.waitForTimeout(150);
+  }
+  return frame;
+}
+
 async function main() {
   const browser = await chromium.launch({
     executablePath: resolveChromePath(),
@@ -115,16 +138,31 @@ async function main() {
       page.waitForResponse((r) => r.url().includes('/r4/mutate/'), { timeout: 5000 }).catch(() => null),
       page.selectOption('#r4GlobalMobileNavVariant', 'four_item'),
     ]);
+    const mutationBody = mutationResp ? await mutationResp.json().catch(() => null) : null;
     if (!mutationResp) await page.waitForTimeout(700);
+    const mutationOk = !!mutationResp && mutationResp.status() === 200 && !!mutationBody && mutationBody.ok === true;
+    record(
+      '5. footer.update mutation accepted (200, ok, revision advanced)',
+      mutationOk,
+      mutationBody ? JSON.stringify({ status: mutationResp.status(), ok: mutationBody.ok, new_revision: mutationBody.new_revision }) : 'no response captured',
+    );
 
-    // 6. Normal R4 save/revision completion — poll until Undo is enabled
-    // (proves a real history entry landed).
-    await page.waitForFunction(() => {
-      const btn = document.getElementById('r4UndoButton');
-      return btn && !btn.disabled;
-    }, { timeout: 5000 }).catch(() => {});
+    // 6. A real history entry landed. NOTE (pre-existing R4 behavior, not
+    // specific to this field): the Global Design panel's read-side refresh
+    // (refreshGlobalDesignAndPreview) only swaps #r4GlobalDesign's own
+    // innerHTML — the toolbar's #r4UndoButton/#r4RedoButton are rendered
+    // server-side only, from `history.can_undo`/`can_redo` (editor.html),
+    // and are never toggled client-side; Undo/Redo's own click handlers
+    // reload the whole page for exactly this reason (r4_editor.js,
+    // "Section 21"). This is identical to every other Global Design field
+    // (e.g. footer_variant) and is unrelated to the W5B diff. A real
+    // merchant sees the enabled state on their next reload/navigation —
+    // reproduced here the same way.
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.click('#r4GlobalDesignToggle');
+    await page.waitForSelector('#r4GlobalMobileNavVariant', { state: 'visible', timeout: 5000 });
     const undoEnabled = await page.$eval('#r4UndoButton', (b) => !b.disabled);
-    record('6. Save completes (Undo becomes enabled)', undoEnabled);
+    record('6. Save completes (Undo becomes enabled after reload)', undoEnabled);
 
     // 7. Switch Preview to Mobile.
     await page.click('[data-r4-device="mobile"]');
@@ -132,8 +170,7 @@ async function main() {
     record('7. Preview switched to mobile device mode', deviceAttr === 'mobile');
 
     // 8. Selected Bottom Nav is rendered in Preview.
-    await page.waitForTimeout(400);
-    let frame = previewFrame(page);
+    let frame = await waitForPreviewFrameReady(page);
     let frameHtml = frame ? await frame.content() : '';
     record('8. Preview shows the new Bottom Nav variant', frameHtml.includes('data-mobile-nav="four_item"'));
 
@@ -141,19 +178,24 @@ async function main() {
     const footerVariantValue = await page.$eval('#r4GlobalFooterVariant', (el) => el.value);
     record('9. Footer variant unchanged', footerVariantValue === 'legacy_default' || footerVariantValue.length > 0, footerVariantValue);
 
-    // 10. Undo.
-    await page.click('#r4UndoButton');
-    await page.waitForTimeout(700);
+    // 10. Undo (its own click handler reloads the whole page on success —
+    // wait for that navigation rather than a fixed timeout).
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 8000 }).catch(() => null),
+      page.click('#r4UndoButton'),
+    ]);
     // 11. Previous Bottom Nav (hidden — renders no marker) returns.
-    frame = previewFrame(page);
+    frame = await waitForPreviewFrameReady(page);
     frameHtml = frame ? await frame.content() : '';
     record('11. Undo restores the previous (hidden) Bottom Nav', !frameHtml.includes('data-mobile-nav="four_item"'));
 
-    // 12. Redo.
-    await page.click('#r4RedoButton');
-    await page.waitForTimeout(700);
+    // 12. Redo (its own click handler also reloads the whole page on success).
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 8000 }).catch(() => null),
+      page.click('#r4RedoButton'),
+    ]);
     // 13. New Bottom Nav returns.
-    frame = previewFrame(page);
+    frame = await waitForPreviewFrameReady(page);
     frameHtml = frame ? await frame.content() : '';
     record('13. Redo restores the changed Bottom Nav', frameHtml.includes('data-mobile-nav="four_item"'));
 
@@ -203,17 +245,32 @@ async function main() {
       record('17. Fresh Draft hidden-default scenario', false, 'manifest missing admin_host_2');
     }
 
-    // 18. Stale mutation is rejected.
-    const staleResult = await page.evaluate(async () => {
-      const csrftoken = (document.cookie.match(/(?:^|; )csrftoken=([^;]+)/) || [])[1] || '';
-      const resp = await fetch('/admin-portal/storefront-builder/r4/mutate/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ base_revision: 0, mutation: { type: 'footer.update', patch: { mobile_nav_variant: 'five_item' } } }),
-      });
-      return { status: resp.status, body: await resp.json().catch(() => null) };
-    });
-    record('18. Stale mutation rejected (409)', staleResult.status === 409, JSON.stringify(staleResult));
+    // 18. Stale mutation is rejected. `page` is now on the fresh
+    // post-Publish Draft's editor (from step 15's reload), whose own
+    // revision starts at 0 — so a hardcoded `base_revision: 0` would NOT
+    // be stale for it. Instead: capture the real current revision, spend
+    // it with one genuine mutation (advancing the server past it), then
+    // replay that now-stale captured revision and expect a controlled 409.
+    async function postFooterUpdate(baseRevision, variant) {
+      return page.evaluate(async ({ rev, v }) => {
+        const csrftoken = (document.cookie.match(/(?:^|; )csrftoken=([^;]+)/) || [])[1] || '';
+        const resp = await fetch('/admin-portal/storefront-builder/r4/mutate/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+          body: JSON.stringify({ base_revision: rev, mutation: { type: 'footer.update', patch: { mobile_nav_variant: v } } }),
+        });
+        return { status: resp.status, body: await resp.json().catch(() => null) };
+      }, { rev: baseRevision, v: variant });
+    }
+    const capturedRevision = await page.evaluate(() => window.RastiSiR4 ? window.RastiSiR4.revision : null);
+    const advanceResult = await postFooterUpdate(capturedRevision, 'five_item');
+    const advanceOk = advanceResult.status === 200 && advanceResult.body && advanceResult.body.ok === true;
+    const staleResult = await postFooterUpdate(capturedRevision, 'wide_cart');
+    record(
+      '18. Stale mutation rejected (409)',
+      advanceOk && staleResult.status === 409,
+      JSON.stringify({ capturedRevision, advanceResult, staleResult }),
+    );
   } catch (error) {
     record('UNEXPECTED ERROR', false, error.stack || String(error));
     await page.screenshot({ path: path.join(report_dir, 'unexpected-error.png'), fullPage: true }).catch(() => {});
