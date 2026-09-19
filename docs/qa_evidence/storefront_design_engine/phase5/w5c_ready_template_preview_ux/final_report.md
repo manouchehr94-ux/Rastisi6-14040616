@@ -2,6 +2,11 @@
 
 ## STATUS: COMPLETE
 
+**Superseded by round 2 (Independent Architect repair) — see the
+section near the end of this document for the current, authoritative
+metadata and results.** This document is kept in place rather than
+rewritten from scratch so the round-1 record stays intact.
+
 ## Starting base
 
 - Official integration branch: `feature/phase5-design-expansion`
@@ -12,12 +17,11 @@
 
 `feature/phase5-w5c-ready-template-preview-ux`
 
-## HEAD SHAs
+## HEAD SHAs (round 1 — superseded, see round 2 below)
 
-- **Final production source HEAD:** `75b08c53` (`feat(phase5): add
-  in-gallery Ready Template device preview`) — no production file
-  changed in any commit after this one.
-- **Final evidence/branch HEAD:** `a9073391` (`docs(phase5): execute
+- **Round-1 production source HEAD:** `75b08c53` (`feat(phase5): add
+  in-gallery Ready Template device preview`).
+- **Round-1 evidence/branch HEAD:** `a9073391` (`docs(phase5): execute
   W5C browser QA, fix QA-fixture-only bug`)
 
 ## Ready Template count
@@ -162,7 +166,7 @@ authorization).
 **Clean** at final HEAD `55fd1384` (confirmed via `git status
 --porcelain`).
 
-## Final status
+## Final status (round 1)
 
 **COMPLETE.** All required gates pass: 24/24 new contract tests (23 in
 the new module + the updated pre-existing one), 0 new/missing/changed
@@ -171,5 +175,120 @@ with live DB-verified non-mutation, 0 CRITICAL/IMPORTANT code-review
 findings (after fixing 4 real defects the first pass found), clean
 Django check, zero migrations, zero architectural duplication.
 
-STOP. Do not merge. Do not start W5D. Return for Independent Architect
-review.
+---
+
+# Round 2 — Independent Architect repair (AUTHORITATIVE)
+
+## P5-W5C INDEPENDENT ARCHITECT REPAIR: COMPLETE
+
+**PR:** #15 — https://github.com/manouchehr94-ux/Rastisi6-14040616/pull/15
+
+**PRE-REPAIR HEAD:** `2ebdc38ea868ceb5eae6a6696560cc4835fe6410`
+
+**FINAL PRODUCTION SOURCE HEAD:** `868e0c0b` (`fix(phase5): W5C repair —
+leave a fresh Draft after golden reference publish` — no production
+file changed in any commit after this one)
+
+**FINAL EVIDENCE HEAD:** `fb528c8a` (`docs(phase5): record W5C repair
+exact-source full regression identity comparison` — this document's own
+PR-number-correction commit, added after this report's own commit, is
+the true final branch HEAD; see the chat report for that exact SHA,
+avoiding the self-referential loop of a document naming its own commit)
+
+**PREVIEW METHOD:** GET-ONLY (`@require_GET` added; a POST now returns a
+controlled 405, proven by `PreviewMethodContractTests`)
+
+**MERCHANT POST:** 405 (`test_merchant_preview_post_is_405`)
+
+**DEMO POST:** 405 (`test_demo_preview_post_is_405`)
+
+**DEMO STORE WITHOUT DRAFT:** 404 (`test_demo_preview_without_a_draft_404s_and_creates_nothing`
+— and proven to create ZERO `StorefrontLayout`/`StorefrontLayoutVersion`/
+history rows, not just a status-code check)
+
+**DEMO DRAFT AUTO-CREATED (by Preview itself):** NO — Demo mode now uses
+`get_existing_draft` exactly like Merchant mode; the canonical Demo
+Store's Draft is instead ensured by the (also repaired)
+`apply_golden_reference_storefront` seeding command, a real
+platform/operator action, never by a GET request to Preview.
+
+**SEEDED DEMO PREVIEW MUTATES DEMO DRAFT:** NO — proven twice: at the
+Django/DB level (`SeededDemoPreviewNonMutationTests`, including 3
+repeated loads) and at the browser level against the REAL seeded Demo
+Draft (`w5c_demo_draft_before.json` / `w5c_demo_draft_after.json`,
+byte-identical).
+
+**MERCHANT PREVIEW MUTATES MERCHANT DRAFT:** NO — proven at the Django/DB
+level (pre-existing + `MerchantPreviewNoBootstrapRegressionTests`) and at
+the browser level (`w5c_draft_before_repair.json` /
+`w5c_draft_after_repair.json`, byte-identical).
+
+**SINGLE IFRAME:** PASS (unchanged from round 1 — `frameCount:1`
+throughout the repaired browser session).
+
+**ESC FROM PARENT DIALOG:** PASS.
+
+**ESC WHILE FOCUS IS INSIDE IFRAME:** PASS — a genuinely separate
+browser-QA test: focus verified INSIDE the iframe's own document from
+both the parent's and the iframe's own perspective before pressing
+Escape.
+
+**FOCUS RESTORE:** PASS (both Escape paths restore focus to the exact
+Gallery trigger that opened the dialog).
+
+**TABLET WIDTH:** 768 (exact, measured inside the iframe's own document).
+
+**MOBILE WIDTH:** 390 (exact, measured inside the iframe's own document).
+
+**BROWSER QA:** 28/28 PASS (`browser_qa.md`'s round-2 section,
+`browser_qa_console_repair.txt`, `browser_qa_results_repair.json`).
+
+**CODE REVIEW:**
+CRITICAL 0
+IMPORTANT 0
+(Fresh independent pass over the repair diff itself found 1 real
+additional defect — Demo Preview was broken out-of-the-box because no
+production path created a Demo Draft after `apply_golden_reference_
+storefront` publishes — fixed; 2 further findings considered and
+documented as deliberate, in-scope-compliant non-changes. See
+`code_review.md`'s round-2 section.)
+
+**DJANGO CHECK:** PASS
+
+**MIGRATIONS:** 0
+
+**FULL SUITE EXACT-SOURCE HEAD:** `bfcedb96`
+
+**FULL SUITE TOTAL:** 3531
+
+**HISTORICAL FAILURES:** 30
+
+**HISTORICAL ERRORS:** 2
+
+**SKIPS:** 1
+
+**NEW FAILURE/ERROR IDENTITIES:** 0
+
+**CHANGED HISTORICAL REASONS:** 0
+
+**704 CAMPAIGN:** NOT RUN (no renderer/Ready-Template/candidate-
+construction architecture touched by this repair)
+
+**NEW PREVIEW ROUTES:** 0
+
+**NEW RENDERERS:** 0
+
+**ARCHITECTURAL DUPLICATION:** 0
+
+**PR STATE:** OPEN + UNMERGED
+
+**W5D STARTED:** NO
+
+**FINAL WORKTREE CLEAN:** YES
+
+**FINAL STATUS: READY FOR INDEPENDENT ARCHITECT W5C RE-REVIEW**
+
+STOP.
+
+Do not merge.
+Do not start W5D.
