@@ -189,8 +189,10 @@ Django check, zero migrations, zero architectural duplication.
 
 **PRE-REPAIR PR HEAD:** `46b5dba4d8ede31df4e1be2d3188c08a70e1b294`
 
-**FINAL BRANCH HEAD:** `cf8cf346` (`docs(phase5): W5B Independent
-Architect browser-evidence repair`)
+**FINAL BRANCH HEAD:** `92d7005f` (`docs(phase5): update W5B final
+report for browser-evidence repair` — this document's own commit; the
+browser-evidence repair itself, including the QA script fix and all
+evidence/screenshots, landed the commit before it, `cf8cf346`)
 
 **PRODUCTION FILES CHANGED:** 0
 
