@@ -227,6 +227,52 @@ async function main() {
     }, rep_middle);
     record('29-30. Escape closes dialog and restores focus to the trigger', !state.open && state.ariaHidden === 'true' && focusReturnedToTrigger, JSON.stringify({ state, focusReturnedToTrigger }));
 
+    // Independent Architect repair — Escape must ALSO close the dialog
+    // when keyboard focus is INSIDE the (same-origin) preview iframe's
+    // own document, not just when focus is among the parent dialog's own
+    // controls (the test above). Separate test, per the repair directive.
+    const midTriggerAgain = triggerLocator(page, rep_middle, { merchant: true });
+    await midTriggerAgain.click();
+    await page.waitForTimeout(300);
+    frame = await waitForFrameNavigation(page);
+    // Focus a real, always-present element INSIDE the iframe's own
+    // document — the live-preview banner's "بازگشت به گالری" link.
+    const backLinkInFrame = frame.locator('a', { hasText: 'بازگشت به گالری' }).first();
+    await backLinkInFrame.focus();
+    const focusIsInsideIframe = await page.evaluate(() => {
+      const active = document.activeElement;
+      return !!active && active.tagName === 'IFRAME' && active.hasAttribute('data-tpl-preview-frame');
+    });
+    const frameActiveTag = await frame.evaluate(() => document.activeElement && document.activeElement.tagName).catch(() => null);
+    record(
+      'Escape-from-iframe setup: focus is genuinely inside the iframe document',
+      focusIsInsideIframe && frameActiveTag === 'A',
+      JSON.stringify({ focusIsInsideIframe, frameActiveTag }),
+    );
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    state = await dialogState(page);
+    const focusReturnedAfterIframeEscape = await page.evaluate((key) => {
+      const active = document.activeElement;
+      return !!active && active.getAttribute('data-tpl-preview-url-merchant') && active.getAttribute('data-tpl-preview-url-merchant').includes(`/templates/${key}/preview/`);
+    }, rep_middle);
+    record(
+      'Escape while focus is INSIDE the preview iframe closes the dialog and restores focus to the trigger',
+      !state.open && state.ariaHidden === 'true' && focusReturnedAfterIframeEscape,
+      JSON.stringify({ state, focusReturnedAfterIframeEscape }),
+    );
+
+    // Reopen and confirm normal (parent-focus) Escape behavior still
+    // works after the iframe-focus Escape cycle above.
+    await midTriggerAgain.click();
+    await page.waitForTimeout(300);
+    state = await dialogState(page);
+    const reopenOk = state.open;
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
+    state = await dialogState(page);
+    record('Normal parent-focus Escape still works after the iframe-focus cycle', reopenOk && !state.open && state.ariaHidden === 'true', JSON.stringify(state));
+
     // 31-32. Open a SECOND, different Ready Template — retargeting proof.
     const earlyTrigger = triggerLocator(page, rep_early, { merchant: true });
     await earlyTrigger.scrollIntoViewIfNeeded();

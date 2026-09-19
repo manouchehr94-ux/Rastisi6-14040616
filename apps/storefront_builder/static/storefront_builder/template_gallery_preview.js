@@ -133,6 +133,33 @@
       return root.classList.contains('is-open');
     }
 
+    // P5-W5C Independent Architect repair — Escape must also close the
+    // dialog when keyboard focus has moved INSIDE the (same-origin)
+    // preview iframe's own document, since keydown events fired there
+    // never bubble up to this (parent) document's listener below. Each
+    // navigation of the iframe (open, retarget, data-source switch) gets
+    // a brand-new Document object, so this attaches once per `load`
+    // event — never accumulating duplicate listeners on a stale
+    // document. Wrapped in try/catch purely as defense-in-depth (the
+    // canonical live-preview route is always same-origin in this
+    // deployment); a cross-origin access exception here would just mean
+    // Escape-from-inside-the-iframe silently does nothing, never an
+    // uncaught error.
+    frame.addEventListener('load', function () {
+      try {
+        var frameDoc = frame.contentDocument || (frame.contentWindow && frame.contentWindow.document);
+        if (!frameDoc) return;
+        frameDoc.addEventListener('keydown', function (evt) {
+          if (evt.key === 'Escape' && isOpen()) {
+            evt.preventDefault();
+            closeDialog();
+          }
+        });
+      } catch (err) {
+        // Cross-origin or otherwise inaccessible — nothing to attach.
+      }
+    });
+
     document.addEventListener('click', function (evt) {
       var trigger = evt.target.closest('[data-tpl-preview-trigger]');
       if (!trigger) return;

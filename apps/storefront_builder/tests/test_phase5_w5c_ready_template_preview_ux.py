@@ -241,9 +241,21 @@ class GalleryPreviewNonMutationTests(TestCase):
         # Demo mode resolves the fixed canonical rasti-mode-demo Store —
         # seed it once per class (heavy pipeline), matching the established
         # Task-2 convention (test_task2_live_demo_template_preview.py).
+        # apply_golden_reference_storefront both applies AND PUBLISHES the
+        # Demo Store's Draft (layout_service.publish() sets
+        # layout.draft_version = None) — so, per the Independent Architect
+        # repair's own no-bootstrap contract, Demo Preview now correctly
+        # 404s unless a fresh Draft exists for it afterward. Create one
+        # explicitly here (a real merchant/platform action, not something
+        # Preview itself may do), mirroring exactly how
+        # SeededDemoPreviewNonMutationTests already does this correctly.
         from io import StringIO
 
+        from apps.storefront_builder.views import RASTI_MODE_DEMO_STORE_SLUG
+
         call_command("apply_golden_reference_storefront", stdout=StringIO())
+        demo_store = Store.objects.get(slug=RASTI_MODE_DEMO_STORE_SLUG)
+        svc.get_or_create_draft(demo_store)
 
     def setUp(self):
         cache.clear()
@@ -409,3 +421,178 @@ class GalleryPreviewTenantIsolationTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["store"].pk, self.store_a.pk)
+
+
+# ---------------------------------------------------------------------
+# P5-W5C Independent Architect repair — the Preview route claimed to be
+# "GET-only" / "non-mutating in both data modes" but neither was actually
+# enforced: no @require_GET existed (a POST was silently accepted), and
+# Demo mode resolved its candidate via layout_service.get_or_create_draft
+# (bootstrapping persistence for the canonical Demo Store on a bare GET
+# if it had no active Draft yet) while Merchant mode already correctly
+# used the non-creating get_existing_draft. These tests prove the real,
+# repaired contract: GET-only, zero persistence created in EITHER mode.
+# ---------------------------------------------------------------------
+@override_settings(ALLOWED_HOSTS=[ADMIN_HOST, PUBLIC_HOST, "testserver"])
+class PreviewMethodContractTests(TestCase):
+    """Repair item A — the Preview route must be GET-only; POST gets a
+    controlled 405, never silently accepted."""
+
+    def setUp(self):
+        cache.clear()
+        self.store = _akhlaghi()
+        self.store.admin_subdomain = ADMIN_HOST.split(".")[0]
+        self.store.save(update_fields=["admin_subdomain"])
+        self.staff = User.objects.create_user(username="w5c_method_owner", password="pass12345", is_staff=True)
+        StoreMembership.objects.create(
+            store=self.store, user=self.staff, role=StoreMembership.Role.OWNER,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
+        )
+        self.client = Client(HTTP_HOST=ADMIN_HOST)
+        self.client.login(username="w5c_method_owner", password="pass12345")
+        self.draft = svc.get_or_create_draft(self.store)
+        self.preset = lpr.list_ready_templates()[0]
+        self.url = reverse("dashboard:storefront-builder-template-live-preview", kwargs={"key": self.preset.key})
+
+    def test_merchant_preview_post_is_405(self):
+        before = _draft_snapshot(self.draft)
+        response = self.client.post(f"{self.url}?data=merchant")
+        self.assertEqual(response.status_code, 405)
+        after = _draft_snapshot(self.draft)
+        self.assertEqual(before, after)
+
+    def test_demo_preview_post_is_405(self):
+        response = self.client.post(self.url)
+        self.assertEqual(response.status_code, 405)
+
+
+@override_settings(ALLOWED_HOSTS=[ADMIN_HOST, PUBLIC_HOST, "testserver"])
+class DemoPreviewNoBootstrapTests(TestCase):
+    """Repair item B — a GET to Demo Preview must NEVER create a Draft
+    (or any other persistence) for the canonical Demo Store; if it has no
+    active Draft yet, the request must fail closed with 404, exactly like
+    Merchant mode already does for a Store with no Draft."""
+
+    def setUp(self):
+        cache.clear()
+        self.store = _akhlaghi()
+        self.store.admin_subdomain = ADMIN_HOST.split(".")[0]
+        self.store.save(update_fields=["admin_subdomain"])
+        self.staff = User.objects.create_user(username="w5c_demo_nodraft_owner", password="pass12345", is_staff=True)
+        StoreMembership.objects.create(
+            store=self.store, user=self.staff, role=StoreMembership.Role.OWNER,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
+        )
+        self.client = Client(HTTP_HOST=ADMIN_HOST)
+        self.client.login(username="w5c_demo_nodraft_owner", password="pass12345")
+        # The canonical Demo Store, deliberately created WITHOUT any Draft
+        # (no layout_service.get_or_create_draft/get_or_create_layout call
+        # at all) — this is what a freshly-provisioned environment looks
+        # like before apply_golden_reference_storefront has ever run.
+        self.demo_store = Store.objects.create(
+            slug="rasti-mode-demo", name="Rasti Mode Demo", admin_subdomain="rasti-mode-demo",
+            status=Store.Status.ACTIVE,
+        )
+        self.preset = lpr.list_ready_templates()[0]
+        self.url = reverse("dashboard:storefront-builder-template-live-preview", kwargs={"key": self.preset.key})
+
+    def test_demo_preview_without_a_draft_404s_and_creates_nothing(self):
+        layout_count_before = StorefrontLayout.objects.filter(store=self.demo_store).count()
+        version_count_before = StorefrontLayoutVersion.objects.filter(layout__store=self.demo_store).count()
+        history_count_before = StorefrontEditHistoryEntry.objects.filter(
+            draft_version__layout__store=self.demo_store,
+        ).count()
+        self.assertEqual(layout_count_before, 0)
+        self.assertEqual(version_count_before, 0)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(StorefrontLayout.objects.filter(store=self.demo_store).count(), 0)
+        self.assertEqual(StorefrontLayoutVersion.objects.filter(layout__store=self.demo_store).count(), 0)
+        self.assertEqual(
+            StorefrontEditHistoryEntry.objects.filter(draft_version__layout__store=self.demo_store).count(),
+            history_count_before,
+        )
+
+
+@override_settings(ALLOWED_HOSTS=[ADMIN_HOST, PUBLIC_HOST, "testserver"])
+class SeededDemoPreviewNonMutationTests(TestCase):
+    """Repair item C — with a REAL seeded Demo Draft, GET Demo Preview
+    must not mutate it in any way, proven with the SAME full-lifecycle
+    snapshot shape used for Merchant mode (not just a status-code check)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from io import StringIO
+
+        call_command("apply_golden_reference_storefront", stdout=StringIO())
+
+    def setUp(self):
+        cache.clear()
+        self.store = _akhlaghi()
+        self.store.admin_subdomain = ADMIN_HOST.split(".")[0]
+        self.store.save(update_fields=["admin_subdomain"])
+        self.staff = User.objects.create_user(username="w5c_demo_seeded_owner", password="pass12345", is_staff=True)
+        StoreMembership.objects.create(
+            store=self.store, user=self.staff, role=StoreMembership.Role.OWNER,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
+        )
+        self.client = Client(HTTP_HOST=ADMIN_HOST)
+        self.client.login(username="w5c_demo_seeded_owner", password="pass12345")
+        from apps.storefront_builder.views import RASTI_MODE_DEMO_STORE_SLUG
+
+        demo_store = Store.objects.get(slug=RASTI_MODE_DEMO_STORE_SLUG)
+        self.demo_draft = svc.get_or_create_draft(demo_store)
+        self.preset = lpr.list_ready_templates()[0]
+        self.url = reverse("dashboard:storefront-builder-template-live-preview", kwargs={"key": self.preset.key})
+
+    def test_seeded_demo_preview_does_not_mutate_the_demo_draft(self):
+        before = _draft_snapshot(self.demo_draft)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        after = _draft_snapshot(self.demo_draft)
+        self.assertEqual(before, after)
+
+    def test_repeated_seeded_demo_preview_loads_do_not_accumulate_mutation(self):
+        before = _draft_snapshot(self.demo_draft)
+        for _ in range(3):
+            response = self.client.get(self.url)
+            self.assertEqual(response.status_code, 200)
+        after = _draft_snapshot(self.demo_draft)
+        self.assertEqual(before, after)
+
+
+class MerchantPreviewNoBootstrapRegressionTests(TestCase):
+    """Repair item D — Merchant mode's existing no-bootstrap behavior
+    (fail closed with 404 rather than creating a Draft) must continue to
+    hold; scoped here alongside the repair's Demo-mode equivalent for a
+    self-contained module (the original, fuller version of this contract
+    already lives in test_task3_merchant_template_preview.py, which
+    remains unmodified and is included in this phase's focused gates)."""
+
+    ADMIN_HOST_C = "sfb-w5c-merchant-nodraft.rastisi.localhost"
+
+    def setUp(self):
+        cache.clear()
+        self.store = Store.objects.create(
+            slug="w5c-merchant-nodraft", name="W5C Merchant No Draft",
+            admin_subdomain="sfb-w5c-merchant-nodraft", status=Store.Status.ACTIVE,
+        )
+        self.staff = User.objects.create_user(username="w5c_merchant_nodraft_owner", password="pass12345", is_staff=True)
+        StoreMembership.objects.create(
+            store=self.store, user=self.staff, role=StoreMembership.Role.OWNER,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
+        )
+        self.client = Client(HTTP_HOST=self.ADMIN_HOST_C)
+        self.client.login(username="w5c_merchant_nodraft_owner", password="pass12345")
+        self.preset = lpr.list_ready_templates()[0]
+        self.url = reverse("dashboard:storefront-builder-template-live-preview", kwargs={"key": self.preset.key})
+
+    def test_merchant_preview_without_a_draft_404s_and_creates_nothing(self):
+        layout_count_before = StorefrontLayout.objects.filter(store=self.store).count()
+        self.assertEqual(layout_count_before, 0)
+        response = self.client.get(f"{self.url}?data=merchant")
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(StorefrontLayout.objects.filter(store=self.store).count(), 0)
+        self.assertEqual(StorefrontLayoutVersion.objects.filter(layout__store=self.store).count(), 0)
