@@ -1,5 +1,15 @@
 # W5C — Accessibility Review
 
+**Repaired by the Independent Architect's review — see "Round 2" near
+the end of this document for the corrected, authoritative account.** The
+original "Escape: closes from anywhere while the dialog is open" claim
+below was **false as written**: it only ever attached a listener to the
+parent document, so Escape did nothing once keyboard focus moved inside
+the same-origin preview `<iframe>`'s own document (those `keydown`
+events never bubble to the parent document's listener). This is now
+fixed — see Round 2 — and the claim is corrected there, not silently left
+standing here.
+
 Contract R. Static markup is proven by
 `GalleryDialogAccessibilityMarkupTests`
 (`test_phase5_w5c_ready_template_preview_ux.py`); dynamic focus/keyboard
@@ -81,3 +91,64 @@ deliberately kept them as real anchors (see the implementation plan's "no
 second QA/interaction framework" and "graceful degradation" requirements)
 rather than converting them to `<button>` or `<div>` elements that would
 need manual keyboard-activation wiring.
+
+---
+
+# Round 2 — Independent Architect repair (AUTHORITATIVE)
+
+## The fix
+
+Fixed WITHOUT a second iframe, without injecting application state into
+the iframe, and without modifying storefront rendering (per the repair
+directive's explicit constraints). `template_gallery_preview.js` now
+attaches a `keydown` listener to the preview iframe's own
+`contentDocument` on each `load` event:
+
+```js
+frame.addEventListener('load', function () {
+  try {
+    var frameDoc = frame.contentDocument || (frame.contentWindow && frame.contentWindow.document);
+    if (!frameDoc) return;
+    frameDoc.addEventListener('keydown', function (evt) {
+      if (evt.key === 'Escape' && isOpen()) {
+        evt.preventDefault();
+        closeDialog();
+      }
+    });
+  } catch (err) {
+    // Cross-origin or otherwise inaccessible — nothing to attach.
+  }
+});
+```
+
+Each navigation of the iframe (open, retarget, data-source switch)
+produces a brand-new `Document` object, so this attaches exactly once
+per document — never accumulating duplicate listeners on a stale one.
+The `try/catch` is defense-in-depth only (the canonical live-preview
+route is always same-origin in this deployment); a hypothetical
+cross-origin exception here would just mean Escape-from-inside-the-
+iframe silently does nothing, never an uncaught error. `closeDialog()`
+is the SAME function the parent-document Escape handler already calls —
+same focus-restore-to-trigger behavior, no special-casing.
+
+## Now proven live (not just by design)
+
+Browser QA (`browser_qa.md`'s Round 2 section) adds a dedicated,
+separate test from the existing parent-dialog Escape test: focus a real,
+always-present element INSIDE the iframe's own document (the live-preview
+banner's "بازگشت به گالری" link), confirm — from BOTH the parent
+document's perspective (`document.activeElement` is the `<iframe>`
+element itself) and the iframe's own perspective
+(`frame.evaluate(() => document.activeElement.tagName)` reports `A`) —
+that focus is genuinely inside the iframe, then press Escape and confirm
+the dialog closes and focus returns to the exact Gallery trigger. A
+follow-up reopen confirms normal parent-focus Escape still works
+afterward.
+
+## The corrected claim
+
+**"Escape closes the dialog whether focus is among the dialog's own
+parent-document controls OR inside the same-origin preview iframe's own
+document"** — this is now true, and is proven by two separate browser-QA
+assertions (parent-focus Escape, iframe-focus Escape), not asserted by
+design alone.

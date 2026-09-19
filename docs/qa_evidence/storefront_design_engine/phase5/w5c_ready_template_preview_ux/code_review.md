@@ -48,8 +48,52 @@ the same three files.
 | Industry hiding/filtering | None — `storefront_template_gallery()`'s context/query is untouched; `test_gallery_lists_every_registered_ready_template` proves all 50 still render. |
 | Accidental W5D scope creep | None — no page-type switcher, no convenience Apply-from-dialog button, no capture-pipeline change were added; all explicitly out of scope per the plan's non-goals. |
 
-## Outcome
+## Outcome (round 1)
 
 **CRITICAL: 0. IMPORTANT: 0.** (All 4 findings from the first pass were
 fixed before this document's final state; the re-review found nothing
 further.)
+
+---
+
+# Round 2 — Independent Architect repair
+
+## What the round-1 automated pass missed
+
+The Architect's own direct source review found two real gaps in
+`storefront_template_live_preview` that round 1's automated `code-review`
+pass (high effort) did **not** catch: no `@require_GET` (a POST was
+silently accepted), and Demo mode's candidate resolution used the
+write-capable `get_or_create_draft` instead of the non-creating
+`get_existing_draft` Merchant mode already used. This is recorded
+honestly rather than glossed over — round 1's "CRITICAL 0 / IMPORTANT 0"
+verdict was correct for the files it was scoped to at the time, but the
+Preview route's actual method/persistence contract had not been checked
+against its own documented claims.
+
+## Fixes (see `preview_authority_chain.md` / `non_mutation_proof.md` for the full account)
+
+- `@require_GET` added to `storefront_template_live_preview`.
+- Demo mode's candidate resolution changed to `get_existing_draft`,
+  mirroring Merchant mode exactly.
+- `template_gallery_preview.js` gained an Escape handler attached to
+  each newly-loaded iframe document (`load` event), closing the gap
+  where Escape did nothing once focus moved inside the same-origin
+  preview iframe.
+
+## Fresh independent code-review pass over the repair diff itself
+
+Run at effort level `high` over `views.py`, `template_gallery_preview.js`,
+both touched test files, and the browser QA script. **3 findings:**
+
+| # | Finding | Disposition |
+|---|---|---|
+| 1 | Demo mode's new no-bootstrap check requires an active Draft on `rasti-mode-demo`, but no production code path created one — `apply_golden_reference_storefront` publishes (`layout.draft_version = None`) and nothing re-creates a Draft afterward, so a freshly-seeded environment's Demo Preview would 404 indefinitely, and the 404 message's own suggested remedy (re-running that command) would not fix it. | **Fixed** — `apply_golden_reference_storefront` (the management command) now calls `layout_service.get_or_create_draft(store)` as an explicit final step after publishing, exactly mirroring how a merchant's own Store always has a fresh Draft the moment they open their Gallery. Idempotent (get-or-create), matching the command's own existing idempotency contract. See `apps/stores/management/commands/apply_golden_reference_storefront.py`. |
+| 2 | The new Escape-inside-iframe fix does not extend the existing `Tab`/`Shift+Tab` focus-trap block to intercept Tab keydowns fired inside the iframe's own document (the same root cause as the Escape gap, for a different key). | **Considered, not applied — out of the authorized repair scope.** The Architect's directive (§7) asked specifically for Escape-from-inside-the-iframe; extending the Tab-trap into the iframe is a materially larger, unrequested change, and §9 explicitly forbids widening this repair into a new architecture. Topology check: in this dialog's actual DOM order (Close → data-source buttons → device buttons → iframe → "open in new tab" link), both directions of iframe-boundary Tab traversal land on an element STILL INSIDE the dialog (the new-tab link forward, the "mobile" device button backward) — from either landing point, the existing parent-document Tab handler correctly re-establishes the wrap on the next Tab press. So while the code-level observation is correct (the trap block's code path is never entered for an iframe-internal Tab keydown), the practical risk of focus actually escaping the dialog is mitigated by this specific markup's ordering, not by the trap logic itself. Documented here rather than silently dropped. |
+| 3 | Merchant and Demo branches in `storefront_template_live_preview` now contain near-duplicate "resolve existing Draft or 404" blocks. | **Not applied — optional style nit, not a correctness issue, not one of the Architect's named findings.** Left as two small, independently-readable blocks with their own distinct Persian error messages rather than introducing a new shared helper for a 2-call-site pattern, consistent with keeping this repair's diff minimal and scoped to exactly what was asked. |
+
+## Outcome (round 2)
+
+**CRITICAL: 0. IMPORTANT: 0.** Finding #1 (the only one with a real
+failure scenario) is fixed. Findings #2 and #3 are documented,
+deliberate scope decisions, not overlooked defects.

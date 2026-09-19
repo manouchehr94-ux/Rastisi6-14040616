@@ -1,5 +1,11 @@
 # W5C — Preview Authority Chain
 
+**Repaired by the Independent Architect's review — see "Round 2" near
+the end of this document.** The claim below that `storefront_template_
+live_preview` needed only "ONE line added" was incomplete: two more
+real gaps existed (no method restriction, Demo mode could bootstrap a
+Draft) and are fixed in Round 2. The chain diagram itself is unchanged.
+
 ```
 layout_preset_registry.list_ready_templates()      (UNCHANGED — 50 presets)
     -> storefront_template_gallery()                (UNCHANGED view/context)
@@ -86,3 +92,47 @@ phase).
   the two server-supplied canonical URLs.
 - The existing Apply `<form>` (`action="{% url 'dashboard:storefront-
   builder-apply-preset' %}"`) is unmodified.
+
+---
+
+# Round 2 — Independent Architect repair (AUTHORITATIVE)
+
+Two more real gaps in `storefront_template_live_preview`, found by
+direct source review (not caught by the first round's code-review pass
+or tests):
+
+1. No `@require_GET` — a POST was silently accepted instead of getting a
+   controlled 405.
+2. Demo mode's candidate resolution used `layout_service.get_or_create_
+   draft(preview_store)` — a write path — instead of the non-creating
+   `get_existing_draft` Merchant mode already used, so a GET request
+   could bootstrap a Draft for the canonical Demo Store.
+
+## The repaired chain (method + persistence contract only; structure unchanged)
+
+```
+storefront_template_live_preview()
+    @require_GET                          (NEW — POST -> 405)
+    @staff_required / @permission_required  (UNCHANGED)
+    @xframe_options_sameorigin              (UNCHANGED, from round 1)
+    Demo mode:
+        get_existing_draft(demo_store)      (CHANGED from get_or_create_draft
+                                              — no bootstrap; 404 if none)
+    Merchant mode:
+        get_existing_draft(preview_store)   (UNCHANGED — already correct)
+```
+
+No route, renderer, or mutation-type change. `git diff --stat` for
+`views.py` in the repair commit: +26/-2 (the `@require_GET` decorator +
+import, the Demo-mode candidate-resolution swap, and docstring
+justifications for both) — no other line changed.
+
+## Why this matters architecturally
+
+Before this repair, Demo and Merchant mode had asymmetric persistence
+guarantees despite both being documented as "read-only" — exactly the
+kind of drift a single-authority chain is supposed to prevent. The
+repair does not add a new authority; it makes the TWO existing branches
+of the SAME authority (`get_existing_draft`, already used correctly by
+Merchant mode) actually agree with each other, closing the one place
+they had quietly diverged.
