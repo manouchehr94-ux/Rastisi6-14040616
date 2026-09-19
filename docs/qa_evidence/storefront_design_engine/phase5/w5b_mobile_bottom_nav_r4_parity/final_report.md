@@ -2,6 +2,11 @@
 
 ## STATUS: COMPLETE
 
+**Superseded by round 2 (Independent Architect browser-evidence repair)
+— see the section near the end of this document for the current,
+authoritative metadata.** This document is kept in place rather than
+rewritten from scratch so the original (round-1) record stays intact.
+
 ## Starting base
 
 - Official integration branch: `feature/phase5-design-expansion`
@@ -12,12 +17,12 @@
 
 `feature/phase5-w5b-mobile-bottom-nav-r4-parity`
 
-## HEAD SHAs
+## HEAD SHAs (round 1 — superseded, see round 2 below)
 
 - **Final production source HEAD:** `0359851b` (`feat(phase5): expose
   mobile bottom navigation in R4`) — no production file changed in any
-  commit after this one.
-- **Final evidence/branch HEAD:** `94193557` (`docs(phase5): execute W5B
+  commit after this one, in round 1 OR round 2.
+- **Round-1 evidence/branch HEAD:** `94193557` (`docs(phase5): execute W5B
   browser QA, fix QA-script-only bugs`)
 
 ## Registered variant count
@@ -76,7 +81,7 @@ minimal fix (`tdd_green.txt`).
 - `manage.py check`: **clean, 0 issues.**
 - `manage.py makemigrations --check --dry-run`: **"No changes detected."**
 
-## Browser QA
+## Browser QA (round 1 — superseded, see round 2 below)
 
 **16/16 PASS** — full 18-step real mobile-viewport merchant journey
 against the live R4 Builder (`browser_qa.md`, `browser_qa_console.txt`,
@@ -85,6 +90,16 @@ mutation acceptance, Footer-variant sibling isolation, Undo/Redo
 round-trip, Draft-Preview/Public lifecycle around Publish, a second
 Store's fresh-Draft `hidden` default, and stale-revision rejection all
 demonstrated live.
+
+The Independent Architect's review of PR #14 found this round's browser
+evidence insufficient (IMPORTANT 1, BLOCKING MINOR 2 — see the round-2
+section below): none of the "mobile" assertions ran at a genuine mobile
+viewport, the Public-after-Publish check only proved markup presence
+(not visibility), the Footer-sibling assertion was logically too weak,
+and the registry-options check only enforced 3 of the 9 variants it
+claimed to cover. The production implementation itself was accepted
+(CRITICAL 0) — only the browser QA script and its evidence needed
+repair.
 
 ## Independent code review
 
@@ -154,12 +169,96 @@ authorization).
 **Clean** at final HEAD `243effe9` (confirmed via `git status
 --porcelain`).
 
-## Final status
+## Final status (round 1)
 
 **COMPLETE.** All required gates pass: 24/24 new contract tests, 0 new/
 missing/changed regression identities against the accepted W5A baseline,
 16/16 browser QA, 0 CRITICAL/IMPORTANT code-review findings, clean
 Django check, zero migrations, zero architectural duplication.
 
-STOP. Do not merge. Do not start W5C. Return for Independent Architect
-review.
+---
+
+# Round 2 — Independent Architect browser-evidence repair (AUTHORITATIVE)
+
+## P5-W5B INDEPENDENT BROWSER-EVIDENCE REPAIR: COMPLETE
+
+**PR:** #14 — https://github.com/manouchehr94-ux/Rastisi6-14040616/pull/14
+
+**PRODUCTION SOURCE HEAD:** `0359851bd262d501fcbdbf4dceed238aa5b7c8a3`
+(unchanged — no production file touched by this repair)
+
+**PRE-REPAIR PR HEAD:** `46b5dba4d8ede31df4e1be2d3188c08a70e1b294`
+
+**FINAL BRANCH HEAD:** `cf8cf346` (`docs(phase5): W5B Independent
+Architect browser-evidence repair`)
+
+**PRODUCTION FILES CHANGED:** 0
+
+**DJANGO TEST FILES CHANGED:** 0
+
+**MOBILE DRAFT PREVIEW WIDTH:** `390` (`window.innerWidth` read inside
+the Draft Preview iframe's own document, after `[data-r4-device=
+"mobile"]`)
+
+**MOBILE PUBLIC WIDTH:** `390` (`window.innerWidth` read on the Public
+storefront page, opened in a real `{width: 390, height: 844}` Playwright
+viewport context)
+
+**DRAFT MOBILE NAV MARKUP:** PASS
+
+**DRAFT MOBILE NAV COMPUTED VISIBILITY:** PASS (`display: block`)
+
+**DRAFT MOBILE NAV NONZERO BOUNDS:** PASS (370×64)
+
+**PUBLIC MOBILE NAV MARKUP AFTER PUBLISH:** PASS
+
+**PUBLIC MOBILE NAV COMPUTED VISIBILITY:** PASS (`display: block`)
+
+**PUBLIC MOBILE NAV NONZERO BOUNDS:** PASS (370×64)
+
+**HIDDEN MOBILE VARIANT:** PASS (real mobile viewport, `innerWidth=390`,
+zero `[data-mobile-nav]` elements — the canonical `hidden.html` renderer
+is a true no-op template)
+
+**FOOTER VARIANT BEFORE:** `legacy_default`
+
+**FOOTER VARIANT AFTER:** `legacy_default`
+
+**FOOTER VARIANT PRESERVED:** PASS (exact equality, not merely non-empty)
+
+**REGISTERED VARIANTS EXPECTED:** 9 / 9
+
+**REGISTERED VARIANTS ACTUAL:** 9 / 9
+
+**MISSING OPTIONS:** `[]`
+
+**UNEXPECTED OPTIONS:** `[]`
+
+**BROWSER QA:** 23/23 PASS (`browser_qa.md` round-2 section,
+`browser_qa_console_repair.txt`, `browser_qa_results_repair.json`)
+
+**SUCCESS SCREENSHOTS:**
+- `docs/qa_evidence/storefront_design_engine/phase5/w5b_mobile_bottom_nav_r4_parity/screenshots/01-draft-preview-mobile-four_item.png`
+- `docs/qa_evidence/storefront_design_engine/phase5/w5b_mobile_bottom_nav_r4_parity/screenshots/02-public-mobile-four_item.png`
+- `docs/qa_evidence/storefront_design_engine/phase5/w5b_mobile_bottom_nav_r4_parity/screenshots/03-fresh-draft-hidden-mobile.png`
+
+**FULL SUITE:** 3502 / 30 failures / 2 errors / 1 skip —
+**REFERENCE ONLY — NOT RERUN** (per the repair directive; the certified
+W5B source/test tree is unchanged by this repair)
+
+**NEW FAILURE/ERROR IDENTITIES:** 0 — **REFERENCE FROM CERTIFIED SOURCE**
+(`full_suite_identity_comparison.md`, produced against source HEAD
+`0359851b`, still valid since no production/test file changed)
+
+**FINAL PRODUCTION SOURCE ALTERED:** NO
+
+**PR STATE:** OPEN + UNMERGED
+
+**W5C STARTED:** NO
+
+**FINAL STATUS:** READY FOR INDEPENDENT ARCHITECT W5B RE-REVIEW
+
+STOP.
+
+Do not merge.
+Do not start W5C.
