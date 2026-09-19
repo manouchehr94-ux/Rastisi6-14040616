@@ -676,6 +676,26 @@
           </div>
           {% endfor %}
         </section>
+
+        {% comment %}
+        P5-W5B — Mobile Bottom Navigation is its own product-level control
+        (a distinct global chrome region, GLOBAL_MOBILE_NAV_REGION), kept as
+        a separate section so it never reads as part of the visual Footer
+        itself — while still sharing the existing footer.update mutation
+        group internally, matching the underlying footer_config storage
+        exactly. The existing generic data-r4-global-field/data-r4-global-
+        mutation change handler (r4_editor.js) picks this up automatically;
+        no new JS branch.
+        {% endcomment %}
+        <section class="r4-global-design-group" data-r4-global-mutation="footer.update">
+          <h4>ناوبری پایین موبایل <span class="r4-field-scope r4-field-scope--global" data-r4-scope="global-group">سراسری — کل فروشگاه</span></h4>
+          <label class="r4-field-sublabel" for="r4GlobalMobileNavVariant">نوع ناوبری پایین موبایل</label>
+          <select id="r4GlobalMobileNavVariant" class="r4-control" data-r4-global-field="mobile_nav_variant">
+            {% for v in global_design.mobile_nav_variants %}
+            <option value="{{ v.key }}" {% if v.key == global_design.footer.mobile_nav_variant %}selected{% endif %}>{{ v.label_fa }}</option>
+            {% endfor %}
+          </select>
+        </section>
       </div>
     </aside>
   </main>

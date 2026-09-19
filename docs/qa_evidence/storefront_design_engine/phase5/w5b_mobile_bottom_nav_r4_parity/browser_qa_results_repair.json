@@ -1,0 +1,122 @@
+{
+  "total": 23,
+  "pass": 23,
+  "fail": 0,
+  "results": [
+    {
+      "name": "1. R4 Builder opens",
+      "ok": true,
+      "detail": "http://w5b-qa.rastisi.localhost:8765/admin-portal/storefront-builder/r4/"
+    },
+    {
+      "name": "2. Global Design panel opens",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "3. \"ناوبری پایین موبایل\" label present",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "4. Selector options match the registry EXACTLY (9/9, no missing, no unexpected)",
+      "ok": true,
+      "detail": "{\"expectedCount\":9,\"actualCount\":9,\"missing\":[],\"unexpected\":[],\"actual\":[\"hidden\",\"luxury_floating_cart\",\"four_item\",\"five_item\",\"raised_cart\",\"floating_dock\",\"glass_dock\",\"minimal_icons\",\"wide_cart\"]}"
+    },
+    {
+      "name": "5. footer.update mutation accepted (200, ok, revision advanced)",
+      "ok": true,
+      "detail": "{\"status\":200,\"ok\":true,\"new_revision\":1}"
+    },
+    {
+      "name": "6. Save completes (Undo becomes enabled after reload)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "7. Preview switched to a REAL mobile viewport (window.innerWidth <= 680 inside the Draft Preview document)",
+      "ok": true,
+      "detail": "data-r4-device=mobile, draftPreview.innerWidth=390"
+    },
+    {
+      "name": "8a. DRAFT MOBILE NAV MARKUP",
+      "ok": true,
+      "detail": "{\"markupPresent\":true,\"computedVisible\":true,\"nonzeroBounds\":true,\"itemCount\":4,\"display\":\"block\",\"box\":{\"x\":589,\"y\":648,\"width\":370,\"height\":64}}"
+    },
+    {
+      "name": "8b. DRAFT MOBILE NAV COMPUTED VISIBILITY",
+      "ok": true,
+      "detail": "display=block"
+    },
+    {
+      "name": "8c. DRAFT MOBILE NAV NONZERO BOUNDS",
+      "ok": true,
+      "detail": "{\"x\":589,\"y\":648,\"width\":370,\"height\":64}"
+    },
+    {
+      "name": "8d. Draft Preview renders the expected nav items (>= 3)",
+      "ok": true,
+      "detail": "itemCount=4"
+    },
+    {
+      "name": "9. Footer variant preserved (exact before === after, not merely non-empty)",
+      "ok": true,
+      "detail": "{\"footerVariantBefore\":\"legacy_default\",\"footerVariantAfter\":\"legacy_default\"}"
+    },
+    {
+      "name": "11. Undo restores the previous (hidden) Bottom Nav — no [data-mobile-nav] element at all",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "13. Redo restores the changed Bottom Nav (markup + computed visibility + nonzero bounds)",
+      "ok": true,
+      "detail": "{\"markupPresent\":true,\"computedVisible\":true,\"nonzeroBounds\":true,\"itemCount\":4,\"display\":\"block\",\"box\":{\"x\":419,\"y\":648,\"width\":370,\"height\":64}}"
+    },
+    {
+      "name": "14. Public storefront unchanged before Publish (no Bottom Nav rendered yet)",
+      "ok": true,
+      "detail": "status=200"
+    },
+    {
+      "name": "15. Publish clicked and editor reloaded",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "16a. PUBLIC MOBILE VIEWPORT (window.innerWidth <= 680)",
+      "ok": true,
+      "detail": "publicPage.innerWidth=390"
+    },
+    {
+      "name": "16b. PUBLIC MOBILE NAV MARKUP AFTER PUBLISH",
+      "ok": true,
+      "detail": "{\"markupPresent\":true,\"computedVisible\":true,\"nonzeroBounds\":true,\"itemCount\":4,\"display\":\"block\",\"box\":{\"x\":10,\"y\":772,\"width\":370,\"height\":64}}"
+    },
+    {
+      "name": "16c. PUBLIC MOBILE NAV COMPUTED VISIBILITY",
+      "ok": true,
+      "detail": "display=block"
+    },
+    {
+      "name": "16d. PUBLIC MOBILE NAV NONZERO BOUNDS",
+      "ok": true,
+      "detail": "{\"x\":10,\"y\":772,\"width\":370,\"height\":64}"
+    },
+    {
+      "name": "16e. Public renders the expected nav items (>= 3)",
+      "ok": true,
+      "detail": "itemCount=4, status=200"
+    },
+    {
+      "name": "17. Fresh Draft (hidden default) at a REAL mobile viewport shows no Bottom Nav markup at all",
+      "ok": true,
+      "detail": "innerWidth=390, absent=true"
+    },
+    {
+      "name": "18. Stale mutation rejected (409)",
+      "ok": true,
+      "detail": "{\"capturedRevision\":0,\"advanceResult\":{\"status\":200,\"body\":{\"ok\":true,\"new_revision\":1,\"mutation_type\":\"footer.update\"}},\"staleResult\":{\"status\":409,\"body\":{\"ok\":false,\"code\":\"stale_revision\",\"current_revision\":1}}}"
+    }
+  ]
+}

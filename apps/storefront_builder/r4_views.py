@@ -402,6 +402,13 @@ def _build_global_design_context(draft: StorefrontLayoutVersion) -> dict:
             {"key": v.key, "label_fa": v.label_fa}
             for v in global_region_registry.list_global_variants(global_region_registry.GLOBAL_FOOTER_REGION)
         ],
+        # P5-W5B — Mobile Bottom Navigation is a third global chrome region,
+        # registry-driven exactly like Header/Footer above; never a
+        # hardcoded option list here or in the template.
+        "mobile_nav_variants": [
+            {"key": v.key, "label_fa": v.label_fa}
+            for v in global_region_registry.list_global_variants(global_region_registry.GLOBAL_MOBILE_NAV_REGION)
+        ],
         "density_choices": appearance_registry.DENSITY_CHOICES,
         "image_fit_choices": appearance_registry.IMAGE_FIT_CHOICES,
         "image_hover_choices": appearance_registry.IMAGE_HOVER_CHOICES,
