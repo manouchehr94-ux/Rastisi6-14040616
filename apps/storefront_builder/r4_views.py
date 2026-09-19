@@ -1547,7 +1547,14 @@ def storefront_r4_apply_industry_layout(request):
     if not valid:
         return JsonResponse({"ok": False, "code": "invalid_base_revision"}, status=400)
 
-    force = bool(payload.get("force", False))
+    # Strict JSON-boolean check — never a truthy-string coercion. A client
+    # explicitly confirming "never silently overwrite" must send the JSON
+    # boolean ``true``; anything else (including the string "false", which
+    # ``bool(...)`` would otherwise coerce to True) is rejected outright.
+    force_raw = payload.get("force", False)
+    if not isinstance(force_raw, bool):
+        return JsonResponse({"ok": False, "code": "invalid_force"}, status=400)
+    force = force_raw
 
     try:
         r4_mutation_service.apply_industry_layout_safe(

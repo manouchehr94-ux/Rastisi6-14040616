@@ -55,7 +55,7 @@ document.querySelectorAll('[data-r4-restore-button]').forEach(function (btn) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '',
+        'X-CSRFToken': (document.cookie.match(/(?:^|; )csrftoken=([^;]+)/) || [])[1] || '',
       },
       body: JSON.stringify({base_revision: baseRevision}),
     }).then(function (resp) {

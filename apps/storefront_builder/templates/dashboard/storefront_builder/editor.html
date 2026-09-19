@@ -70,7 +70,7 @@ below.
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '',
+        'X-CSRFToken': (document.cookie.match(/(?:^|; )csrftoken=([^;]+)/) || [])[1] || '',
       },
       body: JSON.stringify({base_revision: parseInt(btn.getAttribute('data-r4-base-revision'), 10), force: force}),
     }).then(function (resp) {

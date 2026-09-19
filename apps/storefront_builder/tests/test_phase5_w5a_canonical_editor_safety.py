@@ -495,6 +495,28 @@ class R4SafeIndustryApplyTests(R4EnabledCase):
         layout = svc.get_or_create_layout(self.store)
         self.assertEqual(layout.draft_version.source, StorefrontLayoutVersion.Source.INDUSTRY_TEMPLATE)
 
+    def test_r4_safe_industry_apply_rejects_truthy_string_force(self):
+        """Code-review finding: ``bool("false")`` is True in Python — a
+        non-boolean ``force`` value must be rejected outright, never
+        silently coerced, or the 'never silently overwrite' confirm gate
+        could be defeated by a client sending the literal string
+        "false"."""
+        self._install_template()
+        svc.get_or_create_draft(self.store)
+        published = svc.publish(self.store)
+
+        resp = self.client.post(
+            self._apply_url(),
+            data=json.dumps({"base_revision": None, "force": "false"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()["code"], "invalid_force")
+        layout = svc.get_or_create_layout(self.store)
+        self.assertEqual(layout.published_version_id, published.pk)
+        self.assertIsNone(layout.draft_version_id)
+
     def test_r4_safe_industry_apply_cross_store_fails_closed(self):
         """N — tenant isolation: a Store with no installation of its own
         can never reach another Store's industry template through this
