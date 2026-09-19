@@ -782,7 +782,7 @@ class LiveBuilderMultiBlockClosureTests(TestCase):
         # P5-W5A: this test exercises a legacy Class-A route, which now
         # fails closed under r4_editor_enabled=True (binding policy) --
         # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout = svc.get_or_create_layout(self.store)
         _w5a_layout.r4_editor_enabled = False
         _w5a_layout.save(update_fields=["r4_editor_enabled"])
         container, survivor, (a, b, c) = self._build_multiblock_cell_via_real_workflow()
@@ -815,7 +815,7 @@ class LiveBuilderMultiBlockClosureTests(TestCase):
         # P5-W5A: this test exercises a legacy Class-A route, which now
         # fails closed under r4_editor_enabled=True (binding policy) --
         # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout = svc.get_or_create_layout(self.store)
         _w5a_layout.r4_editor_enabled = False
         _w5a_layout.save(update_fields=["r4_editor_enabled"])
         container, survivor, (a, b, c) = self._build_multiblock_cell_via_real_workflow()
@@ -835,7 +835,7 @@ class LiveBuilderMultiBlockClosureTests(TestCase):
         # P5-W5A: this test exercises a legacy Class-A route, which now
         # fails closed under r4_editor_enabled=True (binding policy) --
         # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout = svc.get_or_create_layout(self.store)
         _w5a_layout.r4_editor_enabled = False
         _w5a_layout.save(update_fields=["r4_editor_enabled"])
         self._build_multiblock_cell_via_real_workflow()
@@ -853,7 +853,7 @@ class LiveBuilderMultiBlockClosureTests(TestCase):
         # P5-W5A: this test exercises a legacy Class-A route, which now
         # fails closed under r4_editor_enabled=True (binding policy) --
         # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout = svc.get_or_create_layout(self.store)
         _w5a_layout.r4_editor_enabled = False
         _w5a_layout.save(update_fields=["r4_editor_enabled"])
         container, survivor, (a, b, c) = self._build_multiblock_cell_via_real_workflow()
@@ -874,7 +874,7 @@ class LiveBuilderMultiBlockClosureTests(TestCase):
         # P5-W5A: this test exercises a legacy Class-A route, which now
         # fails closed under r4_editor_enabled=True (binding policy) --
         # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout = svc.get_or_create_layout(self.store)
         _w5a_layout.r4_editor_enabled = False
         _w5a_layout.save(update_fields=["r4_editor_enabled"])
         container, survivor, (a, b, c) = self._build_multiblock_cell_via_real_workflow()
@@ -895,7 +895,7 @@ class LiveBuilderMultiBlockClosureTests(TestCase):
         # P5-W5A: this test exercises a legacy Class-A route, which now
         # fails closed under r4_editor_enabled=True (binding policy) --
         # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout = svc.get_or_create_layout(self.store)
         _w5a_layout.r4_editor_enabled = False
         _w5a_layout.save(update_fields=["r4_editor_enabled"])
         a = self._section(0)
@@ -923,7 +923,7 @@ class LiveBuilderMultiBlockClosureTests(TestCase):
         # P5-W5A: this test exercises a legacy Class-A route, which now
         # fails closed under r4_editor_enabled=True (binding policy) --
         # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout = svc.get_or_create_layout(self.store)
         _w5a_layout.r4_editor_enabled = False
         _w5a_layout.save(update_fields=["r4_editor_enabled"])
         """V3 exposes the Phase-2B multi-block engine through the real live
@@ -948,7 +948,7 @@ class LiveBuilderMultiBlockClosureTests(TestCase):
         # P5-W5A: this test exercises a legacy Class-A route, which now
         # fails closed under r4_editor_enabled=True (binding policy) --
         # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout = svc.get_or_create_layout(self.store)
         _w5a_layout.r4_editor_enabled = False
         _w5a_layout.save(update_fields=["r4_editor_enabled"])
         """Regression guard alongside the fix above: an ACTUALLY empty
@@ -974,7 +974,7 @@ class LiveBuilderMultiBlockClosureTests(TestCase):
         # P5-W5A: this test exercises a legacy Class-A route, which now
         # fails closed under r4_editor_enabled=True (binding policy) --
         # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout = svc.get_or_create_layout(self.store)
         _w5a_layout.r4_editor_enabled = False
         _w5a_layout.save(update_fields=["r4_editor_enabled"])
         container, survivor, (a, b, c) = self._build_multiblock_cell_via_real_workflow()
@@ -996,7 +996,7 @@ class LiveBuilderMultiBlockClosureTests(TestCase):
         # P5-W5A: this test exercises a legacy Class-A route, which now
         # fails closed under r4_editor_enabled=True (binding policy) --
         # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout = svc.get_or_create_layout(self.store)
         _w5a_layout.r4_editor_enabled = False
         _w5a_layout.save(update_fields=["r4_editor_enabled"])
         a, b, c = self._section(0), self._section(1), self._section(2)
@@ -1022,7 +1022,7 @@ class LiveBuilderMultiBlockClosureTests(TestCase):
         # P5-W5A: this test exercises a legacy Class-A route, which now
         # fails closed under r4_editor_enabled=True (binding policy) --
         # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout = svc.get_or_create_layout(self.store)
         _w5a_layout.r4_editor_enabled = False
         _w5a_layout.save(update_fields=["r4_editor_enabled"])
         container, survivor, (a, b, c) = self._build_multiblock_cell_via_real_workflow()
@@ -1040,7 +1040,7 @@ class LiveBuilderMultiBlockClosureTests(TestCase):
         # P5-W5A: this test exercises a legacy Class-A route, which now
         # fails closed under r4_editor_enabled=True (binding policy) --
         # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout = svc.get_or_create_layout(self.store)
         _w5a_layout.r4_editor_enabled = False
         _w5a_layout.save(update_fields=["r4_editor_enabled"])
         container, survivor, (a, b, c) = self._build_multiblock_cell_via_real_workflow()
@@ -1064,7 +1064,7 @@ class LiveBuilderMultiBlockClosureTests(TestCase):
         # P5-W5A: this test exercises a legacy Class-A route, which now
         # fails closed under r4_editor_enabled=True (binding policy) --
         # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout = svc.get_or_create_layout(self.store)
         _w5a_layout.r4_editor_enabled = False
         _w5a_layout.save(update_fields=["r4_editor_enabled"])
         """A Section placed ONLY through the new FK (e.g. one of several
@@ -1095,7 +1095,7 @@ class LiveBuilderMultiBlockClosureTests(TestCase):
         # P5-W5A: this test exercises a legacy Class-A route, which now
         # fails closed under r4_editor_enabled=True (binding policy) --
         # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
+        _w5a_layout = svc.get_or_create_layout(self.store)
         _w5a_layout.r4_editor_enabled = False
         _w5a_layout.save(update_fields=["r4_editor_enabled"])
         section = self._section()

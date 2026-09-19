@@ -282,12 +282,6 @@ class LegacyEditMakesConcurrentR4BaseRevisionStaleTests(StorefrontBuilderViewsTe
 
     def test_legacy_edit_makes_prior_r4_base_revision_stale(self):
         # An R4 client observes the current revision as its base_revision.
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         self.draft.refresh_from_db()
         r4_base_revision = self.draft.edit_revision
 
@@ -298,9 +292,17 @@ class LegacyEditMakesConcurrentR4BaseRevisionStaleTests(StorefrontBuilderViewsTe
             page=home, section_key="rich_text", order=1,
             settings={"body_html": "<p>اولیه</p>"},
         )
+        # P5-W5A: the legacy route now fails closed under r4_editor_enabled=
+        # True (binding policy) -- flip to the legacy editor mode for this
+        # one call, then back to R4 mode for the R4 replay that follows.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         legacy_response = self._legacy_section_edit(
             rich_text, "<p>تغییر مسیر قدیمی هم‌زمان</p>")
         self.assertEqual(legacy_response.status_code, 302)
+        _w5a_layout.r4_editor_enabled = True
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
 
         self.draft.refresh_from_db()
         # The legacy edit advanced the token, so the R4 client's captured
@@ -772,12 +774,13 @@ class LegacyLifecycleRouteTargetingTests(_LifecycleTargetsMixin):
         # A GET to the appearance editor resolves the caller's OWN active
         # draft; a foreign caller only ever sees their own draft, never the
         # target store's versions.
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
+        # P5-W5A: this test exercises a legacy Class-A route on the FOREIGN
+        # store (via foreign_client), which now fails closed under
+        # r4_editor_enabled=True (binding policy) -- pin the foreign store's
+        # layout, not the caller's own store.
+        _w5a_foreign_layout = svc.get_or_create_layout(self.foreign_store)
+        _w5a_foreign_layout.r4_editor_enabled = False
+        _w5a_foreign_layout.save(update_fields=["r4_editor_enabled"])
         foreign_appearance_before = dict(self.foreign_draft.appearance_config or {})
         own_appearance_before = dict(self.own_draft.appearance_config or {})
 
@@ -796,12 +799,13 @@ class LegacyLifecycleRouteTargetingTests(_LifecycleTargetsMixin):
         # None of these can name a Published/Archived version; a foreign
         # caller's undo/redo/discard only affects the foreign draft, never
         # the target store's active draft or its published/archived rows.
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
+        # P5-W5A: this test exercises legacy Class-A routes on the FOREIGN
+        # store (via foreign_client), which now fail closed under
+        # r4_editor_enabled=True (binding policy) -- pin the foreign store's
+        # layout, not the caller's own store.
+        _w5a_foreign_layout = svc.get_or_create_layout(self.foreign_store)
+        _w5a_foreign_layout.r4_editor_enabled = False
+        _w5a_foreign_layout.save(update_fields=["r4_editor_enabled"])
         own_draft_pk = self.own_draft.pk
         published_pk = self.published.pk
         archived_pk = self.archived.pk
@@ -2286,11 +2290,21 @@ class FullLifecycleConvergenceTests(_CrossEntryConvergenceMixin):
         self.assertEqual(promoted.status, StorefrontLayoutVersion.Status.PUBLISHED)
         self.assertEqual(self._manifest_primitive(promoted), expected_manifest)
 
-        # (3) RESTORE the published version into a fresh Draft. Restore has no
-        # R4 mutation type — it is a lifecycle op owned by layout_service and
-        # exposed via the shared legacy restore route; the R4 client uses the
-        # same route.
-        self.assertEqual(self._legacy_restore(published_version_id).status_code, 302)
+        # (3) RESTORE the published version into a fresh Draft, via the
+        # R4-safe restore endpoint. P5-W5A: the legacy restore route is a
+        # Class-A/C-adjacent route that now fails closed under
+        # r4_editor_enabled=True; the R4-safe endpoint is its canonical
+        # replacement, converging onto the same, unmodified
+        # layout_service.restore_version(). No active Draft exists right
+        # after publish, so base_revision is None (the documented "no Draft"
+        # precondition).
+        restore_resp = self.client.post(
+            reverse("dashboard:storefront-builder-r4-restore", args=[published_version_id]),
+            data=json.dumps({"base_revision": None}),
+            content_type="application/json",
+        )
+        self.assertEqual(restore_resp.status_code, 200, restore_resp.content)
+        self.assertIs(restore_resp.json()["ok"], True)
         self.draft = svc.get_or_create_draft(self.store, user=self.staff)
         self.home = self.draft.get_page(StorefrontPage.PageType.HOME)
         self.assertEqual(self._manifest_primitive(self.draft), expected_manifest)
@@ -2303,13 +2317,16 @@ class FullLifecycleConvergenceTests(_CrossEntryConvergenceMixin):
         }
 
     def test_full_lifecycle_end_state_converges_across_entry_points(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
+        # P5-W5A: the legacy entry point now fails closed under
+        # r4_editor_enabled=True (binding policy) -- flip to legacy editor
+        # mode for the legacy run only; the R4 run that follows needs the
+        # gate back on (the mixin's own setUp default) to reach R4 routes.
         _w5a_layout = svc.get_or_create_layout(self.store)
         _w5a_layout.r4_editor_enabled = False
         _w5a_layout.save(update_fields=["r4_editor_enabled"])
         legacy_end_state = self._run_lifecycle_via_legacy()
+        _w5a_layout.r4_editor_enabled = True
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
 
         # Rebuild a clean world for the R4 run so the two are independent and
         # directly comparable (fresh store fixture per test method already;
@@ -2337,15 +2354,17 @@ class FullLifecycleConvergenceTests(_CrossEntryConvergenceMixin):
             legacy_end_state["promoted_status"], StorefrontLayoutVersion.Status.PUBLISHED)
 
     def test_undo_redo_after_restore_is_revision_monotonic_and_manifest_intact_both_paths(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         """The full sequence continues past restore into undo/redo and the
         revision stays monotonic across the WHOLE sequence, via BOTH the
         legacy and the R4 history endpoints, with the manifest intact."""
+        # P5-W5A: the legacy history routes now fail closed under
+        # r4_editor_enabled=True (binding policy) -- flip to legacy editor
+        # mode for the legacy round-trip only; the R4 round-trip that
+        # follows needs the gate back on (the mixin's own setUp default) to
+        # reach the R4 history endpoint.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         # --- Legacy history round-trip on a fresh restored draft. ---
         expected_manifest, section = self._seed_manifest_and_section()
         # Two real legacy edits so there is something to undo then redo.
@@ -2374,6 +2393,8 @@ class FullLifecycleConvergenceTests(_CrossEntryConvergenceMixin):
         # --- R4 history round-trip converges on the SAME contract. ---
         # A successful R4 undo/redo advances by exactly 1, changes content,
         # keeps the manifest intact — identical observable behaviour.
+        _w5a_layout.r4_editor_enabled = True
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         r4_undo = self._r4_history("undo")
         self.assertEqual(r4_undo.status_code, 200, r4_undo.content)
         body = r4_undo.json()
@@ -2418,19 +2439,21 @@ class MixedSequenceSafeOrderingTests(_CrossEntryConvergenceMixin):
 
     def test_legacy_edit_then_stale_r4_replay_is_rejected_and_mutates_nothing(self):
         # An R4 client captures the current revision as its base.
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
         _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         r4_base = self._revision()
 
         # A legacy edit lands on section A, advancing the shared token.
+        # P5-W5A: the legacy route now fails closed under r4_editor_enabled=
+        # True (binding policy) -- flip to legacy editor mode for this one
+        # call, then back to R4 mode for the stale R4 replay that follows.
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         self.assertEqual(
             self._legacy_section_edit(self.section_a, "<p>الف تغییر مسیر قدیمی</p>").status_code,
             302,
         )
+        _w5a_layout.r4_editor_enabled = True
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         self.assertEqual(self._revision(), r4_base + 1)
 
         hero_before = dict(self.section_b.settings)
@@ -2460,12 +2483,7 @@ class MixedSequenceSafeOrderingTests(_CrossEntryConvergenceMixin):
         # publisher who captured an older base_revision; the stale legacy
         # publish (which routes through the shared stale-aware publish) is
         # refused and mutates nothing.
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
         _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         legacy_base = self._revision()
 
         # R4 edit lands, advancing the shared token.
@@ -2479,6 +2497,11 @@ class MixedSequenceSafeOrderingTests(_CrossEntryConvergenceMixin):
 
         draft_pk = self.draft.pk
 
+        # P5-W5A: the legacy route now fails closed under r4_editor_enabled=
+        # True (binding policy) -- flip to legacy editor mode for this
+        # stale-publish call.
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         # Stale legacy publish with the older base_revision → rejected; the
         # Draft is NOT promoted (still the active draft).
         pub = self._legacy_publish(base_revision=legacy_base)
@@ -2497,16 +2520,19 @@ class MixedSequenceSafeOrderingTests(_CrossEntryConvergenceMixin):
         # writes all succeed and the token advances monotonically by exactly
         # one per real change — no false stale rejection when clients are
         # correctly ordered.
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
+        # P5-W5A: each legacy call below now fails closed under
+        # r4_editor_enabled=True (binding policy) -- flip to legacy editor
+        # mode immediately around each legacy call, back to R4 mode
+        # (the mixin's own setUp default) for each R4 call.
         _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         r0 = self._revision()
 
         # legacy edit (reads current, writes) → +1
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         self.assertEqual(self._legacy_section_edit(self.section_a, "<p>الف-۱</p>").status_code, 302)
+        _w5a_layout.r4_editor_enabled = True
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         r1 = self._revision()
         self.assertEqual(r1, r0 + 1)
 
@@ -2521,7 +2547,11 @@ class MixedSequenceSafeOrderingTests(_CrossEntryConvergenceMixin):
         self.assertEqual(r2, r1 + 1)
 
         # legacy edit again with the fresh current revision → +1
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         self.assertEqual(self._legacy_section_edit(self.section_a, "<p>الف-۲</p>").status_code, 302)
+        _w5a_layout.r4_editor_enabled = True
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         r3 = self._revision()
         self.assertEqual(r3, r2 + 1)
 
