@@ -1,10 +1,10 @@
-# RastiSi — گزارش رسمی وضعیت پروژه
+﻿# RastiSi — گزارش رسمی وضعیت پروژه
 
-**تاریخ وضعیت:** ۲۰ سپتامبر ۲۰۲۶  
-**حوزه فعلی:** Storefront Builder / Store Appearance / Design Engine — Phase 5  
-**وضعیت کلی:** پایدار، checkpoint شده، W5A تا W5C بسته شده‌اند و آماده شروع W5D هستیم.  
-**Official Integration Branch:** `feature/phase5-design-expansion`  
-**Official Integration HEAD:** `851181c31a0ee224b5cec8a8ae7793eca4a96621`
+**تاریخ وضعیت:** ۲۰ سپتامبر ۲۰۲۶
+**حوزه فعلی:** Storefront Builder / Store Appearance / Design Engine — Phase 5
+**وضعیت کلی:** پایدار، checkpoint شده، W5A تا W5C بسته شده‌اند و آماده شروع W5D هستیم.
+**Official Integration Branch:** `feature/phase5-design-expansion`
+**W5C Technical Checkpoint (pre-status-report):** `851181c31a0ee224b5cec8a8ae7793eca4a96621`
 
 ---
 
@@ -281,9 +281,9 @@ Bottom Navigation از قبل در engine و renderer وجود داشت، اما
 
 در W5B:
 
-**New Variant = 0**  
-**New Renderer = 0**  
-**New Mutation Type = 0**  
+**New Variant = 0**
+**New Renderer = 0**
+**New Mutation Type = 0**
 **Migration = 0**
 
 ### یک نکته مهم QA که پیدا کردیم
