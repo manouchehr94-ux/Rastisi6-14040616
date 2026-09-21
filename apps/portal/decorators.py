@@ -24,6 +24,16 @@ def portal_action_allowed(request, store, permission) -> bool:
     return user_has_permission(request.user, store, permission)
 
 
+def portal_actions_allowed(request, store, *permissions) -> bool:
+    """Whether the requesting user holds *every* one of ``permissions`` on
+    ``store`` (AND semantics). Same thin delegation to the canonical
+    ``user_has_permission`` authority as :func:`portal_action_allowed`; used
+    where an action's authorization requires more than one canonical key
+    (e.g. subscription purchase needs both the plan-change decision and the
+    billing-payment authority)."""
+    return all(user_has_permission(request.user, store, p) for p in permissions)
+
+
 def portal_permission_denied(request):
     """The portal's canonical fail-closed response for an authenticated,
     correctly-scoped member who lacks the required action permission — an

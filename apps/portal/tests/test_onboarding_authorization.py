@@ -4,36 +4,59 @@ These tests prove the canonical authorization contract for the portal
 onboarding *mutation* routes:
 
     onboarding_identity   -> writes Store.name + ShopSettings identity/contact
-    onboarding_industry   -> installs a StoreIndustryInstallation
+    onboarding_industry   -> installs a StoreIndustryInstallation OR (if one
+                             already exists) advances Store.onboarding_stage
     onboarding_branding   -> writes ShopSettings.logo
     onboarding_review     -> publishes the store (Store.onboarding_completed_at)
+
+...and the wider AUTH-001 repair inventory:
+
+    billing_checkout / billing_step_up_verify        -> SUBSCRIPTION_CHANGE + BILLING_PAYMENT_MANAGE
+    claim_handle / claim_handle_step_up              -> DOMAIN_MANAGE
+    custom_domains (add) / custom_domain_begin_verify
+    / custom_domain_check / custom_domain_final_check
+    / custom_domain_activate / _activate_step_up     -> DOMAIN_MANAGE
+    request_store_deletion / store_deletion_step_up
+    / cancel_store_deletion                          -> STORE_DELETE (new, Owner-only)
+    initiate_ownership_transfer / _step_up
+    / cancel_ownership_transfer                       -> STAFF_MANAGE
 
 The single canonical authority for *action* authorization is
 ``apps/stores/authorization.py`` (``ROLE_PERMISSIONS`` +
 ``user_has_permission``). Every one of these routes mutates Store-scoped
 business truth that the Merchant Admin dashboard already gates with the
-``SETTINGS_MANAGE`` permission (``settings_appearance`` for identity/logo,
-``settings_industry_install`` for industry). ``ANALYST`` does **not** hold
-``SETTINGS_MANAGE``.
+matching canonical permission. ``ANALYST``/``ADMINISTRATOR`` do **not** hold
+any of the Owner-only keys used here (``SUBSCRIPTION_CHANGE``,
+``DOMAIN_MANAGE``, ``STAFF_MANAGE``, ``STORE_DELETE``); ``ANALYST`` also
+lacks ``SETTINGS_MANAGE``.
 
 The defect (AUTH-001): these portal routes were protected only by
 ``owner_required`` (authentication) + an ACTIVE ``StoreMembership`` — i.e.
-tenant scope — and never consulted the canonical action permission. An
-authenticated ACTIVE ANALYST could therefore mutate Store settings through
-the portal even though the same action is denied on the dashboard.
-
+tenant scope — and never consulted the canonical action permission.
 Authentication is not authorization; tenant membership is not action
-authorization. A request must satisfy BOTH correct Store scope AND the
-required action permission.
+authorization; and — the specific regression this file's second half closes
+— proving one's identity again via OTP Step-Up is not a substitute for
+action authorization either. A request must satisfy Store scope AND the
+required action permission BEFORE any Step-Up challenge or business mutation,
+and every Step-Up *continuation* endpoint re-checks the same permission
+before completing the mutation.
 """
 
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from apps.core.models import ShopSettings
 from apps.catalog.models import IndustryTemplate, StoreIndustryInstallation
+from apps.portal.models import OwnerProfile
 from apps.portal.services import provisioning_service
-from apps.stores.models import StoreMembership
+from apps.portal.services.platform_config_service import update_platform_configuration
+from apps.stores.authorization import ALL_PERMISSIONS, ROLE_PERMISSIONS, STORE_DELETE, _OWNER_ONLY
+from apps.stores.models import Store, StoreDomain, StoreMembership, StoreOwnershipTransfer
+from apps.subscriptions.models import Plan, PlanVersion
 
 User = get_user_model()
 _HOST = "rastisi.localhost"
@@ -136,6 +159,50 @@ class OnboardingMutationAuthorizationTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 0)
         self.assertEqual(self._snapshot(), before)
+
+    def test_analyst_cannot_advance_stage_when_industry_already_installed(self):
+        """BLOCKER 1 regression (independent architect review of commit
+        557d1742): the ``elif request.method == "POST":`` branch of
+        ``onboarding_industry`` — reached only when a
+        ``StoreIndustryInstallation`` already exists — mutates
+        ``Store.onboarding_stage`` via ``_advance_onboarding_stage`` and was
+        left unprotected by the first commit, which only gated the
+        ``installation is None`` branch. This is the exact branch the
+        blocker identified; it must now be denied identically."""
+        template = IndustryTemplate.objects.create(
+            slug="books-auth001-blocker1", name="کتاب", version=1,
+            readiness=IndustryTemplate.Readiness.PRODUCTION_READY,
+        )
+        from apps.catalog.services.industry_template_service import install_industry_template
+
+        install_industry_template(self.store, template)
+        self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 1)
+
+        self.client.force_login(self.analyst)
+        before = self._snapshot()
+        response = self.client.post(self._url("industry"), {}, HTTP_HOST=_HOST)
+        self.assertEqual(response.status_code, 403)
+        # The installation itself, and every other mutable field, is untouched.
+        self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 1)
+        self.assertEqual(self._snapshot(), before)
+
+    def test_owner_can_still_advance_stage_when_industry_already_installed(self):
+        """Positive control for the Blocker-1 repair: an authorized OWNER
+        must still be able to advance past this step once a template is
+        already installed (the legitimate, intended behavior)."""
+        template = IndustryTemplate.objects.create(
+            slug="books-auth001-blocker1-owner", name="کتاب", version=1,
+            readiness=IndustryTemplate.Readiness.PRODUCTION_READY,
+        )
+        from apps.catalog.services.industry_template_service import install_industry_template
+
+        install_industry_template(self.store, template)
+
+        self.client.force_login(self.owner)
+        response = self.client.post(self._url("industry"), {}, HTTP_HOST=_HOST)
+        self.assertRedirects(response, self._url("branding"))
+        self.store.refresh_from_db()
+        self.assertEqual(self.store.onboarding_stage, Store.OnboardingStage.BRANDING)
 
     def test_analyst_cannot_publish_via_review(self):
         self.client.force_login(self.analyst)
@@ -265,3 +332,518 @@ class OnboardingMutationAuthorizationTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.store.refresh_from_db()
         self.assertEqual(self.store.name, "توسطِ ادمین")
+
+
+# ===========================================================================
+# STORE_DELETE — canonical registry change (new granular permission)
+# ===========================================================================
+
+
+class StoreDeletePermissionRegistryTests(TestCase):
+    """AUTH-001 architect decision: STORE_DELETE is a new granular key added
+    to the single canonical registry (apps/stores/authorization.py) — never
+    a second registry, and never a hardcoded role-name check in a view."""
+
+    def test_store_delete_is_a_member_of_all_permissions(self):
+        self.assertIn(STORE_DELETE, ALL_PERMISSIONS)
+
+    def test_store_delete_is_owner_only(self):
+        self.assertIn(STORE_DELETE, _OWNER_ONLY)
+
+    def test_owner_role_holds_store_delete(self):
+        self.assertIn(STORE_DELETE, ROLE_PERMISSIONS[StoreMembership.Role.OWNER])
+
+    def test_administrator_role_does_not_hold_store_delete(self):
+        self.assertNotIn(STORE_DELETE, ROLE_PERMISSIONS[StoreMembership.Role.ADMINISTRATOR])
+
+    def test_analyst_role_does_not_hold_store_delete(self):
+        self.assertNotIn(STORE_DELETE, ROLE_PERMISSIONS[StoreMembership.Role.ANALYST])
+
+    def test_catalog_manager_role_does_not_hold_store_delete(self):
+        self.assertNotIn(STORE_DELETE, ROLE_PERMISSIONS[StoreMembership.Role.CATALOG_MANAGER])
+
+
+# ===========================================================================
+# B. SUBSCRIPTION PURCHASE — billing_checkout / billing_step_up_verify
+# ===========================================================================
+
+
+@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
+class SubscriptionPurchaseAuthorizationTests(TestCase):
+    """SUBSCRIPTION_CHANGE + BILLING_PAYMENT_MANAGE gate reaching the
+    subscription-purchase mutation. Both are ``_OWNER_ONLY`` keys, so this
+    is effectively Owner-only under the current role matrix — but the view
+    must express that through the canonical permission check, not a
+    hardcoded role-name check (proven by testing ADMINISTRATOR, who is
+    denied here despite holding many other permissions)."""
+
+    def setUp(self):
+        cache.clear()
+        # Step-Up is turned OFF here: this test suite is about the action-
+        # authorization boundary reached *before* Step-Up ever begins, not
+        # about OTP mechanics (covered by test_step_up_billing.py).
+        update_platform_configuration(actor=None, step_up_actions={"subscription_purchase_confirm": False})
+        self.owner = User.objects.create_user(
+            username="09121380011", password=_STRONG_PASS,
+        )
+        OwnerProfile.objects.create(user=self.owner, phone="09121380011", full_name="مالک")
+        self.store = provisioning_service.provision_trial_store(owner=self.owner, name="فروشگاه صورتحساب مجوز")
+
+        self.administrator = User.objects.create_user(username="09121380022", password=_STRONG_PASS)
+        StoreMembership.objects.create(
+            store=self.store, user=self.administrator, role=StoreMembership.Role.ADMINISTRATOR,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
+        )
+        self.analyst = User.objects.create_user(username="09121380033", password=_STRONG_PASS)
+        StoreMembership.objects.create(
+            store=self.store, user=self.analyst, role=StoreMembership.Role.ANALYST,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
+        )
+
+        self.plan = Plan.objects.create(code="pro-auth001", name="Pro", is_active=True, is_publicly_selectable=True)
+        self.plan_version = PlanVersion.objects.create(
+            plan=self.plan, version_number=1, status=PlanVersion.Status.PUBLISHED,
+            billing_interval=PlanVersion.BillingInterval.MONTHLY, display_price=490_000,
+        )
+
+    def _checkout_url(self):
+        return f"/app/stores/{self.store.public_id}/billing/checkout/{self.plan_version.pk}/"
+
+    def test_administrator_is_denied_before_any_billing_side_effect(self):
+        from apps.billing.models import SubscriptionInvoice, SubscriptionPaymentAttempt
+
+        self.client.force_login(self.administrator)
+        invoices_before = SubscriptionInvoice.objects.count()
+        attempts_before = SubscriptionPaymentAttempt.objects.count()
+
+        with patch(
+            "apps.portal.views.plan_change_billing_service.start_plan_change"
+        ) as mocked_start_plan_change, patch(
+            "apps.portal.views.payment_flow_service.start_payment"
+        ) as mocked_start_payment:
+            response = self.client.post(self._checkout_url(), HTTP_HOST=_HOST)
+
+        self.assertEqual(response.status_code, 403)
+        mocked_start_plan_change.assert_not_called()
+        mocked_start_payment.assert_not_called()
+        self.assertEqual(SubscriptionInvoice.objects.count(), invoices_before)
+        self.assertEqual(SubscriptionPaymentAttempt.objects.count(), attempts_before)
+
+    def test_analyst_is_denied_before_any_billing_side_effect(self):
+        from apps.billing.models import SubscriptionInvoice
+
+        self.client.force_login(self.analyst)
+        before = SubscriptionInvoice.objects.count()
+        with patch("apps.portal.views.plan_change_billing_service.start_plan_change") as mocked:
+            response = self.client.post(self._checkout_url(), HTTP_HOST=_HOST)
+        self.assertEqual(response.status_code, 403)
+        mocked.assert_not_called()
+        self.assertEqual(SubscriptionInvoice.objects.count(), before)
+
+    def test_owner_reaches_the_real_purchase_flow(self):
+        """Positive control: OWNER (holds both SUBSCRIPTION_CHANGE and
+        BILLING_PAYMENT_MANAGE) is not blocked by the new gate — the request
+        proceeds into the real plan_change_billing_service/payment_flow_service
+        flow exactly as before this repair."""
+        self.client.force_login(self.owner)
+        response = self.client.post(self._checkout_url(), HTTP_HOST=_HOST)
+        # Not a 403 — the request reached the real billing services (which,
+        # for a first paid purchase from a free-trial subscription, redirect
+        # into the payment-attempt/return flow).
+        self.assertNotEqual(response.status_code, 403)
+
+    def test_step_up_continuation_rechecks_permission_for_administrator(self):
+        """Step-Up ordering requirement: even if an ADMINISTRATOR somehow
+        reaches the Step-Up continuation view directly (stale session,
+        role change after a challenge was issued by another session, etc.),
+        the continuation must re-check the canonical permission and deny —
+        Step-Up proof of identity must never substitute for authorization."""
+        self.client.force_login(self.administrator)
+        with patch("apps.portal.views._start_purchase") as mocked_start_purchase:
+            response = self.client.get(
+                f"/app/stores/{self.store.public_id}/billing/step-up/", HTTP_HOST=_HOST,
+            )
+        self.assertEqual(response.status_code, 403)
+        mocked_start_purchase.assert_not_called()
+
+
+# ===========================================================================
+# C. PERMANENT HANDLE / DOMAIN MANAGEMENT — DOMAIN_MANAGE
+# ===========================================================================
+
+
+@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"], RASTISI_ADMIN_DOMAIN_SUFFIX="rastisi.ir")
+class HandleAndDomainAuthorizationTests(TestCase):
+    """DOMAIN_MANAGE gates the permanent-handle claim and every custom-domain
+    mutation. Step-Up remains required in addition where it already was;
+    this suite proves the permission gate runs first and that a denied
+    request never reaches StoreDomain creation/update or the DNS/TLS
+    verification services."""
+
+    def setUp(self):
+        cache.clear()
+        update_platform_configuration(
+            actor=None, step_up_actions={"permanent_handle_claim": False, "custom_domain_activate": False},
+        )
+        self.owner = User.objects.create_user(username="09121390011", password=_STRONG_PASS)
+        OwnerProfile.objects.create(user=self.owner, phone="09121390011", full_name="مالک")
+        self.store = provisioning_service.provision_trial_store(owner=self.owner, name="فروشگاه دامنه مجوز")
+
+        self.administrator = User.objects.create_user(username="09121390022", password=_STRONG_PASS)
+        StoreMembership.objects.create(
+            store=self.store, user=self.administrator, role=StoreMembership.Role.ADMINISTRATOR,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
+        )
+        self.analyst = User.objects.create_user(username="09121390033", password=_STRONG_PASS)
+        StoreMembership.objects.create(
+            store=self.store, user=self.analyst, role=StoreMembership.Role.ANALYST,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
+        )
+        # A paid+active subscription, so ``claim_handle``'s own ``can_claim``
+        # business precondition is satisfied and cannot itself explain a
+        # denial in these tests — only the new authorization gate can.
+        from apps.subscriptions.models import StoreSubscription
+
+        StoreSubscription.objects.filter(store=self.store, is_current=True).update(
+            status=StoreSubscription.Status.ACTIVE,
+        )
+
+    def _claim_handle_url(self):
+        return f"/app/stores/{self.store.public_id}/handle/"
+
+    def _domains_url(self):
+        return f"/app/stores/{self.store.public_id}/domains/"
+
+    # -- (3) permanent handle -----------------------------------------------
+
+    def test_administrator_cannot_claim_handle_and_no_domain_is_created(self):
+        self.client.force_login(self.administrator)
+        domains_before = StoreDomain.objects.filter(store=self.store).count()
+        with patch("apps.portal.views.handle_service.claim_platform_handle") as mocked_claim:
+            response = self.client.post(self._claim_handle_url(), {"label": "myshop"}, HTTP_HOST=_HOST)
+        self.assertEqual(response.status_code, 403)
+        mocked_claim.assert_not_called()
+        self.assertEqual(StoreDomain.objects.filter(store=self.store).count(), domains_before)
+
+    def test_analyst_cannot_claim_handle(self):
+        self.client.force_login(self.analyst)
+        with patch("apps.portal.views.handle_service.claim_platform_handle") as mocked_claim:
+            response = self.client.post(self._claim_handle_url(), {"label": "myshop2"}, HTTP_HOST=_HOST)
+        self.assertEqual(response.status_code, 403)
+        mocked_claim.assert_not_called()
+
+    def test_owner_can_claim_handle(self):
+        self.client.force_login(self.owner)
+        with patch("apps.portal.views.handle_service.claim_platform_handle") as mocked_claim:
+            response = self.client.post(self._claim_handle_url(), {"label": "myshop3"}, HTTP_HOST=_HOST)
+        self.assertNotEqual(response.status_code, 403)
+        mocked_claim.assert_called_once()
+
+    def test_handle_claim_step_up_continuation_rechecks_permission(self):
+        """Step-Up ordering requirement for the handle-claim continuation."""
+        self.client.force_login(self.administrator)
+        with patch("apps.portal.views.handle_service.claim_platform_handle") as mocked:
+            response = self.client.get(
+                f"/app/stores/{self.store.public_id}/handle/step-up/", HTTP_HOST=_HOST,
+            )
+        self.assertEqual(response.status_code, 403)
+        mocked.assert_not_called()
+
+    # -- (4) custom-domain add -----------------------------------------------
+
+    def test_administrator_cannot_add_custom_domain_and_no_row_is_created(self):
+        self.client.force_login(self.administrator)
+        before = StoreDomain.objects.filter(store=self.store).count()
+        response = self.client.post(
+            self._domains_url(), {"action": "add", "hostname": "shop.example.com"}, HTTP_HOST=_HOST,
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(StoreDomain.objects.filter(store=self.store).count(), before)
+        self.assertFalse(StoreDomain.objects.filter(store=self.store, hostname="shop.example.com").exists())
+
+    def test_analyst_cannot_add_custom_domain(self):
+        self.client.force_login(self.analyst)
+        before = StoreDomain.objects.filter(store=self.store).count()
+        response = self.client.post(
+            self._domains_url(), {"action": "add", "hostname": "shop2.example.com"}, HTTP_HOST=_HOST,
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(StoreDomain.objects.filter(store=self.store).count(), before)
+
+    def test_owner_can_add_custom_domain(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(
+            self._domains_url(), {"action": "add", "hostname": "shop3.example.com"}, HTTP_HOST=_HOST,
+        )
+        self.assertNotEqual(response.status_code, 403)
+        self.assertTrue(StoreDomain.objects.filter(store=self.store, hostname="shop3.example.com").exists())
+
+    # -- (5) custom-domain verification/activation ---------------------------
+
+    def _create_domain(self, **kwargs):
+        defaults = dict(
+            store=self.store, hostname="verify.example.com", is_primary=False,
+            domain_type=StoreDomain.DomainType.CUSTOM_DOMAIN,
+            verification_status=StoreDomain.VerificationStatus.UNVERIFIED,
+        )
+        defaults.update(kwargs)
+        return StoreDomain.objects.create(**defaults)
+
+    def test_administrator_cannot_begin_dns_verification(self):
+        domain = self._create_domain()
+        self.client.force_login(self.administrator)
+        with patch("apps.portal.views.domain_verification_service.begin_dns_verification") as mocked:
+            response = self.client.post(
+                f"/app/stores/{self.store.public_id}/domains/{domain.pk}/begin-verify/", HTTP_HOST=_HOST,
+            )
+        self.assertEqual(response.status_code, 403)
+        mocked.assert_not_called()
+        domain.refresh_from_db()
+        self.assertEqual(domain.verification_status, StoreDomain.VerificationStatus.UNVERIFIED)
+
+    def test_administrator_cannot_check_dns_verification(self):
+        domain = self._create_domain(
+            verification_status=StoreDomain.VerificationStatus.PENDING, verification_token="tok123",
+        )
+        self.client.force_login(self.administrator)
+        with patch("apps.portal.views.domain_verification_service.check_dns_verification") as mocked:
+            response = self.client.post(
+                f"/app/stores/{self.store.public_id}/domains/{domain.pk}/check/", HTTP_HOST=_HOST,
+            )
+        self.assertEqual(response.status_code, 403)
+        mocked.assert_not_called()
+
+    def test_administrator_cannot_run_final_readiness_check(self):
+        domain = self._create_domain(
+            verification_status=StoreDomain.VerificationStatus.PENDING, verification_token="tok456",
+        )
+        self.client.force_login(self.administrator)
+        with patch("apps.portal.views.domain_verification_service.refresh_custom_domain_readiness") as mocked:
+            response = self.client.post(
+                f"/app/stores/{self.store.public_id}/domains/{domain.pk}/final-check/", HTTP_HOST=_HOST,
+            )
+        self.assertEqual(response.status_code, 403)
+        mocked.assert_not_called()
+
+    def test_administrator_cannot_activate_custom_domain(self):
+        domain = self._create_domain(
+            verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=timezone.now(),
+        )
+        self.client.force_login(self.administrator)
+        with patch("apps.portal.views.domain_verification_service.activate_custom_domain") as mocked:
+            response = self.client.post(
+                f"/app/stores/{self.store.public_id}/domains/{domain.pk}/activate/", HTTP_HOST=_HOST,
+            )
+        self.assertEqual(response.status_code, 403)
+        mocked.assert_not_called()
+        domain.refresh_from_db()
+        self.assertFalse(domain.is_primary)
+
+    def test_owner_can_activate_custom_domain(self):
+        domain = self._create_domain(
+            verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=timezone.now(),
+        )
+        self.client.force_login(self.owner)
+        with patch("apps.portal.views.domain_verification_service.activate_custom_domain") as mocked:
+            response = self.client.post(
+                f"/app/stores/{self.store.public_id}/domains/{domain.pk}/activate/", HTTP_HOST=_HOST,
+            )
+        self.assertNotEqual(response.status_code, 403)
+        mocked.assert_called_once()
+
+    def test_domain_activate_step_up_continuation_rechecks_permission(self):
+        """Step-Up ordering requirement for the activation continuation."""
+        domain = self._create_domain(
+            verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=timezone.now(),
+        )
+        self.client.force_login(self.administrator)
+        with patch("apps.portal.views.domain_verification_service.activate_custom_domain") as mocked:
+            response = self.client.get(
+                f"/app/stores/{self.store.public_id}/domains/activate/step-up/", HTTP_HOST=_HOST,
+            )
+        self.assertEqual(response.status_code, 403)
+        mocked.assert_not_called()
+
+
+# ===========================================================================
+# D. STORE DELETION — STORE_DELETE (Owner-only)
+# ===========================================================================
+
+
+@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
+class StoreDeletionAuthorizationTests(TestCase):
+    """STORE_DELETE gates requesting, Step-Up-continuing, and cancelling a
+    store-deletion request. Both ADMINISTRATOR and ANALYST are denied
+    (STORE_DELETE is Owner-only), proving this is not merely
+    ``ALL_PERMISSIONS - _OWNER_ONLY`` reasoning error — Store.status and the
+    deletion-lifecycle fields must remain completely untouched on denial."""
+
+    def setUp(self):
+        cache.clear()
+        update_platform_configuration(actor=None, step_up_actions={"store_delete": False})
+        self.owner = User.objects.create_user(username="09121400011", password=_STRONG_PASS)
+        OwnerProfile.objects.create(user=self.owner, phone="09121400011", full_name="مالک")
+        self.store = provisioning_service.provision_trial_store(owner=self.owner, name="فروشگاه حذف مجوز")
+
+        self.administrator = User.objects.create_user(username="09121400022", password=_STRONG_PASS)
+        StoreMembership.objects.create(
+            store=self.store, user=self.administrator, role=StoreMembership.Role.ADMINISTRATOR,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
+        )
+        self.analyst = User.objects.create_user(username="09121400033", password=_STRONG_PASS)
+        StoreMembership.objects.create(
+            store=self.store, user=self.analyst, role=StoreMembership.Role.ANALYST,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
+        )
+
+    def _snapshot(self):
+        self.store.refresh_from_db()
+        return (
+            self.store.status, self.store.deletion_requested_at,
+            self.store.deletion_scheduled_purge_at, self.store.pre_deletion_status,
+        )
+
+    def _request_deletion_url(self):
+        return f"/app/stores/{self.store.public_id}/delete/"
+
+    def test_administrator_cannot_request_deletion(self):
+        self.client.force_login(self.administrator)
+        before = self._snapshot()
+        with patch("apps.portal.views.deletion_service.request_deletion") as mocked:
+            response = self.client.post(
+                self._request_deletion_url(), {"typed_confirmation": self.store.slug}, HTTP_HOST=_HOST,
+            )
+        self.assertEqual(response.status_code, 403)
+        mocked.assert_not_called()
+        self.assertEqual(self._snapshot(), before)
+
+    def test_analyst_cannot_request_deletion(self):
+        self.client.force_login(self.analyst)
+        before = self._snapshot()
+        with patch("apps.portal.views.deletion_service.request_deletion") as mocked:
+            response = self.client.post(
+                self._request_deletion_url(), {"typed_confirmation": self.store.slug}, HTTP_HOST=_HOST,
+            )
+        self.assertEqual(response.status_code, 403)
+        mocked.assert_not_called()
+        self.assertEqual(self._snapshot(), before)
+
+    def test_administrator_cannot_cancel_deletion(self):
+        self.client.force_login(self.administrator)
+        with patch("apps.portal.views.deletion_service.cancel_deletion") as mocked:
+            response = self.client.post(
+                f"/app/stores/{self.store.public_id}/delete/cancel/", HTTP_HOST=_HOST,
+            )
+        self.assertEqual(response.status_code, 403)
+        mocked.assert_not_called()
+
+    def test_owner_can_request_deletion(self):
+        self.client.force_login(self.owner)
+        with patch("apps.portal.views.deletion_service.request_deletion") as mocked:
+            response = self.client.post(
+                self._request_deletion_url(), {"typed_confirmation": self.store.slug}, HTTP_HOST=_HOST,
+            )
+        self.assertNotEqual(response.status_code, 403)
+        mocked.assert_called_once()
+
+    def test_deletion_step_up_continuation_rechecks_permission(self):
+        """Step-Up ordering requirement: an ADMINISTRATOR reaching the
+        deletion Step-Up continuation directly must still be denied —
+        identity re-proof never completes a forbidden deletion."""
+        self.client.force_login(self.administrator)
+        with patch("apps.portal.views.deletion_service.request_deletion") as mocked:
+            response = self.client.get(
+                f"/app/stores/{self.store.public_id}/delete/step-up/", HTTP_HOST=_HOST,
+            )
+        self.assertEqual(response.status_code, 403)
+        mocked.assert_not_called()
+
+
+# ===========================================================================
+# E. OWNER-SIDE OWNERSHIP TRANSFER — STAFF_MANAGE
+# ===========================================================================
+
+
+@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
+class OwnershipTransferAuthorizationTests(TestCase):
+    """STAFF_MANAGE gates initiating, Step-Up-continuing, and cancelling an
+    ownership transfer from the current-owner side. The public recipient-
+    side ``accept_ownership_transfer`` is explicitly out of AUTH-001 scope
+    and is not touched or tested here."""
+
+    def setUp(self):
+        cache.clear()
+        update_platform_configuration(actor=None, step_up_actions={"store_ownership_transfer": False})
+        self.owner = User.objects.create_user(username="09121410011", password=_STRONG_PASS)
+        OwnerProfile.objects.create(user=self.owner, phone="09121410011", full_name="مالک")
+        self.store = provisioning_service.provision_trial_store(owner=self.owner, name="فروشگاه انتقال مجوز")
+
+        self.administrator = User.objects.create_user(username="09121410022", password=_STRONG_PASS)
+        StoreMembership.objects.create(
+            store=self.store, user=self.administrator, role=StoreMembership.Role.ADMINISTRATOR,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
+        )
+        self.analyst = User.objects.create_user(username="09121410033", password=_STRONG_PASS)
+        StoreMembership.objects.create(
+            store=self.store, user=self.analyst, role=StoreMembership.Role.ANALYST,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
+        )
+
+    def _initiate_url(self):
+        return f"/app/stores/{self.store.public_id}/transfer/"
+
+    def test_administrator_cannot_initiate_transfer_and_no_transfer_is_created(self):
+        self.client.force_login(self.administrator)
+        before = StoreOwnershipTransfer.objects.filter(store=self.store).count()
+        with patch("apps.portal.views.ownership_transfer_service.initiate_transfer") as mocked:
+            response = self.client.post(
+                self._initiate_url(), {"target_phone": "09121999999"}, HTTP_HOST=_HOST,
+            )
+        self.assertEqual(response.status_code, 403)
+        mocked.assert_not_called()
+        self.assertEqual(StoreOwnershipTransfer.objects.filter(store=self.store).count(), before)
+
+    def test_analyst_cannot_initiate_transfer(self):
+        self.client.force_login(self.analyst)
+        with patch("apps.portal.views.ownership_transfer_service.initiate_transfer") as mocked:
+            response = self.client.post(
+                self._initiate_url(), {"target_phone": "09121999998"}, HTTP_HOST=_HOST,
+            )
+        self.assertEqual(response.status_code, 403)
+        mocked.assert_not_called()
+
+    def test_owner_can_initiate_transfer(self):
+        self.client.force_login(self.owner)
+        with patch("apps.portal.views.ownership_transfer_service.initiate_transfer") as mocked:
+            response = self.client.post(
+                self._initiate_url(), {"target_phone": "09121999997"}, HTTP_HOST=_HOST,
+            )
+        self.assertNotEqual(response.status_code, 403)
+        mocked.assert_called_once()
+
+    def test_administrator_cannot_cancel_transfer_and_no_cancellation_occurs(self):
+        transfer = StoreOwnershipTransfer.objects.create(
+            store=self.store, initiated_by=self.owner, target_phone="09121999996",
+            expires_at=timezone.now() + timezone.timedelta(days=3),
+        )
+        self.client.force_login(self.administrator)
+        with patch("apps.portal.views.ownership_transfer_service.cancel_transfer") as mocked:
+            response = self.client.post(
+                f"/app/stores/{self.store.public_id}/transfer/cancel/", HTTP_HOST=_HOST,
+            )
+        self.assertEqual(response.status_code, 403)
+        mocked.assert_not_called()
+        transfer.refresh_from_db()
+        self.assertEqual(transfer.status, StoreOwnershipTransfer.Status.PENDING)
+
+    def test_transfer_step_up_continuation_rechecks_permission(self):
+        """Step-Up ordering requirement: an ADMINISTRATOR reaching the
+        ownership-transfer Step-Up continuation directly must still be
+        denied — identity re-proof never completes a forbidden transfer."""
+        self.client.force_login(self.administrator)
+        with patch("apps.portal.views.ownership_transfer_service.initiate_transfer") as mocked:
+            response = self.client.get(
+                f"/app/stores/{self.store.public_id}/transfer/step-up/", HTTP_HOST=_HOST,
+            )
+        self.assertEqual(response.status_code, 403)
+        mocked.assert_not_called()
