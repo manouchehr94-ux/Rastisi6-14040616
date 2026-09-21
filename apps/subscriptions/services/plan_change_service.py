@@ -108,44 +108,6 @@ def preview_plan_change(store, target_version) -> dict:
     }
 
 
-def execute_plan_change(store, target_version, *, preview_token, actor=None, reason="", idempotency_key=""):
-    """تغییرِ پلن را اجرا می‌کند — فقط اگر ``preview_token`` با وضعیتِ فعلیِ
-    اشتراک هم‌خوان باشد. اگر اشتراک از زمانِ پیش‌نمایش تغییر کرده باشد
-    ``StalePreviewError`` می‌اندازد (محافظت در برابرِ پیش‌نمایشِ کهنه).
-
-    هیچ پولی جابه‌جا نمی‌شود (ADR-72).
-
-    SUB-001 (بازبینیِ مستقلِ معماری، Repair 2): این تابعِ عمومی دیگر یک
-    نقطه‌ی ورودِ تولیدیِ در-معرض-استفاده نیست — کنورژنسِ SUB-001، مسیرِ
-    مرچنتِ Merchant Admin (``apps.dashboard.views.subscription_plan_execute``)
-    را به‌جایِ این تابع به ``apps.billing.services.plan_change_billing_
-    service.start_plan_change`` (که پرداختِ واقعی را الزامی می‌کند) منتقل
-    کرده است، و overrideِ اپراتوریِ مدیرِ پلتفرم
-    (``apps.portal.platform_admin_views.store_change_plan``) هم به‌جایِ این
-    تابع از ``execute_platform_admin_plan_override`` (که مستقیماً از
-    ``subscription_service.change_plan_version`` عبور می‌کند، نه از اینجا)
-    استفاده می‌کند. این تابع صرفاً برایِ سازگاریِ عقب‌رو و آزمون‌هایِ مستقیمِ
-    پرایمیتیوِ preview-then-execute نگه داشته شده و دیگر هیچ فراخوانِ
-    تولیدیِ فعالی ندارد؛ برایِ کدِ تازه از ``plan_change_billing_service.
-    start_plan_change`` (مرچنت) یا ``execute_platform_admin_plan_override``
-    (اپراتور) استفاده کنید، نه این تابع."""
-    subscription = ent.get_current_subscription(store)
-    if subscription is None:
-        raise PlanChangeError("این فروشگاه اشتراکِ جاری ندارد؛ تغییرِ پلن ممکن نیست.")
-    if target_version.status != PlanVersion.Status.PUBLISHED:
-        raise PlanChangeError("فقط نسخه‌ی «منتشرشده» را می‌توان انتخاب کرد.")
-    expected = _preview_token(subscription, target_version)
-    if not preview_token or preview_token != expected:
-        raise StalePreviewError(
-            "این پیش‌نمایش دیگر معتبر نیست (اشتراکِ شما تغییر کرده)؛ لطفاً دوباره پیش‌نمایش بگیرید."
-        )
-    updated = svc.change_plan_version(
-        subscription, target_version, actor=actor, reason=reason, idempotency_key=idempotency_key,
-    )
-    ent.clear_entitlement_cache()
-    return updated
-
-
 def execute_platform_admin_plan_override(store, target_version, *, actor, reason="", idempotency_key=""):
     """SUB-001 (بازبینیِ مستقلِ معماری، Repair 2) — مرزِ صریحِ overrideِ
     اپراتوریِ مدیرِ پلتفرم: نسخه‌ی پلنِ اشتراکِ جاریِ ``store`` را بلافاصله و
@@ -153,39 +115,92 @@ def execute_platform_admin_plan_override(store, target_version, *, actor, reason
     مستقلِ عملیاتیِ مدیرِ پلتفرم است، نه یک خریدِ مرچنت که نیازمندِ محافظتِ
     پیش‌نمایشِ کهنه‌ی 5A باشد).
 
-    این تابع عمداً از ``execute_plan_change`` (مسیرِ عمومیِ مرچنت‌محورِ قدیمی)
-    استفاده نمی‌کند — به‌جایش مستقیماً از همان پرایمیتیوِ سطحِ‌پایینِ
-    چرخه‌ی‌حیاتی که خودِ ``execute_plan_change``/تأییدِ پرداخت/تمدید هم از آن
-    عبور می‌کنند صدا می‌زند
+    این تابع مستقیماً از همان پرایمیتیوِ سطحِ‌پایینِ چرخه‌ی‌حیاتی که تأییدِ
+    پرداخت/تمدید هم از آن عبور می‌کنند صدا می‌زند
     (``subscription_service.change_plan_version``) — یک موتورِ صورتحسابِ
-    دوم یا یک انشعابِ منطقیِ تازه ساخته نمی‌شود.
+    دوم یا یک انشعابِ منطقیِ تازه ساخته نمی‌شود. (SUB-001 Repair 3: تابعِ
+    عمومیِ قدیمیِ ``execute_plan_change`` — که preview_token را بررسی
+    می‌کرد و سپس بلافاصله بدونِ صورتحساب تغییرِ پلن می‌داد — کاملاً حذف
+    شده است؛ هیچ نقطه‌ی ورودِ تولیدیِ دیگری با همین معنا
+    («preview_token معتبرِ مرچنت → تغییرِ فوریِ بدونِ صورتحساب») در این
+    فایل باقی نمانده.)
 
     ایمنی (Master Architecture Ledger — «امتیازاتِ پلتفرم» یک دامنه‌یِ
     امنیتیِ کاملاً جدا از «مجوزدهیِ Store-scopedِ مرچنت» است، نه یک نقشِ
     StoreMembership تازه):
 
-    * ``actor`` الزامی است و باید یک کاربرِ platform superuser احرازشده
-      باشد (بررسیِ ``is_authenticated and is_staff and is_superuser`` —
-      همان معیارِ ``apps.portal.platform_admin_views._is_platform_staff``؛
-      این تابع خودش یک رجیستریِ مجوزِ دومی نمی‌سازد، فقط همان معیارِ
-      موجودِ Django superuser را دوباره تأیید می‌کند).
+    * ``actor`` الزامی است و باید دقیقاً همان معیارِ سه‌بخشیِ کانونیکِ
+      ``apps.portal.platform_admin_views._is_platform_staff`` را برآورده
+      کند: ``is_authenticated and is_staff and is_superuser`` (SUB-001،
+      بازبینیِ مستقلِ معماری، Repair 3 — نسخه‌ی قبلی فقط
+      ``is_authenticated and is_superuser`` را بررسی می‌کرد، ضعیف‌تر از
+      مرزِ کانونیکِ Platform Admin و ناهم‌خوان با مستندسازیِ خودش). این
+      تابع عمداً خودِ ``_is_platform_staff`` را import نمی‌کند —
+      ``apps.portal.platform_admin_views`` در سطحِ ماژول از
+      ``apps.subscriptions`` وارد می‌کند، پس importِ برعکس از این‌جا به
+      آن ویو یک import cycle می‌سازد؛ به‌جایش همان سه‌شرط مستقیماً اینجا
+      هم بررسی می‌شود (نه یک رجیستریِ مجوزِ دومی — صرفاً تکرارِ همان
+      معیارِ Django staff/superuser).
     * نسخه‌ی پلنِ هدف باید «منتشرشده» باشد.
     * اشتراکِ جاری باید وجود داشته باشد.
+    * SUB-001 Repair 3 — قبل از هرگونه تغییرِ فوری، اگر یک فاکتورِ
+      ``PLAN_CHANGE`` هنوز قابلِ‌پرداخت برایِ همینِ اشتراک وجود داشته باشد،
+      override رد می‌شود (``PlanChangeError``): یک تصمیمِ مالیِ حل‌نشده
+      نباید توسطِ یک overrideِ اپراتوریِ بی‌ارتباط با پرداخت، بی‌اثر/کهنه
+      شود. مدیرِ پلتفرم باید ابتدا آن فاکتور را از طریقِ چرخه‌ی کانونیکِ
+      صورتحساب (مثلاً ``invoice_service.void_invoice``) حل کند.
     * ``StoreMembership``/``ROLE_PERMISSIONS``یِ مرچنت — از جمله
       ``SUBSCRIPTION_CHANGE`` — هرگز دسترسی به این override نمی‌دهد؛ این
       تابع صراحتاً یک override اپراتوری است، نه یک مسیرِ جایگزینِ خریدِ
-      مرچنت."""
-    if actor is None or not getattr(actor, "is_authenticated", False) or not getattr(
-        actor, "is_superuser", False
+      مرچنت.
+
+    ترتیبِ قفل (SUB-001 Repair 3، بازبینیِ ترتیبِ قفل): این تابع، همانندِ
+    ``plan_change_billing_service.start_plan_change``، ابتدا
+    ``StoreSubscription`` جاری را با ``select_for_update`` قفل می‌کند —
+    پیش از هر بررسیِ فاکتورِ رقیب. سپس بررسیِ وجودِ فاکتورِ رقیبِ
+    قابلِ‌پرداخت یک خوانشِ *بدونِ قفل* رویِ ``SubscriptionInvoice`` است (نه
+    ``select_for_update``) — تنها سازنده‌ی فاکتورهایِ ``PLAN_CHANGE``
+    (``start_plan_change``) خودش پیش از ساختن، همینِ ردیفِ اشتراک را قفل
+    می‌کند، پس نگه‌داشتنِ همین قفل کافی است تا هیچ ``start_plan_change``ی
+    هم‌زمان نتواند وسطِ ساختنِ فاکتور باشد — بدونِ نیاز به قفلِ اضافی رویِ
+    فاکتور. این هرگز ترتیبِ قفلِ ``confirm_payment``
+    (Attempt→Invoice→Subscription) را معکوس نمی‌کند، چون هرگز منتظرِ قفلِ
+    Invoice/Attempt نمی‌ماند — فقط می‌خواند."""
+    if (
+        actor is None
+        or not getattr(actor, "is_authenticated", False)
+        or not getattr(actor, "is_staff", False)
+        or not getattr(actor, "is_superuser", False)
     ):
-        raise PlanChangeError("این عملیات فقط برایِ مدیرِ پلتفرمِ احرازشده (superuser) مجاز است.")
-    subscription = ent.get_current_subscription(store)
-    if subscription is None:
-        raise PlanChangeError("این فروشگاه اشتراکِ جاری ندارد؛ تغییرِ پلن ممکن نیست.")
-    if target_version.status != PlanVersion.Status.PUBLISHED:
-        raise PlanChangeError("فقط نسخه‌ی «منتشرشده» را می‌توان انتخاب کرد.")
-    updated = svc.change_plan_version(
-        subscription, target_version, actor=actor, reason=reason, idempotency_key=idempotency_key,
-    )
+        raise PlanChangeError("این عملیات فقط برایِ مدیرِ پلتفرمِ احرازشده (staff + superuser) مجاز است.")
+    from django.db import transaction as _transaction
+
+    from apps.subscriptions.models import StoreSubscription
+
+    with _transaction.atomic():
+        locked_subscription = (
+            StoreSubscription.objects.select_for_update()
+            .filter(store=store, is_current=True)
+            .first()
+        )
+        if locked_subscription is None:
+            raise PlanChangeError("این فروشگاه اشتراکِ جاری ندارد؛ تغییرِ پلن ممکن نیست.")
+        if target_version.status != PlanVersion.Status.PUBLISHED:
+            raise PlanChangeError("فقط نسخه‌ی «منتشرشده» را می‌توان انتخاب کرد.")
+
+        from apps.billing.models import SubscriptionInvoice
+
+        if SubscriptionInvoice.objects.filter(
+            subscription=locked_subscription, kind=SubscriptionInvoice.Kind.PLAN_CHANGE,
+            status__in=SubscriptionInvoice.PAYABLE_STATUSES,
+        ).exists():
+            raise PlanChangeError(
+                "یک فاکتورِ تغییرِ پلنِ حل‌نشده برایِ این فروشگاه وجود دارد؛ "
+                "پیش از overrideِ فوری، آن فاکتور را باطل یا حل کنید."
+            )
+
+        updated = svc.change_plan_version(
+            locked_subscription, target_version, actor=actor, reason=reason, idempotency_key=idempotency_key,
+        )
     ent.clear_entitlement_cache()
     return updated

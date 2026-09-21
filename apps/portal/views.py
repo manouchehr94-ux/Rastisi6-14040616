@@ -911,7 +911,12 @@ def _start_purchase(request, *, store, plan_version):
         kind, result = plan_change_billing_service.start_plan_change(
             current, plan_version, preview_token=token, actor=request.user,
         )
-    except plan_change_service.PlanChangeError as exc:
+    except (plan_change_service.PlanChangeError, plan_change_billing_service.PlanChangeBillingError) as exc:
+        # SUB-001 Repair 3: ``start_plan_change`` now also raises
+        # ``PlanChangeBillingError`` when a competing, unresolved
+        # PLAN_CHANGE invoice already exists for this subscription (the
+        # financial invariant added in this repair) — this is a normal,
+        # user-facing rejection, not a 500.
         messages.error(request, str(exc))
         return redirect("portal:billing-plans", store_public_id=store.public_id)
 

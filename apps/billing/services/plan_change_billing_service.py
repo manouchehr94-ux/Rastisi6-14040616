@@ -101,6 +101,29 @@ def start_plan_change(subscription, target_version, *, preview_token, actor=None
         if existing_payable is not None:
             return "invoice", existing_payable
 
+        # SUB-001 Repair 3 (ناوردایِ مالی): در هر لحظه حداکثر *یک* فاکتورِ
+        # ``PLAN_CHANGE`` قابلِ‌پرداخت به‌ازایِ هر اشتراک مجاز است. اگر
+        # فاکتورِ تطبیق‌یافته‌ی بالا (همینِ اثرانگشتِ منبع/هدف) پیدا نشد اما
+        # یک فاکتورِ ``PLAN_CHANGE`` قابلِ‌پرداختِ *دیگری* برایِ همینِ اشتراک
+        # از قبل باز است — چه هدفش فرق داشته باشد (مثلاً A→C باز است و حالا
+        # A→D درخواست شده) چه اثرانگشتِ منبعش قدیمی باشد — این یک تصمیمِ
+        # مالیِ حل‌نشده‌ی رقیب است: نباید سندِ دومی ساخته شود، نباید فاکتورِ
+        # قدیمی بی‌صدا تصاحب/بازتخصیص شود، و نباید خودکار شارژ/تغییری داده
+        # شود. کاربر باید صریحاً منتظرِ حل شدن (پرداخت) یا باطل‌کردنِ آن
+        # فاکتور بمانَد؛ فقط سپس تصمیمِ تازه می‌تواند فاکتورِ تازه‌ی خودش را
+        # بسازد. این بررسی زیرِ همان قفلِ ``StoreSubscription``ی است که همین
+        # بالا گرفته شد، پس با هیچ ``start_plan_change``ی هم‌زمانِ دیگر race
+        # نمی‌کند (تنها سازنده‌ی این فاکتورها همینجاست، و آن هم پیش از
+        # نوشتن همینِ قفل را می‌گیرد).
+        if SubscriptionInvoice.objects.filter(
+            subscription=current, kind=SubscriptionInvoice.Kind.PLAN_CHANGE,
+            status__in=SubscriptionInvoice.PAYABLE_STATUSES,
+        ).exclude(idempotency_key=expected).exists():
+            raise PlanChangeBillingError(
+                "یک فاکتورِ تغییرِ پلنِ حل‌نشده برایِ این اشتراک وجود دارد؛ "
+                "پیش از درخواستِ تغییرِ تازه، آن فاکتور را پرداخت یا باطل کنید."
+            )
+
         # ``idempotency_key`` عمداً به ``invoice_service.create_invoice``
         # پاس داده نمی‌شود: بررسیِ idempotency‌ی خودِ آن تابع فقط رویِ
         # store+idempotency_key است (بدونِ فیلترِ وضعیت) و فاکتورِ

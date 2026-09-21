@@ -189,3 +189,97 @@ class StoreChangePlanViewTests(TestCase):
         )
         with self.assertRaises(pcs.PlanChangeError):
             pcs.execute_platform_admin_plan_override(empty_store, self.to_version, actor=self.superuser)
+
+    # -- (7) SUB-001 Repair 3, Blocker 1: is_staff is now required, not just
+    #    is_superuser -----------------------------------------------------
+
+    def test_authenticated_superuser_without_is_staff_is_rejected(self):
+        """The canonical Platform Admin predicate
+        (``apps.portal.platform_admin_views._is_platform_staff``) requires
+        ``is_authenticated AND is_staff AND is_superuser``. Repair 2's guard
+        only checked ``is_authenticated AND is_superuser`` — weaker than the
+        canonical boundary. An authenticated, superuser-but-not-staff actor
+        must be rejected with zero mutation."""
+        non_staff_superuser = User.objects.create_user(
+            username="pa-plan-super-nostaff@example.com", email="pa-plan-super-nostaff@example.com",
+            password="a-very-strong-pass-1", is_staff=False, is_superuser=True,
+        )
+        with self.assertRaises(pcs.PlanChangeError):
+            pcs.execute_platform_admin_plan_override(self.store, self.to_version, actor=non_staff_superuser)
+        self.subscription.refresh_from_db()
+        self.assertEqual(self.subscription.plan_version_id, self.from_version.pk)
+
+    # -- (8) SUB-001 Repair 3, Blocker 3: override vs. an open PLAN_CHANGE
+    #    invoice — reject before void, succeed after void ------------------
+
+    def test_override_rejected_while_a_payable_plan_change_invoice_exists(self):
+        """A merchant-initiated, unresolved ``PLAN_CHANGE`` invoice must not
+        be silently invalidated/bypassed by an unrelated operator override:
+        the override is rejected outright, the invoice is untouched, and the
+        subscription does not move."""
+        from apps.billing.models import SubscriptionInvoice
+        from apps.billing.services import plan_change_billing_service as pcb
+
+        # Give the subscription a price so `to_version` is a genuine upgrade
+        # target, so `start_plan_change` creates a payable invoice.
+        self.to_version.display_price = "150000"
+        self.to_version.currency = "IRT"
+        self.to_version.billing_interval = PlanVersion.BillingInterval.MONTHLY
+        self.to_version.save(update_fields=["display_price", "currency", "billing_interval"])
+        self.from_version.display_price = "50000"
+        self.from_version.currency = "IRT"
+        self.from_version.billing_interval = PlanVersion.BillingInterval.MONTHLY
+        self.from_version.save(update_fields=["display_price", "currency", "billing_interval"])
+
+        from apps.subscriptions.services import plan_change_service as pcs_module
+
+        token = pcs_module._preview_token(self.subscription, self.to_version)
+        _kind, invoice = pcb.start_plan_change(self.subscription, self.to_version, preview_token=token)
+        self.assertTrue(invoice.is_payable)
+
+        other_plan = Plan.objects.create(code="override-other", name="Other")
+        other_version = PlanVersion.objects.create(
+            plan=other_plan, version_number=1, status=PlanVersion.Status.PUBLISHED,
+        )
+        with self.assertRaises(pcs.PlanChangeError):
+            pcs.execute_platform_admin_plan_override(self.store, other_version, actor=self.superuser, reason="QA")
+
+        self.subscription.refresh_from_db()
+        self.assertEqual(self.subscription.plan_version_id, self.from_version.pk)
+        invoice.refresh_from_db()
+        self.assertTrue(invoice.is_payable)
+        self.assertEqual(
+            SubscriptionInvoice.objects.filter(subscription=self.subscription).count(), 1,
+        )
+
+    def test_override_succeeds_after_the_open_invoice_is_explicitly_voided(self):
+        """Once the merchant's open ``PLAN_CHANGE`` invoice is resolved via
+        the canonical billing lifecycle (``invoice_service.void_invoice``),
+        the same override that was previously rejected must succeed."""
+        from apps.billing.services import invoice_service, plan_change_billing_service as pcb
+        from apps.subscriptions.services import plan_change_service as pcs_module
+
+        self.to_version.display_price = "150000"
+        self.to_version.currency = "IRT"
+        self.to_version.billing_interval = PlanVersion.BillingInterval.MONTHLY
+        self.to_version.save(update_fields=["display_price", "currency", "billing_interval"])
+        self.from_version.display_price = "50000"
+        self.from_version.currency = "IRT"
+        self.from_version.billing_interval = PlanVersion.BillingInterval.MONTHLY
+        self.from_version.save(update_fields=["display_price", "currency", "billing_interval"])
+
+        token = pcs_module._preview_token(self.subscription, self.to_version)
+        _kind, invoice = pcb.start_plan_change(self.subscription, self.to_version, preview_token=token)
+
+        other_plan = Plan.objects.create(code="override-other-2", name="Other2")
+        other_version = PlanVersion.objects.create(
+            plan=other_plan, version_number=1, status=PlanVersion.Status.PUBLISHED,
+        )
+        with self.assertRaises(pcs.PlanChangeError):
+            pcs.execute_platform_admin_plan_override(self.store, other_version, actor=self.superuser, reason="QA")
+
+        invoice_service.void_invoice(invoice)
+        pcs.execute_platform_admin_plan_override(self.store, other_version, actor=self.superuser, reason="QA")
+
+        self.subscription.refresh_from_db()
+        self.assertEqual(self.subscription.plan_version_id, other_version.pk)

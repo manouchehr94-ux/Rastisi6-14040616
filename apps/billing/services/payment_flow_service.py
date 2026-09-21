@@ -28,11 +28,37 @@ class PaymentFlowError(Exception):
 @transaction.atomic
 def start_payment(invoice, *, return_url, actor=None, idempotency_key="", now=None):
     """یک تلاشِ پرداخت و جلسه‌ی Provider برایِ یک فاکتورِ قابلِ‌پرداخت می‌سازد و
-    فاکتور را به ``payment_pending`` می‌برد. ``(attempt, session)`` را برمی‌گرداند."""
+    فاکتور را به ``payment_pending`` می‌برد. ``(attempt, session)`` را برمی‌گرداند.
+
+    دفاعِ لایه‌ای برایِ ``PLAN_CHANGE`` (SUB-001 Repair 3، Blocker 4): پیش از
+    شروعِ پرداخت، اگر فاکتور از نوعِ ``PLAN_CHANGE`` باشد، تازگیِ *همانِ*
+    اثرانگشتِ منبع/هدفی که هنگامِ ساختنِ فاکتور رویِ ``idempotency_key``اش
+    نوشته شده دوباره بررسی می‌شود (همانندِ محافظتِ پیش‌نمایشِ کهنه‌یِ 5A، فقط
+    این‌بار در لحظه‌یِ شروعِ پرداخت، نه لحظه‌یِ ساختنِ فاکتور). اگر اشتراک از
+    زمانِ ساختنِ این فاکتور از یک مسیرِ دیگر (مثلاً اعمالِ یک
+    ``ScheduledPlanChange`` هنگامِ تمدید) تغییرِ نسخه‌ی پلن کرده باشد، این
+    فاکتور دیگر تصمیمِ معتبرِ فعلی نیست — پرداخت شروع نمی‌شود (خطا) تا پول
+    بر اساسِ یک تصمیمِ کهنه جابه‌جا نشود. این بررسی صرفاً یک خوانشِ *بدونِ
+    قفلِ اضافی* رویِ ``StoreSubscription`` است (نه ``select_for_update``) —
+    قفلِ موجود در همین تابع فقط رویِ ``SubscriptionInvoice`` است، پس هیچ
+    ترتیبِ قفلی معکوس نمی‌شود و رفتارِ ``INITIAL``/``RENEWAL`` دست‌نخورده
+    می‌ماند (این بررسی فقط برایِ ``kind == PLAN_CHANGE`` اجرا می‌شود)."""
     now = now or timezone.now()
     locked = SubscriptionInvoice.objects.select_for_update().get(pk=invoice.pk)
     if not locked.is_payable:
         raise PaymentFlowError("این فاکتور در وضعیتِ قابلِ‌پرداخت نیست.")
+
+    if locked.kind == SubscriptionInvoice.Kind.PLAN_CHANGE:
+        from apps.subscriptions.models import StoreSubscription
+        from apps.subscriptions.services import plan_change_service as pcs
+
+        current_subscription = StoreSubscription.objects.get(pk=locked.subscription_id)
+        expected = pcs._preview_token(current_subscription, locked.plan_version)
+        if not locked.idempotency_key or locked.idempotency_key != expected:
+            raise PaymentFlowError(
+                "این فاکتورِ تغییرِ پلن دیگر تصمیمِ معتبرِ فعلی نیست (اشتراک از "
+                "زمانِ ساختنِ این فاکتور تغییر کرده)؛ پرداخت شروع نمی‌شود."
+            )
 
     attempt = attempt_service.create_attempt(locked, idempotency_key=idempotency_key, actor=actor, now=now)
     provider = registry.get_provider(attempt.provider)
