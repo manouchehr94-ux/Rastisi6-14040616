@@ -28,7 +28,10 @@ business truth that the Merchant Admin dashboard already gates with the
 matching canonical permission. ``ANALYST``/``ADMINISTRATOR`` do **not** hold
 any of the Owner-only keys used here (``SUBSCRIPTION_CHANGE``,
 ``DOMAIN_MANAGE``, ``STAFF_MANAGE``, ``STORE_DELETE``); ``ANALYST`` also
-lacks ``SETTINGS_MANAGE``.
+lacks ``SETTINGS_MANAGE``. ``BILLING_PAYMENT_MANAGE`` — the other half of
+the subscription-purchase AND gate — is deliberately NOT Owner-only
+(``ADMINISTRATOR`` holds it); the purchase gate is still effectively
+Owner-only only because it also requires ``SUBSCRIPTION_CHANGE``.
 
 The defect (AUTH-001): these portal routes were protected only by
 ``owner_required`` (authentication) + an ACTIVE ``StoreMembership`` — i.e.
@@ -54,7 +57,14 @@ from apps.catalog.models import IndustryTemplate, StoreIndustryInstallation
 from apps.portal.models import OwnerProfile
 from apps.portal.services import provisioning_service
 from apps.portal.services.platform_config_service import update_platform_configuration
-from apps.stores.authorization import ALL_PERMISSIONS, ROLE_PERMISSIONS, STORE_DELETE, _OWNER_ONLY
+from apps.stores.authorization import (
+    ALL_PERMISSIONS,
+    BILLING_PAYMENT_MANAGE,
+    ROLE_PERMISSIONS,
+    STORE_DELETE,
+    SUBSCRIPTION_CHANGE,
+    _OWNER_ONLY,
+)
 from apps.stores.models import Store, StoreDomain, StoreMembership, StoreOwnershipTransfer
 from apps.subscriptions.models import Plan, PlanVersion
 
@@ -370,12 +380,25 @@ class StoreDeletePermissionRegistryTests(TestCase):
 
 @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
 class SubscriptionPurchaseAuthorizationTests(TestCase):
-    """SUBSCRIPTION_CHANGE + BILLING_PAYMENT_MANAGE gate reaching the
-    subscription-purchase mutation. Both are ``_OWNER_ONLY`` keys, so this
-    is effectively Owner-only under the current role matrix — but the view
-    must express that through the canonical permission check, not a
-    hardcoded role-name check (proven by testing ADMINISTRATOR, who is
-    denied here despite holding many other permissions)."""
+    """SUBSCRIPTION_CHANGE + BILLING_PAYMENT_MANAGE (AND semantics, via
+    ``portal_actions_allowed``) gate reaching the subscription-purchase
+    mutation.
+
+    AUTH-001 test-repair correction (independent architect re-review): only
+    ``SUBSCRIPTION_CHANGE`` is an ``_OWNER_ONLY`` key in the canonical
+    registry — ``BILLING_PAYMENT_MANAGE`` is NOT. ``ADMINISTRATOR`` (whose
+    permission set is ``ALL_PERMISSIONS - _OWNER_ONLY``) therefore actually
+    *holds* ``BILLING_PAYMENT_MANAGE`` and only *lacks*
+    ``SUBSCRIPTION_CHANGE``. The combined AND gate is still effectively
+    Owner-only under the current role matrix — not because both keys are
+    individually Owner-only, but because the gate requires *every* listed
+    permission and ``SUBSCRIPTION_CHANGE`` alone is enough to deny any
+    non-Owner role. ``test_permission_matrix_administrator_holds_billing_payment_manage_but_not_subscription_change``
+    below pins this exact canonical fact directly against
+    ``ROLE_PERMISSIONS``/``_OWNER_ONLY``, so the view must express the
+    denial through the canonical permission check (not a hardcoded
+    role-name check) — proven by testing ADMINISTRATOR, who is denied here
+    despite holding ``BILLING_PAYMENT_MANAGE`` and many other permissions."""
 
     def setUp(self):
         cache.clear()
@@ -409,6 +432,28 @@ class SubscriptionPurchaseAuthorizationTests(TestCase):
     def _checkout_url(self):
         return f"/app/stores/{self.store.public_id}/billing/checkout/{self.plan_version.pk}/"
 
+    def test_permission_matrix_administrator_holds_billing_payment_manage_but_not_subscription_change(self):
+        """Pins the exact canonical registry fact this suite depends on
+        (AUTH-001 test-repair — independent architect re-review):
+
+            SUBSCRIPTION_CHANGE     is Owner-only  (in _OWNER_ONLY)
+            BILLING_PAYMENT_MANAGE  is NOT Owner-only (not in _OWNER_ONLY)
+            ADMINISTRATOR           holds BILLING_PAYMENT_MANAGE
+            ADMINISTRATOR           lacks SUBSCRIPTION_CHANGE
+
+        The registry (apps/stores/authorization.py) is the sole authority;
+        this test would need to change if the registry legitimately changes
+        — it must never be "fixed" by editing ROLE_PERMISSIONS to match a
+        stale assumption."""
+        self.assertIn(SUBSCRIPTION_CHANGE, _OWNER_ONLY)
+        self.assertNotIn(BILLING_PAYMENT_MANAGE, _OWNER_ONLY)
+        self.assertIn(
+            BILLING_PAYMENT_MANAGE, ROLE_PERMISSIONS[StoreMembership.Role.ADMINISTRATOR],
+        )
+        self.assertNotIn(
+            SUBSCRIPTION_CHANGE, ROLE_PERMISSIONS[StoreMembership.Role.ADMINISTRATOR],
+        )
+
     def test_administrator_is_denied_before_any_billing_side_effect(self):
         from apps.billing.models import SubscriptionInvoice, SubscriptionPaymentAttempt
 
@@ -441,16 +486,34 @@ class SubscriptionPurchaseAuthorizationTests(TestCase):
         self.assertEqual(SubscriptionInvoice.objects.count(), before)
 
     def test_owner_reaches_the_real_purchase_flow(self):
-        """Positive control: OWNER (holds both SUBSCRIPTION_CHANGE and
-        BILLING_PAYMENT_MANAGE) is not blocked by the new gate — the request
-        proceeds into the real plan_change_billing_service/payment_flow_service
-        flow exactly as before this repair."""
+        """Positive control (AUTH-001 test-repair — independent architect
+        re-review): asserting merely ``status_code != 403`` is too weak,
+        because this fixture deliberately does NOT guarantee a current
+        subscription (that would depend on RASTISI_DEFAULT_PLAN_CODE); an
+        OWNER request could pass authorization and then exit early/differ
+        for an unrelated billing-setup reason, which would *also* not be a
+        403 and would falsely look like a passing test.
+
+        Mock the exact continuation the view calls once authorization
+        passes (``_start_purchase``) and assert it is invoked, with the
+        correct Store and PlanVersion, and that its return value is what
+        the view returns — proving OWNER concretely crossed the canonical
+        authorization gate, independent of any billing/subscription
+        business-setup concern (which is SUB-001/billing territory, not
+        AUTH-001)."""
+        from django.http import HttpResponse
+
+        sentinel = HttpResponse("owner-crossed-the-gate", status=278)
         self.client.force_login(self.owner)
-        response = self.client.post(self._checkout_url(), HTTP_HOST=_HOST)
-        # Not a 403 — the request reached the real billing services (which,
-        # for a first paid purchase from a free-trial subscription, redirect
-        # into the payment-attempt/return flow).
-        self.assertNotEqual(response.status_code, 403)
+        with patch("apps.portal.views._start_purchase", return_value=sentinel) as mocked_start_purchase:
+            response = self.client.post(self._checkout_url(), HTTP_HOST=_HOST)
+
+        self.assertEqual(response.status_code, 278)
+        self.assertEqual(response.content, b"owner-crossed-the-gate")
+        mocked_start_purchase.assert_called_once()
+        _args, kwargs = mocked_start_purchase.call_args
+        self.assertEqual(kwargs["store"], self.store)
+        self.assertEqual(kwargs["plan_version"], self.plan_version)
 
     def test_step_up_continuation_rechecks_permission_for_administrator(self):
         """Step-Up ordering requirement: even if an ADMINISTRATOR somehow
@@ -472,7 +535,18 @@ class SubscriptionPurchaseAuthorizationTests(TestCase):
 # ===========================================================================
 
 
-@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"], RASTISI_ADMIN_DOMAIN_SUFFIX="rastisi.ir")
+@override_settings(
+    ALLOWED_HOSTS=[_HOST, "testserver"], RASTISI_ADMIN_DOMAIN_SUFFIX="rastisi.ir",
+    # AUTH-001 test-repair (independent architect re-review): this suite must
+    # not depend on deployment/default-plan configuration. Explicitly force
+    # RASTISI_DEFAULT_PLAN_CODE empty (the project default) so
+    # provision_trial_store()'s internal, fail-open
+    # provision_default_subscription() call is guaranteed to find no default
+    # plan and do nothing — the paid/active subscription below is instead
+    # built explicitly and deterministically via the canonical
+    # subscription_service, exactly like apps/portal/tests/test_claim_handle_views.py.
+    RASTISI_DEFAULT_PLAN_CODE="",
+)
 class HandleAndDomainAuthorizationTests(TestCase):
     """DOMAIN_MANAGE gates the permanent-handle claim and every custom-domain
     mutation. Step-Up remains required in addition where it already was;
@@ -499,13 +573,43 @@ class HandleAndDomainAuthorizationTests(TestCase):
             store=self.store, user=self.analyst, role=StoreMembership.Role.ANALYST,
             status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
         )
-        # A paid+active subscription, so ``claim_handle``'s own ``can_claim``
-        # business precondition is satisfied and cannot itself explain a
-        # denial in these tests — only the new authorization gate can.
-        from apps.subscriptions.models import StoreSubscription
+        self._activate_paid_subscription()
 
-        StoreSubscription.objects.filter(store=self.store, is_current=True).update(
-            status=StoreSubscription.Status.ACTIVE,
+    def _activate_paid_subscription(self):
+        """Deterministically gives ``self.store`` a real ACTIVE paid
+        subscription through the canonical subscription_service, so
+        ``claim_handle``'s own ``can_claim`` business precondition is
+        genuinely satisfied — never faked by direct-writing
+        StoreSubscription fields, and never dependent on
+        RASTISI_DEFAULT_PLAN_CODE / provision_trial_store()'s own (fail-open,
+        possibly no-op) default-subscription provisioning. With
+        RASTISI_DEFAULT_PLAN_CODE="" (forced above),
+        provision_trial_store() never creates any subscription for this
+        Store, so ``create_subscription`` is guaranteed to find none and
+        will not raise the "already has a current subscription" error."""
+        from apps.subscriptions.models import StoreSubscription
+        from apps.subscriptions.services import subscription_service
+
+        self.assertFalse(
+            StoreSubscription.objects.filter(store=self.store, is_current=True).exists(),
+            "precondition: provision_trial_store must not have created a subscription "
+            "when RASTISI_DEFAULT_PLAN_CODE is empty — otherwise this fixture is not "
+            "actually exercising the explicit create_subscription/activate_subscription path.",
+        )
+        plan = Plan.objects.create(
+            code=f"pro-auth001-domain-{self.store.pk}", name="Pro", is_active=True, is_publicly_selectable=True,
+        )
+        version = PlanVersion.objects.create(
+            plan=plan, version_number=1, status=PlanVersion.Status.PUBLISHED,
+            billing_interval=PlanVersion.BillingInterval.MONTHLY, display_price=490_000,
+        )
+        subscription = subscription_service.create_subscription(self.store, version, actor=self.owner)
+        subscription_service.activate_subscription(subscription, actor=self.owner)
+        self.assertTrue(
+            StoreSubscription.objects.filter(
+                store=self.store, is_current=True, status=StoreSubscription.Status.ACTIVE,
+            ).exists(),
+            "precondition: the store must now have a real, current, ACTIVE subscription.",
         )
 
     def _claim_handle_url(self):
@@ -513,6 +617,20 @@ class HandleAndDomainAuthorizationTests(TestCase):
 
     def _domains_url(self):
         return f"/app/stores/{self.store.public_id}/domains/"
+
+    def test_fixture_precondition_can_claim_is_true_for_the_owner(self):
+        """Explicit fixture-validity check (test-repair requirement): before
+        any authorization distinction is tested, prove — through the real
+        view, not just the service layer — that ``can_claim`` is actually
+        True. If this precondition test itself fails, every other test in
+        this handle-claim block would be denied by the business
+        precondition rather than by the authorization gate under test, and
+        must be treated as invalid."""
+        self.client.force_login(self.owner)
+        response = self.client.get(self._claim_handle_url(), HTTP_HOST=_HOST)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["can_claim"])
+        self.assertIsNotNone(response.context["current_subscription"])
 
     # -- (3) permanent handle -----------------------------------------------
 
