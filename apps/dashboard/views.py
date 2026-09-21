@@ -4865,17 +4865,18 @@ def hero_form(request, pk=None):
             obj.full_clean()
             obj.save()
 
-            # MED-001 — legacy Dashboard hero replacement no longer has
-            # unilateral authority to physically delete reusable media
-            # bytes. Old desktop/mobile filenames that actually changed are
-            # routed through the same canonical content/media safety gate
-            # every other reusable-media path uses
-            # (``cleanup_reusable_media_file`` → ``is_physical_media_path_
-            # safe_to_delete``), which conservatively checks for any other
-            # ``MediaAsset`` alias or legacy ImageField still claiming the
-            # same physical path (e.g. a Storefront Builder asset-backed
-            # placement created via ``_sync_asset_references`` pointing at
-            # this exact filename) before ever calling ``storage.delete``.
+            # MED-001 (Retention-First, architect decision): legacy
+            # Dashboard hero replacement never had — and still does not
+            # have — unilateral authority to physically delete reusable
+            # media bytes. Old desktop/mobile filenames that actually
+            # changed are routed through the one canonical content/media
+            # retention authority (``cleanup_reusable_media_file``), which
+            # is now a deliberate retention no-op for this reusable-media
+            # family (no ``storage.delete`` is ever performed here) — see
+            # the Retention-First policy note in ``apps.content.services``.
+            # The old asset/file is intentionally left in place; a small
+            # storage leak is an accepted cost of eliminating the
+            # attach-vs-delete TOCTOU race for this P0.
             from apps.content.services import cleanup_reusable_media_file
 
             storage = HeroSlide.desktop_image.field.storage
@@ -4915,9 +4916,11 @@ def hero_delete(request, pk):
 
     slide.delete()
 
-    # MED-001 — same canonical safety gate as hero_form above; the legacy
-    # Dashboard delete route may delete its own HeroSlide row, but must not
-    # unilaterally destroy bytes another placement/alias still needs.
+    # MED-001 (Retention-First, architect decision): the legacy Dashboard
+    # delete route may delete its own HeroSlide row, but never physically
+    # deletes reusable media bytes — routed through the canonical
+    # retention authority (``cleanup_reusable_media_file``), which
+    # intentionally performs no ``storage.delete`` for this media family.
     from apps.content.services import cleanup_reusable_media_file
 
     cleanup_reusable_media_file(desktop_name, storage)
@@ -4992,9 +4995,12 @@ def banner_form(request, pk=None):
             obj.full_clean()
             obj.save()
 
-            # MED-001 — same repair as hero_form above: route old-filename
-            # cleanup through the canonical content/media safety gate
-            # instead of an unconditional ``storage.delete``.
+            # MED-001 (Retention-First, architect decision): same policy as
+            # hero_form above — route old-filename cleanup through the
+            # canonical content/media retention authority, which
+            # intentionally performs no ``storage.delete`` for this media
+            # family (a small storage leak is accepted to eliminate the
+            # attach-vs-delete TOCTOU race).
             from apps.content.services import cleanup_reusable_media_file
 
             storage = PromotionalBanner.desktop_image.field.storage
@@ -5034,7 +5040,8 @@ def banner_delete(request, pk):
 
     banner.delete()
 
-    # MED-001 — same canonical safety gate as banner_form above.
+    # MED-001 (Retention-First, architect decision): same policy as
+    # hero_delete above.
     from apps.content.services import cleanup_reusable_media_file
 
     cleanup_reusable_media_file(desktop_name, storage)

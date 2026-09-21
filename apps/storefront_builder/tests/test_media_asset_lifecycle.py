@@ -429,9 +429,25 @@ class SectionDuplicateMediaTests(TestCase):
 
 
 class DeleteMediaAssetIfUnreferencedServiceTests(TestCase):
-    """Part 11.B/H — the explicit cleanup service itself: never deletes an
-    asset that is still referenced elsewhere; safely deletes one that
-    truly has zero references."""
+    """Part 11.B/H, superseded by MED-001 (Retention-First, architect
+    decision): the explicit cleanup service itself never destroys either
+    the ``MediaAsset`` metadata row or the underlying physical bytes for
+    this reusable-Storefront-media family — regardless of whether the
+    asset is currently referenced elsewhere.
+
+    The old destructive contract this class used to prove
+    ("test_deletes_asset_with_zero_references" — a genuinely-unreferenced
+    asset's row AND physical file were both actually removed) is
+    explicitly retired: the MED-001 concurrency investigation proved that
+    any check-then-delete design (even one re-checking safety inside a
+    ``transaction.on_commit`` callback) has a real, provable attach-vs-
+    delete TOCTOU race against concurrent reference creation (a new
+    ``MediaAsset`` alias, an Undo/Redo revival, a Draft/Restore clone, a
+    background-JSON write). The P0 fix removes the destructive side
+    entirely from online mutation paths, accepting a small
+    storage/metadata leak as the cost of eliminating that race — durable,
+    serialized garbage collection is deferred to a separate,
+    later-architected task, not designed or implemented here."""
 
     def setUp(self):
         cache.clear()
@@ -444,11 +460,24 @@ class DeleteMediaAssetIfUnreferencedServiceTests(TestCase):
         self.assertFalse(deleted)
         self.assertTrue(MediaAsset.objects.filter(pk=asset.pk).exists())
 
-    def test_deletes_asset_with_zero_references(self):
+    def test_unreferenced_asset_is_retained_not_deleted(self):
+        """MED-001 Retention-First (supersedes the old
+        ``test_deletes_asset_with_zero_references``): a ``MediaAsset`` with
+        zero CURRENT references is intentionally RETAINED — both the
+        metadata row and the physical file remain, because zero current
+        reachability is not sufficient authority to destroy either in
+        online/runtime code (a concurrent write, Undo/Redo, or restore
+        could legitimately revive this exact asset)."""
         asset = MediaAsset.objects.create(store=self.store, image=_img())
-        deleted = delete_media_asset_if_unreferenced(asset)
-        self.assertTrue(deleted)
-        self.assertFalse(MediaAsset.objects.filter(pk=asset.pk).exists())
+        name = asset.image.name
+        storage = asset.image.storage
+
+        with self.captureOnCommitCallbacks(execute=True):
+            deleted = delete_media_asset_if_unreferenced(asset)
+
+        self.assertFalse(deleted)
+        self.assertTrue(MediaAsset.objects.filter(pk=asset.pk).exists())
+        self.assertTrue(storage.exists(name))
 
     def test_none_asset_is_a_safe_noop(self):
         self.assertFalse(delete_media_asset_if_unreferenced(None))

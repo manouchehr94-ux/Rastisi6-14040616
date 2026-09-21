@@ -314,18 +314,21 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
             # asset را به آن وصل کن. اگر چیزی تغییر نکرده (مثلاً فقط عنوان
             # ویرایش شده)، asset FKِ قبلی (اگر باشد) دست‌نخورده می‌ماند.
             #
-            # MED-001 (ترمیم — بایپاسِ حذفِ فیزیکیِ رسانه‌ی به‌اشتراک‌
-            # گذاشته‌شده): این‌جا دیگر مستقیماً ``storage.delete(old_name)``
-            # صدا زده نمی‌شود. نامِ فایلِ قدیمیِ هر فیلدِ واقعاً تغییریافته
-            # جمع‌آوری می‌شود؛ اگر آن فیلد پیش از تغییر یک FKِ ``MediaAsset``
-            # داشت (``old_assets``ی که ``_sync_asset_references`` برمی‌
-            # گرداند)، پاک‌سازیِ آن asset از طریقِ همانِ مسیرِ کانونیکِ
-            # ``delete_media_asset_if_unreferenced`` انجام می‌شود (که خودش
-            # بایتِ فیزیکی را فقط از طریقِ ``cleanup_reusable_media_file``
-            # حذف می‌کند)؛ در غیرِ این‌صورت (ردیفِ قدیمی‌تر بدونِ asset FK)
-            # نامِ فایل مستقیماً به همان مرجعِ کانونیک (``cleanup_reusable_
-            # media_file``) سپرده می‌شود — نه یک ``storage.delete`` مستقیمِ
-            # دیگر.
+            # MED-001 (Retention-First، تصمیمِ معمار): این‌جا هرگز مستقیماً
+            # ``storage.delete(old_name)`` صدا زده نمی‌شود، و مسیرهایِ زیر
+            # هم دیگر هیچ حذفِ فیزیکی/متادیتایی انجام نمی‌دهند. نامِ فایلِ
+            # قدیمیِ هر فیلدِ واقعاً تغییریافته جمع‌آوری می‌شود؛ اگر آن فیلد
+            # پیش از تغییر یک FKِ ``MediaAsset`` داشت (``old_assets``ی که
+            # ``_sync_asset_references`` برمی‌گرداند)، فراخوانِ
+            # ``delete_media_asset_if_unreferenced`` انجام می‌شود — که اکنون
+            # صرفاً یک no-opِ نگه‌دارنده است (نه ردیف حذف می‌شود، نه فایل)؛
+            # در غیرِ این‌صورت (ردیفِ قدیمی‌تر بدونِ asset FK) نامِ فایل
+            # مستقیماً به همان مرجعِ کانونیک (``cleanup_reusable_media_file``)
+            # سپرده می‌شود که خودش هم اکنون یک no-opِ نگه‌دارنده است. asset
+            # قدیمی/فایلِ قدیمی عمداً orphan باقی می‌ماند — این نشتِ کوچکِ
+            # storage/metadata هزینه‌ی پذیرفته‌شده‌یِ حذفِ کاملِ مسابقه‌یِ
+            # TOCTOUِ attach-vs-delete در همینِ P0 است (نگاه کنید به
+            # یادداشتِ Retention-First در ``apps.content.services``).
             from apps.content.services import (
                 cleanup_reusable_media_file,
                 delete_media_asset_if_unreferenced,
@@ -402,15 +405,17 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
 def storefront_section_media_delete(request, pk, kind, item_pk):
     """حذفِ یک Placement.
 
-    Phase 0.5 — تصمیمِ مالک ۸ (حذفِ امن): این Placement حذف می‌شود، اما
-    ``MediaAsset``هایی که ارجاع می‌دهد **مستقیماً** حذف نمی‌شوند — به‌جایِ
-    آن، ``delete_media_asset_if_unreferenced`` صدا زده می‌شود که فقط اگر
-    هیچ Placementِ دیگری (مثلاً همینِ اسلاید در نسخه‌ی Published) به همان
-    asset ارجاع ندهد، آن را (و فایلِ فیزیکی‌اش را) حذف می‌کند.
+    Phase 0.5 — تصمیمِ مالک ۸ (حذفِ امن) + MED-001 (Retention-First،
+    تصمیمِ معمار): این Placement حذف می‌شود، اما ``MediaAsset``هایی که
+    ارجاع می‌دهد **هرگز** حذف نمی‌شوند — نه ردیفِ متادیتا، نه فایلِ
+    فیزیکی — چه هنوز از جایِ دیگری ارجاع شوند چه نشوند. ``delete_media_
+    asset_if_unreferenced`` صدا زده می‌شود که اکنون صرفاً یک no-opِ
+    نگه‌دارنده است.
 
-    برایِ ردیف‌هایِ قدیمی‌تر (بدونِ asset FK — از قبل از Phase 0.5) دقیقاً
-    همان رفتارِ قبلی حفظ شده: پاک‌سازیِ مستقیمِ فایلِ فیزیکی بر اساسِ نامِ
-    فیلدِ تصویرِ قدیمی."""
+    برایِ ردیف‌هایِ قدیمی‌تر (بدونِ asset FK — از قبل از Phase 0.5) هم
+    دقیقاً همینِ سیاست: نامِ فایلِ قدیمی به ``cleanup_reusable_media_file``
+    سپرده می‌شود که آن هم اکنون صرفاً یک no-opِ نگه‌دارنده است — هرگز
+    ``storage.delete`` مستقیم."""
     from apps.content.services import cleanup_reusable_media_file, delete_media_asset_if_unreferenced
 
     section = _get_scoped_section(request, pk)
@@ -422,13 +427,10 @@ def storefront_section_media_delete(request, pk, kind, item_pk):
     asset_field_map = config["asset_fields"]
 
     # جفتِ (asset موجود، نامِ فایلِ legacy) — فقط برایِ فیلدهایی که asset
-    # FK ندارند (ردیفِ قدیمی‌تر) نامِ فایل ذخیره می‌شود؛ برایِ بقیه، حذفِ
-    # فایلِ فیزیکی کاملاً به عهده‌ی ``delete_media_asset_if_unreferenced``
-    # است (که خودش reference-safety را چک می‌کند). MED-001 — fallbackِ
-    # legacyِ بدونِ asset دیگر ``storage.delete`` را مستقیم صدا نمی‌زند؛
-    # بلکه از طریقِ همانِ مرجعِ کانونیکِ ``cleanup_reusable_media_file``
-    # عبور می‌کند (که خودش alias/ImageFieldِ قدیمیِ دیگر را هم بررسی
-    # می‌کند، نه صرفاً همینِ Placement).
+    # FK ندارند (ردیفِ قدیمی‌تر) نامِ فایل ذخیره می‌شود؛ برایِ بقیه، مسیرِ
+    # کانونیکِ ``delete_media_asset_if_unreferenced`` صدا زده می‌شود. هر دو
+    # مسیر اکنون Retention-Firstاند (MED-001، تصمیمِ معمار): هرگز
+    # ``storage.delete`` مستقیم، هرگز حذفِ ردیفِ ``MediaAsset``.
     legacy_cleanup_names = []
     assets_to_check = []
     for file_field, asset_field in asset_field_map.items():
