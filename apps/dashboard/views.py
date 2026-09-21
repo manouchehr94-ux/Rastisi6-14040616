@@ -7383,12 +7383,22 @@ def _resolve_selectable_version_or_404(store, version_id):
 @staff_required
 @permission_required(SUBSCRIPTION_CHANGE)
 def subscription_plan_preview(request):
+    """SUB-001: از پیش‌نمایشِ کانونیِ صورتحساب‌محورِ
+    ``plan_change_billing_service.preview`` عبور می‌کند (نه صرفاً 5Aِ
+    entitlement-only) تا قالب بتواند صادقانه نشان دهد که آیا این تغییر
+    ارتقاست (نیازمندِ پرداخت) یا تنزل/هم‌قیمت (زمان‌بندی‌شده، بدونِ پرداخت)."""
+    from apps.billing.services import plan_change_billing_service as pcb
+    from apps.subscriptions.services import entitlement_service as ent
     from apps.subscriptions.services import plan_change_service as pcs
 
     store = _resolve_dashboard_store(request)
     target_version = _resolve_selectable_version_or_404(store, request.POST.get("version_id", ""))
+    current_subscription = ent.get_current_subscription(store)
+    if current_subscription is None:
+        messages.error(request, "این فروشگاه اشتراکِ جاری ندارد؛ تغییرِ پلن ممکن نیست.")
+        return redirect("dashboard:subscription-plans")
     try:
-        preview = pcs.preview_plan_change(store, target_version)
+        preview = pcb.preview(current_subscription, target_version)
     except pcs.PlanChangeError as exc:
         messages.error(request, str(exc))
         return redirect("dashboard:subscription-plans")
@@ -7402,21 +7412,53 @@ def subscription_plan_preview(request):
 @staff_required
 @permission_required(SUBSCRIPTION_CHANGE)
 def subscription_plan_execute(request):
+    """SUB-001: مرچنت هرگز نمی‌تواند مستقیماً ``subscription_service.
+    change_plan_version`` را صدا بزند — این ویو حالا از همان مسیرِ
+    صورتحساب‌محورِ کانونیک عبور می‌کند که خریدِ اشتراکِ پرتال هم از آن
+    استفاده می‌کند (``plan_change_billing_service.start_plan_change``):
+
+    * **ارتقا** یک فاکتورِ ``PLAN_CHANGE`` می‌سازد و مرچنت را به همان صفحه‌ی
+      فاکتورِ Billing UIِ موجود (``dashboard:billing-invoice-detail``)
+      می‌فرستد؛ نسخه‌ی پلن فقط پس از تأییدِ *واقعیِ* پرداخت
+      (``confirmation_service``) تغییر می‌کند — نه با این درخواست.
+    * **تنزل/قیمتِ برابر** بدونِ نیازِ پرداخت زمان‌بندی می‌شود
+      (``ScheduledPlanChange``) و در دوره‌ی بعد اعمال می‌شود.
+
+    محافظتِ پیش‌نمایشِ کهنه و انتخابِ فقط از میانِ نسخه‌هایِ قابلِ‌انتخابِ عمومی
+    (``_resolve_selectable_version_or_404``) بدونِ تغییر باقی می‌ماند."""
+    from apps.billing.services import plan_change_billing_service as pcb
+    from apps.subscriptions.services import entitlement_service as ent
     from apps.subscriptions.services import plan_change_service as pcs
 
     store = _resolve_dashboard_store(request)
     target_version = _resolve_selectable_version_or_404(store, request.POST.get("version_id", ""))
     token = request.POST.get("preview_token", "")
+
+    current_subscription = ent.get_current_subscription(store)
+    if current_subscription is None:
+        messages.error(request, "این فروشگاه اشتراکِ جاری ندارد؛ تغییرِ پلن ممکن نیست.")
+        return redirect("dashboard:subscription-plans")
+
     try:
-        pcs.execute_plan_change(store, target_version, preview_token=token, actor=request.user)
-        messages.success(request, "پلنِ اشتراکِ شما با موفقیت تغییر کرد.")
+        kind, result = pcb.start_plan_change(
+            current_subscription, target_version, preview_token=token, actor=request.user,
+        )
     except pcs.StalePreviewError as exc:
         messages.error(request, str(exc))
         return redirect("dashboard:subscription-plans")
-    except pcs.PlanChangeError as exc:
+    except (pcs.PlanChangeError, pcb.PlanChangeBillingError) as exc:
         messages.error(request, str(exc))
         return redirect("dashboard:subscription-plans")
-    return redirect("dashboard:subscription-overview")
+
+    if kind == "scheduled":
+        messages.success(request, "تغییرِ پلن برایِ دوره‌ی بعد زمان‌بندی شد؛ اشتراکِ فعلی تا آن زمان بدونِ تغییر باقی می‌ماند.")
+        return redirect("dashboard:subscription-overview")
+
+    # ارتقا: سندِ مالی (فاکتورِ تغییرِ پلن) ساخته/بازیابی شد؛ مرچنت را به همان
+    # صفحه‌ی فاکتورِ Billing UIِ موجود می‌فرستیم تا از طریقِ ``dashboard:
+    # billing-pay`` پرداخت کند — هیچ رابطِ پرداختِ دومی ساخته نمی‌شود.
+    messages.success(request, "فاکتورِ تغییرِ پلن ایجاد شد؛ پلن پس از تکمیلِ پرداخت فعال می‌شود.")
+    return redirect("dashboard:billing-invoice-detail", pk=result.pk)
 
 
 @staff_required

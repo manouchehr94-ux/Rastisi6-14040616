@@ -129,3 +129,121 @@ class DowngradeBillingTests(TestCase):
         self.assertFalse(ScheduledPlanChange.objects.filter(subscription=self.sub).exists())
         invoice = SubscriptionInvoice.objects.get(subscription=self.sub, kind=SubscriptionInvoice.Kind.RENEWAL)
         self.assertEqual(invoice.grand_total, Decimal("100000"))
+
+    def test_equal_price_target_follows_the_same_scheduled_policy_as_downgrade(self):
+        """``is_upgrade`` is a strict ``>`` comparison — an equal-price
+        target is therefore not an upgrade and must follow the same
+        no-immediate-switch, no-payable-invoice, scheduled-for-next-period
+        policy as a genuine downgrade."""
+        same_price_plan = _published("dn-same-price", price="300000")
+        token = pcs._preview_token(ent.get_current_subscription(self.store), same_price_plan)
+        kind, scheduled = pcb.start_plan_change(self.sub, same_price_plan, preview_token=token)
+        self.assertEqual(kind, "scheduled")
+        self.assertIsInstance(scheduled, ScheduledPlanChange)
+        self.assertEqual(ent.get_current_subscription(self.store).plan_version_id, self.pricey.pk)
+        self.assertFalse(
+            SubscriptionInvoice.objects.filter(
+                subscription=self.sub, kind=SubscriptionInvoice.Kind.PLAN_CHANGE, plan_version=same_price_plan,
+            ).exists()
+        )
+
+
+class PlanChangeIdempotencyTests(TestCase):
+    """SUB-001 architecture review: ``start_plan_change`` must not create a
+    second payable ``PLAN_CHANGE`` invoice for the same still-current
+    subscription state and same target when called repeatedly with the
+    same valid preview decision (e.g. a double form-submit, a retried
+    request, or two browser tabs). This is a repair inside the canonical
+    billing service itself — not a workaround in any calling view — so both
+    Merchant Admin (``apps.dashboard``) and Portal (``apps.portal``) callers
+    benefit identically."""
+
+    def setUp(self):
+        ent.clear_entitlement_cache()
+        self.store = Store.objects.create(name="ف", slug="idem-store", admin_subdomain="idem-store")
+        self.cheap = _published("idem-cheap", price="100000")
+        self.pricey = _published("idem-pricey", price="300000")
+        sub = sub_svc.create_subscription(self.store, self.cheap)
+        self.sub = sub_svc.activate_subscription(sub, period_end=timezone.now() + timedelta(days=30))
+        ent.clear_entitlement_cache()
+
+    def _token(self):
+        return pcs._preview_token(ent.get_current_subscription(self.store), self.pricey)
+
+    def test_repeated_upgrade_call_reuses_the_same_payable_invoice(self):
+        token = self._token()
+        kind1, invoice1 = pcb.start_plan_change(self.sub, self.pricey, preview_token=token)
+        kind2, invoice2 = pcb.start_plan_change(self.sub, self.pricey, preview_token=token)
+
+        self.assertEqual(kind1, "invoice")
+        self.assertEqual(kind2, "invoice")
+        self.assertEqual(invoice1.pk, invoice2.pk)
+        self.assertEqual(
+            SubscriptionInvoice.objects.filter(
+                subscription=self.sub, kind=SubscriptionInvoice.Kind.PLAN_CHANGE, plan_version=self.pricey,
+            ).count(),
+            1,
+        )
+        # Plan still not switched — the reused invoice is unpaid.
+        self.assertEqual(ent.get_current_subscription(self.store).plan_version_id, self.cheap.pk)
+
+    def test_three_repeated_calls_still_resolve_to_exactly_one_invoice(self):
+        token = self._token()
+        for _ in range(3):
+            pcb.start_plan_change(self.sub, self.pricey, preview_token=token)
+        self.assertEqual(
+            SubscriptionInvoice.objects.filter(
+                subscription=self.sub, kind=SubscriptionInvoice.Kind.PLAN_CHANGE, plan_version=self.pricey,
+            ).count(),
+            1,
+        )
+
+    def test_a_voided_plan_change_invoice_is_never_silently_reused(self):
+        """A financially-closed invoice (VOID/PAID/...) must never be handed
+        back as if it were still payable — the merchant needs a genuinely
+        new attempt, and the closed document's history must stay intact."""
+        token = self._token()
+        _kind, invoice = pcb.start_plan_change(self.sub, self.pricey, preview_token=token)
+        invoice_service.void_invoice(invoice)
+
+        _kind2, invoice2 = pcb.start_plan_change(self.sub, self.pricey, preview_token=token)
+        self.assertNotEqual(invoice.pk, invoice2.pk)
+        self.assertEqual(invoice2.status, SubscriptionInvoice.Status.OPEN)
+        self.assertEqual(
+            SubscriptionInvoice.objects.filter(
+                subscription=self.sub, kind=SubscriptionInvoice.Kind.PLAN_CHANGE, plan_version=self.pricey,
+            ).count(),
+            2,
+        )
+
+    def test_repeated_downgrade_call_updates_the_single_scheduled_row(self):
+        """Downgrade/equal-price idempotency: repeating the same scheduling
+        decision must not create a second ``ScheduledPlanChange`` — the
+        model's ``OneToOneField(subscription)`` plus
+        ``update_or_create`` already guarantee exactly one row per
+        subscription; this test locks that contract for SUB-001."""
+        # Move to a paid plan first so cheap is a genuine downgrade target.
+        up_token = pcs._preview_token(ent.get_current_subscription(self.store), self.pricey)
+        _kind, invoice = pcb.start_plan_change(self.sub, self.pricey, preview_token=up_token)
+        attempt = attempt_service.create_attempt(invoice)
+        confirmation_service.confirm_payment(attempt=attempt, amount=invoice.amount_due, currency="IRT")
+        ent.clear_entitlement_cache()
+
+        down_token = pcs._preview_token(ent.get_current_subscription(self.store), self.cheap)
+        pcb.start_plan_change(self.sub, self.cheap, preview_token=down_token)
+        pcb.start_plan_change(self.sub, self.cheap, preview_token=down_token)
+
+        self.assertEqual(ScheduledPlanChange.objects.filter(subscription=self.sub).count(), 1)
+
+    def test_stale_token_still_rejected_before_any_lock_side_effect(self):
+        """The subscription-locking repair must not weaken stale-preview
+        protection: a stale token is still rejected, and no invoice or
+        scheduled change is created."""
+        with self.assertRaises(pcs.StalePreviewError):
+            pcb.start_plan_change(self.sub, self.pricey, preview_token="not-the-real-token")
+        self.assertFalse(
+            SubscriptionInvoice.objects.filter(
+                subscription=self.sub, kind=SubscriptionInvoice.Kind.PLAN_CHANGE,
+            ).exists()
+        )
+        self.assertFalse(ScheduledPlanChange.objects.filter(subscription=self.sub).exists())
