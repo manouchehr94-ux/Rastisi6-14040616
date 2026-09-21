@@ -127,7 +127,14 @@ class MediaWritePathAssetCreationTests(TestCase):
 
 
 class MediaDeleteReferenceSafetyTests(TestCase):
-    """Part 8 — safe deletion via storefront_section_media_delete."""
+    """Part 8 — safe deletion via storefront_section_media_delete.
+
+    MED-001 (Retention-First, architect decision): deleting a Placement
+    row via this real endpoint MUST NOT physically delete reusable media
+    bytes, nor destroy the MediaAsset metadata row it referenced — even
+    when that asset has zero remaining references at the moment of
+    deletion. See ``apps.content.services`` for the binding policy this
+    proves."""
 
     def setUp(self):
         cache.clear()
@@ -146,18 +153,38 @@ class MediaDeleteReferenceSafetyTests(TestCase):
         self.draft.sections.filter(section_key="hero_banner").delete()
         self.hero_section = StorefrontSection.objects.create(version=self.draft, section_key="hero_banner", order=900)
 
-    def test_deleting_a_slide_deletes_its_unreferenced_asset(self):
+    def test_deleting_a_slide_retains_its_previously_unreferenced_asset_row_and_bytes(self):
+        """MED-001 Retention-First (supersedes the old, pre-MED-001
+        ``test_deleting_a_slide_deletes_its_unreferenced_asset``, which
+        proved the now-retired destructive contract): the real
+        ``storefront_section_media_delete`` endpoint deletes the
+        Placement row, but the ``MediaAsset`` it referenced — even though
+        it now has zero remaining references — is intentionally RETAINED,
+        both as a metadata row and as physical bytes."""
         self.client.post(
             reverse("dashboard:storefront-builder-section-media-add", args=[self.hero_section.pk, "hero-slides"]),
             {"title": "برای حذف", "destination_type": "none", "desktop_image": _img(), "is_active": "on"},
         )
         slide = HeroSlide.objects.get(section=self.hero_section)
         asset_id = slide.desktop_asset_id
+        asset = MediaAsset.objects.get(pk=asset_id)
+        physical_name = asset.image.name
+        storage = asset.image.storage
+        self.assertTrue(storage.exists(physical_name))
 
-        self.client.post(
-            reverse("dashboard:storefront-builder-section-media-delete", args=[self.hero_section.pk, "hero-slides", slide.pk]),
-        )
-        self.assertFalse(MediaAsset.objects.filter(pk=asset_id).exists())
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(
+                reverse(
+                    "dashboard:storefront-builder-section-media-delete",
+                    args=[self.hero_section.pk, "hero-slides", slide.pk],
+                ),
+            )
+
+        self.assertFalse(HeroSlide.objects.filter(pk=slide.pk).exists())
+        # Retention-First: the now-unreferenced MediaAsset row AND its
+        # physical bytes both survive.
+        self.assertTrue(MediaAsset.objects.filter(pk=asset_id).exists())
+        self.assertTrue(storage.exists(physical_name))
 
     def test_deleting_a_slide_does_not_delete_asset_still_used_by_another_placement(self):
         self.client.post(

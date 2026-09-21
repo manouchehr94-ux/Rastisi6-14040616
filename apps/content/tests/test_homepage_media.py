@@ -397,26 +397,42 @@ class TransactionSafeFileLifecycleTests(TransactionTestCase):
         ShopSettings.provision_for(store)
         FooterSettings.provision_for(store)
 
-    def test_hero_delete_removes_files_after_commit(self):
-        """Deleting a hero removes its files via on_commit."""
+    def test_hero_delete_retains_file_after_commit(self):
+        """MED-001 (Retention-First, architect decision — supersedes the
+        old, misleadingly-named ``test_hero_delete_removes_files_after_
+        commit``, which passed only because it never actually asserted on
+        storage state at all): deleting a hero row via the real endpoint
+        deletes the row, but the physical file is intentionally RETAINED
+        — this class is a ``TransactionTestCase``, so the view's own
+        transaction really commits and ``transaction.on_commit`` fires
+        naturally; no ``captureOnCommitCallbacks`` wrapper is needed or
+        available here."""
         slide = HeroSlide.objects.create(store=_akhlaghi(), title="D", desktop_image=_img("del_hero.png"), is_active=True)
         desktop_name = slide.desktop_image.name
         storage = slide.desktop_image.storage
+        self.assertTrue(storage.exists(desktop_name))
 
         response = self.client.post(reverse("dashboard:hero-delete", args=[slide.pk]))
         self.assertEqual(response.status_code, 302)
         self.assertFalse(HeroSlide.objects.filter(pk=slide.pk).exists())
-        # In TransactionTestCase, on_commit fires immediately after the view's transaction
-        # The file should be deleted (or storage.exists returns False)
-        # We accept both outcomes: file cleaned up, or storage doesn't track test files
-        # The key assertion is that the model is deleted and no exception occurred
+        # Retention-First: the physical file remains after commit.
+        self.assertTrue(storage.exists(desktop_name))
 
-    def test_banner_delete_removes_files_after_commit(self):
-        """Deleting a banner removes its files via on_commit."""
+    def test_banner_delete_retains_file_after_commit(self):
+        """MED-001 (Retention-First, architect decision — supersedes the
+        old, misleadingly-named ``test_banner_delete_removes_files_after_
+        commit``): same contract as the Hero test above, for
+        ``PromotionalBanner``."""
         banner = PromotionalBanner.objects.create(store=_akhlaghi(), title="D", desktop_image=_img("del_b.png"), is_active=True)
+        desktop_name = banner.desktop_image.name
+        storage = banner.desktop_image.storage
+        self.assertTrue(storage.exists(desktop_name))
+
         response = self.client.post(reverse("dashboard:banner-delete", args=[banner.pk]))
         self.assertEqual(response.status_code, 302)
         self.assertFalse(PromotionalBanner.objects.filter(pk=banner.pk).exists())
+        # Retention-First: the physical file remains after commit.
+        self.assertTrue(storage.exists(desktop_name))
 
     def test_failed_validation_preserves_existing_hero_image(self):
         """If validation fails on edit, existing desktop image is preserved."""

@@ -137,8 +137,15 @@ class Red1DraftReplacementMustNotDeletePublishedBytesTests(TransactionTestCase):
         draft_slide.desktop_asset = new_asset
         draft_slide.save(update_fields=["desktop_asset"])
 
-        with self.captureOnCommitCallbacks(execute=True):
-            deleted = delete_media_asset_if_unreferenced(asset)
+        # This class is a TransactionTestCase (real, actually-committing
+        # transactions), so transaction.on_commit callbacks fire on their
+        # own — captureOnCommitCallbacks is a TestCase-only API (it exists
+        # because plain TestCase wraps every test in an outer atomic block
+        # that never really commits, so on_commit callbacks would otherwise
+        # never run without being captured/forced). No wrapper is needed
+        # here; calling the function directly already runs inside a real
+        # commit that naturally fires its own on_commit callback.
+        deleted = delete_media_asset_if_unreferenced(asset)
 
         # Retention-First: never destroyed, regardless of Published still
         # needing it.
@@ -497,14 +504,17 @@ class EndpointStorefrontBuilderReplacementRetentionTests(TransactionTestCase):
         client = Client()
         client.login(username="med001-ep-sfb-replace-owner", password="pass12345")
 
-        with self.captureOnCommitCallbacks(execute=True):
-            response = client.post(
-                reverse(
-                    "dashboard:storefront-builder-section-media-edit",
-                    args=[draft_section.pk, "hero-slides", draft_slide.pk],
-                ),
-                {"title": "ثابت", "destination_type": "none", "desktop_image": _img("ep-new-draft.png"), "is_active": "on"},
-            )
+        # TransactionTestCase: the POST's own transaction really commits,
+        # so any transaction.on_commit callback scheduled inside the view
+        # fires naturally — no captureOnCommitCallbacks wrapper (that API
+        # only exists on plain TestCase).
+        response = client.post(
+            reverse(
+                "dashboard:storefront-builder-section-media-edit",
+                args=[draft_section.pk, "hero-slides", draft_slide.pk],
+            ),
+            {"title": "ثابت", "destination_type": "none", "desktop_image": _img("ep-new-draft.png"), "is_active": "on"},
+        )
 
         self.assertIn(response.status_code, (200, 302))
 
@@ -561,13 +571,14 @@ class EndpointStorefrontBuilderLegacyDeleteFallbackRetentionTests(TransactionTes
         client = Client()
         client.login(username="med001-ep-sfb-delete-owner", password="pass12345")
 
-        with self.captureOnCommitCallbacks(execute=True):
-            response = client.post(
-                reverse(
-                    "dashboard:storefront-builder-section-media-delete",
-                    args=[section.pk, "hero-slides", legacy_slide.pk],
-                ),
-            )
+        # TransactionTestCase: no captureOnCommitCallbacks wrapper needed —
+        # see the identical note above.
+        response = client.post(
+            reverse(
+                "dashboard:storefront-builder-section-media-delete",
+                args=[section.pk, "hero-slides", legacy_slide.pk],
+            ),
+        )
 
         self.assertIn(response.status_code, (200, 302))
         self.assertFalse(HeroSlide.objects.filter(pk=legacy_slide.pk).exists())
@@ -614,15 +625,16 @@ class EndpointDashboardHeroRetentionTests(TransactionTestCase):
         self.assertTrue(shared_asset.is_referenced())
         self.assertTrue(storage.exists(old_name))
 
-        with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(
-                reverse("dashboard:hero-edit", args=[slide.pk]),
-                {
-                    "title": "تعویض", "subtitle": "", "button_label": "", "show_button": "",
-                    "destination_type": "none", "destination_external_url": "", "display_order": "0",
-                    "desktop_image": _img("ep-hero-new.png"),
-                },
-            )
+        # TransactionTestCase: no captureOnCommitCallbacks wrapper needed —
+        # see the identical note above.
+        response = self.client.post(
+            reverse("dashboard:hero-edit", args=[slide.pk]),
+            {
+                "title": "تعویض", "subtitle": "", "button_label": "", "show_button": "",
+                "destination_type": "none", "destination_external_url": "", "display_order": "0",
+                "desktop_image": _img("ep-hero-new.png"),
+            },
+        )
 
         self.assertEqual(response.status_code, 302)
         slide.refresh_from_db()
@@ -642,8 +654,9 @@ class EndpointDashboardHeroRetentionTests(TransactionTestCase):
         storage = _storage_of(slide.desktop_image)
         self.assertTrue(storage.exists(name))
 
-        with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(reverse("dashboard:hero-delete", args=[slide.pk]))
+        # TransactionTestCase: no captureOnCommitCallbacks wrapper needed —
+        # see the identical note above.
+        response = self.client.post(reverse("dashboard:hero-delete", args=[slide.pk]))
 
         self.assertEqual(response.status_code, 302)
         self.assertFalse(HeroSlide.objects.filter(pk=slide.pk).exists())
@@ -681,15 +694,16 @@ class EndpointDashboardBannerRetentionTests(TransactionTestCase):
         storage = _storage_of(banner.desktop_image)
         self.assertTrue(storage.exists(old_name))
 
-        with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(
-                reverse("dashboard:banner-edit", args=[banner.pk]),
-                {
-                    "title": "تعویض بنر", "description": "", "button_label": "", "show_button": "",
-                    "destination_type": "none", "destination_external_url": "", "display_order": "0",
-                    "desktop_image": _img("ep-banner-new.png"),
-                },
-            )
+        # TransactionTestCase: no captureOnCommitCallbacks wrapper needed —
+        # see the identical note above.
+        response = self.client.post(
+            reverse("dashboard:banner-edit", args=[banner.pk]),
+            {
+                "title": "تعویض بنر", "description": "", "button_label": "", "show_button": "",
+                "destination_type": "none", "destination_external_url": "", "display_order": "0",
+                "desktop_image": _img("ep-banner-new.png"),
+            },
+        )
 
         self.assertEqual(response.status_code, 302)
         banner.refresh_from_db()
@@ -704,8 +718,9 @@ class EndpointDashboardBannerRetentionTests(TransactionTestCase):
         storage = _storage_of(banner.desktop_image)
         self.assertTrue(storage.exists(name))
 
-        with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(reverse("dashboard:banner-delete", args=[banner.pk]))
+        # TransactionTestCase: no captureOnCommitCallbacks wrapper needed —
+        # see the identical note above.
+        response = self.client.post(reverse("dashboard:banner-delete", args=[banner.pk]))
 
         self.assertEqual(response.status_code, 302)
         self.assertFalse(PromotionalBanner.objects.filter(pk=banner.pk).exists())
