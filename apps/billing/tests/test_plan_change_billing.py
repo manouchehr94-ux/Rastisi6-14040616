@@ -314,6 +314,86 @@ class SingleUnresolvedPlanChangeIntentTests(TestCase):
         invoice.refresh_from_db()
         self.assertTrue(invoice.is_payable)
 
+    def test_repeated_upgrade_execution_supersedes_a_schedule_added_after_the_invoice_existed(self):
+        """SUB-001 final static edge repair: the schedule-supersession call
+        must run for BOTH outcomes of the upgrade branch — a newly created
+        invoice AND an idempotent reuse of an already-existing same-decision
+        payable invoice. Previously it only ran on the new-invoice path
+        (because the old code returned early on ``existing_payable is not
+        None`` before superseding), so a ``ScheduledPlanChange`` created
+        AFTER the invoice already existed (legacy/inconsistent data) would
+        survive a repeated execution of the SAME valid upgrade decision.
+
+        Scenario (test-only simulation of legacy/inconsistent state):
+        1. Subscription on A (pricey).
+        2. Canonical payable PLAN_CHANGE invoice A -> C (enterprise) exists.
+        3. AFTER the invoice exists, a ScheduledPlanChange A -> B (cheap) is
+           created directly (bypassing the canonical guard) to simulate
+           pre-repair inconsistent data.
+        4. Re-execute the SAME valid A -> C decision via start_plan_change.
+
+        Expected: idempotent reuse (same invoice, no second invoice) AND
+        schedule supersession (schedule removed, audited) — both at once."""
+        from apps.core.models import AuditLogEntry
+
+        up_token = pcs._preview_token(ent.get_current_subscription(self.store), self.enterprise)
+        kind1, invoice1 = pcb.start_plan_change(self.sub, self.enterprise, preview_token=up_token)
+        self.assertEqual(kind1, "invoice")
+        self.assertTrue(invoice1.is_payable)
+
+        # Test-only bypass: create a ScheduledPlanChange AFTER the invoice
+        # already exists, simulating inconsistent legacy data. Never do
+        # this through canonical start_plan_change (which would reject it).
+        ScheduledPlanChange.objects.create(
+            subscription=self.sub, store=self.store, target_plan_version=self.cheap,
+        )
+        self.assertTrue(ScheduledPlanChange.objects.filter(subscription=self.sub).exists())
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.plan_version_id, self.pricey.pk)
+
+        # Re-execute the SAME valid A -> C decision (same fingerprint).
+        same_token = pcs._preview_token(ent.get_current_subscription(self.store), self.enterprise)
+        self.assertEqual(same_token, up_token)
+        kind2, invoice2 = pcb.start_plan_change(self.sub, self.enterprise, preview_token=same_token)
+
+        self.assertEqual(kind2, "invoice")
+        self.assertEqual(invoice2.pk, invoice1.pk)
+        self.assertEqual(
+            SubscriptionInvoice.objects.filter(
+                subscription=self.sub, kind=SubscriptionInvoice.Kind.PLAN_CHANGE,
+                status__in=SubscriptionInvoice.PAYABLE_STATUSES,
+            ).count(),
+            1,
+        )
+        self.assertFalse(ScheduledPlanChange.objects.filter(subscription=self.sub).exists())
+        self.assertTrue(
+            AuditLogEntry.objects.filter(
+                store=self.store, action_code="billing.plan_change_schedule_superseded",
+            ).exists()
+        )
+        # Subscription stays on A until payment is confirmed.
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.plan_version_id, self.pricey.pk)
+        invoice2.refresh_from_db()
+        self.assertTrue(invoice2.is_payable)
+
+        # Confirm payment -> subscription becomes C, invoice PAID, no
+        # ScheduledPlanChange.
+        attempt = attempt_service.create_attempt(invoice2)
+        confirmation_service.confirm_payment(attempt=attempt, amount=invoice2.amount_due, currency="IRT")
+        ent.clear_entitlement_cache()
+        invoice2.refresh_from_db()
+        self.assertEqual(invoice2.status, SubscriptionInvoice.Status.PAID)
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.plan_version_id, self.enterprise.pk)
+        self.assertFalse(ScheduledPlanChange.objects.filter(subscription=self.sub).exists())
+
+        # Renewal must not revert to the long-superseded schedule target.
+        renewal_service.generate_renewals(lead_days=3)
+        ent.clear_entitlement_cache()
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.plan_version_id, self.enterprise.pk)
+
     def test_legacy_inconsistent_scheduled_row_is_cleaned_up_on_payment_confirmation(self):
         """Defense against historical/inconsistent data (NOT a supported
         way to create current state): deliberately simulate a pre-repair

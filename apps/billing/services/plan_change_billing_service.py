@@ -163,8 +163,6 @@ def start_plan_change(subscription, target_version, *, preview_token, actor=None
             subscription=current, kind=SubscriptionInvoice.Kind.PLAN_CHANGE, plan_version=target_version,
             idempotency_key=expected, status__in=SubscriptionInvoice.PAYABLE_STATUSES,
         ).order_by("-created_at").first()
-        if existing_payable is not None:
-            return "invoice", existing_payable
 
         # SUB-001 Repair 3 (ناوردایِ مالی): در هر لحظه حداکثر *یک* فاکتورِ
         # ``PLAN_CHANGE`` قابلِ‌پرداخت به‌ازایِ هر اشتراک مجاز است. اگر
@@ -179,7 +177,11 @@ def start_plan_change(subscription, target_version, *, preview_token, actor=None
         # بسازد. این بررسی زیرِ همان قفلِ ``StoreSubscription``ی است که همین
         # بالا گرفته شد، پس با هیچ ``start_plan_change``ی هم‌زمانِ دیگر race
         # نمی‌کند (تنها سازنده‌ی این فاکتورها همینجاست، و آن هم پیش از
-        # نوشتن همینِ قفل را می‌گیرد).
+        # نوشتن همینِ قفل را می‌گیرد). این بررسی عمداً *بعد* از
+        # ``existing_payable`` است — یک فاکتورِ رقیبِ واقعی هرگز با همینِ
+        # فاکتورِ همینِ‌تصمیم یکی نیست، پس این حذفِ ``existing_payable``
+        # (``exclude(idempotency_key=expected)``) هرگز تصمیمِ همین
+        # فاکتور را رقیب حساب نمی‌کند.
         if SubscriptionInvoice.objects.filter(
             subscription=current, kind=SubscriptionInvoice.Kind.PLAN_CHANGE,
             status__in=SubscriptionInvoice.PAYABLE_STATUSES,
@@ -189,16 +191,25 @@ def start_plan_change(subscription, target_version, *, preview_token, actor=None
                 "پیش از درخواستِ تغییرِ تازه، آن فاکتور را پرداخت یا باطل کنید."
             )
 
-        # ناوردایِ تصمیمِ واحد (تصمیمِ معمار): این ارتقا واقعاً در حالِ
-        # *اجرا*شدن است (نه صرفِ پیش‌نمایش) — پس هر ``ScheduledPlanChange``
-        # قدیمی‌تر (تنزل/برابرِ حل‌نشده) باید همینجا، پیش از ساختنِ فاکتورِ
-        # تازه، جانشین شود؛ در غیرِاین‌صورت هر دو تصمیم (زمان‌بندی‌شده +
-        # فاکتورِ قابلِ‌پرداخت) هم‌زمان زنده می‌مانند و تمدیدِ بعدی می‌تواند
-        # ارتقایِ تازه را بی‌صدا برگرداند.
+        # ناوردایِ تصمیمِ واحد (تصمیمِ معمار — ترمیمِ لبه‌ایِ ضروری): این ارتقا
+        # واقعاً در حالِ *اجرا*شدن است (نه صرفِ پیش‌نمایش) — چه یک فاکتورِ
+        # تازه ساخته شود چه همینِ فاکتورِ همین‌تصمیمِ از‌قبل‌موجود
+        # (``existing_payable``) به‌صورتِ ایده‌پوتنت دوباره استفاده شود، هر دو
+        # حالت یک «اجرایِ معتبرِ ارتقا» هستند. پس هر ``ScheduledPlanChange``
+        # قدیمی‌تر (تنزل/برابرِ حل‌نشده) باید همینجا — پیش از هر دو مسیرِ
+        # بازگشت، نه فقط مسیرِ ساختنِ فاکتورِ تازه — جانشین شود؛ در
+        # غیرِاین‌صورت (مثلاً داده‌یِ ناهم‌خوانِ تاریخی که یک
+        # ``ScheduledPlanChange`` بعداً و بیرون از این تابع کنارِ یک فاکتورِ
+        # از‌قبل‌موجود ساخته شده) یک اجرایِ *تکراریِ* همینِ تصمیمِ ارتقا هرگز
+        # به مسیرِ ساختنِ فاکتورِ تازه نمی‌رسید و آن تنزلِ زمان‌بندی‌شده پشتِ
+        # تصمیمِ ارتقا باقی می‌ماند تا در تمدیدِ بعدی بی‌صدا آن را برگرداند.
         supersede_scheduled_plan_change(
             current, actor=actor, reason="ارتقایِ اجراشده جایِ تنزلِ زمان‌بندی‌شده را گرفت",
             replacement_intent=f"upgrade:{target_version.pk}",
         )
+
+        if existing_payable is not None:
+            return "invoice", existing_payable
 
         # ``idempotency_key`` عمداً به ``invoice_service.create_invoice``
         # پاس داده نمی‌شود: بررسیِ idempotency‌ی خودِ آن تابع فقط رویِ
