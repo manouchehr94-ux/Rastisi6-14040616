@@ -16,6 +16,7 @@ immediate switch. See ``PlanChangeExecuteBillingConvergenceTests`` below —
 this class supersedes the old immediate-switch behavior."""
 
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -189,10 +190,46 @@ class PlanChangeExecuteBillingConvergenceTests(TestCase):
         return pcs._preview_token(current, target_version)
 
     def _execute(self, target_version, token=None):
+        """``token=None`` means "auto-generate a valid preview token for
+        this call" (the common case for positive-path tests). Any other
+        value — including the empty string ``""`` — is sent to the view
+        EXACTLY as given, unmodified. This distinction matters: ``"" or x``
+        would silently replace an intentionally-empty token with a valid
+        one (since ``""`` is falsy in Python), which would make
+        ``test_empty_preview_token_creates_no_mutation`` actually exercise
+        a legitimate upgrade instead of the empty-token rejection path it
+        claims to test. Using an explicit ``is None`` check avoids that."""
+        if token is None:
+            token = self._token_for(target_version)
         return self.client.post(
             reverse("dashboard:subscription-plan-execute"),
-            {"version_id": target_version.pk, "preview_token": token or self._token_for(target_version)},
+            {"version_id": target_version.pk, "preview_token": token},
         )
+
+    # -- helper self-test: proves the exact wire value _execute sends -------
+    # (independent review Blocker 1 repair). This spies only on the test
+    # client's own ``post`` method (via ``wraps=``, so the real call still
+    # happens) — it never mocks any production billing/subscription
+    # service, so it cannot hide or fake the behavior under test.
+
+    def test_helper_token_none_generates_a_valid_token(self):
+        with patch.object(self.client, "post", wraps=self.client.post) as spy:
+            self._execute(self.pricey_version, token=None)
+        sent = spy.call_args.args[1]["preview_token"]
+        self.assertEqual(sent, self._token_for(self.pricey_version))
+        self.assertNotEqual(sent, "")
+
+    def test_helper_empty_string_token_is_sent_exactly_empty(self):
+        with patch.object(self.client, "post", wraps=self.client.post) as spy:
+            self._execute(self.pricey_version, token="")
+        sent = spy.call_args.args[1]["preview_token"]
+        self.assertEqual(sent, "")
+
+    def test_helper_stale_token_is_sent_exactly_as_given(self):
+        with patch.object(self.client, "post", wraps=self.client.post) as spy:
+            self._execute(self.pricey_version, token="stale")
+        sent = spy.call_args.args[1]["preview_token"]
+        self.assertEqual(sent, "stale")
 
     # -- (1) upgrade: invoice created, plan NOT switched --------------------
 

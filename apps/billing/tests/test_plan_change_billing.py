@@ -5,6 +5,7 @@ downgrade is scheduled for the next period; stale-preview protection retained.""
 from datetime import timedelta
 from decimal import Decimal
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
@@ -21,6 +22,8 @@ from apps.subscriptions.models import Plan, PlanVersion, StoreSubscription
 from apps.subscriptions.services import entitlement_service as ent
 from apps.subscriptions.services import plan_change_service as pcs
 from apps.subscriptions.services import subscription_service as sub_svc
+
+User = get_user_model()
 
 
 def _published(code, *, price):
@@ -247,3 +250,59 @@ class PlanChangeIdempotencyTests(TestCase):
             ).exists()
         )
         self.assertFalse(ScheduledPlanChange.objects.filter(subscription=self.sub).exists())
+
+    def test_invoice_reuse_is_bound_to_source_state_not_just_subscription_and_target(self):
+        """SUB-001 independent architecture review, Important 3: the old
+        reuse rule matched only (subscription, target plan_version, kind,
+        PAYABLE status) — but ``StoreSubscription`` keeps the SAME primary
+        key across a ``change_plan_version`` call, so that rule alone
+        cannot distinguish "the same source decision, resubmitted" from "a
+        completely different source state that happens to want the same
+        target". This proves the fix: create an unpaid A->C invoice, then
+        move the subscription's source state from A to B through a
+        legitimate internal lifecycle transition (the Platform Admin
+        override — itself a distinct, audited operator action, not
+        billing), and prove a fresh, independently-tokened B->C decision
+        does NOT silently reuse the stale A->C invoice."""
+        from apps.subscriptions.services import plan_change_service as pcs_module
+
+        plan_a = self.cheap  # current source: A
+        plan_c = self.pricey  # shared target: C
+
+        token_a_to_c = pcs._preview_token(ent.get_current_subscription(self.store), plan_c)
+        _kind, invoice_a_to_c = pcb.start_plan_change(self.sub, plan_c, preview_token=token_a_to_c)
+        self.assertEqual(invoice_a_to_c.plan_version_id, plan_c.pk)
+        self.assertTrue(invoice_a_to_c.is_payable)
+
+        # Move the subscription's source state A -> B through a legitimate
+        # internal lifecycle transition (Platform Admin override), NOT
+        # through billing. This changes plan_version AND updated_at, so the
+        # A->C decision's preview-token fingerprint is now stale.
+        plan_b = _published("idem-plan-b", price="150000")
+        superuser = User.objects.create_user(
+            username="idem-superuser@example.com", email="idem-superuser@example.com",
+            password="a-very-strong-pass-1", is_staff=True, is_superuser=True,
+        )
+        pcs_module.execute_platform_admin_plan_override(self.store, plan_b, actor=superuser, reason="QA")
+        ent.clear_entitlement_cache()
+        current_after_move = ent.get_current_subscription(self.store)
+        self.assertEqual(current_after_move.plan_version_id, plan_b.pk)
+
+        # A fresh, independently-generated B->C decision.
+        token_b_to_c = pcs._preview_token(current_after_move, plan_c)
+        self.assertNotEqual(token_b_to_c, token_a_to_c)
+        kind_b_to_c, invoice_b_to_c = pcb.start_plan_change(self.sub, plan_c, preview_token=token_b_to_c)
+
+        self.assertEqual(kind_b_to_c, "invoice")
+        # The new B->C decision must NOT reuse the stale A->C invoice.
+        self.assertNotEqual(invoice_b_to_c.pk, invoice_a_to_c.pk)
+        self.assertEqual(
+            SubscriptionInvoice.objects.filter(
+                subscription=self.sub, kind=SubscriptionInvoice.Kind.PLAN_CHANGE, plan_version=plan_c,
+            ).count(),
+            2,
+        )
+        # Both invoices remain independently payable/inspectable — the old
+        # one was never voided or silently repurposed by this repair.
+        invoice_a_to_c.refresh_from_db()
+        self.assertTrue(invoice_a_to_c.is_payable)

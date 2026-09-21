@@ -51,12 +51,20 @@ def start_plan_change(subscription, target_version, *, preview_token, actor=None
     آن را تضمین می‌کند (دو ترانزاکشنِ هم‌زمانی که همین ردیف را قفل می‌کنند
     به‌ترتیب اجرا می‌شوند، نه هم‌پوشان).
 
-    ایده‌پوتنسیِ مالی: برایِ ارتقا، اگر یک فاکتورِ ``PLAN_CHANGE`` هنوز
-    قابلِ‌پرداخت (``PAYABLE_STATUSES``) برایِ همینِ اشتراک و همینِ نسخه‌ی هدف
-    از قبل وجود داشته باشد، همان بازگردانده می‌شود — سندِ مالیِ تازه‌ای
-    ساخته نمی‌شود. این تصمیمِ کسب‌وکاری را با یک فاکتورِ باطل‌شده/بسته‌شده‌ی
-    مالی (VOID/PAID/...) که Store قصدِ تلاشِ دوباره دارد اشتباه نمی‌گیرد —
-    آن‌ها هرگز دوباره استفاده نمی‌شوند."""
+    ایده‌پوتنسیِ مالی (اصلاحِ بازبینیِ مستقلِ معماری): برایِ ارتقا، اگر یک
+    فاکتورِ ``PLAN_CHANGE`` هنوز قابلِ‌پرداخت (``PAYABLE_STATUSES``) برایِ
+    *همینِ تصمیم* از قبل وجود داشته باشد، همان بازگردانده می‌شود — سندِ مالیِ
+    تازه‌ای ساخته نمی‌شود. «همینِ تصمیم» یعنی همینِ اشتراک + همینِ **وضعیتِ
+    منبع** (نسخه‌ی پلنِ فعلی + زمانِ آخرین تغییرِ اشتراک، همان اثرانگشتی که
+    ``_preview_token`` می‌سازد) + همینِ نسخه‌ی هدف — نه صرفاً همینِ رکوردِ
+    ``StoreSubscription`` (که وقتی ``plan_version``اش عوض می‌شود همان pk را
+    نگه می‌دارد). اگر اشتراک بینِ دو فراخوانی از حالتِ منبعِ دیگری (مثلاً یک
+    override دستیِ مدیرِ پلتفرم) عبور کرده باشد، فاکتورِ متعلق به تصمیمِ
+    منبعِ *قدیمی* هرگز برایِ تصمیمِ *تازه* دوباره استفاده نمی‌شود، حتی اگر
+    هدف یکسان باشد — چون اثرانگشتِ منبع دیگر یکسان نیست. این تصمیمِ
+    کسب‌وکاری را با یک فاکتورِ باطل‌شده/بسته‌شده‌ی مالی (VOID/PAID/...) که
+    Store قصدِ تلاشِ دوباره دارد اشتباه نمی‌گیرد — آن‌ها هرگز دوباره استفاده
+    نمی‌شوند، حتی اگر اثرانگشتِ منبعشان هم‌خوان باشد."""
     # عمداً از رویِ Store دوباره resolve می‌شود (نه صرفاً ``subscription.pk``ی
     # ورودی) تا اگر همین لحظه یک تغییرِ هم‌زمانِ دیگر اشتراکِ جاری را عوض کرده
     # باشد (مثلاً پایانِ تریال/لغو)، همیشه دقیقاً همان ردیفی که *الان* جاری
@@ -77,16 +85,29 @@ def start_plan_change(subscription, target_version, *, preview_token, actor=None
         raise pcs.StalePreviewError("پیش‌نمایش دیگر معتبر نیست؛ دوباره پیش‌نمایش بگیرید.")
 
     if is_upgrade(current.plan_version, target_version):
-        # ارتقا: یک فاکتورِ قابلِ‌پرداختِ تغییرِ پلنِ از قبل‌موجود (همینِ اشتراک،
-        # همینِ نسخه‌ی هدف) را دوباره برمی‌گرداند به‌جایِ ساختنِ سندِ تکراری —
-        # وگرنه فاکتورِ تغییرِ پلن؛ نسخه‌ی پلن تا پرداخت عوض نمی‌شود.
+        # ارتقا: یک فاکتورِ قابلِ‌پرداختِ تغییرِ پلن که متعلق به همینِ *تصمیمِ
+        # منبع* است (همینِ اشتراک + همینِ اثرانگشتِ وضعیتِ منبع/هدف، یعنی
+        # ``expected`` که همین بالا محاسبه و تأیید شد) را دوباره برمی‌گرداند
+        # به‌جایِ ساختنِ سندِ تکراری. عمداً رویِ ``idempotency_key`` (نه صرفاً
+        # subscription+target) فیلتر می‌شود: ``StoreSubscription`` هنگامِ
+        # تغییرِ ``plan_version``اش همان pk را نگه می‌دارد، پس «همینِ اشتراک و
+        # همینِ هدف» به‌تنهایی کافی نیست — یک تصمیمِ منبعِ *قدیمی* (پیش از یک
+        # override/تغییرِ داخلیِ دیگر) هرگز نباید فاکتورِ تصمیمِ *تازه* را
+        # جا بزند، حتی اگر هدف یکسان باشد.
         existing_payable = SubscriptionInvoice.objects.filter(
             subscription=current, kind=SubscriptionInvoice.Kind.PLAN_CHANGE, plan_version=target_version,
-            status__in=SubscriptionInvoice.PAYABLE_STATUSES,
+            idempotency_key=expected, status__in=SubscriptionInvoice.PAYABLE_STATUSES,
         ).order_by("-created_at").first()
         if existing_payable is not None:
             return "invoice", existing_payable
 
+        # ``idempotency_key`` عمداً به ``invoice_service.create_invoice``
+        # پاس داده نمی‌شود: بررسیِ idempotency‌ی خودِ آن تابع فقط رویِ
+        # store+idempotency_key است (بدونِ فیلترِ وضعیت) و فاکتورِ
+        # باطل‌شده‌ی هم‌فاکتورِ قبلی (VOID) را هم برمی‌گرداند — دقیقاً همان
+        # رفتاری که اینجا صریحاً نمی‌خواهیم (فاکتورِ باطل‌شده هرگز دوباره
+        # استفاده نمی‌شود). به‌جایش، پس از ساختن، اثرانگشت را مستقیماً رویِ
+        # همین فاکتورِ تازه می‌نویسیم.
         invoice = invoice_service.create_invoice(
             current, kind=SubscriptionInvoice.Kind.PLAN_CHANGE, plan_version=target_version,
             currency=target_version.currency,
@@ -95,6 +116,8 @@ def start_plan_change(subscription, target_version, *, preview_token, actor=None
             )],
             now=now,
         )
+        invoice.idempotency_key = expected
+        invoice.save(update_fields=["idempotency_key", "updated_at"])
         invoice = invoice_service.open_invoice(invoice, now=now)
         record_audit_event(
             store=current.store, actor=actor, action_code="billing.plan_change_invoiced",
