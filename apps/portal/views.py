@@ -23,7 +23,9 @@ from apps.subscriptions.models import Plan, PlanVersion, StoreSubscription
 from apps.subscriptions.services import entitlement_service as ent
 from apps.subscriptions.services import plan_change_service
 
-from .decorators import owner_required
+from apps.stores.authorization import SETTINGS_MANAGE
+
+from .decorators import owner_required, portal_action_allowed, portal_permission_denied
 from .forms import (
     ContactForm,
     CreateStoreForm,
@@ -666,6 +668,11 @@ def onboarding_identity(request, store_public_id):
     shop_settings = ShopSettings.load(store=store)
 
     if request.method == "POST":
+        # AUTH-001: mutating store identity/ShopSettings requires the canonical
+        # SETTINGS_MANAGE action permission — the same gate the Merchant Admin
+        # ``settings_appearance`` view uses — not merely an ACTIVE membership.
+        if not portal_action_allowed(request, store, SETTINGS_MANAGE):
+            return portal_permission_denied(request)
         form = OnboardingIdentityForm(request.POST)
         if form.is_valid():
             data = form.cleaned_data
@@ -705,6 +712,11 @@ def onboarding_industry(request, store_public_id):
     templates = provisioning_service.latest_offerable_industry_templates()
 
     if request.method == "POST" and installation is None:
+        # AUTH-001: installing an industry template (a store-configuration
+        # mutation) requires the canonical SETTINGS_MANAGE permission — the
+        # same gate the Merchant Admin ``settings_industry_install`` view uses.
+        if not portal_action_allowed(request, store, SETTINGS_MANAGE):
+            return portal_permission_denied(request)
         action = request.POST.get("action")
         if action == "skip":
             _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
@@ -743,6 +755,11 @@ def onboarding_branding(request, store_public_id):
     shop_settings = ShopSettings.load(store=store)
 
     if request.method == "POST":
+        # AUTH-001: mutating branding (ShopSettings.logo) or advancing the
+        # onboarding stage requires the canonical SETTINGS_MANAGE permission —
+        # the same gate the Merchant Admin ``settings_appearance`` view uses.
+        if not portal_action_allowed(request, store, SETTINGS_MANAGE):
+            return portal_permission_denied(request)
         if request.POST.get("action") == "skip":
             _advance_onboarding_stage(store, completed=Store.OnboardingStage.BRANDING)
             return redirect("portal:onboarding-review", store_public_id=store.public_id)
@@ -784,6 +801,11 @@ def onboarding_review(request, store_public_id):
     trial_domain = store.domains.filter(is_primary=True).first()
 
     if request.method == "POST":
+        # AUTH-001: publishing the store (completing onboarding) is a
+        # store-level configuration mutation and requires the canonical
+        # SETTINGS_MANAGE permission, not merely an ACTIVE membership.
+        if not portal_action_allowed(request, store, SETTINGS_MANAGE):
+            return portal_permission_denied(request)
         store.onboarding_completed_at = timezone.now()
         store.onboarding_stage = Store.OnboardingStage.DONE
         store.save(update_fields=["onboarding_completed_at", "onboarding_stage", "updated_at"])
