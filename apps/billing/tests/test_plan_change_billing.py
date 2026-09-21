@@ -152,38 +152,13 @@ class DowngradeBillingTests(TestCase):
         )
 
 
-class ScheduledDowngradeVsPaidUpgradeRaceTests(TestCase):
-    """SUB-001 Repair 3, item 7 (mandatory inspection, NOT a fix): does an
-    outstanding ``ScheduledPlanChange`` (a downgrade scheduled for next
-    period) interact safely with a *new*, separately-paid upgrade that
-    happens before that scheduled downgrade is applied at renewal?
-
-    This test DOCUMENTS the current, pre-existing behavior (unchanged by
-    this repair — ``start_plan_change``'s upgrade branch never inspects or
-    clears any existing ``ScheduledPlanChange`` row, and
-    ``renewal_service._generate_one`` unconditionally applies whatever
-    ``ScheduledPlanChange`` still exists for the subscription at renewal
-    time, regardless of what the subscription's plan_version has become in
-    the meantime).
-
-    Result proven below: a merchant who schedules a downgrade, then changes
-    their mind and pays for a fresh upgrade before the next renewal, has
-    their PAID upgrade silently overwritten back down to the originally
-    scheduled (and no-longer-desired) downgrade target at the next renewal
-    — with no invoice/refund reconciliation of any kind for the paid
-    upgrade they just received. Neither ``start_plan_change`` nor
-    ``confirmation_service.confirm_payment`` clears the stale
-    ``ScheduledPlanChange`` when an intervening upgrade is paid.
-
-    This is flagged here as a genuine product-policy gap requiring an
-    architect decision (e.g.: should starting/paying a new upgrade cancel
-    any pending ``ScheduledPlanChange``? should renewal refuse to apply a
-    ``ScheduledPlanChange`` whose ``target_plan_version`` no longer reflects
-    the merchant's latest paid decision? should the scheduled downgrade be
-    fingerprinted the same way ``PLAN_CHANGE`` invoices now are?) — NOT
-    invented or implemented as part of this repair, per explicit
-    instruction to STOP and report rather than guess at new financial
-    policy in this area."""
+class SingleUnresolvedPlanChangeIntentTests(TestCase):
+    """SUB-001 Repair 4 (architect decision — canonical single-intent
+    invariant): at most one unresolved plan-change intent may exist per
+    ``StoreSubscription`` at any time — either a ``ScheduledPlanChange``
+    (non-payable downgrade/equal) OR a payable ``SubscriptionInvoice``
+    (kind=PLAN_CHANGE, upgrade), never both. Preview never supersedes
+    anything; only EXECUTION does."""
 
     def setUp(self):
         ent.clear_entitlement_cache()
@@ -195,42 +170,197 @@ class ScheduledDowngradeVsPaidUpgradeRaceTests(TestCase):
         self.sub = sub_svc.activate_subscription(sub, period_end=timezone.now() + timedelta(days=1))
         ent.clear_entitlement_cache()
 
-    def test_paid_upgrade_after_scheduling_a_downgrade_is_silently_reverted_at_renewal(self):
-        # 1) Merchant schedules a downgrade (pricey -> cheap) for next period.
+    def test_executed_upgrade_supersedes_a_scheduled_downgrade_and_survives_renewal(self):
+        """Mandatory regression proving the architect decision:
+        1. Store on plan A (pricey).
+        2. Merchant executes A -> B downgrade (cheap) -> ScheduledPlanChange.
+        3. Merchant then executes A -> C paid upgrade (enterprise) -> the
+           newly EXECUTED upgrade supersedes/removes the scheduled A->B
+           intent, in the same transaction, under the same subscription
+           lock, with an audited supersession.
+        4. Exactly one payable PLAN_CHANGE invoice for C exists; no
+           ScheduledPlanChange survives.
+        5. Pay C through canonical confirmation_service.
+        6. Subscription becomes C.
+        7. Run renewal -> subscription remains C, NOT reverted to B.
+        """
+        # 1 & 2: schedule a downgrade (pricey -> cheap).
         down_token = pcs._preview_token(ent.get_current_subscription(self.store), self.cheap)
         kind, _scheduled = pcb.start_plan_change(self.sub, self.cheap, preview_token=down_token)
         self.assertEqual(kind, "scheduled")
         self.assertTrue(ScheduledPlanChange.objects.filter(subscription=self.sub).exists())
 
-        # 2) Merchant changes their mind and pays for a fresh upgrade
-        #    (pricey -> enterprise) BEFORE the scheduled downgrade applies.
+        # 3: execute a paid upgrade (pricey -> enterprise) BEFORE the
+        # scheduled downgrade applies -> supersedes the scheduled intent.
         up_token = pcs._preview_token(ent.get_current_subscription(self.store), self.enterprise)
-        _kind2, invoice = pcb.start_plan_change(self.sub, self.enterprise, preview_token=up_token)
+        kind2, invoice = pcb.start_plan_change(self.sub, self.enterprise, preview_token=up_token)
+        self.assertEqual(kind2, "invoice")
+
+        # 4: the scheduled downgrade no longer exists; exactly one payable
+        # PLAN_CHANGE invoice (for enterprise) exists.
+        self.assertFalse(ScheduledPlanChange.objects.filter(subscription=self.sub).exists())
+        self.assertEqual(
+            SubscriptionInvoice.objects.filter(
+                subscription=self.sub, kind=SubscriptionInvoice.Kind.PLAN_CHANGE,
+                status__in=SubscriptionInvoice.PAYABLE_STATUSES,
+            ).count(),
+            1,
+        )
+        # Audited: the supersession was recorded before the schedule row
+        # was removed.
+        from apps.core.models import AuditLogEntry
+        self.assertTrue(
+            AuditLogEntry.objects.filter(
+                store=self.store, action_code="billing.plan_change_schedule_superseded",
+            ).exists()
+        )
+
+        # 5 & 6: pay C -> subscription becomes enterprise.
         attempt = attempt_service.create_attempt(invoice)
         confirmation_service.confirm_payment(attempt=attempt, amount=invoice.amount_due, currency="IRT")
         ent.clear_entitlement_cache()
         self.assertEqual(ent.get_current_subscription(self.store).plan_version_id, self.enterprise.pk)
 
-        # The stale ScheduledPlanChange (still targeting `cheap`) was NOT
-        # cleared by the intervening paid upgrade — current behavior.
-        self.assertTrue(ScheduledPlanChange.objects.filter(subscription=self.sub).exists())
-
-        # 3) Renewal runs and unconditionally applies the stale scheduled
-        #    downgrade, silently reverting the merchant's just-paid
-        #    enterprise upgrade back down to `cheap` — with no
-        #    invoice/refund reconciliation of the enterprise payment.
+        # 7: renewal must NOT revert the paid upgrade back to the
+        # superseded scheduled downgrade target.
         renewal_service.generate_renewals(lead_days=3)
         ent.clear_entitlement_cache()
         self.sub.refresh_from_db()
-        self.assertEqual(
-            self.sub.plan_version_id, self.cheap.pk,
-            "Documents current (unfixed) behavior: renewal blindly applies a "
-            "stale ScheduledPlanChange, silently reverting a paid-for "
-            "upgrade that happened after the downgrade was scheduled. This "
-            "is a genuine product-policy gap flagged to the architect, not "
-            "resolved by this repair.",
-        )
+        self.assertEqual(self.sub.plan_version_id, self.enterprise.pk)
         self.assertFalse(ScheduledPlanChange.objects.filter(subscription=self.sub).exists())
+
+    def test_downgrade_while_payable_upgrade_exists_is_rejected_and_creates_no_schedule(self):
+        """Required opposite-direction test:
+        1. A -> C payable upgrade invoice exists.
+        2. Merchant attempts A -> B downgrade/equal scheduling.
+        3. start_plan_change raises PlanChangeBillingError.
+        4. No ScheduledPlanChange exists.
+        5. C invoice remains unchanged/payable.
+        6. Subscription remains A.
+        """
+        up_token = pcs._preview_token(ent.get_current_subscription(self.store), self.enterprise)
+        _kind, invoice = pcb.start_plan_change(self.sub, self.enterprise, preview_token=up_token)
+        self.assertTrue(invoice.is_payable)
+
+        down_token = pcs._preview_token(ent.get_current_subscription(self.store), self.cheap)
+        with self.assertRaises(pcb.PlanChangeBillingError):
+            pcb.start_plan_change(self.sub, self.cheap, preview_token=down_token)
+
+        self.assertFalse(ScheduledPlanChange.objects.filter(subscription=self.sub).exists())
+        invoice.refresh_from_db()
+        self.assertTrue(invoice.is_payable)
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.plan_version_id, self.pricey.pk)
+
+    def test_platform_override_supersedes_scheduled_change_and_renewal_does_not_revert_it(self):
+        """Platform override + schedule interaction:
+        1. ScheduledPlanChange exists.
+        2. An authenticated is_staff+is_superuser Platform Admin executes an
+           immediate override.
+        3. ScheduledPlanChange is superseded/removed.
+        4. Plan changes immediately to the operator's target.
+        5. Audit entry records the schedule supersession.
+        6. Subsequent renewal does not revert the operator override.
+        """
+        from apps.subscriptions.services import plan_change_service as pcs_module
+        from apps.core.models import AuditLogEntry
+
+        down_token = pcs._preview_token(ent.get_current_subscription(self.store), self.cheap)
+        pcb.start_plan_change(self.sub, self.cheap, preview_token=down_token)
+        self.assertTrue(ScheduledPlanChange.objects.filter(subscription=self.sub).exists())
+
+        superuser = User.objects.create_user(
+            username="sched-override-super@example.com", email="sched-override-super@example.com",
+            password="a-very-strong-pass-1", is_staff=True, is_superuser=True,
+        )
+        pcs_module.execute_platform_admin_plan_override(
+            self.store, self.enterprise, actor=superuser, reason="operator override over schedule",
+        )
+        ent.clear_entitlement_cache()
+
+        self.assertFalse(ScheduledPlanChange.objects.filter(subscription=self.sub).exists())
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.plan_version_id, self.enterprise.pk)
+        self.assertTrue(
+            AuditLogEntry.objects.filter(
+                store=self.store, action_code="billing.plan_change_schedule_superseded",
+            ).exists()
+        )
+
+        renewal_service.generate_renewals(lead_days=3)
+        ent.clear_entitlement_cache()
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.plan_version_id, self.enterprise.pk)
+
+    def test_platform_override_still_rejected_while_a_payable_invoice_exists(self):
+        """Keep the existing rule: a payable PLAN_CHANGE invoice still
+        blocks the Platform Admin override outright (no supersession, no
+        mutation) — only a ScheduledPlanChange (non-financial) is
+        auto-superseded by an operator override."""
+        from apps.subscriptions.services import plan_change_service as pcs_module
+
+        up_token = pcs._preview_token(ent.get_current_subscription(self.store), self.enterprise)
+        _kind, invoice = pcb.start_plan_change(self.sub, self.enterprise, preview_token=up_token)
+
+        superuser = User.objects.create_user(
+            username="sched-override-super-2@example.com", email="sched-override-super-2@example.com",
+            password="a-very-strong-pass-1", is_staff=True, is_superuser=True,
+        )
+        with self.assertRaises(pcs.PlanChangeError):
+            pcs_module.execute_platform_admin_plan_override(self.store, self.cheap, actor=superuser, reason="QA")
+
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.plan_version_id, self.pricey.pk)
+        invoice.refresh_from_db()
+        self.assertTrue(invoice.is_payable)
+
+    def test_legacy_inconsistent_scheduled_row_is_cleaned_up_on_payment_confirmation(self):
+        """Defense against historical/inconsistent data (NOT a supported
+        way to create current state): deliberately simulate a pre-repair
+        row layout where a ScheduledPlanChange was created AFTER a payable
+        PLAN_CHANGE invoice already existed, bypassing the canonical
+        start_plan_change guard (test-only, direct model creation).
+
+        Confirming the PLAN_CHANGE payment must still:
+        * record the payment normally,
+        * activate the paid target plan,
+        * remove the stale ScheduledPlanChange,
+        * audit that supersession,
+        * and NOT be silently reverted by that stale row at the next
+          renewal."""
+        up_token = pcs._preview_token(ent.get_current_subscription(self.store), self.enterprise)
+        _kind, invoice = pcb.start_plan_change(self.sub, self.enterprise, preview_token=up_token)
+
+        # Test-only bypass: directly create a ScheduledPlanChange row for
+        # the same subscription, simulating inconsistent legacy data. Never
+        # do this through canonical start_plan_change (which would reject
+        # it per the opposite-direction invariant proven above).
+        ScheduledPlanChange.objects.create(
+            subscription=self.sub, store=self.store, target_plan_version=self.cheap,
+        )
+        self.assertTrue(ScheduledPlanChange.objects.filter(subscription=self.sub).exists())
+
+        attempt = attempt_service.create_attempt(invoice)
+        confirmation_service.confirm_payment(attempt=attempt, amount=invoice.amount_due, currency="IRT")
+        ent.clear_entitlement_cache()
+
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status, SubscriptionInvoice.Status.PAID)
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.plan_version_id, self.enterprise.pk)
+        self.assertFalse(ScheduledPlanChange.objects.filter(subscription=self.sub).exists())
+
+        from apps.core.models import AuditLogEntry
+        self.assertTrue(
+            AuditLogEntry.objects.filter(
+                store=self.store, action_code="billing.plan_change_schedule_superseded",
+            ).exists()
+        )
+
+        renewal_service.generate_renewals(lead_days=3)
+        ent.clear_entitlement_cache()
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.plan_version_id, self.enterprise.pk)
 
 
 class PlanChangePaymentStartDefenseTests(TestCase):
@@ -256,31 +386,46 @@ class PlanChangePaymentStartDefenseTests(TestCase):
         self.assertIsNotNone(attempt.pk)
 
     def test_start_payment_rejects_a_plan_change_invoice_whose_source_state_moved_on(self):
-        """If the subscription's source state changes (e.g. via a Platform
-        Admin override) after the invoice was created but before payment
-        starts, the invoice's fingerprinted decision is stale — payment
-        must not start on it, even though the invoice itself is still
-        formally ``is_payable``."""
-        from apps.subscriptions.services import plan_change_service as pcs_module
+        """If the subscription's source state changes underneath a still-
+        payable PLAN_CHANGE invoice (simulating an internal/legacy
+        lifecycle movement that bypasses the high-level canonical guards —
+        here reproduced test-only via the low-level
+        ``subscription_service.change_plan_version`` primitive directly,
+        NOT via a supported production path), the invoice's fingerprinted
+        decision is stale — payment must not start on it, even though the
+        invoice itself remains formally ``is_payable``.
+
+        This test must genuinely reach the PLAN_CHANGE fingerprint
+        validation inside ``start_payment``, not fail earlier on
+        ``invoice.is_payable`` — so the invoice is deliberately left
+        OPEN/PAYMENT_PENDING (never voided) throughout."""
+        from apps.billing.models import SubscriptionPaymentAttempt
+        from apps.subscriptions.services import subscription_service as sub_svc_module
 
         token = pcs._preview_token(ent.get_current_subscription(self.store), self.pricey)
         _kind, invoice = pcb.start_plan_change(self.sub, self.pricey, preview_token=token)
 
-        # Void it first isn't needed here — we're proving the *source-state*
-        # check, so instead move the subscription via a route that does NOT
-        # touch this invoice at all (there is currently no payable-invoice
-        # guard on the override once no OTHER payable invoice exists, so
-        # void it to let the override through, matching Blocker 3 semantics).
-        invoice_service.void_invoice(invoice)
-        superuser = get_user_model().objects.create_user(
-            username="pay-start-super@example.com", email="pay-start-super@example.com",
-            password="a-very-strong-pass-1", is_staff=True, is_superuser=True,
+        # Move the subscription's source state directly through the
+        # low-level primitive, bypassing start_plan_change/override entirely
+        # (test-only simulation of an internal/legacy movement) — the
+        # invoice itself is never touched, so it remains payable.
+        other_target = _published("pay-start-other-target", price="500000")
+        sub_svc_module.change_plan_version(self.sub, other_target, reason="QA: simulate internal source-state move")
+
+        invoice.refresh_from_db()
+        self.assertTrue(invoice.is_payable)
+        self.assertIn(
+            invoice.status,
+            (SubscriptionInvoice.Status.OPEN, SubscriptionInvoice.Status.PAYMENT_PENDING),
         )
-        pcs_module.execute_platform_admin_plan_override(self.store, self.pricey, actor=superuser, reason="QA")
-        ent.clear_entitlement_cache()
+        attempts_before = SubscriptionPaymentAttempt.objects.filter(invoice=invoice).count()
 
         with self.assertRaises(payment_flow_service.PaymentFlowError):
             payment_flow_service.start_payment(invoice, return_url="https://example.test/return")
+
+        self.assertEqual(
+            SubscriptionPaymentAttempt.objects.filter(invoice=invoice).count(), attempts_before,
+        )
 
     def test_initial_invoice_payment_start_is_unaffected(self):
         """INITIAL invoices are never fingerprint-checked — only

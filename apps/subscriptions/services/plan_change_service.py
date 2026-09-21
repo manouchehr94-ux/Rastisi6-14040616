@@ -1,15 +1,30 @@
-"""پیش‌نمایش و اجرایِ تغییرِ پلن برایِ Merchant Admin (ADR-70/71/72).
+"""پیش‌نمایشِ تغییرِ پلن + overrideِ فوریِ مدیرِ پلتفرم (ADR-70/71/72، SUB-001).
 
-تغییرِ پلن یک عملِ دومرحله‌ای است: (۱) پیش‌نمایش که تفاوتِ قابلیت‌ها و
-هشدارهایِ تنزل (متریک‌هایی که مصرفِ فعلی از سقفِ پلنِ هدف بیشتر است) را نشان
-می‌دهد و یک «توکنِ پیش‌نمایش» تولید می‌کند؛ (۲) اجرا که فقط اگر توکن با
-وضعیتِ فعلیِ اشتراک هم‌خوان باشد انجام می‌شود — در غیر این صورت پیش‌نمایش
-کهنه شده (اشتراک بینِ پیش‌نمایش و اجرا تغییر کرده) و اجرا رد می‌شود تا کاربر
-تصمیمی بر اساسِ داده‌ی قدیمی نگیرد.
+این ماژول عمداً **فقط** دو نقطه‌ی ورودیِ در-معرض-استفاده دارد:
 
-در Checkpoint 5A هیچ پولی جابه‌جا نمی‌شود (ADR-72) — تغییرِ پلن فقط
-Entitlementها را عوض می‌کند. جمع‌آوریِ پرداختِ آنلاین کارِ Checkpoint 5B است.
-"""
+* ``preview_plan_change`` — تفاوتِ Entitlementها/هشدارهایِ تنزل را بینِ
+  پلنِ فعلی و یک نسخه‌ی هدف محاسبه می‌کند و یک «توکنِ پیش‌نمایش» تولید
+  می‌کند (اثرانگشتِ وضعیتِ فعلیِ اشتراک + نسخه‌ی هدف). این تابع صرفاً
+  خوانشی است و هیچ‌چیزی را تغییر/اجرا نمی‌کند — نه پیش‌نمایشِ Merchant
+  Admin و نه پیش‌نمایشِ Portal.
+* ``execute_platform_admin_plan_override`` — مرزِ صریحِ overrideِ اپراتوریِ
+  مدیرِ پلتفرم: بدونِ preview_token، بدونِ فاکتور/پرداخت، نسخه‌ی پلنِ
+  اشتراکِ جاری را بلافاصله عوض می‌کند (فقط برایِ ``is_authenticated and
+  is_staff and is_superuser``).
+
+اختیارِ *اجرایِ* تغییرِ پلنِ مرچنت (پرداختی/زمان‌بندی‌شده) اینجا نیست —
+``apps.billing.services.plan_change_billing_service.start_plan_change``
+همان مرجعِ کانونیک است (ارتقا → فاکتورِ ``PLAN_CHANGE``؛ تنزل/برابر →
+``ScheduledPlanChange``؛ ناوردایِ «حداکثر یک تصمیمِ حل‌نشده به‌ازایِ هر
+اشتراک» را هم همانجا برقرار می‌کند). تابعِ عمومیِ قدیمیِ
+``execute_plan_change`` (preview_token → تغییرِ فوریِ بدونِ صورتحساب) کاملاً
+حذف شده است و **هیچ جایگزینِ دیگری برایِ آن در این فایل ساخته نشده**.
+
+پرایمیتیوِ سطحِ‌پایینِ واقعیِ تغییرِ ``plan_version`` هم اینجا نیست — همه‌ی
+مسیرها (پرداخت/تمدید/override/اجرایِ مرچنت) از
+``apps.subscriptions.services.subscription_service.change_plan_version``
+عبور می‌کنند؛ این ماژول (``plan_change_service``) هرگز آن پرایمیتیو را
+دوباره پیاده‌سازی نمی‌کند، فقط از آن استفاده می‌کند."""
 
 import hashlib
 
@@ -149,23 +164,39 @@ def execute_platform_admin_plan_override(store, target_version, *, actor, reason
       نباید توسطِ یک overrideِ اپراتوریِ بی‌ارتباط با پرداخت، بی‌اثر/کهنه
       شود. مدیرِ پلتفرم باید ابتدا آن فاکتور را از طریقِ چرخه‌ی کانونیکِ
       صورتحساب (مثلاً ``invoice_service.void_invoice``) حل کند.
+    * SUB-001 Repair 4 (تصمیمِ معمار — ناوردایِ تصمیمِ واحد) — اگر فاکتورِ
+      قابلِ‌پرداختی وجود نداشته باشد اما یک ``ScheduledPlanChange``
+      (تنزل/برابرِ زمان‌بندی‌شده‌یِ حل‌نشده) برایِ همینِ اشتراک موجود باشد،
+      این override — که خودش یک تصمیمِ *اجراشده*‌یِ فوریِ اپراتوری است، نه
+      صرفِ پیش‌نمایش — آن تنزلِ زمان‌بندی‌شده را جانشین/حذف می‌کند (از
+      طریقِ همان کمکِ کانونیکِ
+      ``plan_change_billing_service.supersede_scheduled_plan_change`` —
+      با ثبتِ حسابرسیِ ``billing.plan_change_schedule_superseded``) پیش
+      از اجرایِ فوریِ overrideِ خودش؛ در غیرِاین‌صورت آن تنزلِ زمان‌بندی‌شده
+      پشتِ overrideِ اپراتوری باقی می‌ماند و در تمدیدِ بعدی بی‌صدا آن را
+      برمی‌گرداند.
     * ``StoreMembership``/``ROLE_PERMISSIONS``یِ مرچنت — از جمله
       ``SUBSCRIPTION_CHANGE`` — هرگز دسترسی به این override نمی‌دهد؛ این
       تابع صراحتاً یک override اپراتوری است، نه یک مسیرِ جایگزینِ خریدِ
       مرچنت.
 
-    ترتیبِ قفل (SUB-001 Repair 3، بازبینیِ ترتیبِ قفل): این تابع، همانندِ
+    ترتیبِ قفل (SUB-001 Repair 3/4، بازبینیِ ترتیبِ قفل): این تابع، همانندِ
     ``plan_change_billing_service.start_plan_change``، ابتدا
     ``StoreSubscription`` جاری را با ``select_for_update`` قفل می‌کند —
-    پیش از هر بررسیِ فاکتورِ رقیب. سپس بررسیِ وجودِ فاکتورِ رقیبِ
-    قابلِ‌پرداخت یک خوانشِ *بدونِ قفل* رویِ ``SubscriptionInvoice`` است (نه
-    ``select_for_update``) — تنها سازنده‌ی فاکتورهایِ ``PLAN_CHANGE``
-    (``start_plan_change``) خودش پیش از ساختن، همینِ ردیفِ اشتراک را قفل
-    می‌کند، پس نگه‌داشتنِ همین قفل کافی است تا هیچ ``start_plan_change``ی
-    هم‌زمان نتواند وسطِ ساختنِ فاکتور باشد — بدونِ نیاز به قفلِ اضافی رویِ
-    فاکتور. این هرگز ترتیبِ قفلِ ``confirm_payment``
-    (Attempt→Invoice→Subscription) را معکوس نمی‌کند، چون هرگز منتظرِ قفلِ
-    Invoice/Attempt نمی‌ماند — فقط می‌خواند."""
+    پیش از هر بررسیِ فاکتورِ رقیب یا تنزلِ زمان‌بندی‌شده. سپس بررسیِ وجودِ
+    فاکتورِ رقیبِ قابلِ‌پرداخت یک خوانشِ *بدونِ قفل* رویِ
+    ``SubscriptionInvoice`` است (نه ``select_for_update``) — تنها سازنده‌ی
+    فاکتورهایِ ``PLAN_CHANGE`` (``start_plan_change``) خودش پیش از
+    ساختن، همینِ ردیفِ اشتراک را قفل می‌کند، پس نگه‌داشتنِ همین قفل کافی
+    است تا هیچ ``start_plan_change``ی هم‌زمان نتواند وسطِ ساختنِ فاکتور
+    باشد — بدونِ نیاز به قفلِ اضافی رویِ فاکتور. جانشینیِ
+    ``ScheduledPlanChange`` (وقتی فاکتورِ رقیبی نیست) پس از آن، همچنان
+    زیرِ همان قفلِ اشتراک، اتفاق می‌افتد و خودش صرفاً همان ردیفِ
+    ``OneToOneField(subscription)``ی ``ScheduledPlanChange`` را قفل
+    می‌کند — نه هیچ ردیفِ ``SubscriptionInvoice``ای. این هرگز ترتیبِ قفلِ
+    ``confirm_payment`` (Attempt→Invoice→Subscription) را معکوس نمی‌کند،
+    چون هرگز منتظرِ قفلِ Invoice/Attempt نمی‌ماند — فقط می‌خواند/قفلِ
+    Scheduled می‌گیرد."""
     if (
         actor is None
         or not getattr(actor, "is_authenticated", False)
@@ -198,6 +229,19 @@ def execute_platform_admin_plan_override(store, target_version, *, actor, reason
                 "یک فاکتورِ تغییرِ پلنِ حل‌نشده برایِ این فروشگاه وجود دارد؛ "
                 "پیش از overrideِ فوری، آن فاکتور را باطل یا حل کنید."
             )
+
+        # SUB-001 Repair 4 (ناوردایِ تصمیمِ واحد): هیچ فاکتورِ رقیبی نیست —
+        # اما اگر یک تنزلِ زمان‌بندی‌شده وجود داشته باشد، این overrideِ
+        # فوریِ *اجراشده* آن را جانشین می‌کند (با ثبتِ حسابرسی) تا پشتِ
+        # overrideِ اپراتوری باقی نمانَد و در تمدیدِ بعدی بی‌صدا آن را
+        # برنگرداند.
+        from apps.billing.services import plan_change_billing_service as pcb
+
+        pcb.supersede_scheduled_plan_change(
+            locked_subscription, actor=actor,
+            reason="overrideِ فوریِ مدیرِ پلتفرم جایِ تنزلِ زمان‌بندی‌شده را گرفت",
+            replacement_intent=f"platform_admin_override:{target_version.pk}",
+        )
 
         updated = svc.change_plan_version(
             locked_subscription, target_version, actor=actor, reason=reason, idempotency_key=idempotency_key,

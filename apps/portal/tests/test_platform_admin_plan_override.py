@@ -283,3 +283,50 @@ class StoreChangePlanViewTests(TestCase):
 
         self.subscription.refresh_from_db()
         self.assertEqual(self.subscription.plan_version_id, other_version.pk)
+
+    # -- (9) SUB-001 Repair 4, architect decision: override supersedes a
+    #    ScheduledPlanChange (non-financial) rather than being blocked by it
+    #    -----------------------------------------------------------------
+
+    def test_override_supersedes_a_scheduled_plan_change_and_audits_the_supersession(self):
+        """Unlike a payable PLAN_CHANGE invoice (a financial artifact that
+        must be explicitly resolved), a ScheduledPlanChange represents no
+        money moved yet — an explicit Platform Admin immediate override may
+        supersede it directly, in the same transaction/lock, with an
+        audited supersession, so it does not survive behind the operator
+        override and silently revert it at the next renewal."""
+        from apps.billing.models import ScheduledPlanChange
+        from apps.billing.services import plan_change_billing_service as pcb
+        from apps.core.models import AuditLogEntry
+
+        self.to_version.display_price = "150000"
+        self.to_version.currency = "IRT"
+        self.to_version.billing_interval = PlanVersion.BillingInterval.MONTHLY
+        self.to_version.save(update_fields=["display_price", "currency", "billing_interval"])
+        self.from_version.display_price = "300000"
+        self.from_version.currency = "IRT"
+        self.from_version.billing_interval = PlanVersion.BillingInterval.MONTHLY
+        self.from_version.save(update_fields=["display_price", "currency", "billing_interval"])
+
+        # `to_version` (150000) is cheaper than `from_version` (300000), so
+        # this start_plan_change call is a genuine downgrade -> schedules,
+        # doesn't invoice.
+        token = pcs._preview_token(self.subscription, self.to_version)
+        kind, _scheduled = pcb.start_plan_change(self.subscription, self.to_version, preview_token=token)
+        self.assertEqual(kind, "scheduled")
+        self.assertTrue(ScheduledPlanChange.objects.filter(subscription=self.subscription).exists())
+
+        other_plan = Plan.objects.create(code="override-other-3", name="Other3")
+        other_version = PlanVersion.objects.create(
+            plan=other_plan, version_number=1, status=PlanVersion.Status.PUBLISHED,
+        )
+        pcs.execute_platform_admin_plan_override(self.store, other_version, actor=self.superuser, reason="QA")
+
+        self.subscription.refresh_from_db()
+        self.assertEqual(self.subscription.plan_version_id, other_version.pk)
+        self.assertFalse(ScheduledPlanChange.objects.filter(subscription=self.subscription).exists())
+        self.assertTrue(
+            AuditLogEntry.objects.filter(
+                store=self.store, action_code="billing.plan_change_schedule_superseded",
+            ).exists()
+        )

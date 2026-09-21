@@ -29,6 +29,50 @@ def is_upgrade(current_version, target_version) -> bool:
     return Decimal(target_version.display_price) > Decimal(current_version.display_price)
 
 
+def supersede_scheduled_plan_change(subscription, *, actor=None, reason="", replacement_intent=""):
+    """پیاده‌سازیِ کانونیک و **تنها** برایِ لغو/جانشین‌سازیِ یک
+    ``ScheduledPlanChange`` حل‌نشده (SUB-001، تصمیمِ معمار — ناوردایِ
+    «حداکثر یک تصمیمِ تغییرِ پلنِ حل‌نشده به‌ازایِ هر اشتراک»: یا یک
+    ``ScheduledPlanChange`` یا یک فاکتورِ قابلِ‌پرداختِ ``PLAN_CHANGE``، هرگز
+    هر دو هم‌زمان).
+
+    هرگاه یک تصمیمِ *اجراشده*‌یِ تازه (ارتقایِ پرداختیِ واقعاً اجراشده، یک
+    overrideِ فوریِ مدیرِ پلتفرم، یا یک همگراییِ دفاعیِ داده‌یِ ناهم‌خوانِ
+    تاریخی) جایِ یک تنزل/برابرِ زمان‌بندی‌شده‌یِ حل‌نشده را می‌گیرد، همه‌ی
+    فراخوان‌ها باید دقیقاً از همینجا عبور کنند — نه یک منطقِ حذفِ موازیِ
+    دیگر در جایِ دیگری از کد. پیش از حذفِ ردیف، یک رخدادِ حسابرسی با کدِ
+    ``billing.plan_change_schedule_superseded`` (فروشگاه، هدفِ قدیمیِ
+    زمان‌بندی‌شده، actor، دلیل، و نوعِ تصمیمِ جانشین) ثبت می‌شود — تا این
+    جانشینی هیچ‌وقت بی‌ردِپا نباشد.
+
+    اگر برایِ این اشتراک اصلاً ``ScheduledPlanChange``ای وجود نداشته باشد
+    کاری نمی‌کند (idempotent) و ``None`` برمی‌گرداند — پس می‌توان این تابع
+    را بی‌قیدوشرط، پیش از هر تصمیمِ تازه‌یِ اجراشده، فراخوانی کرد.
+
+    ترتیبِ قفل: فراخواننده باید از قبل ``StoreSubscription`` را با
+    ``select_for_update`` قفل کرده باشد (ترتیبِ کانونیکِ SUB-001:
+    Subscription → Scheduled) — این تابع خودش رویِ همان ردیفِ
+    ``ScheduledPlanChange`` (نه رویِ اشتراک) ``select_for_update`` می‌گیرد؛
+    چون این ردیف یک ``OneToOneField(subscription)`` است، هیچ ترتیبِ قفلِ
+    دیگری وارد نمی‌شود و هرگز منتظرِ قفلِ ``SubscriptionInvoice`` نمی‌ماند.
+
+    مهم: باطل/ناموفق‌شدنِ بعدیِ تصمیمِ جانشین (مثلاً VOIDِ فاکتورِ ارتقایِ
+    تازه) هرگز به‌صورتِ خودکار این تنزلِ جانشین‌شده را احیا نمی‌کند — مرچنت
+    در صورتِ نیاز باید صریحاً دوباره تنزلی را زمان‌بندی کند."""
+    scheduled = ScheduledPlanChange.objects.select_for_update().filter(subscription=subscription).first()
+    if scheduled is None:
+        return None
+    record_audit_event(
+        store=scheduled.store, actor=actor, action_code="billing.plan_change_schedule_superseded",
+        object_type="ScheduledPlanChange", object_id=scheduled.pk,
+        object_label=scheduled.target_plan_version.plan.code,
+        before={"target_version": scheduled.target_plan_version_id},
+        metadata={"reason": reason, "replacement_intent": replacement_intent},
+    )
+    scheduled.delete()
+    return scheduled
+
+
 def preview(subscription, target_version) -> dict:
     """پیش‌نمایشِ 5A را با اطلاعاتِ صورتحساب (ارتقا/تنزل + مبلغِ قابلِ‌پرداخت)
     غنی می‌کند."""
@@ -44,6 +88,27 @@ def preview(subscription, target_version) -> dict:
 def start_plan_change(subscription, target_version, *, preview_token, actor=None, now=None):
     """تغییرِ پلن را آغاز می‌کند. برایِ ارتقا ``("invoice", invoice)`` و برایِ
     تنزل ``("scheduled", scheduled_change)`` برمی‌گرداند. توکنِ کهنه رد می‌شود.
+
+    ناوردایِ تصمیمِ واحد (SUB-001، تصمیمِ معمار): برایِ هر ``StoreSubscription``
+    در هر لحظه حداکثر یک تصمیمِ تغییرِ پلنِ حل‌نشده می‌تواند وجود داشته باشد —
+    یا یک ``ScheduledPlanChange`` (تنزل/برابر — بدونِ پول) یا یک فاکتورِ
+    قابلِ‌پرداختِ ``PLAN_CHANGE`` (ارتقا — پرداختی)، هرگز هر دو هم‌زمان.
+    «پیش‌نمایش» هیچ‌چیزی را جانشین نمی‌کند؛ فقط **اجرا** (همینجا) مرزِ
+    جانشینیِ تصمیم است:
+
+    * اگر این فراخوانی به ارتقا برسد و یک ``ScheduledPlanChange`` قدیمی
+      برایِ همینِ اشتراک موجود باشد، آن تنزلِ اجراشده‌یِ قدیمی‌تر توسطِ همینِ
+      ارتقایِ تازه‌ی *اجراشده* جانشین/حذف می‌شود (از طریقِ
+      ``supersede_scheduled_plan_change`` — با ثبتِ حسابرسی) پیش از ساختن/
+      بازیابیِ فاکتور؛ هرگز پشتِ تصمیمِ تازه باقی نمی‌ماند تا در تمدیدِ بعدی
+      بی‌صدا آن را برگرداند.
+    * اگر این فراخوانی به تنزل/برابر برسد در حالی‌که یک فاکتورِ
+      ``PLAN_CHANGE`` قابلِ‌پرداخت از قبل برایِ همینِ اشتراک باز است،
+      ``PlanChangeBillingError`` می‌اندازد — بدونِ ساختن/به‌روزرسانیِ هیچ
+      ``ScheduledPlanChange``ای، بدونِ تغییرِ پلن، بدونِ تغییرِ فاکتور. یک
+      سندِ مالیِ باز فقط از طریقِ چرخه‌یِ کانونیکِ خودش (پرداخت یا
+      ``invoice_service.void_invoice``) حل می‌شود — هرگز به‌صورتِ خودکار
+      به‌خاطرِ یک درخواستِ تنزلِ تازه باطل نمی‌شود.
 
     ایمنیِ هم‌زمانی (SUB-001، بازبینیِ معماری): پیش از هر بررسی/نوشتنِ دیگری،
     ``StoreSubscription`` جاری با ``select_for_update`` قفل می‌شود — صرفِ
@@ -124,6 +189,17 @@ def start_plan_change(subscription, target_version, *, preview_token, actor=None
                 "پیش از درخواستِ تغییرِ تازه، آن فاکتور را پرداخت یا باطل کنید."
             )
 
+        # ناوردایِ تصمیمِ واحد (تصمیمِ معمار): این ارتقا واقعاً در حالِ
+        # *اجرا*شدن است (نه صرفِ پیش‌نمایش) — پس هر ``ScheduledPlanChange``
+        # قدیمی‌تر (تنزل/برابرِ حل‌نشده) باید همینجا، پیش از ساختنِ فاکتورِ
+        # تازه، جانشین شود؛ در غیرِاین‌صورت هر دو تصمیم (زمان‌بندی‌شده +
+        # فاکتورِ قابلِ‌پرداخت) هم‌زمان زنده می‌مانند و تمدیدِ بعدی می‌تواند
+        # ارتقایِ تازه را بی‌صدا برگرداند.
+        supersede_scheduled_plan_change(
+            current, actor=actor, reason="ارتقایِ اجراشده جایِ تنزلِ زمان‌بندی‌شده را گرفت",
+            replacement_intent=f"upgrade:{target_version.pk}",
+        )
+
         # ``idempotency_key`` عمداً به ``invoice_service.create_invoice``
         # پاس داده نمی‌شود: بررسیِ idempotency‌ی خودِ آن تابع فقط رویِ
         # store+idempotency_key است (بدونِ فیلترِ وضعیت) و فاکتورِ
@@ -148,6 +224,21 @@ def start_plan_change(subscription, target_version, *, preview_token, actor=None
             after={"target_version": target_version.pk, "amount": str(invoice.grand_total)},
         )
         return "invoice", invoice
+
+    # ناوردایِ تصمیمِ واحد (تصمیمِ معمار، جهتِ مخالف): اگر یک فاکتورِ
+    # ``PLAN_CHANGE`` قابلِ‌پرداخت از قبل برایِ همینِ اشتراک باز است، یک
+    # درخواستِ تنزل/برابرِ تازه هرگز نباید آن سندِ مالی را به‌صورتِ خودکار
+    # بی‌اثر/باطل کند یا کنارش یک ``ScheduledPlanChange`` تازه بسازد —
+    # مرچنت باید ابتدا آن تصمیمِ مالی را صریحاً حل کند (پرداخت یا
+    # ``invoice_service.void_invoice``).
+    if SubscriptionInvoice.objects.filter(
+        subscription=current, kind=SubscriptionInvoice.Kind.PLAN_CHANGE,
+        status__in=SubscriptionInvoice.PAYABLE_STATUSES,
+    ).exists():
+        raise PlanChangeBillingError(
+            "یک فاکتورِ تغییرِ پلنِ حل‌نشده برایِ این اشتراک وجود دارد؛ "
+            "پیش از زمان‌بندیِ تنزل/برابر، آن فاکتور را پرداخت یا باطل کنید."
+        )
 
     # تنزل/برابر: زمان‌بندی برایِ دوره‌ی بعد — ``update_or_create`` رویِ
     # ``OneToOneField(subscription)`` خودش idempotent است (یک تغییرِ
