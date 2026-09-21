@@ -4824,8 +4824,6 @@ def hero_list(request):
 @staff_required
 @permission_required(CONTENT_MANAGE)
 def hero_form(request, pk=None):
-    from django.db import transaction
-
     from apps.catalog.models import Brand, Category
     store = _resolve_dashboard_store(request)
     slide = get_object_or_404(HeroSlide, pk=pk, store=store) if pk else None
@@ -4867,7 +4865,19 @@ def hero_form(request, pk=None):
             obj.full_clean()
             obj.save()
 
-            # Schedule old file cleanup after successful commit
+            # MED-001 — legacy Dashboard hero replacement no longer has
+            # unilateral authority to physically delete reusable media
+            # bytes. Old desktop/mobile filenames that actually changed are
+            # routed through the same canonical content/media safety gate
+            # every other reusable-media path uses
+            # (``cleanup_reusable_media_file`` → ``is_physical_media_path_
+            # safe_to_delete``), which conservatively checks for any other
+            # ``MediaAsset`` alias or legacy ImageField still claiming the
+            # same physical path (e.g. a Storefront Builder asset-backed
+            # placement created via ``_sync_asset_references`` pointing at
+            # this exact filename) before ever calling ``storage.delete``.
+            from apps.content.services import cleanup_reusable_media_file
+
             storage = HeroSlide.desktop_image.field.storage
             new_desktop_name = obj.desktop_image.name if obj.desktop_image else None
             new_mobile_name = obj.mobile_image.name if obj.mobile_image else None
@@ -4878,10 +4888,8 @@ def hero_form(request, pk=None):
             if old_mobile_name and old_mobile_name != new_mobile_name:
                 files_to_delete.append(old_mobile_name)
 
-            if files_to_delete:
-                transaction.on_commit(lambda: [
-                    storage.delete(f) for f in files_to_delete if storage.exists(f)
-                ])
+            for old_name in files_to_delete:
+                cleanup_reusable_media_file(old_name, storage)
 
             messages.success(request, f"اسلاید «{obj.title or obj.pk}» ذخیره شد")
             return redirect("dashboard:hero-list")
@@ -4899,8 +4907,6 @@ def hero_form(request, pk=None):
 @staff_required
 @permission_required(CONTENT_MANAGE)
 def hero_delete(request, pk):
-    from django.db import transaction
-
     store = _resolve_dashboard_store(request)
     slide = get_object_or_404(HeroSlide, pk=pk, store=store)
     desktop_name = slide.desktop_image.name if slide.desktop_image else None
@@ -4909,14 +4915,13 @@ def hero_delete(request, pk):
 
     slide.delete()
 
-    # Delete owned files only after successful DB commit
-    def _cleanup():
-        if desktop_name and storage.exists(desktop_name):
-            storage.delete(desktop_name)
-        if mobile_name and storage.exists(mobile_name):
-            storage.delete(mobile_name)
+    # MED-001 — same canonical safety gate as hero_form above; the legacy
+    # Dashboard delete route may delete its own HeroSlide row, but must not
+    # unilaterally destroy bytes another placement/alias still needs.
+    from apps.content.services import cleanup_reusable_media_file
 
-    transaction.on_commit(_cleanup)
+    cleanup_reusable_media_file(desktop_name, storage)
+    cleanup_reusable_media_file(mobile_name, storage)
     messages.success(request, "اسلاید حذف شد")
     return redirect("dashboard:hero-list")
 
@@ -4948,8 +4953,6 @@ def banner_list(request):
 @staff_required
 @permission_required(CONTENT_MANAGE)
 def banner_form(request, pk=None):
-    from django.db import transaction
-
     from apps.catalog.models import Brand, Category
     store = _resolve_dashboard_store(request)
     banner = get_object_or_404(PromotionalBanner, pk=pk, store=store) if pk else None
@@ -4989,7 +4992,11 @@ def banner_form(request, pk=None):
             obj.full_clean()
             obj.save()
 
-            # Schedule old file cleanup after successful commit
+            # MED-001 — same repair as hero_form above: route old-filename
+            # cleanup through the canonical content/media safety gate
+            # instead of an unconditional ``storage.delete``.
+            from apps.content.services import cleanup_reusable_media_file
+
             storage = PromotionalBanner.desktop_image.field.storage
             new_desktop_name = obj.desktop_image.name if obj.desktop_image else None
             new_mobile_name = obj.mobile_image.name if obj.mobile_image else None
@@ -5000,10 +5007,8 @@ def banner_form(request, pk=None):
             if old_mobile_name and old_mobile_name != new_mobile_name:
                 files_to_delete.append(old_mobile_name)
 
-            if files_to_delete:
-                transaction.on_commit(lambda: [
-                    storage.delete(f) for f in files_to_delete if storage.exists(f)
-                ])
+            for old_name in files_to_delete:
+                cleanup_reusable_media_file(old_name, storage)
 
             messages.success(request, f"بنر «{obj.title or obj.pk}» ذخیره شد")
             return redirect("dashboard:banner-list")
@@ -5021,8 +5026,6 @@ def banner_form(request, pk=None):
 @staff_required
 @permission_required(CONTENT_MANAGE)
 def banner_delete(request, pk):
-    from django.db import transaction
-
     store = _resolve_dashboard_store(request)
     banner = get_object_or_404(PromotionalBanner, pk=pk, store=store)
     desktop_name = banner.desktop_image.name if banner.desktop_image else None
@@ -5031,14 +5034,11 @@ def banner_delete(request, pk):
 
     banner.delete()
 
-    # Delete owned files only after successful DB commit
-    def _cleanup():
-        if desktop_name and storage.exists(desktop_name):
-            storage.delete(desktop_name)
-        if mobile_name and storage.exists(mobile_name):
-            storage.delete(mobile_name)
+    # MED-001 — same canonical safety gate as banner_form above.
+    from apps.content.services import cleanup_reusable_media_file
 
-    transaction.on_commit(_cleanup)
+    cleanup_reusable_media_file(desktop_name, storage)
+    cleanup_reusable_media_file(mobile_name, storage)
     messages.success(request, "بنر حذف شد")
     return redirect("dashboard:banner-list")
 

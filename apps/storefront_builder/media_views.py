@@ -236,16 +236,27 @@ def _sync_asset_references(obj, config, store, *, changed_fields: set[str]) -> N
     اگر فیلدِ فایل حذف شده باشد (مثلاً ``remove_mobile``)، FKِ asset متناظر
     فقط به ``None`` تنظیم می‌شود — هرگز خودِ ردیفِ ``MediaAsset`` را حذف
     نمی‌کند (ممکن است Placementِ دیگری، مثلاً نسخه‌ی Published، هنوز به
-    همان asset ارجاع بدهد؛ نگاه کنید به ``MediaAsset.is_referenced``)."""
+    همان asset ارجاع بدهد؛ نگاه کنید به ``MediaAsset.is_referenced``).
+
+    MED-001: قبلِ ساختنِ FKِ asset تازه، اگر فیلدِ فایلِ قدیمیِ همینِ
+    ``obj`` (پیش از تغییر) خودش قبلاً به یک ``MediaAsset`` وصل بود، آن
+    asset را برمی‌گرداند — فراخوانِ (تنها همینجا، در ``storefront_section_
+    media_form``) مسئولِ فراخوانیِ ``delete_media_asset_if_unreferenced``
+    رویِ آن است تا اگر دیگر جایی به آن ارجاع ندهد، هم ردیفِ متادیتا و هم
+    (فقط اگر مسیرِ فیزیکی هنوز از طریقِ هیچ alias/ImageFieldِ قدیمیِ
+    دیگری ادعا نشود) بایتِ فیزیکی‌اش حذف شود."""
     asset_fields = config.get("asset_fields")
     if not asset_fields:
-        return
+        return {}
     from apps.content.models import MediaAsset
 
+    old_assets = {}
     update_fields = []
     for file_field, asset_field in asset_fields.items():
         if file_field not in changed_fields:
             continue
+        old_asset_id = getattr(obj, f"{asset_field}_id", None)
+        old_assets[asset_field] = MediaAsset.objects.filter(pk=old_asset_id).first() if old_asset_id else None
         file_obj = getattr(obj, file_field)
         if file_obj:
             asset = MediaAsset.objects.create(store=store, image=file_obj.name)
@@ -255,6 +266,7 @@ def _sync_asset_references(obj, config, store, *, changed_fields: set[str]) -> N
         update_fields.append(asset_field)
     if update_fields:
         obj.save(update_fields=update_fields)
+    return old_assets
 
 
 @staff_required
@@ -301,19 +313,44 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
             # کردند (نه هر بار ذخیره)، یک ردیفِ MediaAsset تازه بساز و FKِ
             # asset را به آن وصل کن. اگر چیزی تغییر نکرده (مثلاً فقط عنوان
             # ویرایش شده)، asset FKِ قبلی (اگر باشد) دست‌نخورده می‌ماند.
+            #
+            # MED-001 (ترمیم — بایپاسِ حذفِ فیزیکیِ رسانه‌ی به‌اشتراک‌
+            # گذاشته‌شده): این‌جا دیگر مستقیماً ``storage.delete(old_name)``
+            # صدا زده نمی‌شود. نامِ فایلِ قدیمیِ هر فیلدِ واقعاً تغییریافته
+            # جمع‌آوری می‌شود؛ اگر آن فیلد پیش از تغییر یک FKِ ``MediaAsset``
+            # داشت (``old_assets``ی که ``_sync_asset_references`` برمی‌
+            # گرداند)، پاک‌سازیِ آن asset از طریقِ همانِ مسیرِ کانونیکِ
+            # ``delete_media_asset_if_unreferenced`` انجام می‌شود (که خودش
+            # بایتِ فیزیکی را فقط از طریقِ ``cleanup_reusable_media_file``
+            # حذف می‌کند)؛ در غیرِ این‌صورت (ردیفِ قدیمی‌تر بدونِ asset FK)
+            # نامِ فایل مستقیماً به همان مرجعِ کانونیک (``cleanup_reusable_
+            # media_file``) سپرده می‌شود — نه یک ``storage.delete`` مستقیمِ
+            # دیگر.
+            from apps.content.services import (
+                cleanup_reusable_media_file,
+                delete_media_asset_if_unreferenced,
+            )
+
             changed = set()
-            files_to_delete = []
+            legacy_files_to_cleanup = []
             for f in file_fields:
                 name = f["name"]
                 new_name = getattr(obj, name).name if getattr(obj, name) else None
                 if old_names[name] != new_name:
                     changed.add(name)
-                    if old_names[name]:
-                        files_to_delete.append(old_names[name])
-            if files_to_delete:
-                transaction.on_commit(lambda names=files_to_delete: [storage.delete(f) for f in names if storage.exists(f)])
-            if changed:
-                _sync_asset_references(obj, config, store, changed_fields=changed)
+            old_assets = _sync_asset_references(obj, config, store, changed_fields=changed) if changed else {}
+            for f in file_fields:
+                name = f["name"]
+                if name not in changed or not old_names[name]:
+                    continue
+                asset_field = (config.get("asset_fields") or {}).get(name)
+                old_asset = old_assets.get(asset_field) if asset_field else None
+                if old_asset is not None:
+                    delete_media_asset_if_unreferenced(old_asset)
+                else:
+                    legacy_files_to_cleanup.append(old_names[name])
+            for legacy_name in legacy_files_to_cleanup:
+                cleanup_reusable_media_file(legacy_name, storage)
             messages.success(request, f"«{config['label']}» ذخیره شد")
             # Phase 5 Task 4 (final review fix) — when the save came from the R4
             # inline manager (explicit marker), return the refreshed manager
@@ -374,7 +411,7 @@ def storefront_section_media_delete(request, pk, kind, item_pk):
     برایِ ردیف‌هایِ قدیمی‌تر (بدونِ asset FK — از قبل از Phase 0.5) دقیقاً
     همان رفتارِ قبلی حفظ شده: پاک‌سازیِ مستقیمِ فایلِ فیزیکی بر اساسِ نامِ
     فیلدِ تصویرِ قدیمی."""
-    from apps.content.services import delete_media_asset_if_unreferenced
+    from apps.content.services import cleanup_reusable_media_file, delete_media_asset_if_unreferenced
 
     section = _get_scoped_section(request, pk)
     config = _media_config(kind, section)
@@ -387,7 +424,11 @@ def storefront_section_media_delete(request, pk, kind, item_pk):
     # جفتِ (asset موجود، نامِ فایلِ legacy) — فقط برایِ فیلدهایی که asset
     # FK ندارند (ردیفِ قدیمی‌تر) نامِ فایل ذخیره می‌شود؛ برایِ بقیه، حذفِ
     # فایلِ فیزیکی کاملاً به عهده‌ی ``delete_media_asset_if_unreferenced``
-    # است (که خودش reference-safety را چک می‌کند).
+    # است (که خودش reference-safety را چک می‌کند). MED-001 — fallbackِ
+    # legacyِ بدونِ asset دیگر ``storage.delete`` را مستقیم صدا نمی‌زند؛
+    # بلکه از طریقِ همانِ مرجعِ کانونیکِ ``cleanup_reusable_media_file``
+    # عبور می‌کند (که خودش alias/ImageFieldِ قدیمیِ دیگر را هم بررسی
+    # می‌کند، نه صرفاً همینِ Placement).
     legacy_cleanup_names = []
     assets_to_check = []
     for file_field, asset_field in asset_field_map.items():
@@ -406,13 +447,9 @@ def storefront_section_media_delete(request, pk, kind, item_pk):
     for asset in assets_to_check:
         delete_media_asset_if_unreferenced(asset)
 
-    if legacy_cleanup_names and storage is not None:
-        def _cleanup():
-            for name in legacy_cleanup_names:
-                if storage.exists(name):
-                    storage.delete(name)
-
-        transaction.on_commit(_cleanup)
+    if storage is not None:
+        for legacy_name in legacy_cleanup_names:
+            cleanup_reusable_media_file(legacy_name, storage)
 
     messages.success(request, f"«{config['label']}» حذف شد")
     return _media_list_body(request, section, kind, config)

@@ -208,37 +208,176 @@ def _collection_url(store, pk, MerchantCollection):
 # site instead of hidden in signal-dispatch order.
 
 
+def _reusable_media_placement_models():
+    """MED-001 — هر مدل/فیلدِ ImageFieldِ قدیمیِ (legacy) رسانه‌ی
+    قابل‌استفاده‌ی‌مجددِ Storefront که می‌تواند مستقیماً به یک مسیرِ فیزیکیِ
+    فایل اشاره کند (نه از طریقِ ``MediaAsset``). این فهرست دقیقاً همانِ
+    خانواده‌ی «رسانه‌ی قابل‌استفاده‌ی‌مجددِ Storefront»یِ MED-001 است —
+    ``ProductImage``یِ کاتالوگ عمداً اینجا نیست (چرخه‌ی‌حیاتِ کاملاً جداست،
+    نگاه کنید به مستندسازیِ ``is_physical_media_path_safe_to_delete``)."""
+    from .models import HeroSlide, PromotionalBanner, StoryRailItem
+
+    return (
+        (HeroSlide, ("desktop_image", "mobile_image")),
+        (PromotionalBanner, ("desktop_image", "mobile_image")),
+        (StoryRailItem, ("image",)),
+    )
+
+
+def _legacy_field_still_claims_path(file_name: str) -> bool:
+    """MED-001 — آیا هنوز حداقل یک ردیفِ ImageFieldِ *قدیمی*ِ رسانه‌ی
+    قابل‌استفاده‌ی‌مجددِ Storefront (``HeroSlide.desktop_image``/
+    ``mobile_image``، ``PromotionalBanner.desktop_image``/``mobile_image``،
+    ``StoryRailItem.image``) — در هر Storeیی — دقیقاً به همینِ مسیرِ
+    فیزیکی اشاره می‌دهد؟
+
+    عمداً به هیچ Storeیی محدود نشده — این صرفاً یک پرسشِ «آیا این مسیرِ
+    فیزیکی هنوز ادعا شده» است، نه یک پرسشِ داده‌یِ مستأجر؛ فقط یک مقدارِ
+    بولی برمی‌گرداند (هرگز خودِ ردیف/Storeِ آن)، پس هیچ داده‌ی فروشگاهِ
+    دیگری فاش نمی‌شود — فقط از فاش‌شدنِ *بایتِ فیزیکیِ* به‌اشتراک‌گذاشته‌شده
+    جلوگیری می‌کند (نگاه کنید به RED 8 در گزارشِ MED-001)."""
+    if not file_name:
+        return False
+    for model, field_names in _reusable_media_placement_models():
+        for field_name in field_names:
+            if model.objects.filter(**{field_name: file_name}).exists():
+                return True
+    return False
+
+
+def _other_media_asset_alias_is_referenced(file_name: str, *, exclude_pk=None) -> bool:
+    """MED-001 — آیا هنوز یک ردیفِ *دیگرِ* ``MediaAsset`` (در هر Storeیی)
+    وجود دارد که ``image.name``اش دقیقاً همینِ مسیرِ فیزیکی است و آن ردیف
+    خودش ``is_referenced()`` است (بررسیِ tenant-scopedِ همانِ ردیف، نسبت به
+    Storeِ خودش)؟
+
+    عمداً بینِ Storeها فیلتر نمی‌شود — یک نامِ فایلِ فیزیکیِ یکسان می‌تواند
+    توسطِ دو ``MediaAsset`` در دو Storeِ متفاوت alias شود (وقتی
+    ``_sync_asset_references`` یک ``MediaAsset`` تازه می‌سازد که مستقیماً
+    به یک نامِ فایلِ *از قبل موجود* اشاره می‌کند، بدونِ آپلودِ دوباره —
+    نگاه کنید به ``apps.storefront_builder.media_views._sync_asset_
+    references``). این یک محافظتِ صرفاً فیزیکی/محافظه‌کارانه است، نه افشایِ
+    داده‌ی مستأجر: تنها یک مقدارِ بولی برمی‌گردد، هرگز خودِ ردیف یا Storeِ
+    آن (خودِ ``is_referenced()`` هم‌چنان کاملاً tenant-scoped می‌ماند —
+    نگاه کنید به ``apps.content.media_reachability``)."""
+    if not file_name:
+        return False
+    from .models import MediaAsset
+
+    qs = MediaAsset.objects.filter(image=file_name)
+    if exclude_pk is not None:
+        qs = qs.exclude(pk=exclude_pk)
+    for other in qs.iterator():
+        if other.is_referenced():
+            return True
+    return False
+
+
+def is_physical_media_path_safe_to_delete(file_name: str, *, exclude_asset_pk=None) -> bool:
+    """MED-001 — تنها مرجعِ کانونیِ تصمیمِ «آیا این مسیرِ فیزیکیِ رسانه‌ی
+    قابل‌استفاده‌ی‌مجددِ Storefront اکنون واقعاً می‌تواند حذف شود؟».
+
+    این پرسش دربابِ *بایتِ فیزیکی* است، نه یک ردیفِ ``MediaAsset``ِ خاص —
+    یک نامِ فایلِ فیزیکیِ واحد می‌تواند توسطِ چند ``MediaAsset`` (حتی در
+    Storeهایِ متفاوت، از طریقِ alias بدونِ آپلودِ دوباره) و/یا چند
+    ImageFieldِ قدیمی (پیش از Phase 0.5) هم‌زمان اشاره‌پذیر باشد. هرگز فرض
+    نکنید یک ``MediaAsset``ِ بدون‌ارجاع یعنی خودِ بایت‌ها هم بدون‌ارجاعند.
+
+    محافظه‌کارانه/fail-closed — دقیقاً همانِ قراردادِ
+    ``media_reachability.is_reachable_via_json_or_snapshots``: هر خطایِ
+    غیرِمنتظره «ناامن» تفسیر می‌شود (``False``) — یک خطا/ابهام هرگز نباید
+    چراغِ سبزِ حذفِ فیزیکی باشد.
+
+    هر فراخوانی که قصدِ حذفِ فیزیکیِ یک فایلِ رسانه‌ی قابل‌استفاده‌ی‌مجددِ
+    Storefront را دارد — چه اکنون یک ردیفِ ``MediaAsset`` داشته باشد، چه
+    فقط یک ImageFieldِ قدیمی، چه هر دو — باید دقیقاً پیش از
+    ``storage.delete()`` همین تابع را صدا بزند (و ترجیحاً از *داخلِ* همانِ
+    callbackِ ``transaction.on_commit``ی که خودِ حذف را انجام می‌دهد، تا
+    بررسی رویِ تازه‌ترین وضعیتِ commit-شده اجرا شود، نه وضعیتِ پیش‌ازcommit —
+    نگاه کنید به ``cleanup_reusable_media_file`` پایین‌تر و بخشِ Concurrency
+    در گزارشِ MED-001 برایِ محدودیتِ باقی‌مانده‌ی این رویکرد).
+
+    ``ProductImage``یِ کاتالوگ عمداً اینجا بررسی نمی‌شود — چرخه‌ی‌حیاتِ
+    کاملاً جداییِ خودش را دارد (``apps.catalog.services.product_image_
+    service``) و هرگز به این مرجع مسیریابی نمی‌شود (MED-001، مرزِ صریح)."""
+    if not file_name:
+        return False
+    try:
+        if _other_media_asset_alias_is_referenced(file_name, exclude_pk=exclude_asset_pk):
+            return False
+        if _legacy_field_still_claims_path(file_name):
+            return False
+        return True
+    except Exception:
+        return False
+
+
+def cleanup_reusable_media_file(file_name, storage, *, exclude_asset_pk=None) -> None:
+    """MED-001 — تنها نقطه‌یِ زمان‌بندیِ حذفِ فیزیکیِ فایل‌هایِ رسانه‌ی
+    قابل‌استفاده‌ی‌مجددِ Storefront. حذفِ واقعی فقط **پس از commitِ موفقِ
+    تراکنش** انجام می‌شود (``transaction.on_commit``) و بلافاصله پیش از
+    خودِ ``storage.delete()``، ایمنیِ مسیرِ فیزیکی دوباره از طریقِ
+    ``is_physical_media_path_safe_to_delete`` — رویِ وضعیتِ تازه‌ترینِ
+    commit-شده — بازبینی می‌شود (نه فقط یک‌بار پیش از commit).
+
+    این تابع خودش را «مالکِ» ردیفِ ``MediaAsset`` نمی‌داند — فقط نامِ فایل
+    و storage را می‌گیرد، پس هم توسطِ حذفِ یک asset (``delete_media_asset_
+    if_unreferenced``) و هم توسطِ fallbackِ قدیمیِ بدون‌asset (در
+    ``apps.storefront_builder.media_views``/``apps.dashboard.views``)
+    یکسان قابلِ‌استفاده است — بدونِ تکرارِ منطقِ حذف در چند جا.
+
+    اگر ``file_name`` یا ``storage`` خالی باشد، بی‌صدا کاری نمی‌کند."""
+    if not file_name or storage is None:
+        return
+
+    from django.db import transaction
+
+    def _cleanup():
+        if not storage.exists(file_name):
+            return
+        if not is_physical_media_path_safe_to_delete(file_name, exclude_asset_pk=exclude_asset_pk):
+            return
+        storage.delete(file_name)
+
+    transaction.on_commit(_cleanup)
+
+
 def delete_media_asset_if_unreferenced(asset) -> bool:
     """اگر ``asset`` دیگر توسط هیچ Placementی (در هیچ نسخه‌ای — Published،
-    Draft یا بایگانی‌شده) ارجاع نمی‌شود، خودِ ردیف را (و فایلِ فیزیکی‌اش را،
-    فقط پس از commitِ موفقِ تراکنش) حذف می‌کند و ``True`` برمی‌گرداند.
+    Draft یا بایگانی‌شده)، هیچ پس‌زمینه‌ی JSONای، و هیچ عکسِ بازیابی/
+    baselineای ارجاع نمی‌شود، خودِ ردیفِ ``MediaAsset`` را بلادرنگ حذف
+    می‌کند و ``True`` برمی‌گرداند.
 
-    اگر هنوز حداقل یک Placement به آن ارجاع می‌دهد، **هیچ کاری نمی‌کند** و
+    اگر هنوز حداقل یکی از آن‌ها به آن ارجاع می‌دهد، **هیچ کاری نمی‌کند** و
     ``False`` برمی‌گرداند — قانونِ حیاتیِ Phase 0.5: هرگز فایلِ فیزیکیِ
     زیرِ یک asset را حذف نکن اگر Placementِ دیگری (مثلاً نسخه‌ی Published)
     هنوز به همان ردیف اشاره می‌کند.
 
+    MED-001: حذفِ خودِ ردیفِ متادیتا (این ردیفِ ``MediaAsset``ِ مشخص) از
+    حذفِ *بایتِ فیزیکی* جدا شده است — حتی اگر همینِ ردیف بدون‌ارجاع باشد
+    (و بنابراین خودش حذف شود)، بایتِ فیزیکیِ زیرِ آن فقط از طریقِ
+    ``cleanup_reusable_media_file`` (یعنی مرجعِ کانونیِ
+    ``is_physical_media_path_safe_to_delete``) حذف می‌شود — که خودش
+    دوباره چک می‌کند آیا یک alias دیگر (یک ``MediaAsset``ِ دیگر با همانِ
+    نامِ فایل، یا یک ImageFieldِ قدیمی) هنوز به همانِ مسیرِ فیزیکی نیاز
+    دارد.
+
     ``asset`` می‌تواند ``None`` باشد (مثلاً وقتی Placementِ حذف‌شده هنوز از
     قبل از Phase 0.5 است و هیچ FKِ assetای نداشت) — در این حالت بی‌صدا
-    ``False`` برمی‌گرداند؛ فراخوان مسئولِ رفتارِ fallback (حذفِ مستقیمِ
-    فایلِ قدیمی از طریقِ نامِ فایل) است، نه این تابع."""
+    ``False`` برمی‌گرداند؛ فراخوان مسئولِ رفتارِ fallback (پاک‌سازیِ فایلِ
+    قدیمی از طریقِ همانِ ``cleanup_reusable_media_file``، نه دیگر یک
+    ``storage.delete`` مستقیم) است، نه این تابع."""
     if asset is None:
         return False
     if asset.is_referenced():
         return False
 
-    from django.db import transaction
-
     file_name = asset.image.name if asset.image else None
     storage = asset.image.storage if asset.image else None
+    asset_pk = asset.pk
     asset.delete()
 
-    if file_name and storage:
-        def _cleanup():
-            if storage.exists(file_name):
-                storage.delete(file_name)
-
-        transaction.on_commit(_cleanup)
+    cleanup_reusable_media_file(file_name, storage, exclude_asset_pk=asset_pk)
     return True
 
 
