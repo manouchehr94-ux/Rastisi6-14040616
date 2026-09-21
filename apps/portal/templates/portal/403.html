@@ -1,0 +1,20 @@
+{% extends "portal/base_platform.html" %}
+{% block title %}دسترسی مجاز نیست | راستیسی{% endblock %}
+{% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block content %}
+<div class="p-wrap" style="padding:70px 0;text-align:center">
+  <div style="max-width:460px;margin:0 auto;background:var(--p-card, #fff);border:1px solid var(--p-line, #e5e7eb);border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,.08);padding:48px 32px">
+    <div style="font-size:64px;margin-bottom:8px">🔒</div>
+    <div style="font-size:44px;font-weight:800;color:var(--p-primary, #6d28d9);letter-spacing:2px">۴۰۳</div>
+    <h1 style="font-size:18px;margin:10px 0 6px">دسترسی به این عملیات مجاز نیست</h1>
+    <p style="color:var(--p-muted, #6b7280);font-size:13.5px;margin-bottom:26px">
+      نقشِ شما در این فروشگاه اجازه‌ی انجامِ این عملیات را نمی‌دهد. اگر فکر می‌کنید این
+      اشتباه است، با مالکِ فروشگاه تماس بگیرید.
+    </p>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <a href="{% url 'portal:app-home' %}" class="p-btn p-btn-primary">بازگشت به پنل من</a>
+      <a href="{% url 'portal:home' %}" class="p-btn p-btn-ghost">صفحه‌ی اصلی راستیسی</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

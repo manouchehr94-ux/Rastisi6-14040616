@@ -95,7 +95,10 @@ class OnboardingMutationAuthorizationTests(TestCase):
         StoreMembership.objects.create(
             store=self.store, user=self.analyst,
             role=StoreMembership.Role.ANALYST,
-            status=StoreMembership.MembershipStatus.ACTIVE,
+            # AUTH-001 real-QA repair (independent re-review): the canonical
+            # ``active_membership_requires_accepted_at`` CHECK constraint
+            # requires accepted_at whenever status=ACTIVE.
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
         )
 
         # An ACTIVE ADMINISTRATOR member of the SAME store. ADMINISTRATOR
@@ -109,7 +112,7 @@ class OnboardingMutationAuthorizationTests(TestCase):
         StoreMembership.objects.create(
             store=self.store, user=self.administrator,
             role=StoreMembership.Role.ADMINISTRATOR,
-            status=StoreMembership.MembershipStatus.ACTIVE,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
         )
 
     # -- url helpers -------------------------------------------------------
@@ -139,6 +142,18 @@ class OnboardingMutationAuthorizationTests(TestCase):
     #    and (7) denial leaves ZERO persistent writes ----------------------
 
     def test_analyst_cannot_mutate_identity_and_leaves_zero_writes(self):
+        """This is the representative denial test locking the platform-
+        host-safe denial contract (AUTH-001 real-QA repair — independent
+        re-review, Root Cause 1): every request in this file already runs
+        with ``HTTP_HOST="rastisi.localhost"`` (a platform host routed to
+        ``shop_core.urls_platform``), so it already exercises the REAL
+        ``portal_permission_denied`` rendering path, unmocked. Asserting
+        the template used here pins that the denial response renders the
+        portal-scoped ``portal/403.html`` (which only reverses ``portal:*``
+        URL names) rather than the global Storefront-scoped
+        ``templates/403.html`` (whose ``catalog:home``/``customers:account``
+        reversals raise ``NoReverseMatch`` under this host's URLconf, in
+        which case the response would not even reach this assertion)."""
         self.client.force_login(self.analyst)
         before = self._snapshot()
         response = self.client.post(
@@ -154,6 +169,7 @@ class OnboardingMutationAuthorizationTests(TestCase):
             HTTP_HOST=_HOST,
         )
         self.assertEqual(response.status_code, 403)
+        self.assertTemplateUsed(response, "portal/403.html")
         self.assertEqual(self._snapshot(), before)
 
     def test_analyst_cannot_install_industry(self):
@@ -286,7 +302,14 @@ class OnboardingMutationAuthorizationTests(TestCase):
         StoreMembership.objects.create(
             store=self.store, user=revoked,
             role=StoreMembership.Role.ADMINISTRATOR,
+            # AUTH-001 real-QA repair: represents a formerly-accepted
+            # membership that was later revoked — the canonical
+            # ``revoked_membership_requires_revoked_at`` CHECK constraint
+            # requires revoked_at whenever status=REVOKED; accepted_at is
+            # kept too, since a revoked membership was necessarily accepted
+            # at some earlier point.
             status=StoreMembership.MembershipStatus.REVOKED,
+            accepted_at=timezone.now(), revoked_at=timezone.now(),
         )
         self.client.force_login(revoked)
         before = self._snapshot()
@@ -720,8 +743,13 @@ class HandleAndDomainAuthorizationTests(TestCase):
         self.assertEqual(domain.verification_status, StoreDomain.VerificationStatus.UNVERIFIED)
 
     def test_administrator_cannot_check_dns_verification(self):
+        # AUTH-001 real-QA repair (independent re-review): the canonical
+        # ``pending_status_requires_verification_requested_at`` CHECK
+        # constraint requires verification_requested_at whenever
+        # verification_status=PENDING (in addition to a non-empty token).
         domain = self._create_domain(
             verification_status=StoreDomain.VerificationStatus.PENDING, verification_token="tok123",
+            verification_requested_at=timezone.now(),
         )
         self.client.force_login(self.administrator)
         with patch("apps.portal.views.domain_verification_service.check_dns_verification") as mocked:
@@ -732,8 +760,10 @@ class HandleAndDomainAuthorizationTests(TestCase):
         mocked.assert_not_called()
 
     def test_administrator_cannot_run_final_readiness_check(self):
+        # AUTH-001 real-QA repair: same PENDING-state constraint as above.
         domain = self._create_domain(
             verification_status=StoreDomain.VerificationStatus.PENDING, verification_token="tok456",
+            verification_requested_at=timezone.now(),
         )
         self.client.force_login(self.administrator)
         with patch("apps.portal.views.domain_verification_service.refresh_custom_domain_readiness") as mocked:

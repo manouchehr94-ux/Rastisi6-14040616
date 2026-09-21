@@ -39,8 +39,20 @@ def portal_permission_denied(request):
     correctly-scoped member who lacks the required action permission — an
     explicit HTTP 403 (never a silent redirect or a 404), mirroring the
     dashboard's ``permission_required`` behavior so denied requests are
-    unambiguous and, crucially, perform zero mutation."""
-    return render(request, "403.html", status=403)
+    unambiguous and, crucially, perform zero mutation.
+
+    Renders ``portal/403.html``, NOT the global Storefront-scoped
+    ``templates/403.html`` — that template extends ``base.html`` and
+    reverses Storefront-only URL names (``catalog:home``,
+    ``customers:account``), which do not exist under
+    ``shop_core.urls_platform`` (the URLconf that serves every portal/
+    owner-facing request; see ``apps.portal.middleware.
+    PlatformHostRoutingMiddleware`` and ADR-97). Using the global template
+    here would turn a correct 403 decision into a ``NoReverseMatch``/500.
+    This mirrors ``apps.portal.views.not_found``'s identical host-boundary
+    handling for 404 (``portal/public/404.html``, self-contained within
+    ``portal/base_platform.html``)."""
+    return render(request, "portal/403.html", status=403)
 
 
 def owner_required(view_func):
