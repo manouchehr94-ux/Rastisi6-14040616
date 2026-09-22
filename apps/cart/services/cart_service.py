@@ -106,6 +106,16 @@ def add_item_to_cart(cart, product, variant, quantity, *, gift_wrap_requested=Fa
         if not is_purchasable:
             raise UnavailableStockError("این کالا در حال حاضر موجود نیست.")
 
+        # CAT-002 حصارِ عضویت (membership fence) — پس از قفلِ Product/Variant
+        # و *پیش از* هر خواندن/ساختِ CartItem، خودِ ردیفِ Cart را قفل کن.
+        # این تضمین می‌کند یک درجِ CartItemِ جدید در این Cart هرگز نمی‌تواند
+        # بینِ اسنپ‌شاتِ نهاییِ تسویه‌حساب و commit آن سر بخورد: تسویه‌حساب
+        # همین ردیفِ Cart را قفل کرده و این درج تا آزادشدنش منتظر می‌ماند.
+        # ترتیبِ قفل عمداً Product/Variant → Cart → CartItem است تا با
+        # ``order_service._lock_cart_items_and_resolve_final_prices`` یکی
+        # باشد و وارونگیِ بن‌بست (Cart→Product) رخ ندهد.
+        Cart.objects.select_for_update().get(pk=cart.pk)
+
         item = cart.items.select_for_update().filter(product=product, variant=variant).first()
         existing_quantity = item.quantity if item else 0
         requested_total = existing_quantity + quantity

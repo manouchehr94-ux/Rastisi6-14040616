@@ -739,3 +739,128 @@ class CouponFailureSafetyWithAppliedCouponTests(_Cat002Fixture):
         )
         trigger = json.loads(resp.headers["HX-Trigger"])
         self.assertEqual(trigger["toast"]["message"], PRICE_CHANGED_MESSAGE)
+
+
+
+# ---------------------------------------------------------------------------
+# Scenario 16 — CAT-002 membership fence: a brand-new CartItem INSERT that
+# happens AFTER checkout's final CartItem snapshot must not sneak into the
+# successful Order.
+#
+# Row locks on existing CartItems do not stop a fresh INSERT (a new row has
+# no pre-existing lock to wait on). The fix locks the Cart ROW as a
+# membership fence before the final full CartItem SELECT. These tests prove
+# the ordering/behavior deterministically. SQLite (the test DB) does NOT
+# enforce real PostgreSQL row-lock semantics, so this proves the fence
+# ORDER/participation, not the DB-level blocking itself — that is validated
+# by independent PostgreSQL QA.
+# ---------------------------------------------------------------------------
+class MembershipFenceOrderingTests(_Cat002Fixture):
+    def test_checkout_locks_cart_row_before_final_cartitem_snapshot(self):
+        """order_service must SELECT ... FOR UPDATE the Cart row before it
+        locks/queries the full set of CartItem rows."""
+        from apps.cart.models import Cart as CartModel
+        from apps.cart.models import CartItem as CartItemModel
+
+        cart = self._cart_with_item(quantity=1, unit_price=Decimal("500000"))
+
+        events = []
+
+        real_cart_sfu = CartModel.objects.select_for_update
+        real_item_sfu = CartItemModel.objects.select_for_update
+
+        def _cart_sfu(*args, **kwargs):
+            events.append("cart_lock")
+            return real_cart_sfu(*args, **kwargs)
+
+        def _item_sfu(*args, **kwargs):
+            events.append("cartitem_lock")
+            return real_item_sfu(*args, **kwargs)
+
+        with patch.object(CartModel.objects, "select_for_update", side_effect=_cart_sfu), \
+             patch.object(CartItemModel.objects, "select_for_update", side_effect=_item_sfu):
+            self._create(cart)
+
+        # The Cart fence must be acquired, and the FIRST Cart lock must come
+        # before the FIRST full-CartItem-snapshot lock inside the final
+        # valuation helper.
+        self.assertIn("cart_lock", events)
+        self.assertIn("cartitem_lock", events)
+        self.assertLess(
+            events.index("cart_lock"), events.index("cartitem_lock"),
+            msg=f"Cart fence must precede CartItem snapshot lock; got order: {events}",
+        )
+
+    def test_add_item_to_cart_locks_cart_after_product_before_cartitem(self):
+        """add_item_to_cart must lock Product/Variant, THEN the Cart row,
+        THEN the CartItem — preserving Product/Variant -> Cart -> CartItem so
+        checkout and the add path can never deadlock-invert."""
+        from apps.cart.models import Cart as CartModel
+        from apps.cart.services import cart_service
+        from apps.catalog.models import Product as ProductModel
+
+        cart = Cart.objects.create(customer=self.customer)
+
+        events = []
+        real_product_sfu = ProductModel.objects.select_for_update
+        real_cart_sfu = CartModel.objects.select_for_update
+
+        def _product_sfu(*args, **kwargs):
+            events.append("product_lock")
+            return real_product_sfu(*args, **kwargs)
+
+        def _cart_sfu(*args, **kwargs):
+            events.append("cart_lock")
+            return real_cart_sfu(*args, **kwargs)
+
+        with patch.object(ProductModel.objects, "select_for_update", side_effect=_product_sfu), \
+             patch.object(CartModel.objects, "select_for_update", side_effect=_cart_sfu):
+            cart_service.add_item_to_cart(cart, self.product, None, 1)
+
+        self.assertIn("product_lock", events)
+        self.assertIn("cart_lock", events)
+        self.assertLess(
+            events.index("product_lock"), events.index("cart_lock"),
+            msg=f"Product lock must precede Cart lock; got order: {events}",
+        )
+
+    def test_merge_guest_cart_locks_target_cart_before_moving_membership(self):
+        """merge_guest_cart must lock the target user Cart row before moving a
+        guest CartItem into it (membership fence participation)."""
+        from django.test import RequestFactory
+        from django.contrib.sessions.middleware import SessionMiddleware
+
+        from apps.cart.models import Cart as CartModel
+        from apps.customers.services import auth_service
+
+        # Build a guest cart tied to a session, holding one item.
+        factory = RequestFactory()
+        request = factory.post("/checkout/pay/")
+        SessionMiddleware(lambda r: None).process_request(request)
+        request.session.save()
+        session_key = request.session.session_key
+
+        guest_cart = CartModel.objects.create(session_key=session_key, customer=None)
+        CartItem.objects.create(
+            cart=guest_cart, product=self.product, quantity=1, unit_price=Decimal("500000"),
+        )
+
+        locked_pks = []
+        real_cart_sfu = CartModel.objects.select_for_update
+
+        def _cart_sfu(*args, **kwargs):
+            class _Tracker:
+                def get(inner, *a, **k):
+                    obj = real_cart_sfu(*args, **kwargs).get(*a, **k)
+                    locked_pks.append(obj.pk)
+                    return obj
+            return _Tracker()
+
+        with patch.object(CartModel.objects, "select_for_update", side_effect=_cart_sfu):
+            auth_service.merge_guest_cart(request, self.customer)
+
+        user_cart = CartModel.objects.get(customer=self.customer)
+        # The target (user) cart row was locked as the membership fence.
+        self.assertIn(user_cart.pk, locked_pks)
+        # Item moved into the user cart.
+        self.assertTrue(user_cart.items.filter(product=self.product).exists())

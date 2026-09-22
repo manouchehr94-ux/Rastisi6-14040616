@@ -225,30 +225,36 @@ def _lock_cart_items_and_resolve_final_prices(
     خروجی: لیستِ چندتایی‌هایِ ``(locked_item, final_unit_price)`` — به
     ترتیبِ pk (همان ترتیبِ قفل).
     """
-    from apps.cart.models import CartItem
+    from apps.cart.models import Cart, CartItem
 
     if not items:
         return []
 
     initial_signature = _cart_membership_signature(items)
 
-    # CAT-002 Blocker B/بخش ۳ — عضویتِ سبد را از رویِ *کلِ ردیف‌های فعلیِ
-    # همین سبد* (نه فقط ``pk__in`` مجموعه‌ی کشف‌شده) زیرِ قفل بخوان. اگر فقط
-    # روی pkهای کشف‌شده قفل می‌گرفتیم، یک قلمِ تازه‌اضافه‌شده‌ی هم‌زمان (که
-    # pkش در آن مجموعه نیست) هرگز دیده نمی‌شد و بی‌صدا نادیده گرفته می‌شد →
-    # Orderِ ناقص. با خواندنِ کلِ ``cart.items`` زیرِ قفل، هم حذف، هم افزودن،
-    # و هم تغییرِ تعداد/کالا/تنوع تشخیص داده می‌شود.
+    # CAT-002 Blocker B/بخش ۳ — قفلِ ردیفِ Cart به‌عنوان «حصارِ عضویت»
+    # (membership fence). قفلِ سطحِ ردیفِ CartItem به‌تنهایی کافی نیست:
+    # PostgreSQL می‌تواند یک CartItemِ *کاملاً جدید* را حتی پس از اجرایِ
+    # ``SELECT ... FOR UPDATE`` روی ردیف‌های موجود درج کند (ردیفِ جدید هیچ
+    # قفلِ ازپیش‌موجودی ندارد که روی آن منتظر بماند). با قفلِ خودِ ردیفِ Cart
+    # پیش از خواندنِ اقلام، هر مسیرِ تولیدی‌ای که عضویتِ این Cart را عوض
+    # می‌کند (``add_item_to_cart``ِ درج، ``merge_guest_cart``ِ انتقال) تا
+    # پایانِ این تراکنش پشتِ همین قفل مسدود می‌ماند — پس هیچ درجِ/انتقالِ
+    # هم‌زمانی نمی‌تواند بینِ اسنپ‌شاتِ نهایی و commit وارد شود.
     #
-    # ترتیبِ قفل: Product/Variant (در ``_lock_and_revalidate_items``) سپس
-    # CartItem — دقیقاً همان ترتیبی که تنها نویسنده‌های تولیدیِ CartItem
-    # (``cart_service.add_item_to_cart`` و ``cart_service.reprice_cart_items``)
-    # می‌گیرند. بنابراین نیازی به قفلِ جداگانه‌ی ردیفِ Cart نیست: هیچ مسیرِ
-    # تولیدی‌ای CartItem را در ترتیبِ معکوس (CartItem→Product) قفل نمی‌کند،
-    # پس وارونگیِ بن‌بستِ Cart→Product در برابر Product→Cart ایجاد نمی‌شود.
+    # ترتیبِ قفل: Product/ProductVariant (در ``_lock_and_revalidate_items``)
+    # → Cart → CartItem. تنها نویسنده‌های تولیدیِ عضویتِ CartItem
+    # (``cart_service.add_item_to_cart``، ``cart_service.reprice_cart_items``،
+    # ``auth_service.merge_guest_cart``) همگی همین ترتیب را رعایت می‌کنند،
+    # پس وارونگیِ بن‌بست (Cart→Product در برابر Product→Cart) رخ نمی‌دهد.
     cart_id = items[0].cart_id
+    # قفلِ حصارِ عضویت روی خودِ ردیفِ Cart — هویتِ معتبرِ Cart از همین‌جا
+    # می‌آید، نه صرفاً ``items[0].cart_id`` بی‌قفل.
+    locked_cart = Cart.objects.select_for_update().get(pk=cart_id)
+
     locked_items = list(
         CartItem.objects.select_for_update()
-        .filter(cart_id=cart_id)
+        .filter(cart_id=locked_cart.pk)
         .select_related("product", "variant")
         .order_by("pk")
     )
