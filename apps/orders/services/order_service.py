@@ -148,6 +148,71 @@ def _lock_and_revalidate_items(items, *, store):
     return locked_products, locked_variants
 
 
+def _lock_cart_items_and_resolve_final_prices(items, *, locked_products, locked_variants):
+    """CAT-002 — «یک اسنپ‌شاتِ نهایی»: بعد از قفلِ Product/ProductVariant
+    (``_lock_and_revalidate_items``)، ردیف‌های CartItem را هم قفل می‌کند و
+    برایِ هر قلم، قیمتِ نهایی را *فقط یک‌بار* از رویِ همان Product/Variant
+    قفل‌شده با ``resolve_effective_price`` (تنها مرجعِ کانونی) محاسبه
+    می‌کند — و همان مقدار را روی خودِ ``CartItem.unit_price`` هم می‌نویسد.
+
+    این تابع قلبِ رفعِ CAT-002 است: پیش از این PR، سرِ سفارش
+    (``cart_totals`` که از ``item.unit_price`` می‌خواند) و هر ردیفِ سفارش
+    (که با یک فراخوانیِ *مستقلِ دومِ* ``resolve_effective_price`` محاسبه
+    می‌شد) می‌توانستند دو مقدارِ متفاوت ببینند — اگر بین «افزودن به سبد» و
+    «قفل‌گیریِ نهایی» قیمتِ کاتالوگ تغییر کرده باشد.
+
+    این تابع ``create_order_from_cart`` را خودش، مستقل از هر فراخوانِ
+    بالاتر، کاملاً سازگار (header == lines) می‌کند:
+
+    ۱. زیرِ قفلِ Product/Variant، قیمتِ نهاییِ هر قلم را دقیقاً *یک‌بار*
+       محاسبه می‌کند؛
+    ۲. اگر با ``CartItem.unit_price`` فعلی فرق داشت، همان‌جا آن را
+       به‌روزرسانی می‌کند — نه این‌که خطا بدهد — تا فراخوانیِ بعدیِ
+       ``cart_totals()`` (که مستقیماً از ``item.unit_price`` در دیتابیس
+       می‌خواند) دقیقاً همین قیمتِ تازه را برایِ سرِ سفارش ببیند؛
+    ۳. همان مقدار — نه یک فراخوانیِ دومِ مستقل — برایِ ``OrderItem.unit_price``
+       در حلقه‌ی ساختِ سفارش پایین‌تر بازاستفاده می‌شود.
+
+    تصمیمِ محصولیِ «اگر قیمت تغییر کرده، اول به کاربر نشان بده و سفارش نساز»
+    یک لایه‌ی UX جداست که *پیش از* رسیدن به این تابع، در
+    ``checkout_service.finalize_order`` (با ``cart_service.reprice_cart_items``)
+    اعمال می‌شود — نه این‌جا. این تابع، برایِ هر فراخوانی (اعم از مسیرِ
+    HTTP معمولی، فراخوانیِ مستقیمِ سرویس در تست‌ها، یا اسکریپت seed)، فقط
+    تضمین می‌کند که Order نهایی هرگز داخلی ناهم‌خوان نباشد — با یا بدون
+    عبور از آن لایه‌ی UX.
+
+    خروجی: دیکشنری ``{item.pk: final_unit_price}``.
+    """
+    from apps.cart.models import CartItem
+
+    locked_items_by_pk = {
+        ci.pk: ci
+        for ci in CartItem.objects.select_for_update()
+        .filter(pk__in=[item.pk for item in items])
+        .order_by("pk")
+    }
+
+    final_prices = {}
+    for item in items:
+        locked_item = locked_items_by_pk.get(item.pk)
+        if locked_item is None:
+            raise ValueError("یکی از اقلام سبد خرید دیگر موجود نیست")
+
+        product = locked_products[item.product_id]
+        variant = locked_variants.get(item.variant_id) if item.variant_id else None
+        # با pricing_service (نه product.final_price ساده) تا قیمتِ مستقلِ
+        # تنوع (یا delta قدیمیِ آن) درست اعمال شود.
+        fresh_price = resolve_effective_price(product, variant)
+
+        if fresh_price != locked_item.unit_price:
+            locked_item.unit_price = fresh_price
+            locked_item.save(update_fields=["unit_price", "updated_at"])
+
+        final_prices[item.pk] = fresh_price
+
+    return final_prices
+
+
 @transaction.atomic
 def create_order_from_cart(
     cart, *, customer, vendor, address, shipping_method, payment_gateway,
@@ -205,6 +270,18 @@ def create_order_from_cart(
         raise ValueError("سبد خرید خالی است")
 
     locked_products, locked_variants = _lock_and_revalidate_items(items, store=store)
+
+    # CAT-002 — یک اسنپ‌شاتِ نهاییِ منسجم: زیرِ همان قفلِ Product/Variant
+    # بالا، ``CartItem.unit_price`` هر قلم را (در صورتِ نیاز) با قیمتِ زنده‌ی
+    # کاتالوگ هم‌راستا می‌کند و قیمتِ نهایی را *یک‌بار* برمی‌گرداند. همین
+    # مقدار هم برایِ ``cart_totals`` (که بلافاصله در ادامه از رویِ همین
+    # ``CartItem.unit_price`` — که از این‌جا تا آن‌جا هیچ‌کس دیگر تغییرش
+    # نمی‌دهد — جمع می‌بندد) و هم برایِ حلقه‌ی ساختِ OrderItem پایین‌تر
+    # بازاستفاده می‌شود — نگاه کنید به
+    # ``_lock_cart_items_and_resolve_final_prices`` برایِ توضیحِ کامل.
+    final_prices = _lock_cart_items_and_resolve_final_prices(
+        items, locked_products=locked_products, locked_variants=locked_variants,
+    )
 
     province = address.province if address is not None else ""
     city = address.city if address is not None else ""
@@ -276,10 +353,16 @@ def create_order_from_cart(
     for item in items:
         product = locked_products[item.product_id]
         variant = locked_variants.get(item.variant_id) if item.variant_id else None
-        # با pricing_service (نه product.final_price ساده) تا قیمتِ مستقلِ
-        # تنوع (یا delta قدیمیِ آن) درست اعمال شود — بدونِ این، سفارش با
-        # قیمتِ پایه‌ی کالا ثبت می‌شد، نه قیمتِ واقعیِ تنوعِ انتخاب‌شده.
-        unit_price = resolve_effective_price(product, variant)
+        # CAT-002 — همان قیمتِ قفل‌شده‌ای که چند سطر بالاتر (پیش از
+        # ``cart_totals``) یک‌بار محاسبه شد، دوباره استفاده می‌شود — نه یک
+        # فراخوانیِ *مستقلِ دومِ* ``resolve_effective_price``. پیش از این
+        # وصله، همین فراخوانیِ دوم دقیقاً ریشه‌ی CAT-002 بود: سرِ سفارش
+        # (``cart_totals``، از رویِ ``item.unit_price``) و این ردیف
+        # می‌توانستند دو نتیجه‌ی متفاوت ببینند اگر قیمتِ کاتالوگ بینِ آن دو
+        # فراخوانیِ مستقل تغییر می‌کرد. اکنون منبعِ حقیقتِ قیمت برایِ کلِ
+        # این سفارش دقیقاً یک‌بار محاسبه شده — نگاه کنید به
+        # ``_lock_cart_items_and_resolve_final_prices``.
+        unit_price = final_prices[item.pk]
         tax_line = tax_lines_by_item.get(item.pk, {})
         order_item = OrderItem.objects.create(
             order=order,

@@ -13,6 +13,7 @@ from decimal import Decimal
 from django.db import transaction
 
 from apps.cart.models import Coupon
+from apps.cart.services.cart_service import reprice_cart_items
 from apps.cart.services.pricing import cart_totals, coupon_is_applicable
 from apps.catalog.services.pricing_service import resolve_regular_price
 from apps.customers.models import Address
@@ -180,6 +181,24 @@ class CheckoutError(Exception):
     """خطای قابل‌نمایش به کاربر هنگام نهایی‌سازی سفارش."""
 
 
+# متنِ دقیقاً الزامی — یک تصمیمِ محصولیِ binding (CAT-002) است؛ این رشته را
+# تغییر ندهید.
+PRICE_CHANGED_MESSAGE = (
+    "قیمت یک یا چند کالا از زمان افزودن به سبد تغییر کرده است. "
+    "مبلغ نهایی به‌روزرسانی شد؛ لطفاً مبلغ جدید را بررسی و دوباره پرداخت را تأیید کنید."
+)
+
+
+class PriceChangeReviewRequired(CheckoutError):
+    """قیمتِ زنده‌ی کاتالوگ با اسنپ‌شاتِ سبد فرق دارد (CAT-002) — سفارشی
+    ساخته نشده، موجودی/کدِ تخفیف/سبد/نشست دست‌نخورده مانده‌اند. سبد با
+    قیمتِ تازه به‌روز شده (نگاه کنید به ``reprice_cart_items``)؛ کاربر باید
+    مبلغِ جدید را ببیند و صریحاً «دوباره پرداخت» را تأیید کند."""
+
+    def __init__(self):
+        super().__init__(PRICE_CHANGED_MESSAGE)
+
+
 def _resolve_or_create_address(customer, address_data: dict) -> Address:
     is_first = not customer.addresses.exists()
     return Address.objects.create(
@@ -221,6 +240,17 @@ def finalize_order(request, cart, customer):
 
     if not cart.items.exists():
         raise CheckoutError("سبد خرید شما خالی است")
+
+    # CAT-002 — reprice-at-checkout: قیمتِ اسنپ‌شاتِ هر قلمِ سبد را با قیمتِ
+    # زنده‌ی کاتالوگ (تنها مرجعِ کانونی — resolve_effective_price) هم‌راستا
+    # می‌کند. این فراخوانی، تراکنشِ خودش را باز/commit می‌کند و *پیش از* هر
+    # کارِ Address/Order اجرا می‌شود — اگر قیمتی تغییر کرده باشد، هیچ Order،
+    # هیچ Address، هیچ کاهشِ موجودی، هیچ افزایشِ used_count کدِ تخفیف، و هیچ
+    # حذفِ آیتمِ سبدی رخ نمی‌دهد؛ فقط سبد (که همین الان با قیمتِ تازه
+    # به‌روز شد) دوباره به کاربر نمایش داده می‌شود تا صریحاً «دوباره
+    # پرداخت» را تأیید کند.
+    if reprice_cart_items(cart):
+        raise PriceChangeReviewRequired()
 
     address_data = get_address(request)
     if not address_data.get("full_address"):
