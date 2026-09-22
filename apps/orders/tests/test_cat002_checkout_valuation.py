@@ -490,10 +490,28 @@ class BlockerAHttpTwoSubmitTests(_Cat002Fixture):
 
     def test_mid_lock_race_first_submit_no_side_effects_second_submit_succeeds(self):
         from apps.customers.models import Address
+        from apps.catalog.services import pricing_service
+        from apps.cart.services import cart_service
 
         cart = Cart.objects.get(customer=self.customer)
         original_stock = self.product.stock
         address_count_before = Address.objects.count()
+
+        # A test-local "live price oracle" models an EXTERNALLY committed
+        # catalog price. It lives outside the DB transaction, so — unlike a
+        # ``Product.objects.update()`` fired inside the checkout transaction —
+        # it is NOT rolled back when the strict valuation raises
+        # LivePriceChangedError and the checkout atomic block unwinds. This is
+        # the only faithful way to represent an independently-committed
+        # concurrent price on SQLite (which cannot hold a real committed row
+        # while checkout owns transactional locks).
+        live_price = {"value": Decimal("500000")}
+        real_resolve = pricing_service.resolve_effective_price
+
+        def _oracle_resolve(product, variant=None):
+            if product.pk == self.product.pk and variant is None:
+                return live_price["value"]
+            return real_resolve(product, variant)
 
         real_lock = order_service._lock_and_revalidate_items
         fired = {"count": 0}
@@ -502,11 +520,18 @@ class BlockerAHttpTwoSubmitTests(_Cat002Fixture):
             result = real_lock(items, store=store)
             if fired["count"] == 0:
                 fired["count"] = 1
-                # Live price jumps mid-lock on the first submission only.
-                Product.objects.filter(pk=self.product.pk).update(price=Decimal("680000"))
+                # Live external price jumps mid-lock (after the real
+                # Product/Variant lock step) on the first submission only.
+                live_price["value"] = Decimal("680000")
             return result
 
-        with patch.object(order_service, "_lock_and_revalidate_items", side_effect=_race_once):
+        # Patch BOTH module-level resolver references the production flow
+        # uses: order_service (final locked valuation) and cart_service
+        # (post-rollback reprice_cart_items). Delegates to the real canonical
+        # resolver for unrelated products — no pricing math duplicated.
+        with patch.object(order_service, "resolve_effective_price", side_effect=_oracle_resolve), \
+             patch.object(cart_service, "resolve_effective_price", side_effect=_oracle_resolve), \
+             patch.object(order_service, "_lock_and_revalidate_items", side_effect=_race_once):
             first = self.client.post(reverse("orders:checkout-pay"), self.payload)
 
         # First submission: no Order, no side effects, warning surfaced.
@@ -518,13 +543,19 @@ class BlockerAHttpTwoSubmitTests(_Cat002Fixture):
         self.assertEqual(self.product.stock, original_stock)  # no inventory consumption
         cart.refresh_from_db()
         self.assertTrue(cart.items.exists())  # cart retained
-        # Latest price persisted to the cart for review.
+        # Latest live price persisted to the cart for review (post-rollback
+        # reprice_cart_items read the oracle, which survived rollback).
         self.assertEqual(cart.items.first().unit_price, Decimal("680000"))
         trigger = json.loads(first.headers["HX-Trigger"])
         self.assertEqual(trigger["toast"]["message"], PRICE_CHANGED_MESSAGE)
 
-        # Second (stable) submission: no further race, Order created at latest.
-        second = self.client.post(reverse("orders:checkout-pay"), self.payload)
+        # Second (stable) submission: oracle patches remain active (the live
+        # external price stays 680000 and the race hook does NOT fire again),
+        # so the now-confirmed price matches and the Order is created at it.
+        with patch.object(order_service, "resolve_effective_price", side_effect=_oracle_resolve), \
+             patch.object(cart_service, "resolve_effective_price", side_effect=_oracle_resolve), \
+             patch.object(order_service, "_lock_and_revalidate_items", side_effect=_race_once):
+            second = self.client.post(reverse("orders:checkout-pay"), self.payload)
         self.assertIn("HX-Redirect", second.headers)
         self.assertEqual(Order.objects.count(), 1)
         order = Order.objects.get()
@@ -712,14 +743,33 @@ class CouponFailureSafetyWithAppliedCouponTests(_Cat002Fixture):
 
         cart = Cart.objects.get(customer=self.customer)
 
+        from apps.catalog.services import pricing_service
+        from apps.cart.services import cart_service
+
+        # Test-local live-price oracle (outside the DB transaction) — models
+        # an externally committed catalog price that survives the checkout
+        # rollback triggered by LivePriceChangedError. A Product.update()
+        # fired inside the checkout transaction would be rolled back with it
+        # and could not represent an independently committed concurrent price.
+        live_price = {"value": Decimal("500000")}
+        real_resolve = pricing_service.resolve_effective_price
+
+        def _oracle_resolve(product, variant=None):
+            if product.pk == self.product.pk and variant is None:
+                return live_price["value"]
+            return real_resolve(product, variant)
+
         real_lock = order_service._lock_and_revalidate_items
 
         def _race_once(items, *, store):
             result = real_lock(items, store=store)
-            Product.objects.filter(pk=self.product.pk).update(price=Decimal("650000"))
+            # Live external price changes mid-lock (after the real lock step).
+            live_price["value"] = Decimal("650000")
             return result
 
-        with patch.object(order_service, "_lock_and_revalidate_items", side_effect=_race_once):
+        with patch.object(order_service, "resolve_effective_price", side_effect=_oracle_resolve), \
+             patch.object(cart_service, "resolve_effective_price", side_effect=_oracle_resolve), \
+             patch.object(order_service, "_lock_and_revalidate_items", side_effect=_race_once):
             resp = self.client.post(reverse("orders:checkout-pay"), self.payload)
 
         self.assertNotIn("HX-Redirect", resp.headers)
