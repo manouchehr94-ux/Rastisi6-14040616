@@ -267,6 +267,11 @@ def finalize_order(request, cart, customer):
     coupon = get_applied_coupon(request, cart)
     store = resolve_store_for_service(request)
 
+    from apps.orders.services.order_service import (
+        CartMembershipChangedError,
+        LivePriceChangedError,
+    )
+
     try:
         with transaction.atomic():
             address = _resolve_or_create_address(customer, address_data)
@@ -274,9 +279,26 @@ def finalize_order(request, cart, customer):
                 cart, customer=customer, vendor=vendor, address=address,
                 shipping_method=shipping_method, payment_gateway=payment_gateway,
                 coupon=coupon, note=address_data.get("note", ""), store=store,
-                idempotency_key=token,
+                idempotency_key=token, require_confirmed_prices=True,
             )
             cart.items.all().delete()
+    except LivePriceChangedError as exc:
+        # CAT-002 Blocker A — قیمتِ زنده در فاصله‌ی بینِ reprice اولیه‌ی این
+        # درخواست و قفلِ نهایی دوباره تغییر کرد. کلِ تراکنشِ بالا (Address،
+        # Order، OrderItem، رزرو/مصرفِ موجودی، افزایشِ used_countِ کوپن، حذفِ
+        # اقلامِ سبد) به‌خاطرِ خطایِ داخلِ ``with transaction.atomic()`` رول‌بک
+        # شده — هیچ اثرِ جانبی‌ای باقی نمانده. حالا (خارج از آن تراکنش) سبد را
+        # با آخرین قیمت به‌روز می‌کنیم و از مشتری تأییدِ دوباره می‌خواهیم؛
+        # مشتری هرگز Orderی با قیمتِ تأییدنشده نمی‌گیرد.
+        reprice_cart_items(cart)
+        raise PriceChangeReviewRequired() from exc
+    except CartMembershipChangedError as exc:
+        # CAT-002 Blocker B/بخش ۳ — اقلامِ سبد حین نهایی‌سازی تغییر کرد؛ هیچ
+        # Orderِ ناقصی ساخته نشده (تراکنش رول‌بک شد). سبد را با آخرین قیمت
+        # به‌روز می‌کنیم و از مشتری می‌خواهیم دوباره سبدِ به‌روز را ببیند و
+        # تأیید کند.
+        reprice_cart_items(cart)
+        raise PriceChangeReviewRequired() from exc
     except ValueError as exc:
         raise CheckoutError(str(exc)) from exc
 

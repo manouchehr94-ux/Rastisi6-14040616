@@ -53,6 +53,31 @@ ALLOWED_TRANSITIONS = {
 FINAL_STATUSES = {Order.Status.DELIVERED, Order.Status.CANCELED}
 
 
+class LivePriceChangedError(ValueError):
+    """CAT-002 (Blocker A) — قیمتِ زنده‌ی کاتالوگ در فاصله‌ی میانِ
+    ``cart_service.reprice_cart_items`` (که مشتری آخرین‌بار آن را دید و
+    تأیید کرد) و قفلِ نهاییِ ``CartItem`` در همینِ فراخوانیِ
+    ``create_order_from_cart`` دوباره تغییر کرده است.
+
+    این فراخوانی هرگز نباید در این حالت بی‌صدا با قیمتِ تازه‌تر سفارش
+    بسازد — حتی اگر آن قیمتِ تازه‌تر «درست»‌تر باشد — چون مشتری هنوز آن را
+    تأیید نکرده. فراخوانِ بالاتر (``checkout_service.finalize_order``) این
+    خطا را می‌گیرد، سبد را دوباره با آخرین قیمت به‌روز می‌کند و از مشتری
+    می‌خواهد صریحاً «دوباره پرداخت» را تأیید کند — دقیقاً همان قرارداد
+    ``PriceChangeReviewRequired``. هیچ Order/Address/موجودی/کدِ تخفیفی در
+    این مسیر لمس نشده (کل تراکنشِ اتمیکِ این تابع، و تراکنشِ بیرونی‌ترِ
+    ``checkout_service``، رول‌بک می‌شوند)."""
+
+
+class CartMembershipChangedError(ValueError):
+    """CAT-002 (Blocker B) — مجموعه‌ی اقلامِ این سبد بینِ کشفِ اولیه
+    (``cart.items`` در ابتدایِ ``create_order_from_cart``) و قفلِ نهاییِ
+    ``CartItem`` (``select_for_update``) تغییر کرده — یک قلم اضافه یا حذف
+    شده. به‌جایِ ساختِ یک Order ناقص (که یک قلمِ تازه‌اضافه‌شده را نادیده
+    بگیرد یا برایِ قلمی که دیگر وجود ندارد ردیف بسازد)، این فراخوانی متوقف
+    می‌شود — بدون هیچ Order/Address/موجودی/کدِ تخفیفی."""
+
+
 def _generate_order_code() -> str:
     while True:
         code = f"{ORDER_CODE_PREFIX}-{random.randint(10000, 99999)}"
@@ -148,12 +173,34 @@ def _lock_and_revalidate_items(items, *, store):
     return locked_products, locked_variants
 
 
-def _lock_cart_items_and_resolve_final_prices(items, *, locked_products, locked_variants):
+def _cart_membership_signature(items):
+    """امضایِ پایدارِ عضویتِ سبد — چندتاییِ مرتبِ ``(item.pk, product_id,
+    variant_id, quantity)`` برایِ همه‌ی اقلام. اگر بینِ کشفِ اولیه و قفلِ
+    نهایی هر قلمی اضافه/حذف شود یا هویتِ کالا/تنوع/تعدادِ یک قلم عوض شود،
+    این امضا تغییر می‌کند (CAT-002 Blocker B/بخش ۳)."""
+    return tuple(
+        sorted(
+            (item.pk, item.product_id, item.variant_id, item.quantity)
+            for item in items
+        )
+    )
+
+
+def _lock_cart_items_and_resolve_final_prices(
+    items, *, locked_products, locked_variants, require_confirmed_prices=False,
+):
     """CAT-002 — «یک اسنپ‌شاتِ نهایی»: بعد از قفلِ Product/ProductVariant
     (``_lock_and_revalidate_items``)، ردیف‌های CartItem را هم قفل می‌کند و
     برایِ هر قلم، قیمتِ نهایی را *فقط یک‌بار* از رویِ همان Product/Variant
     قفل‌شده با ``resolve_effective_price`` (تنها مرجعِ کانونی) محاسبه
-    می‌کند — و همان مقدار را روی خودِ ``CartItem.unit_price`` هم می‌نویسد.
+    می‌کند.
+
+    ردیف‌های قفل‌شده‌ی ``CartItem`` (نه شیءهای pre-lockِ ``items``) خودشان
+    اسنپ‌شاتِ کانونی‌اند — این تابع همان ردیف‌های قفل‌شده را (به همراهِ
+    قیمتِ نهاییِ هر کدام) برمی‌گرداند تا فراخوانِ بالاتر، هم برایِ
+    اعتبارسنجیِ موجودی و هم برایِ ساختِ ``OrderItem``، از عضویت/کالا/تنوع/
+    تعداد/قیمتِ همین ردیف‌های قفل‌شده استفاده کند — نه از شیءهای قدیمیِ
+    pre-lock که ممکن است تعداد/عضویتِ stale داشته باشند (CAT-002 Blocker B).
 
     این تابع قلبِ رفعِ CAT-002 است: پیش از این PR، سرِ سفارش
     (``cart_totals`` که از ``item.unit_price`` می‌خواند) و هر ردیفِ سفارش
@@ -161,68 +208,96 @@ def _lock_cart_items_and_resolve_final_prices(items, *, locked_products, locked_
     می‌شد) می‌توانستند دو مقدارِ متفاوت ببینند — اگر بین «افزودن به سبد» و
     «قفل‌گیریِ نهایی» قیمتِ کاتالوگ تغییر کرده باشد.
 
-    این تابع ``create_order_from_cart`` را خودش، مستقل از هر فراخوانِ
-    بالاتر، کاملاً سازگار (header == lines) می‌کند:
+    ``require_confirmed_prices`` (CAT-002 Blocker A):
 
-    ۱. زیرِ قفلِ Product/Variant، قیمتِ نهاییِ هر قلم را دقیقاً *یک‌بار*
-       محاسبه می‌کند؛
-    ۲. اگر با ``CartItem.unit_price`` فعلی فرق داشت، همان‌جا آن را
-       به‌روزرسانی می‌کند — نه این‌که خطا بدهد — تا فراخوانیِ بعدیِ
-       ``cart_totals()`` (که مستقیماً از ``item.unit_price`` در دیتابیس
-       می‌خواند) دقیقاً همین قیمتِ تازه را برایِ سرِ سفارش ببیند؛
-    ۳. همان مقدار — نه یک فراخوانیِ دومِ مستقل — برایِ ``OrderItem.unit_price``
-       در حلقه‌ی ساختِ سفارش پایین‌تر بازاستفاده می‌شود.
+    * ``False`` (پیش‌فرض — فراخوان‌های مستقیمِ سرویس/تست/seed): رفتارِ
+      «auto-reprice» — اگر قیمتِ زنده با اسنپ‌شاتِ ``CartItem.unit_price``
+      فرق داشت، همان‌جا ``CartItem`` به‌روزرسانی می‌شود تا Order نهایی هرگز
+      داخلی ناهم‌خوان نباشد (header == lines).
+    * ``True`` (مسیرِ مشتری‌محورِ HTTP از ``checkout_service.finalize_order``):
+      اگر قیمتِ زنده با آخرین قیمتی که مشتری «دید و تأیید کرد»
+      (``CartItem.unit_price``) فرق داشت، ``LivePriceChangedError`` صادر
+      می‌شود — Order هرگز با قیمتِ تأییدنشده ساخته نمی‌شود؛ فراخوانِ بالاتر
+      رول‌بک می‌کند، سبد را دوباره reprice می‌کند و از مشتری تأییدِ دوباره
+      می‌خواهد (نگاه کنید به ``LivePriceChangedError``/
+      ``checkout_service.PriceChangeReviewRequired``).
 
-    تصمیمِ محصولیِ «اگر قیمت تغییر کرده، اول به کاربر نشان بده و سفارش نساز»
-    یک لایه‌ی UX جداست که *پیش از* رسیدن به این تابع، در
-    ``checkout_service.finalize_order`` (با ``cart_service.reprice_cart_items``)
-    اعمال می‌شود — نه این‌جا. این تابع، برایِ هر فراخوانی (اعم از مسیرِ
-    HTTP معمولی، فراخوانیِ مستقیمِ سرویس در تست‌ها، یا اسکریپت seed)، فقط
-    تضمین می‌کند که Order نهایی هرگز داخلی ناهم‌خوان نباشد — با یا بدون
-    عبور از آن لایه‌ی UX.
-
-    خروجی: دیکشنری ``{item.pk: final_unit_price}``.
+    خروجی: لیستِ چندتایی‌هایِ ``(locked_item, final_unit_price)`` — به
+    ترتیبِ pk (همان ترتیبِ قفل).
     """
     from apps.cart.models import CartItem
 
-    locked_items_by_pk = {
-        ci.pk: ci
-        for ci in CartItem.objects.select_for_update()
-        .filter(pk__in=[item.pk for item in items])
+    if not items:
+        return []
+
+    initial_signature = _cart_membership_signature(items)
+
+    # CAT-002 Blocker B/بخش ۳ — عضویتِ سبد را از رویِ *کلِ ردیف‌های فعلیِ
+    # همین سبد* (نه فقط ``pk__in`` مجموعه‌ی کشف‌شده) زیرِ قفل بخوان. اگر فقط
+    # روی pkهای کشف‌شده قفل می‌گرفتیم، یک قلمِ تازه‌اضافه‌شده‌ی هم‌زمان (که
+    # pkش در آن مجموعه نیست) هرگز دیده نمی‌شد و بی‌صدا نادیده گرفته می‌شد →
+    # Orderِ ناقص. با خواندنِ کلِ ``cart.items`` زیرِ قفل، هم حذف، هم افزودن،
+    # و هم تغییرِ تعداد/کالا/تنوع تشخیص داده می‌شود.
+    #
+    # ترتیبِ قفل: Product/Variant (در ``_lock_and_revalidate_items``) سپس
+    # CartItem — دقیقاً همان ترتیبی که تنها نویسنده‌های تولیدیِ CartItem
+    # (``cart_service.add_item_to_cart`` و ``cart_service.reprice_cart_items``)
+    # می‌گیرند. بنابراین نیازی به قفلِ جداگانه‌ی ردیفِ Cart نیست: هیچ مسیرِ
+    # تولیدی‌ای CartItem را در ترتیبِ معکوس (CartItem→Product) قفل نمی‌کند،
+    # پس وارونگیِ بن‌بستِ Cart→Product در برابر Product→Cart ایجاد نمی‌شود.
+    cart_id = items[0].cart_id
+    locked_items = list(
+        CartItem.objects.select_for_update()
+        .filter(cart_id=cart_id)
+        .select_related("product", "variant")
         .order_by("pk")
-    }
+    )
 
-    final_prices = {}
-    for item in items:
-        locked_item = locked_items_by_pk.get(item.pk)
-        if locked_item is None:
-            raise ValueError("یکی از اقلام سبد خرید دیگر موجود نیست")
+    locked_signature = _cart_membership_signature(locked_items)
+    if locked_signature != initial_signature:
+        raise CartMembershipChangedError(
+            "اقلام سبد خرید حین نهایی‌سازی سفارش تغییر کرد؛ لطفاً دوباره تلاش کنید"
+        )
 
-        product = locked_products[item.product_id]
-        variant = locked_variants.get(item.variant_id) if item.variant_id else None
+    resolved = []
+    for locked_item in locked_items:
+        product = locked_products[locked_item.product_id]
+        variant = locked_variants.get(locked_item.variant_id) if locked_item.variant_id else None
         # با pricing_service (نه product.final_price ساده) تا قیمتِ مستقلِ
         # تنوع (یا delta قدیمیِ آن) درست اعمال شود.
         fresh_price = resolve_effective_price(product, variant)
 
         if fresh_price != locked_item.unit_price:
+            if require_confirmed_prices:
+                # CAT-002 Blocker A — قیمتِ زنده با آخرین قیمتِ تأییدشده‌ی
+                # مشتری فرق دارد؛ هرگز Order را با قیمتِ تأییدنشده نساز.
+                raise LivePriceChangedError(
+                    "قیمتِ زنده‌ی کاتالوگ با آخرین قیمتِ تأییدشده‌ی سبد فرق دارد"
+                )
             locked_item.unit_price = fresh_price
             locked_item.save(update_fields=["unit_price", "updated_at"])
 
-        final_prices[item.pk] = fresh_price
+        resolved.append((locked_item, fresh_price))
 
-    return final_prices
+    return resolved
 
 
 @transaction.atomic
 def create_order_from_cart(
     cart, *, customer, vendor, address, shipping_method, payment_gateway,
-    coupon=None, note="", store, idempotency_key="",
+    coupon=None, note="", store, idempotency_key="", require_confirmed_prices=False,
 ):
     """سفارش را از روی سبد خرید می‌سازد و همه‌ی مبالغ را اسنپ‌شات می‌کند.
 
     ``store`` الزامی است — همان Store که فراخوان (معمولاً
     ``checkout_service.finalize_order``) از ``request.store`` resolve کرده؛
     برای قیمت‌گذاری (``cart_totals``) و پیامک ثبت سفارش استفاده می‌شود.
+
+    ``require_confirmed_prices`` (CAT-002 Blocker A) — وقتی ``True`` (مسیرِ
+    مشتری‌محورِ HTTP)، اگر قیمتِ زنده‌ی کاتالوگ زیرِ قفلِ نهایی با آخرین
+    قیمتی که مشتری تأیید کرده فرق داشته باشد، ``LivePriceChangedError``
+    صادر می‌شود و هیچ Orderی ساخته نمی‌شود. فراخوان‌های مستقیمِ سرویس/تست
+    (پیش‌فرض ``False``) رفتارِ auto-repriceِ منسجم را نگه می‌دارند.
 
     ``idempotency_key`` اختیاری است (خالی یعنی بدون کنترل idempotency — برای
     فراخوان‌های مستقیم/تست). وقتی مقدار دارد (معمولاً
@@ -272,16 +347,18 @@ def create_order_from_cart(
     locked_products, locked_variants = _lock_and_revalidate_items(items, store=store)
 
     # CAT-002 — یک اسنپ‌شاتِ نهاییِ منسجم: زیرِ همان قفلِ Product/Variant
-    # بالا، ``CartItem.unit_price`` هر قلم را (در صورتِ نیاز) با قیمتِ زنده‌ی
-    # کاتالوگ هم‌راستا می‌کند و قیمتِ نهایی را *یک‌بار* برمی‌گرداند. همین
-    # مقدار هم برایِ ``cart_totals`` (که بلافاصله در ادامه از رویِ همین
-    # ``CartItem.unit_price`` — که از این‌جا تا آن‌جا هیچ‌کس دیگر تغییرش
-    # نمی‌دهد — جمع می‌بندد) و هم برایِ حلقه‌ی ساختِ OrderItem پایین‌تر
-    # بازاستفاده می‌شود — نگاه کنید به
+    # بالا، ردیف‌های ``CartItem`` قفل می‌شوند و *همان ردیف‌های قفل‌شده*
+    # (Blocker B) برایِ عضویت/کالا/تنوع/تعداد/قیمت به‌عنوان اسنپ‌شاتِ
+    # کانونی برگردانده می‌شوند. ``require_confirmed_prices`` (Blocker A):
+    # در مسیرِ مشتری‌محور، اگر قیمتِ زنده با قیمتِ تأییدشده فرق داشته باشد،
+    # ``LivePriceChangedError`` صادر می‌شود — نگاه کنید به
     # ``_lock_cart_items_and_resolve_final_prices`` برایِ توضیحِ کامل.
-    final_prices = _lock_cart_items_and_resolve_final_prices(
+    locked_lines = _lock_cart_items_and_resolve_final_prices(
         items, locked_products=locked_products, locked_variants=locked_variants,
+        require_confirmed_prices=require_confirmed_prices,
     )
+    # پس از این نقطه، هیچ‌کس به شیءهای pre-lockِ ``items`` تکیه نمی‌کند —
+    # ``locked_lines`` تنها اسنپ‌شاتِ معتبر است (Blocker B).
 
     province = address.province if address is not None else ""
     city = address.city if address is not None else ""
@@ -350,20 +427,16 @@ def create_order_from_cart(
                 return existing
         raise
 
-    for item in items:
-        product = locked_products[item.product_id]
-        variant = locked_variants.get(item.variant_id) if item.variant_id else None
-        # CAT-002 — همان قیمتِ قفل‌شده‌ای که چند سطر بالاتر (پیش از
-        # ``cart_totals``) یک‌بار محاسبه شد، دوباره استفاده می‌شود — نه یک
-        # فراخوانیِ *مستقلِ دومِ* ``resolve_effective_price``. پیش از این
-        # وصله، همین فراخوانیِ دوم دقیقاً ریشه‌ی CAT-002 بود: سرِ سفارش
-        # (``cart_totals``، از رویِ ``item.unit_price``) و این ردیف
-        # می‌توانستند دو نتیجه‌ی متفاوت ببینند اگر قیمتِ کاتالوگ بینِ آن دو
-        # فراخوانیِ مستقل تغییر می‌کرد. اکنون منبعِ حقیقتِ قیمت برایِ کلِ
-        # این سفارش دقیقاً یک‌بار محاسبه شده — نگاه کنید به
-        # ``_lock_cart_items_and_resolve_final_prices``.
-        unit_price = final_prices[item.pk]
-        tax_line = tax_lines_by_item.get(item.pk, {})
+    for locked_item, unit_price in locked_lines:
+        product = locked_products[locked_item.product_id]
+        variant = locked_variants.get(locked_item.variant_id) if locked_item.variant_id else None
+        # CAT-002 Blocker B — همه‌ی مقادیرِ این ردیف از خودِ ردیفِ *قفل‌شده‌ی*
+        # ``CartItem`` می‌آید (تعداد، هویتِ کالا/تنوع، قیمتِ واحد) — نه از شیءِ
+        # pre-lockِ ``items`` که ممکن است تعدادِ stale داشته باشد. قیمتِ واحد
+        # همان مقداری است که چند سطر بالاتر (پیش از ``cart_totals``) *یک‌بار*
+        # زیرِ همان قفل محاسبه شد؛ سرِ سفارش (``cart_totals`` از رویِ همین
+        # ``CartItem.unit_price`` قفل‌شده) و این ردیف تضمیناً یکی‌اند.
+        tax_line = tax_lines_by_item.get(locked_item.pk, {})
         order_item = OrderItem.objects.create(
             order=order,
             product=product,
@@ -371,9 +444,9 @@ def create_order_from_cart(
             product_name=product.name,
             sku=product.sku,
             variant_label=_variant_label(variant),
-            quantity=item.quantity,
+            quantity=locked_item.quantity,
             unit_price=unit_price,
-            line_total=unit_price * item.quantity,
+            line_total=unit_price * locked_item.quantity,
             discount_allocation=tax_line.get("discount_allocation", 0) or 0,
             taxable_amount=tax_line.get("taxable_amount", 0) or 0,
             tax_class_code=tax_line.get("tax_class_code", ""),
@@ -381,12 +454,12 @@ def create_order_from_cart(
             tax_rate_percent=tax_line.get("tax_rate_percent"),
             unit_tax=tax_line.get("unit_tax") or 0,
             total_tax=tax_line.get("total_tax") or 0,
-            # کادوپیچی — دقیقاً همان اسنپ‌شاتِ سطحِ قلمِ سبد (نه بازخوانیِ
-            # دوباره‌ی ShopSettings) تا اگر مدیر بین افزودن به سبد و ثبتِ
-            # سفارش قیمتِ کادوپیچی را تغییر دهد، این ردیفِ تاریخی دست‌نخورده
-            # بماند — دقیقاً همان استدلالِ unit_price بالا.
-            gift_wrap_selected=item.gift_wrap_selected,
-            gift_wrap_unit_price=item.gift_wrap_unit_price,
+            # کادوپیچی — دقیقاً همان اسنپ‌شاتِ سطحِ قلمِ سبدِ قفل‌شده (نه
+            # بازخوانیِ دوباره‌ی ShopSettings) تا اگر مدیر بین افزودن به سبد و
+            # ثبتِ سفارش قیمتِ کادوپیچی را تغییر دهد، این ردیفِ تاریخی
+            # دست‌نخورده بماند — دقیقاً همان استدلالِ unit_price بالا.
+            gift_wrap_selected=locked_item.gift_wrap_selected,
+            gift_wrap_unit_price=locked_item.gift_wrap_unit_price,
         )
         # با قفلِ قبلی (_lock_and_revalidate_items)، شکستِ رزرو/مصرف عملاً
         # نباید پیش بیاید — reserve_inventory همچنان دوباره (به‌صورت اتمیک،
@@ -396,9 +469,9 @@ def create_order_from_cart(
         # است تا تلاشِ دوباره‌ی همان درخواست هرگز دوبار رزرو/مصرف نکند.
         try:
             reservation = reserve_inventory(
-                store=store, product=product, variant=variant, quantity=item.quantity,
+                store=store, product=product, variant=variant, quantity=locked_item.quantity,
                 cart=cart, source="order",
-                idempotency_key=f"{idempotency_key}:{item.pk}" if idempotency_key else "",
+                idempotency_key=f"{idempotency_key}:{locked_item.pk}" if idempotency_key else "",
                 ttl_minutes=None,
             )
             consume_inventory_reservation(reservation, order=order)
