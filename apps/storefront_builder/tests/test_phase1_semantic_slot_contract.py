@@ -367,14 +367,25 @@ class DistinctRoleTests(SimpleTestCase):
 
 
 class MovedIndexRoleTests(SimpleTestCase):
-    """15 — the SAME semantic role may live at DIFFERENT indexes across two
-    real Ready Template recipes (identity is index-independent)."""
+    """15 — the SAME semantic role must live at DIFFERENT indexes across two
+    real Ready Template recipes (identity is index-independent).
 
-    def test_same_role_can_appear_at_different_index_across_templates(self):
+    Correction 1: use a pair where the shared role genuinely moves index.
+      aftab_price home: 0 hero, 1 chip_categories, 2 product_grid, 3 sale_products
+        -> hero.primary at index 0
+      street_drop  home: 0 ticker, 1 hero, 2 chip_categories, 3 product_rail,
+                          4 sale_products
+        -> hero.primary at index 1
+    So hero.primary sits at index 0 in A and index 1 in B — proving semantic
+    identity survives an index move, not merely that keys compare equal at the
+    same position.
+    """
+
+    def test_same_role_appears_at_different_index_across_templates(self):
         a = lpr.get_layout_preset("aftab_price")
-        b = lpr.get_layout_preset("almas_luxury")
+        b = lpr.get_layout_preset("street_drop")
         self.assertIsNotNone(a, "aftab_price must exist")
-        self.assertIsNotNone(b, "almas_luxury must exist")
+        self.assertIsNotNone(b, "street_drop must exist")
 
         def _role_index(preset, role):
             for i, entry in enumerate(preset.pages.get("home", ())):
@@ -382,33 +393,43 @@ class MovedIndexRoleTests(SimpleTestCase):
                     return i
             return None
 
-        # products.primary is present in both, and (per the ratified specs)
-        # sits at different home indexes:
-        #   aftab_price home: hero, chip_categories, product_grid, sale_products
-        #     -> products.primary at index 2
-        #   almas_luxury home: hero, circular_categories, product_grid,
-        #                      community_gallery, newsletter
-        #     -> products.primary at index 2 as well; use categories.primary
-        #        which also differs only if reordered — so assert on the ROLE
-        #        being resolvable in both, and equality of identity regardless
-        #        of index.
-        a_idx = _role_index(a, "products.primary")
-        b_idx = _role_index(b, "products.primary")
+        a_idx = _role_index(a, "hero.primary")
+        b_idx = _role_index(b, "hero.primary")
         self.assertIsNotNone(
             a_idx,
-            "RED: aftab_price must resolve products.primary (index-independent identity).",
+            "RED: aftab_price must resolve hero.primary (semantic metadata missing today).",
         )
         self.assertIsNotNone(
             b_idx,
-            "RED: almas_luxury must resolve products.primary (index-independent identity).",
+            "RED: street_drop must resolve hero.primary (semantic metadata missing today).",
         )
-        # Identity equality must hold even though the surrounding composition
-        # (and potentially the index) differs between the two recipes.
+        # Explicit index expectations (Correction 1): the SAME role at DIFFERENT
+        # indexes.
+        self.assertEqual(
+            a_idx, 0,
+            "RED: hero.primary must be at index 0 in aftab_price.",
+        )
+        self.assertEqual(
+            b_idx, 1,
+            "RED: hero.primary must be at index 1 in street_drop.",
+        )
+        self.assertNotEqual(
+            a_idx, b_idx,
+            "RED: the shared semantic role must occupy DIFFERENT indexes in the "
+            "two recipes (this is the whole point of index-independent identity).",
+        )
+        # And the identity itself must compare equal across the index move,
+        # and be exactly "hero.primary".
         self.assertEqual(
             _semantic_slot_key(a.pages["home"][a_idx]),
             _semantic_slot_key(b.pages["home"][b_idx]),
             "RED: the same semantic role must compare equal across templates "
             "regardless of its list index.",
+        )
+        self.assertEqual(
+            _semantic_slot_key(a.pages["home"][a_idx]),
+            "hero.primary",
+            "RED: the shared role at both positions must be exactly hero.primary.",
         )
 
 

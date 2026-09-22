@@ -44,6 +44,7 @@ from apps.storefront_builder.models import (
     StorefrontContainer,
     StorefrontSection,
 )
+from apps.storefront_builder.services import container_service
 from apps.storefront_builder.services import layout_service as svc
 from apps.storefront_builder.services import preset_service
 from apps.storefront_builder.services import r4_mutation_service
@@ -257,6 +258,7 @@ class MerchantContentPreservationTests(Phase1PreservationBase):
         )
 
     def test_merchant_reorder_survives(self):
+        # Correction 3: prove ORDER preservation, not merely existence.
         home = self._home(self.draft)
         sections = list(home.sections.order_by("order"))
         if len(sections) < 2:
@@ -265,13 +267,21 @@ class MerchantContentPreservationTests(Phase1PreservationBase):
         first.order, second.order = second.order, first.order
         first.save(update_fields=["order"])
         second.save(update_fields=["order"])
-        sid = first.stable_id
+        # Capture the intended post-merchant-edit order per logical section.
+        expected_order = {first.stable_id: first.order, second.stable_id: second.order}
         switched = self._switch_to_b()
-        self.assertIsNotNone(
-            self._resolve_by_stable_id(switched, sid),
-            "RED: a merchant reorder makes the page preservation-required; the "
-            "reordered section must survive on the active Draft.",
-        )
+        for sid, want_order in expected_order.items():
+            preserved = self._resolve_by_stable_id(switched, sid)
+            self.assertIsNotNone(
+                preserved,
+                "RED: a merchant reorder makes the page preservation-required; "
+                "the reordered section must survive on the active Draft.",
+            )
+            self.assertEqual(
+                preserved.order, want_order,
+                "RED: the merchant-authored order value must be preserved exactly "
+                f"for section {sid} (want {want_order}, got {preserved.order}).",
+            )
 
     def test_is_active_change_survives(self):
         section = self._home(self.draft).sections.order_by("order").first()
@@ -296,6 +306,11 @@ class MerchantContentPreservationTests(Phase1PreservationBase):
             preserved.order, original_order,
             "RED: a locked section must never be moved by a switch.",
         )
+        # Correction 5: the lock state itself must survive.
+        self.assertIs(
+            preserved.is_locked, True,
+            "RED: a switch must not silently clear a merchant lock.",
+        )
 
     def test_changed_row_layout_marks_page_preservation_required(self):
         home = self._home(self.draft)
@@ -308,18 +323,24 @@ class MerchantContentPreservationTests(Phase1PreservationBase):
         sections[1].row_span = 6
         sections[0].save(update_fields=["row_key", "row_span"])
         sections[1].save(update_fields=["row_key", "row_span"])
-        sids = {sections[0].stable_id, sections[1].stable_id}
+        sids = [sections[0].stable_id, sections[1].stable_id]
         switched = self._switch_to_b()
-        survived = {
-            s.stable_id
-            for s in switched.get_page("home").sections.all()
-            if s.stable_id in sids
-        }
-        self.assertEqual(
-            survived, sids,
-            "RED: a merchant row_key/row_span change must make the page "
-            "preservation-required; those sections must survive on the active Draft.",
-        )
+        # Correction 4: prove row_key/row_span preservation, not merely survival.
+        for sid in sids:
+            preserved = self._resolve_by_stable_id(switched, sid)
+            self.assertIsNotNone(
+                preserved,
+                "RED: a merchant row_key/row_span change must make the page "
+                "preservation-required; the section must survive on the active Draft.",
+            )
+            self.assertEqual(
+                preserved.row_key, "merchant_row",
+                f"RED: merchant row_key must be preserved for section {sid}.",
+            )
+            self.assertEqual(
+                preserved.row_span, 6,
+                f"RED: merchant row_span must be preserved for section {sid}.",
+            )
 
 
 class ContainerCellPreservationTests(Phase1PreservationBase):
@@ -352,16 +373,34 @@ class ContainerCellPreservationTests(Phase1PreservationBase):
         self.assertEqual((active.settings or {}).get("gap"), "wide")
 
     def test_container_layout_modification_survives(self):
+        # Correction 7: mutate layout through the CANONICAL service so the
+        # Container/Cell graph stays internally consistent (never by editing
+        # layout_key alone, which leaves spans/cells inconsistent).
         container = self._first_container(self.draft)
         if container is None:
             self.skipTest("template A produced no home container")
-        container.layout_key = "half"
-        container.save(update_fields=["layout_key"])
+        # Pick a layout key different from the current one.
+        target_layout = "half" if container.layout_key != "half" else "single"
+        try:
+            container_service.change_container_layout(container, target_layout)
+        except container_service.ContainerLayoutError as exc:
+            self.skipTest(f"target layout {target_layout!r} not applicable here: {exc}")
+        container.refresh_from_db()
         sid = container.stable_id
+        expected_layout = container.layout_key
+        expected_cell_stable_ids = set(container.cells.values_list("stable_id", flat=True))
         switched = self._switch_to_b()
         active = self._container_by_stable_id(switched, sid)
         self.assertIsNotNone(active, "RED: merchant Container layout change must survive.")
-        self.assertEqual(active.layout_key, "half")
+        self.assertEqual(
+            active.layout_key, expected_layout,
+            "RED: the merchant-authored canonical layout must survive the switch.",
+        )
+        self.assertEqual(
+            set(active.cells.values_list("stable_id", flat=True)),
+            expected_cell_stable_ids,
+            "RED: the canonical Cell graph produced by the layout change must survive.",
+        )
 
     def test_locked_container_graph_survives(self):
         container = self._first_container(self.draft)
@@ -374,6 +413,11 @@ class ContainerCellPreservationTests(Phase1PreservationBase):
         switched = self._switch_to_b()
         active = self._container_by_stable_id(switched, sid)
         self.assertIsNotNone(active, "RED: a locked Container must survive the switch.")
+        # Correction 5: the container lock state itself must survive.
+        self.assertIs(
+            active.is_locked, True,
+            "RED: a switch must not silently clear a locked Container.",
+        )
         self.assertEqual(
             set(active.cells.values_list("stable_id", flat=True)),
             original_cell_stable_ids,
@@ -381,33 +425,63 @@ class ContainerCellPreservationTests(Phase1PreservationBase):
         )
 
     def test_multiblock_cell_membership_and_order_survives(self):
+        # Correction 6: build the multi-block fixture through the CANONICAL
+        # container_service, so it represents a real state production can
+        # create (never by directly setting cell=/cell_order= on new rows,
+        # which can hide a Cell's legacy occupant).
         container = self._first_container(self.draft)
         if container is None or not container.cells.exists():
             self.skipTest("template A produced no home container/cell")
         cell = container.cells.order_by("order", "id").first()
-        block1 = StorefrontSection.objects.create(
-            version=self.draft, section_key="rich_text", order=60,
-            settings={"content": "block-1"}, cell=cell, cell_order=0,
-        )
-        block2 = StorefrontSection.objects.create(
+
+        # 1) Resolve the Cell's existing occupant via the canonical read path.
+        existing_blocks = container_service.get_cell_blocks(cell)
+        if not existing_blocks:
+            self.skipTest("selected Cell has no existing block to build a multi-block fixture on")
+        existing = existing_blocks[0]
+        # 2) Adopt the existing occupant into the multi-block FK (idempotent).
+        container_service.add_block(cell, existing)
+
+        # 3) Create ONE additional merchant section on the same page...
+        merchant_block = StorefrontSection.objects.create(
             version=self.draft, section_key="rich_text", order=61,
-            settings={"content": "block-2"}, cell=cell, cell_order=1,
+            settings={"content": "merchant-block"},
         )
+        # 4) ...and place it through the canonical service.
+        container_service.add_block(cell, merchant_block)
+
+        # 5) Capture the canonical ordered block stable_ids + cell_order.
+        cell.refresh_from_db()
+        ordered_blocks = container_service.get_cell_blocks(cell)
         cell_sid = cell.stable_id
-        block_sids = [(block1.stable_id, 0), (block2.stable_id, 1)]
+        expected = [(b.stable_id, b.cell_order) for b in ordered_blocks]
+        self.assertGreaterEqual(
+            len(expected), 2, "canonical fixture must yield >=2 ordered blocks"
+        )
+
         switched = self._switch_to_b()
-        for block_sid, expected_order in block_sids:
+
+        # On the ACTIVE Draft: same logical Cell survives, all block stable_ids
+        # survive, order unchanged, and no existing logical block was hidden.
+        active_cell = StorefrontContainer.objects.filter(
+            page__version=switched, page__page_type="home"
+        ).values_list("cells__stable_id", flat=True)
+        self.assertIn(
+            cell_sid, set(active_cell),
+            "RED: the merchant multi-block Cell (by stable id) must survive.",
+        )
+        for block_sid, expected_order in expected:
             active_block = self._resolve_by_stable_id(switched, block_sid)
             self.assertIsNotNone(
                 active_block,
-                "RED: multi-block Cell members must survive on the active Draft.",
+                "RED: every canonical multi-block member must survive on the active Draft.",
             )
-            active_cell = active_block.cell
-            self.assertIsNotNone(active_cell, "RED: block must remain in a Cell.")
+            self.assertIsNotNone(active_block.cell, "RED: block must remain in a Cell.")
             self.assertEqual(
-                (active_cell.stable_id, active_block.cell_order),
+                (active_block.cell.stable_id, active_block.cell_order),
                 (cell_sid, expected_order),
-                "RED: multi-block Cell membership (by stable_id) and order preserved.",
+                "RED: multi-block Cell membership (by stable_id) and order must be "
+                "preserved after the switch.",
             )
 
 
@@ -514,24 +588,34 @@ class SemanticMappingTests(Phase1PreservationBase):
         marked_key = marked.section_key
         marked_sid = marked.stable_id
         switched = self._switch_to_b()
-        # Resolve by stable_id first; if the logical section survived, its
-        # section_key must be unchanged (never moved onto a different type).
+        # Correction 2: deletion must FAIL this test — assert survival first.
         preserved = self._resolve_by_stable_id(switched, marked_sid)
-        if preserved is not None:
-            self.assertEqual(
-                preserved.section_key, marked_key,
-                "RED: merchant content must never be positionally re-attached to "
-                "a different section type across a template switch.",
-            )
-        # And any holder of the probe (backend-neutral) must share the same type.
+        self.assertIsNotNone(
+            preserved,
+            "RED: the merchant-edited logical section must survive on the active "
+            "Draft (a switch that deletes it must fail this test, not pass).",
+        )
+        self.assertEqual(
+            (preserved.settings or {}).get("__probe__"), "unique-token",
+            "RED: the merchant probe content must be preserved.",
+        )
+        self.assertEqual(
+            preserved.section_key, marked_key,
+            "RED: merchant content must never be positionally re-attached to "
+            "a different section type across a template switch.",
+        )
+        # Exactly one active holder of the probe, and it shares the same type.
         holders = _settings_holder(
             list(switched.get_page("home").sections.all()), "__probe__", "unique-token"
         )
-        for holder in holders:
-            self.assertEqual(
-                holder.section_key, marked_key,
-                "RED: the probe token must stay with its original section type.",
-            )
+        self.assertEqual(
+            len(holders), 1,
+            "RED: exactly one active section must hold the merchant probe token.",
+        )
+        self.assertEqual(
+            holders[0].section_key, marked_key,
+            "RED: the probe token must stay with its original section type.",
+        )
 
     def test_same_section_key_different_role_not_retagged_or_misattached(self):
         # Blocker 13: a merchant product_section (products.primary-like) must be

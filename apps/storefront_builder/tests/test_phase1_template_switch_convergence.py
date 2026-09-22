@@ -39,6 +39,7 @@ from apps.storefront_builder.models import (
     StorefrontLayoutVersion,
     StorefrontSection,
 )
+from apps.storefront_builder.services import edit_history_service
 from apps.storefront_builder.services import layout_service as svc
 from apps.storefront_builder.services import preset_service
 from apps.storefront_builder.services import r4_mutation_service
@@ -147,67 +148,66 @@ class SameDraftHistoryRevisionTests(Phase1ConvergenceBase):
             "edit_revision exactly once.",
         )
 
-    def test_undo_via_canonical_command_restores_pre_switch_state(self):
-        # Blocker 12: canonical R4 Undo boundary.
-        pre_keys = list(
-            self.draft.get_page("home").sections.order_by("order").values_list(
-                "section_key", flat=True
-            )
-        )
-        pre_provenance = dict(self.draft.template_provenance or {})
+    def test_undo_via_canonical_command_restores_complete_pre_switch_snapshot(self):
+        # Correction 9: prove COMPLETE snapshot restore (header/footer/
+        # appearance/provenance/baseline/pages/media/containers), not just
+        # section keys + provenance. A missing Undo entry is a known domain gap
+        # -> convert R4MutationError into a descriptive RED failure, not an ERROR.
+        pre_state = edit_history_service.snapshot_draft(self.draft)
         self._switch_to_b()
         active = self._active_draft()
-        result = r4_mutation_service.apply_history_command(
-            store=self.store, actor=self.staff,
-            base_revision=active.edit_revision, command="undo",
-        )
-        self.assertTrue(
-            result.get("changed"),
-            "RED: Undo of a switch must report changed=True.",
-        )
+        try:
+            result = r4_mutation_service.apply_history_command(
+                store=self.store, actor=self.staff,
+                base_revision=active.edit_revision, command="undo",
+            )
+        except r4_mutation_service.R4MutationError as exc:
+            self.fail(f"RED: template switch must create canonical Undo history: {exc}")
+        self.assertTrue(result.get("changed"), "RED: Undo of a switch must report changed=True.")
         restored = self._active_draft()
+        restored_state = edit_history_service.snapshot_draft(restored)
         self.assertEqual(
-            list(restored.get_page("home").sections.order_by("order").values_list(
-                "section_key", flat=True)),
-            pre_keys,
-            "RED: Undo must restore the complete pre-switch composition.",
-        )
-        self.assertEqual(
-            dict(restored.template_provenance or {}), pre_provenance,
-            "RED: Undo must restore the pre-switch provenance.",
+            restored_state, pre_state,
+            "RED: Undo must restore the COMPLETE pre-switch draft snapshot "
+            "(header/footer/appearance/provenance/baseline/pages/media/containers).",
         )
 
-    def test_redo_via_canonical_command_restores_switched_state(self):
+    def test_redo_via_canonical_command_restores_complete_switched_snapshot(self):
+        # Correction 10: prove COMPLETE switched snapshot restore.
         self._switch_to_b()
         active = self._active_draft()
-        switched_provenance = dict(active.template_provenance or {})
-        r4_mutation_service.apply_history_command(
-            store=self.store, actor=self.staff,
-            base_revision=active.edit_revision, command="undo",
-        )
-        after_undo = self._active_draft()
-        rev_before_redo = after_undo.edit_revision
-        result = r4_mutation_service.apply_history_command(
-            store=self.store, actor=self.staff,
-            base_revision=after_undo.edit_revision, command="redo",
-        )
+        switched_state = edit_history_service.snapshot_draft(active)
+        try:
+            r4_mutation_service.apply_history_command(
+                store=self.store, actor=self.staff,
+                base_revision=active.edit_revision, command="undo",
+            )
+            after_undo = self._active_draft()
+            rev_before_redo = after_undo.edit_revision
+            result = r4_mutation_service.apply_history_command(
+                store=self.store, actor=self.staff,
+                base_revision=after_undo.edit_revision, command="redo",
+            )
+        except r4_mutation_service.R4MutationError as exc:
+            self.fail(f"RED: template switch must create canonical Undo/Redo history: {exc}")
         self.assertTrue(result.get("changed"), "RED: Redo must report changed=True.")
         self.assertEqual(
             result.get("new_revision"), rev_before_redo + 1,
             "RED: Redo must increment edit_revision exactly once.",
         )
         redone = self._active_draft()
+        redone_state = edit_history_service.snapshot_draft(redone)
         self.assertEqual(
-            dict(redone.template_provenance or {}), switched_provenance,
-            "RED: Redo must restore the switched (Template B) state.",
+            redone_state, switched_state,
+            "RED: Redo must restore the COMPLETE switched (Template B) draft snapshot.",
         )
 
-    def test_stale_base_revision_causes_zero_mutation(self):
+    def test_stale_base_revision_causes_zero_complete_state_mutation(self):
+        # Correction 11: prove the COMPLETE draft state is unchanged (not just
+        # section stable_ids) — provenance/appearance/baseline/header/footer too.
         self.draft.edit_revision = 7
         self.draft.save(update_fields=["edit_revision"])
-        before_sections = list(
-            self.draft.get_page("home").sections.values_list("stable_id", flat=True)
-        )
+        before_state = edit_history_service.snapshot_draft(self.draft)
         raised = False
         try:
             r4_mutation_service.switch_template(
@@ -220,29 +220,44 @@ class SameDraftHistoryRevisionTests(Phase1ConvergenceBase):
             raised,
             "RED: a stale base_revision must raise R4StaleRevision before any mutation.",
         )
-        self.draft.refresh_from_db()
-        self.assertEqual(self.draft.edit_revision, 7, "revision must be unchanged")
+        self.layout.refresh_from_db()
         self.assertEqual(
-            list(self.draft.get_page("home").sections.values_list("stable_id", flat=True)),
-            before_sections,
-            "RED: a stale switch must mutate nothing.",
+            self.layout.draft_version_id, self.original_draft_pk,
+            "RED: a stale switch must not replace the active Draft.",
+        )
+        active = self.layout.draft_version
+        self.assertEqual(active.edit_revision, 7, "RED: revision must be unchanged")
+        after_state = edit_history_service.snapshot_draft(active)
+        self.assertEqual(
+            after_state, before_state,
+            "RED: a stale switch must mutate NOTHING — complete draft snapshot "
+            "(provenance/appearance/baseline/header/footer/pages/containers) unchanged.",
         )
 
-    def test_store_a_cannot_mutate_store_b(self):
+    def test_store_a_switch_leaves_store_b_complete_state_unchanged(self):
+        # Correction 12: compare Store B's COMPLETE draft snapshot before/after,
+        # proving no cross-tenant metadata/layout mutation (stronger than
+        # comparing only section stable_ids).
         other = Store.objects.create(name="Other Co", slug="other-co-phase1")
         other_draft = svc.get_or_create_draft(other, user=self.staff)
         preset_service.apply_preset(other_draft, self.template_a)
         other_draft.refresh_from_db()
-        other_sids = set(other_draft.sections.values_list("stable_id", flat=True))
+        other_before = edit_history_service.snapshot_draft(other_draft)
+
         self._switch_to_b()
-        # Store B's active draft content must be untouched.
+
         other_layout = svc.get_or_create_layout(other)
         other_layout.refresh_from_db()
         other_active = other_layout.draft_version
+        other_after = edit_history_service.snapshot_draft(other_active)
         self.assertEqual(
-            set(other_active.sections.values_list("stable_id", flat=True)),
-            other_sids,
-            "RED: switching Store A's template must never mutate Store B content.",
+            other_active.pk, other_draft.pk,
+            "RED: Store B's active Draft identity must be unchanged.",
+        )
+        self.assertEqual(
+            other_after, other_before,
+            "RED: switching Store A's template must never mutate Store B's "
+            "complete draft state (no cross-tenant metadata/layout mutation).",
         )
 
 
@@ -326,20 +341,64 @@ class BaselineProvenanceTests(Phase1ConvergenceBase):
 # --------------------------------------------------------------------------
 class ResetBehaviorTests(Phase1ConvergenceBase):
     def test_granular_reset_of_mapped_b_slot_uses_b_baseline(self):
+        # Correction 8: prove B-baseline reset specifically (not merely that
+        # SOME edit disappeared, which false-greens against provenance=B/
+        # baseline=A incoherence).
         switched = self._switch_to_b()
+
+        # 1) The baseline must be B's.
+        snap = switched.template_baseline_snapshot or {}
+        self.assertEqual(
+            snap.get("template_key"), self.template_b.key,
+            "RED: after switch, template_baseline_snapshot must be Template B's.",
+        )
+
+        # 2) Select a genuinely B-owned section (its slot key names B).
+        b_prefix = f"{self.template_b.key}:v"
         home = switched.get_page("home")
-        section = home.sections.exclude(template_slot_key="").order_by("order").first()
+        section = next(
+            (s for s in home.sections.order_by("order")
+             if (s.template_slot_key or "").startswith(b_prefix)),
+            None,
+        )
         if section is None:
-            self.skipTest("no B-owned mapped slot present to reset")
+            self.fail(
+                "RED: after a switch to B, at least one section must be B-owned "
+                f"(template_slot_key starting with {b_prefix!r}); none found."
+            )
+
+        # 3) Resolve its exact B baseline entry from the snapshot via slot_key.
+        home_entries = (snap.get("pages") or {}).get("home") or []
+        baseline_entry = next(
+            (e for e in home_entries if e.get("slot_key") == section.template_slot_key),
+            None,
+        )
+        self.assertIsNotNone(
+            baseline_entry,
+            "RED: the B-owned section's slot_key must resolve an entry in B's "
+            "baseline snapshot.",
+        )
+        expected_section_key = baseline_entry.get("section_key")
+        expected_settings = baseline_entry.get("settings")
+        expected_row_key = baseline_entry.get("row_key")
+        expected_row_span = baseline_entry.get("row_span")
+
+        # 4) Mutate the active section, then reset it (SECTION OBJECT — Blocker 4).
         section.settings = {**(section.settings or {}), "__edited__": "yes"}
+        section.section_key = section.section_key  # unchanged; settings drift is the edit
         section.save(update_fields=["settings"])
-        # Blocker 4: pass the SECTION OBJECT, no stable_id/pk/TypeError fallback.
         preset_service.reset_section_to_baseline(switched, section)
         section.refresh_from_db()
-        self.assertNotIn(
-            "__edited__", section.settings,
-            "RED: granular reset of a B-owned mapped slot must restore B baseline.",
-        )
+
+        # 5) Exact equality with B's recorded baseline entry.
+        self.assertEqual(section.section_key, expected_section_key,
+                         "RED: reset must restore B baseline section_key.")
+        self.assertEqual(section.settings, expected_settings,
+                         "RED: reset must restore B baseline settings exactly.")
+        self.assertEqual(section.row_key, expected_row_key,
+                         "RED: reset must restore B baseline row_key.")
+        self.assertEqual(section.row_span, expected_row_span,
+                         "RED: reset must restore B baseline row_span.")
 
     def test_granular_reset_of_unmatched_preserved_legacy_fails_safe(self):
         manual = StorefrontSection.objects.create(
