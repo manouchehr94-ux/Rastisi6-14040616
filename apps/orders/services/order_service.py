@@ -265,12 +265,33 @@ def _lock_cart_items_and_resolve_final_prices(
             "اقلام سبد خرید حین نهایی‌سازی سفارش تغییر کرد؛ لطفاً دوباره تلاش کنید"
         )
 
+    # CAT-002 Blocker A — قیمتِ کانونیِ نهایی باید از حالتِ *فعلیِ
+    # دیتابیسیِ* همان ردیف‌های Product/ProductVariantی که قفلشان را همین
+    # تراکنش در اختیار دارد خوانده شود؛ نه از شیءهای پایتونی که در
+    # ``_lock_and_revalidate_items`` یک‌بار instantiate شدند و ممکن است
+    # کهنه (stale) باشند. یک ``QuerySet.update()`` هم‌زمان (یا هر نوشتنِ
+    # مستقیمِ دیتابیسی) ردیفِ دیتابیس را عوض می‌کند اما آن شیءِ درون‌حافظه‌ای
+    # را تازه نمی‌کند — بنابراین بدونِ این refresh، ``resolve_effective_price``
+    # می‌تواند از قیمتِ کهنه محاسبه کند و تغییرِ قیمتِ زنده هرگز تشخیص داده
+    # نشود (خطایِ واقعیِ Windows QA).
+    #
+    # این یک re-readِ ساده از ردیف‌هایی است که *همین تراکنش از پیش قفلشان
+    # را گرفته* — نه یک قفلِ جدید و نه یک ترتیبِ قفلِ معکوس. هیچ
+    # ``select_for_update`` تازه‌ای صادر نمی‌شود؛ ترتیبِ کلیِ
+    # Product/Variant → Cart → CartItem دست‌نخورده می‌ماند (حصارِ عضویت هم
+    # همچنان برقرار است چون قفلِ Cart/CartItem از قبل گرفته شده).
+    for product in locked_products.values():
+        product.refresh_from_db()
+    for variant in locked_variants.values():
+        variant.refresh_from_db()
+
     resolved = []
     for locked_item in locked_items:
         product = locked_products[locked_item.product_id]
         variant = locked_variants.get(locked_item.variant_id) if locked_item.variant_id else None
         # با pricing_service (نه product.final_price ساده) تا قیمتِ مستقلِ
-        # تنوع (یا delta قدیمیِ آن) درست اعمال شود.
+        # تنوع (یا delta قدیمیِ آن) درست اعمال شود — روی حالتِ تازه‌شده‌ی
+        # (refreshed) همین ردیف‌های قفل‌شده.
         fresh_price = resolve_effective_price(product, variant)
 
         if fresh_price != locked_item.unit_price:
