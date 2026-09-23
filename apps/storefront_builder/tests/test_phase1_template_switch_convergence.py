@@ -435,7 +435,20 @@ class ResetBehaviorTests(Phase1ConvergenceBase):
 
     def test_whole_store_reset_intentionally_restores_b_baseline(self):
         switched = self._switch_to_b()
-        returned = preset_service.reset_storefront_to_baseline(switched)
+        # Correction 2: today's DNA-only switch leaves provenance=B but
+        # baseline=A, so reset_storefront_to_baseline raises
+        # TemplateBaselineVersionChangedError. That is an EXPECTED Phase-1
+        # production gap — surface it as a normal assertion FAIL (RED), never
+        # an unhandled unittest ERROR. (Do NOT suppress this in production this
+        # round; the desired end-state is unchanged.)
+        try:
+            returned = preset_service.reset_storefront_to_baseline(switched)
+        except preset_service.TemplateBaselineVersionChangedError as exc:
+            self.fail(
+                "RED: after a successful preservation-first switch to Template B, "
+                "provenance and baseline must both be B so whole-store reset can "
+                f"restore B. Current baseline/provenance mismatch raised: {exc}"
+            )
         self.assertEqual(
             getattr(returned, "key", None), self.template_b.key,
             "RED: whole-store reset after a B switch must restore B baseline "
@@ -471,6 +484,10 @@ class MerchantFacingConvergenceTests(Phase1ConvergenceBase):
             "base_revision": self.draft.edit_revision,
             "mutation": {
                 "type": "appearance.template.apply",
+                # Correction 1: the canonical R4 template-apply mutation contract
+                # requires draft_id (see test_r4_store_appearance_mutations.py).
+                # Its prior absence was a TEST DEFECT, not an Expected RED gap.
+                "draft_id": self.draft.pk,
                 "template_key": self.template_b.key,
                 "template_version": self.template_b.version,
             },
