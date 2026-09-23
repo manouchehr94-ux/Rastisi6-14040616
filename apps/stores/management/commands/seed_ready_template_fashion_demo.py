@@ -419,7 +419,12 @@ class Command(BaseCommand):
         if ready_template_preset is not None:
             from apps.storefront_builder.services import layout_service, preset_service
 
-            preset_service.apply_preset_with_checkpoint(store, ready_template_preset)
+            # Controlled seed setup: apply the Ready Template through the
+            # lower-level ``apply_preset`` primitive on the store's active Draft.
+            # (The merchant-facing checkpoint wrapper is fail-closed for Ready
+            # Templates — Architecture Convergence / Phase 1 single-authority rule.)
+            seed_draft = layout_service.get_or_create_draft(store)
+            preset_service.apply_preset(seed_draft, ready_template_preset)
             layout_service.publish(store)
             applied_template_note = f"  Ready Template: {ready_template_preset.key} (Apply + Publish شد)\n"
 

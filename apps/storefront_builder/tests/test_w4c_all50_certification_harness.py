@@ -82,7 +82,8 @@ class W4CAll50CertificationHarnessTests(TestCase):
 
     def _publish(self, key):
         preset = lpr.get_layout_preset(key)
-        preset_service.apply_preset_with_checkpoint(self.store, preset)
+        draft = layout_service.get_or_create_draft(self.store)
+        preset_service.apply_preset(draft, preset)
         layout_service.publish(self.store)
         return preset
 
@@ -781,7 +782,8 @@ class W4CPartialBatchStatusTests(TestCase):
     def test_36_theme_cleanup_failure_raises_even_in_only_partial_batch(self):
         store = Store.objects.create(name="فروشگاه ۳۶", slug="w4c-case36", admin_subdomain="w4c-case36")
         preset = lpr.get_layout_preset("editorial_jewelry")
-        preset_service.apply_preset_with_checkpoint(store, preset)
+        draft = layout_service.get_or_create_draft(store)
+        preset_service.apply_preset(draft, preset)
         layout_service.publish(store)
         campaign_root = Path(tempfile.mkdtemp())
         base_manifest = {"origin": "http://x", "public_url": "http://x/"}
@@ -901,7 +903,8 @@ class W4CResultFreshnessTests(TestCase):
             name="فروشگاه تازگی", slug="w4c-freshness", admin_subdomain="w4c-freshness",
         )
         preset = lpr.get_layout_preset("editorial_jewelry")
-        preset_service.apply_preset_with_checkpoint(self.store, preset)
+        draft = layout_service.get_or_create_draft(self.store)
+        preset_service.apply_preset(draft, preset)
         layout_service.publish(self.store)
         self.campaign_root = Path(tempfile.mkdtemp(prefix="w4c-fresh-"))
         self.command = Command()
@@ -1077,7 +1080,8 @@ class W4CResumeAndMergeTests(TestCase):
             name="فروشگاه ازسرگیری", slug="w4c-resume", admin_subdomain="w4c-resume",
         )
         preset = lpr.get_layout_preset("editorial_jewelry")
-        preset_service.apply_preset_with_checkpoint(self.store, preset)
+        draft = layout_service.get_or_create_draft(self.store)
+        preset_service.apply_preset(draft, preset)
         layout_service.publish(self.store)
         self.campaign_root = Path(tempfile.mkdtemp(prefix="w4c-resume-"))
         self.command = Command()
@@ -1226,7 +1230,8 @@ class W4CThemeCleanupOrderingTests(TestCase):
             name="فروشگاه پاک‌سازی", slug="w4c-cleanup-order", admin_subdomain="w4c-cleanup-order",
         )
         preset = lpr.get_layout_preset("editorial_jewelry")
-        preset_service.apply_preset_with_checkpoint(self.store, preset)
+        draft = layout_service.get_or_create_draft(self.store)
+        preset_service.apply_preset(draft, preset)
         layout_service.publish(self.store)
         self.campaign_root = Path(tempfile.mkdtemp(prefix="w4c-cleanup-"))
         self.command = Command()
@@ -1749,7 +1754,8 @@ class W4CCampaignProvenanceTests(TestCase):
 
     def _publish(self, key):
         preset = lpr.get_layout_preset(key)
-        preset_service.apply_preset_with_checkpoint(self.store, preset)
+        draft = layout_service.get_or_create_draft(self.store)
+        preset_service.apply_preset(draft, preset)
         layout_service.publish(self.store)
         return preset
 
@@ -2055,18 +2061,22 @@ class W4CRateLimitControlledDiagnosticTests(TestCase):
         preset1 = lpr.get_layout_preset("dense_marketplace")
         preset2 = lpr.get_layout_preset("premium_leather")
         call_count = {"n": 0}
-        original_apply = preset_service.apply_preset_with_checkpoint
+        # Architecture Convergence / Phase 1: the W4C campaign now applies the
+        # Ready-Template baseline through the lower-level ``apply_preset``
+        # primitive (the merchant-facing checkpoint wrapper is fail-closed for
+        # Ready Templates), so the rate-limit fault must be injected there.
+        original_apply = preset_service.apply_preset
 
-        def flaky_apply(store, preset):
+        def flaky_apply(draft, preset):
             call_count["n"] += 1
             if call_count["n"] == 2:
                 raise RateLimitExceeded(
                     "تعداد تلاش برای «storefront_layout.new_draft» بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید"
                 )
-            return original_apply(store, preset)
+            return original_apply(draft, preset)
 
         with mock.patch.object(Command, "_run_logged", side_effect=self._fake_run_logged), \
-             mock.patch.object(r4_mod.preset_service, "apply_preset_with_checkpoint", side_effect=flaky_apply):
+             mock.patch.object(r4_mod.preset_service, "apply_preset", side_effect=flaky_apply):
             with self.assertRaises(CommandError) as ctx:
                 self.command._run_w4c_campaign(
                     store=self.store,
@@ -2137,7 +2147,8 @@ class W4CCanonicalHomeExpectationTests(TestCase):
 
     def _published_contract_for(self, key):
         preset = lpr.get_layout_preset(key)
-        preset_service.apply_preset_with_checkpoint(self.store, preset)
+        draft = layout_service.get_or_create_draft(self.store)
+        preset_service.apply_preset(draft, preset)
         layout_service.publish(self.store)
         return self.store, preset, self.command._canonical_home_contract(self.store)
 

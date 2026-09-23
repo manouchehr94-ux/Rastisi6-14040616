@@ -2477,23 +2477,26 @@ def storefront_template_live_preview(request, key):
 def storefront_apply_layout_preset(request):
     """اعمالِ یک Preset (``layout_preset_registry``) روی Draftِ فعلی.
 
-    Architecture Convergence / Phase 1 — a merchant-facing READY TEMPLATE apply
-    is now the SAME preservation-first, same-Draft transition every other
-    merchant Ready Template path uses (``r4_mutation_service.switch_template``):
-    it maps shared semantic slots, introduces missing target slots, never
-    silently destroys merchant work, and records EXACTLY one canonical history
-    entry / one revision increment on the same active Draft (no clone-a-new-Draft
-    checkpoint, no ``@_record_edit_history`` decorator — that would double-record
-    against the R4 mutation boundary's own ``record_change``).
+    Architecture Convergence / Phase 1 — the merchant behavior is split by preset
+    kind, and that split happens BEFORE any destructive-confirmation gate:
 
-    A NON-Ready structural preset keeps the pre-existing, deliberately
-    destructive ``apply_preset_with_checkpoint`` behavior (a separate, confirmed
-    concept — Phase 1 does not broaden the preservation contract to legacy
-    structural presets).
+    * READY TEMPLATE → the canonical preservation-first, SAME-active-Draft switch
+      (``r4_mutation_service.switch_template_current``): it maps shared semantic
+      slots, introduces missing target slots, never silently destroys merchant
+      work, and records EXACTLY one canonical history entry / one revision
+      increment. Because it is preservation-first, it does NOT go through the
+      "would replace your content" confirmation contract and never tells the
+      merchant their layout/content will be replaced — that warning would be
+      false for this transition.
 
-    Either way this stays a Draft-only operation with the same explicit-confirm
-    gate: if a covered page already has sections, ``confirm_preset_apply=1`` is
-    required."""
+    * NON-READY STRUCTURAL PRESET → the pre-existing, deliberately destructive
+      ``apply_preset_with_checkpoint`` path, which KEEPS its explicit-confirm gate
+      (``confirm_preset_apply=1`` when a covered page already has sections), its
+      recoverable-checkpoint behavior, and its destructive warning. Phase 1 does
+      not broaden the preservation contract to legacy structural presets.
+
+    Permissions/tenant-scoping/editor-surface guards (the decorators and
+    ``_resolve_store``) are unchanged for both kinds."""
     from . import layout_preset_registry
     from .services import preset_service
 
@@ -2506,6 +2509,24 @@ def storefront_apply_layout_preset(request):
         messages.error(request, "پیش‌تنظیمِ انتخاب‌شده یافت نشد")
         return redirect("dashboard:storefront-builder-editor")
 
+    if preset.is_ready_template:
+        # Preservation-first, same-active-Draft switch through the canonical R4
+        # mutation boundary — no destructive-confirmation gate, records exactly
+        # one history entry / one revision increment (no ``@_record_edit_history``
+        # decorator, which would double-record against ``record_change``).
+        try:
+            r4_mutation_service.switch_template_current(
+                store=store, actor=request.user,
+                template_key=preset.key, template_version=preset.version,
+            )
+            messages.success(request, f"پیش‌تنظیمِ «{preset.label_fa}» اعمال شد")
+        except preset_service.InvalidPresetError as exc:
+            messages.error(request, str(exc))
+        except r4_mutation_service.R4MutationError as exc:
+            messages.error(request, str(exc))
+        return redirect("dashboard:storefront-builder-editor")
+
+    # NON-Ready structural preset — confirmed-destructive checkpoint/apply path.
     would_replace = _preset_would_replace_content(draft, preset)
     if would_replace and request.POST.get("confirm_preset_apply") != "1":
         messages.error(
@@ -2516,33 +2537,18 @@ def storefront_apply_layout_preset(request):
         return redirect("dashboard:storefront-builder-editor")
 
     try:
-        if preset.is_ready_template:
-            # Converged preservation-first same-Draft Ready Template switch —
-            # records exactly one history entry / one revision increment on the
-            # active Draft through the canonical R4 mutation boundary (no
-            # ``@_record_edit_history`` decorator, which would double-record).
-            r4_mutation_service.switch_template_current(
-                store=store, actor=request.user,
-                template_key=preset.key, template_version=preset.version,
-            )
-        else:
-            # Non-Ready structural preset — unchanged confirmed-destructive path,
-            # preserving the current Draft as a recoverable version checkpoint.
-            # Its edit-history behavior is unchanged from before convergence:
-            # when nothing is checkpointed (the SAME Draft is mutated in place)
-            # exactly one plain history entry is recorded; when a checkpoint
-            # fires (a fresh active Draft), the old row is archived and nothing
-            # is recorded against it (mirroring the removed decorator exactly).
-            before_state = _history_before(draft)
-            preset_service.apply_preset_with_checkpoint(store, preset, user=request.user)
-            if StorefrontLayoutVersion.objects.filter(
-                pk=draft.pk, status=StorefrontLayoutVersion.Status.DRAFT,
-            ).exists():
-                _history_record(request, draft, before_state, "اعمال پیش‌تنظیم صفحه‌آرایی")
+        # Its edit-history behavior is unchanged: when nothing is checkpointed
+        # (the SAME Draft is mutated in place) exactly one plain history entry is
+        # recorded; when a checkpoint fires (a fresh active Draft), the old row is
+        # archived and nothing is recorded against it.
+        before_state = _history_before(draft)
+        preset_service.apply_preset_with_checkpoint(store, preset, user=request.user)
+        if StorefrontLayoutVersion.objects.filter(
+            pk=draft.pk, status=StorefrontLayoutVersion.Status.DRAFT,
+        ).exists():
+            _history_record(request, draft, before_state, "اعمال پیش‌تنظیم صفحه‌آرایی")
         messages.success(request, f"پیش‌تنظیمِ «{preset.label_fa}» اعمال شد")
     except preset_service.InvalidPresetError as exc:
-        messages.error(request, str(exc))
-    except r4_mutation_service.R4MutationError as exc:
         messages.error(request, str(exc))
     return redirect("dashboard:storefront-builder-editor")
 

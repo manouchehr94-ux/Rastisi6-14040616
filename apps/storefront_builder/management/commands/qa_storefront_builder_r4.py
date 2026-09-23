@@ -1703,7 +1703,12 @@ class Command(BaseCommand):
         ``published_version is None``/status FIRST, raising a controlled
         ``CommandError``, before ever dereferencing ``template_provenance``
         (the exact ordering bug the design review flagged)."""
-        preset_service.apply_preset_with_checkpoint(store, preset)
+        # Controlled QA setup: apply the (Ready Template) preset through the
+        # lower-level ``apply_preset`` primitive on the active Draft — the
+        # merchant-facing checkpoint wrapper is fail-closed for Ready Templates
+        # (Architecture Convergence / Phase 1 single-authority rule).
+        qa_draft = layout_service.get_or_create_draft(store)
+        preset_service.apply_preset(qa_draft, preset)
         layout_service.publish(store)
         layout = StorefrontLayout.objects.get(store=store)
         pv = layout.published_version

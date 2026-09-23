@@ -20,12 +20,19 @@ Phase-1 RED/GREEN contract files are untouched):
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import Client, TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.storefront_builder import layout_preset_registry as lpr
-from apps.storefront_builder.models import StorefrontSection
+from apps.storefront_builder.models import (
+    StorefrontCell,
+    StorefrontContainer,
+    StorefrontEditHistoryEntry,
+    StorefrontSection,
+)
 from apps.storefront_builder.services import container_service
+from apps.storefront_builder.services import edit_history_service
 from apps.storefront_builder.services import layout_service as svc
 from apps.storefront_builder.services import preset_service
 from apps.storefront_builder.services import r4_mutation_service
@@ -229,3 +236,193 @@ class IntroducedSlotPlacementConsistencyTests(_ReviewCorrectionBase):
                 cell.container.page.version_id, switched.pk,
                 "introduced slot's placement must belong to the active switched Draft",
             )
+
+
+# --------------------------------------------------------------------------
+# SECOND REVIEW / R2-I1 — a Cell.settings edit forces the preservation path
+# --------------------------------------------------------------------------
+class CellSettingsPristineProofTests(_ReviewCorrectionBase):
+    def test_cell_settings_edit_is_preservation_required_and_survives(self):
+        home = self.draft.get_page("home")
+        sections = list(home.sections.order_by("order", "id"))
+        original_sids = [s.stable_id for s in sections]
+
+        # Persisted Cell-settings edit (editable layout state also captured by
+        # the canonical Undo/Redo snapshot) — section state is untouched.
+        cell = StorefrontCell.objects.filter(container__page=home).order_by("order", "id").first()
+        self.assertIsNotNone(cell)
+        self.assertEqual(cell.settings or {}, {})  # canonical default before edit
+        cell.settings = {"vertical_align": "center"}
+        cell.save(update_fields=["settings", "updated_at"])
+
+        self.assertFalse(
+            preset_service._page_is_pristine(
+                self.draft.get_page("home"), self.draft.template_baseline_snapshot or {},
+            ),
+            "a merchant Cell-settings edit must make the page preservation-required",
+        )
+
+        switched = self._switch_to_b()
+        self.assertEqual(self.layout.draft_version_id, self.draft.pk)
+        for sid in original_sids:
+            self.assertIsNotNone(
+                StorefrontSection.objects.filter(page__version=switched, stable_id=sid).first(),
+                f"merchant section {sid} must survive after a Cell-settings edit",
+            )
+
+
+# --------------------------------------------------------------------------
+# SECOND REVIEW / R2-I3 — apply_preset_with_checkpoint is fail-closed for Ready
+# --------------------------------------------------------------------------
+class CheckpointApplyFailsClosedForReadyTests(_ReviewCorrectionBase):
+    def test_apply_preset_with_checkpoint_rejects_ready_template(self):
+        with self.assertRaises(preset_service.InvalidPresetError):
+            preset_service.apply_preset_with_checkpoint(self.store, self.template_b, user=self.staff)
+
+    def test_apply_preset_with_checkpoint_still_accepts_non_ready_structural_preset(self):
+        non_ready = lpr.get_layout_preset("dense_catalog")
+        self.assertFalse(non_ready.is_ready_template)
+        result = preset_service.apply_preset_with_checkpoint(self.store, non_ready, user=self.staff)
+        self.assertIsNotNone(result)
+        prov = result.template_provenance or {}
+        self.assertEqual(prov.get("template", {}).get("key"), "dense_catalog")
+
+
+# --------------------------------------------------------------------------
+# SECOND REVIEW / R2-I4 — exact same Template is a TRUE no-op
+# --------------------------------------------------------------------------
+class ExactSameTemplateNoOpTests(_ReviewCorrectionBase):
+    def _identities(self, draft):
+        return (
+            set(StorefrontSection.objects.filter(page__version=draft).values_list("pk", "stable_id")),
+            set(StorefrontContainer.objects.filter(page__version=draft).values_list("pk", "stable_id")),
+            set(StorefrontCell.objects.filter(container__page__version=draft).values_list("pk", "stable_id")),
+        )
+
+    def test_reapplying_the_exact_same_template_is_a_true_no_op(self):
+        # setUp applied Template A canonically; re-applying A through the
+        # merchant-facing canonical switch must be a TRUE no-op.
+        active = self._active_draft()
+        pre_snapshot = edit_history_service.snapshot_draft(active)
+        pre_revision = active.edit_revision
+        pre_history = StorefrontEditHistoryEntry.objects.filter(draft_version=active).count()
+        pre_identities = self._identities(active)
+
+        r4_mutation_service.switch_template(
+            store=self.store, actor=self.staff, base_revision=active.edit_revision,
+            template_key=self.template_a.key, template_version=self.template_a.version,
+        )
+
+        after = self._active_draft()
+        self.assertEqual(after.pk, active.pk, "no-op must keep the same active Draft")
+        self.assertEqual(
+            edit_history_service.snapshot_draft(after), pre_snapshot,
+            "no-op must leave the complete editable snapshot unchanged",
+        )
+        self.assertEqual(after.edit_revision, pre_revision, "no-op must not advance edit_revision")
+        self.assertEqual(
+            StorefrontEditHistoryEntry.objects.filter(draft_version=after).count(), pre_history,
+            "no-op must not add a history entry",
+        )
+        self.assertEqual(
+            self._identities(after), pre_identities,
+            "no-op must preserve every Section/Container/Cell DB + stable identity",
+        )
+
+    def test_merchant_modified_same_template_is_not_a_no_op(self):
+        # A merchant modification to the same-template Draft must NOT be
+        # misclassified as pristine/no-op — the preservation path runs and the
+        # merchant content survives.
+        active = self._active_draft()
+        section = active.get_page("home").sections.order_by("order").first()
+        section.settings = {**(section.settings or {}), "__merchant__": "keep"}
+        section.save(update_fields=["settings"])
+        sid = section.stable_id
+
+        self.assertFalse(
+            preset_service._draft_already_matches_preset(active, self.template_a),
+            "a merchant-modified same-template Draft must NOT match as a no-op",
+        )
+        r4_mutation_service.switch_template(
+            store=self.store, actor=self.staff, base_revision=active.edit_revision,
+            template_key=self.template_a.key, template_version=self.template_a.version,
+        )
+        switched = self._active_draft()
+        preserved = StorefrontSection.objects.filter(page__version=switched, stable_id=sid).first()
+        self.assertIsNotNone(preserved, "merchant-modified section must survive same-template apply")
+        self.assertEqual((preserved.settings or {}).get("__merchant__"), "keep")
+
+
+# --------------------------------------------------------------------------
+# SECOND REVIEW / R2-I2 — dashboard Ready/non-Ready confirmation split
+# --------------------------------------------------------------------------
+_HOST = "sfb-r2-dashboard.rastisi.localhost"
+
+
+class DashboardReadyApplyConfirmationSplitTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.store = _akhlaghi()
+        self.store.admin_subdomain = _HOST.split(".")[0]
+        self.store.save(update_fields=["admin_subdomain"])
+        self.staff = User.objects.create_user(
+            username="r2_dash_owner", password="pass12345", is_staff=True
+        )
+        StoreMembership.objects.create(
+            store=self.store, user=self.staff, role=StoreMembership.Role.OWNER,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
+        )
+        self.layout = svc.get_or_create_layout(self.store)
+        self.layout.r4_editor_enabled = True
+        self.layout.save(update_fields=["r4_editor_enabled"])
+        self.draft = svc.get_or_create_draft(self.store, user=self.staff)
+        preset_service.apply_preset(self.draft, lpr.get_layout_preset("aftab_price"))
+        self.draft.refresh_from_db()
+
+    def _login(self):
+        client = Client(HTTP_HOST=_HOST)
+        client.login(username="r2_dash_owner", password="pass12345")
+        return client
+
+    def test_ready_template_apply_needs_no_destructive_confirmation(self):
+        # A merchant section makes the page have real content; a Ready Template
+        # apply must still succeed WITHOUT confirm_preset_apply=1 (preservation
+        # first, no destructive-replacement warning).
+        merchant = StorefrontSection.objects.create(
+            version=self.draft, section_key="rich_text", order=97,
+            settings={"content": "keep-me"},
+        )
+        sid = merchant.stable_id
+        client = self._login()
+        resp = client.post(
+            reverse("dashboard:storefront-builder-apply-preset"),
+            data={"preset_key": "almas_luxury"},  # NOTE: no confirm_preset_apply
+        )
+        self.assertIn(resp.status_code, (302, 303))
+        self.layout.refresh_from_db()
+        # Same active Draft, provenance B, merchant content survived.
+        self.assertEqual(self.layout.draft_version_id, self.draft.pk)
+        active = self.layout.draft_version
+        self.assertEqual(
+            (active.template_provenance or {}).get("template", {}).get("key"), "almas_luxury",
+        )
+        self.assertIsNotNone(
+            StorefrontSection.objects.filter(page__version=active, stable_id=sid).first(),
+            "merchant content must survive the confirmation-free Ready Template apply",
+        )
+
+    def test_non_ready_structural_preset_still_requires_confirmation(self):
+        client = self._login()
+        # dense_catalog is non-Ready; covered pages already have content, so
+        # the destructive apply is refused without explicit confirmation.
+        resp = client.post(
+            reverse("dashboard:storefront-builder-apply-preset"),
+            data={"preset_key": "dense_catalog"},  # no confirm
+        )
+        self.assertIn(resp.status_code, (302, 303))
+        self.layout.refresh_from_db()
+        active = self.layout.draft_version
+        # Refused: provenance is still Template A (aftab_price), unchanged.
+        self.assertEqual(
+            (active.template_provenance or {}).get("template", {}).get("key"), "aftab_price",
+        )

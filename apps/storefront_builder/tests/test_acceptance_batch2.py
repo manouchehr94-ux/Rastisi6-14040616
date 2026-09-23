@@ -79,30 +79,34 @@ class PreApplyCheckpointTests(TestCase):
         self.store = _akhlaghi()
         self.staff = User.objects.create_user(username="batch2_checkpoint_owner", password="pass12345", is_staff=True)
 
-    def _apply_dense_marketplace(self):
+    def _apply_dense_catalog(self):
+        # Architecture Convergence / Phase 1: ``apply_preset_with_checkpoint``
+        # is the NON-READY structural-preset wrapper (fail-closed for Ready
+        # Templates), so this checkpoint batch exercises it with genuine
+        # non-Ready structural presets (dense_catalog / premium_boutique).
         draft = svc.get_or_create_draft(self.store)
-        preset_service.apply_preset(draft, lpr.get_layout_preset("dense_marketplace"))
+        preset_service.apply_preset(draft, lpr.get_layout_preset("dense_catalog"))
         draft.refresh_from_db()
         return draft
 
     def test_a_applying_a_different_template_creates_a_recoverable_pre_switch_checkpoint(self):
-        draft1 = self._apply_dense_marketplace()
+        draft1 = self._apply_dense_catalog()
         layout = svc.get_or_create_layout(self.store)
         versions_before = layout.versions.count()
 
         preset_service.apply_preset_with_checkpoint(
-            self.store, lpr.get_layout_preset("warm_boutique"), user=self.staff,
+            self.store, lpr.get_layout_preset("premium_boutique"), user=self.staff,
         )
         layout.refresh_from_db()
         self.assertEqual(layout.versions.count(), versions_before + 1)
         checkpoint = layout.versions.filter(status=StorefrontLayoutVersion.Status.ARCHIVED).latest("version_number")
         self.assertEqual(checkpoint.pk, draft1.pk)
-        self.assertEqual(checkpoint.template_provenance["template"]["key"], "dense_marketplace")
+        self.assertEqual(checkpoint.template_provenance["template"]["key"], "dense_catalog")
 
     def test_b_active_draft_becomes_a_distinct_version_where_appropriate(self):
-        draft1 = self._apply_dense_marketplace()
+        draft1 = self._apply_dense_catalog()
         new_draft = preset_service.apply_preset_with_checkpoint(
-            self.store, lpr.get_layout_preset("warm_boutique"), user=self.staff,
+            self.store, lpr.get_layout_preset("premium_boutique"), user=self.staff,
         )
         self.assertNotEqual(new_draft.pk, draft1.pk)
         layout = svc.get_or_create_layout(self.store)
@@ -114,19 +118,19 @@ class PreApplyCheckpointTests(TestCase):
         fresh_draft = svc.get_or_create_draft(other_store)
         fresh_draft.sections.all().delete()
         result_draft = preset_service.apply_preset_with_checkpoint(
-            other_store, lpr.get_layout_preset("warm_boutique"), user=self.staff,
+            other_store, lpr.get_layout_preset("premium_boutique"), user=self.staff,
         )
         self.assertEqual(result_draft.pk, fresh_draft.pk)
 
     def test_c_published_version_id_and_content_remain_untouched(self):
-        self._apply_dense_marketplace()
+        self._apply_dense_catalog()
         svc.publish(self.store)
         layout = svc.get_or_create_layout(self.store)
         published_before_id = layout.published_version_id
         fingerprint_before = layout.published_version.content_fingerprint
 
         preset_service.apply_preset_with_checkpoint(
-            self.store, lpr.get_layout_preset("warm_boutique"), user=self.staff,
+            self.store, lpr.get_layout_preset("premium_boutique"), user=self.staff,
         )
         layout.refresh_from_db()
         self.assertEqual(layout.published_version_id, published_before_id)
@@ -134,11 +138,11 @@ class PreApplyCheckpointTests(TestCase):
         self.assertEqual(layout.published_version.content_fingerprint, fingerprint_before)
 
     def test_d_pre_switch_state_is_recoverable_via_existing_restore_version(self):
-        draft1 = self._apply_dense_marketplace()
+        draft1 = self._apply_dense_catalog()
         home_before = list(draft1.home_page().sections.order_by("order").values_list("section_key", flat=True))
 
         preset_service.apply_preset_with_checkpoint(
-            self.store, lpr.get_layout_preset("warm_boutique"), user=self.staff,
+            self.store, lpr.get_layout_preset("premium_boutique"), user=self.staff,
         )
         layout = svc.get_or_create_layout(self.store)
         checkpoint = layout.versions.filter(status=StorefrontLayoutVersion.Status.ARCHIVED).latest("version_number")
@@ -148,17 +152,17 @@ class PreApplyCheckpointTests(TestCase):
         self.assertEqual(home_after, home_before)
 
     def test_e_restore_creates_a_draft_and_never_auto_publishes(self):
-        draft1 = self._apply_dense_marketplace()
+        draft1 = self._apply_dense_catalog()
         svc.publish(self.store)
         # publish() archives draft1 too (as the previous published version's
         # predecessor path) — re-create a fresh draft with real content atop it.
         draft2 = svc.get_or_create_draft(self.store)
-        preset_service.apply_preset(draft2, lpr.get_layout_preset("dense_marketplace"))
+        preset_service.apply_preset(draft2, lpr.get_layout_preset("dense_catalog"))
         layout = svc.get_or_create_layout(self.store)
         published_before = layout.published_version_id
 
         preset_service.apply_preset_with_checkpoint(
-            self.store, lpr.get_layout_preset("warm_boutique"), user=self.staff,
+            self.store, lpr.get_layout_preset("premium_boutique"), user=self.staff,
         )
         layout.refresh_from_db()
         checkpoint = layout.versions.filter(status=StorefrontLayoutVersion.Status.ARCHIVED).latest("version_number")
@@ -170,9 +174,9 @@ class PreApplyCheckpointTests(TestCase):
         self.assertEqual(layout.draft_version_id, restored.pk)
 
     def test_f_one_store_cannot_restore_another_stores_history(self):
-        self._apply_dense_marketplace()
+        self._apply_dense_catalog()
         preset_service.apply_preset_with_checkpoint(
-            self.store, lpr.get_layout_preset("warm_boutique"), user=self.staff,
+            self.store, lpr.get_layout_preset("premium_boutique"), user=self.staff,
         )
         layout = svc.get_or_create_layout(self.store)
         checkpoint = layout.versions.filter(status=StorefrontLayoutVersion.Status.ARCHIVED).latest("version_number")
@@ -182,7 +186,7 @@ class PreApplyCheckpointTests(TestCase):
             svc.restore_version(other_store, checkpoint.pk, user=self.staff)
 
     def test_g_failed_template_apply_leaves_no_half_created_history_state(self):
-        draft1 = self._apply_dense_marketplace()
+        draft1 = self._apply_dense_catalog()
         layout = svc.get_or_create_layout(self.store)
         versions_before = layout.versions.count()
         draft_pk_before = layout.draft_version_id
@@ -193,7 +197,7 @@ class PreApplyCheckpointTests(TestCase):
 
         with self.assertRaises(preset_service.LockedSectionsPresentError):
             preset_service.apply_preset_with_checkpoint(
-                self.store, lpr.get_layout_preset("warm_boutique"), user=self.staff,
+                self.store, lpr.get_layout_preset("premium_boutique"), user=self.staff,
             )
 
         layout.refresh_from_db()
@@ -203,7 +207,7 @@ class PreApplyCheckpointTests(TestCase):
         self.assertEqual(draft1.status, StorefrontLayoutVersion.Status.DRAFT)
 
     def test_h_apply_and_history_transition_are_atomic(self):
-        draft1 = self._apply_dense_marketplace()
+        draft1 = self._apply_dense_catalog()
         layout = svc.get_or_create_layout(self.store)
         versions_before = layout.versions.count()
         sections_before = StorefrontSection.objects.filter(page__version=draft1).count()
@@ -214,7 +218,7 @@ class PreApplyCheckpointTests(TestCase):
         ):
             with self.assertRaises(RuntimeError):
                 preset_service.apply_preset_with_checkpoint(
-                    self.store, lpr.get_layout_preset("warm_boutique"), user=self.staff,
+                    self.store, lpr.get_layout_preset("premium_boutique"), user=self.staff,
                 )
 
         layout.refresh_from_db()
@@ -324,14 +328,14 @@ class SameTemplateNoOpTests(TestCase):
 
     def test_reapplying_the_same_unmodified_template_creates_no_new_version_or_draft(self):
         draft = svc.get_or_create_draft(self.store, user=self.staff)
-        preset_service.apply_preset(draft, lpr.get_layout_preset("dense_marketplace"))
+        preset_service.apply_preset(draft, lpr.get_layout_preset("dense_catalog"))
         draft.refresh_from_db()
         layout = svc.get_or_create_layout(self.store)
         versions_before = layout.versions.count()
         draft_id_before = layout.draft_version_id
 
         result = preset_service.apply_preset_with_checkpoint(
-            self.store, lpr.get_layout_preset("dense_marketplace"), user=self.staff,
+            self.store, lpr.get_layout_preset("dense_catalog"), user=self.staff,
         )
 
         layout.refresh_from_db()
@@ -341,14 +345,14 @@ class SameTemplateNoOpTests(TestCase):
 
     def test_applying_a_genuinely_different_template_still_checkpoints(self):
         draft = svc.get_or_create_draft(self.store, user=self.staff)
-        preset_service.apply_preset(draft, lpr.get_layout_preset("dense_marketplace"))
+        preset_service.apply_preset(draft, lpr.get_layout_preset("dense_catalog"))
         draft.refresh_from_db()
         layout = svc.get_or_create_layout(self.store)
         versions_before = layout.versions.count()
         draft_id_before = layout.draft_version_id
 
         result = preset_service.apply_preset_with_checkpoint(
-            self.store, lpr.get_layout_preset("warm_boutique"), user=self.staff,
+            self.store, lpr.get_layout_preset("premium_boutique"), user=self.staff,
         )
 
         layout.refresh_from_db()
@@ -361,7 +365,7 @@ class SameTemplateNoOpTests(TestCase):
         content — re-applying the same Template to revert it must still be
         checkpointed, exactly like any other meaningful replacement."""
         draft = svc.get_or_create_draft(self.store, user=self.staff)
-        preset_service.apply_preset(draft, lpr.get_layout_preset("dense_marketplace"))
+        preset_service.apply_preset(draft, lpr.get_layout_preset("dense_catalog"))
         draft.refresh_from_db()
         section = draft.home_page().sections.first()
         section.settings = {**section.settings, "_manual_qa_marker": True}
@@ -371,7 +375,7 @@ class SameTemplateNoOpTests(TestCase):
         draft_id_before = layout.draft_version_id
 
         result = preset_service.apply_preset_with_checkpoint(
-            self.store, lpr.get_layout_preset("dense_marketplace"), user=self.staff,
+            self.store, lpr.get_layout_preset("dense_catalog"), user=self.staff,
         )
 
         layout.refresh_from_db()
