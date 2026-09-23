@@ -9,24 +9,41 @@ code actually does**, with evidence classifications. It does **not** propose a f
 architecture (governing rule §26) and does **not** reconcile against existing documentation
 (that is a later phase).
 
+> **STEP-0 reporting repair (post-Phase-1 review).** During the Phases 2–4 task, three bookkeeping
+> corrections were applied to this report — transparently, not silently:
+> (A) commit/SHA terminology made explicit and non-self-referential (Part A / Part K);
+> (B) the potentially-dead **count** recalculated from doc 13 — the "8 findings" figure was an
+> investigation-record count, not a candidate count; the accurate breakdown is 5 actual
+> POTENTIALLY/POSSIBLY_DEAD candidates + 1 conditionally-live + 1 live-but-inert + 1
+> confirmed-removed (Part F / Part K item 17);
+> (C) the runtime-flow count clarified (15 numbered flows / 16 sections; Part K item 15).
+> No substantive architecture finding was altered. Substantive findings are independently
+> re-verified against the frozen code in `../phase2_validation/`.
+
 ---
 
 ## Part A — Freeze record (governing rule §27)
 
+Immutable identifiers (a committed document must NOT try to contain its own final commit SHA, so
+the terminology below is explicit rather than a single self-referential "ending HEAD"):
+
 ```
-source_commit: 5883a1404a8b0f1f245f0d8ef17ac5c13e40a7cb   (production code audited)
-branch: docs/architecture-knowledge-system
-branch_start_HEAD: 1bc347404194067c529652c0a56a6c1210b4c092
-branch_end_HEAD:   6e88c2c41448b2a7b6a73fb89bfb57e183b78147   (the single Phase 1 artifact commit)
-discovery_completed_at: 2026-09-23 (session date)
+audited_production_snapshot:        5883a1404a8b0f1f245f0d8ef17ac5c13e40a7cb
+governing_document_commit:          1bc347404194067c529652c0a56a6c1210b4c092
+phase1_artifact_commit:             6e88c2c41448b2a7b6a73fb89bfb57e183b78147
+phase1_metadata_followup_commit:    326c83c5822f5571f4f2bab68ff9d934ede76001
+phase1_report_repair_commit:        (this STEP-0 repair; SHA recorded in the commit itself,
+                                     not embedded here — see Part K)
+branch:                             docs/architecture-knowledge-system
+discovery_completed_at:             2026-09-23 (session date)
 existing_docs_used_for_architecture_discovery: NO
 ```
 
-**Source-freeze note:** the branch HEAD differs from the audited production snapshot `5883a140`
-by exactly one documentation-only commit (the governing document). `git diff 5883a140 HEAD`
-returns only `docs/architecture_knowledge_system/00_GOVERNING_RULES_AND_PHASE1.md`. **No
-production code differs**, so this report faithfully describes commit `5883a140`. No newer
-production code was incorporated.
+**Source-freeze note:** the branch HEAD advances only via documentation commits under
+`docs/architecture_knowledge_system/**`. `git diff 5883a140 <any Phase-1 commit>` touches only
+files under `docs/architecture_knowledge_system/`. **No production code differs** from the audited
+snapshot, so this report faithfully describes commit `5883a140`. No newer production code was
+incorporated.
 
 ---
 
@@ -123,15 +140,23 @@ side effects via service calls + `transaction.on_commit`).
 
 ## Part F — Potentially dead / orphaned (governing rule §29.17)
 
-- **D1 `apps/blog`** — POTENTIALLY_DEAD storefront wiring (admin-only model; no urls/views).
-- **D3 `membership_service.transfer_ownership`** — POTENTIALLY_DEAD relative to OTP flow (unconfirmed).
-- **D4 `ShopSettings` legacy SMS fields** — POTENTIALLY_DEAD data (superseded by PlatformConfiguration).
-- **D5 removed `family_registry.py`/`preset_registry.py`** — confirmed absent; only doc/test references.
-- **D6 `resolution.require_resolved_store`** — possibly unused scaffolding (unconfirmed).
-- **D7 reserved authorization permission keys** — inert forward-design.
-- **D8 content MED-001 media-cleanup functions** — live-but-inert no-ops.
+Doc 13 contains **8 investigation records (D1–D8)**. They do **not** all satisfy the
+POTENTIALLY_DEAD classification. Recalculated from doc 13:
 
-Corrected non-dead items: PAYMENT_SUCCESS/FAILED SMS (live) and notification enqueue callers
+| Bucket | Count | Records |
+|---|---:|---|
+| Actual POTENTIALLY / POSSIBLY_DEAD candidates | 5 | D1 (blog storefront wiring), D3 (`membership_service.transfer_ownership`, unconfirmed), D4 (`ShopSettings` legacy SMS fields, data), D6 (`resolution.require_resolved_store`, unconfirmed), D7 (reserved authorization permission keys, intentional) |
+| Conditionally-live | 1 | D2 (`simulate_payment` — production-gated, live in dev/tests) |
+| Live-but-inert | 1 | D8 (content MED-001 media-cleanup no-ops — called but do nothing by design) |
+| Confirmed-removed / absent (not live code) | 1 | D5 (`family_registry.py`/`preset_registry.py` — files do not exist; only doc/test references remain) |
+
+- **Investigation records total:** 8 (D1–D8).
+- **Actual POTENTIALLY/POSSIBLY_DEAD candidates:** **5** (D1, D3, D4, D6, D7).
+- Of these 5, **2 are unconfirmed** (D3, D6) and are carried into Phase 2 for caller tracing;
+  D1/D4/D7 are VERIFIED as their stated (limited) kind of deadness.
+
+**Confirmed-live corrections** (an earlier pass mis-flagged these; direct grep disproved):
+PAYMENT_SUCCESS/FAILED SMS (live) and notification `enqueue`/`notify_security_event` callers
 (live in `stores` services). Full detail in doc 13.
 
 ---
@@ -181,10 +206,14 @@ suite (no such service); minimal blog tests; R4 client JS untested directly.
 ## Part K — Final Phase 1 report (governing rule §29)
 
 1. **Branch name:** `docs/architecture-knowledge-system`
-2. **Starting SHA:** `1bc347404194067c529652c0a56a6c1210b4c092`
-3. **Ending SHA:** `6e88c2c41448b2a7b6a73fb89bfb57e183b78147` — a single commit adding only the
-   Phase 1 artifacts under `docs/architecture_knowledge_system/phase1_code_discovery/`
-   (this SHA-correction note itself is folded into a follow-up commit on the same branch).
+2. **Immutable commit identifiers** (explicit, non-self-referential):
+   - audited production snapshot: `5883a1404a8b0f1f245f0d8ef17ac5c13e40a7cb`
+   - governing-document commit: `1bc347404194067c529652c0a56a6c1210b4c092`
+   - Phase 1 artifact commit: `6e88c2c41448b2a7b6a73fb89bfb57e183b78147`
+   - Phase 1 metadata follow-up commit: `326c83c5822f5571f4f2bab68ff9d934ede76001`
+   - Phase 1 report repair commit(s): created by STEP 0 of the Phases 2–4 task; each such
+     commit's SHA is recorded by Git (and in `PHASES_2_TO_4_MASTER_REPORT.md`), never embedded
+     inside the document it creates.
 4. **`git status --short` (before commit):** only `?? docs/architecture_knowledge_system/phase1_code_discovery/`
    (all new, untracked).
 5. **`git diff --stat` (tracked files):** empty — no tracked file modified.
@@ -201,9 +230,14 @@ suite (no such service); minimal blog tests; R4 client JS untested directly.
 14. **Entry points mapped:** 3 URLconfs, 6 route groups + dashboard/portal/platform-admin route
     families, 4 webhook/device callbacks, 34 management commands, admin actions, 0 signals,
     6 on_commit hook sites (doc 05).
-15. **Major runtime flows reconstructed:** 15 (doc 08, Flows 0–14).
+15. **Major runtime flows reconstructed:** 15 numbered flows (doc 08, Flows 0–14); Flow 3 is
+    documented as two sub-flows (3a simulation, 3b real gateway), so doc 08 contains 16 flow
+    sections in total.
 16. **Architecture-smell findings by severity:** 0 CRITICAL / 3 HIGH / 15 MEDIUM / 4 LOW / 4 OBSERVATION (Part E).
-17. **Potentially dead/orphaned findings:** 8 (Part F / doc 13).
+17. **Dead/orphan investigation records:** 8 (D1–D8). Of these, **actual POTENTIALLY/POSSIBLY_DEAD
+    candidates = 5** (D1, D3, D4, D6, D7; two unconfirmed: D3, D6), plus 1 conditionally-live (D2),
+    1 live-but-inert (D8), 1 confirmed-removed/absent (D5), and 2 confirmed-live corrections
+    (payment SMS, notification callers). See Part F / doc 13.
 18. **Ambiguous-ownership findings:** 9 (Part G / doc 14 §1).
 19. **Major unknowns:** 9 (doc 14 §2).
 20. **Test coverage gaps discovered:** payment_status transition legality; content-service tests;

@@ -102,6 +102,22 @@ sites remain but perform no deletion. Not dead (called), but functionally inert 
 
 ---
 
+## Count reconciliation (STEP-0 repair)
+
+This document holds **8 investigation records (D1–D8)**; they are not all POTENTIALLY_DEAD:
+
+| Bucket | Count | Records |
+|---|---:|---|
+| Actual POTENTIALLY / POSSIBLY_DEAD candidates | 5 | D1, D3, D4, D6, D7 |
+| Conditionally-live | 1 | D2 |
+| Live-but-inert | 1 | D8 |
+| Confirmed-removed / absent (not live code) | 1 | D5 |
+| Confirmed-live corrections (separate section below) | 2 | payment SMS; notification callers |
+
+Of the 5 candidates, **D3 and D6 are unconfirmed** (carried into Phase 2 for caller tracing);
+D1, D4, D7 are VERIFIED as their stated (limited) kind of deadness. The Phase 1 master report
+(doc 15, Part F / Part K item 17) uses these recalculated figures.
+
 ## Method note
 Signals were checked exhaustively (none exist), so no component can be "dead" merely for lacking a
 signal receiver. Dynamic imports were not exhaustively enumerated; lazy/local imports are used
