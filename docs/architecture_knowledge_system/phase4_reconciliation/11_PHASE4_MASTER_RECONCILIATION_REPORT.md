@@ -26,7 +26,8 @@ archive candidates.
 | HISTORICAL | 1 | doc 05 |
 | UNVERIFIABLE | 1 | doc 07 |
 | DUPLICATE | 0 (document-level, doc 06) | doc 06 |
-| **Decision-required** | **6** (DR-1…DR-8 span these + Phase 1/2 items) | doc 08 |
+| **Claim-level `decision_required=YES` flags** | **6** | doc 01 CSV |
+| **Total architectural decisions (DR register)** | **8** (DR-1…DR-8) | doc 08 |
 
 ## 3. Headline conclusions
 1. **The authoritative SaaS ADR record + payment architecture are substantially accurate**
@@ -51,8 +52,9 @@ QA-evidence-as-architecture (4 homes), and missing docs for content/notification
 catalogue with instances in doc 08 Part B.
 
 ## 5. Domain documentation readiness (doc 08 Part C)
-READY 1 (stores) · PARTIAL 8 · POOR 4 (customers, cart, SMS, content) · MISSING 2 (notifications,
-blog) · CONFLICTED 1 (storefront_builder). Priorities for future Domain Knowledge Packs:
+READY 1 (stores) · PARTIAL 7 (portal, catalog, orders, subscriptions, billing, dashboard, core) ·
+POOR 4 (customers, cart, content, SMS) · MISSING 2 (notifications, blog) · CONFLICTED 1
+(storefront_builder). **Totals sum to 15.** Priorities for future Domain Knowledge Packs:
 content (D10), storefront de-confliction (D9), and the POOR/MISSING domains.
 
 ## 6. Architectural decisions required (doc 08 Part A) — identified, not made

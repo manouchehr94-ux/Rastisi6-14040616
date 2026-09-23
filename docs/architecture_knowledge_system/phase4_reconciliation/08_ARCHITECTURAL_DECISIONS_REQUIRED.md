@@ -10,7 +10,16 @@ assessment mandated for this task.
 
 ---
 
-## Part A — Decisions required (6 decision-required claims + Phase 1/2 HIGH/UPGRADED items)
+## Part A — Decisions required
+
+> **Count distinction (STEP-0 clarification):**
+> - **claim-level `decision_required=YES` flags in `01_CLAIM_RECONCILIATION_MATRIX.csv`: 6.**
+> - **total architectural decisions requiring resolution (the DR register): 8 (DR-1…DR-8).**
+> The DR register is larger than the 6 flagged claims because several DR items originate from
+> Phase 1/2 findings (e.g. DR-8 `require_resolved_store`) rather than from a reconciled document
+> claim. Do not conflate "6 flagged claims" with "8 DR items."
+
+The 8 decisions below are surfaced by doc↔code disagreements **and** by Phase 1/2 findings.
 
 ### DR-1 — `Order.payment_status`: single canonical writer + transition guard (from H1 / S1 / CL-08)
 - **Tension:** 3 writers (gateway conditional-update; simulate direct save; refund direct save),
@@ -98,13 +107,27 @@ quality). Scale: READY / PARTIAL / POOR / MISSING / CONFLICTED.
 | D7 SaaS subscriptions (`subscriptions`) | **PARTIAL** | ADR-66/72 + prelaunch report; no consolidated state-machine doc |
 | D8 SaaS billing (`billing`) | **PARTIAL** | ADR-72–82 + prelaunch report; strong but spread |
 | D9 Storefront presentation (`storefront_builder`) | **CONFLICTED** | Over-documented across 4 generations; reader cannot tell which is current without the retirement map |
-| D10 Content & navigation (`content`) | **POOR/MISSING** | No content-domain doc; H2 mutation authority undocumented |
+| D10 Content & navigation (`content`) | **POOR** | Scattered design-intent/ownership references exist (PR-8 ownership, ADR framing) but no adequate current content-domain doc; H2 mutation authority undocumented |
 | D11 Merchant admin (`dashboard`) | **PARTIAL** | Build reports exist; no current "dashboard as controller / direct-write surface" doc |
 | D12 SMS (`sms`) | **POOR** | ADR-93 owner SMS only; device gateway/credit model undocumented |
 | D13 Notifications (`notifications`) | **MISSING** | No doc |
 | D14 Cross-cutting (`core`) | **PARTIAL** | ShopSettings/config covered; export/import/SEO thin |
 | D15 Blog (`blog`) | **MISSING** | No doc (consistent with near-dead code) |
 
-**Readiness summary:** READY 1 · PARTIAL 8 · POOR 4 · MISSING 2 · CONFLICTED 1. This directly
-scopes the future Domain Knowledge Packs: prioritize **content (D10)**, **storefront de-confliction
-(D9)**, and the POOR/MISSING domains (D3, D5, D12, D13, D15).
+**Readiness summary (single-value vocabulary; totals sum to exactly 15 domains):**
+
+```
+READY:      1   (D1 stores)
+PARTIAL:    7   (D2 portal, D4 catalog, D6 orders, D7 subscriptions, D8 billing, D11 dashboard, D14 core)
+POOR:       4   (D3 customers, D5 cart, D10 content, D12 sms)
+MISSING:    2   (D13 notifications, D15 blog)
+CONFLICTED: 1   (D9 storefront_builder)
+TOTAL:      15
+```
+
+This directly scopes the future Domain Knowledge Packs: prioritize **content (D10)**,
+**storefront de-confliction (D9)**, and the POOR/MISSING domains (D3, D5, D12, D13, D15).
+
+> **[STEP-0 CORRECTION]** An earlier draft rated D10 as "POOR/MISSING" and summed PARTIAL to 8
+> (totalling 16). Corrected: D10 = **POOR** (scattered intent exists, no adequate current doc);
+> the seven PARTIAL domains are enumerated explicitly above; totals now sum to 15.

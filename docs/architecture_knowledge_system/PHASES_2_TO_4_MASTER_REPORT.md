@@ -90,7 +90,8 @@ both views. Classification: MATCHES_CODE / STALE / CONTRADICTS_CODE / HISTORICAL
 DESIGN_INTENT_ONLY / SUPERSEDED / DUPLICATE / UNVERIFIABLE.
 
 **Totals:** MATCHES_CODE 22 · STALE 3 · CONTRADICTS_CODE 2 · DESIGN_INTENT_ONLY 2 · SUPERSEDED 1 ·
-HISTORICAL 1 · UNVERIFIABLE 1 · DUPLICATE 0 (document-level). Decision-required: 6.
+HISTORICAL 1 · UNVERIFIABLE 1 · DUPLICATE 0 (document-level). Claim-level `decision_required=YES`
+flags: **6**; total architectural decisions requiring resolution (DR register): **8** (DR-1…DR-8).
 
 **Contradictions with current code:**
 - **X1 (`docs/README.md`)** — claims a `backend/ frontend/ infra/ docker/` layout; the repo is a
@@ -126,10 +127,15 @@ with the Phase 1/2 code-derived layer as the authoritative "what."
 | Rating | Count | Domains |
 |---|---:|---|
 | READY | 1 | stores (D1) |
-| PARTIAL | 8 | portal, catalog, orders, subscriptions, billing, dashboard, core, (+1) |
-| POOR | 4 | customers (D3), cart (D5), SMS (D12), content (D10) |
+| PARTIAL | 7 | portal (D2), catalog (D4), orders (D6), subscriptions (D7), billing (D8), dashboard (D11), core (D14) |
+| POOR | 4 | customers (D3), cart (D5), content (D10), SMS (D12) |
 | MISSING | 2 | notifications (D13), blog (D15) |
 | CONFLICTED | 1 | storefront_builder (D9 — over-documented across generations) |
+| **TOTAL** | **15** | — |
+
+> **[STEP-0 CORRECTION]** Earlier the PARTIAL row read "8 … (+1)" (D10 double-counted as
+> POOR/MISSING), summing to 16. Corrected: D10 = POOR; PARTIAL = 7 (enumerated explicitly);
+> totals sum to 15.
 
 Highest-priority documentation gaps for future Domain Knowledge Packs: **content (D10)** (the H2
 mutation authority is entirely undocumented), **storefront de-confliction (D9)**, and the

@@ -50,7 +50,8 @@ Four concepts are kept distinct throughout:
 | HISTORICAL | 1 |
 | UNVERIFIABLE | 1 |
 | DUPLICATE | 0 (duplication is document-level, see doc 06) |
-| **Decision-required claims** | **6** |
+| **Claim-level `decision_required=YES` flags** | **6** |
+| **Total architectural decisions requiring resolution (DR register DR-1…DR-8)** | **8** |
 
 **Interpretation:** the authoritative SaaS ADR record and payment architecture are **substantially
 accurate** (22/32 MATCHES_CODE) — the code was genuinely built to these decisions. The
