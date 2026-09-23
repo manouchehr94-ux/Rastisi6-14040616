@@ -121,4 +121,4 @@ has **no** write service (`content/services.py` is resolve/cleanup/newsletter on
 | Transaction (legacy) | 2 create paths | n/a | MEDIUM | DR-6 |
 | Order.status / stock / Subscription.status | funneled | yes | LOW | — |
 
-Mutation graph: [`graphs/mutation_graph.mmd`](graphs/mutation_graph.mmd).
+Mutation graph: [`../phase1_code_discovery/graphs/mutation_graph.mmd`](../phase1_code_discovery/graphs/mutation_graph.mmd).

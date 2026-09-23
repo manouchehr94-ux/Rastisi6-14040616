@@ -51,8 +51,9 @@ stable and consistent with Phase 1 `02_DOMAIN_DISCOVERY.md`. Deep packs live in
   (dashboard) **and** `stores.ownership_transfer_service` (portal OTP) — **both live**.
 
 ## Cluster diagram
-See [`graphs/domain_map.mmd`](graphs/domain_map.mmd) and
-[`graphs/domain_dependencies.mmd`](graphs/domain_dependencies.mmd).
+See [`../phase1_code_discovery/graphs/domain_map.mmd`](../phase1_code_discovery/graphs/domain_map.mmd)
+and [`../phase1_code_discovery/graphs/domain_dependencies.mmd`](../phase1_code_discovery/graphs/domain_dependencies.mmd)
+(authoritative Phase 1 sources; canonical navigation graphs in [`graphs/`](graphs/README.md)).
 
 ## Model/service counts per domain (VERIFIED)
 | App | Model classes | Service files |

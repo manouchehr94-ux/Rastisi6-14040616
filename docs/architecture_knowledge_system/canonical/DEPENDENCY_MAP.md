@@ -62,5 +62,5 @@ Typed cross-domain dependencies. Types: `calls`, `imports`, `writes` (cross-doma
 4. `billing → subscriptions` (state-machine driver).
 5. `storefront_builder ↔ content ↔ catalog` (render + FK + registry).
 
-Graphs: [`graphs/domain_dependencies.mmd`](graphs/domain_dependencies.mmd),
-[`graphs/service_dependencies.mmd`](graphs/service_dependencies.mmd).
+Graphs: [`../phase1_code_discovery/graphs/domain_dependencies.mmd`](../phase1_code_discovery/graphs/domain_dependencies.mmd),
+[`../phase1_code_discovery/graphs/service_dependencies.mmd`](../phase1_code_discovery/graphs/service_dependencies.mmd).

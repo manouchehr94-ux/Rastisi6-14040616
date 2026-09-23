@@ -74,8 +74,9 @@ verification), SMTP email (owner password reset), Cloudflare Turnstile. See
 explicit service calls + `transaction.on_commit`). SQLite (dev/test) / PostgreSQL (prod).
 
 ## 7. Canonical graph
-See [`graphs/system_context.mmd`](graphs/system_context.mmd) (canonical) and the Phase 1 source
-[`../phase1_code_discovery/graphs/system_context.mmd`](../phase1_code_discovery/graphs/system_context.mmd).
+See the authoritative Phase 1 source
+[`../phase1_code_discovery/graphs/system_context.mmd`](../phase1_code_discovery/graphs/system_context.mmd)
+and the canonical navigation graphs in [`graphs/`](graphs/README.md).
 
 ---
 

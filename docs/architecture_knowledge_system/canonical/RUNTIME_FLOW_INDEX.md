@@ -35,7 +35,7 @@ Index of the 15 reconstructed runtime flows. Full step-by-step detail lives in P
 **Count:** 15 numbered flows (0–14); Flow 3 is documented as two sub-flows (3a simulation / 3b real
 gateway), so the source document has 16 flow sections.
 
-Graph: [`graphs/major_runtime_flows.mmd`](graphs/major_runtime_flows.mmd).
+Graph: [`../phase1_code_discovery/graphs/major_runtime_flows.mmd`](../phase1_code_discovery/graphs/major_runtime_flows.mmd).
 
 ## Cross-flow observations (CURRENT CODE REALITY)
 - Two payment confirmation designs coexist (3a vs 3b) writing the same `Order.payment_status` (H1).

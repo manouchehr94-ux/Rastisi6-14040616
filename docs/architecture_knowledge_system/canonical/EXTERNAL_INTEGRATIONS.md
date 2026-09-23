@@ -65,4 +65,4 @@ Gateway/SMS credentials are encrypted at rest (`orders.encryption` Fernet) or co
 environment / `PlatformConfiguration`; never logged in full. `PAYMENT_CREDENTIAL_KEY` missing in
 production → startup failure (fail-closed).
 
-Graph: [`graphs/system_context.mmd`](graphs/system_context.mmd).
+Graph: [`../phase1_code_discovery/graphs/system_context.mmd`](../phase1_code_discovery/graphs/system_context.mmd).

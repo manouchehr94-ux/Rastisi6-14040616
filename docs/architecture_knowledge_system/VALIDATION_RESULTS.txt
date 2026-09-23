@@ -1,0 +1,13 @@
+=== Architecture Docs Validation ===
+repo: /projects/sandbox/Rastisi6-14040616
+  info: internal links checked: 434
+  info: registry domain IDs: 15 (expected 15)
+  info: registry DR references: 8 distinct
+  info: domain dirs: 15 (expected 15)
+  info: code-path intentionally absent (expected): apps/blog/urls.py in docs/architecture_knowledge_system/domains/blog/README.md
+  info: code-path intentionally absent (expected): apps/orders/gateways/new_gateway.py in docs/architecture_knowledge_system/domains/orders/SERVICES.md
+  info: code-path references checked: 120
+  info: canonical graph sources: 3
+warnings: 0
+errors: 0
+=== RESULT: PASS ===

@@ -108,4 +108,4 @@ Legend: **[LC]** = lifecycle/status field; **[U]** = unique/constraint of note.
 - **`ShopSettings` is owned by `core`** but write authority is spread (dashboard + sms_service) —
   see MUTATION_AUTHORITY and finding around ShopSettings.
 
-Model-relationship graph: [`graphs/model_relationships.mmd`](graphs/model_relationships.mmd).
+Model-relationship graph: [`../phase1_code_discovery/graphs/model_relationships.mmd`](../phase1_code_discovery/graphs/model_relationships.mmd).
