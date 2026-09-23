@@ -17,7 +17,7 @@ architecture (governing rule §26) and does **not** reconcile against existing d
 source_commit: 5883a1404a8b0f1f245f0d8ef17ac5c13e40a7cb   (production code audited)
 branch: docs/architecture-knowledge-system
 branch_start_HEAD: 1bc347404194067c529652c0a56a6c1210b4c092
-branch_end_HEAD:   1bc347404194067c529652c0a56a6c1210b4c092   (pre-commit; updated on commit — see Part K)
+branch_end_HEAD:   6e88c2c41448b2a7b6a73fb89bfb57e183b78147   (the single Phase 1 artifact commit)
 discovery_completed_at: 2026-09-23 (session date)
 existing_docs_used_for_architecture_discovery: NO
 ```
@@ -182,10 +182,9 @@ suite (no such service); minimal blog tests; R4 client JS untested directly.
 
 1. **Branch name:** `docs/architecture-knowledge-system`
 2. **Starting SHA:** `1bc347404194067c529652c0a56a6c1210b4c092`
-3. **Ending SHA:** `1bc347404194067c529652c0a56a6c1210b4c092` at time of writing; a single commit
-   adding only the Phase 1 artifacts under
-   `docs/architecture_knowledge_system/phase1_code_discovery/` is made in the final step (its SHA
-   is recorded in the commit itself and reported to the operator).
+3. **Ending SHA:** `6e88c2c41448b2a7b6a73fb89bfb57e183b78147` — a single commit adding only the
+   Phase 1 artifacts under `docs/architecture_knowledge_system/phase1_code_discovery/`
+   (this SHA-correction note itself is folded into a follow-up commit on the same branch).
 4. **`git status --short` (before commit):** only `?? docs/architecture_knowledge_system/phase1_code_discovery/`
    (all new, untracked).
 5. **`git diff --stat` (tracked files):** empty — no tracked file modified.
