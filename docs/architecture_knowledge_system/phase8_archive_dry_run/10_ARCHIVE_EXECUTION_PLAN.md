@@ -90,6 +90,27 @@ PY
   because the paths come verbatim from `git ls-files -z` expansion (see
   `12_COLLECTION_EXPANSION_MANIFEST.csv`) and are `shlex.quote`d.
 
+### 2.2 Canonical execution order `[PHASE 8.3]`
+
+There is **one** authoritative execution order (encoded as `CANONICAL_ORDER` in
+`tools/docs/validate_architecture_docs.py` and enforced by transition-legality
+checks). It is **small-first**, so the first live run is the smallest unit and any
+harness surprise surfaces on 3 files, not 1000+:
+
+```
+A6  (3)  →  A5 (18)  →  A4 (21)  →  A3 (30)  →  A2 (250)  →  A1 (1086)
+    →  B (1)  →  C (28)
+    →  D5 (1)  →  D4 (27)  →  D3 (49)  →  D2 (75)  →  D1 (1476)
+```
+
+> **Ambiguity resolved `[PHASE 8.3]`.** Earlier drafts mentioned both an
+> `A1→A2→…` sequence and a "first smoke may be A6 or D5" note. This is now
+> settled: **the canonical order is the small-first list above, and the first
+> live sub-batch is `A6`.** The lifecycle model represents state as the ordered
+> set of **completed execution units** (not an alphabetical prefix); `--phase8-state`
+> is parsed strictly against this order (out-of-order or unknown tokens are
+> rejected). See `16_ARCHIVE_EXECUTION_STATE_MODEL.md`.
+
 ## 3. Per-sub-batch procedure `[PHASE 8.2]` (repeat for each sub-batch A1…A6, B, C, D1…D5)
 
 > **`[PHASE 8.2]` supersedes the earlier §3.** Three hardenings:
@@ -98,13 +119,22 @@ PY
 > tracked validation-output file is written between staging and commit** — the
 > validators print to the console / a temp file only.
 
-The unit of execution is a **sub-batch** (`sub_batch` column of `13_...`), e.g.
-`A1`. `STATE_BEFORE` / `STATE_AFTER` are the completed-sub-batch prefixes.
+> **`[PHASE 8.3]` supersedes the §3 command block below.** Two corrections:
+> (1) the **staged-tree verifier now takes the CURRENT sub-batch explicitly**
+> (`--phase8-current-sub-batch`) and validates **only that unit's delta** — the
+> earlier version derived the expected staged set from the cumulative
+> `--phase8-state`, which wrongly required already-committed sub-batches to be
+> re-staged; (2) execution follows **one canonical order** (§2.2) and each step
+> asserts transition legality via `--phase8-state-before`.
+
+The unit of execution is a **sub-batch** = one canonical execution unit
+(`sub_batch` column of `13_...`). `STATE_BEFORE` is the cumulative completed
+prefix **before** this unit; `STATE_AFTER = STATE_BEFORE + CURRENT`.
 
 ```bash
-SUB=A1                                   # then A2 … A6, B, C, D1 … D5
-STATE_BEFORE=pre                         # completed-prefix BEFORE this sub-batch
-STATE_AFTER=A1                           # completed-prefix AFTER this sub-batch
+CUR=A6                                   # canonical first unit (§2.2); then A5, A4, …
+STATE_BEFORE=pre                         # cumulative completed BEFORE this unit
+STATE_AFTER=A6                           # == STATE_BEFORE + CUR (canonical order)
 TMP="$(mktemp -d)"                       # external scratch — never inside the repo
 
 # 1. Clean tree
@@ -113,17 +143,20 @@ test -z "$(git status --porcelain)" || { echo "TREE NOT CLEAN"; exit 1; }
 # 2. Capture pre-batch HEAD (used by the blob-identity verifier and rollback)
 PRE="$(git rev-parse HEAD)"
 
-# 3. Lifecycle preflight for the CURRENT (pre-this-sub-batch) state -> must PASS
+# 3. Lifecycle preflight for the state BEFORE this unit -> must PASS
 python3 tools/docs/validate_architecture_docs.py --phase8-state "$STATE_BEFORE" \
   > "$TMP/state_before.txt" 2>&1
 grep -q "RESULT: PASS" "$TMP/state_before.txt" || { echo "PRE-STATE NOT PASS"; exit 1; }
 
-# 4. Emit + review the exact git mv commands for THIS sub-batch (from 13_..., see §2.1)
-#    (filter on sub_batch == "$SUB"); execute them — git mv ONLY, never rm, never add -A.
+# 4. Emit + review the exact git mv commands for THIS unit (from 13_..., see §2.1)
+#    (filter on sub_batch == "$CUR"); execute them — git mv ONLY, never rm, never add -A.
 
-# 5. Staged-tree verifier: prove a PURE RELOCATION by blob identity (not R*).
+# 5. Staged-tree verifier: validate ONLY this unit's delta, prove PURE RELOCATION
+#    by blob identity (not R*). Transition legality is checked here too.
 python3 tools/docs/validate_architecture_docs.py \
-    --phase8-state "$STATE_AFTER" --phase8-verify-staged --phase8-pre-head "$PRE" \
+    --phase8-state "$STATE_AFTER" --phase8-state-before "$STATE_BEFORE" \
+    --phase8-current-sub-batch "$CUR" \
+    --phase8-verify-staged --phase8-pre-head "$PRE" \
     > "$TMP/staged.txt" 2>&1
 grep -q "RESULT: PASS" "$TMP/staged.txt" || { echo "STAGED-TREE VERIFY FAILED"; cat "$TMP/staged.txt"; exit 1; }
 
@@ -131,16 +164,16 @@ grep -q "RESULT: PASS" "$TMP/staged.txt" || { echo "STAGED-TREE VERIFY FAILED"; 
 python3 tools/docs/validate_architecture_docs.py > "$TMP/core.txt" 2>&1
 grep -q "RESULT: PASS" "$TMP/core.txt" || { echo "CORE VALIDATOR NOT PASS"; exit 1; }
 
-# 7. Lifecycle validator for the NEW state -> must PASS
+# 7. Commit ONLY this unit's already-staged renames (NO git add -A; NO tracked
+#    validation-output file is part of this commit).
+git commit -m "docs(archive): relocate sub-batch $CUR to docs/archive"
+
+# 8. Post-commit lifecycle validator for the NEW cumulative state -> must PASS
 python3 tools/docs/validate_architecture_docs.py --phase8-state "$STATE_AFTER" \
   > "$TMP/state_after.txt" 2>&1
 grep -q "RESULT: PASS" "$TMP/state_after.txt" || { echo "POST-STATE NOT PASS"; exit 1; }
 
-# 8. HUMAN REVIEW CHECKPOINT (review "$TMP" reports + the staged rename list)
-
-# 9. Commit ONLY this sub-batch's already-staged renames (NO git add -A; NO tracked
-#    validation-output file is part of this commit).
-git commit -m "docs(archive): relocate sub-batch $SUB to docs/archive"
+# 9. HUMAN REVIEW CHECKPOINT (review "$TMP" reports + the committed rename list)
 
 # 10. Clean tree again; discard scratch
 test -z "$(git status --porcelain)" || { echo "TREE NOT CLEAN AFTER COMMIT"; exit 1; }
@@ -202,6 +235,14 @@ restores the original tree with no content loss.
 > (see §3). The harness is proven by `tools/docs/phase8_harness_selftest.py`
 > (11/11 cases). See `16_ARCHIVE_EXECUTION_STATE_MODEL.md` and
 > `17_ARCHIVE_STAGED_TREE_VERIFIER.md`.
+
+> **`[PHASE 8.3]`** The staged-tree gate now **requires** `--phase8-current-sub-batch <UNIT>`
+> and validates **only that unit's delta** (the previous gate wrongly expected the
+> whole cumulative completed set to be staged, so the 2nd sub-batch onward would
+> falsely FAIL). The gate also passes `--phase8-state-before` so transition
+> legality (canonical order, no skips) is enforced. The sequential harness is
+> proven by `tools/docs/phase8_harness_selftest.py` (**21/21** cases, incl. a
+> committed A6 followed by a staged A5). See `19_PHASE8_SEQUENTIAL_HARNESS_REVIEW.md`.
 
 - After **each** batch: validator must report **PASS, 0 errors / 0 warnings**.
 - The validator's `EXPECTED_ABSENT` allowlist

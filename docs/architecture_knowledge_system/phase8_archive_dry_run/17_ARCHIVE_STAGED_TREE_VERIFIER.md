@@ -115,3 +115,54 @@ limit. A large batch can silently disable rename detection, and a similarity-bas
 check could accept a "mostly similar" but altered file. Blob-SHA equality is a
 **binary, exact** guarantee: the archived file is bit-for-bit the original. This
 is the property the archive must uphold — relocation, never mutation.
+
+
+---
+
+## `[PHASE 8.3]` — expected staged set is the CURRENT sub-batch delta only
+
+**Correction to §2/§3 above.** The Phase-8.2 verifier derived the expected staged
+set from the **cumulative completed** state (`--phase8-state`), i.e.
+
+```python
+expected = {(src, tgt) for row in rows if row_completed(row)}   # WRONG for step 2+
+```
+
+This is correct only for the very first sub-batch. From the second sub-batch
+onward it is a bug: after `A6` is committed, staging `A5` would make the verifier
+expect **A6 + A5** to be staged, and it would falsely FAIL because A6 is already
+committed (not staged).
+
+The verifier now takes the current unit **explicitly** and expects **only** that
+unit's delta:
+
+```python
+expected = {(src, tgt) for row in rows if row["sub_batch"] == CURRENT}   # correct
+```
+
+Interface (Phase 8.3):
+
+```bash
+python3 tools/docs/validate_architecture_docs.py \
+    --phase8-state <cumulative AFTER>  \
+    --phase8-state-before <cumulative BEFORE> \
+    --phase8-current-sub-batch <UNIT> \
+    --phase8-verify-staged --phase8-pre-head <PRE_BATCH_HEAD> \
+    [--phase8-fixture <DIR>]
+```
+
+`--phase8-verify-staged` now **requires** `--phase8-current-sub-batch`. The
+lifecycle state (`--phase8-state`) remains cumulative and is validated separately;
+the staged delta is single-unit. Blob-identity checking is unchanged.
+
+Additional checks in this mode:
+
+- **No prior-unit path** may be staged (a re-staged already-committed file FAILs).
+- **No other-unit / unrelated path** may be staged.
+- **Every** move of the current unit must be staged; **no extra** move may appear.
+- **Transition legality** (`STATE_AFTER == STATE_BEFORE + [CURRENT]`, canonical
+  order, no skips) is enforced.
+
+Proven by the sequential harness self-test (`tools/docs/phase8_harness_selftest.py`,
+**21/21**), which stages `A5` **after** `A6` is committed and confirms the verifier
+expects only the `A5` delta.

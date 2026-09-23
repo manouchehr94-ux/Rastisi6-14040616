@@ -47,6 +47,10 @@ reversible **sub-batches** by source subtree (see
 
 `1086+250+30+21+18+3 + 1 + 28 + 1476+75+49+27+1 = 3065`.
 
+> The table above is the **definitional** id→subtree mapping (order-independent).
+> The **execution order** is the canonical small-first sequence in §2a
+> (`A6` first), not the numeric id order.
+
 **Splitting rationale:** each sub-batch is one coherent source subtree, keeps its
 retained siblings untouched, is individually reviewable and revertible, and maps
 deterministically from the manifest. Provenance is preserved (targets mirror
@@ -55,59 +59,92 @@ because it is one self-contained reference-asset export (`beraito-exact-frontend
 splitting it internally would fragment a single provenance unit — it is reviewed
 as a unit and reverted as a unit.
 
-## 3. State token grammar
+## 2a. Canonical execution order `[PHASE 8.3]`
 
-`--phase8-state <STATE>` where STATE is either:
+There is exactly **one** authoritative order (encoded as `CANONICAL_ORDER` in the
+validator), chosen **small-first** so the first live run is the smallest unit:
 
-- `pre` — nothing executed yet (the current real-repo state); **or**
-- a concatenation of **completed** batch letters and/or sub-batch ids, e.g.
-  `A1`, `A1A2`, `A` (whole batch A = all A-sub-batches), `AB`, `ABC`, `ABCD`.
+```
+A6 → A5 → A4 → A3 → A2 → A1 → B → C → D5 → D4 → D3 → D2 → D1
+(3)  (18) (21) (30) (250)(1086)(1)(28) (1) (27) (49) (75)(1476)
+```
 
-Tokenisation: the parser reads maximal `[A-E]\d*` tokens. A bare letter (`A`)
-marks the **whole** batch complete; a letter+digits (`A1`) marks that sub-batch
-complete. Unknown batches or sub-batch ids are rejected.
+**Ambiguity resolved:** earlier drafts contained both an `A1→A2→…` sequence and a
+"first smoke may be A6 or D5" note. The canonical order above is now the single
+source of truth and **the first live sub-batch is `A6`**.
 
-## 4. Per-row lifecycle semantics
+## 3. Two separate concepts `[PHASE 8.3]`
 
-For each row in `13_...`:
+The harness models **two distinct things** that must never be conflated:
 
-| Row's batch/sub-batch in STATE? | `source_path` | `target_path` |
+| Concept | Flag | Meaning | Cumulative? |
+| --- | --- | --- | --- |
+| **Lifecycle state** | `--phase8-state <STATE>` | the ordered set of **completed** execution units (already moved **and committed**) | yes (cumulative) |
+| **Staged delta** | `--phase8-current-sub-batch <UNIT>` | the **one** unit whose moves are staged right now (not yet committed) | no (single unit) |
+
+The staged-tree verifier validates **only the current unit's delta** — never the
+cumulative completed set. (Conflating them was the Phase-8.3 bug: after `A6` was
+committed, staging `A5` would falsely be expected to also re-stage `A6`.)
+
+### State token grammar (strict)
+
+`--phase8-state` is `pre` (nothing done) or a concatenation of **known execution
+unit ids** from the canonical order, e.g. `A6`, `A6A5`, `A6A5A4B`. The parser
+**consumes the entire expression or rejects it**: units must be known, appear in
+**canonical order**, and not repeat. Garbage or any unconsumed character is a hard
+error. Rejected examples: `A1XYZ`, `A1-BOGUS`, `Q1`, `A99`, `A6A6` (dup),
+`A5A6` (out of order).
+
+## 4. Per-row lifecycle semantics (cumulative `--phase8-state`)
+
+For each row in `13_...`, given the completed-unit set:
+
+| Row's unit completed in STATE? | `source_path` | `target_path` |
 | --- | --- | --- |
 | **completed** | must **NOT** exist | must **exist** |
-| **pending** (not completed) | must **exist** | must **NOT** exist |
+| **pending** | must **exist** | must **NOT** exist |
 
-And in **every** state, for every row (state-independent invariants):
+State-independent invariants (every state): `safe_to_move == TRUE`;
+`source_path != target_path`; no duplicate source/target; valid `batch`.
+A single mismatch FAILs.
 
-- `safe_to_move == TRUE`
-- `source_path != target_path`
-- no duplicate `source_path`, no duplicate `target_path` (no target collision)
-- `batch` is a valid batch id
+## 4a. Transition legality `[PHASE 8.3]`
 
-A single mismatch makes the state validation FAIL.
+When a current unit is supplied, the harness also checks the transition
+`STATE_BEFORE → CURRENT → STATE_AFTER`:
 
-## 5. Expected results by state (illustrative)
+- `STATE_AFTER` must equal `STATE_BEFORE + [CURRENT]` (canonical order);
+- `CURRENT` must be the **next** canonical unit not already in `STATE_BEFORE`
+  (no skips, no out-of-order);
+- `CURRENT` must not already be completed in `STATE_BEFORE`.
+
+Illegal examples (rejected): `before=pre, current=A5` (A6 must be first);
+`before=A6, current=A4` (skips A5).
+
+## 5. Expected results (illustrative)
 
 | Command | Expected |
 | --- | --- |
-| `--phase8-state pre` | 3065 pending, 0 completed; all sources present, all targets absent → **PASS** |
-| `--phase8-state A1` | A1 (1086) completed: sources absent, targets present; the other 1979 pending → **PASS** |
-| `--phase8-state A` | all of batch A (1408) completed; B/C/D (1657) pending → **PASS** |
-| `--phase8-state ABCD` | all 3065 completed; sources absent, targets present → **PASS** |
-| completed row whose target is missing | → **FAIL** (`completed but target absent`) |
-| pending row whose source is missing | → **FAIL** (`pending but source absent`) |
+| `--phase8-state pre` | 3065 pending, 0 completed → **PASS** |
+| `--phase8-state A6` | A6 (3) completed; 3062 pending → **PASS** (after A6 committed) |
+| `--phase8-state A6A5` | A6+A5 (21) completed; rest pending → **PASS** |
+| `--phase8-state A6A5A4A3A2A1BCD5D4D3D2D1` | all 3065 completed → **PASS** (full completion) |
+| staging A5 with `--phase8-current-sub-batch A5 --phase8-state-before A6` | only A5's moves staged, blob-identity holds → **PASS** |
+| staging A5 but `--phase8-current-sub-batch A6` | → **FAIL** (wrong current) |
+| `--phase8-state A5` (before=pre) | → **FAIL** (out-of-sequence; A6 first) |
 
-## 6. Recommended state sequence for execution (future, not now)
+## 6. Execution state sequence (future, not now)
 
 ```
-pre  →  A1 → A1A2 → A1A2A3 → A1A2A3A4 → A1A2A3A4A5 → A  (all A)
-     →  AB  →  ABC  →  ABC D1 → … → ABCD  (all complete)
+pre → A6 → A6A5 → A6A5A4 → A6A5A4A3 → A6A5A4A3A2 → A6A5A4A3A2A1
+    → …A1B → …A1BC
+    → …CD5 → …CD5D4 → …CD5D4D3 → …CD5D4D3D2 → A6A5A4A3A2A1BCD5D4D3D2D1
 ```
 
-After each sub-batch is staged, the **staged-tree verifier**
-(`17_ARCHIVE_STAGED_TREE_VERIFIER.md`, `--phase8-verify-staged`) proves the
-staged change is a pure relocation; after each commit, `--phase8-state <prefix>`
-proves the on-disk lifecycle is consistent. Both must PASS, plus the core
-validator, before proceeding (full procedure in `10_ARCHIVE_EXECUTION_PLAN.md`).
+For each unit: stage its moves, run the staged-tree verifier for that **current
+unit** (`--phase8-current-sub-batch`, blob identity + transition legality), run the
+core validator, commit, then run `--phase8-state <new cumulative>` post-commit.
+Full procedure in `10_ARCHIVE_EXECUTION_PLAN.md §3`.
 
 ## 7. Isolation guarantee
 

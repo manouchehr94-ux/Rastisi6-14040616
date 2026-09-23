@@ -140,3 +140,30 @@ Harness self-test cases (all behaved as expected, in a `tempfile` sandbox):
 `docs/architecture_knowledge_system/phase8_archive_dry_run/**` and `tools/docs/**`.
 The plan and harness are inert until a future, separately-approved execution phase.
 **STOP.**
+
+
+---
+
+## `[PHASE 8.3]` — superseded by the sequential harness review
+
+Independent review found one remaining execution blocker in the Phase-8.2 harness
+described above: the staged-tree verifier derived its **expected staged set** from
+the **cumulative** completed lifecycle state, so from the **second** sub-batch
+onward it would falsely require already-committed sub-batches to be re-staged.
+
+This is fixed in Phase 8.3:
+
+- the staged verifier now takes `--phase8-current-sub-batch <UNIT>` and validates
+  **only that unit's delta**;
+- lifecycle state (cumulative) and staged delta (single unit) are modelled
+  separately;
+- one **canonical small-first execution order** (`A6→A5→…→D1`) is enforced with
+  transition-legality checks (no skips / out-of-order);
+- the state parser is hardened to reject garbage / partially-unparsed states;
+- the self-test now covers the **sequential** case (commit A6, then stage A5) and
+  is expanded to **21/21** cases.
+
+The authoritative harness verdict is therefore in
+**`19_PHASE8_SEQUENTIAL_HARNESS_REVIEW.md`**, which supersedes §8's
+`READY_FOR_BATCH_A_AUTHORIZATION` wording with
+`READY_FOR_FIRST_ARCHIVE_SUBBATCH_AUTHORIZATION` (first live unit = `A6`).

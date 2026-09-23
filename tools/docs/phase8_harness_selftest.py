@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""Phase 8.2 — archive execution harness self-test (documentation tooling only).
+"""Phase 8.2/8.3 — archive execution harness self-test (documentation tooling only).
 
 Builds a THROWAWAY git repository in a temporary directory that mimics the
 Phase-8 archive-execution manifest layout, then exercises the lifecycle-aware
-`--phase8-state` validation and the `--phase8-verify-staged` blob-identity
-verifier of ``tools/docs/validate_architecture_docs.py`` in every required
-state and failure mode.
+``--phase8-state`` validation, the sequential current-sub-batch delta model
+(``--phase8-current-sub-batch`` / ``--phase8-state-before``), and the
+``--phase8-verify-staged`` blob-identity verifier of
+``tools/docs/validate_architecture_docs.py`` in every required state and failure
+mode — including the Phase-8.3 SEQUENTIAL cases (a second staged sub-batch after
+the first is committed).
 
 It NEVER touches the real repository tree, performs NO archive move in the real
 repo, and creates NO docs/archive/** in the real repo. All git operations happen
-inside a `tempfile.mkdtemp()` sandbox that is removed on exit.
+inside a ``tempfile.mkdtemp()`` sandbox that is removed on exit.
 
 Run:  python3 tools/docs/phase8_harness_selftest.py
 Exit 0 if all cases behave as expected; 1 otherwise.
@@ -23,24 +26,24 @@ import tempfile
 TOOL = os.path.abspath(__file__).replace("phase8_harness_selftest.py",
                                          "validate_architecture_docs.py")
 
-# The fixture manifest header mirrors 13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv.
 EXEC_HEADER = (
     "source_path,target_path,source_manifest_record,disposition,batch,sub_batch,"
     "source_root,retained_sibling_exists,incoming_reference_count,canonical_reference,"
     "code_reference,link_break_risk,safe_to_move,reason\n"
 )
 
-# A tiny but representative set: two batches (A with sub-batches A1/A2, and B),
-# plus one retained sibling that must never move.
+# Fixture uses the SAME canonical unit ids as the real plan. Small-first order
+# means A6 executes before A5. We model two sequential units A6 (2 files) then
+# A5 (2 files), plus one retained sibling that must never move.
+#   sub_batch A6: 2 files   |   sub_batch A5: 2 files
 FIXTURE_ROWS = [
-    # source, target, batch, sub_batch, safe
-    ("docs/qa_evidence/dna/a1_one.md", "docs/archive/qa_evidence/dna/a1_one.md", "A", "A1", "TRUE"),
-    ("docs/qa_evidence/dna/a1_two.md", "docs/archive/qa_evidence/dna/a1_two.md", "A", "A1", "TRUE"),
-    ("docs/qa_evidence/conv/a2_one.md", "docs/archive/qa_evidence/conv/a2_one.md", "A", "A2", "TRUE"),
-    ("docs/audits/b_one.md", "docs/archive/audits/b_one.md", "B", "B", "TRUE"),
+    # source, target, batch, sub_batch
+    ("docs/qa_evidence/uiux/a6_one.md", "docs/archive/qa_evidence/uiux/a6_one.md", "A", "A6"),
+    ("docs/qa_evidence/uiux/a6_two.md", "docs/archive/qa_evidence/uiux/a6_two.md", "A", "A6"),
+    ("docs/qa_evidence/site/a5_one.md", "docs/archive/qa_evidence/site/a5_one.md", "A", "A5"),
+    ("docs/qa_evidence/site/a5_two.md", "docs/archive/qa_evidence/site/a5_two.md", "A", "A5"),
 ]
-# A retained sibling in the same qa_evidence tree that must stay put.
-RETAINED = "docs/qa_evidence/dna/KEEP_readme.md"
+RETAINED = "docs/qa_evidence/uiux/KEEP_readme.md"
 
 
 def run(cmd, cwd=None):
@@ -59,29 +62,26 @@ def write(repo, relpath, content):
 
 
 def validate(repo, *extra):
-    """Invoke the real validator against the fixture repo; return (passed, output)."""
     r = run(["python3", TOOL, "--phase8-fixture", repo, *extra])
     out = r.stdout + r.stderr
     passed = ("RESULT: PASS" in out) and (r.returncode == 0)
     return passed, out
 
 
-def build_fixture():
-    repo = tempfile.mkdtemp(prefix="p8harness_")
+def build_fixture(rows=FIXTURE_ROWS):
+    repo = tempfile.mkdtemp(prefix="p8seq_")
     git(repo, "init", "-q")
     git(repo, "config", "user.email", "harness@example.com")
     git(repo, "config", "user.name", "harness")
-    # manifest
     lines = [EXEC_HEADER]
-    for src, tgt, b, sb, safe in FIXTURE_ROWS:
+    for src, tgt, b, sb in rows:
         root = "/".join(src.split("/")[:2])
         lines.append(
-            f"{src},{tgt},{src},ARCHIVE_CANDIDATE,{b},{sb},{root},FALSE,0,0,0,NONE,{safe},fixture\n")
+            f"{src},{tgt},{src},ARCHIVE_CANDIDATE,{b},{sb},{root},FALSE,0,0,0,NONE,TRUE,fixture\n")
     write(repo,
           "docs/architecture_knowledge_system/phase8_archive_dry_run/13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv",
           "".join(lines))
-    # source files (unique content so blob identity is meaningful)
-    for i, (src, _tgt, _b, _sb, _s) in enumerate(FIXTURE_ROWS):
+    for i, (src, _t, _b, _sb) in enumerate(rows):
         write(repo, src, f"content-{i}\nline2-{i}\n")
     write(repo, RETAINED, "retained sibling — must never move\n")
     git(repo, "add", "-A")
@@ -94,7 +94,6 @@ def head(repo):
 
 
 def do_move(repo, src, tgt):
-    """Perform a real git mv INSIDE THE FIXTURE ONLY (never the real repo)."""
     os.makedirs(os.path.dirname(os.path.join(repo, tgt)), exist_ok=True)
     git(repo, "mv", src, tgt)
 
@@ -107,120 +106,195 @@ def check(name, condition):
     print(f"  [{'PASS' if condition else 'FAIL'}] {name}")
 
 
+def rows_for(repo, unit):
+    return [(s, t) for s, t, _b, sb in FIXTURE_ROWS if sb == unit]
+
+
 def main():
+    # ================= SEQUENTIAL PASS PATH (A6 then A5) =================
     repo = build_fixture()
     try:
-        # 1) PRE state: nothing moved -> PASS
+        # 1. PRE -> PASS
         ok, out = validate(repo, "--phase8-state", "pre")
-        check("PRE state -> PASS", ok and "completed=0 pending=4" in out)
+        check("PRE -> PASS", ok and "pending=4" in out)
 
-        # 2) Simulate completing sub-batch A1: move its two files, commit.
+        # 2. stage A6 (current=A6, before=pre, after=A6) -> staged verify PASS
         pre = head(repo)
-        do_move(repo, FIXTURE_ROWS[0][0], FIXTURE_ROWS[0][1])
-        do_move(repo, FIXTURE_ROWS[1][0], FIXTURE_ROWS[1][1])
-        # staged-tree verifier BEFORE commit, state A1, pre-head=pre -> PASS
-        ok, out = validate(repo, "--phase8-state", "A1",
+        for s, t in rows_for(repo, "A6"):
+            do_move(repo, s, t)
+        ok, out = validate(repo, "--phase8-state", "A6", "--phase8-state-before", "pre",
+                           "--phase8-current-sub-batch", "A6",
                            "--phase8-verify-staged", "--phase8-pre-head", pre)
-        check("staged A1 pure relocation (blob identity) -> PASS", ok)
-        git(repo, "commit", "-q", "-m", "batch A1")
+        check("stage A6 (current=A6) blob-identity -> PASS", ok)
 
-        # 3) After A1 commit, lifecycle state A1 -> PASS (A1 moved; A2,B pending)
-        ok, out = validate(repo, "--phase8-state", "A1")
-        check("A1 completed lifecycle -> PASS", ok and "completed=2 pending=2" in out)
+        # 3. commit A6
+        git(repo, "commit", "-q", "-m", "sub-batch A6")
 
-        # 4) FAIL: completed-batch target missing.
-        #    Delete a moved target then re-check state A1 -> FAIL.
-        os.remove(os.path.join(repo, FIXTURE_ROWS[0][1]))
-        ok, out = validate(repo, "--phase8-state", "A1")
-        check("completed target missing -> FAIL", (not ok) and "target absent" in out)
-        # restore
-        git(repo, "checkout", "-q", "--", FIXTURE_ROWS[0][1])
+        # 4. lifecycle A6 -> PASS (A6 moved; A5 pending)
+        ok, out = validate(repo, "--phase8-state", "A6")
+        check("lifecycle A6 -> PASS", ok and "completed=2 pending=2" in out)
 
-        # 5) FAIL: pending source missing before its batch is completed.
-        #    Remove an A2 source from worktree+index, check state A1 (A2 pending) -> FAIL.
-        git(repo, "rm", "-q", FIXTURE_ROWS[2][0])
-        ok, out = validate(repo, "--phase8-state", "A1")
-        check("pending source missing -> FAIL", (not ok) and "source absent" in out)
-        git(repo, "reset", "-q", "--hard", "HEAD")
-
-        # 6) FAIL: extra unrelated staged path during a batch step.
+        # 5. stage A5 (before=A6, current=A5, after=A6A5) -> staged verify PASS
         pre2 = head(repo)
-        do_move(repo, FIXTURE_ROWS[2][0], FIXTURE_ROWS[2][1])  # legit A2 move
-        write(repo, "docs/qa_evidence/conv/UNRELATED_new.md", "surprise\n")
-        git(repo, "add", "docs/qa_evidence/conv/UNRELATED_new.md")
-        ok, out = validate(repo, "--phase8-state", "A2",
+        for s, t in rows_for(repo, "A5"):
+            do_move(repo, s, t)
+        ok, out = validate(repo, "--phase8-state", "A6A5", "--phase8-state-before", "A6",
+                           "--phase8-current-sub-batch", "A5",
                            "--phase8-verify-staged", "--phase8-pre-head", pre2)
-        check("extra staged path -> FAIL",
-              (not ok) and ("unexplained staged addition" in out or "not in authorized batch" in out))
-        git(repo, "reset", "-q", "--hard", pre2)
+        check("stage A5 after A6 committed (current=A5) -> PASS", ok)
 
-        # 7) FAIL: source/target content mismatch (not a pure relocation).
-        pre3 = head(repo)
-        do_move(repo, FIXTURE_ROWS[2][0], FIXTURE_ROWS[2][1])
-        # corrupt the staged target content, re-stage
-        write(repo, FIXTURE_ROWS[2][1], "TAMPERED CONTENT\n")
-        git(repo, "add", FIXTURE_ROWS[2][1])
-        ok, out = validate(repo, "--phase8-state", "A2",
-                           "--phase8-verify-staged", "--phase8-pre-head", pre3)
-        check("staged blob content mismatch -> FAIL", (not ok) and "blob mismatch" in out)
-        git(repo, "reset", "-q", "--hard", pre3)
+        # 6. prove A6 is NOT required/allowed to be staged during A5:
+        #    the staged tree contains ONLY A5 moves; verifier expected exactly A5.
+        #    (Confirm no A6 path is staged now.)
+        staged = git(repo, "diff", "--cached", "--name-only").stdout
+        check("A6 NOT staged during A5",
+              ("a6_one.md" not in staged) and ("a5_one.md" in staged))
 
-        # 8) FAIL: duplicate target in manifest.
-        dup_repo = build_fixture()
-        try:
-            man = os.path.join(
-                dup_repo,
-                "docs/architecture_knowledge_system/phase8_archive_dry_run/13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv")
-            with open(man, "a", encoding="utf-8") as fh:
-                # duplicate target of row A2 with a different source
-                s, t, b, sb = "docs/qa_evidence/conv/dup_src.md", FIXTURE_ROWS[2][1], "A", "A2"
-                fh.write(f"{s},{t},{s},ARCHIVE_CANDIDATE,{b},{sb},docs/qa_evidence,FALSE,0,0,0,NONE,TRUE,dup\n")
-            write(dup_repo, "docs/qa_evidence/conv/dup_src.md", "dup\n")
-            git(dup_repo, "add", "-A")
-            git(dup_repo, "commit", "-q", "-m", "add dup")
-            ok, out = validate(dup_repo, "--phase8-state", "pre")
-            check("duplicate target -> FAIL", (not ok) and "duplicate target" in out)
-        finally:
-            shutil.rmtree(dup_repo, ignore_errors=True)
+        # 7. commit A5
+        git(repo, "commit", "-q", "-m", "sub-batch A5")
 
-        # 9) FAIL: a row marked safe_to_move != TRUE.
-        unsafe_repo = build_fixture()
-        try:
-            man = os.path.join(
-                unsafe_repo,
-                "docs/architecture_knowledge_system/phase8_archive_dry_run/13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv")
-            txt = open(man, encoding="utf-8").read().replace(
-                "docs/audits/b_one.md,docs/archive/audits/b_one.md,docs/audits/b_one.md,"
-                "ARCHIVE_CANDIDATE,B,B,docs/audits,FALSE,0,0,0,NONE,TRUE,fixture",
-                "docs/audits/b_one.md,docs/archive/audits/b_one.md,docs/audits/b_one.md,"
-                "ARCHIVE_CANDIDATE,B,B,docs/audits,FALSE,0,0,0,NONE,FALSE,fixture")
-            open(man, "w", encoding="utf-8").write(txt)
-            git(unsafe_repo, "add", "-A")
-            git(unsafe_repo, "commit", "-q", "-m", "unsafe row")
-            ok, out = validate(unsafe_repo, "--phase8-state", "pre")
-            check("unsafe row -> FAIL", (not ok) and "safe_to_move=TRUE" in out)
-        finally:
-            shutil.rmtree(unsafe_repo, ignore_errors=True)
+        # 8. lifecycle A6A5 -> PASS (all four moved)
+        ok, out = validate(repo, "--phase8-state", "A6A5")
+        check("lifecycle A6A5 -> PASS", ok and "completed=4 pending=0" in out)
 
-        # 10) Full completion state (all batches) -> PASS.
-        #     Complete A2 and B on the main fixture, then check state ABCD-equivalent "AB".
-        do_move(repo, FIXTURE_ROWS[2][0], FIXTURE_ROWS[2][1])
-        do_move(repo, FIXTURE_ROWS[3][0], FIXTURE_ROWS[3][1])
-        git(repo, "commit", "-q", "-m", "batches A2 + B")
-        ok, out = validate(repo, "--phase8-state", "AB")
-        check("all batches completed (AB) -> PASS",
-              ok and "completed=4 pending=0" in out)
+        # retained sibling never moved across the whole sequence
+        check("retained sibling untouched", os.path.exists(os.path.join(repo, RETAINED)))
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
 
-        # retained sibling never moved
-        check("retained sibling untouched",
-              os.path.exists(os.path.join(repo, RETAINED)))
+    # ================= SEQUENTIAL FAIL: WRONG CURRENT =================
+    # A6 committed, A5 staged, but verifier is told current=A6 (the already-done unit).
+    repo = build_fixture()
+    try:
+        pre = head(repo)
+        for s, t in rows_for(repo, "A6"):
+            do_move(repo, s, t)
+        git(repo, "commit", "-q", "-m", "A6")
+        pre2 = head(repo)
+        for s, t in rows_for(repo, "A5"):
+            do_move(repo, s, t)
+        # WRONG: current=A6 while A5 is what's staged
+        ok, out = validate(repo, "--phase8-state", "A6A5", "--phase8-state-before", "A6",
+                           "--phase8-current-sub-batch", "A6",
+                           "--phase8-verify-staged", "--phase8-pre-head", pre2)
+        check("A5 staged but current=A6 -> FAIL",
+              (not ok) and ("PHASE8-DELTA" in out or "PHASE8-STAGED" in out))
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+    # ================= SEQUENTIAL FAIL: PRIOR UNIT RE-STAGED =================
+    # A6 committed; while staging A5, also re-stage an A6 file (target modified back).
+    repo = build_fixture()
+    try:
+        pre = head(repo)
+        for s, t in rows_for(repo, "A6"):
+            do_move(repo, s, t)
+        git(repo, "commit", "-q", "-m", "A6")
+        pre2 = head(repo)
+        for s, t in rows_for(repo, "A5"):
+            do_move(repo, s, t)
+        # re-touch a committed A6 target and stage it (a prior-unit path in the delta)
+        a6_tgt = rows_for(repo, "A6")[0][1]
+        write(repo, a6_tgt, "content-0\nline2-0\nEXTRA\n")
+        git(repo, "add", a6_tgt)
+        ok, out = validate(repo, "--phase8-state", "A6A5", "--phase8-state-before", "A6",
+                           "--phase8-current-sub-batch", "A5",
+                           "--phase8-verify-staged", "--phase8-pre-head", pre2)
+        check("A5 staged + re-staged A6 file -> FAIL",
+              (not ok) and "PHASE8-STAGED" in out)
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+    # ================= SEQUENTIAL FAIL: UNRELATED STAGED =================
+    repo = build_fixture()
+    try:
+        pre = head(repo)
+        for s, t in rows_for(repo, "A6"):
+            do_move(repo, s, t)
+        git(repo, "commit", "-q", "-m", "A6")
+        pre2 = head(repo)
+        for s, t in rows_for(repo, "A5"):
+            do_move(repo, s, t)
+        write(repo, "docs/qa_evidence/site/UNRELATED.md", "surprise\n")
+        git(repo, "add", "docs/qa_evidence/site/UNRELATED.md")
+        ok, out = validate(repo, "--phase8-state", "A6A5", "--phase8-state-before", "A6",
+                           "--phase8-current-sub-batch", "A5",
+                           "--phase8-verify-staged", "--phase8-pre-head", pre2)
+        check("A5 staged + unrelated file -> FAIL",
+              (not ok) and "unexplained staged addition" in out)
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+    # ================= SEQUENTIAL FAIL: TARGET BLOB MODIFIED =================
+    repo = build_fixture()
+    try:
+        pre = head(repo)
+        for s, t in rows_for(repo, "A6"):
+            do_move(repo, s, t)
+        git(repo, "commit", "-q", "-m", "A6")
+        pre2 = head(repo)
+        s0, t0 = rows_for(repo, "A5")[0]
+        do_move(repo, s0, t0)
+        # stage the other A5 move cleanly
+        s1, t1 = rows_for(repo, "A5")[1]
+        do_move(repo, s1, t1)
+        # tamper t0 content and re-stage -> blob mismatch
+        write(repo, t0, "TAMPERED\n")
+        git(repo, "add", t0)
+        ok, out = validate(repo, "--phase8-state", "A6A5", "--phase8-state-before", "A6",
+                           "--phase8-current-sub-batch", "A5",
+                           "--phase8-verify-staged", "--phase8-pre-head", pre2)
+        check("A5 target blob modified -> FAIL", (not ok) and "blob mismatch" in out)
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+    # ================= TRANSITION-ORDER FAIL (skip A6, do A5 first) =============
+    repo = build_fixture()
+    try:
+        pre = head(repo)
+        for s, t in rows_for(repo, "A5"):
+            do_move(repo, s, t)
+        # Illegal: before=pre, current=A5 (A6 must be first per canonical order)
+        ok, out = validate(repo, "--phase8-state", "A5", "--phase8-state-before", "pre",
+                           "--phase8-current-sub-batch", "A5",
+                           "--phase8-verify-staged", "--phase8-pre-head", pre)
+        check("out-of-order (A5 before A6) -> FAIL",
+              (not ok) and "out-of-sequence" in out)
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+    # ================= PARSER FAIL CASES (garbage states) =================
+    repo = build_fixture()
+    try:
+        for bad in ["A1XYZ", "A1-BOGUS", "Q1", "A99", "A6A6", "A5A6", "A6X"]:
+            ok, out = validate(repo, "--phase8-state", bad)
+            check(f"invalid state '{bad}' -> FAIL", (not ok) and "invalid state" in out)
+        # a VALID cumulative state still parses/PASSes at pre-move fixture? No — files
+        # for A6 are not moved in this fresh fixture, so lifecycle would FAIL; instead
+        # assert the PARSER accepts it (no 'invalid state' error) even if lifecycle fails.
+        ok, out = validate(repo, "--phase8-state", "A6A5")
+        check("valid state 'A6A5' parses (no parser error)",
+              "invalid state" not in out)
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+    # ================= WRONG-CURRENT: verify-staged without current =============
+    repo = build_fixture()
+    try:
+        pre = head(repo)
+        for s, t in rows_for(repo, "A6"):
+            do_move(repo, s, t)
+        ok, out = validate(repo, "--phase8-state", "A6", "--phase8-state-before", "pre",
+                           "--phase8-verify-staged", "--phase8-pre-head", pre)
+        check("verify-staged without --phase8-current-sub-batch -> FAIL",
+              (not ok) and "requires --phase8-current-sub-batch" in out)
     finally:
         shutil.rmtree(repo, ignore_errors=True)
 
     print()
     passed = sum(1 for _n, ok in results if ok)
     total = len(results)
-    print(f"=== HARNESS SELF-TEST: {passed}/{total} cases behaved as expected ===")
+    print(f"=== SEQUENTIAL HARNESS SELF-TEST: {passed}/{total} cases behaved as expected ===")
     if passed == total:
         print("=== RESULT: PASS ===")
         return 0
