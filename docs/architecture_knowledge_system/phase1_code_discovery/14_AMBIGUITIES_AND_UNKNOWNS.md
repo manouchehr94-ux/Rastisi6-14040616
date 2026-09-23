@@ -16,7 +16,7 @@ is hidden behind confident prose (governing rule §31).
 | A5 | `ShopSettings` write authority | `core` (owner) vs `dashboard` views + `sms_service` (writers) | Owned by core, mutated elsewhere directly (doc 06 §11). |
 | A6 | Subscription lifecycle | `subscriptions` (owner) vs `billing` (driver) | Funneled through subscription_service, but effectively co-owned (doc 12 M7). |
 | A7 | Storefront write surface | legacy R3 views vs R4 mutation service | Both wired; legacy fail-closed by flag; which is canonical depends on `r4_editor_enabled` (doc 12 H3). |
-| A8 | Ownership transfer | `membership_service.transfer_ownership` vs `ownership_transfer_service` | Two implementations (doc 12 M6 / doc 13 D3). |
+| A8 | Ownership transfer | `membership_service.transfer_ownership` vs `ownership_transfer_service` | Two implementations (doc 12 M6 / doc 13 D3). **[PHASE 2: both confirmed LIVE — duplicate mutation path; see ../phase2_validation/06_PHASE1_CORRECTIONS.md C1]** |
 | A9 | Section placement | `StorefrontCell.section` vs `StorefrontSection.cell` vs `row_key/row_span` | Three coexisting mechanisms (doc 12 M12). |
 
 ## 2. UNKNOWN — not established from available evidence
@@ -24,7 +24,7 @@ is hidden behind confident prose (governing rule §31).
 | # | Question | Why unknown |
 |---|---|---|
 | U1 | Exact client→server endpoints hit by R4 editor JavaScript | `static/` JS not read line-by-line; `r4/mutate/` is INFERRED from server design. |
-| U2 | Whether `membership_service.transfer_ownership` has a live (non-test) caller | Not conclusively traced (doc 13 D3). |
+| U2 | Whether `membership_service.transfer_ownership` has a live (non-test) caller | Not conclusively traced (doc 13 D3). **[PHASE 2 RESOLVED: YES — live caller `dashboard/views.py:5896` via route `staff/<pk>/transfer-ownership/`]** |
 | U3 | Whether `resolution.require_resolved_store` is consumed anywhere | Docstring says unused "in this PR"; later consumers not confirmed (doc 13 D6). |
 | U4 | Full bodies of several smaller services (orders tax/shipping/best_seller; subscriptions entitlement/enforcement/usage; billing account/consistency/period_utils; stores domain_consistency/namespace/typo/enamad/integration; portal handoff/owner_sms/platform_config/turnstile/rate_limit) | Characterized from signatures/docstrings/callers, not read line-by-line (INFERRED responsibilities). |
 | U5 | Exact assertion content of individual tests | Test *existence* verified; bodies not opened for most (mapping INFERRED). |

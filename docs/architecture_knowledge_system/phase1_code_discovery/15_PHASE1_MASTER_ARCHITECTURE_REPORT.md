@@ -151,9 +151,15 @@ POTENTIALLY_DEAD classification. Recalculated from doc 13:
 | Confirmed-removed / absent (not live code) | 1 | D5 (`family_registry.py`/`preset_registry.py` — files do not exist; only doc/test references remain) |
 
 - **Investigation records total:** 8 (D1–D8).
-- **Actual POTENTIALLY/POSSIBLY_DEAD candidates:** **5** (D1, D3, D4, D6, D7).
-- Of these 5, **2 are unconfirmed** (D3, D6) and are carried into Phase 2 for caller tracing;
+- **Actual POTENTIALLY/POSSIBLY_DEAD candidates (at STEP 0):** **5** (D1, D3, D4, D6, D7).
+- Of these 5, **2 were unconfirmed** (D3, D6) and were carried into Phase 2 for caller tracing;
   D1/D4/D7 are VERIFIED as their stated (limited) kind of deadness.
+
+> **[PHASE 2 CORRECTION 2026-09-23]** Phase 2 caller tracing **DISPROVED D3 as dead** (it is live:
+> dashboard route `staff/<pk>/transfer-ownership/`). Post-Phase-2: **actual POTENTIALLY_DEAD
+> candidates = 4** (D1, D4, D6, D7), of which **unconfirmed = 1** (D6). D3 becomes a confirmed
+> live duplicate mutation path (strengthens M6/A8). See
+> `../phase2_validation/06_PHASE1_CORRECTIONS.md`.
 
 **Confirmed-live corrections** (an earlier pass mis-flagged these; direct grep disproved):
 PAYMENT_SUCCESS/FAILED SMS (live) and notification `enqueue`/`notify_security_event` callers
@@ -234,10 +240,12 @@ suite (no such service); minimal blog tests; R4 client JS untested directly.
     documented as two sub-flows (3a simulation, 3b real gateway), so doc 08 contains 16 flow
     sections in total.
 16. **Architecture-smell findings by severity:** 0 CRITICAL / 3 HIGH / 15 MEDIUM / 4 LOW / 4 OBSERVATION (Part E).
-17. **Dead/orphan investigation records:** 8 (D1–D8). Of these, **actual POTENTIALLY/POSSIBLY_DEAD
+17. **Dead/orphan investigation records:** 8 (D1–D8). At STEP 0: **actual POTENTIALLY/POSSIBLY_DEAD
     candidates = 5** (D1, D3, D4, D6, D7; two unconfirmed: D3, D6), plus 1 conditionally-live (D2),
     1 live-but-inert (D8), 1 confirmed-removed/absent (D5), and 2 confirmed-live corrections
-    (payment SMS, notification callers). See Part F / doc 13.
+    (payment SMS, notification callers). **After Phase 2:** D3 DISPROVED-as-dead (live) →
+    **4 candidates** (D1, D4, D6, D7), **1 unconfirmed** (D6). See Part F / doc 13 /
+    `../phase2_validation/06_PHASE1_CORRECTIONS.md`.
 18. **Ambiguous-ownership findings:** 9 (Part G / doc 14 §1).
 19. **Major unknowns:** 9 (doc 14 §2).
 20. **Test coverage gaps discovered:** payment_status transition legality; content-service tests;

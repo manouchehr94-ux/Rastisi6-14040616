@@ -92,6 +92,12 @@ go through services. Dashboard is a thin controller for some domains, thick for 
 OWNER→ADMINISTRATOR and promote a new owner. Which is canonical for the portal UI is unclear;
 `membership_service.transfer_ownership` may be POTENTIALLY_DEAD relative to the OTP flow (not confirmed).
 
+> **[PHASE 2 CORRECTION 2026-09-23 — UPGRADED]** `membership_service.transfer_ownership` is
+> confirmed **LIVE** (merchant dashboard route `staff/<pk>/transfer-ownership/` →
+> `dashboard/views.py:5896`). Both paths are therefore live → this is a genuine **duplicate
+> mutation path** for `StoreMembership` owner reassignment, not one-live-plus-one-maybe-dead.
+> The smell is *strengthened*. See `../phase2_validation/06_PHASE1_CORRECTIONS.md` (C1).
+
 ### M7 — billing co-owns the subscription state machine (tight cross-domain coupling) — VERIFIED
 Billing services (confirmation/dunning/renewal/cancellation) drive `StoreSubscription` transitions.
 Correctly funneled through `subscription_service` (no direct status writes), but subscription

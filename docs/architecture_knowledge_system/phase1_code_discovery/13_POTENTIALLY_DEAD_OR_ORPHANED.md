@@ -54,6 +54,14 @@ was **not conclusively confirmed**.
 **Conclusion:** POTENTIALLY_DEAD relative to the OTP flow — **unconfirmed**. Requires a caller trace
 in a later phase.
 
+> **[PHASE 2 CORRECTION 2026-09-23 — DISPROVED as dead]** Caller tracing found a live caller:
+> `apps/dashboard/urls.py:390` route `staff/<int:pk>/transfer-ownership/` →
+> `apps/dashboard/views.py:5896 staff_transfer_ownership` calls `transfer_ownership(...)`. So
+> `membership_service.transfer_ownership` is **LIVE**, not dead. Consequence: there are **two
+> live** ownership-transfer paths (this dashboard-direct path + the portal OTP
+> `ownership_transfer_service`), which *strengthens* the duplication smell (doc 12 M6 / doc 14
+> A8) rather than removing it. See `../phase2_validation/06_PHASE1_CORRECTIONS.md` (C1).
+
 ## D4 — `core.ShopSettings` legacy SMS fields — POTENTIALLY_DEAD (data) — VERIFIED
 
 `ShopSettings` carries `sms_backend`, `melipayamak_*`, `kavenegar_api_key`. `sms_service` ignores
@@ -117,6 +125,12 @@ This document holds **8 investigation records (D1–D8)**; they are not all POTE
 Of the 5 candidates, **D3 and D6 are unconfirmed** (carried into Phase 2 for caller tracing);
 D1, D4, D7 are VERIFIED as their stated (limited) kind of deadness. The Phase 1 master report
 (doc 15, Part F / Part K item 17) uses these recalculated figures.
+
+> **[PHASE 2 CORRECTION 2026-09-23]** After Phase 2 caller tracing, **D3 is DISPROVED as dead**
+> (it is live — see the D3 note above). The post-Phase-2 buckets are therefore:
+> **actual POTENTIALLY_DEAD candidates = 4** (D1, D4, D6, D7), of which **unconfirmed = 1** (D6
+> only; no live caller found, possibly intentional API scaffolding). D1/D4/D7 remain CONFIRMED as
+> their limited kind of deadness. See `../phase2_validation/06_PHASE1_CORRECTIONS.md` (C2).
 
 ## Method note
 Signals were checked exhaustively (none exist), so no component can be "dead" merely for lacking a
