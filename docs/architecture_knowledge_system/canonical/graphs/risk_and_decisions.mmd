@@ -1,0 +1,39 @@
+%% Risk -> Decision -> Domain map (derived from KNOWN_ARCHITECTURE_RISKS.md + ARCHITECTURAL_DECISION_REGISTER.md)
+%% Canonical navigation graph. code_baseline: 5883a140
+graph TB
+    subgraph HIGH
+        H1["H1 duplicate order-payment + unguarded payment_status"]
+        H2["H2 content has no write service"]
+        H3["H3 3 storefront editor generations"]
+    end
+    subgraph MEDIUM_selected
+        M4["M4 dual gateway model"]
+        M5["M5 dashboard direct settings/config writes"]
+        M6["M6 two live ownership-transfer paths"]
+        M7["M7 billing co-owns subscription lifecycle (funneled)"]
+        A1["A1 Store vs Vendor ambiguous"]
+        D6d["D6-dead require_resolved_store no caller"]
+    end
+
+    H1 --> DR1{{DR-1 OPEN}}
+    H1 --> DR6{{DR-6 OPEN}}
+    M4 --> DR5{{DR-5 OPEN}}
+    H3 --> DR6
+    H2 --> DR2{{DR-2 OPEN}}
+    M5 --> DR3{{DR-3 OPEN}}
+    M6 --> DR4{{DR-4 OPEN}}
+    A1 --> DR7{{DR-7 OPEN}}
+    D6d --> DR8{{DR-8 OPEN}}
+    M7 -->|no DR - disciplined coupling| SUBS[subscriptions/billing]
+
+    DR1 --> ORDERS[orders]
+    DR2 --> CONTENT[content + dashboard]
+    DR3 --> CORE[core + orders + dashboard]
+    DR4 --> STORES[stores + portal + dashboard]
+    DR5 --> ORDERS
+    DR6 --> ORDERS2[orders + storefront_builder]
+    DR7 --> CATALOG[catalog + stores]
+    DR8 --> STORES2[stores]
+
+    classDef open fill:#fdd,stroke:#900;
+    class DR1,DR2,DR3,DR4,DR5,DR6,DR7,DR8 open;

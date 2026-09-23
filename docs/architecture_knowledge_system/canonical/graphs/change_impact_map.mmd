@@ -1,0 +1,29 @@
+%% Change-Impact Map — change family -> domain -> blocking decision (Phase 7 navigation)
+%% Canonical navigation graph (derived from CHANGE_IMPACT_GUIDE.md). code_baseline: 5883a140
+graph LR
+    CF1["CF-1 payment verification / payment_state"] --> ORDERS[orders D6]
+    CF2["CF-2 add Store status"] --> STORES[stores D1]
+    CF3["CF-3 storefront appearance"] --> SFB[storefront_builder D9]
+    CF4["CF-4 content pages/menus/footer"] --> CONTENT[content D10]
+    CF5["CF-5 subscription renewal"] --> BILLING[billing D8]
+    CF6["CF-6 SMS sending"] --> SMS[sms D12]
+    CF7["CF-7 owner authentication"] --> PORTAL[portal D2]
+    CF8["CF-8 product inventory"] --> CATALOG[catalog D4]
+
+    BILLING -->|funneled M7| SUBS[subscriptions D7]
+    CONTENT -.->|written by H2| DASH[dashboard D11]
+    PORTAL -.->|shared identity ADR-102| CUST[customers D3]
+
+    ORDERS --> DR1{{DR-1 payment_status guard}}
+    ORDERS --> DR5{{DR-5 dual gateway}}
+    ORDERS --> DR6{{DR-6 legacy removal}}
+    SFB --> DR6
+    CONTENT --> DR2{{DR-2 content write boundary}}
+    DASH --> DR3{{DR-3 settings/config service}}
+    STORES --> DR4{{DR-4 ownership transfer x2}}
+    PORTAL --> DR4
+    CATALOG --> DR7{{DR-7 Store vs Vendor}}
+    STORES --> DR8{{DR-8 require_resolved_store}}
+
+    classDef risk fill:#f9d,stroke:#900;
+    class DR1,DR2,DR3,DR4,DR5,DR6,DR7,DR8 risk;
