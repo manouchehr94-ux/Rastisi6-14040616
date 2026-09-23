@@ -1,0 +1,68 @@
+%% Mutation graph — WHICH CODE PATHS MUTATE WHICH PERSISTED ENTITIES (doc 06)
+%% Edge label = classification: CANON / SECOND / DIRECT / XDOMAIN.
+%% Entities are rounded; writer code paths are rectangles.
+graph LR
+    %% ---- Entities ----
+    E_OPS(["Order.payment_status\n(NO transition table)"])
+    E_OST(["Order.status\n(guarded)"])
+    E_TX(["Transaction (legacy)"])
+    E_PA(["PaymentAttempt (new)"])
+    E_CART(["CartItem / Cart"])
+    E_COUP(["Coupon.used_count"])
+    E_SUB(["StoreSubscription.status\n(guarded)"])
+    E_INV(["SubscriptionInvoice.status"])
+    E_PROD(["Product"])
+    E_STOCK(["stock (via StockMovement)"])
+    E_SHOP(["ShopSettings"])
+    E_CONT(["content.* pages/menus/footer/media"])
+    E_CFG(["Shipping/Tax/GatewayConfig"])
+    E_LAYV(["StorefrontLayoutVersion / Sections"])
+
+    %% ---- Order.payment_status : 3 writers, HIGH risk ----
+    W_SIM[payment_service.simulate_payment] -->|SECOND direct save| E_OPS
+    W_GPS[gateway_payment_service.process_callback] -->|CANON conditional update+lock| E_OPS
+    W_REF[refund_service.execute_order_refund] -->|SECOND direct save| E_OPS
+    W_SIM -->|SECOND create| E_TX
+    W_GPS -->|SECOND create back-compat| E_TX
+    W_GPS -->|CANON| E_PA
+
+    %% ---- Order.status : funneled ----
+    W_OSC[order_service.change_order_status] -->|CANON guarded| E_OST
+    W_SIM --> W_OSC
+    W_GPS --> W_OSC
+    W_DASHORD[dashboard.order_detail] --> W_OSC
+
+    %% ---- Cart : cross-domain ----
+    W_CARTSVC[cart_service] -->|CANON| E_CART
+    W_OCC[order_service.create_order_from_cart] -->|XDOMAIN reprice| E_CART
+    W_CHK[checkout_service.finalize_order] -->|XDOMAIN delete| E_CART
+    W_OCC -->|XDOMAIN +=1| E_COUP
+    W_MERGE[customers.merge_guest_cart] -->|XDOMAIN| E_CART
+
+    %% ---- Subscription : funneled cross-domain ----
+    W_SUBSVC[subscription_service transitions] -->|CANON guarded| E_SUB
+    W_CONF[billing.confirmation_service] --> W_SUBSVC
+    W_DUN[billing.dunning_service] --> W_SUBSVC
+    W_REN[billing.renewal_service] --> W_SUBSVC
+    W_CAN[billing.cancellation_service] --> W_SUBSVC
+
+    %% ---- Invoice ----
+    W_INVSVC[billing.invoice_service] -->|CANON| E_INV
+    W_CONF -->|SECOND paid| E_INV
+    W_DUN -->|SECOND past_due/uncollectible| E_INV
+
+    %% ---- Product / stock ----
+    W_PDRAFT[catalog.product_draft_service] -->|CANON draft| E_PROD
+    W_DASHPROD[dashboard._save_product / bulk] -->|DIRECT/XDOMAIN| E_PROD
+    W_INVSVC2[catalog.inventory_service] -->|CANON ledgered| E_STOCK
+
+    %% ---- Config / content : dashboard direct ----
+    W_DASHSET[dashboard.settings views] -->|XDOMAIN direct save| E_SHOP
+    W_SMS[sms_service.regenerate_token] -->|XDOMAIN| E_SHOP
+    W_DASHCONT[dashboard content views] -->|XDOMAIN direct save (no service)| E_CONT
+    W_DASHCFG[dashboard settings views] -->|XDOMAIN direct save| E_CFG
+
+    %% ---- Storefront layout ----
+    W_R4[r4_mutation_service] -->|CANON optimistic| E_LAYV
+    W_LAY[layout_service publish/draft] -->|CANON| E_LAYV
+    W_LEGACY[legacy views.py] -->|SECOND fail-closed when R4| E_LAYV

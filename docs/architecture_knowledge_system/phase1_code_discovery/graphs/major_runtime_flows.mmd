@@ -1,0 +1,43 @@
+%% Major runtime flows (Phase 1, code-derived, doc 08)
+graph TB
+    subgraph F0["Flow 0: Host to Store context"]
+        A0[request] --> B0[StoreResolutionMiddleware] --> C0[PlatformHostRoutingMiddleware] --> D0[view]
+    end
+
+    subgraph F2["Flow 2: Order creation (atomic, locked, idempotent)"]
+        A2[checkout view] --> B2[order_service.create_order_from_cart]
+        B2 --> C2[(Order/OrderItem/History)]
+        B2 --> D2[reserve+consume inventory]
+        B2 -.on_commit.-> E2[ORDER_PLACED SMS]
+    end
+
+    subgraph F3["Flow 3: Storefront payment (TWO paths)"]
+        A3a[payment-callback/status\nSIMULATION gated] --> B3a[payment_service.simulate_payment] --> C3[(Order.payment_status)]
+        A3b[gateway/callback/attempt] --> B3b[gateway_payment_service.process_callback_and_verify]
+        B3b -->|verify server-to-server| G3[(gateway)]
+        B3b --> C3
+        B3b --> D3[create legacy Transaction]
+    end
+
+    subgraph F7["Flow 7: SaaS billing to activation"]
+        A7[provider webhook] --> B7[webhook_service.ingest_webhook\nverify+dedup]
+        B7 --> C7[payment_flow_service.process_webhook_event]
+        C7 --> D7[confirmation_service.confirm_payment]
+        D7 --> E7[(Invoice PAID)]
+        D7 --> F7b[subscription_service.activate/renew/change]
+        F7b --> G7[(StoreSubscription)]
+    end
+
+    subgraph F10["Flow 10: Storefront edit to publish (R4)"]
+        A10[r4/mutate JS] --> B10[r4_mutation_service\noptimistic edit_revision]
+        B10 --> C10[(Draft Version + Sections)]
+        A10b[r4/publish] --> B10b[layout_service.publish\npointer swap]
+        B10b --> D10[(Published Version)]
+    end
+
+    subgraph F5["Flow 5: Trial provisioning (single atomic, 4 apps)"]
+        A5[portal store-create] --> B5[provisioning_service.provision_trial_store]
+        B5 --> C5[(Store + Membership + Domain)]
+        B5 --> D5[(ShopSettings + Warehouse)]
+        B5 --> E5[(default Subscription, fail-open)]
+    end

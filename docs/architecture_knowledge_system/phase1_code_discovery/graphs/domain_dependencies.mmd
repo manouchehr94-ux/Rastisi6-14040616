@@ -1,0 +1,58 @@
+%% Domain dependencies — typed edges (Phase 1, code-derived, doc 07)
+%% Solid = call/import; dashed = cross-domain mutation; dotted = reads/renders.
+graph LR
+    DASH[dashboard]
+    ORDERS[orders]
+    CART[cart]
+    CATALOG[catalog]
+    CUSTOMERS[customers]
+    BILLING[billing]
+    SUBS[subscriptions]
+    PORTAL[portal]
+    STORES[stores]
+    CORE[core]
+    SFB[storefront_builder]
+    CONTENT[content]
+    SMS[sms]
+    NOTIF[notifications]
+
+    %% every request
+    STORES -->|resolve request.store| ORDERS
+    STORES -->|resolve request.store| SFB
+    PORTAL -->|host routing| STORES
+
+    %% dashboard controller fan-out
+    DASH -->|calls services| CATALOG
+    DASH -->|change_order_status / refund| ORDERS
+    DASH -.->|direct .save cross-domain| CONTENT
+    DASH -.->|direct ShopSettings.save| CORE
+    DASH -->|membership / integration| STORES
+    DASH -->|entitlement / banner| SUBS
+    DASH -->|test/retry send| SMS
+    DASH -->|routes-to editor| SFB
+
+    %% commerce
+    ORDERS -.->|reprice/delete/coupon| CART
+    ORDERS -->|reserve/consume stock| CATALOG
+    ORDERS -->|on_commit SMS| SMS
+    CUSTOMERS -.->|merge guest cart| CART
+    CUSTOMERS -->|on_commit WELCOME| SMS
+
+    %% SaaS
+    BILLING -.->|drive state via subscription_service| SUBS
+    PORTAL -.->|provision writes 4 apps| STORES
+    PORTAL -.->|provision| CORE
+    PORTAL -.->|provision Warehouse/template| CATALOG
+    PORTAL -.->|provision default sub| SUBS
+    PORTAL -->|owner OTP| SMS
+
+    %% tenancy services
+    STORES -->|notify_security_event| NOTIF
+    STORES -.->|reads entitlement (local import)| SUBS
+    STORES -->|create new-owner User| PORTAL
+
+    %% presentation
+    CATALOG -.->|render lazy import| SFB
+    CONTENT -.->|render lazy import| SFB
+    CONTENT -->|FK CASCADE placements| SFB
+    SMS -.->|reads central creds| PORTAL
