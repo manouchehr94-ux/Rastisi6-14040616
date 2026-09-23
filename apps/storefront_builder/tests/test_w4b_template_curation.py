@@ -143,8 +143,42 @@ def _deep_freeze(value):
     return value
 
 
+#: Architecture Convergence / Phase 1 added ONE additive metadata field to the
+#: recipe dataclass ``PresetSectionEntry.semantic_slot_key`` (cross-template
+#: semantic identity). It is authored, versioned recipe metadata but it is NOT
+#: part of the *pre-Phase-1 historical recipe payload* that ``CERTIFIED_W4A_
+#: FINGERPRINT`` certifies. The certification below therefore excludes ONLY this
+#: one key from the serialized projection so the certified byte-for-byte hashes
+#: continue to certify every pre-Phase-1 field (settings, row_key/row_span,
+#: container_settings, appearance, header/footer, composition, versions, DNA…)
+#: unchanged. The semantic metadata itself is certified separately, and
+#: exhaustively, by the Phase-1 semantic contract tests
+#: (``test_phase1_semantic_slot_contract``).
+_PHASE1_ADDITIVE_RECIPE_METADATA_KEYS = frozenset({"semantic_slot_key"})
+
+
+def _strip_phase1_additive_metadata(value):
+    """Recursively drop ONLY the Phase-1 additive recipe-metadata key(s) from a
+    ``dataclasses.asdict`` projection, leaving every historical field intact."""
+    if isinstance(value, dict):
+        return {
+            key: _strip_phase1_additive_metadata(sub)
+            for key, sub in value.items()
+            if key not in _PHASE1_ADDITIVE_RECIPE_METADATA_KEYS
+        }
+    if isinstance(value, (list, tuple)):
+        return type(value)(_strip_phase1_additive_metadata(v) for v in value)
+    return value
+
+
 def fingerprint(preset) -> str:
-    frozen = _deep_freeze(dataclasses.asdict(preset))
+    """Byte-for-byte certification of the COMPLETE pre-Phase-1 historical recipe
+    payload. Excludes ONLY the Phase-1 additive ``semantic_slot_key`` metadata
+    (certified separately by the Phase-1 semantic contract); every other
+    historical field is certified unchanged, so the ``CERTIFIED_W4A_FINGERPRINT``
+    constants remain valid without regeneration."""
+    projection = _strip_phase1_additive_metadata(dataclasses.asdict(preset))
+    frozen = _deep_freeze(projection)
     return hashlib.sha256(repr(frozen).encode()).hexdigest()
 
 
@@ -208,10 +242,17 @@ class HistoricalPreservationTests(SimpleTestCase):
                 self.assertEqual(actual, CERTIFIED_OLD_HOME_SEQUENCE[key], key)
 
     def test_full_historical_fingerprint_matches_certified_w4a_capture(self):
-        """Proves byte-for-byte preservation of the WHOLE LayoutPresetDefinition
-        (not just the Home section-key sequence) against the fingerprint
+        """Proves byte-for-byte preservation of the COMPLETE pre-Phase-1
+        historical recipe payload (the whole LayoutPresetDefinition — settings,
+        row/container data, appearance, header/footer, composition, versions,
+        DNA — not just the Home section-key sequence) against the fingerprint
         captured before any production edit — see
-        docs/qa_evidence/.../w4b_template_curation/implementation/00_certified_w4a_fingerprints.md."""
+        docs/qa_evidence/.../w4b_template_curation/implementation/00_certified_w4a_fingerprints.md.
+
+        The Phase-1 additive ``PresetSectionEntry.semantic_slot_key`` metadata is
+        deliberately excluded from THIS projection (see ``fingerprint``) so the
+        certified hashes stay valid; that semantic metadata is certified
+        separately and exhaustively by ``test_phase1_semantic_slot_contract``."""
         for key in CURATED_KEYS:
             with self.subTest(key=key):
                 historical = lpr.get_layout_preset_version(key, "1")

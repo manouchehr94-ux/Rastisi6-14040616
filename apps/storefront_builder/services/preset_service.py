@@ -647,34 +647,27 @@ def _section_has_scoped_media(section: StorefrontSection) -> bool:
     return False
 
 
-def _expected_containers_from_baseline(entries: list[dict]) -> list[dict]:
-    """Reconstruct the (layout_key, settings, cell_count) a fresh rebuild of the
-    recorded baseline page would produce — used to prove a live page's Container
-    graph is still exactly its baseline (unmodified) before treating it as
-    pristine. Uses the SAME contiguous-``row_key``-run grouping the container
-    rebuild itself uses (``_entry_runs``)."""
-    expected = []
-    for run in _entry_runs(entries, row_key=lambda e: e["row_key"]):
-        spans = [(e["row_span"] if e["row_key"] else 12) for e in run]
-        expected.append({
-            "layout_key": container_service.layout_key_for_spans(spans),
-            "settings": run[0]["container_settings"],
-            "cell_count": len(run),
-        })
-    return expected
-
-
 def _page_is_pristine(page, source_baseline: dict) -> bool:
     """Conservative page-pristine classifier (Architecture Convergence / Phase 1,
-    section H). A page is treated as pristine — safe to replace with the target
-    Template's canonical composition — ONLY when that can be proven from the
-    recorded source baseline snapshot: every live section still matches its
-    recorded baseline entry exactly (type/settings/row/slot), is active, is
-    unlocked and carries no section-scoped media; and every live Container still
-    matches the baseline layout/settings/cell-count with no multi-block cell and
-    no lock. Any deviation, any merchant-created/unmatched section, any missing
-    baseline, or any uncertainty -> preservation-required (return False). The
-    rule is UNCERTAIN = PRESERVE, never UNCERTAIN = DELETE.
+    section H). A page is pristine — safe to replace with the target Template's
+    canonical composition — ONLY when that can be proven from the recorded source
+    baseline snapshot. Binding rule: ANY Section OR Container/Cell placement
+    modification ⇒ preservation-required. UNCERTAIN = PRESERVE, never DELETE.
+
+    Verifies, against the recorded baseline:
+
+    * every live section still equals its recorded baseline entry exactly
+      (section_key/settings/row_key/row_span/slot_key), is active, is unlocked,
+      and carries no section-scoped merchant media;
+    * the FULL canonical Container/Cell/block placement graph — reconstructed
+      from the baseline entries with the SAME contiguous-``row_key``-run grouping
+      ``rebuild_page_from_legacy_rows`` itself uses (via ``_entry_runs``), so
+      there is NO second layout authority — matches the live graph in every
+      particular: Container count and order, per-Container layout_key, settings
+      and lock, Cell count, and for each Cell its order, span, single canonical
+      block membership and the EXACT section (by stable pk) occupying it. Any
+      moved/added/removed/reordered block, empty or multi-block Cell, changed
+      span/order, or lock ⇒ preservation-required.
     """
     pages = (source_baseline or {}).get("pages") or {}
     entries = pages.get(page.page_type)
@@ -700,22 +693,56 @@ def _page_is_pristine(page, source_baseline: dict) -> bool:
         if _section_has_scoped_media(section):
             return False
 
+    # Reconstruct the expected canonical placement graph from the (now proven
+    # position-matched) live sections, grouped exactly like the container rebuild
+    # groups baseline entries. ``run_container_settings`` is the per-run baseline
+    # Container settings recorded in the snapshot.
+    live_by_position = live_sections  # position i already proven == baseline entry i
+    runs: list[list] = []
+    idx = 0
+    while idx < len(live_by_position):
+        section = live_by_position[idx]
+        key = section.row_key or ""
+        if not key:
+            runs.append([section])
+            idx += 1
+            continue
+        run = [section]
+        idx += 1
+        while idx < len(live_by_position) and (live_by_position[idx].row_key or "") == key:
+            run.append(live_by_position[idx])
+            idx += 1
+        runs.append(run)
+    run_container_settings = _container_settings_from_snapshot_sections(entries)
+
     live_containers = list(page.containers.order_by("order", "id"))
-    expected_containers = _expected_containers_from_baseline(entries)
-    if len(live_containers) != len(expected_containers):
+    if len(live_containers) != len(runs) or len(runs) != len(run_container_settings):
         return False
-    for container, expected in zip(live_containers, expected_containers):
+    for container, run, container_settings in zip(live_containers, runs, run_container_settings):
         if container.is_locked:
             return False
-        if container.layout_key != expected["layout_key"]:
+        expected_spans = [(s.row_span if s.row_key else 12) for s in run]
+        if container.layout_key != container_service.layout_key_for_spans(expected_spans):
             return False
-        if (container.settings or {}) != (expected["settings"] or {}):
+        if (container.settings or {}) != (container_settings or {}):
             return False
         cells = list(container.cells.order_by("order", "id"))
-        if len(cells) != expected["cell_count"]:
+        if len(cells) != len(run):
             return False
-        for cell in cells:
-            if len(container_service.get_cell_blocks(cell)) > 1:
+        for cell_index, (cell, section, span) in enumerate(zip(cells, run, expected_spans)):
+            if cell.order != cell_index:
+                return False
+            if cell.span != span:
+                return False
+            blocks = container_service.get_cell_blocks(cell)
+            if len(blocks) != 1:
+                return False
+            if blocks[0].pk != section.pk:
+                return False
+            if blocks[0].cell_order not in (0, None):
+                # A single canonical block occupies index 0 of its Cell; any
+                # other cell_order signals a merchant multi-block reordering that
+                # left exactly one block here — still a placement modification.
                 return False
     return True
 
@@ -776,13 +803,23 @@ def _introduce_target_slot(page, entry: dict) -> None:
 
     last_order = page.sections.order_by("-order", "-id").values_list("order", flat=True).first()
     next_order = (last_order + 1) if last_order is not None else 0
+    # The approved safe fallback is a NEW standalone full-width placement. The
+    # introduced section is therefore given standalone legacy-row metadata
+    # (``row_key=""`` / ``row_span=12``) that is CONSISTENT with the single-cell
+    # full-width Container/Cell it is placed into below — never the target
+    # recipe's own ``row_key``/``row_span`` (which describe that recipe's
+    # multi-section composite row and would make the legacy row metadata claim
+    # this section belongs to a row while the canonical Container/Cell graph says
+    # standalone). Implementing the target recipe's COMPLETE canonical row
+    # placement is out of scope for a safe single-slot introduction; the two
+    # representations must never disagree.
     new_section = StorefrontSection.objects.create(
         page=page,
         section_key=section_key,
         order=next_order,
         settings=entry["settings"],
-        row_key=entry.get("row_key", "") or "",
-        row_span=entry.get("row_span", 12),
+        row_key="",
+        row_span=12,
         template_slot_key=entry["slot_key"],
     )
     # Canonical standalone placement (the RED tests require a real Container/Cell
@@ -1060,22 +1097,21 @@ def reset_storefront_to_baseline(draft: StorefrontLayoutVersion) -> LayoutPreset
         apply_baseline_snapshot(draft, snapshot)
         return layout_preset_registry.get_layout_preset(template_key)
 
-    # R4 Task 8 (final-review fix, CRITICAL-1) — a snapshot that EXISTS but
-    # does not match this Draft's current provenance is a genuinely
-    # different situation than "this Draft never had an accurate snapshot
-    # at all" (the legacy-compatibility fallback below). It arises from
-    # ``switch_template_preserving_content``: a content-preserving Template
-    # Switch deliberately updates ``template_provenance`` to the new
-    # Template WITHOUT rebuilding ``template_baseline_snapshot`` (see that
-    # function's own docstring — rebuilding it would mean fabricating an
-    # exact historical baseline for composition this operation never
-    # actually applied). Before this fix, that mismatch fell straight into
-    # the fallback below, which re-fetches the new Template from the LIVE
-    # registry and does a full ``apply_preset`` — silently wiping every
-    # page's composition, including the exact content a content-preserving
-    # switch just went out of its way to preserve. A Draft with NO
-    # snapshot at all (``snapshot`` falsy) is unaffected by this check and
-    # still takes the legacy best-effort path exactly as before.
+    # A snapshot that EXISTS but does not match this Draft's current provenance
+    # is a genuinely different situation than "this Draft never had an accurate
+    # snapshot at all" (the legacy-compatibility fallback below). Architecture
+    # Convergence / Phase 1 note: the converged Ready Template switch
+    # (``switch_ready_template_preserving``) now always writes a coherent
+    # provenance-B + baseline-B snapshot, so it never LEAVES this mismatch. This
+    # defensive branch remains for legacy/pre-convergence Drafts that recorded a
+    # provenance without a matching baseline snapshot (e.g. an older
+    # content-preserving switch that updated provenance but not the baseline):
+    # for those, falling through to the fallback below would re-fetch the new
+    # Template from the LIVE registry and do a full ``apply_preset`` — silently
+    # wiping every page's composition, including merchant content — so it is
+    # refused here instead. A Draft with NO snapshot at all (``snapshot`` falsy)
+    # is unaffected by this check and still takes the legacy best-effort path
+    # exactly as before.
     if snapshot:
         # Task-10 blocker corrective fix — a mismatched snapshot is only
         # the *safe* Template-Switch case (``TemplateBaselineVersionChangedError``,
@@ -1247,63 +1283,15 @@ def apply_preset_with_checkpoint(store, preset: LayoutPresetDefinition, *, user=
     return draft
 
 
-@transaction.atomic
-def switch_template_preserving_content(store, preset: LayoutPresetDefinition, *, user=None) -> StorefrontLayoutVersion:
-    """R4 Task 8 — content-preserving Template Switch: apply a Ready
-    Template's appearance/DNA (ordinary appearance overlay, header/footer
-    config, and the COMPLETE typed Store-Appearance manifest) WITHOUT
-    replacing page composition at all.
-
-    This is a genuinely different operation from ``apply_preset_with_
-    checkpoint`` above (which replaces both DNA *and* composition for
-    every page the preset's recipe covers) — it exists because a merchant
-    who has already authored real content under one Template must be able
-    to switch to another Template's *visual identity* without losing that
-    work. It reuses, never re-implements, the two already-canonical
-    primitives this needs:
-
-    - ``layout_service.checkpoint_draft_before_replacement`` — same
-      recoverable-checkpoint machinery ``apply_preset_with_checkpoint``/
-      ``reset_page_with_checkpoint``/``reset_storefront_with_checkpoint``
-      already use. It returns a FULL CLONE of the current Draft's content
-      (all six pages, every Section/Container/Cell) as the new active
-      Draft — this is precisely the content-preservation mechanism: we
-      never touch composition, so the clone IS the preserved content.
-    - ``appearance_authority_service.apply_ready_template_appearance`` —
-      the canonical, already-tested Ready-Template DNA-application
-      primitive (Phase 1, Task 2) that had zero production callers before
-      this — explicitly documented as NOT replacing page composition,
-      provenance, or baseline snapshots, which is exactly the contract
-      this function needs.
-
-    ``template_provenance`` IS updated (so the Template Gallery/R4 UI
-    correctly shows the new Template as "current" and future switches
-    compare against it) — but ``template_baseline_snapshot`` is
-    deliberately left untouched: it is a record of which section-level
-    content was actually baseline-applied and can be granularly reset to,
-    and this function never applies Template B's composition, so writing
-    a snapshot claiming otherwise would be exactly the kind of dishonest
-    "fabricated baseline" ``apply_preset``'s own ``_record_baseline_
-    snapshot=False`` path already goes out of its way to avoid. The
-    practical consequence — granular reset-to-baseline after a content-
-    preserving switch still restores a page/section to Template A's
-    (still-accurate) recorded baseline, not Template B's — is a known,
-    deliberate limitation, not an oversight: it never destroys anything,
-    it only means "reset to baseline" continues to mean what it already
-    recorded."""
-    if not preset.is_ready_template:
-        raise InvalidPresetError(
-            f"«{preset.label_fa}» یک Ready Template نیست — تعویضِ محتوا-محفوظ فقط برایِ Ready Templateها معنادار است"
-        )
-    draft = layout_service.checkpoint_draft_before_replacement(
-        store, reason_label=f"پیش از تعویضِ محتوا-محفوظِ قالب «{preset.label_fa}»", user=user,
-    )
-    appearance_authority_service.apply_ready_template_appearance(version=draft, preset=preset)
-    draft.template_provenance = build_template_provenance(
-        template_key=preset.key, template_version=preset.version,
-    )
-    draft.save(update_fields=["template_provenance", "updated_at"])
-    return draft
+# Architecture Convergence / Phase 1 — the obsolete clone/checkpoint + DNA-only
+# Ready Template switch ``switch_template_preserving_content`` was REMOVED here.
+# It had no production caller after convergence and was a second, competing
+# Ready Template transition implementation alongside the canonical
+# ``switch_ready_template_preserving`` (same active Draft, preservation-first
+# merge, honest Template-B baseline). One canonical Ready Template transition
+# authority now exists, not two. The generic recoverable-checkpoint primitive
+# ``layout_service.checkpoint_draft_before_replacement`` and the reset/version-
+# replacement workflows that legitimately use it are unchanged.
 
 
 @transaction.atomic

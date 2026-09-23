@@ -2005,12 +2005,20 @@ class LegacyInPlaceResetRevisionCoherenceTests(_StructureLockMatrixMixin):
 
 
 class LegacyCheckpointApplyLifecycleTests(_StructureLockMatrixMixin):
-    """The legacy apply-preset endpoint is atomic and lifecycle-correct: it
-    routes a would-replace apply through the shared
-    ``apply_preset_with_checkpoint``, preserving the prior Draft as a
-    recoverable ARCHIVED checkpoint on a fresh Draft — never touching a
-    Published version, never auto-publishing. Apply/reset MEANING is
-    unchanged (full replacement)."""
+    """The apply-preset endpoint is atomic and lifecycle-correct for a NON-READY
+    structural preset: it routes a would-replace apply through the shared
+    ``apply_preset_with_checkpoint``, preserving the prior Draft as a recoverable
+    ARCHIVED checkpoint on a fresh Draft — never touching a Published version,
+    never auto-publishing. Full-replacement checkpoint MEANING is unchanged for
+    non-Ready presets.
+
+    Architecture Convergence / Phase 1 re-characterization: a merchant-facing
+    READY TEMPLATE apply is NO LONGER this destructive clone/checkpoint path — it
+    is now the preservation-first, same-active-Draft switch (proven by
+    ``test_phase1_template_switch_convergence`` /
+    ``test_phase1_template_preservation``). So the checkpoint-lifecycle fixture
+    here uses a non-Ready structural preset (``dense_catalog``), which legitimately
+    still checkpoints, rather than a Ready Template."""
 
     def test_apply_preset_view_over_existing_content_is_atomic_and_checkpoints(self):
         # Seed real content so the apply is a "would replace" that must
@@ -2020,13 +2028,15 @@ class LegacyCheckpointApplyLifecycleTests(_StructureLockMatrixMixin):
         old_draft_pk = self.draft.pk
         versions_before = set(self.layout.versions.values_list("pk", flat=True))
 
-        preset = next(iter(_t5_lpr.list_ready_templates()))
+        # A NON-Ready structural preset still uses the destructive checkpoint path.
+        preset = _t5_lpr.get_layout_preset("dense_catalog")
+        self.assertFalse(preset.is_ready_template)
         resp = self.client.post(
             reverse("dashboard:storefront-builder-apply-preset"),
             {"preset_key": preset.key, "confirm_preset_apply": "1"})
         self.assertEqual(resp.status_code, 302)
 
-        # A NEW active Draft now carries the applied template; the previous
+        # A NEW active Draft now carries the applied preset; the previous
         # Draft is preserved as a recoverable ARCHIVED checkpoint (never
         # deleted, never published).
         self.layout.refresh_from_db()
@@ -2042,22 +2052,27 @@ class LegacyCheckpointApplyLifecycleTests(_StructureLockMatrixMixin):
         versions_after = set(self.layout.versions.values_list("pk", flat=True))
         self.assertTrue(versions_before <= versions_after)
 
-    def test_apply_preset_view_refuses_locked_page_and_leaves_it_intact(self):
-        # A locked section on a covered page blocks the apply entirely (the
-        # apply-preset "NO" cell at the HTTP boundary).
+    def test_apply_preset_view_preserves_locked_ready_template_content(self):
+        # Architecture Convergence / Phase 1 re-characterization: a locked section
+        # is no longer a hard "refuse the whole apply" for a READY TEMPLATE. The
+        # converged switch is preservation-first on the SAME active Draft — the
+        # locked section survives untouched (never deleted, never moved) rather
+        # than the apply being rejected.
         locked = self._add_section(section_key="rich_text", order=0, is_locked=True)
         self._place_each_section_in_own_container()
+        locked_order = locked.order
 
         preset = next(iter(_t5_lpr.list_ready_templates()))
         resp = self.client.post(
             reverse("dashboard:storefront-builder-apply-preset"),
             {"preset_key": preset.key, "confirm_preset_apply": "1"})
         self.assertEqual(resp.status_code, 302)
-        # The locked section survived; the apply was refused.
-        self.assertTrue(StorefrontSection.objects.filter(pk=locked.pk, is_locked=True).exists())
+        # The locked section survived, still locked and unmoved...
+        preserved = StorefrontSection.objects.filter(pk=locked.pk, is_locked=True).first()
+        self.assertIsNotNone(preserved)
+        self.assertEqual(preserved.order, locked_order)
         self.layout.refresh_from_db()
-        # Active Draft still points at the original Draft (no checkpoint/new
-        # Draft was created for a refused apply).
+        # ...on the SAME active Draft (preservation-first switch, no clone).
         self.assertEqual(self.layout.draft_version_id, self.draft.pk)
 
 

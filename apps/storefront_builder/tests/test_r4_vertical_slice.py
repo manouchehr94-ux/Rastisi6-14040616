@@ -2417,10 +2417,18 @@ class DraftReplacingEndpointTests(R4MutationApiTestCase):
 
 class TemplateSwitchPreservingContentTests(R4MutationApiTestCase):
     """Template A -> merchant content -> switch to Template B -> merchant
-    content remains, Template B's DNA applies. Same Draft-replacing
-    contract shape as ``DraftReplacingEndpointTests`` above (checkpoint +
-    new active Draft), but the assertions here are specifically about
-    content SURVIVING the switch — the whole point of this capability."""
+    content remains, Template B's DNA applies.
+
+    Architecture Convergence / Phase 1 re-characterization: the merchant-facing
+    R4 Ready Template switch is now the ONE canonical preservation-first,
+    SAME-active-Draft transition (``preset_service.switch_ready_template_
+    preserving``) — NOT the obsolete clone/checkpoint + DNA-only orchestration
+    (``switch_template_preserving_content``, removed). So these assertions are
+    the converged contract: same active Draft, provenance AND baseline both
+    Template B (coherent), and merchant content survives on that same Draft.
+    The rejection/validation tests below (non-Ready, unknown key, version
+    mismatch, stale revision, gate, published-untouched, tenant isolation) are
+    unchanged."""
 
     def setUp(self):
         super().setUp()
@@ -2447,40 +2455,33 @@ class TemplateSwitchPreservingContentTests(R4MutationApiTestCase):
             page=home, section_key="rich_text", order=home.sections.count(),
             settings={"body_html": "<p>محتوایِ دست‌ساختِ مرچنت</p>"},
         )
-        sections_before = list(home.sections.order_by("order", "id").values_list("section_key", "settings"))
+        merchant_sid = merchant_section.stable_id
         old_draft_id = self.draft.pk
-        versions_before = self.layout.versions.count()
 
         response = self._post_switch(self.draft.edit_revision)
         self.assertEqual(response.status_code, 200)
         self.assertIs(response.json()["ok"], True)
 
-        # Draft-identity-replacing, exactly like discard/reset-page/reset-storefront.
+        # Architecture Convergence / Phase 1 — preservation-first on the SAME
+        # active Draft (no clone, no checkpoint, no Draft-identity replacement).
         self.layout.refresh_from_db()
-        self.assertEqual(self.layout.versions.count(), versions_before + 1)
-        self.assertNotEqual(self.layout.draft_version_id, old_draft_id)
-        self.assertTrue(
-            StorefrontLayoutVersion.objects.filter(
-                pk=old_draft_id, status=StorefrontLayoutVersion.Status.ARCHIVED,
-            ).exists(),
-        )
-        new_draft = StorefrontLayoutVersion.objects.get(pk=self.layout.draft_version_id)
+        self.assertEqual(self.layout.draft_version_id, old_draft_id)
+        active = StorefrontLayoutVersion.objects.get(pk=self.layout.draft_version_id)
 
-        # Content preservation — every section, INCLUDING the merchant's own
-        # hand-authored one, survives with identical settings on the new Draft.
-        new_home = new_draft.get_page(StorefrontPage.PageType.HOME)
-        sections_after = list(new_home.sections.order_by("order", "id").values_list("section_key", "settings"))
-        self.assertEqual(sections_after, sections_before)
-        preserved_section = new_home.sections.get(section_key="rich_text")
+        # Content preservation — the merchant's own hand-authored section
+        # survives (by stable identity, with identical settings) on the SAME Draft.
+        preserved_section = StorefrontSection.objects.filter(
+            page__version=active, stable_id=merchant_sid,
+        ).first()
+        self.assertIsNotNone(preserved_section)
         self.assertEqual(preserved_section.settings.get("body_html"), "<p>محتوایِ دست‌ساختِ مرچنت</p>")
 
-        # Template B's DNA actually applied — compare against the legacy
-        # header selector a full (composition-replacing) ``apply_preset``
-        # of the SAME Template B would itself produce, on a throwaway
-        # Draft, rather than hardcoding knowledge of the component-key ->
-        # legacy-selector translation layer. This proves the
-        # content-preserving switch reaches the exact same DNA-authority
-        # result as the canonical full apply, for the fields it touches.
+        # Template B's DNA actually applied — compare against the header
+        # selector a full ``apply_preset`` of the SAME Template B would itself
+        # produce, on a throwaway Draft, rather than hardcoding the component-key
+        # -> legacy-selector translation. The converged switch reaches the exact
+        # same DNA-authority result as the canonical full apply for the fields it
+        # touches, while preserving composition.
         oracle_store = Store.objects.create(
             name="فروشگاه شاهد", slug="r4-task8-switch-oracle-store",
             admin_subdomain="r4-task8-switch-oracle-store",
@@ -2488,9 +2489,9 @@ class TemplateSwitchPreservingContentTests(R4MutationApiTestCase):
         oracle_draft = layout_service.get_or_create_draft(oracle_store)
         preset_service.apply_preset(oracle_draft, self.template_b)
         oracle_draft.refresh_from_db()
-        self.assertEqual(new_draft.header_config.get("header_variant"), oracle_draft.header_config.get("header_variant"))
-        self.assertNotEqual(new_draft.header_config.get("header_variant"), self.template_a_header_variant)
-        provenance = new_draft.template_provenance or {}
+        self.assertEqual(active.header_config.get("header_variant"), oracle_draft.header_config.get("header_variant"))
+        self.assertNotEqual(active.header_config.get("header_variant"), self.template_a_header_variant)
+        provenance = active.template_provenance or {}
         self.assertEqual(provenance.get("template", {}).get("key"), self.template_b.key)
 
     def test_switch_rejects_non_ready_template(self):
@@ -2558,54 +2559,39 @@ class TemplateSwitchPreservingContentTests(R4MutationApiTestCase):
             self.template_a.key,
         )
 
-    def test_reset_storefront_after_switch_is_rejected_not_silently_destructive(self):
-        """R4 Task 8 (final-review fix, CRITICAL-1) — after a content-
-        preserving switch, ``template_provenance`` declares Template B
-        while ``template_baseline_snapshot`` still (deliberately, per
-        ``switch_template_preserving_content``'s own docstring) describes
-        Template A. Before this fix, ``reset_storefront_to_baseline`` read
-        that mismatch as "this Draft never had an accurate snapshot" and
-        silently fell back to fetching Template B fresh from the live
-        registry and applying its BARE recipe — wiping every page's
-        composition, including the exact merchant content a content-
-        preserving switch exists to preserve. It must now be refused
-        outright, with the Draft's content completely untouched."""
+    def test_reset_storefront_after_switch_restores_coherent_b_baseline(self):
+        """Architecture Convergence / Phase 1 re-characterization — the converged
+        preservation-first switch leaves ``template_provenance`` AND
+        ``template_baseline_snapshot`` BOTH Template B (coherent). Whole-store
+        reset-to-baseline is therefore a supported, intentional action that
+        restores B's baseline, NOT the old clone/DNA-only switch's incoherent
+        provenance-B / baseline-A state that ``reset_storefront_to_baseline`` had
+        to refuse with ``TemplateBaselineVersionChangedError``. (Ordinary
+        switching stays non-destructive; only an EXPLICIT reset restores the bare
+        baseline — sections W/X — which is exactly this intentional call.)"""
         home = self.draft.get_page(StorefrontPage.PageType.HOME)
-        merchant_section = StorefrontSection.objects.create(
+        StorefrontSection.objects.create(
             page=home, section_key="rich_text", order=home.sections.count(),
-            settings={"body_html": "<p>هرگز نباید پاک شود</p>"},
+            settings={"body_html": "<p>محتوای مرچنت</p>"},
         )
         response = self._post_switch(self.draft.edit_revision)
         self.assertEqual(response.status_code, 200)
+
+        # Same active Draft; provenance AND baseline are coherently Template B.
         self.layout.refresh_from_db()
-        new_draft = StorefrontLayoutVersion.objects.get(pk=self.layout.draft_version_id)
-        new_home = new_draft.get_page(StorefrontPage.PageType.HOME)
-        sections_before_reset_attempt = list(new_home.sections.order_by("order", "id").values_list("section_key", "settings"))
-        self.assertTrue(
-            new_home.sections.filter(section_key="rich_text", settings__body_html="<p>هرگز نباید پاک شود</p>").exists(),
+        active = StorefrontLayoutVersion.objects.get(pk=self.layout.draft_version_id)
+        self.assertEqual(active.pk, self.draft.pk)
+        self.assertEqual(
+            (active.template_provenance or {}).get("template", {}).get("key"), self.template_b.key,
+        )
+        self.assertEqual(
+            (active.template_baseline_snapshot or {}).get("template_key"), self.template_b.key,
         )
 
-        # Direct service-level proof: the specific mismatch is refused, not
-        # silently treated as "no accurate snapshot" and rebuilt from the
-        # live registry.
-        with self.assertRaises(preset_service.TemplateBaselineVersionChangedError):
-            preset_service.reset_storefront_to_baseline(new_draft)
-
-        # End-to-end proof through the real R4 endpoint: rejected, and the
-        # Draft's composition is completely unchanged — never even
-        # partially rebuilt.
-        response = self.client.post(
-            reverse("dashboard:storefront-builder-r4-reset-storefront"),
-            data=json.dumps({"base_revision": new_draft.edit_revision}),
-            content_type="application/json",
-        )
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["code"], "invalid_preset")
-        self.layout.refresh_from_db()
-        self.assertEqual(self.layout.draft_version_id, new_draft.pk)
-        new_home.refresh_from_db()
-        sections_after_reset_attempt = list(new_home.sections.order_by("order", "id").values_list("section_key", "settings"))
-        self.assertEqual(sections_after_reset_attempt, sections_before_reset_attempt)
+        # The intentional whole-store reset now SUCCEEDS (no version-changed
+        # rejection) and restores Template B's baseline.
+        restored = preset_service.reset_storefront_to_baseline(active)
+        self.assertEqual(getattr(restored, "key", None), self.template_b.key)
 
 
 class QuickLinksMenuPickerR4Tests(R4VerticalSliceTestCase):
