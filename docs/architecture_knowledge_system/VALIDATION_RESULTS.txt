@@ -1,6 +1,6 @@
 === Architecture Docs Validation ===
 repo: /projects/sandbox/Rastisi6-14040616
-  info: internal links checked: 434
+  info: internal links checked: 435
   info: registry domain IDs: 15 (expected 15)
   info: registry DR references: 8 distinct
   info: domain dirs: 15 (expected 15)
@@ -8,6 +8,8 @@ repo: /projects/sandbox/Rastisi6-14040616
   info: code-path intentionally absent (expected): apps/orders/gateways/new_gateway.py in docs/architecture_knowledge_system/domains/orders/SERVICES.md
   info: code-path references checked: 120
   info: canonical graph sources: 3
+  info: registry semantic fields: phase4_prepack=15, canonical_pack_status=15 (both expected 15)
+  info: domain READMEs conforming to metadata schema: 15 (expected 15)
 warnings: 0
 errors: 0
 === RESULT: PASS ===

@@ -3,8 +3,8 @@
 ```
 domain_id: D5
 app: apps/cart
-status: CANONICAL
-readiness: POOR
+canonical_pack_status: CANONICAL
+phase4_prepack_documentation_readiness: POOR
 code_baseline: 5883a140
 open_decisions: —
 known_risks: M9, L2

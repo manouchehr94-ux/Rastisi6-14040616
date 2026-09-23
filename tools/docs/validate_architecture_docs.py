@@ -15,6 +15,18 @@ Checks performed:
   6. Code-path references (apps/... .py) in canonical + domain docs that do not exist on disk.
   7. Markdown/Mermaid source presence (canonical graphs dir has .mmd files).
   8. Registry file present and parseable at a basic structural level.
+  9. Canonical-pack readiness disambiguation (semantic consistency repair):
+       a. exactly 15 domain IDs;
+       b. every domain has a canonical pack directory and README (also checked in 4);
+       c. registry has schema_version + field_semantics documenting the two concepts;
+       d. every registry domain has BOTH phase4_prepack_documentation_readiness AND
+          canonical_pack_status;
+       e. canonical_pack_status is CANONICAL for all 15 completed packs;
+       f. NO generic domain-level `status: READY|PARTIAL|POOR|MISSING|CONFLICTED` in the registry
+          (that ambiguous field was the pre-repair bug) — such usage is rejected;
+       g. every domain README uses the agreed metadata schema
+          (canonical_pack_status + phase4_prepack_documentation_readiness; no ambiguous `readiness:`
+          or bare `status: CANONICAL` metadata line).
 
 Exit code 0 if no ERRORs (warnings allowed); 1 if any ERROR.
 Run from the repo root:  python3 tools/docs/validate_architecture_docs.py
@@ -191,6 +203,88 @@ if os.path.isdir(graphs_dir):
     info.append(f"canonical graph sources: {len(mmd)}")
 else:
     warnings.append("canonical/graphs/ directory missing")
+
+
+# ---- Check 9: canonical-pack readiness disambiguation (semantic consistency) ----
+READINESS_VOCAB = {"READY", "PARTIAL", "POOR", "MISSING", "CONFLICTED"}
+
+# 9a: exactly 15 domain IDs (re-affirm explicitly, in addition to check 2's set logic)
+if os.path.exists(REGISTRY):
+    if len(reg_ids) != 15:
+        errors.append(f"REGISTRY must have exactly 15 domain IDs; found {len(reg_ids)}")
+
+    # 9c: schema_version + field_semantics present and documenting both concepts
+    if not re.search(r"^schema_version:\s*\d+", reg_text, re.MULTILINE):
+        errors.append("REGISTRY missing top-level schema_version")
+    if "field_semantics:" not in reg_text:
+        errors.append("REGISTRY missing top-level field_semantics")
+    else:
+        for concept in ("phase4_prepack_documentation_readiness", "canonical_pack_status"):
+            # must be documented under field_semantics (appears as a key with a description)
+            if not re.search(rf"^\s+{re.escape(concept)}:\s*$", reg_text, re.MULTILINE):
+                warnings.append(f"REGISTRY field_semantics may not document '{concept}'")
+
+    # 9d/9e: per-domain fields — count occurrences of the two required fields
+    reg_prepack = re.findall(r"^\s{4}phase4_prepack_documentation_readiness:\s*(\S+)\s*$", reg_text, re.MULTILINE)
+    reg_packstatus = re.findall(r"^\s{4}canonical_pack_status:\s*(\S+)\s*$", reg_text, re.MULTILINE)
+    if len(reg_prepack) != len(reg_ids):
+        errors.append(
+            f"REGISTRY: phase4_prepack_documentation_readiness count ({len(reg_prepack)}) "
+            f"!= domain count ({len(reg_ids)})"
+        )
+    if len(reg_packstatus) != len(reg_ids):
+        errors.append(
+            f"REGISTRY: canonical_pack_status count ({len(reg_packstatus)}) "
+            f"!= domain count ({len(reg_ids)})"
+        )
+    for v in reg_prepack:
+        if v not in READINESS_VOCAB:
+            errors.append(f"REGISTRY invalid phase4_prepack_documentation_readiness value: {v}")
+    for v in reg_packstatus:
+        if v != "CANONICAL":
+            errors.append(f"REGISTRY canonical_pack_status must be CANONICAL for completed packs; got: {v}")
+    info.append(
+        f"registry semantic fields: phase4_prepack={len(reg_prepack)}, "
+        f"canonical_pack_status={len(reg_packstatus)} (both expected {len(reg_ids)})"
+    )
+
+    # 9f: reject the ambiguous generic domain-level `status: <readiness>` field (4-space indent)
+    ambiguous = re.findall(
+        r"^\s{4}status:\s*(READY|PARTIAL|POOR|MISSING|CONFLICTED)\s*$", reg_text, re.MULTILINE
+    )
+    if ambiguous:
+        errors.append(
+            f"REGISTRY still uses ambiguous domain-level `status: <readiness>` ({len(ambiguous)} "
+            f"occurrence(s)) — use phase4_prepack_documentation_readiness + canonical_pack_status"
+        )
+
+# 9g: every domain README uses the agreed metadata schema
+schema_ok = 0
+for d in sorted(EXPECTED_DOMAINS):
+    readme = os.path.join(DOMAINS, d, "README.md")
+    if not os.path.exists(readme):
+        continue  # missing-README already reported in check 4
+    with open(readme, encoding="utf-8") as fh:
+        head = fh.read()
+    # ambiguous metadata lines must be gone
+    if re.search(r"(?m)^readiness:", head):
+        errors.append(f"DOMAIN README uses ambiguous `readiness:` metadata: domains/{d}/README.md")
+    if re.search(r"(?m)^status:\s*CANONICAL\s*$", head):
+        errors.append(f"DOMAIN README uses ambiguous bare `status: CANONICAL` metadata: domains/{d}/README.md")
+    # required fields present
+    if not re.search(r"(?m)^canonical_pack_status:\s*CANONICAL\s*$", head):
+        errors.append(f"DOMAIN README missing `canonical_pack_status: CANONICAL`: domains/{d}/README.md")
+    m = re.search(r"(?m)^phase4_prepack_documentation_readiness:\s*(\S+)\s*$", head)
+    if not m:
+        errors.append(f"DOMAIN README missing `phase4_prepack_documentation_readiness`: domains/{d}/README.md")
+    elif m.group(1) not in READINESS_VOCAB:
+        errors.append(
+            f"DOMAIN README invalid phase4_prepack_documentation_readiness "
+            f"'{m.group(1)}': domains/{d}/README.md"
+        )
+    else:
+        schema_ok += 1
+info.append(f"domain READMEs conforming to metadata schema: {schema_ok} (expected {len(EXPECTED_DOMAINS)})")
 
 
 # ---- Report ----

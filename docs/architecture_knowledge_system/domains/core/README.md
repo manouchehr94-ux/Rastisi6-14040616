@@ -3,8 +3,8 @@
 ```
 domain_id: D14
 app: apps/core
-status: CANONICAL
-readiness: PARTIAL
+canonical_pack_status: CANONICAL
+phase4_prepack_documentation_readiness: PARTIAL
 code_baseline: 5883a140
 open_decisions: DR-3
 known_risks: M5, M14

@@ -6,6 +6,30 @@
 # NOTE: UNKNOWN = evidence genuinely missing (not "not applicable").
 # Fields use exact code paths/symbols where practical.
 
+schema_version: 1
+
+# Field semantics — makes the two DISTINCT concepts unambiguous for future agents.
+# Each domain below carries BOTH of these; do NOT use a generic domain-level `status:`
+# to represent readiness (that was the pre-repair ambiguity).
+field_semantics:
+  phase4_prepack_documentation_readiness:
+    description: >-
+      Historical Phase-4 finding: documentation readiness measured BEFORE the Phase-6
+      canonical Domain Knowledge Packs were authored. Preserved as-is; it does NOT
+      describe the current state of the canonical documentation.
+    vocabulary: [READY, PARTIAL, POOR, MISSING, CONFLICTED]
+  canonical_pack_status:
+    description: >-
+      CURRENT status of this domain's Architecture Knowledge System pack (docs/
+      architecture_knowledge_system/domains/<app>/). CANONICAL = a Phase-6 pack exists
+      and is the authoritative documentation for the domain. Independent of code freshness.
+    vocabulary: [CANONICAL]
+  code_baseline / last_verified_against_code:
+    description: >-
+      The frozen production commit these facts were verified against. A pack may be
+      canonical_pack_status: CANONICAL yet still require a future delta audit against
+      newer production code — canonical-pack completion is NOT code freshness.
+
 meta:
   system: RastiSi
   framework: "Django 5.2"
@@ -25,7 +49,8 @@ domains:
     name: Tenancy & Store identity
     app: stores
     responsibility: "SaaS tenant boundary; Store lifecycle, membership/roles, domains, ownership transfer, Host->Store resolution, authorization"
-    status: READY
+    phase4_prepack_documentation_readiness: READY
+    canonical_pack_status: CANONICAL
     code_roots: [apps/stores/]
     owned_models: [Store, StoreDomain, StoreMembership, StoreOwnershipTransfer, StoreIntegrationConnection]
     owned_services: [resolution.py, authorization.py, services/publication_service.py, services/store_status_service.py, services/domain_verification_service.py, services/platform_code_service.py, services/deletion_service.py, services/membership_service.py, services/ownership_transfer_service.py, services/handle_service.py]
@@ -52,7 +77,8 @@ domains:
     name: Platform control & owner identity
     app: portal
     responsibility: "Platform config singleton, owner/staff auth+OTP+step-up, host routing, store provisioning, platform-admin console"
-    status: PARTIAL
+    phase4_prepack_documentation_readiness: PARTIAL
+    canonical_pack_status: CANONICAL
     code_roots: [apps/portal/]
     owned_models: [OwnerProfile, OwnerOtpChallenge, AdminHandoffTicket, PlatformConfiguration, PlatformAuditLogEntry, PlatformInternalNote, ContactMessage]
     owned_services: [services/provisioning_service.py, services/owner_auth_service.py, services/owner_otp_service.py, services/step_up_service.py, services/owner_sms_service.py, services/platform_config_service.py, services/handoff_service.py, services/turnstile_service.py, services/session_service.py]
@@ -78,7 +104,8 @@ domains:
     name: Customer identity & CRM
     app: customers
     responsibility: "Global shopper account, per-Store CRM projection, segments/tags, addresses, wishlist, guest->user cart merge, customer auth/OTP"
-    status: POOR
+    phase4_prepack_documentation_readiness: POOR
+    canonical_pack_status: CANONICAL
     code_roots: [apps/customers/]
     owned_models: [Customer, CustomerProfile, CustomerTag, CustomerNote, CustomerSegment, CustomerSegmentRule, CustomerSegmentMembership, Address, Wishlist]
     owned_services: [services/auth_service.py]
@@ -104,7 +131,8 @@ domains:
     name: Catalog & inventory
     app: catalog
     responsibility: "Products/variants/options/attributes, categories/brands, collections, ledgered inventory, industry templates, specs, reviews"
-    status: PARTIAL
+    phase4_prepack_documentation_readiness: PARTIAL
+    canonical_pack_status: CANONICAL
     code_roots: [apps/catalog/]
     owned_models: [Product, ProductVariant, StockMovement, Category, Brand, Vendor, MerchantCollection, Warehouse, WarehouseInventory, InventoryReservation, WarehouseTransfer, IndustryTemplate, StoreIndustryInstallation, StoreTemplateUpdate, "and ~24 more"]
     owned_services: [services/product_publish_service.py, services/product_draft_service.py, services/inventory_service.py, services/variant_service.py, services/variant_engine_service.py, services/reservation_service.py, services/warehouse_service.py, services/transfer_service.py, services/industry_template_service.py, "and ~22 more"]
@@ -130,7 +158,8 @@ domains:
     name: Cart & pricing
     app: cart
     responsibility: "Shopping cart, cart pricing/coupons, gift wrap, checkout token"
-    status: POOR
+    phase4_prepack_documentation_readiness: POOR
+    canonical_pack_status: CANONICAL
     code_roots: [apps/cart/]
     owned_models: [Cart, CartItem, Coupon]
     owned_services: [services/cart_service.py, services/pricing.py, services/coupon_service.py, services/gift_wrap_service.py, services/cart_preview.py]
@@ -156,7 +185,8 @@ domains:
     name: Orders, checkout, payments (storefront money)
     app: orders
     responsibility: "Order state machine, two storefront-payment implementations, refunds/returns, shipping/tax config, gateway config+adapters"
-    status: PARTIAL
+    phase4_prepack_documentation_readiness: PARTIAL
+    canonical_pack_status: CANONICAL
     code_roots: [apps/orders/]
     owned_models: [Order, OrderItem, OrderStatusHistory, Transaction, PaymentAttempt, PaymentGatewayConfig, PaymentGateway, Refund, RefundItem, ReturnRequest, ReturnItem, ShippingZone, ShippingMethod, ShippingRateRule, TaxClass, TaxRate]
     owned_services: [services/order_service.py, services/payment_service.py, services/gateway_payment_service.py, services/refund_service.py, services/return_service.py, services/checkout_service.py, services/shipping_service.py, services/tax_service.py, services/best_seller_service.py]
@@ -184,7 +214,8 @@ domains:
     name: SaaS subscriptions
     app: subscriptions
     responsibility: "Plans/versions/entitlements, canonical StoreSubscription state machine, usage records"
-    status: PARTIAL
+    phase4_prepack_documentation_readiness: PARTIAL
+    canonical_pack_status: CANONICAL
     code_roots: [apps/subscriptions/]
     owned_models: [StoreSubscription, Plan, PlanVersion, EntitlementDefinition, PlanEntitlement, SubscriptionEvent, UsageRecord]
     owned_services: [services/subscription_service.py, services/plan_change_service.py, services/entitlement_service.py, services/usage_service.py, services/plan_service.py, services/legacy_service.py, entitlements.py]
@@ -209,7 +240,8 @@ domains:
     name: SaaS billing
     app: billing
     responsibility: "Subscription invoicing, billing payment/confirmation, webhook inbox, dunning, renewals, credit/refund, plan-change billing, numbering"
-    status: PARTIAL
+    phase4_prepack_documentation_readiness: PARTIAL
+    canonical_pack_status: CANONICAL
     code_roots: [apps/billing/]
     owned_models: [StoreBillingAccount, SubscriptionInvoice, SubscriptionInvoiceLine, SubscriptionPaymentAttempt, BillingWebhookEvent, SubscriptionDunningState, SubscriptionCreditNote, SubscriptionRefund, ScheduledPlanChange, BillingSequence]
     owned_services: [services/invoice_service.py, services/attempt_service.py, services/confirmation_service.py, services/payment_flow_service.py, services/webhook_service.py, services/renewal_service.py, services/dunning_service.py, services/cancellation_service.py, services/refund_service.py, services/credit_note_service.py, services/numbering_service.py, services/account_service.py, services/period_utils.py, services/consistency_service.py, services/plan_change_billing_service.py]
@@ -234,7 +266,8 @@ domains:
     name: Storefront presentation / builder
     app: storefront_builder
     responsibility: "Versioned draft/publish layout; R4 editor (default); A8 ready templates; appearance/theme/palette registries; render path"
-    status: CONFLICTED
+    phase4_prepack_documentation_readiness: CONFLICTED
+    canonical_pack_status: CANONICAL
     code_roots: [apps/storefront_builder/]
     owned_models: [StorefrontLayout, StorefrontLayoutVersion, StorefrontPage, StorefrontSection, StorefrontContainer, StorefrontCell, StorefrontEditHistoryEntry]
     owned_services: [services/layout_service.py, services/r4_mutation_service.py, services/preset_service.py, services/appearance_authority_service.py, services/render_service.py, services/container_service.py, services/section_structure_service.py, services/bootstrap_service.py, services/edit_history_service.py, "and ~8 more"]
@@ -260,7 +293,8 @@ domains:
     name: Content & navigation
     app: content
     responsibility: "CMS pages, menus, footer settings/media, section-scoped placements, social links, newsletter, media assets"
-    status: POOR
+    phase4_prepack_documentation_readiness: POOR
+    canonical_pack_status: CANONICAL
     code_roots: [apps/content/]
     owned_models: [ContentPage, Menu, MenuItem, FooterSettings, FooterTrustBadge, FooterPaymentLogo, HeroSlide, PromotionalBanner, StoryRailItem, MediaAsset, SocialLink, NewsletterSubscriber]
     owned_services: ["services.py (READ/RESOLVE ONLY - no write service; H2)"]
@@ -285,7 +319,8 @@ domains:
     name: Merchant admin (controller)
     app: dashboard
     responsibility: "Auth-gated orchestration/CRUD over other domains; storefront-builder route delegation. No models."
-    status: PARTIAL
+    phase4_prepack_documentation_readiness: PARTIAL
+    canonical_pack_status: CANONICAL
     code_roots: [apps/dashboard/]
     owned_models: []
     owned_services: [services/catalog_admin_service.py, services/orders_admin_service.py, services/settings_admin_service.py, services/sms_admin_service.py, services/dashboard_service.py, services/report_service.py, services/customer_crm_service.py, services/segment_service.py, services/checklist_service.py, services/import_service.py, services/charts.py, services/customers_admin_service.py]
@@ -310,7 +345,8 @@ domains:
     name: Messaging - SMS
     app: sms
     responsibility: "SMS templates/events, credit accounting, backends, Android device gateway, OTP codes"
-    status: POOR
+    phase4_prepack_documentation_readiness: POOR
+    canonical_pack_status: CANONICAL
     code_roots: [apps/sms/]
     owned_models: [SmsTemplate, SmsBillingPolicy, SmsLog, SmsOutboxItem, SmsBalance, SmsPackage, SmsPackagePurchase, SmsCreditAdjustment, OtpCode]
     owned_services: [services/sms_service.py, services/backends.py, services/billing_policy_service.py, services/balance_service.py, "and 1 more"]
@@ -335,7 +371,8 @@ domains:
     name: Notifications
     app: notifications
     responsibility: "Persistent multi-channel notification outbox"
-    status: MISSING
+    phase4_prepack_documentation_readiness: MISSING
+    canonical_pack_status: CANONICAL
     code_roots: [apps/notifications/]
     owned_models: [NotificationOutbox]
     owned_services: [services/notification_service.py]
@@ -360,7 +397,8 @@ domains:
     name: Shared / cross-cutting
     app: core
     responsibility: "ShopSettings (per-Store), TimeStampedModel base, audit log, export/import + private storage, SEO, utilities"
-    status: PARTIAL
+    phase4_prepack_documentation_readiness: PARTIAL
+    canonical_pack_status: CANONICAL
     code_roots: [apps/core/]
     owned_models: [TimeStampedModel, ShopSettings, AuditLogEntry, ExportJob, ImportJob, ImportRowResult]
     owned_services: [services/export_service.py, services/audit_service.py, services/session_service.py, services/csv_utils.py, services/rate_limit.py]
@@ -385,7 +423,8 @@ domains:
     name: Blog (near-dead)
     app: blog
     responsibility: "Single BlogPost admin-only model; no urls/views"
-    status: MISSING
+    phase4_prepack_documentation_readiness: MISSING
+    canonical_pack_status: CANONICAL
     code_roots: [apps/blog/]
     owned_models: [BlogPost]
     owned_services: []

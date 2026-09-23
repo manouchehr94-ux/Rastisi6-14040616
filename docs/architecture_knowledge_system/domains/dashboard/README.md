@@ -3,8 +3,8 @@
 ```
 domain_id: D11
 app: apps/dashboard
-status: CANONICAL
-readiness: PARTIAL
+canonical_pack_status: CANONICAL
+phase4_prepack_documentation_readiness: PARTIAL
 code_baseline: 5883a140
 last_verified_against_code: 5883a140
 open_decisions: DR-2, DR-3, DR-4

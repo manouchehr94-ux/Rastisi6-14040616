@@ -3,8 +3,8 @@
 ```
 domain_id: D9
 app: apps/storefront_builder
-status: CANONICAL
-readiness: CONFLICTED
+canonical_pack_status: CANONICAL
+phase4_prepack_documentation_readiness: CONFLICTED
 code_baseline: 5883a140
 last_verified_against_code: 5883a140
 source_phases: Phase 1 / Phase 2 / Phase 4

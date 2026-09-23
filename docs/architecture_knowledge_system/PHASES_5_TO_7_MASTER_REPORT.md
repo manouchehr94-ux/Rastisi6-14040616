@@ -30,6 +30,15 @@ domain claim is grounded in Phase 1/2 code evidence at `5883a140`.
   (D2 portal, D4 catalog, D6 orders, D7 subscriptions, D8 billing, D11 dashboard, D14 core).
   Totals: **READY 1 / PARTIAL 7 / POOR 4 / MISSING 2 / CONFLICTED 1 = 15.**
 
+> **Canonical-consistency repair (post-Phase-7 review).** The readiness values above are the
+> **Phase-4 pre-pack** assessment (documentation readiness measured *before* the Phase-6 packs
+> existed). After Phase 6, all 15 domains have `canonical_pack_status: CANONICAL`. A later repair
+> disambiguated the two concepts everywhere (registry, domain READMEs, canonical README, graph):
+> `phase4_prepack_documentation_readiness` (historical) vs `canonical_pack_status` (current). A
+> `MISSING`/`POOR`/`CONFLICTED` readiness value never means documentation is missing today. See
+> `canonical/README.md`, `canonical/architecture_registry.yaml` (`field_semantics`), and the
+> repair commit `docs(architecture): disambiguate canonical pack readiness`.
+
 ## 3. Phase 5 — Canonical Architecture Knowledge Layer (commit `34e38188`)
 Created `docs/architecture_knowledge_system/canonical/` — the primary navigation + current-
 architecture layer (21 files incl. graphs). Every file has verified content; no empty placeholders.

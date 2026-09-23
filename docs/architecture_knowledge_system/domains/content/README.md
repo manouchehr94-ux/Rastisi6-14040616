@@ -3,8 +3,8 @@
 ```
 domain_id: D10
 app: apps/content
-status: CANONICAL
-readiness: POOR
+canonical_pack_status: CANONICAL
+phase4_prepack_documentation_readiness: POOR
 code_baseline: 5883a140
 last_verified_against_code: 5883a140
 source_phases: Phase 1 / Phase 2 / Phase 4

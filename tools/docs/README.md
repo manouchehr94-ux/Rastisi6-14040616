@@ -21,6 +21,13 @@ Checks:
    and the hypothetical `new_gateway.py` example).
 7. Canonical graph (`.mmd`) presence.
 8. Registry present + structurally parseable.
+9. **Canonical-pack readiness disambiguation** (semantic consistency): exactly 15 domain IDs;
+   registry has `schema_version` + `field_semantics`; every registry domain carries BOTH
+   `phase4_prepack_documentation_readiness` (historical) and `canonical_pack_status` (current);
+   `canonical_pack_status` is `CANONICAL` for all 15; the ambiguous generic domain-level
+   `status: <readiness>` field is **rejected**; and every domain README uses the agreed schema
+   (`canonical_pack_status` + `phase4_prepack_documentation_readiness`, no ambiguous `readiness:`
+   or bare `status: CANONICAL`).
 
 Exit code 0 = PASS (warnings allowed), 1 = FAIL (any ERROR).
 

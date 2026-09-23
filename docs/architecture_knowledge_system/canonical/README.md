@@ -38,27 +38,40 @@ Two deliberately separate "money" systems exist: **storefront money** (customer 
 15 code-derived domains. Full map: [`DOMAIN_MAP.md`](DOMAIN_MAP.md). Per-domain deep packs:
 [`../domains/`](../domains/).
 
-| ID | Domain | App | Readiness* |
-|---|---|---|---|
-| D1 | Tenancy & Store identity | `stores` | READY |
-| D2 | Platform control & owner identity | `portal` | PARTIAL |
-| D3 | Customer identity & CRM | `customers` | POOR |
-| D4 | Catalog & inventory | `catalog` | PARTIAL |
-| D5 | Cart & pricing | `cart` | POOR |
-| D6 | Orders, checkout, payments (storefront money) | `orders` | PARTIAL |
-| D7 | SaaS subscriptions | `subscriptions` | PARTIAL |
-| D8 | SaaS billing | `billing` | PARTIAL |
-| D9 | Storefront presentation / builder | `storefront_builder` | CONFLICTED |
-| D10 | Content & navigation | `content` | POOR |
-| D11 | Merchant admin (controller) | `dashboard` | PARTIAL |
-| D12 | Messaging: SMS | `sms` | POOR |
-| D13 | Notifications | `notifications` | MISSING |
-| D14 | Shared / cross-cutting | `core` | PARTIAL |
-| D15 | Blog (near-dead) | `blog` | MISSING |
+15 code-derived domains. All 15 now have a **CANONICAL** Domain Knowledge Pack (Phase 6). The
+"Phase-4 pre-pack readiness" column below is a **historical** finding recorded *before* those packs
+existed — it does **not** describe the current documentation state. The "Current canonical pack"
+column is the state now.
 
-*Readiness = **documentation** readiness for safe modification, not code quality. Totals: READY 1
-/ PARTIAL 7 / POOR 4 / MISSING 2 / CONFLICTED 1 = 15. See
+| ID | Domain | App | Phase-4 pre-pack readiness¹ | Current canonical pack² |
+|---|---|---|---|---|
+| D1 | Tenancy & Store identity | `stores` | READY | CANONICAL |
+| D2 | Platform control & owner identity | `portal` | PARTIAL | CANONICAL |
+| D3 | Customer identity & CRM | `customers` | POOR | CANONICAL |
+| D4 | Catalog & inventory | `catalog` | PARTIAL | CANONICAL |
+| D5 | Cart & pricing | `cart` | POOR | CANONICAL |
+| D6 | Orders, checkout, payments (storefront money) | `orders` | PARTIAL | CANONICAL |
+| D7 | SaaS subscriptions | `subscriptions` | PARTIAL | CANONICAL |
+| D8 | SaaS billing | `billing` | PARTIAL | CANONICAL |
+| D9 | Storefront presentation / builder | `storefront_builder` | CONFLICTED | CANONICAL |
+| D10 | Content & navigation | `content` | POOR | CANONICAL |
+| D11 | Merchant admin (controller) | `dashboard` | PARTIAL | CANONICAL |
+| D12 | Messaging: SMS | `sms` | POOR | CANONICAL |
+| D13 | Notifications | `notifications` | MISSING | CANONICAL |
+| D14 | Shared / cross-cutting | `core` | PARTIAL | CANONICAL |
+| D15 | Blog (near-dead) | `blog` | MISSING | CANONICAL |
+
+¹ **Phase-4 pre-pack readiness** = the historical Phase-4 assessment of *documentation* readiness
+measured **before** the Phase-6 canonical packs were authored (not code quality; not current state).
+Preserved for the record. Totals (unchanged): READY 1 / PARTIAL 7 / POOR 4 / MISSING 2 /
+CONFLICTED 1 = 15. Source:
 [`../phase4_reconciliation/08_ARCHITECTURAL_DECISIONS_REQUIRED.md`](../phase4_reconciliation/08_ARCHITECTURAL_DECISIONS_REQUIRED.md) Part C.
+
+² **Current canonical pack** = the present state of the domain's Architecture Knowledge System pack.
+All 15 are **CANONICAL** (a Phase-6 pack exists at [`../domains/<app>/`](../domains/)). This is
+**independent of code freshness** — every pack remains verified against baseline `5883a140` and may
+still require a future delta audit against newer production code. A `MISSING`/`POOR`/`CONFLICTED`
+value in column ¹ therefore does **not** mean documentation is missing today.
 
 ## Where do I start? (navigation)
 

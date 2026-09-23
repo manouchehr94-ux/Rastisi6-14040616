@@ -3,8 +3,8 @@
 ```
 domain_id: D15
 app: apps/blog
-status: CANONICAL
-readiness: MISSING → (this pack is the first doc)
+canonical_pack_status: CANONICAL
+phase4_prepack_documentation_readiness: MISSING
 code_baseline: 5883a140
 open_decisions: —
 known_risks: D1 (POTENTIALLY_DEAD storefront wiring)

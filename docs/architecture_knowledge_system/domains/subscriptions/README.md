@@ -3,8 +3,8 @@
 ```
 domain_id: D7
 app: apps/subscriptions
-status: CANONICAL
-readiness: PARTIAL
+canonical_pack_status: CANONICAL
+phase4_prepack_documentation_readiness: PARTIAL
 code_baseline: 5883a140
 last_verified_against_code: 5883a140
 open_decisions: —
