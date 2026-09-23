@@ -229,3 +229,57 @@ both sections).
 **No archive was executed.** All corrective artifacts (`12`–`15`) and the updated
 `00`–`11` + validator are planning-only. The plan is inert until a future,
 separately-approved execution phase. **STOP.**
+
+
+---
+
+## `[PHASE 8.2]` — bookkeeping correction: reference-protected count
+
+§6 above stated **"11 archivable files actually referenced"**. That figure counted
+only the existing `ARCHIVE_CANDIDATE` records that were **downgraded**. The
+corrective review actually introduced **12** exact reference-protected files,
+because one of them (`docs/prototypes/storefront-builder-v2/rastisi_builder_v2_prototype.html`,
+cited by the canonical `UNIVERSAL_STOREFRONT_BUILDER_V2_SPEC.md`) existed **only**
+inside a collection pseudo-row and had no explicit `ARCHIVE_CANDIDATE` record to
+downgrade — it was added as a **new explicit `KEEP_HISTORICAL_REFERENCE` record**.
+
+Explicit, reconciled arithmetic:
+
+```
+existing_archive_records_downgraded                          = 11
+supplemental_retained_collection_member_records             =  1
+total_exact_reference_protected_files_introduced_by_review  = 12
+```
+
+The 11 downgrades: `docs/architecture_audits/2026-09-05-...-architecture-audit.md`
++ the 7 `docs/architecture_audits/final_closure_pack/*` +
+`docs/architecture/STOREFRONT_BUILDER_V2_PHASE_5_AUDIT.md` (fixpoint cascade) +
+`docs/audits/universal_storefront_engine_u3_u11_execution.md` +
+`docs/template-references/live-audit/01_REPOSITORY_ARCHITECTURE_AND_GAPS.md`.
+
+### `KEEP_HISTORICAL_REFERENCE = 47` — full composition (reconciled)
+
+| Component | Count |
+| --- | --- |
+| Original dry-run: code-referenced | 11 |
+| Original dry-run: canonical-referenced | 9 |
+| Original dry-run: conservative-historical | 13 |
+| Corrective: supplemental root documents (`SIX_NEW_FAMILIES_*`) | 2 |
+| Corrective: existing ARCHIVE records downgraded | 11 |
+| Corrective: supplemental collection-member record | 1 |
+| **Total** | **47** |
+
+`(11 + 9 + 13) + 2 + (11 + 1) = 33 + 2 + 12 = 47`. **No unexplained remainder.**
+Dispositions were **not** otherwise altered; the recount revealed a wording
+undercount, not a logic error. All 12 corrective files are `KEEP_HISTORICAL_REFERENCE`
+and **none** appears in `13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv`.
+
+## `[PHASE 8.2]` — execution harness hardened (see 16/17/18)
+
+The verdict below (`READY_FOR_ARCHIVE_EXECUTION_REVIEW`) covered the *data plan*.
+The **execution harness** was separately hardened in Phase 8.2:
+lifecycle-aware `--phase8-state` validation, a blob-identity staged-tree verifier
+(replacing the unsafe `R*` rename heuristic), per-file sub-batches
+(A1…A6, B, C, D1…D5), no tracked validation-output inside batch commits, and a
+`tempfile`-sandboxed self-test (11/11). The harness verdict is in
+`18_PHASE8_EXECUTION_HARNESS_REVIEW.md`.

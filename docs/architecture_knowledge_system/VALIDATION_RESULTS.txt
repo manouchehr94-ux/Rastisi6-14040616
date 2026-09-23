@@ -1,4 +1,4 @@
-########## CORE VALIDATION (default mode) ##########
+########## CORE VALIDATION (default) ##########
 === Architecture Docs Validation ===
 repo: /projects/sandbox/Rastisi6-14040616
   info: internal links checked: 435
@@ -15,7 +15,7 @@ warnings: 0
 errors: 0
 === RESULT: PASS ===
 
-########## PHASE 8 EXECUTION-SAFETY VALIDATION (--phase8) ##########
+########## PHASE 8 STATIC PREFLIGHT (--phase8) ##########
 === Architecture Docs Validation ===
 repo: /projects/sandbox/Rastisi6-14040616
   info: internal links checked: 435
@@ -33,4 +33,38 @@ repo: /projects/sandbox/Rastisi6-14040616
   info: PHASE8: execution tracked files=3065 (all safe_to_move=TRUE)
 warnings: 0
 errors: 0
+=== RESULT: PASS ===
+
+########## PHASE 8.2 LIFECYCLE STATE (--phase8-state pre) ##########
+=== Architecture Docs Validation ===
+repo: /projects/sandbox/Rastisi6-14040616
+  info: internal links checked: 435
+  info: registry domain IDs: 15 (expected 15)
+  info: registry DR references: 8 distinct
+  info: domain dirs: 15 (expected 15)
+  info: code-path intentionally absent (expected): apps/blog/urls.py in docs/architecture_knowledge_system/domains/blog/README.md
+  info: code-path intentionally absent (expected): apps/orders/gateways/new_gateway.py in docs/architecture_knowledge_system/domains/orders/SERVICES.md
+  info: code-path references checked: 120
+  info: canonical graph sources: 3
+  info: registry semantic fields: phase4_prepack=15, canonical_pack_status=15 (both expected 15)
+  info: domain READMEs conforming to metadata schema: 15 (expected 15)
+  info: PHASE8-STATE 'pre': rows=3065 completed=0 pending=3065 lifecycle_mismatches=0
+warnings: 0
+errors: 0
+=== RESULT: PASS ===
+
+########## PHASE 8.2 HARNESS SELF-TEST (phase8_harness_selftest.py) ##########
+  [PASS] PRE state -> PASS
+  [PASS] staged A1 pure relocation (blob identity) -> PASS
+  [PASS] A1 completed lifecycle -> PASS
+  [PASS] completed target missing -> FAIL
+  [PASS] pending source missing -> FAIL
+  [PASS] extra staged path -> FAIL
+  [PASS] staged blob content mismatch -> FAIL
+  [PASS] duplicate target -> FAIL
+  [PASS] unsafe row -> FAIL
+  [PASS] all batches completed (AB) -> PASS
+  [PASS] retained sibling untouched
+
+=== HARNESS SELF-TEST: 11/11 cases behaved as expected ===
 === RESULT: PASS ===

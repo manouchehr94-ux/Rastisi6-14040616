@@ -90,63 +90,68 @@ PY
   because the paths come verbatim from `git ls-files -z` expansion (see
   `12_COLLECTION_EXPANSION_MANIFEST.csv`) and are `shlex.quote`d.
 
-## 3. Per-batch procedure `[PHASE 8 CORRECTIVE REVIEW]` (repeat for A→D)
+## 3. Per-sub-batch procedure `[PHASE 8.2]` (repeat for each sub-batch A1…A6, B, C, D1…D5)
 
-Staging no longer uses unrestricted `git add -A`. `git mv` already stages the
-rename; we then **verify** that every staged path belongs to the authorized
-batch and fail otherwise.
+> **`[PHASE 8.2]` supersedes the earlier §3.** Three hardenings:
+> (1) staging never uses `git add -A`; (2) the staged-tree verifier proves a
+> **pure relocation by blob identity**, not the `R*` rename heuristic; (3) **no
+> tracked validation-output file is written between staging and commit** — the
+> validators print to the console / a temp file only.
+
+The unit of execution is a **sub-batch** (`sub_batch` column of `13_...`), e.g.
+`A1`. `STATE_BEFORE` / `STATE_AFTER` are the completed-sub-batch prefixes.
 
 ```bash
-BATCH=A     # then B, C, D
+SUB=A1                                   # then A2 … A6, B, C, D1 … D5
+STATE_BEFORE=pre                         # completed-prefix BEFORE this sub-batch
+STATE_AFTER=A1                           # completed-prefix AFTER this sub-batch
+TMP="$(mktemp -d)"                       # external scratch — never inside the repo
 
-# 1. Record pre-batch HEAD and confirm clean tree
-PRE=$(git rev-parse HEAD)
+# 1. Clean tree
 test -z "$(git status --porcelain)" || { echo "TREE NOT CLEAN"; exit 1; }
 
-# 2. Generate the batch git mv script from 13_... (see §2.1) and review it
-# 3. Execute the git mv commands for this batch (git mv ONLY; never rm, never add -A)
+# 2. Capture pre-batch HEAD (used by the blob-identity verifier and rollback)
+PRE="$(git rev-parse HEAD)"
 
-# 4. Batch-scope verification: EVERY staged path (old + new) must be in this batch.
-python3 - "$BATCH" <<'PY'
-import csv, subprocess, sys
-batch=sys.argv[1]
-p="docs/architecture_knowledge_system/phase8_archive_dry_run/13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv"
-allowed=set()
-for r in csv.DictReader(open(p,encoding="utf-8")):
-    if r["batch"]==batch:
-        allowed.add(r["source_path"]); allowed.add(r["target_path"])
-# staged renames (NUL-safe, -z)
-out=subprocess.run(["git","diff","--cached","--name-status","-z"],capture_output=True).stdout.decode()
-toks=out.split("\0"); i=0; bad=[]
-while i < len(toks) and toks[i]:
-    st=toks[i]
-    if st.startswith("R"):
-        old,new=toks[i+1],toks[i+2]; i+=3
-        if old not in allowed or new not in allowed: bad+=[old,new]
-    else:
-        path=toks[i+1] if i+1<len(toks) else ""; i+=2
-        bad.append(path)   # anything not a clean rename is out of scope
-bad=[b for b in bad if b and b not in allowed]
-if bad:
-    print("OUT-OF-SCOPE STAGED PATHS:", *bad, sep="\n  "); sys.exit(1)
-print("batch-scope OK: all staged paths belong to batch", batch)
-PY
-test $? -eq 0 || { echo "SCOPE CHECK FAILED — abort batch"; exit 1; }
+# 3. Lifecycle preflight for the CURRENT (pre-this-sub-batch) state -> must PASS
+python3 tools/docs/validate_architecture_docs.py --phase8-state "$STATE_BEFORE" \
+  > "$TMP/state_before.txt" 2>&1
+grep -q "RESULT: PASS" "$TMP/state_before.txt" || { echo "PRE-STATE NOT PASS"; exit 1; }
 
-# 5. No accidental deletions (a git mv shows as R; a bare D is forbidden)
-git diff --cached --name-status | grep -E '^D' && { echo "UNEXPECTED DELETION"; exit 1; }
+# 4. Emit + review the exact git mv commands for THIS sub-batch (from 13_..., see §2.1)
+#    (filter on sub_batch == "$SUB"); execute them — git mv ONLY, never rm, never add -A.
 
-# 6. VALIDATOR GATE — require PASS 0/0
+# 5. Staged-tree verifier: prove a PURE RELOCATION by blob identity (not R*).
 python3 tools/docs/validate_architecture_docs.py \
-  > docs/architecture_knowledge_system/VALIDATION_RESULTS.txt 2>&1
-grep -q "RESULT: PASS" docs/architecture_knowledge_system/VALIDATION_RESULTS.txt \
-  || { echo "VALIDATOR NOT PASS"; exit 1; }
+    --phase8-state "$STATE_AFTER" --phase8-verify-staged --phase8-pre-head "$PRE" \
+    > "$TMP/staged.txt" 2>&1
+grep -q "RESULT: PASS" "$TMP/staged.txt" || { echo "STAGED-TREE VERIFY FAILED"; cat "$TMP/staged.txt"; exit 1; }
 
-# 7. Commit ONLY this batch's already-staged renames (do NOT git add -A)
-git commit -m "docs(archive): relocate batch $BATCH to docs/archive"
+# 6. Core documentation validator -> must PASS (printed to temp, NOT a tracked file)
+python3 tools/docs/validate_architecture_docs.py > "$TMP/core.txt" 2>&1
+grep -q "RESULT: PASS" "$TMP/core.txt" || { echo "CORE VALIDATOR NOT PASS"; exit 1; }
 
-# 8. HUMAN REVIEW CHECKPOINT before the next batch
+# 7. Lifecycle validator for the NEW state -> must PASS
+python3 tools/docs/validate_architecture_docs.py --phase8-state "$STATE_AFTER" \
+  > "$TMP/state_after.txt" 2>&1
+grep -q "RESULT: PASS" "$TMP/state_after.txt" || { echo "POST-STATE NOT PASS"; exit 1; }
+
+# 8. HUMAN REVIEW CHECKPOINT (review "$TMP" reports + the staged rename list)
+
+# 9. Commit ONLY this sub-batch's already-staged renames (NO git add -A; NO tracked
+#    validation-output file is part of this commit).
+git commit -m "docs(archive): relocate sub-batch $SUB to docs/archive"
+
+# 10. Clean tree again; discard scratch
+test -z "$(git status --porcelain)" || { echo "TREE NOT CLEAN AFTER COMMIT"; exit 1; }
+rm -rf "$TMP"
 ```
+
+> **Validation output must never contaminate a batch commit.** Steps 3, 5, 6, 7
+> write to `$TMP` (an external `mktemp -d`), never to the tracked
+> `docs/architecture_knowledge_system/VALIDATION_RESULTS.txt`. That tracked file
+> is refreshed **once**, in a **separate final documentation commit**, only after
+> **all** archive batches are complete (see §8).
 
 ## 4. Rollback `[PHASE 8 CORRECTIVE REVIEW]`
 
@@ -188,6 +193,16 @@ restores the original tree with no content loss.
 > The execution gate requires BOTH the core validator **and** the Phase-8 checks
 > to pass.
 
+> **`[PHASE 8.2]`** The per-batch gate now uses the **lifecycle-aware**
+> `--phase8-state <STATE>` validator (not the static `--phase8`, which is
+> preflight-only and would falsely FAIL once a source has been relocated) plus the
+> **`--phase8-verify-staged`** blob-identity staged-tree verifier. Static
+> `--phase8` is used **only** at `pre` (before any batch). All validator output
+> during batches goes to an external temp file, **never** to a tracked file
+> (see §3). The harness is proven by `tools/docs/phase8_harness_selftest.py`
+> (11/11 cases). See `16_ARCHIVE_EXECUTION_STATE_MODEL.md` and
+> `17_ARCHIVE_STAGED_TREE_VERIFIER.md`.
+
 - After **each** batch: validator must report **PASS, 0 errors / 0 warnings**.
 - The validator's `EXPECTED_ABSENT` allowlist
   (`apps/storefront_builder/family_registry.py`,
@@ -223,15 +238,21 @@ renames and diffs reviewable):
 > Superseded by: `<canonical-doc-or-"n/a">`.
 ```
 
-## 8. Post-execution (future)
+## 8. Post-execution (future) `[PHASE 8.2]`
 
-1. Run the correct-in-place phase for `docs/README.md` / `docs/docs/README.md`
+1. Refresh the tracked `docs/architecture_knowledge_system/VALIDATION_RESULTS.txt`
+   **once**, in a **separate, dedicated documentation commit** made **after all
+   archive batches are complete** — never as part of a batch commit. Suggested
+   message: `docs(architecture): refresh validation results post-archive`.
+2. Run the correct-in-place phase for `docs/README.md` / `docs/docs/README.md`
    (`08_CORRECT_IN_PLACE_QUEUE.md`) so indexes point at `docs/archive/…`.
-2. Re-run the validator; PASS 0/0.
-3. Update the AKS registry if any archived path was tracked.
+3. Re-run the core validator and `--phase8-state ABCD` (full-completion state);
+   both PASS 0/0.
+4. Update the AKS registry if any archived path was tracked.
 
 ## 9. Phase-8 statement
 
 **None of the above was executed.** No batch ran, no `git mv` occurred, no
-`docs/archive/` exists, no banner was inserted. This plan is inert until a future
-phase is explicitly approved.
+`docs/archive/` exists, no banner was inserted. `[PHASE 8.2]` added only planning
++ tooling (lifecycle/staged-tree validation, sub-batches, self-test); the plan
+remains inert until a future phase is explicitly approved.

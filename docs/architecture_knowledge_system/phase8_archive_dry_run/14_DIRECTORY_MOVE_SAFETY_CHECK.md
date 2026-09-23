@@ -84,3 +84,24 @@ recorded in the manifest's `incoming_reference_count` for transparency.
 No unsafe whole-directory move remains in the plan. The 8 mixed/forbidden
 directories will be archived by selective per-file `git mv` operations that
 leave every protected/retained/deferred file untouched at its original path.
+
+
+---
+
+## `[PHASE 8.2]` — lifecycle note
+
+Directory-move safety is unchanged (2 whole-dir allowed, 8 forbidden). Phase 8.2
+adds a **lifecycle dimension**: because execution is per-file and per-**sub-batch**
+(`16_ARCHIVE_EXECUTION_STATE_MODEL.md`), the "allowed/forbidden" split above is a
+**static preflight** property (`--phase8` at `pre`). During execution, directory
+membership is never used to move files — each file moves individually from
+`13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv`, and the **lifecycle validator**
+(`--phase8-state`) re-checks, per state, that:
+
+- files in **completed** sub-batches have left their source directory and now
+  exist under `docs/archive/…`;
+- **retained** siblings in the same (forbidden) directory still exist at their
+  original path in every state.
+
+So even the 2 "whole-dir allowed" directories are moved per-file, and the 8
+forbidden directories are never moved wholesale at any lifecycle state.

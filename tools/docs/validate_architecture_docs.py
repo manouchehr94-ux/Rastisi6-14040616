@@ -39,6 +39,28 @@ import sys
 
 PHASE8 = ("--phase8" in sys.argv[1:])
 
+# --- Phase 8.2 lifecycle-aware execution-state validation flags ---
+# --phase8-state <STATE>   STATE is "pre" or a prefix of completed batches (A, AB, ABC, ABCD)
+#                          or completed sub-batches (e.g. A1, A1A2, A1A2A3...). Presence of any
+#                          batch letter/sub-batch id means that batch's rows are considered MOVED.
+# --phase8-verify-staged   run the staged-tree blob-identity verifier for the given state
+# --phase8-pre-head <SHA>  the pre-batch HEAD used by the staged-tree verifier (default HEAD)
+# --phase8-fixture <DIR>   run against an isolated fixture repo/worktree instead of REPO
+def _flag_value(name):
+    argv = sys.argv[1:]
+    for i, a in enumerate(argv):
+        if a == name and i + 1 < len(argv):
+            return argv[i + 1]
+        if a.startswith(name + "="):
+            return a.split("=", 1)[1]
+    return None
+
+PHASE8_STATE = _flag_value("--phase8-state")            # None | "pre" | "A" | "AB" | "A1" ...
+PHASE8_VERIFY_STAGED = ("--phase8-verify-staged" in sys.argv[1:])
+PHASE8_PRE_HEAD = _flag_value("--phase8-pre-head")      # SHA of pre-batch HEAD
+PHASE8_FIXTURE = _flag_value("--phase8-fixture")        # isolated repo dir for tests
+PHASE8_ANY = PHASE8 or (PHASE8_STATE is not None) or PHASE8_VERIFY_STAGED
+
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 AKS = os.path.join(REPO, "docs", "architecture_knowledge_system")
 CANON = os.path.join(AKS, "canonical")
@@ -450,6 +472,203 @@ if PHASE8:
                 dist.get("DO_NOT_TOUCH_LEGAL_OR_EXTERNAL", 0),
                 dist.get("CORRECT_IN_PLACE_LATER", 0)))
         info.append(f"PHASE8: execution tracked files={len(ex)} (all safe_to_move=TRUE)")
+
+
+# ============================================================================
+# Phase-8.2 lifecycle-aware EXECUTION-STATE validation + staged-tree verifier.
+# Opt-in via --phase8-state <STATE> (and optional --phase8-verify-staged).
+# These operate against REPO by default, or an isolated fixture repo when
+# --phase8-fixture <DIR> is given (used by the harness fixture tests). They are
+# ADDITIVE and never relax the core checks 1-9 or the static --phase8 checks.
+# ============================================================================
+if PHASE8_STATE is not None or PHASE8_VERIFY_STAGED:
+    p8_repo = os.path.abspath(PHASE8_FIXTURE) if PHASE8_FIXTURE else REPO
+    p8_aks = os.path.join(p8_repo, "docs", "architecture_knowledge_system")
+    p8_dir = os.path.join(p8_aks, "phase8_archive_dry_run")
+    p8_execman = os.path.join(p8_dir, "13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv")
+
+    VALID_BATCHES = ["A", "B", "C", "D", "E"]
+
+    def _p8_git(args):
+        return subprocess.run(["git", "-C", p8_repo] + args,
+                              capture_output=True)
+
+    def _p8_exists(relpath):
+        # tracked-or-worktree existence within the (fixture) repo
+        return os.path.exists(os.path.join(p8_repo, relpath))
+
+    def _parse_state(state):
+        """Return the set of COMPLETED batch letters and sub-batch ids.
+
+        A state token is a concatenation of batch letters (A,B,C,D,E) and/or
+        sub-batch ids (letter+digits, e.g. A1, D12). 'pre' means nothing done.
+        A bare batch letter marks that WHOLE batch complete (all its sub-batches).
+        """
+        completed_batches = set()
+        completed_subs = set()
+        if not state or state.lower() == "pre":
+            return completed_batches, completed_subs
+        # tokenise: a capital letter optionally followed by digits
+        for tok in re.findall(r"[A-E]\d*", state.upper()):
+            if len(tok) == 1:
+                completed_batches.add(tok)
+            else:
+                completed_subs.add(tok)
+        return completed_batches, completed_subs
+
+    if not os.path.exists(p8_execman):
+        errors.append(f"PHASE8-STATE: missing execution manifest at {p8_execman}")
+    else:
+        exrows = list(csv.DictReader(open(p8_execman, encoding="utf-8")))
+        state = PHASE8_STATE if PHASE8_STATE is not None else "pre"
+        comp_batches, comp_subs = _parse_state(state)
+
+        # validate the requested state tokens are known
+        for b in comp_batches:
+            if b not in VALID_BATCHES:
+                errors.append(f"PHASE8-STATE: unknown batch '{b}' in state '{state}'")
+        known_subs = {r.get("sub_batch", "") for r in exrows}
+        for s in comp_subs:
+            if s not in known_subs:
+                errors.append(f"PHASE8-STATE: unknown sub-batch '{s}' in state '{state}'")
+
+        def _row_completed(r):
+            if r["batch"] in comp_batches:
+                return True
+            if r.get("sub_batch", "") in comp_subs:
+                return True
+            return False
+
+        # invariants that hold in EVERY state
+        srcs = [r["source_path"] for r in exrows]
+        tgts = [r["target_path"] for r in exrows]
+        if len(set(srcs)) != len(srcs):
+            errors.append("PHASE8-STATE: duplicate source path(s)")
+        if len(set(tgts)) != len(tgts):
+            errors.append("PHASE8-STATE: duplicate target path(s)")
+        for r in exrows:
+            if r.get("safe_to_move") != "TRUE":
+                errors.append(f"PHASE8-STATE: row not safe_to_move=TRUE: {r['source_path']}")
+                break
+            if r["source_path"] == r["target_path"]:
+                errors.append(f"PHASE8-STATE: source==target: {r['source_path']}")
+                break
+            if r["batch"] not in VALID_BATCHES:
+                errors.append(f"PHASE8-STATE: invalid batch id: {r['batch']}")
+                break
+
+        # lifecycle existence checks
+        done = notdone = 0
+        lifecycle_bad = []
+        for r in exrows:
+            completed = _row_completed(r)
+            s_here = _p8_exists(r["source_path"])
+            t_here = _p8_exists(r["target_path"])
+            if completed:
+                done += 1
+                if s_here:
+                    lifecycle_bad.append(f"completed but source still present: {r['source_path']}")
+                if not t_here:
+                    lifecycle_bad.append(f"completed but target absent: {r['target_path']}")
+            else:
+                notdone += 1
+                if not s_here:
+                    lifecycle_bad.append(f"pending but source absent: {r['source_path']}")
+                if t_here:
+                    lifecycle_bad.append(f"pending but target already present: {r['target_path']}")
+        for m in lifecycle_bad[:20]:
+            errors.append(f"PHASE8-STATE: {m}")
+        if len(lifecycle_bad) > 20:
+            errors.append(f"PHASE8-STATE: (+{len(lifecycle_bad) - 20} more lifecycle mismatches)")
+        info.append(
+            f"PHASE8-STATE '{state}': rows={len(exrows)} completed={done} pending={notdone} "
+            f"lifecycle_mismatches={len(lifecycle_bad)}")
+
+        # ----- staged-tree blob-identity verifier -----
+        if PHASE8_VERIFY_STAGED:
+            pre_head = PHASE8_PRE_HEAD or "HEAD"
+            # rows expected to be staged in THIS batch step = rows completed by `state`
+            # (the verifier is meant to run right after staging a batch, before commit)
+            expected = {(r["source_path"], r["target_path"]) for r in exrows if _row_completed(r)}
+            expected_sources = {s for s, _ in expected}
+            expected_targets = {t for _, t in expected}
+
+            # read staged name-status (NUL-safe); accept R or D+A pairs
+            ns = _p8_git(["diff", "--cached", "--name-status", "-z"]).stdout.decode("utf-8")
+            toks = ns.split("\0")
+            staged_pairs = set()      # (old,new) from R
+            staged_del = set()
+            staged_add = set()
+            staged_other = []
+            i = 0
+            while i < len(toks) and toks[i] != "":
+                st = toks[i]
+                if st.startswith("R"):
+                    old, new = toks[i + 1], toks[i + 2]
+                    staged_pairs.add((old, new)); i += 3
+                elif st.startswith("C"):
+                    old, new = toks[i + 1], toks[i + 2]
+                    staged_other.append(("C", old, new)); i += 3
+                elif st and st[0] in ("A", "D", "M", "T"):
+                    path = toks[i + 1]
+                    if st[0] == "D":
+                        staged_del.add(path)
+                    elif st[0] == "A":
+                        staged_add.add(path)
+                    else:
+                        staged_other.append((st, path)); i += 2; continue
+                    i += 2
+                else:
+                    i += 1
+
+            # reconstruct logical (old->new) moves from D+A pairs by matching expected set
+            reconstructed = set(staged_pairs)
+            for (old, new) in expected:
+                if (old, new) not in reconstructed and old in staged_del and new in staged_add:
+                    reconstructed.add((old, new))
+
+            # 1) no unexplained staged path
+            explained_sources = {o for o, _ in reconstructed}
+            explained_targets = {n for _, n in reconstructed}
+            leftover_del = staged_del - explained_sources
+            leftover_add = staged_add - explained_targets
+            if staged_other:
+                errors.append(f"PHASE8-STAGED: non-relocation staged change(s): {staged_other[:5]}")
+            if leftover_del:
+                errors.append(f"PHASE8-STAGED: unexplained staged deletion(s): {sorted(leftover_del)[:5]}")
+            if leftover_add:
+                errors.append(f"PHASE8-STAGED: unexplained staged addition(s): {sorted(leftover_add)[:5]}")
+
+            # 2) every reconstructed move must be in the authorized batch set
+            unauth = [(o, n) for (o, n) in reconstructed if (o, n) not in expected]
+            if unauth:
+                errors.append(f"PHASE8-STAGED: staged move(s) not in authorized batch: {unauth[:5]}")
+
+            # 3) every expected move must actually be staged
+            missing_moves = [(o, n) for (o, n) in expected if (o, n) not in reconstructed]
+            if missing_moves:
+                errors.append(f"PHASE8-STAGED: expected move(s) not staged: {missing_moves[:5]}")
+
+            # 4) BLOB IDENTITY: staged target blob SHA == pre-batch source blob SHA
+            def _blob_sha(ref):
+                out = _p8_git(["rev-parse", "--verify", "--quiet", ref])
+                if out.returncode != 0:
+                    return None
+                return out.stdout.decode().strip()
+            mismatched = []
+            checked = 0
+            for (old, new) in reconstructed:
+                src_blob = _blob_sha(f"{pre_head}:{old}")
+                tgt_blob = _blob_sha(f":{new}")            # staged (index) blob
+                checked += 1
+                if src_blob is None or tgt_blob is None or src_blob != tgt_blob:
+                    mismatched.append((old, new, src_blob, tgt_blob))
+            for (o, n, sb, tb) in mismatched[:5]:
+                errors.append(f"PHASE8-STAGED: blob mismatch {o} -> {n} (pre={sb} staged={tb})")
+            info.append(
+                f"PHASE8-STAGED: reconstructed moves={len(reconstructed)} "
+                f"blob-identity checked={checked} mismatches={len(mismatched)} "
+                f"(pre_head={pre_head})")
 
 
 # ---- Report ----
