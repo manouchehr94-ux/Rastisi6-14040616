@@ -88,6 +88,13 @@ sits on top of a frozen, unchanged runtime.
 | `DO_NOT_TOUCH_LEGAL_OR_EXTERNAL` | 3 |
 | **Total** | **519** |
 
+> **`[PHASE 8 CORRECTIVE REVIEW]`** The headline totals in this section reflect the
+> original dry run (scope 519). They are **superseded** by the corrective pass:
+> scope is now **522** logical records (519 inventory + 2 supplemental root docs +
+> 1 collection-member), with `ARCHIVE_CANDIDATE` = 406 logical units expanding to
+> **3065 exact git-tracked files**. See `15_PHASE8_CORRECTIVE_SAFETY_REPORT.md` and
+> the corrective addendum in `11_...`.
+
 20 + 33 + 2 + 417 + 44 + 3 = **519** — exactly the Phase-3 inventory scope, with
 no unexplained remainder.
 

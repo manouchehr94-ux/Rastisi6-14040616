@@ -94,3 +94,25 @@ docs/superpowers/specs/2026-09-16-phase5-w4b-50-template-curation-design.md     
    update the code citation deliberately in a separate change.
 4. If open/ambiguous → keep as `KEEP_HISTORICAL_REFERENCE`.
 5. Never delete.
+
+
+---
+
+## `[PHASE 8 CORRECTIVE REVIEW]` — deferred set unchanged; role in reference safety
+
+The `DEFER_REVIEW` set is **unchanged at 44** documents (26 superpowers plans + 15
+superpowers specs + 3 non-superpowers plans/roadmaps). The corrective pass adds
+one clarification about their role in execution safety:
+
+- Several `DEFER_REVIEW` plans/specs **reference archive-candidate files** (e.g.
+  the phase5 task6 showcase plan references
+  `docs/qa_evidence/storefront_design_engine/phase5/task6_discovery_report.md`).
+  These references are treated as **non-blocking** for the archive move: because
+  the referring plan is itself **deferred and reviewed by a human before any of
+  its own disposition changes**, the reviewer will reconcile such links at that
+  time. They are therefore *not* a reason to hold the referenced archive file in
+  place, but they are recorded in `13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv`
+  (`incoming_reference_count`) for transparency.
+- By contrast, references from **retained / canonical / AKS** docs *are* blocking
+  and caused 11 files to be downgraded to `KEEP_HISTORICAL_REFERENCE` (see
+  `07_HIGH_RISK_OR_AMBIGUOUS_MOVES.md`).

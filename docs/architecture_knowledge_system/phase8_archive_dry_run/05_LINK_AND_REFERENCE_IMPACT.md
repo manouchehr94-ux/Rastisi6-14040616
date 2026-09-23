@@ -112,3 +112,38 @@ Because the archive-candidate set is reference-free (§3), the expected number o
 `LINK_CAN_UPDATE` rewrites required for the current candidate set is **0** — the
 moves are self-contained. Any future re-classification that promotes a referenced
 doc into the archive set would reintroduce rewrites and must re-run this analysis.
+
+
+---
+
+## `[PHASE 8 CORRECTIVE REVIEW]` — reference analysis re-run at exact-path granularity
+
+The original analysis above concluded "the archive-candidate set is reference-free"
+and predicted **0** `LINK_CAN_UPDATE` rewrites. That conclusion was drawn at the
+**logical manifest-unit** level and **missed references into individual files that
+were only represented by a collection pseudo-row**. Re-running the scan at
+**exact git-tracked-path** granularity (path-exact matching, NUL-safe file
+enumeration, referrer classified by disposition) found:
+
+- **11 archivable files were in fact referenced by retained / canonical / AKS
+  documents** that stay in place (e.g. `docs/architecture_audits/final_closure_pack/*`
+  cited by the KEEP doc
+  `docs/architecture_decisions/2026-09-05-storefront-appearance-convergence-decision-baseline.md`;
+  `docs/prototypes/storefront-builder-v2/rastisi_builder_v2_prototype.html` cited by
+  the canonical `UNIVERSAL_STOREFRONT_BUILDER_V2_SPEC.md`). These were **downgraded
+  to `KEEP_HISTORICAL_REFERENCE`** (iterated to a fixpoint), so they no longer move.
+
+Corrected safety result:
+
+- Every one of the **3065** rows in `13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv` has
+  `safe_to_move = TRUE` with **no blocking incoming reference** (no live
+  code/script/template reference, no retained/canonical/AKS-doc reference).
+- References that remain are only **from other archive-candidate files** (which
+  move together) or **from `DEFER_REVIEW` plans/specs** (which a human reviews
+  before any move). These are recorded in `incoming_reference_count` and are
+  non-blocking.
+- Predicted `LINK_CAN_UPDATE` rewrites for the authorized set: still **0** (moves
+  are self-contained), now proven at exact-path level rather than assumed.
+
+Bucket note: the `CODE_REFERENCE_DO_NOT_CHANGE_AUTOMATICALLY` finding is unchanged;
+no execution path is code-referenced.

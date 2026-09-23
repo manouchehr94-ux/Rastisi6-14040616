@@ -70,3 +70,29 @@ The proposed archive set is **canonically safe**: relocating the 417 archive
 candidates cannot orphan any canonical reference. This check must be **re-run** if
 any document is ever reclassified from a keep/defer disposition into
 `ARCHIVE_CANDIDATE`.
+
+
+---
+
+## `[PHASE 8 CORRECTIVE REVIEW]` — canonical guard re-verified at exact-path level
+
+The PASS verdict above (no canonical-referenced doc scheduled to move) is
+**reaffirmed and strengthened**. The original guard checked the 14 distinct paths
+the canonical layer references. The corrective exact-path scan additionally
+confirmed that **files reachable only via a collection pseudo-row** are also not
+canonically referenced-then-moved: where such a file *was* referenced by a
+canonical/AKS/retained doc (11 files), it was **downgraded to
+`KEEP_HISTORICAL_REFERENCE`** and removed from the execution set.
+
+Re-verified guard results against `13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv`:
+
+| Check | Result |
+| --- | --- |
+| Execution paths referenced by a canonical/domain AKS doc | **0** |
+| Execution paths referenced by an AKS Phase-1…8 doc | **0** |
+| Execution paths referenced by any retained (KEEP/legal/correct) doc | **0** |
+| Execution paths referenced by live code/scripts/templates | **0** |
+| Root mandatory docs (`SIX_NEW_FAMILIES_*`) dispositioned | **YES** (both `KEEP_HISTORICAL_REFERENCE`) |
+
+**PASS (corrected).** The 3065-file execution set is canonically safe at exact-path
+granularity.

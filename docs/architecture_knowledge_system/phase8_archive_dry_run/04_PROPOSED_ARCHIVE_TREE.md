@@ -107,3 +107,24 @@ in Phase 8**, and banners are an opt-in follow-up even during execution.
 - The 33 `KEEP_HISTORICAL_REFERENCE` docs (stay at their original paths).
 - The 2 `CORRECT_IN_PLACE_LATER` READMEs.
 - The 44 `DEFER_REVIEW` plans/specs.
+
+
+---
+
+## `[PHASE 8 CORRECTIVE REVIEW]` — revisions to this document
+
+The provenance-preserving scheme (Option B) is unchanged and remains correct.
+The following statements above are **revised**:
+
+- **"417 archive candidates" → the archive-candidate *logical* unit total is now
+  406** (after adding 2 supplemental root docs as KEEP and downgrading 11
+  reference-blocked files to KEEP). The true number of **exact git-tracked files**
+  that would move is **3065**, not 417 — see
+  `13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv` and `10_ARCHIVE_EXECUTION_PLAN.md §2`.
+- The per-subtree counts in §3 were **manifest-unit** counts. Exact tracked-file
+  counts per source root are authoritative in `12_COLLECTION_EXPANSION_MANIFEST.csv`
+  (e.g. `docs/qa_evidence` expands to 1408 archivable files, not 333 units;
+  `docs/references/beraito-exact-frontend-v5` to 1476).
+- A move mapping is **per-file** (`docs/<rel>` → `docs/archive/<rel>`); **no
+  whole-directory `git mv`** is used for the 8 mixed source roots (see
+  `14_DIRECTORY_MOVE_SAFETY_CHECK.md`).

@@ -13,8 +13,15 @@
   `git diff --stat 5883a140… HEAD -- apps/ shop_core/ templates/ static/` → empty.
 - [ ] Validator PASS 0/0 at start:
   `python3 tools/docs/validate_architecture_docs.py`
-- [ ] `03_ARCHIVE_DISPOSITION_MANIFEST.csv` re-verified: 417 `ARCHIVE_CANDIDATE`
-  rows, all `link_break_risk = LOW`, `incoming_repo_links_count = 0`.
+- [ ] `13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv` re-verified: every row
+  `safe_to_move = TRUE`, no duplicate `source_path`/`target_path`, no
+  `source_path == target_path`, every `source_path` exists as a tracked file.
+
+> **`[PHASE 8 CORRECTIVE REVIEW]`** The execution input is now
+> `13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv` (one exact git-tracked path per row),
+> **not** the logical `03_ARCHIVE_DISPOSITION_MANIFEST.csv`. The prior precondition
+> ("417 ARCHIVE_CANDIDATE rows, all `link_break_risk = LOW`") confused
+> *manifest units* with *files to move* and is superseded — see §2.
 
 ## 1. Global rules
 
@@ -27,85 +34,159 @@
 
 ## 2. Batch plan (A–E)
 
-Batches are ordered lowest-risk → highest-visibility. Counts come from the manifest.
+> **`[PHASE 8 CORRECTIVE REVIEW]` — counts are now EXACT TRACKED FILES, not manifest rows.**
+> The original table stated "417" as the moved count. **417 was a logical
+> manifest-unit count** (which included 6 collection *pseudo-rows* each standing
+> for hundreds of real files). The true number of exact git-tracked files to
+> `git mv` — after collection expansion, exact-path reference back-pressure, and
+> the corrective downgrades — is **3065 tracked files**. All counts below are exact
+> tracked-file counts derived from `13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv`.
 
-| Batch | Source scope | Target | Rows | Link risk |
-| --- | --- | --- | --- | --- |
-| **A** | `docs/qa_evidence/**` (textual + asset collection) | `docs/archive/qa_evidence/**` | 333 | LOW (0 refs) |
-| **B** | `docs/architecture_audits/**`, `docs/audits/**` | `docs/archive/architecture_audits/**`, `docs/archive/audits/**` | 10 | LOW |
-| **C** | `docs/architecture/STOREFRONT_BUILDER_V2_PHASE_*` (unreferenced) + group-A/B reports in `docs/reports/**`, `docs/docs/product/reports/**` | mirror under `docs/archive/…` | 23 | LOW |
-| **D** | Reference material: `docs/reference-kits/**`, `docs/references/**` (unreferenced), `docs/template-references/**`, `docs/prototypes/**` (unreferenced), `docs/docs/product/Final Result At Last/**` | mirror under `docs/archive/…` | 51 | LOW |
-| **E** | *(reserved — no auto-archive)* superpowers plans/specs remain `DEFER_REVIEW`; **Batch E is intentionally empty** until human review reclassifies any item | — | 0 | — |
-|  | **Total moved** | | **417** | |
+| Batch | Source scope | Manifest units | **Exact tracked files** | Retained under same roots | Link risk |
+| --- | --- | ---: | ---: | ---: | --- |
+| **A** | `docs/qa_evidence/**` (selective; leaves 8 KEEP siblings in place) | 1 collection + 332 textual | **1408** | 8 | none (all `safe_to_move`) |
+| **B** | `docs/audits/**` (selective; `architecture_audits/**` now all KEEP) | ~3 | **1** | 1 (+8 in architecture_audits) | none |
+| **C** | `docs/architecture/STOREFRONT_BUILDER_V2_PHASE_*` (selective) + `docs/reports/**` + `docs/docs/product/reports/**` (selective) | ~29 | **28** | 31 across those roots | none |
+| **D** | `docs/reference-kits/**`, `docs/references/**`, `docs/template-references/**`, `docs/prototypes/**`, `docs/docs/product/Final Result At Last/**` (selective) | 4 collections + textual | **1628** | 4 | none |
+| **E** | *(reserved — no auto-archive)* superpowers plans/specs remain `DEFER_REVIEW` | — | **0** | — | — |
+|  | **Total moved** | 406 logical units | **3065 files** | — | — |
 
-> 333 + 10 + 23 + 51 + 0 = **417** = the `ARCHIVE_CANDIDATE` count. Batch E moves
-> nothing by design; it exists as the placeholder for post-review plan/spec archiving.
+> 1408 + 1 + 28 + 1628 + 0 = **3065** exact tracked files. The logical
+> `ARCHIVE_CANDIDATE` unit total is **406** (incl. 6 collection pseudo-rows).
+> Batch E moves nothing by design.
+>
+> **Directory-level `git mv` is FORBIDDEN for 8 of the source roots** (they contain
+> retained/deferred siblings) — see `14_DIRECTORY_MOVE_SAFETY_CHECK.md`. Only
+> `docs/reference-kits` and `docs/docs/product/Final Result At Last` are whole-dir
+> safe, and even those are executed per-file from `13_...` for uniformity.
 
-### 2.1 Per-batch derivation of the exact file list
+### 2.1 Per-batch derivation of the exact file list `[PHASE 8 CORRECTIVE REVIEW]`
 
-Do **not** hand-type paths. Derive each batch's file set from the manifest:
+Do **not** hand-type paths, and **do not** use `**`, globs, or whole-directory
+`git mv`. Derive each batch's file set from the **exact-path** manifest
+`13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv`, one `git mv` per row:
 
 ```bash
-# Example: emit the git mv commands for a given batch prefix, from the manifest.
-python3 - "$PREFIX" <<'PY'
-import csv, sys, shlex
-prefix = sys.argv[1]
-p = "docs/architecture_knowledge_system/phase8_archive_dry_run/03_ARCHIVE_DISPOSITION_MANIFEST.csv"
+# Emit git mv commands for a given batch from the EXACT-PATH manifest.
+# Every row is already proven safe_to_move=TRUE; we re-assert it here.
+python3 - "$BATCH" <<'PY'
+import csv, sys, shlex, os
+batch = sys.argv[1]
+p = "docs/architecture_knowledge_system/phase8_archive_dry_run/13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv"
 for r in csv.DictReader(open(p, encoding="utf-8")):
-    if r["proposed_disposition"] != "ARCHIVE_CANDIDATE":
+    if r["batch"] != batch:
         continue
-    src = r["source_path"]
-    if "**" in src:            # collection row -> handled by directory-level git mv
-        continue
-    if not src.startswith(prefix):
-        continue
-    dst = r["proposed_archive_path"]
-    print("mkdir -p", shlex.quote(dst.rsplit('/',1)[0]))
-    print("git mv", shlex.quote(src), shlex.quote(dst))
+    assert r["safe_to_move"] == "TRUE", f"UNSAFE ROW LEAKED: {r['source_path']}"
+    src, dst = r["source_path"], r["target_path"]
+    assert src != dst and "**" not in src and "**" not in dst
+    print("mkdir -p", shlex.quote(os.path.dirname(dst)))
+    print("git mv --", shlex.quote(src), shlex.quote(dst))
 PY
 ```
 
-Asset **collection** rows (the 6 `**` rows) are moved as whole directories with a
-single `git mv <dir> docs/archive/<dir>` after their textual siblings.
+- **No whole-directory move.** Even for the 2 whole-dir-safe roots, moves are
+  per-file so a later reclassification cannot silently sweep a protected sibling.
+- Filenames with spaces / non-ASCII (Persian) characters are handled correctly
+  because the paths come verbatim from `git ls-files -z` expansion (see
+  `12_COLLECTION_EXPANSION_MANIFEST.csv`) and are `shlex.quote`d.
 
-## 3. Per-batch procedure (repeat for A→D)
+## 3. Per-batch procedure `[PHASE 8 CORRECTIVE REVIEW]` (repeat for A→D)
+
+Staging no longer uses unrestricted `git add -A`. `git mv` already stages the
+rename; we then **verify** that every staged path belongs to the authorized
+batch and fail otherwise.
 
 ```bash
-# 1. Confirm clean tree
-git status --porcelain    # expect empty
+BATCH=A     # then B, C, D
 
-# 2. Generate + review the batch's git mv script (see §2.1); eyeball it
-# 3. Execute the git mv commands for the batch (git mv ONLY)
-# 4. Verify nothing left behind / no deletions
-git status --porcelain | grep -E '^ ?D' && echo "UNEXPECTED DELETION" && exit 1
+# 1. Record pre-batch HEAD and confirm clean tree
+PRE=$(git rev-parse HEAD)
+test -z "$(git status --porcelain)" || { echo "TREE NOT CLEAN"; exit 1; }
 
-# 5. VALIDATOR GATE
+# 2. Generate the batch git mv script from 13_... (see §2.1) and review it
+# 3. Execute the git mv commands for this batch (git mv ONLY; never rm, never add -A)
+
+# 4. Batch-scope verification: EVERY staged path (old + new) must be in this batch.
+python3 - "$BATCH" <<'PY'
+import csv, subprocess, sys
+batch=sys.argv[1]
+p="docs/architecture_knowledge_system/phase8_archive_dry_run/13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv"
+allowed=set()
+for r in csv.DictReader(open(p,encoding="utf-8")):
+    if r["batch"]==batch:
+        allowed.add(r["source_path"]); allowed.add(r["target_path"])
+# staged renames (NUL-safe, -z)
+out=subprocess.run(["git","diff","--cached","--name-status","-z"],capture_output=True).stdout.decode()
+toks=out.split("\0"); i=0; bad=[]
+while i < len(toks) and toks[i]:
+    st=toks[i]
+    if st.startswith("R"):
+        old,new=toks[i+1],toks[i+2]; i+=3
+        if old not in allowed or new not in allowed: bad+=[old,new]
+    else:
+        path=toks[i+1] if i+1<len(toks) else ""; i+=2
+        bad.append(path)   # anything not a clean rename is out of scope
+bad=[b for b in bad if b and b not in allowed]
+if bad:
+    print("OUT-OF-SCOPE STAGED PATHS:", *bad, sep="\n  "); sys.exit(1)
+print("batch-scope OK: all staged paths belong to batch", batch)
+PY
+test $? -eq 0 || { echo "SCOPE CHECK FAILED — abort batch"; exit 1; }
+
+# 5. No accidental deletions (a git mv shows as R; a bare D is forbidden)
+git diff --cached --name-status | grep -E '^D' && { echo "UNEXPECTED DELETION"; exit 1; }
+
+# 6. VALIDATOR GATE — require PASS 0/0
 python3 tools/docs/validate_architecture_docs.py \
   > docs/architecture_knowledge_system/VALIDATION_RESULTS.txt 2>&1
-tail -n 5 docs/architecture_knowledge_system/VALIDATION_RESULTS.txt   # require PASS 0/0
+grep -q "RESULT: PASS" docs/architecture_knowledge_system/VALIDATION_RESULTS.txt \
+  || { echo "VALIDATOR NOT PASS"; exit 1; }
 
-# 6. Commit the batch
-git add -A
-git commit -m "docs(archive): relocate batch <X> (<n> files) to docs/archive"
+# 7. Commit ONLY this batch's already-staged renames (do NOT git add -A)
+git commit -m "docs(archive): relocate batch $BATCH to docs/archive"
 
-# 7. HUMAN REVIEW CHECKPOINT before starting the next batch
+# 8. HUMAN REVIEW CHECKPOINT before the next batch
 ```
 
-## 4. Rollback
+## 4. Rollback `[PHASE 8 CORRECTIVE REVIEW]`
 
-Per batch, before pushing:
+The prior rollback (`git checkout -- . && git clean`) was **insufficient**: it
+restores the worktree but leaves staged `git mv` renames in the index, so a
+partly-applied batch would not be cleanly undone. Use an index+worktree reset.
+
+**Uncommitted batch** (safe only on this isolated documentation branch/worktree,
+and only after confirming the batch contains no unrelated user work):
 
 ```bash
-# Undo an uncommitted batch:
-git checkout -- . && git clean -nd     # inspect, then git reset if git mv staged
-# Undo a committed-but-unpushed batch:
-git revert --no-edit <batch_commit_sha>      # reinstates original paths via git
+# Restores BOTH index and worktree to the pre-batch HEAD recorded in step 1.
+git reset --hard "$PRE"      # $PRE = pre-batch HEAD; discards the staged renames
+git status --porcelain       # expect empty
 ```
 
-Because every step is a `git mv`, `git revert` of the batch commit fully restores
-the original tree. No content is lost.
+Preconditions for the hard reset:
+- current branch is `docs/architecture-knowledge-system` (a dedicated docs branch);
+- `git status` before the batch was clean (no unrelated staged/worktree changes);
+- `$PRE` was captured in step 1 and is the immediate pre-batch HEAD.
+
+**Committed-but-unpushed batch** (preferred; never rewrite history):
+
+```bash
+git revert --no-edit <batch_commit_sha>   # reinstates original paths via a new commit
+```
+
+Because every step is a `git mv`, a `git revert` of the batch commit fully
+restores the original tree with no content loss.
 
 ## 5. Validator gates (mandatory)
+
+> **`[PHASE 8 CORRECTIVE REVIEW]`** In addition to the core doc validator, run the
+> Phase-8 execution-safety checks (`--phase8` mode of
+> `tools/docs/validate_architecture_docs.py`, added in this corrective pass): they
+> assert exact-path source existence, no source/target collision, no duplicate
+> source/target, no execution path from a KEEP/DEFER/LEGAL source, no unsafe
+> whole-directory move, and that the root mandatory documents are dispositioned.
+> The execution gate requires BOTH the core validator **and** the Phase-8 checks
+> to pass.
 
 - After **each** batch: validator must report **PASS, 0 errors / 0 warnings**.
 - The validator's `EXPECTED_ABSENT` allowlist
@@ -121,9 +202,9 @@ the original tree. No content is lost.
 
 | Gate | When | Question |
 | --- | --- | --- |
-| G0 | Before batch A | Is execution approved? Baseline still frozen? |
-| G1 | After batch A | 333 QA-evidence moves look correct? Validator PASS? |
-| G2 | After batch B/C/D | Reports/audits/reference material correct? Validator PASS? |
+| G0 | Before batch A | Is execution approved? Baseline still frozen? `13_...` all `safe_to_move`? |
+| G1 | After batch A | 1408 QA-evidence file moves correct; 8 KEEP siblings untouched? Validator PASS? |
+| G2 | After batch B/C/D | Reports/audits/reference material (1+28+1628 files) correct; retained siblings untouched? Validator PASS? |
 | G3 | Before batch E | Has each deferred plan/spec been individually reviewed? |
 | G4 | Before push | Squash/keep batch commits? Update `docs/README.md` in the follow-up correct-in-place phase? |
 

@@ -99,3 +99,33 @@ prelaunch reports (§3) that back the billing-area DRs are explicitly held in pl
 | Ambiguous plans/specs | `DEFER_REVIEW` | 44 |
 
 (11 + 9 + 13 = 33 = total `KEEP_HISTORICAL_REFERENCE`.)
+
+
+---
+
+## `[PHASE 8 CORRECTIVE REVIEW]` — root docs dispositioned; new held-back files
+
+### Root mandatory documents (previously "out of scope")
+
+§6 above said the two repository-root docs were out of the Phase-3 inventory and
+therefore not dispositioned. **This is now corrected.** Both have been analysed
+and added to the manifest as supplemental root records, both
+`KEEP_HISTORICAL_REFERENCE` (NOT archived):
+
+| Root document | Disposition | Why held (not archived) |
+| --- | --- | --- |
+| `SIX_NEW_FAMILIES_IMPLEMENTATION_PLAN.md` | `KEEP_HISTORICAL_REFERENCE` | Describes the **retired** family architecture (`family_registry.py`/`preset_registry.py` confirmed **absent**; superseded by the universal R4 + A8/preset engine). Referenced by the canonical-support doc `docs/architecture/UNIVERSAL_STOREFRONT_PHASE1_ARCHITECTURE.md`. Not archived merely for age. |
+| `SIX_NEW_FAMILIES_IMPLEMENTATION_REPORT.md` | `KEEP_HISTORICAL_REFERENCE` | Self-declared `IMPLEMENTATION_INCOMPLETE` / runtime `NOT EXECUTED`; sole surviving record of that status. Cited in the docstring of the test file `apps/cart/tests/test_gift_wrap.py` (`CODE_REFERENCE_DO_NOT_CHANGE_AUTOMATICALLY`). |
+
+### Additional high-risk files held back this pass (11)
+
+The exact-path reference scan found 11 files that looked archivable but are
+referenced by retained/canonical/AKS docs that stay in place. All were downgraded
+`ARCHIVE_CANDIDATE → KEEP_HISTORICAL_REFERENCE` (fixpoint), e.g. the 7
+`docs/architecture_audits/final_closure_pack/*` docs and the top-level audit
+(cited by a KEEP decision-baseline doc), `docs/audits/universal_storefront_engine_u3_u11_execution.md`
+(cited by the AKS Phase-3 inventory), `docs/prototypes/storefront-builder-v2/rastisi_builder_v2_prototype.html`
+(cited by the canonical V2 spec), `docs/template-references/live-audit/01_REPOSITORY_ARCHITECTURE_AND_GAPS.md`,
+and `docs/architecture/STOREFRONT_BUILDER_V2_PHASE_5_AUDIT.md` (cascade). Full
+per-file reasons are in `03_ARCHIVE_DISPOSITION_MANIFEST.csv`
+(`special_handling = REFERENCED_BY_RETAINED_DOC_CORRECTIVE`).

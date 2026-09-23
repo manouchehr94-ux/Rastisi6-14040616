@@ -95,3 +95,23 @@ remains `docs/architecture_knowledge_system/README.md`.
 
 The remaining **461** units are either `ARCHIVE_CANDIDATE` (417) or `DEFER_REVIEW`
 (44). 58 + 461 = **519**.
+
+> ## `[PHASE 8 CORRECTIVE REVIEW]` — updated protected-count summary
+>
+> After adding 2 supplemental root docs + 1 collection-member record and
+> downgrading 11 reference-blocked files to `KEEP_HISTORICAL_REFERENCE`, the
+> corrected totals (scope **522**) are:
+>
+> | Disposition | Count |
+> | --- | --- |
+> | `KEEP_CANONICAL_SUPPORT` | 20 |
+> | `KEEP_HISTORICAL_REFERENCE` | 47 |
+> | `CORRECT_IN_PLACE_LATER` | 2 |
+> | `DO_NOT_TOUCH_LEGAL_OR_EXTERNAL` | 3 |
+> | **Retained / in place** | **72** |
+> | `ARCHIVE_CANDIDATE` (logical units) | 406 |
+> | `DEFER_REVIEW` | 44 |
+>
+> `72 + 406 + 44 = 522`. The Tier P3 reference back-pressure rule now also fires on
+> **exact-path** references from retained/canonical/AKS docs into individual files
+> that were previously represented only by a collection row.

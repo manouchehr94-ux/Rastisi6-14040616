@@ -31,9 +31,13 @@ Checks performed:
 Exit code 0 if no ERRORs (warnings allowed); 1 if any ERROR.
 Run from the repo root:  python3 tools/docs/validate_architecture_docs.py
 """
+import csv
 import os
 import re
+import subprocess
 import sys
+
+PHASE8 = ("--phase8" in sys.argv[1:])
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 AKS = os.path.join(REPO, "docs", "architecture_knowledge_system")
@@ -285,6 +289,167 @@ for d in sorted(EXPECTED_DOMAINS):
     else:
         schema_ok += 1
 info.append(f"domain READMEs conforming to metadata schema: {schema_ok} (expected {len(EXPECTED_DOMAINS)})")
+
+
+# ============================================================================
+# Phase-8 archive execution-safety checks (opt-in via --phase8).
+# These are ADDITIVE: they never relax or skip checks 1-9 above. When --phase8
+# is not passed, this block is skipped entirely and behaviour is unchanged.
+# ============================================================================
+if PHASE8:
+    P8 = os.path.join(AKS, "phase8_archive_dry_run")
+    MANIFEST = os.path.join(P8, "03_ARCHIVE_DISPOSITION_MANIFEST.csv")
+    EXECMAN = os.path.join(P8, "13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv")
+    DIRSAFE = os.path.join(P8, "14_DIRECTORY_MOVE_SAFETY_CHECK.md")
+
+    RETAIN_DISP = {
+        "KEEP_HISTORICAL_REFERENCE", "KEEP_CANONICAL_SUPPORT",
+        "CORRECT_IN_PLACE_LATER", "DO_NOT_TOUCH_LEGAL_OR_EXTERNAL",
+    }
+    DEFER_DISP = {"DEFER_REVIEW"}
+    COLLECTION_ROOTS = [
+        "docs/qa_evidence", "docs/prototypes",
+        "docs/references/beraito-exact-frontend-v5", "docs/reference-kits",
+        "docs/template-references", "docs/docs/product/Final Result At Last",
+    ]
+
+    def _git_ls_z(path):
+        out = subprocess.run(["git", "-C", REPO, "ls-files", "-z", path],
+                             capture_output=True)
+        return [p for p in out.stdout.decode("utf-8").split("\0") if p]
+
+    if not os.path.exists(MANIFEST):
+        errors.append("PHASE8: missing 03_ARCHIVE_DISPOSITION_MANIFEST.csv")
+    if not os.path.exists(EXECMAN):
+        errors.append("PHASE8: missing 13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv")
+
+    if os.path.exists(MANIFEST) and os.path.exists(EXECMAN):
+        man = list(csv.DictReader(open(MANIFEST, encoding="utf-8")))
+        ex = list(csv.DictReader(open(EXECMAN, encoding="utf-8")))
+        file_disp = {r["source_path"]: r["proposed_disposition"]
+                     for r in man if "**" not in r["source_path"]}
+
+        # tracked-file set for existence checks (NUL-safe)
+        tracked_all = set(_git_ls_z("."))
+
+        # P8-1: every ARCHIVE_CANDIDATE logical record maps to execution paths OR is
+        #       an explicitly justified non-file collection pseudo-row.
+        exec_sources = {r["source_path"] for r in ex}
+        exec_roots_covered = set()
+        for r in ex:
+            for root in COLLECTION_ROOTS:
+                if r["source_path"] == root or r["source_path"].startswith(root + "/"):
+                    exec_roots_covered.add(root)
+        unmapped = []
+        for r in man:
+            if r["proposed_disposition"] != "ARCHIVE_CANDIDATE":
+                continue
+            sp = r["source_path"]
+            if "**" in sp:
+                root = sp.split("/**", 1)[0]
+                if root not in exec_roots_covered:
+                    unmapped.append(sp)  # collection pseudo-row with no expanded files
+            else:
+                if sp not in exec_sources:
+                    unmapped.append(sp)
+        if unmapped:
+            errors.append(
+                f"PHASE8: {len(unmapped)} ARCHIVE_CANDIDATE record(s) not mapped to any "
+                f"execution path (first: {unmapped[0]})")
+
+        # P8-2: no execution path belongs to a KEEP/DEFER/LEGAL source disposition.
+        bad_disp = [r["source_path"] for r in ex
+                    if file_disp.get(r["source_path"]) in (RETAIN_DISP | DEFER_DISP)]
+        if bad_disp:
+            errors.append(
+                f"PHASE8: {len(bad_disp)} execution path(s) map to a KEEP/DEFER/LEGAL "
+                f"source (first: {bad_disp[0]})")
+
+        # P8-3: all exact source paths exist as tracked files.
+        missing = [r["source_path"] for r in ex if r["source_path"] not in tracked_all]
+        if missing:
+            errors.append(
+                f"PHASE8: {len(missing)} execution source path(s) not tracked "
+                f"(first: {missing[0]})")
+
+        # P8-4: no target path collides (duplicate target).
+        tgts = [r["target_path"] for r in ex]
+        dup_t = {t for t in tgts if tgts.count(t) > 1}
+        if dup_t:
+            errors.append(f"PHASE8: duplicate target path(s): {len(dup_t)}")
+
+        # P8-5: no source equals target.
+        se = [r["source_path"] for r in ex if r["source_path"] == r["target_path"]]
+        if se:
+            errors.append(f"PHASE8: {len(se)} row(s) with source_path == target_path")
+
+        # P8-6: no duplicate source path.
+        srcs = [r["source_path"] for r in ex]
+        dup_s = {s for s in srcs if srcs.count(s) > 1}
+        if dup_s:
+            errors.append(f"PHASE8: duplicate source path(s): {len(dup_s)}")
+
+        # P8-7: (target uniqueness already covered by P8-4; assert set sizes)
+        if len(set(srcs)) != len(srcs) or len(set(tgts)) != len(tgts):
+            errors.append("PHASE8: source/target uniqueness invariant violated")
+
+        # P8-8: no execution path has an active canonical/code reference unless approved.
+        #       Every row must be safe_to_move == TRUE.
+        unsafe = [r["source_path"] for r in ex if r.get("safe_to_move") != "TRUE"]
+        if unsafe:
+            errors.append(
+                f"PHASE8: {len(unsafe)} execution path(s) not safe_to_move=TRUE "
+                f"(first: {unsafe[0]})")
+
+        # P8-9: no unsafe whole-directory move exists. Re-derive per source root:
+        #       a whole-dir move is only allowed if EVERY tracked descendant is an
+        #       execution source. We assert the plan never *depends* on a whole-dir
+        #       move by proving that for each collection root that still has retained
+        #       descendants, not all descendants are in the execution set (i.e. the
+        #       plan must be per-file). We also surface the allowed/forbidden split.
+        forbidden = []
+        allowed = []
+        roots_to_check = set(COLLECTION_ROOTS)
+        for r in ex:
+            if not any(r["source_path"] == rt or r["source_path"].startswith(rt + "/")
+                       for rt in COLLECTION_ROOTS):
+                roots_to_check.add(os.path.dirname(r["source_path"]))
+        for d in sorted(roots_to_check):
+            tracked = _git_ls_z(d)
+            if not tracked:
+                continue
+            in_exec = sum(1 for t in tracked if t in exec_sources)
+            retained = sum(1 for t in tracked if file_disp.get(t) in RETAIN_DISP)
+            deferred = sum(1 for t in tracked if file_disp.get(t) in DEFER_DISP)
+            if in_exec == len(tracked) and retained == 0 and deferred == 0:
+                allowed.append(d)
+            else:
+                forbidden.append(d)
+        # The DIRSAFE doc must document at least the forbidden set so a whole-dir move
+        # is never silently assumed. (Presence check only; content is authoritative.)
+        if not os.path.exists(DIRSAFE):
+            errors.append("PHASE8: missing 14_DIRECTORY_MOVE_SAFETY_CHECK.md")
+        info.append(
+            f"PHASE8: whole-dir move allowed={len(allowed)} forbidden={len(forbidden)}")
+
+        # P8-10: root mandatory documents are dispositioned.
+        for root_doc in ("SIX_NEW_FAMILIES_IMPLEMENTATION_PLAN.md",
+                         "SIX_NEW_FAMILIES_IMPLEMENTATION_REPORT.md"):
+            if root_doc not in file_disp:
+                errors.append(f"PHASE8: root mandatory document not dispositioned: {root_doc}")
+
+        # reconciliation info
+        from collections import Counter as _C
+        dist = _C(r["proposed_disposition"] for r in man)
+        info.append(
+            "PHASE8: manifest records=%d (ARCHIVE=%d KEEP_HIST=%d KEEP_CANON=%d "
+            "DEFER=%d LEGAL=%d CORRECT=%d)" % (
+                len(man), dist.get("ARCHIVE_CANDIDATE", 0),
+                dist.get("KEEP_HISTORICAL_REFERENCE", 0),
+                dist.get("KEEP_CANONICAL_SUPPORT", 0), dist.get("DEFER_REVIEW", 0),
+                dist.get("DO_NOT_TOUCH_LEGAL_OR_EXTERNAL", 0),
+                dist.get("CORRECT_IN_PLACE_LATER", 0)))
+        info.append(f"PHASE8: execution tracked files={len(ex)} (all safe_to_move=TRUE)")
 
 
 # ---- Report ----

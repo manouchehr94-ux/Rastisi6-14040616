@@ -4,6 +4,46 @@
 > READY / NOT READY recommendation. **No archive action is taken in Phase 8, even
 > if the recommendation is READY.**
 
+> ## `[PHASE 8 CORRECTIVE REVIEW]` — THIS SECTION SUPERSEDES §§1,3,4,7 BELOW
+>
+> An independent review found execution-safety gaps. The numbers in §§1,3,4 and
+> the verdict in §7 (kept below for auditability) are **superseded** by the
+> corrected figures here and by `15_PHASE8_CORRECTIVE_SAFETY_REPORT.md`.
+>
+> **Corrected scope & dispositions (522 logical records):**
+>
+> | Item | Value |
+> | --- | --- |
+> | Phase-3 inventory units | 519 |
+> | + supplemental root documents (`SIX_NEW_FAMILIES_*`) | 2 |
+> | + supplemental collection-member record | 1 |
+> | **Total logical disposition records** | **522** |
+> | `ARCHIVE_CANDIDATE` (logical units, incl. 6 collection pseudo-rows) | 406 |
+> | `KEEP_HISTORICAL_REFERENCE` | 47 |
+> | `KEEP_CANONICAL_SUPPORT` | 20 |
+> | `DEFER_REVIEW` | 44 |
+> | `DO_NOT_TOUCH_LEGAL_OR_EXTERNAL` | 3 |
+> | `CORRECT_IN_PLACE_LATER` | 2 |
+>
+> `406 + 47 + 20 + 44 + 3 + 2 = 522`. **No remainder.**
+>
+> **Corrected execution counts (exact git-tracked files, not manifest units):**
+>
+> | Item | Value |
+> | --- | --- |
+> | Exact tracked files to move (`13_ARCHIVE_EXECUTION_PATH_MANIFEST.csv`) | **3065** |
+> | — inside collection roots | 3036 |
+> | — outside collection roots | 29 |
+> | Batch A / B / C / D / E | 1408 / 1 / 28 / 1628 / 0 |
+> | Collection expansion rows (`12_...`) | 3048 (3036 safe, 12 retained) |
+> | Whole-dir moves ALLOWED / FORBIDDEN | 2 / 8 |
+> | Files downgraded ARCHIVE→KEEP this pass (reference-blocked) | 11 |
+> | `13_...` rows with `safe_to_move=TRUE` | **3065 / 3065** |
+> | Duplicate source / target; source==target; missing sources | 0 / 0 / 0 / 0 |
+>
+> **Corrected verdict: `READY_FOR_ARCHIVE_EXECUTION_REVIEW`** (not plain "READY";
+> not authorization to execute). Full detail: `15_PHASE8_CORRECTIVE_SAFETY_REPORT.md`.
+
 ## 1. Executive summary
 
 Phase 8 analysed the full RastiSi documentation corpus (**519 inventoried units**
@@ -137,12 +177,18 @@ untouched.
    in code vs the real `docs/docs/product/architecture/…`). These are pre-existing
    and are **not** fixed here; they do not affect archive safety because the real
    targets are protected.
-3. **Out-of-scope root docs** (`SIX_NEW_FAMILIES_*` at repo root) are not in the
-   inventory and were not dispositioned; a future inventory pass should include them.
+3. ~~**Out-of-scope root docs** (`SIX_NEW_FAMILIES_*`) not dispositioned.~~
+   **`[PHASE 8 CORRECTIVE REVIEW]` RESOLVED:** both root docs are now dispositioned
+   as `KEEP_HISTORICAL_REFERENCE` supplemental records (scope = 522).
 4. **The `docs/archive/docs/…` double-segment** is intentional provenance
    preservation, not a defect.
 
 ## 7. Recommendation
+
+> **`[PHASE 8 CORRECTIVE REVIEW]` — the verdict below is SUPERSEDED.** The corrected
+> verdict is **`READY_FOR_ARCHIVE_EXECUTION_REVIEW`** (see the corrective addendum
+> at the top of this document and `15_PHASE8_CORRECTIVE_SAFETY_REPORT.md`). The
+> original wording is retained for auditability only.
 
 > ## ✅ READY (for a future, separately-approved execution phase)
 >
