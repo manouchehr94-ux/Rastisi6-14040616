@@ -12,7 +12,7 @@
 | Repository | `manouchehr94-ux/Rastisi6-14040616` |
 | Branch (only) | `docs/architecture-knowledge-system` |
 | Starting Phase-8 commit | `7cac3326bbdf1eee2fc64f74093c1379b6f80c5f` |
-| Ending corrective commit | `docs(architecture): harden archive execution safety` (this commit) |
+| Ending corrective commit | `8381885d325b593c6461bdbcd7cfe52d0d420b2c` — `docs(architecture): harden archive execution safety` (this content committed at `8381885d`; this SHA-fill is the immediate follow-up commit) |
 | Production baseline (frozen) | `5883a1404a8b0f1f245f0d8ef17ac5c13e40a7cb` |
 | Runtime diff (baseline→HEAD, `apps/ shop_core/ templates/ static/`) | **empty** |
 
