@@ -67,22 +67,91 @@ _STATIC_SECTIONS = {
     "collection_tiles": "collection_tiles",
 }
 
+# ==================================================================
+# Architecture Convergence / Phase 1 — RATIFIED SEMANTIC MAPPING.
+#
+# This is the ONE canonical composition-token -> semantic-role mapping for the
+# home page, and the (page_type, section_key) -> role mapping for non-home
+# pages. It lives HERE, with the A8 recipe construction authority, and is never
+# reproduced independently in a service (the master architectural rule: one
+# canonical source of truth per concept). ``_home``/``_common_pages`` below
+# stamp each built ``PresetSectionEntry`` with its ratified role, so every A8
+# Ready Template (current and every retained historical version) carries an
+# explicit, per-page-unique semantic identity.
+#
+# Note that the same section_key legitimately carries DIFFERENT roles across
+# tokens (``product_grid`` -> products.primary vs ``sale_products`` ->
+# products.sale, both ``product_section``/``catalog_product_wall``), and several
+# tokens legitimately collapse onto ONE role (every category presentation ->
+# categories.primary). Identity is the ROLE, never the section_key or the list
+# index.
+# ==================================================================
+HOME_TOKEN_SEMANTIC_ROLE = {
+    "hero": "hero.primary",
+    "circular_categories": "categories.primary",
+    "tile_categories": "categories.primary",
+    "arch_categories": "categories.primary",
+    "chip_categories": "categories.primary",
+    "indexed_categories": "categories.primary",
+    "product_grid": "products.primary",
+    "product_list": "products.primary",
+    "product_rail": "products.primary",
+    "bento_products": "products.primary",
+    "featured_products": "products.featured",
+    "sale_products": "products.sale",
+    "ticker": "announcement.primary",
+    "brand_story": "brand_story.primary",
+    "editorial_note": "editorial_note.primary",
+    "service_strip": "trust.primary",
+    "trust_features": "trust.primary",
+    "brands": "brands.primary",
+    "testimonials": "testimonials.primary",
+    "newsletter": "newsletter.primary",
+    "community_gallery": "community.gallery",
+    "collection_tiles": "collection.tiles",
+}
+
+NON_HOME_SECTION_SEMANTIC_ROLE = {
+    ("product_detail", "product_main"): "product.main",
+    ("product_detail", "product_description"): "product.description",
+    ("product_detail", "related_products"): "product.related",
+    ("listing", "product_listing"): "products.listing",
+    ("collection", "collection_header"): "collection.header",
+    ("collection", "collection_products"): "collection.products",
+    ("search", "product_listing"): "products.search",
+    ("cart", "cart_items"): "cart.items",
+    ("cart", "cart_summary"): "cart.summary",
+}
+
+
+def _with_role(entry: "PresetSectionEntry", role: str) -> "PresetSectionEntry":
+    return dataclasses.replace(entry, semantic_slot_key=role)
+
+def _common_entry(page_type: str, section_key: str, settings: dict | None = None) -> "PresetSectionEntry":
+    """Build a non-home recipe row already stamped with its ratified role
+    (``NON_HOME_SECTION_SEMANTIC_ROLE``) — the same canonical mapping authority
+    used for the home page, so search vs listing (both ``product_listing``)
+    resolve to distinct roles by page even though they share a section_key."""
+    role = NON_HOME_SECTION_SEMANTIC_ROLE[(page_type, section_key)]
+    return PresetSectionEntry(section_key, settings, semantic_slot_key=role)
+
+
 def _common_pages() -> dict[str, tuple[PresetSectionEntry, ...]]:
     return {
         "product_detail": (
-            PresetSectionEntry("product_main"),
-            PresetSectionEntry("product_description"),
-            PresetSectionEntry("related_products"),
+            _common_entry("product_detail", "product_main"),
+            _common_entry("product_detail", "product_description"),
+            _common_entry("product_detail", "related_products"),
         ),
-        "listing": (PresetSectionEntry("product_listing"),),
+        "listing": (_common_entry("listing", "product_listing"),),
         "collection": (
-            PresetSectionEntry("collection_header"),
-            PresetSectionEntry("collection_products"),
+            _common_entry("collection", "collection_header"),
+            _common_entry("collection", "collection_products"),
         ),
-        "search": (PresetSectionEntry("product_listing"),),
+        "search": (_common_entry("search", "product_listing"),),
         "cart": (
-            PresetSectionEntry("cart_items"),
-            PresetSectionEntry("cart_summary"),
+            _common_entry("cart", "cart_items"),
+            _common_entry("cart", "cart_summary"),
         ),
     }
 
@@ -140,18 +209,25 @@ def _product_entry(token: str, spec: _RecipeSpec) -> PresetSectionEntry:
 def _home(spec: _RecipeSpec) -> tuple[PresetSectionEntry, ...]:
     entries: list[PresetSectionEntry] = []
     for token in spec.composition:
+        role = HOME_TOKEN_SEMANTIC_ROLE[token]
         if token == "hero":
             if spec.hero != "none":
                 entries.append(
-                    PresetSectionEntry(
-                        "hero_banner", {"hero_style": _HERO_VARIANTS[spec.hero]}
+                    _with_role(
+                        PresetSectionEntry(
+                            "hero_banner", {"hero_style": _HERO_VARIANTS[spec.hero]}
+                        ),
+                        role,
                     )
                 )
         elif token in _CATEGORY_PRESENTATIONS:
             entries.append(
-                PresetSectionEntry(
-                    "category_grid",
-                    {"display_mode": _CATEGORY_PRESENTATIONS[token]},
+                _with_role(
+                    PresetSectionEntry(
+                        "category_grid",
+                        {"display_mode": _CATEGORY_PRESENTATIONS[token]},
+                    ),
+                    role,
                 )
             )
         elif token in {
@@ -162,9 +238,9 @@ def _home(spec: _RecipeSpec) -> tuple[PresetSectionEntry, ...]:
             "bento_products",
             "featured_products",
         }:
-            entries.append(_product_entry(token, spec))
+            entries.append(_with_role(_product_entry(token, spec), role))
         else:
-            entries.append(PresetSectionEntry(_STATIC_SECTIONS[token]))
+            entries.append(_with_role(PresetSectionEntry(_STATIC_SECTIONS[token]), role))
     return tuple(entries)
 
 

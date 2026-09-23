@@ -800,37 +800,44 @@ def _apply_appearance_manifest(
         raise R4MutationError("invalid_store_appearance_manifest") from exc
 
 
-def _apply_appearance_template(
-    *, draft: StorefrontLayoutVersion, mutation: dict
-) -> None:
-    _require_pinned_appearance_draft(draft=draft, mutation=mutation)
-    template_key = mutation.get("template_key")
-    template_version = mutation.get("template_version")
+def _resolve_ready_template(template_key, template_version):
+    """Validate an R4 Ready Template key/version request, returning the exact
+    registered ``LayoutPresetDefinition`` or raising the stable external codes.
+    Shared by ``appearance.template.apply`` and the ``switch_template`` entry
+    points so every merchant-facing Ready Template change validates identically.
+    """
     if not isinstance(template_key, str) or not template_key:
         raise R4MutationError("unknown_appearance_template")
     if not isinstance(template_version, str) or not template_version:
         raise R4MutationError("template_version_mismatch")
-
     preset = layout_preset_registry.get_layout_preset(template_key)
     if preset is None or not preset.is_ready_template:
         raise R4MutationError("unknown_appearance_template")
     if preset.version != template_version:
         raise R4MutationError("template_version_mismatch")
+    return preset
 
+
+def _apply_appearance_template(
+    *, draft: StorefrontLayoutVersion, mutation: dict
+) -> None:
+    _require_pinned_appearance_draft(draft=draft, mutation=mutation)
+    preset = _resolve_ready_template(
+        mutation.get("template_key"), mutation.get("template_version"),
+    )
+
+    # Architecture Convergence / Phase 1 — a merchant-facing Ready Template apply
+    # is now the SAME preservation-first, same-Draft transition as
+    # ``switch_template``: it maps shared semantic slots, introduces missing
+    # target slots, and never silently destroys merchant work. It runs in place
+    # on the already-locked active Draft; ``apply_mutation`` owns the transaction,
+    # base revision, rollback, and records exactly one history entry / one
+    # revision increment (in ``record_change``), so this handler never records
+    # history itself.
     try:
-        preset_service.apply_preset(draft, preset)
+        preset_service.switch_ready_template_preserving(draft, preset)
     except preset_service.InvalidPresetError as exc:
         raise R4MutationError("invalid_appearance_template") from exc
-
-    # Phase 1 (Task 5) — ``preset_service.apply_preset`` is now authoritative:
-    # it persists the Ready Template's COMPLETE declared typed manifest (all
-    # families, not only header/footer/bottom_nav/motion) and builds its
-    # ``template_baseline_snapshot`` from that manifest-synced state. The old
-    # partial four-family ``_sync_manifest_from_live_selectors`` and the
-    # post-apply baseline re-capture that this path used to perform are now
-    # redundant and have been removed. R4 still owns exact preset key/version
-    # validation (above), active-Draft locking, base revision, the transaction,
-    # rollback, history and the revision increment (in ``apply_mutation``).
 
 
 def _apply_appearance_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
@@ -1347,46 +1354,76 @@ def reset_storefront(*, store, actor, base_revision: int) -> StorefrontLayoutVer
         raise R4MutationError(_reset_error_code(exc)) from exc
 
 
+def _perform_ready_template_switch(
+    *, draft: StorefrontLayoutVersion, actor, preset,
+) -> StorefrontLayoutVersion:
+    """The ONE canonical preservation-first Ready Template switch execution,
+    shared by the optimistic (``switch_template``) and the legacy-form
+    (``switch_template_current``) entry points. Runs in place on the already-
+    locked ``draft`` (SAME Draft pk), then records exactly one canonical history
+    entry / one revision increment through ``edit_history_service.record_change``
+    — never a second history system, never a Draft-identity replacement.
+    """
+    before_state = edit_history_service.snapshot_draft(draft)
+    try:
+        preset_service.switch_ready_template_preserving(draft, preset)
+    except preset_service.InvalidPresetError as exc:
+        raise R4MutationError("invalid_appearance_template") from exc
+    edit_history_service.record_change(
+        draft=draft,
+        actor=actor,
+        action_label=_MUTATION_HISTORY_LABELS["appearance.template.apply"],
+        before_state=before_state,
+    )
+    return draft
+
+
 @transaction.atomic
 def switch_template(
     *, store, actor, base_revision: int, template_key: str, template_version: str,
 ) -> StorefrontLayoutVersion:
-    """R4 Task 8 (Batch 1) — content-preserving Template Switch, gated
-    through the same concurrency boundary as Publish/Discard/Reset-page/
-    Reset-storefront above, delegating the actual (checkpoint-then-apply-
-    DNA-only) operation to ``preset_service.switch_template_preserving_
-    content`` — never a second copy of its checkpoint/appearance-authority
-    logic. Replaces the active Draft with a NEW version (the old one
-    archived as a recoverable checkpoint, its FULL content cloned forward
-    untouched), so — like every other Draft-identity-replacing operation
-    above — this is deliberately NOT a normal ``_dispatch_mutation`` type.
+    """Architecture Convergence / Phase 1 — the merchant-facing Ready Template
+    switch, gated through the same optimistic concurrency boundary as every
+    other R4 write (``_lock_active_draft`` compares ``base_revision`` and raises
+    ``R4StaleRevision`` before any mutation), delegating the actual transition to
+    the ONE canonical preservation-first algorithm
+    (``preset_service.switch_ready_template_preserving``).
 
-    Deliberately a SEPARATE capability from the pre-existing ``appearance.
-    template.apply`` mutation type (``_apply_appearance_template`` above):
-    that one is the already-tested, already-undo/redo-integrated FULL
-    recipe apply (composition + DNA, in-place on the same Draft — a
-    legitimate, different, already-shipped operation this task does not
-    touch). This one is the NEW capability Task 8 asks for: DNA only,
-    composition untouched, because it must survive a merchant's authored
-    content. Two genuinely different operations, each with exactly one
-    canonical implementation — not two competing orchestrations of the
-    same thing."""
-    _lock_active_draft(store=store, base_revision=base_revision)
-    if not isinstance(template_key, str) or not template_key:
-        raise R4MutationError("unknown_appearance_template")
-    if not isinstance(template_version, str) or not template_version:
-        raise R4MutationError("template_version_mismatch")
+    Unlike the pre-convergence implementation (which archived the Draft and
+    cloned a new one), this stays on the SAME active Draft: it is preservation-
+    first (merchant work survives wherever semantically valid), records exactly
+    one canonical edit-history entry, and increments ``edit_revision`` exactly
+    once. ``appearance.template.apply`` and the dashboard Ready Template apply now
+    converge onto this same authority — there is one Ready Template transition,
+    not two competing ones."""
+    draft = _lock_active_draft(store=store, base_revision=base_revision)
+    preset = _resolve_ready_template(template_key, template_version)
+    return _perform_ready_template_switch(draft=draft, actor=actor, preset=preset)
 
-    preset = layout_preset_registry.get_layout_preset(template_key)
-    if preset is None or not preset.is_ready_template:
-        raise R4MutationError("unknown_appearance_template")
-    if preset.version != template_version:
-        raise R4MutationError("template_version_mismatch")
 
+@transaction.atomic
+def switch_template_current(
+    *, store, actor, template_key: str, template_version: str,
+) -> StorefrontLayoutVersion:
+    """Legacy-form (no client-supplied ``base_revision``) counterpart to
+    ``switch_template`` — same canonical preservation-first switch, locking the
+    store's active Draft against its OWN current revision (a lock that can never
+    spuriously reject). The converged dashboard Ready Template apply routes here
+    so it stays on the same active Draft and records exactly one history entry /
+    one revision increment, instead of the old clone-a-new-Draft path."""
+    layout = StorefrontLayout.objects.select_for_update().get(store=store)
+    if layout.draft_version_id is None:
+        raise R4MutationError("no_active_draft")
     try:
-        return preset_service.switch_template_preserving_content(store, preset, user=actor)
-    except preset_service.InvalidPresetError as exc:
-        raise R4MutationError("invalid_appearance_template") from exc
+        draft = StorefrontLayoutVersion.objects.select_for_update().get(
+            pk=layout.draft_version_id,
+            layout=layout,
+            status=StorefrontLayoutVersion.Status.DRAFT,
+        )
+    except StorefrontLayoutVersion.DoesNotExist:
+        raise R4MutationError("no_active_draft") from None
+    preset = _resolve_ready_template(template_key, template_version)
+    return _perform_ready_template_switch(draft=draft, actor=actor, preset=preset)
 
 
 def _lock_layout_for_identity_replacement(*, store, expected_draft_id, expected_base_revision):

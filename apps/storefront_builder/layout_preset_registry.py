@@ -81,6 +81,19 @@ class PresetSectionEntry:
     #: entry or contiguous row run. Presets stay pure data; no Store IDs or
     #: renderer-specific hooks belong here.
     container_settings: dict | None = None
+    #: Architecture Convergence / Phase 1 — cross-template SEMANTIC identity of
+    #: this recipe row. Pure recipe metadata (NO database field/model/migration/
+    #: separate registry): it is the one canonical way to decide that two rows in
+    #: two *different* Ready Templates represent the same merchant concept (e.g.
+    #: ``hero.primary``), independent of section_key and independent of the
+    #: positional ``template_slot_key`` (``key:vN:page:index``). ``None`` (default)
+    #: is legitimate for legacy/non-Ready structural presets; every Ready Template
+    #: row must carry an explicit, non-empty, per-page-unique role — enforced at
+    #: registration time (see ``_validate_semantic_slot_keys``). The canonical
+    #: token→role / (page,section)→role mapping lives with the A8 recipe
+    #: construction authority (``a8_ready_templates``); it is never reproduced in
+    #: a service.
+    semantic_slot_key: str | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -159,6 +172,91 @@ LAYOUT_PRESET_VERSION_REGISTRY: dict[tuple[str, str], LayoutPresetDefinition] = 
 
 _NUMERIC_VERSION_RE = re.compile(r"^[1-9][0-9]*$")
 
+#: Architecture Convergence / Phase 1 — normalized ``semantic_slot_key`` syntax:
+#: a lowercase ``<domain>.<qualifier>[.<qualifier>...]`` role, never a bare word
+#: and never a positional/index-derived value.
+_SEMANTIC_SLOT_KEY_RE = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
+
+
+def _autofill_legacy_semantic_slots(definition: "LayoutPresetDefinition") -> "LayoutPresetDefinition":
+    """Compatibility filler for retained *legacy hand-built* Ready Templates.
+
+    Every merchant-facing Ready Template must carry an explicit, per-page-unique
+    ``semantic_slot_key`` (Architecture Convergence / Phase 1). The current A8
+    recipes author their roles explicitly through the ratified token/page mapping
+    in ``a8_ready_templates``. The eight pre-A8 hand-built Ready Template recipes
+    retained in this module predate that authoring convention and would otherwise
+    fail registration validation, so any of their rows still left as ``None`` is
+    filled here with a deterministic, per-page-unique ``legacy.<section_key>``
+    role (numeric-suffixed on repeats). This is a default *within the single
+    registry authority*, never a second semantic-role registry: it only ever
+    fills rows the recipe left ``None``, so an explicitly-authored A8 role is
+    never touched, and it produces exactly the "non-empty, syntactically valid,
+    per-page unique" shape the validator requires.
+    """
+    if not definition.is_ready_template:
+        return definition
+    new_pages = {}
+    changed = False
+    for page_type, entries in definition.pages.items():
+        used = {
+            e.semantic_slot_key
+            for e in entries
+            if e.semantic_slot_key not in (None, "")
+        }
+        new_entries = []
+        for entry in entries:
+            if entry.semantic_slot_key not in (None, ""):
+                new_entries.append(entry)
+                continue
+            base = f"legacy.{entry.section_key}"
+            role = base
+            suffix = 2
+            while role in used:
+                role = f"{base}_{suffix}"
+                suffix += 1
+            used.add(role)
+            new_entries.append(dataclasses.replace(entry, semantic_slot_key=role))
+            changed = True
+        new_pages[page_type] = tuple(new_entries)
+    if not changed:
+        return definition
+    return dataclasses.replace(definition, pages=new_pages)
+
+
+def _validate_semantic_slot_keys(definition: "LayoutPresetDefinition") -> None:
+    """Ready Template validation for the cross-template semantic contract.
+
+    Runs only for ``is_ready_template`` definitions (legacy/non-Ready structural
+    presets may legitimately keep ``None`` roles). Every row must carry a
+    non-empty, syntactically valid role, and a role must be unique within one
+    page — a duplicate semantic role on a single page is a fail-closed
+    registration error, exactly like every other built-in-preset shape error in
+    this module (never a runtime error for a real merchant).
+    """
+    if not definition.is_ready_template:
+        return
+    for page_type, entries in definition.pages.items():
+        seen: dict[str, int] = {}
+        for index, entry in enumerate(entries):
+            role = entry.semantic_slot_key
+            if role is None or not str(role).strip():
+                raise InvalidLayoutPresetError(
+                    f"Ready Template «{definition.key}»: ردیفِ «{entry.section_key}» "
+                    f"در صفحه‌ی «{page_type}» باید semantic_slot_key صریح داشته باشد"
+                )
+            if not _SEMANTIC_SLOT_KEY_RE.fullmatch(str(role)):
+                raise InvalidLayoutPresetError(
+                    f"Ready Template «{definition.key}»: semantic_slot_key «{role}» "
+                    f"نحوِ نامعتبر دارد (باید <domain>.<qualifier> باشد)"
+                )
+            if role in seen:
+                raise InvalidLayoutPresetError(
+                    f"Ready Template «{definition.key}»: نقشِ معناییِ تکراری «{role}» "
+                    f"در صفحه‌ی «{page_type}» (ایندکس {seen[role]} و {index})"
+                )
+            seen[role] = index
+
 
 def _complete_store_appearance(
     *, header: str, hero: str, layout: str, product_view: str, card: str,
@@ -188,8 +286,13 @@ def _complete_store_appearance(
 
 
 def register_layout_preset(definition: LayoutPresetDefinition) -> None:
+    # Fill any legacy hand-built Ready Template rows still missing a role BEFORE
+    # validation, so the registered definition always carries the complete,
+    # per-page-unique semantic identity the rest of the system relies on.
+    definition = _autofill_legacy_semantic_slots(definition)
     _validate_page_composition_shape(definition)
     _validate_ready_template_store_appearance(definition)
+    _validate_semantic_slot_keys(definition)
 
     identity = (definition.key, definition.version)
     if identity in LAYOUT_PRESET_VERSION_REGISTRY:
