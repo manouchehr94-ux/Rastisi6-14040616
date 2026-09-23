@@ -1,0 +1,417 @@
+# RastiSi Architecture Registry (machine-readable)
+# status: CANONICAL
+# code_baseline: 5883a1404a8b0f1f245f0d8ef17ac5c13e40a7cb
+# last_verified_against_code: 5883a1404a8b0f1f245f0d8ef17ac5c13e40a7cb
+# source_phases: Phase 1 / Phase 2 / Phase 4
+# NOTE: UNKNOWN = evidence genuinely missing (not "not applicable").
+# Fields use exact code paths/symbols where practical.
+
+meta:
+  system: RastiSi
+  framework: "Django 5.2"
+  project_package: shop_core
+  code_baseline: 5883a1404a8b0f1f245f0d8ef17ac5c13e40a7cb
+  surfaces:
+    - {name: storefront_and_merchant_admin, urlconf: shop_core.urls}
+    - {name: marketing_owner_portal, urlconf: shop_core.urls_platform, hosts_setting: RASTISI_PLATFORM_HOSTS}
+    - {name: platform_admin, urlconf: shop_core.urls_platform_admin, hosts_setting: RASTISI_PLATFORM_ADMIN_HOSTS}
+  host_router: apps.portal.middleware.PlatformHostRoutingMiddleware
+  store_resolver: apps.stores.resolution.resolve_store_for_hostname
+  signals_in_production: 0
+  test_functions: 8665
+
+domains:
+  - id: D1
+    name: Tenancy & Store identity
+    app: stores
+    responsibility: "SaaS tenant boundary; Store lifecycle, membership/roles, domains, ownership transfer, Host->Store resolution, authorization"
+    status: READY
+    code_roots: [apps/stores/]
+    owned_models: [Store, StoreDomain, StoreMembership, StoreOwnershipTransfer, StoreIntegrationConnection]
+    owned_services: [resolution.py, authorization.py, services/publication_service.py, services/store_status_service.py, services/domain_verification_service.py, services/platform_code_service.py, services/deletion_service.py, services/membership_service.py, services/ownership_transfer_service.py, services/handle_service.py]
+    entry_points: [apps/stores/middleware.py (StoreResolutionMiddleware, StorefrontCanonicalRedirectMiddleware), "management/commands/purge_deleted_stores.py", "management/commands/rename_store_handle.py", "management/commands/verify_domain_consistency.py"]
+    reads: [Store, StoreDomain, StoreMembership, "subscriptions.entitlement_service (local import)"]
+    writes: [Store, StoreDomain, StoreMembership, StoreOwnershipTransfer, StoreIntegrationConnection]
+    upstream_dependencies: [every_request_via_middleware]
+    downstream_dependencies: [core, catalog, subscriptions, portal, notifications]
+    external_integrations: ["DNS TXT (dnspython)", "TLS SSL socket"]
+    state_machines: ["Store.status(provisioning/active/suspended/closed)", "Store.onboarding_stage(soft)", "StoreDomain.verification_status/routing_status/tls_status", "StoreMembership.status", "StoreOwnershipTransfer.status"]
+    critical_invariants: ["exactly one active OWNER per Store (uniq_active_owner_per_store)", "StoreDomain.hostname normalized+unique", "onboarding_completed_at read for visibility only via publication_service"]
+    mutation_authorities:
+      Store.status: [store_status_service, deletion_service, provisioning_service(create), platform_admin_views]
+      StoreMembership: [membership_service, ownership_transfer_service.accept, provisioning_service]
+      StoreDomain: [domain_verification_service, handle_service, provisioning_service]
+    cross_domain_writers: ["portal.provisioning_service (creates Store/Membership/Domain)"]
+    tests: [apps/stores/tests/test_resolution.py, test_membership_service.py, test_ownership_transfer_service.py, test_domain_verification_service.py, test_publication_service.py, test_deletion_service.py, test_admin_superuser_gate.py]
+    canonical_docs: [../domains/stores/README.md]
+    historical_docs: ["docs/docs/product/architecture/SAAS_ARCHITECTURE.md", "docs/docs/product/architecture/SAAS_DOMAIN_DECISIONS.md (ADR-1/2/3/11/16/17)"]
+    known_risks: [M13, M15, O4]
+    unresolved_decisions: [DR-4, DR-7, DR-8]
+
+  - id: D2
+    name: Platform control & owner identity
+    app: portal
+    responsibility: "Platform config singleton, owner/staff auth+OTP+step-up, host routing, store provisioning, platform-admin console"
+    status: PARTIAL
+    code_roots: [apps/portal/]
+    owned_models: [OwnerProfile, OwnerOtpChallenge, AdminHandoffTicket, PlatformConfiguration, PlatformAuditLogEntry, PlatformInternalNote, ContactMessage]
+    owned_services: [services/provisioning_service.py, services/owner_auth_service.py, services/owner_otp_service.py, services/step_up_service.py, services/owner_sms_service.py, services/platform_config_service.py, services/handoff_service.py, services/turnstile_service.py, services/session_service.py]
+    entry_points: [apps/portal/urls.py, apps/portal/platform_admin_urls.py, apps/portal/platform_admin_views.py, apps/portal/middleware.py (PlatformHostRoutingMiddleware), apps/portal/decorators.py]
+    reads: [PlatformConfiguration, Store, StoreMembership]
+    writes: [OwnerProfile, OwnerOtpChallenge, AdminHandoffTicket, PlatformConfiguration, PlatformAuditLogEntry, "stores.* + core.ShopSettings + catalog.Warehouse + subscriptions (via provisioning)"]
+    upstream_dependencies: [every_request_via_host_routing]
+    downstream_dependencies: [stores, core, catalog, subscriptions, sms]
+    external_integrations: ["SMS (owner_sms_service -> Melipayamak/Kavenegar/console)", "SMTP email", "Cloudflare Turnstile"]
+    state_machines: ["OwnerOtpChallenge (purpose/consumed)", "AdminHandoffTicket (single-use)"]
+    critical_invariants: ["PlatformConfiguration pk forced to 1 (singleton)", "OTP codes hashed, single-use, rate-limited", "platform admin requires is_staff AND is_superuser"]
+    mutation_authorities:
+      PlatformConfiguration: [platform_config_service, platform_admin_views]
+      auth.User(owner): [owner_auth_service, owner_otp_service]
+    cross_domain_writers: []
+    tests: [apps/portal/tests/test_provisioning.py, test_owner_auth.py, test_owner_otp.py, test_step_up_billing.py, test_platform_host_routing.py, test_platform_admin*.py, test_handoff.py]
+    canonical_docs: [../domains/portal/README.md]
+    historical_docs: ["SAAS_DOMAIN_DECISIONS.md (ADR-93/97/98/101/102)", "00_PROJECT_MASTER_REFERENCE.md"]
+    known_risks: [M15]
+    unresolved_decisions: [DR-4]
+
+  - id: D3
+    name: Customer identity & CRM
+    app: customers
+    responsibility: "Global shopper account, per-Store CRM projection, segments/tags, addresses, wishlist, guest->user cart merge, customer auth/OTP"
+    status: POOR
+    code_roots: [apps/customers/]
+    owned_models: [Customer, CustomerProfile, CustomerTag, CustomerNote, CustomerSegment, CustomerSegmentRule, CustomerSegmentMembership, Address, Wishlist]
+    owned_services: [services/auth_service.py]
+    entry_points: [apps/customers/urls.py, apps/customers/context_processors.py]
+    reads: [Customer, CustomerProfile, orders.Order]
+    writes: [Customer, CustomerProfile, "cart.Cart/CartItem (merge_guest_cart, cross-domain)"]
+    upstream_dependencies: [dashboard(CRM), orders(profile stats)]
+    downstream_dependencies: [cart, sms]
+    external_integrations: ["SMS WELCOME (on_commit via sms_service)"]
+    state_machines: ["CustomerProfile.internal_status"]
+    critical_invariants: ["Customer is global (no store FK, ADR-50/93)", "CustomerProfile unique per store"]
+    mutation_authorities:
+      Customer: [auth_service, "portal.owner_auth_service (shared identity)"]
+      CustomerProfile: ["dashboard.customer_crm_service"]
+    cross_domain_writers: ["dashboard.customer_crm_service", "dashboard.segment_service"]
+    tests: [apps/customers/tests/test_auth_service.py, test_auth_views.py]
+    canonical_docs: [../domains/customers/README.md]
+    historical_docs: ["SAAS_DOMAIN_DECISIONS.md (ADR-6/50/93/102)"]
+    known_risks: []
+    unresolved_decisions: []
+
+  - id: D4
+    name: Catalog & inventory
+    app: catalog
+    responsibility: "Products/variants/options/attributes, categories/brands, collections, ledgered inventory, industry templates, specs, reviews"
+    status: PARTIAL
+    code_roots: [apps/catalog/]
+    owned_models: [Product, ProductVariant, StockMovement, Category, Brand, Vendor, MerchantCollection, Warehouse, WarehouseInventory, InventoryReservation, WarehouseTransfer, IndustryTemplate, StoreIndustryInstallation, StoreTemplateUpdate, "and ~24 more"]
+    owned_services: [services/product_publish_service.py, services/product_draft_service.py, services/inventory_service.py, services/variant_service.py, services/variant_engine_service.py, services/reservation_service.py, services/warehouse_service.py, services/transfer_service.py, services/industry_template_service.py, "and ~22 more"]
+    entry_points: [apps/catalog/urls.py, apps/catalog/views.py (home/product-list/detail/collection), context_processors.py, templatetags/, "management/commands/* (cleanup_stale_product_drafts, expire_inventory_reservations, seed_industry_templates, verify_inventory_consistency, ...)"]
+    reads: [Product, ProductVariant, Category, "storefront_builder.render_service (lazy, for home render)"]
+    writes: [Product, ProductVariant, StockMovement, Category, Warehouse*, IndustryTemplate*]
+    upstream_dependencies: [dashboard, orders, portal(provisioning)]
+    downstream_dependencies: [storefront_builder(render)]
+    external_integrations: []
+    state_machines: ["Product.status(draft/active/inactive) + publish_at + visibility", "Product.is_draft_placeholder", "WarehouseTransfer.ALLOWED_TRANSITIONS", "InventoryReservation.status", "IndustryTemplate.Readiness", "StoreTemplateUpdate.status"]
+    critical_invariants: ["stock never changes without a StockMovement (inventory_service)", "ProductVariant QuerySet blocks normalization-bypassing bulk writes", "Product/Variant.stock is single authoritative sellable field (ADR-38)"]
+    mutation_authorities:
+      Product: [product_draft_service, "dashboard.views._save_product", "dashboard.catalog_admin_service (bulk)", import, industry_template_service]
+      stock: [inventory_service]
+    cross_domain_writers: ["dashboard.views/services", "orders.order_service (reserve/consume)", "portal.provisioning_service (Warehouse/template)"]
+    tests: [apps/catalog tests, apps/dashboard/tests (product suite), apps/dashboard/tests/test_catalog_store_isolation.py]
+    canonical_docs: [../domains/catalog/README.md]
+    historical_docs: ["SAAS_DOMAIN_DECISIONS.md (ADR-18..31/38..40/58/60)", "docs/docs/product/reports/PHASE_1C/1D/1E_*"]
+    known_risks: [M13]
+    unresolved_decisions: [DR-7]
+
+  - id: D5
+    name: Cart & pricing
+    app: cart
+    responsibility: "Shopping cart, cart pricing/coupons, gift wrap, checkout token"
+    status: POOR
+    code_roots: [apps/cart/]
+    owned_models: [Cart, CartItem, Coupon]
+    owned_services: [services/cart_service.py, services/pricing.py, services/coupon_service.py, services/gift_wrap_service.py, services/cart_preview.py]
+    entry_points: [apps/cart/urls.py, apps/cart/views.py, apps/cart/context_processors.py]
+    reads: [Cart, CartItem, catalog.Product/ProductVariant, Coupon]
+    writes: [Cart, CartItem, Coupon.used_count]
+    upstream_dependencies: [orders(checkout), customers(merge)]
+    downstream_dependencies: [catalog(price resolution)]
+    external_integrations: []
+    state_machines: []
+    critical_invariants: ["CartItem.unit_price is a server snapshot from catalog effective price", "checkout_token is the order-creation idempotency anchor"]
+    mutation_authorities:
+      CartItem: [cart_service, "orders.order_service (reprice, cross-domain)", "orders.checkout_service (delete)", "customers.auth_service (merge)"]
+      Coupon.used_count: ["orders.order_service (cross-domain)"]
+    cross_domain_writers: [orders.order_service, orders.checkout_service, orders.views, customers.auth_service]
+    tests: [apps/cart/tests/test_cart_service.py, test_pricing.py, test_cart_security.py, test_gift_wrap.py]
+    canonical_docs: [../domains/cart/README.md]
+    historical_docs: ["SAAS_DOMAIN_DECISIONS.md (ADR-15/32)"]
+    known_risks: [M9, L2]
+    unresolved_decisions: []
+
+  - id: D6
+    name: Orders, checkout, payments (storefront money)
+    app: orders
+    responsibility: "Order state machine, two storefront-payment implementations, refunds/returns, shipping/tax config, gateway config+adapters"
+    status: PARTIAL
+    code_roots: [apps/orders/]
+    owned_models: [Order, OrderItem, OrderStatusHistory, Transaction, PaymentAttempt, PaymentGatewayConfig, PaymentGateway, Refund, RefundItem, ReturnRequest, ReturnItem, ShippingZone, ShippingMethod, ShippingRateRule, TaxClass, TaxRate]
+    owned_services: [services/order_service.py, services/payment_service.py, services/gateway_payment_service.py, services/refund_service.py, services/return_service.py, services/checkout_service.py, services/shipping_service.py, services/tax_service.py, services/best_seller_service.py]
+    entry_points: [apps/orders/urls.py, apps/orders/views.py, "gateways/ (base, registry, zibal, cod)", "checkout/gateway/callback/<attempt_id>", "checkout/payment-callback/<status> (simulation, gated)", "management/commands/seed_default_shipping_methods.py"]
+    reads: [Order, Cart, catalog.Product/Variant]
+    writes: [Order, OrderItem, OrderStatusHistory, Transaction, PaymentAttempt, Refund, ReturnRequest, "cart.CartItem/Coupon (cross-domain)", "catalog stock (reserve/consume)"]
+    upstream_dependencies: [dashboard, checkout_views]
+    downstream_dependencies: [cart, catalog, sms]
+    external_integrations: ["Zibal gateway", "COD (offline)"]
+    state_machines: ["Order.status (GUARDED, ALLOWED_TRANSITIONS)", "Order.payment_status (NOT GUARDED - 3 writers, H1)", "PaymentAttempt.status", "Refund.status", "ReturnRequest.status (model-level ALLOWED_TRANSITIONS)"]
+    critical_invariants: ["order creation idempotent via cart checkout_token", "gateway payment_status update is conditional on PENDING under lock", "MANUAL refund only (GATEWAY raises, ADR-33)", "COD does not mark order paid", "browser return is never payment proof"]
+    mutation_authorities:
+      Order.status: [order_service.change_order_status]
+      Order.payment_status: [gateway_payment_service.process_callback_and_verify, payment_service.simulate_payment, refund_service.execute_order_refund]
+      Transaction: [payment_service.simulate_payment, gateway_payment_service]
+      PaymentAttempt: [gateway_payment_service]
+    cross_domain_writers: ["dashboard (order status via change_order_status; shipping/tax/gateway-config direct)"]
+    tests: [apps/orders/tests/test_order_service.py, test_payment_service.py, test_gateway_payment_service.py, test_refund_service.py, test_return_service.py, test_checkout_*.py]
+    canonical_docs: [../domains/orders/README.md, ../domains/orders/CHANGE_GUIDE.md]
+    historical_docs: ["docs/docs/product/architecture/PAYMENT_ARCHITECTURE.md", "SAAS_DOMAIN_DECISIONS.md (ADR-7/9/14/33/34/35)", "docs/reports/PRELAUNCH_PHASE4_ZIBAL_MERCHANT_PAYMENTS.md"]
+    known_risks: [H1, M4, M9, L1, L2, L4]
+    unresolved_decisions: [DR-1, DR-5, DR-6]
+
+  - id: D7
+    name: SaaS subscriptions
+    app: subscriptions
+    responsibility: "Plans/versions/entitlements, canonical StoreSubscription state machine, usage records"
+    status: PARTIAL
+    code_roots: [apps/subscriptions/]
+    owned_models: [StoreSubscription, Plan, PlanVersion, EntitlementDefinition, PlanEntitlement, SubscriptionEvent, UsageRecord]
+    owned_services: [services/subscription_service.py, services/plan_change_service.py, services/entitlement_service.py, services/usage_service.py, services/plan_service.py, services/legacy_service.py, entitlements.py]
+    entry_points: ["management/commands/evaluate_subscription_states.py", "management/commands/provision_legacy_subscriptions.py", "management/commands/seed_default_plans.py", "management/commands/verify_subscription_consistency.py", "django admin (superuser, status readonly)"]
+    reads: [StoreSubscription, PlanVersion, PlanEntitlement, UsageRecord]
+    writes: [StoreSubscription, SubscriptionEvent, UsageRecord]
+    upstream_dependencies: [billing(drives transitions), portal(provisioning), dashboard(reads)]
+    downstream_dependencies: [stores(publication reads entitlement)]
+    external_integrations: []
+    state_machines: ["StoreSubscription.status (GUARDED, ALLOWED_TRANSITIONS, ADR-66)"]
+    critical_invariants: ["only subscription_service writes subscription.status", "uniq_current_subscription_per_store (is_current)", "transitions idempotent via SubscriptionEvent idempotency_key"]
+    mutation_authorities:
+      StoreSubscription.status: [subscription_service]
+    cross_domain_writers: ["billing.confirmation_service/dunning_service/renewal_service/cancellation_service (via subscription_service, funneled)"]
+    tests: [apps/subscriptions/tests/test_state_machine.py, test_plan_change.py, test_manual_trial_controls.py, test_management_and_isolation.py]
+    canonical_docs: [../domains/subscriptions/README.md]
+    historical_docs: ["SAAS_DOMAIN_DECISIONS.md (ADR-66/72)", "docs/reports/PRELAUNCH_PHASE2_SUBSCRIPTIONS_TRIALS.md"]
+    known_risks: [M7]
+    unresolved_decisions: []
+
+  - id: D8
+    name: SaaS billing
+    app: billing
+    responsibility: "Subscription invoicing, billing payment/confirmation, webhook inbox, dunning, renewals, credit/refund, plan-change billing, numbering"
+    status: PARTIAL
+    code_roots: [apps/billing/]
+    owned_models: [StoreBillingAccount, SubscriptionInvoice, SubscriptionInvoiceLine, SubscriptionPaymentAttempt, BillingWebhookEvent, SubscriptionDunningState, SubscriptionCreditNote, SubscriptionRefund, ScheduledPlanChange, BillingSequence]
+    owned_services: [services/invoice_service.py, services/attempt_service.py, services/confirmation_service.py, services/payment_flow_service.py, services/webhook_service.py, services/renewal_service.py, services/dunning_service.py, services/cancellation_service.py, services/refund_service.py, services/credit_note_service.py, services/numbering_service.py, services/account_service.py, services/period_utils.py, services/consistency_service.py, services/plan_change_billing_service.py]
+    entry_points: [apps/billing/urls.py (webhook/<provider_code>/), apps/billing/views.py (billing_webhook), "providers/ (base, registry, manual, zibal)", "management/commands/generate_subscription_renewals.py", "management/commands/process_subscription_dunning.py", "management/commands/verify_billing_consistency.py", "admin actions (action_mark_paid, action_retry)"]
+    reads: [SubscriptionInvoice, SubscriptionPaymentAttempt, subscriptions.StoreSubscription]
+    writes: [SubscriptionInvoice, SubscriptionPaymentAttempt, BillingWebhookEvent, SubscriptionDunningState, SubscriptionRefund, ScheduledPlanChange, "subscriptions.StoreSubscription (via subscription_service)"]
+    upstream_dependencies: [webhook(provider), cron, portal(checkout), admin]
+    downstream_dependencies: [subscriptions]
+    external_integrations: ["Zibal", "manual provider", "provider webhook signature"]
+    state_machines: ["SubscriptionInvoice.status", "SubscriptionPaymentAttempt.status", "BillingWebhookEvent.processing_status", "SubscriptionDunningState.status", "SubscriptionCreditNote/Refund status"]
+    critical_invariants: ["webhook verified+idempotent before any business mutation (ADR-76)", "confirm_payment is one transactional idempotent service, never in a view (ADR-77)", "amount+currency validated vs invoice, not browser", "uniq_renewal_invoice_per_period", "BillingSequence race-safe numbering"]
+    mutation_authorities:
+      SubscriptionInvoice.status: [invoice_service, confirmation_service, dunning_service, refund_service, payment_flow_service]
+    cross_domain_writers: []
+    tests: [apps/billing/tests/test_confirmation_activation.py, test_webhook_inbox.py, test_renewals.py, test_dunning_cancellation.py, test_credit_refund.py, test_plan_change_billing.py, test_provider_and_attempts.py, test_zibal_platform_provider.py]
+    canonical_docs: [../domains/billing/README.md]
+    historical_docs: ["SAAS_DOMAIN_DECISIONS.md (ADR-72..82)", "docs/reports/PRELAUNCH_PHASE3_ZIBAL_PLATFORM_BILLING.md"]
+    known_risks: [M7]
+    unresolved_decisions: []
+
+  - id: D9
+    name: Storefront presentation / builder
+    app: storefront_builder
+    responsibility: "Versioned draft/publish layout; R4 editor (default); A8 ready templates; appearance/theme/palette registries; render path"
+    status: CONFLICTED
+    code_roots: [apps/storefront_builder/]
+    owned_models: [StorefrontLayout, StorefrontLayoutVersion, StorefrontPage, StorefrontSection, StorefrontContainer, StorefrontCell, StorefrontEditHistoryEntry]
+    owned_services: [services/layout_service.py, services/r4_mutation_service.py, services/preset_service.py, services/appearance_authority_service.py, services/render_service.py, services/container_service.py, services/section_structure_service.py, services/bootstrap_service.py, services/edit_history_service.py, "and ~8 more"]
+    entry_points: ["routes registered in apps/dashboard/urls.py (storefront-builder/... and .../r4/...)", apps/storefront_builder/views.py (legacy R3), apps/storefront_builder/r4_views.py (R4), apps/storefront_builder/media_views.py, "management/commands/capture_ready_template_previews.py"]
+    reads: [StorefrontLayoutVersion, catalog.*, content.Menu]
+    writes: [StorefrontLayout, StorefrontLayoutVersion, StorefrontSection, StorefrontContainer, StorefrontCell, StorefrontEditHistoryEntry, "content placement rows (media clone, cross-domain)"]
+    upstream_dependencies: [dashboard(routes+nav), catalog.home(render), content.page_detail(render)]
+    downstream_dependencies: [catalog, content]
+    external_integrations: []
+    state_machines: ["StorefrontLayoutVersion.status(draft/published/archived)", "editor generation gate: r4_editor_enabled (default True) -> legacy fail-closed"]
+    critical_invariants: ["publish is pointer-swap (published_version/draft_version)", "restore always makes a new draft", "R4 mutation is a single optimistic boundary (edit_revision)", "legacy R3 mutation routes fail closed when r4_editor_enabled=True"]
+    mutation_authorities:
+      StorefrontLayoutVersion/sections: [r4_mutation_service, layout_service, container_service, preset_service]
+      appearance_config: [appearance_authority_service, "storefront_appearance.persistence"]
+    cross_domain_writers: ["writes content placement rows via layout_service/media_views"]
+    tests: [apps/storefront_builder/tests/test_r4_*.py, test_render_service.py, test_storefront_page.py, test_layout_preset_registry.py, test_u8_template_gallery.py]
+    canonical_docs: [../domains/storefront_builder/README.md]
+    historical_docs: ["docs/architecture/UNIVERSAL_STOREFRONT_BUILDER_V2_SPEC.md", "docs/architecture/STOREFRONT_BUILDER_V2_LEGACY_RETIREMENT_MAP.md", "docs/architecture/STOREFRONT_BUILDER_V2_PHASE_*", "docs/superpowers/**"]
+    known_risks: [H3, M1, M2, M10, M11, M12]
+    unresolved_decisions: [DR-6]
+
+  - id: D10
+    name: Content & navigation
+    app: content
+    responsibility: "CMS pages, menus, footer settings/media, section-scoped placements, social links, newsletter, media assets"
+    status: POOR
+    code_roots: [apps/content/]
+    owned_models: [ContentPage, Menu, MenuItem, FooterSettings, FooterTrustBadge, FooterPaymentLogo, HeroSlide, PromotionalBanner, StoryRailItem, MediaAsset, SocialLink, NewsletterSubscriber]
+    owned_services: ["services.py (READ/RESOLVE ONLY - no write service; H2)"]
+    entry_points: [apps/content/urls.py (page_detail, newsletter_subscribe), apps/content/context_processors.py, apps/content/templatetags/]
+    reads: [ContentPage, Menu, FooterSettings, "catalog references (destination resolution)"]
+    writes: ["NewsletterSubscriber (subscribe_to_newsletter is the only content-service write)"]
+    upstream_dependencies: ["dashboard.views (ALL content CRUD - cross-domain direct)", storefront_builder(render)]
+    downstream_dependencies: [storefront_builder(FK), catalog(destination refs)]
+    external_integrations: []
+    state_machines: ["ContentPage.status(draft/published)"]
+    critical_invariants: ["placements FK into storefront_builder.StorefrontSection (CASCADE)", "MediaAsset.is_referenced fail-closed", "MED-001 media cleanup is intentional no-op"]
+    mutation_authorities:
+      "content.* (all models)": ["dashboard.views (DIRECT / CROSS-DOMAIN - no content write service)"]
+    cross_domain_writers: ["dashboard.views (primary writer)", "storefront_builder.layout_service/media_views (placement media clone)"]
+    tests: ["apps/dashboard/tests (content CRUD via dashboard views)", "apps/content/tests"]
+    canonical_docs: [../domains/content/README.md]
+    historical_docs: ["SAAS_MIGRATION_PLAN.md (PR-8 content ownership)"]
+    known_risks: [H2, M2, M11, O2]
+    unresolved_decisions: [DR-2]
+
+  - id: D11
+    name: Merchant admin (controller)
+    app: dashboard
+    responsibility: "Auth-gated orchestration/CRUD over other domains; storefront-builder route delegation. No models."
+    status: PARTIAL
+    code_roots: [apps/dashboard/]
+    owned_models: []
+    owned_services: [services/catalog_admin_service.py, services/orders_admin_service.py, services/settings_admin_service.py, services/sms_admin_service.py, services/dashboard_service.py, services/report_service.py, services/customer_crm_service.py, services/segment_service.py, services/checklist_service.py, services/import_service.py, services/charts.py, services/customers_admin_service.py]
+    entry_points: [apps/dashboard/urls.py, apps/dashboard/views.py, apps/dashboard/decorators.py (staff_required, permission_required), apps/dashboard/middleware.py (AdminEmbedFrameOptions), apps/dashboard/context_processors.py, apps/dashboard/forms.py, "management/commands/cleanup_import_files.py", "management/commands/refresh_customer_segments.py"]
+    reads: ["all other-app models (scoped to request.store)"]
+    writes: ["orders.Order status (via order_service)", "catalog (services + direct)", "content.* (DIRECT - H2)", "core.ShopSettings (DIRECT)", "orders shipping/tax/gateway config (DIRECT)", "stores.StoreMembership (via membership_service)"]
+    upstream_dependencies: [merchant_admin_host_requests]
+    downstream_dependencies: [catalog, orders, content, core, stores, subscriptions, sms, storefront_builder]
+    external_integrations: []
+    state_machines: []
+    critical_invariants: ["staff_required requires ACTIVE StoreMembership (not is_staff)", "permission_required inside staff_required (OR-semantics)", "all figures scoped to request.store (post tenant-bleed fix)"]
+    mutation_authorities:
+      "content.*, core.ShopSettings, orders config": ["dashboard.views (direct - see DR-2/DR-3)"]
+    cross_domain_writers: ["dashboard is the cross-domain writer for content/settings/config"]
+    tests: [apps/dashboard/tests/test_decorators.py, test_permission_enforcement.py, test_membership_authorization.py, "product/order/settings/import/export suites"]
+    canonical_docs: [../domains/dashboard/README.md]
+    historical_docs: ["docs/docs/product/reports/ADMIN_PANEL_COMPLETION_REPORT.md", "PHASE_1B_ADMIN_FOUNDATION_REPORT.md", "docs/reports/PRODUCT_ENTRY_*"]
+    known_risks: [H2, M5, M14, M15, O4]
+    unresolved_decisions: [DR-2, DR-3, DR-4]
+
+  - id: D12
+    name: Messaging - SMS
+    app: sms
+    responsibility: "SMS templates/events, credit accounting, backends, Android device gateway, OTP codes"
+    status: POOR
+    code_roots: [apps/sms/]
+    owned_models: [SmsTemplate, SmsBillingPolicy, SmsLog, SmsOutboxItem, SmsBalance, SmsPackage, SmsPackagePurchase, SmsCreditAdjustment, OtpCode]
+    owned_services: [services/sms_service.py, services/backends.py, services/billing_policy_service.py, services/balance_service.py, "and 1 more"]
+    entry_points: [apps/sms/urls.py, apps/sms/gateway_views.py (smsrasti_poll, smsrasti_ack), apps/sms/events.py]
+    reads: [SmsTemplate, SmsBalance, "core.ShopSettings.sms_backend", "portal.PlatformConfiguration (central creds)"]
+    writes: [SmsLog, SmsOutboxItem, SmsBalance, OtpCode, "core.ShopSettings.smsrasti_device_token (regenerate)"]
+    upstream_dependencies: ["orders (on_commit)", "customers (on_commit)", "notifications", "portal (OTP)"]
+    downstream_dependencies: [portal(owner_sms_service)]
+    external_integrations: ["Melipayamak", "Kavenegar", "SmsRasti Android device gateway", "console (dev)"]
+    state_machines: ["SmsOutboxItem status (pending/sending/sent/failed)", "SmsLog status"]
+    critical_invariants: ["all Store SMS funnels through _dispatch (credit gate + logging)", "OTP routes to platform provider", "console backend never fakes delivery"]
+    mutation_authorities:
+      "SmsLog/credits/outbox": [sms_service._dispatch, gateway_views]
+    cross_domain_writers: []
+    tests: [apps/sms/tests/*, apps/dashboard/tests/test_sms_admin_views.py]
+    canonical_docs: [../domains/sms/README.md]
+    historical_docs: ["SAAS_DOMAIN_DECISIONS.md (ADR-93)"]
+    known_risks: []
+    unresolved_decisions: []
+
+  - id: D13
+    name: Notifications
+    app: notifications
+    responsibility: "Persistent multi-channel notification outbox"
+    status: MISSING
+    code_roots: [apps/notifications/]
+    owned_models: [NotificationOutbox]
+    owned_services: [services/notification_service.py]
+    entry_points: ["management/commands/process_notification_outbox.py (the only sender)"]
+    reads: [NotificationOutbox]
+    writes: [NotificationOutbox]
+    upstream_dependencies: ["stores.deletion_service/handle_service/ownership_transfer_service (enqueue)"]
+    downstream_dependencies: [sms, portal(platform send)]
+    external_integrations: ["SMS (via sms_service/owner_sms_service)", "email (Django send_mail)"]
+    state_machines: ["NotificationOutbox status (pending/sent/failed)"]
+    critical_invariants: ["enqueue never sends; deliver_pending is the only sender", "failure marks FAILED so nothing is lost"]
+    mutation_authorities:
+      NotificationOutbox: [notification_service]
+    cross_domain_writers: ["stores services (enqueue)"]
+    tests: [apps/notifications/tests]
+    canonical_docs: [../domains/notifications/README.md]
+    historical_docs: []
+    known_risks: []
+    unresolved_decisions: []
+
+  - id: D14
+    name: Shared / cross-cutting
+    app: core
+    responsibility: "ShopSettings (per-Store), TimeStampedModel base, audit log, export/import + private storage, SEO, utilities"
+    status: PARTIAL
+    code_roots: [apps/core/]
+    owned_models: [TimeStampedModel, ShopSettings, AuditLogEntry, ExportJob, ImportJob, ImportRowResult]
+    owned_services: [services/export_service.py, services/audit_service.py, services/session_service.py, services/csv_utils.py, services/rate_limit.py]
+    entry_points: [apps/core/seo.py (sitemap_xml, robots_txt), apps/core/views.py (favicon), apps/core/storage.py (private_storage), "management/commands/cleanup_expired_exports.py", "management/commands/seed_shop.py", apps/core/context_processors.py (shop_settings)]
+    reads: [ShopSettings]
+    writes: [ShopSettings(provision), AuditLogEntry, ExportJob, ImportJob]
+    upstream_dependencies: ["dashboard (ShopSettings writes, export)", "all apps (audit, TimeStampedModel)"]
+    downstream_dependencies: [stores(future FK direction)]
+    external_integrations: []
+    state_machines: ["ExportJob.status", "ImportJob.status"]
+    critical_invariants: ["ShopSettings is store-scoped OneToOne; load() raises if unprovisioned (no read-time create)", "AuditLogEntry redacts sensitive keys, omits IP/UA (ADR-36)", "private_storage is outside MEDIA_ROOT"]
+    mutation_authorities:
+      ShopSettings: [ShopSettings.provision_for, "dashboard.views (direct)", "sms_service.regenerate_smsrasti_device_token"]
+    cross_domain_writers: ["dashboard.views", "sms.sms_service"]
+    tests: [apps/core/tests, apps/dashboard/tests/test_export_views.py]
+    canonical_docs: [../domains/core/README.md]
+    historical_docs: ["docs/docs/product/deployment/PRODUCTION_CONFIGURATION.md", "00_PROJECT_MASTER_REFERENCE.md"]
+    known_risks: [M5, "ShopSettings legacy SMS fields POTENTIALLY_DEAD (D4 register)"]
+    unresolved_decisions: [DR-3]
+
+  - id: D15
+    name: Blog (near-dead)
+    app: blog
+    responsibility: "Single BlogPost admin-only model; no urls/views"
+    status: MISSING
+    code_roots: [apps/blog/]
+    owned_models: [BlogPost]
+    owned_services: []
+    entry_points: ["Django admin only (admin.py); views.py is a stub; NO urls.py"]
+    reads: [BlogPost]
+    writes: [BlogPost]
+    upstream_dependencies: []
+    downstream_dependencies: []
+    external_integrations: []
+    state_machines: []
+    critical_invariants: []
+    mutation_authorities:
+      BlogPost: ["Django admin"]
+    cross_domain_writers: []
+    tests: [apps/blog/tests.py]
+    canonical_docs: [../domains/blog/README.md]
+    historical_docs: ["root SIX_NEW_FAMILIES_* (unrelated family effort)"]
+    known_risks: ["D1 register: POTENTIALLY_DEAD storefront wiring"]
+    unresolved_decisions: []
+
+open_decisions:
+  - {id: DR-1, title: "Order.payment_status canonical writer + guard", status: OPEN, domains: [orders]}
+  - {id: DR-2, title: "content domain write boundary", status: OPEN, domains: [content, dashboard]}
+  - {id: DR-3, title: "service-layer write discipline for settings/config", status: OPEN, domains: [core, orders, dashboard]}
+  - {id: DR-4, title: "ownership-transfer duplication", status: OPEN, domains: [stores, portal, dashboard]}
+  - {id: DR-5, title: "dual gateway representation", status: OPEN, domains: [orders]}
+  - {id: DR-6, title: "legacy-path removal", status: OPEN, domains: [orders, storefront_builder]}
+  - {id: DR-7, title: "Store vs catalog.Vendor ownership", status: OPEN, domains: [catalog, stores]}
+  - {id: DR-8, title: "require_resolved_store disposition", status: OPEN, domains: [stores]}
