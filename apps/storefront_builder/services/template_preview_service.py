@@ -405,12 +405,28 @@ _DEMO_SEED_COMMAND_PATH = (
 )
 
 
+def _canonicalize_text_bytes(data: bytes) -> bytes:
+    """Normalize line endings so logically identical TEXT hashes the same on
+    every platform: CRLF (Windows) and lone CR (classic Mac) both collapse to
+    LF. LF-only content (how these inputs are committed on Linux) is returned
+    unchanged, so fingerprints captured on Linux stay valid after a Windows
+    checkout that materializes the same text with CRLF."""
+    return data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
 def _file_hash(path: Path) -> str:
+    """SHA256 of a deterministic TEXT input to ``preview_input_fingerprint``.
+
+    Both callers pass text files (``selected_product_media_manifest.json`` and
+    ``seed_ready_template_fashion_demo.py``), so the bytes are line-ending
+    normalized before hashing — the fingerprint must identify logical content,
+    not the checkout's platform-specific EOL style. A missing file hashes as
+    empty (never raises)."""
     try:
         data = path.read_bytes()
     except OSError:
         data = b""
-    return hashlib.sha256(data).hexdigest()
+    return hashlib.sha256(_canonicalize_text_bytes(data)).hexdigest()
 
 
 def preview_input_fingerprint(preset: LayoutPresetDefinition) -> str:

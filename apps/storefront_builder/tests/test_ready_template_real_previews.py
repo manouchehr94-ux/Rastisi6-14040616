@@ -488,3 +488,54 @@ class CaptureCommandSafetyTests(TestCase):
         Store.objects.filter(slug="rasti-mode-demo").delete()
         with self.assertRaises(CommandError):
             call_command("capture_ready_template_previews", stdout=StringIO())
+
+
+class TextFingerprintLineEndingNormalizationTests(TestCase):
+    """Windows-parity regression: ``preview_input_fingerprint`` hashes text
+    inputs (the demo media manifest JSON and the seed command's own source)
+    via ``_file_hash``. A Windows checkout can materialize those text files
+    with CRLF instead of the committed LF, which must NOT change the hash —
+    otherwise Linux-generated committed fingerprints resolve as stale on
+    Windows and ``resolve_real_screenshot`` wrongly returns ``None``.
+
+    These tests use temporary files with explicit byte content, so they never
+    depend on the running platform's checkout / autocrlf configuration."""
+
+    def _hash_bytes(self, raw: bytes) -> str:
+        import os
+        import tempfile
+
+        fd, name = tempfile.mkstemp()
+        try:
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(raw)
+            return tps._file_hash(Path(name))
+        finally:
+            os.unlink(name)
+
+    def test_lf_crlf_cr_same_logical_text_hash_identically(self):
+        base_lf = b"line one\nline two\nline three\n"
+        crlf = b"line one\r\nline two\r\nline three\r\n"
+        cr = b"line one\rline two\rline three\r"
+
+        h_lf = self._hash_bytes(base_lf)
+        h_crlf = self._hash_bytes(crlf)
+        h_cr = self._hash_bytes(cr)
+
+        self.assertEqual(h_lf, h_crlf, "CRLF must hash identically to LF")
+        self.assertEqual(h_lf, h_cr, "lone CR must hash identically to LF")
+
+    def test_lf_bytes_are_unchanged_by_normalization(self):
+        # The committed inputs are LF on Linux; normalization must be a no-op
+        # for them so existing Linux-generated fingerprints stay valid.
+        lf = b"a\nb\nc\n"
+        self.assertEqual(tps._canonicalize_text_bytes(lf), lf)
+
+    def test_real_content_change_still_changes_the_hash(self):
+        original = b"catalog: 50 products\nprice tier: A\n"
+        changed = b"catalog: 51 products\nprice tier: A\n"  # a genuine content edit
+        self.assertNotEqual(
+            self._hash_bytes(original),
+            self._hash_bytes(changed),
+            "a real text-content change must still produce a different hash",
+        )
