@@ -2250,14 +2250,31 @@ def storefront_template_gallery(request):
     ``storefront_apply_layout_preset`` (Draft-only، با تأییدِ صریح اگر
     صفحه‌ای از قبل section دارد، هرگز publish خودکار) انجام می‌شود؛ این ویو
     هیچ مسیرِ نوشتنِ جدیدی اضافه نمی‌کند."""
-    from . import appearance_registry, global_region_registry, layout_preset_registry
-    from .services import template_preview_service
     from .variant_contract import validate_template_provenance
 
     store = _resolve_store(request)
     draft = layout_service.get_or_create_draft(store, user=request.user)
     provenance = validate_template_provenance(draft.template_provenance)
     current_template_key = provenance["template"]["key"]
+
+    template_cards = build_ready_template_cards(draft, current_template_key=current_template_key)
+
+    context = {
+        "active_page": "storefront_builder",
+        "template_cards": template_cards,
+        "has_any_template_applied": bool(current_template_key),
+    }
+    return render(request, "dashboard/storefront_builder/template_gallery.html", context)
+
+
+def build_ready_template_cards(draft, *, current_template_key):
+    """Read projection of the ONE Ready Template catalog for merchant-facing
+    galleries (the standalone Template Gallery page and the R4 Design Studio
+    gallery). Pure read — never a second catalog/registry: every card comes
+    from ``layout_preset_registry.list_ready_templates()`` with its exact
+    ``version``, its real preview thumbnail and its default palette swatch."""
+    from . import appearance_registry, global_region_registry, layout_preset_registry
+    from .services import template_preview_service
 
     def _variant_label(region, variant_key):
         if not variant_key:
@@ -2274,23 +2291,12 @@ def storefront_template_gallery(request):
         return [palette.colors[key] for key in ("primary", "secondary", "accent") if key in palette.colors]
 
     def _thumbnail_fields(preset):
-        # Rasti Mode Demo mission (post-Batch-3) — the merchant-rejected
-        # abstract SVG schematic is now only the safe fallback. The normal
-        # healthy state is a real captured screenshot of the actual public
-        # Rasti Mode Demo storefront rendered under this Template — see
-        # ``template_preview_service.resolve_real_screenshot``'s own
-        # docstring: this is a pure, zero-mutation filesystem check (an
-        # existence check plus one small JSON sidecar read), never a
-        # browser launch, never a live render, never a data mutation.
         screenshot_relpath = template_preview_service.resolve_real_screenshot(preset)
         if screenshot_relpath is not None:
             return {"thumbnail_kind": "screenshot", "thumbnail_url": static(screenshot_relpath), "thumbnail_svg": ""}
-        # Fallback: the always-fresh, zero-I/O SVG schematic from Batch 3 —
-        # never raises; any future Preset shape this hasn't been taught yet
-        # degrades to a neutral placeholder rather than breaking the page.
         return {"thumbnail_kind": "svg", "thumbnail_url": "", "thumbnail_svg": template_preview_service.resolve_gallery_thumbnail(preset)}
 
-    template_cards = [
+    return [
         {
             "preset": preset,
             "is_current": preset.key == current_template_key,
@@ -2304,20 +2310,8 @@ def storefront_template_gallery(request):
                 global_region_registry.GLOBAL_FOOTER_REGION, (preset.footer or {}).get("footer_variant"),
             ),
         }
-        # Acceptance Batch 1 (post-U11) — the merchant-facing Gallery must
-        # show only the 8 official Ready Templates, not every registered
-        # LayoutPresetDefinition (5 historical/internal presets remain
-        # registered and applicable elsewhere — e.g. Advanced mode / the
-        # apply-preset endpoint directly — just not surfaced here).
         for preset in layout_preset_registry.list_ready_templates()
     ]
-
-    context = {
-        "active_page": "storefront_builder",
-        "template_cards": template_cards,
-        "has_any_template_applied": bool(current_template_key),
-    }
-    return render(request, "dashboard/storefront_builder/template_gallery.html", context)
 
 
 #: Phase 5, Task 2 — the ONE canonical Demo Store this live-preview view is

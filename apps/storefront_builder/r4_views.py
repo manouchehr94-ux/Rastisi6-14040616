@@ -6,6 +6,7 @@ from django.http import Http404, JsonResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.catalog.models import Brand, Category, MerchantCollection
@@ -558,6 +559,7 @@ def storefront_r4_editor(request):
             item_definition = None
         structure_items.append({
             "id": section_obj.pk,
+            "section_key": section_obj.section_key,
             "label": item_definition.label_fa if item_definition else section_obj.section_key,
             "duplicable": bool(item_definition and item_definition.duplicable),
             "removable": bool(item_definition and item_definition.removable),
@@ -690,8 +692,142 @@ def storefront_r4_editor(request):
             # P5-W3 — Design Lab / Random Mix panel read projection.
             "design_lab": _build_design_lab_design_context(draft),
             "history": edit_history_service.history_state(draft),
+            # RastiSi Design Studio — read-only presentation projection of
+            # real, server-authoritative state (store identity, publication,
+            # Ready Template catalog, palettes, history labels). No write, no
+            # second catalog/registry; see _build_studio_context.
+            "studio": _build_studio_context(
+                request, store, layout, draft,
+                page_type=page_type,
+                structure_library=structure_library,
+                showcase_choices=showcase_choices,
+                empty_cells=empty_cells,
+            ),
         },
     )
+
+
+def _build_studio_context(
+    request, store, layout, draft, *, page_type, structure_library, showcase_choices, empty_cells,
+) -> dict:
+    """Read-only data the approved Design Studio workspace presents.
+
+    Every value comes from an existing canonical owner: Store identity,
+    ``StorefrontLayout.published_version`` (+ the model's own content
+    fingerprint for the "unpublished changes" signal), the ONE Ready Template
+    catalog (``build_ready_template_cards``), the appearance palette registry,
+    the Draft's own edit-history entries and the canonical public storefront
+    URL resolver. UI-only concerns (mode, device, zoom, modal) never appear
+    here and are never persisted.
+    """
+    from apps.stores.resolution import resolve_storefront_url_for_store
+
+    from . import appearance_registry, theme_catalog
+    from .studio_icons import STUDIO_ICON_PATHS
+    from .views import build_ready_template_cards
+
+    provenance = variant_contract.validate_template_provenance(draft.template_provenance)
+    current_key = provenance["template"]["key"]
+    current_version = provenance["template"].get("version")
+
+    published = layout.published_version
+    has_published = bool(
+        published is not None
+        and published.status == StorefrontLayoutVersion.Status.PUBLISHED
+    )
+    draft_changed = (not has_published) or (
+        draft.compute_fingerprint() != (published.content_fingerprint or "")
+    )
+
+    cards = build_ready_template_cards(draft, current_template_key=current_key)
+    current_card = next((card for card in cards if card["is_current"]), None)
+
+    palettes = []
+    for palette in appearance_registry.list_palettes():
+        colors = palette.colors or {}
+        palettes.append({
+            "slug": palette.slug,
+            "label_fa": palette.name_fa,
+            "accent": colors.get("primary", "#2c6251"),
+            "soft": colors.get("secondary", colors.get("accent", "#e9f1e9")),
+            "bg": colors.get("background", "#ffffff"),
+        })
+
+    history_entries = [
+        {"label": entry.action_label, "created_at": entry.created_at}
+        for entry in draft.edit_history_entries.filter(is_undone=False).order_by("-sequence")[:30]
+    ]
+
+    user = request.user
+    display_name = (user.get_full_name() or user.get_username() or "").strip()
+    public_url = resolve_storefront_url_for_store(store, request)
+    page_label = dict(StorefrontPage.PageType.choices).get(page_type, page_type)
+    live_preview_url = reverse(
+        "dashboard:storefront-builder-template-live-preview", kwargs={"key": "__KEY__"}
+    )
+    # JSON for the UI-only presentation script (r4_studio.js). Contains only
+    # display data + the exact key/version pairs the existing switch-template
+    # contract requires — never component keys, tokens or any authority.
+    client = {
+        "store_name": store.name,
+        "page_type": page_type,
+        "page_label": page_label,
+        "has_published": has_published,
+        "published_at": (
+            timezone.localtime(published.published_at).strftime("%H:%M")
+            if has_published and published.published_at else ""
+        ),
+        "draft_changed": draft_changed,
+        "public_url": public_url or "",
+        "current_template_key": current_key or "",
+        "live_preview_url": live_preview_url,
+        "preview_url": reverse("dashboard:storefront-builder-preview"),
+        "templates": [
+            {
+                "key": card["preset"].key,
+                "version": card["preset"].version,
+                "label": card["preset"].label_fa,
+                "description": card["preset"].description_fa,
+                "is_current": card["is_current"],
+                "thumbnail_kind": card["thumbnail_kind"],
+                "thumbnail_url": card["thumbnail_url"],
+                "thumbnail_svg": card["thumbnail_svg"],
+                "palette_swatch": card["palette_swatch"],
+                "header_label": card["header_variant_label"],
+                "footer_label": card["footer_variant_label"],
+            }
+            for card in cards
+        ],
+        "library": structure_library,
+        "showcase": showcase_choices,
+        "empty_cells": empty_cells,
+        "history_entries": [
+            {"label": entry["label"], "at": timezone.localtime(entry["created_at"]).strftime("%H:%M")}
+            for entry in history_entries
+        ],
+        "theme_occasions": [
+            {"component_key": o.component_key, "label_fa": o.label_fa}
+            for o in theme_catalog.list_theme_occasions()
+        ],
+        "theme_intensities": list(theme_catalog.THEME_INTENSITY_CHOICES),
+        "theme_none_key": "theme.none.v1",
+    }
+    return {
+        "store_name": store.name,
+        "user_display_name": display_name,
+        "user_initial": display_name[:1] if display_name else "",
+        "has_published": has_published,
+        "published_at": published.published_at if has_published else None,
+        "draft_changed": draft_changed,
+        "public_url": public_url,
+        "current_template": current_card,
+        "current_template_version": current_version,
+        "template_cards": cards,
+        "palettes": palettes,
+        "history_entries": history_entries,
+        "icon_paths": STUDIO_ICON_PATHS,
+        "client": client,
+    }
 
 
 def _is_strict_int(value: object) -> bool:
@@ -783,6 +919,10 @@ def storefront_r4_design_lab(request):
         "reset",
         "remove_theme",
         "apply_payload",
+        # RastiSi Design Studio — pure transforms of the transient candidate.
+        "set_theme",
+        "reset_to_base",
+        "return_to_template_dna",
     ):
         return JsonResponse({"ok": False, "code": "invalid_action"}, status=400)
 
@@ -868,6 +1008,12 @@ def storefront_r4_design_lab(request):
         except ValueError:
             return JsonResponse({"ok": False, "code": "invalid_candidate"}, status=400)
 
+    # Studio operations that only ever transform an EXISTING experiment: they
+    # need the signed candidate (its fixed Base + Draft/revision binding) and
+    # never start a fresh one from the committed Draft.
+    if action in ("set_theme", "reset_to_base", "return_to_template_dna") and prior_candidate is None:
+        return JsonResponse({"ok": False, "code": "no_candidate"}, status=400)
+
     if action == "randomize_one":
         family = payload.get("family")
         if (
@@ -885,6 +1031,24 @@ def storefront_r4_design_lab(request):
         elif action == "remove_theme":
             base = prior_candidate or design_lab_service.reset_candidate(draft)
             candidate = design_lab_service.remove_theme(base)
+        elif action == "set_theme":
+            try:
+                candidate = design_lab_service.set_candidate_theme(
+                    prior_candidate,
+                    theme_component_key=payload.get("theme_component_key"),
+                    intensity=payload.get("intensity"),
+                )
+            except ValueError as exc:
+                return JsonResponse({"ok": False, "code": str(exc)}, status=400)
+        elif action == "reset_to_base":
+            candidate = design_lab_service.reset_experiment_to_base(prior_candidate)
+        elif action == "return_to_template_dna":
+            try:
+                candidate = design_lab_service.return_to_template_dna(draft, prior_candidate)
+            except design_lab_service.TemplateDnaUnavailable:
+                return JsonResponse(
+                    {"ok": False, "code": "template_dna_unavailable"}, status=409
+                )
         elif action == "compare":
             candidate = prior_candidate or design_lab_service.reset_candidate(draft)
         elif action == "randomize_one":
@@ -956,6 +1120,34 @@ def _random_design_lab_seed() -> int:
 #: for the read-only inspector filtering path (grid/carousel emit the anchor,
 #: beauty_tabs never does).
 _BRAND_VIEW_ALL_SUPPORTING_VARIANTS = frozenset({"grid", "carousel"})
+
+
+def _with_variant_choice_labels(fields, definition):
+    """Display-only: replace a choice label that is just its raw key with the
+    registered variant's ``label_fa`` from the same section definition."""
+    import dataclasses
+
+    variant_labels = {
+        variant.key: variant.label_fa
+        for variant in (getattr(definition, "variants", None) or ())
+        if getattr(variant, "label_fa", "")
+    }
+    if not variant_labels:
+        return fields
+    labelled = []
+    for field in fields:
+        if field.field_type == "choice" and any(
+            label == value and value in variant_labels for value, label in field.choices
+        ):
+            field = dataclasses.replace(
+                field,
+                choices=tuple(
+                    (value, variant_labels.get(value, label) if label == value else label)
+                    for value, label in field.choices
+                ),
+            )
+        labelled.append(field)
+    return tuple(labelled)
 
 
 def _brand_view_all_control_offered(store, definition, current_settings: dict) -> bool:
@@ -1064,6 +1256,13 @@ def storefront_r4_section_inspector(request, pk):
 
     basic_fields = tuple(field for field in schema.fields if field.group == "basic")
     advanced_fields = tuple(field for field in schema.fields if field.group == "advanced")
+    # A variant-selector choice field (e.g. hero_banner.hero_style,
+    # category_grid.display_mode) declares its choices as bare keys; the
+    # merchant-facing names already live on the SAME definition's registered
+    # ``variants`` (label_fa). Project those canonical labels for display only
+    # — stored values and validation are unchanged, no second label source.
+    basic_fields = _with_variant_choice_labels(basic_fields, definition)
+    advanced_fields = _with_variant_choice_labels(advanced_fields, definition)
     current_settings = section.settings or {}
 
     # Phase 3 (V02) — the brand_carousel "مشاهده همه" (``show_view_all``)

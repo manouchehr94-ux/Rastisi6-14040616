@@ -1,0 +1,461 @@
+{% load storefront_builder_extras persian %}
+{% comment %}
+RastiSi Design Studio — Global Design body (reference tabs «رنگ و تایپ / قالب /
+مناسبت»). Everything here is real, validated Store appearance state from
+_build_global_design_context/_build_studio_context; every control keeps its
+existing R4 hook (data-r4-global-mutation/field, data-r4-theme-*,
+#r4ResetStorefrontButton ...) so the ONE existing R4 listener sends each change
+through the canonical mutation queue. Tab selection is UI-only (a data
+attribute on the Studio wrapper, never persisted). R4 re-fetches this element
+after each successful global edit.
+{% endcomment %}
+<p class="visually-hidden" data-r4-scope="global">سراسری — کل فروشگاه: تغییرات این پنل روی تمام صفحه‌های فروشگاه اعمال می‌شود.</p>
+<section class="rs-tab-pane" data-rs-tab-pane="visual">
+  <div class="r4-global-design-group" data-r4-global-mutation="appearance.update" data-rs-appearance-group><span class="visually-hidden" data-r4-scope="global-group">سراسری — کل فروشگاه</span>
+    <div class="section-label"><span>پالت رنگ</span><small class="muted">{% for p in studio.palettes %}{% if p.slug == global_design.appearance.palette_slug %}{{ p.label_fa }}{% endif %}{% endfor %}{% if not global_design.appearance.palette_slug %}بدون پالت{% endif %}</small></div>
+    {% rs_featured studio.palettes "slug" global_design.appearance.palette_slug 4 as palettes %}
+    <div class="swatches" role="radiogroup" aria-label="پالت رنگ">
+      {% for p in palettes.featured %}
+      <label class="swatch {% if p.slug == global_design.appearance.palette_slug %}active{% endif %}" title="{{ p.label_fa }}">
+        <input type="radio" class="visually-hidden" name="rsPalette" value="{{ p.slug }}" data-r4-global-field="palette_slug" {% if p.slug == global_design.appearance.palette_slug %}checked{% endif %}>
+        <span style="--swatch:linear-gradient(90deg,{{ p.accent }} 0 36%,{{ p.soft }} 36% 68%,{{ p.bg }} 68%)"></span>{{ p.label_fa }}
+      </label>
+      {% endfor %}
+    </div>
+    {% if palettes.more %}
+    <details class="rs-more rs-more-choices">
+      <summary>{% rs_icon "grid" %}<span>همهٔ پالت‌ها</span><span class="pill">{{ palettes.more|length|fa_number }}</span></summary>
+      <div class="rs-more-body"><div class="swatches" role="radiogroup" aria-label="پالت‌های بیشتر">
+      {% for p in palettes.more %}
+      <label class="swatch {% if p.slug == global_design.appearance.palette_slug %}active{% endif %}" title="{{ p.label_fa }}">
+        <input type="radio" class="visually-hidden" name="rsPalette" value="{{ p.slug }}" data-r4-global-field="palette_slug" {% if p.slug == global_design.appearance.palette_slug %}checked{% endif %}>
+        <span style="--swatch:linear-gradient(90deg,{{ p.accent }} 0 36%,{{ p.soft }} 36% 68%,{{ p.bg }} 68%)"></span>{{ p.label_fa }}
+      </label>
+      {% endfor %}
+      </div></div>
+    </details>
+    {% endif %}
+    {% if storefront_has_baseline %}<button type="button" class="quiet small" data-r4-global-reset-field="palette_slug">{% rs_icon "refresh" %}پالت قالب</button>{% endif %}
+    <div class="section-divider"></div>
+    <label class="field"><span>شخصیت نوشتار</span>
+      <select id="r4GlobalFont" data-r4-global-field="font">
+        {% for f in global_design.font_choices %}
+        <option value="{{ f }}" {% if f == global_design.appearance.font %}selected{% endif %}>{{ f|rs_font_label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% if storefront_has_baseline %}<button type="button" class="quiet small" data-r4-global-reset-field="font">{% rs_icon "refresh" %}فونت قالب</button>{% endif %}
+    <div class="section-divider"></div>
+    <div class="section-label">بستهٔ ظاهری <small class="muted">بستهٔ سبک</small></div>
+    {% rs_featured global_design.templates "slug" global_design.appearance.template_slug 3 as packs %}
+    <div class="pack-options" role="radiogroup" aria-label="بستهٔ سبک">
+      {% for t in packs.featured %}
+      <label class="pack-option {% if t.slug == global_design.appearance.template_slug %}active{% endif %}">
+        <input type="radio" class="visually-hidden" name="rsStylePack" value="{{ t.slug }}" data-r4-global-field="template_slug" {% if t.slug == global_design.appearance.template_slug %}checked{% endif %}>
+        <i class="pack-shape {% cycle 'soft' 'sharp' 'airy' %}"></i>{{ t.label_fa }}
+      </label>
+      {% endfor %}
+    </div>
+    {% if packs.more %}
+    <details class="rs-more rs-more-choices">
+      <summary>{% rs_icon "grid" %}<span>بسته‌های سبک بیشتر</span><span class="pill">{{ packs.more|length|fa_number }}</span></summary>
+      <div class="rs-more-body"><div class="pack-options" role="radiogroup" aria-label="بسته‌های سبک بیشتر">
+      {% for t in packs.more %}
+      <label class="pack-option {% if t.slug == global_design.appearance.template_slug %}active{% endif %}">
+        <input type="radio" class="visually-hidden" name="rsStylePack" value="{{ t.slug }}" data-r4-global-field="template_slug" {% if t.slug == global_design.appearance.template_slug %}checked{% endif %}>
+        <i class="pack-shape {% cycle 'soft' 'sharp' 'airy' %}"></i>{{ t.label_fa }}
+      </label>
+      {% endfor %}
+      </div></div>
+    </details>
+    {% endif %}
+    <p class="small muted" style="margin-top:10px;line-height:1.9">بستهٔ ظاهری، فاصله‌ها و جزئیات را تغییر می‌دهد؛ نه محتوای صفحه و چیدمان قالب را.</p>
+    <details class="rs-more" id="rsGlobalDetails">
+      <summary>{% rs_icon "sliders" %}<span>جزئیات بیشتر ظاهر</span></summary>
+      <div class="rs-more-body">
+          <label class="r4-field-sublabel" for="r4GlobalTypeScale">اندازه تایپوگرافی</label>
+          <select id="r4GlobalTypeScale" class="r4-control" data-r4-global-field="type_scale">
+            {% for value, label in global_design.type_scale_choices %}
+            <option value="{{ value }}" {% if value == global_design.appearance.type_scale %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          {% if storefront_has_baseline %}<button type="button" data-r4-global-reset-field="type_scale" aria-label="بازنشانی اندازه تایپوگرافی به قالب" class="r4-icon-btn">↺</button>{% endif %}
+
+          <label class="r4-field-sublabel" for="r4GlobalMotion">سبک حرکت</label>
+          <select id="r4GlobalMotion" class="r4-control" data-r4-global-field="motion">
+            {% for m in global_design.motion_choices %}
+            <option value="{{ m }}" {% if m == global_design.appearance.motion %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+          </select>
+          {% if storefront_has_baseline %}<button type="button" data-r4-global-reset-field="motion" aria-label="بازنشانی سبک حرکت به قالب" class="r4-icon-btn">↺</button>{% endif %}
+
+          <label class="r4-field-sublabel" for="r4GlobalButtonStyle">سبک دکمه</label>
+          <select id="r4GlobalButtonStyle" class="r4-control" data-r4-global-field="button_style">
+            {% for b in global_design.button_style_choices %}
+            <option value="{{ b }}" {% if b == global_design.appearance.button_style %}selected{% endif %}>{{ b }}</option>
+            {% endfor %}
+          </select>
+          {% if storefront_has_baseline %}<button type="button" data-r4-global-reset-field="button_style" aria-label="بازنشانی سبک دکمه به قالب" class="r4-icon-btn">↺</button>{% endif %}
+
+          <label class="r4-field-sublabel" for="r4GlobalRadius">گردی گوشه‌ها</label>
+          <input type="number" min="0" max="32" id="r4GlobalRadius" class="r4-control" data-r4-global-field="radius" value="{{ global_design.appearance.radius }}">
+
+          <label class="r4-field-sublabel" for="r4GlobalButtonRadius">گردی گوشه‌ی دکمه‌ها</label>
+          <input type="number" min="0" max="32" id="r4GlobalButtonRadius" class="r4-control" data-r4-global-field="button_radius" value="{{ global_design.appearance.button_radius }}">
+
+          <label class="r4-field-sublabel" for="r4GlobalDensity">تراکم</label>
+          <select id="r4GlobalDensity" class="r4-control" data-r4-global-field="density">
+            {% for d in global_design.density_choices %}
+            <option value="{{ d }}" {% if d == global_design.appearance.density %}selected{% endif %}>{{ d }}</option>
+            {% endfor %}
+          </select>
+
+          <label class="r4-field-sublabel" for="r4GlobalImageFit">نوع نمایش تصویر</label>
+          <select id="r4GlobalImageFit" class="r4-control" data-r4-global-field="image_fit">
+            {% for c in global_design.image_fit_choices %}
+            <option value="{{ c }}" {% if c == global_design.appearance.image_fit %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+
+          <label class="r4-field-sublabel" for="r4GlobalImageHover">افکت هاور تصویر</label>
+          <select id="r4GlobalImageHover" class="r4-control" data-r4-global-field="image_hover">
+            {% for c in global_design.image_hover_choices %}
+            <option value="{{ c }}" {% if c == global_design.appearance.image_hover %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+
+          <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="card_image_crossfade" {% if global_design.appearance.card_image_crossfade %}checked{% endif %}> <span>کراس‌فید تصویر کارت</span></label>
+          <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="card_image_zoom" {% if global_design.appearance.card_image_zoom %}checked{% endif %}> <span>زوم تصویر کارت روی هاور</span></label>
+
+          <label class="r4-field-sublabel" for="r4GlobalContentWidth">عرض محتوای سایت</label>
+          <select id="r4GlobalContentWidth" class="r4-control" data-r4-global-field="content_width">
+            {% for w in global_design.site_content_width_choices %}
+            <option value="{{ w }}" {% if w == global_design.appearance.content_width %}selected{% endif %}>{{ w }}px</option>
+            {% endfor %}
+          </select>
+
+          <label class="r4-field-sublabel" for="r4GlobalGridDensity">تعداد ستون گرید محصول</label>
+          <select id="r4GlobalGridDensity" class="r4-control" data-r4-global-field="grid_density">
+            {% for n in global_design.site_grid_density_choices %}
+            <option value="{{ n }}" {% if n == global_design.appearance.grid_density %}selected{% endif %}>{{ n }}</option>
+            {% endfor %}
+          </select>
+
+          <label class="r4-field-sublabel" for="r4GlobalCardShadow">سایه کارت</label>
+          <select id="r4GlobalCardShadow" class="r4-control" data-r4-global-field="card_shadow">
+            {% for c in global_design.site_card_shadow_choices %}
+            <option value="{{ c }}" {% if c == global_design.appearance.card_shadow %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+
+          <label class="r4-field-sublabel" for="r4GlobalCardHover">هاور کارت</label>
+          <select id="r4GlobalCardHover" class="r4-control" data-r4-global-field="card_hover">
+            {% for c in global_design.site_card_hover_choices %}
+            <option value="{{ c }}" {% if c == global_design.appearance.card_hover %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+
+          <label class="r4-field-sublabel" for="r4GlobalHeroStyle">سبک هیرو</label>
+          <select id="r4GlobalHeroStyle" class="r4-control" data-r4-global-field="hero_style">
+            {% for c in global_design.site_hero_style_choices %}
+            <option value="{{ c }}" {% if c == global_design.appearance.hero_style %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+
+          <h5>رنگ‌های سفارشی</h5>
+          {% for key, label in global_design.color_field_labels %}
+          <label class="r4-field-sublabel" for="r4GlobalColor-{{ key }}">{{ label }}</label>
+          <input type="color" id="r4GlobalColor-{{ key }}" class="r4-control" data-r4-global-field="color_overrides" data-r4-global-color-key="{{ key }}" value="{{ global_design.resolved_colors|dictget:key }}">
+          {% endfor %}
+
+          <h5>رنگ‌های ناحیه‌ای سفارشی</h5>
+          {% for key, label in global_design.theme_field_labels %}
+          <label class="r4-field-sublabel" for="r4GlobalTheme-{{ key }}">{{ label }}</label>
+          <input type="color" id="r4GlobalTheme-{{ key }}" class="r4-control" data-r4-global-field="theme_overrides" data-r4-global-theme-key="{{ key }}" value="{{ global_design.resolved_theme_roles|dictget:key }}">
+          {% endfor %}
+      </div>
+    </details>
+  </div>
+  <details class="rs-more" id="rsGlobalHeader" data-rs-global-region="header">
+    <summary>{% rs_icon "header" %}<span>سربرگ فروشگاه</span></summary>
+    <div class="rs-more-body">
+        <section class="r4-global-design-group" data-r4-global-mutation="header.update"><span class="visually-hidden" data-r4-scope="global-group">سراسری — کل فروشگاه</span>
+          <h4>هدر</h4>
+          <label class="r4-field-sublabel" for="r4GlobalHeaderVariant">نوع هدر</label>
+          <select id="r4GlobalHeaderVariant" class="r4-control" data-r4-global-field="header_variant">
+            {% for v in global_design.header_variants %}
+            <option value="{{ v.key }}" {% if v.key == global_design.header.header_variant %}selected{% endif %}>{{ v.label_fa }}</option>
+            {% endfor %}
+          </select>
+          {% if storefront_has_baseline %}<button type="button" id="r4ResetHeaderButton">⟲ بازنشانی هدر به قالب</button>{% endif %}
+
+          {% for key, label in global_design.header_toggle_fields %}
+          <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="{{ key }}" {% if global_design.header|dictget:key %}checked{% endif %}> <span>{{ label }}</span></label>
+          {% endfor %}
+
+          <label class="r4-field-sublabel" for="r4GlobalAnnouncementText">متن نوار اعلان</label>
+          <input type="text" id="r4GlobalAnnouncementText" class="r4-control" maxlength="300" data-r4-global-field="announcement_text" value="{{ global_design.header.announcement_text }}">
+
+          <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="announcement_show_phone" {% if global_design.header.announcement_show_phone %}checked{% endif %}> <span>نمایش تلفن در نوار اعلان</span></label>
+
+          <h5>لینک‌های نوار اعلان</h5>
+          <div class="r4-repeater" data-r4-global-repeater-field="announcement_links">
+            <div data-r4-repeater-rows>
+              {% for link in global_design.header.announcement_links %}
+              <div class="r4-repeater-row" data-r4-repeater-row>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">برچسب</label>
+                  <input type="text" class="r4-control" data-r4-repeater-subfield="label" maxlength="50" value="{{ link.label }}">
+                </div>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">لینک</label>
+                  <input type="text" class="r4-control" data-r4-repeater-subfield="url" maxlength="500" value="{{ link.url }}">
+                </div>
+                <div class="r4-repeater-row-actions">
+                  <button type="button" data-r4-repeater-move-up aria-label="انتقال به بالا">↑</button>
+                  <button type="button" data-r4-repeater-move-down aria-label="انتقال به پایین">↓</button>
+                  <button type="button" class="danger" data-r4-repeater-remove aria-label="حذف">×</button>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            <template data-r4-repeater-row-template>
+              <div class="r4-repeater-row" data-r4-repeater-row>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">برچسب</label>
+                  <input type="text" class="r4-control" data-r4-repeater-subfield="label" maxlength="50">
+                </div>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">لینک</label>
+                  <input type="text" class="r4-control" data-r4-repeater-subfield="url" maxlength="500">
+                </div>
+                <div class="r4-repeater-row-actions">
+                  <button type="button" data-r4-repeater-move-up aria-label="انتقال به بالا">↑</button>
+                  <button type="button" data-r4-repeater-move-down aria-label="انتقال به پایین">↓</button>
+                  <button type="button" class="danger" data-r4-repeater-remove aria-label="حذف">×</button>
+                </div>
+              </div>
+            </template>
+            <button type="button" class="r4-repeater-add" data-r4-repeater-add>+ افزودن لینک</button>
+          </div>
+
+          <h5>بلوک‌های اضافی هدر</h5>
+          <div class="r4-repeater" data-r4-global-repeater-field="extra_blocks">
+            <div data-r4-repeater-rows>
+              {% for block in global_design.header.extra_blocks %}
+              <div class="r4-repeater-row" data-r4-repeater-row>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">نوع بلوک</label>
+                  <select class="r4-control" data-r4-repeater-subfield="type">
+                    {% for value, label in global_design.header_extra_block_type_choices %}
+                    <option value="{{ value }}" {% if block.type == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">برچسب (فقط برای دکمه فراخوان)</label>
+                  <input type="text" class="r4-control" data-r4-repeater-subfield="label" maxlength="30" value="{{ block.label }}">
+                </div>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">لینک (فقط برای دکمه فراخوان)</label>
+                  <input type="text" class="r4-control" data-r4-repeater-subfield="url" value="{{ block.url }}">
+                </div>
+                <div class="r4-repeater-row-actions">
+                  <button type="button" data-r4-repeater-move-up aria-label="انتقال به بالا">↑</button>
+                  <button type="button" data-r4-repeater-move-down aria-label="انتقال به پایین">↓</button>
+                  <button type="button" class="danger" data-r4-repeater-remove aria-label="حذف">×</button>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            <template data-r4-repeater-row-template>
+              <div class="r4-repeater-row" data-r4-repeater-row>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">نوع بلوک</label>
+                  <select class="r4-control" data-r4-repeater-subfield="type">
+                    {% for value, label in global_design.header_extra_block_type_choices %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">برچسب (فقط برای دکمه فراخوان)</label>
+                  <input type="text" class="r4-control" data-r4-repeater-subfield="label" maxlength="30">
+                </div>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">لینک (فقط برای دکمه فراخوان)</label>
+                  <input type="text" class="r4-control" data-r4-repeater-subfield="url">
+                </div>
+                <div class="r4-repeater-row-actions">
+                  <button type="button" data-r4-repeater-move-up aria-label="انتقال به بالا">↑</button>
+                  <button type="button" data-r4-repeater-move-down aria-label="انتقال به پایین">↓</button>
+                  <button type="button" class="danger" data-r4-repeater-remove aria-label="حذف">×</button>
+                </div>
+              </div>
+            </template>
+            <button type="button" class="r4-repeater-add" data-r4-repeater-add>+ افزودن بلوک</button>
+          </div>
+
+          <h5>نمایش در دستگاه‌ها</h5>
+          {% for key, label in global_design.header_responsive_fields %}
+          <div class="r4-responsive-row">
+            <span class="r4-field-sublabel">{{ label }}</span>
+            <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-responsive-toggle data-r4-global-responsive-key="{{ key }}" data-r4-global-responsive-prop="hide_on_tablet" {% if global_design.header.responsive|dictget:key|dictget:"hide_on_tablet" %}checked{% endif %}> <span>پنهان در تبلت</span></label>
+            <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-responsive-toggle data-r4-global-responsive-key="{{ key }}" data-r4-global-responsive-prop="hide_on_mobile" {% if global_design.header.responsive|dictget:key|dictget:"hide_on_mobile" %}checked{% endif %}> <span>پنهان در موبایل</span></label>
+          </div>
+          {% endfor %}
+        </section>
+    </div>
+  </details>
+  <details class="rs-more" id="rsGlobalFooter" data-rs-global-region="footer">
+    <summary>{% rs_icon "footer" %}<span>پایین صفحه</span></summary>
+    <div class="rs-more-body">
+<section class="r4-global-design-group" data-r4-global-mutation="footer.update"><span class="visually-hidden" data-r4-scope="global-group">سراسری — کل فروشگاه</span>
+          <h4>فوتر</h4>
+          <label class="r4-field-sublabel" for="r4GlobalFooterVariant">نوع فوتر</label>
+          <select id="r4GlobalFooterVariant" class="r4-control" data-r4-global-field="footer_variant">
+            {% for v in global_design.footer_variants %}
+            <option value="{{ v.key }}" {% if v.key == global_design.footer.footer_variant %}selected{% endif %}>{{ v.label_fa }}</option>
+            {% endfor %}
+          </select>
+          {% if storefront_has_baseline %}<button type="button" id="r4ResetFooterButton">⟲ بازنشانی فوتر به قالب</button>{% endif %}
+
+          {% for key, label in global_design.footer_toggle_fields %}
+          <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="{{ key }}" {% if global_design.footer|dictget:key %}checked{% endif %}> <span>{{ label }}</span></label>
+          {% endfor %}
+
+          <h5>ستون‌های اضافی فوتر</h5>
+          <div class="r4-repeater" data-r4-global-repeater-field="extra_blocks">
+            <div data-r4-repeater-rows>
+              {% for block in global_design.footer.extra_blocks %}
+              <div class="r4-repeater-row" data-r4-repeater-row>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">نوع ستون</label>
+                  <select class="r4-control" data-r4-repeater-subfield="type">
+                    {% for value, label in global_design.footer_extra_block_type_choices %}
+                    <option value="{{ value }}" {% if block.type == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">عنوان/برچسب</label>
+                  <input type="text" class="r4-control" placeholder="عنوان (متن دلخواه)" data-r4-repeater-subfield="title" maxlength="40" value="{{ block.title }}">
+                  <input type="text" class="r4-control" placeholder="برچسب (لینک تکی)" data-r4-repeater-subfield="label" maxlength="40" value="{{ block.label }}">
+                </div>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">متن/لینک</label>
+                  <input type="text" class="r4-control" placeholder="متن (متن دلخواه)" data-r4-repeater-subfield="text" maxlength="400" value="{{ block.text }}">
+                  <input type="text" class="r4-control" placeholder="آدرس لینک (لینک تکی)" data-r4-repeater-subfield="url" value="{{ block.url }}">
+                </div>
+                <div class="r4-repeater-row-actions">
+                  <button type="button" data-r4-repeater-move-up aria-label="انتقال به بالا">↑</button>
+                  <button type="button" data-r4-repeater-move-down aria-label="انتقال به پایین">↓</button>
+                  <button type="button" class="danger" data-r4-repeater-remove aria-label="حذف">×</button>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            <template data-r4-repeater-row-template>
+              <div class="r4-repeater-row" data-r4-repeater-row>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">نوع ستون</label>
+                  <select class="r4-control" data-r4-repeater-subfield="type">
+                    {% for value, label in global_design.footer_extra_block_type_choices %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">عنوان/برچسب</label>
+                  <input type="text" class="r4-control" placeholder="عنوان (متن دلخواه)" data-r4-repeater-subfield="title" maxlength="40">
+                  <input type="text" class="r4-control" placeholder="برچسب (لینک تکی)" data-r4-repeater-subfield="label" maxlength="40">
+                </div>
+                <div class="r4-repeater-subfield">
+                  <label class="r4-field-sublabel">متن/لینک</label>
+                  <input type="text" class="r4-control" placeholder="متن (متن دلخواه)" data-r4-repeater-subfield="text" maxlength="400">
+                  <input type="text" class="r4-control" placeholder="آدرس لینک (لینک تکی)" data-r4-repeater-subfield="url">
+                </div>
+                <div class="r4-repeater-row-actions">
+                  <button type="button" data-r4-repeater-move-up aria-label="انتقال به بالا">↑</button>
+                  <button type="button" data-r4-repeater-move-down aria-label="انتقال به پایین">↓</button>
+                  <button type="button" class="danger" data-r4-repeater-remove aria-label="حذف">×</button>
+                </div>
+              </div>
+            </template>
+            <button type="button" class="r4-repeater-add" data-r4-repeater-add>+ افزودن ستون</button>
+          </div>
+
+          <h5>نمایش در دستگاه‌ها</h5>
+          {% for key, label in global_design.footer_responsive_fields %}
+          <div class="r4-responsive-row">
+            <span class="r4-field-sublabel">{{ label }}</span>
+            <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-responsive-toggle data-r4-global-responsive-key="{{ key }}" data-r4-global-responsive-prop="hide_on_tablet" {% if global_design.footer.responsive|dictget:key|dictget:"hide_on_tablet" %}checked{% endif %}> <span>پنهان در تبلت</span></label>
+            <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-responsive-toggle data-r4-global-responsive-key="{{ key }}" data-r4-global-responsive-prop="hide_on_mobile" {% if global_design.footer.responsive|dictget:key|dictget:"hide_on_mobile" %}checked{% endif %}> <span>پنهان در موبایل</span></label>
+          </div>
+          {% endfor %}
+        </section>
+    </div>
+  </details>
+  <details class="rs-more" id="rsGlobalMobileNav" data-rs-global-region="bottom_nav">
+    <summary>{% rs_icon "mobile" %}<span>ناوبری پایین موبایل</span></summary>
+    <div class="rs-more-body">
+        <section class="r4-global-design-group" data-r4-global-mutation="footer.update"><span class="visually-hidden" data-r4-scope="global-group">سراسری — کل فروشگاه</span>
+          <h4>ناوبری پایین موبایل</h4>
+          <label class="r4-field-sublabel" for="r4GlobalMobileNavVariant">نوع ناوبری پایین موبایل</label>
+          <select id="r4GlobalMobileNavVariant" class="r4-control" data-r4-global-field="mobile_nav_variant">
+            {% for v in global_design.mobile_nav_variants %}
+            <option value="{{ v.key }}" {% if v.key == global_design.footer.mobile_nav_variant %}selected{% endif %}>{{ v.label_fa }}</option>
+            {% endfor %}
+          </select>
+        </section>
+    </div>
+  </details>
+  <div class="template-nudge"><h3>طرح فعلی: {% if studio.current_template %}{{ studio.current_template.preset.label_fa }}{% else %}بدون قالب آماده{% endif %}</h3><p>برای تغییر چیدمان، یک قالب تازه انتخاب کنید.</p><button type="button" data-rastisi-action="templates">{% rs_icon "arrow" %}کاوش قالب‌ها</button></div>
+</section>
+
+<section class="rs-tab-pane" data-rs-tab-pane="template">
+  <div class="section-label"><span>قالب فعلی</span><span class="pill">چیدمان + ظاهر</span></div>
+  {% if studio.current_template %}
+  <div class="global-template">
+    {% if studio.current_template.thumbnail_kind == "screenshot" %}<img src="{{ studio.current_template.thumbnail_url }}" alt="پیش‌نمایش قالب {{ studio.current_template.preset.label_fa }}" loading="lazy">{% else %}<div class="rs-thumb-svg">{{ studio.current_template.thumbnail_svg|safe }}</div>{% endif %}
+    <div><h3>{{ studio.current_template.preset.label_fa }}</h3><p>{{ studio.current_template.preset.description_fa }}</p></div>
+  </div>
+  {% else %}
+  <div class="note">هنوز هیچ قالب آماده‌ای روی این فروشگاه اعمال نشده است.</div>
+  {% endif %}
+  <div style="height:14px"></div>
+  <button type="button" data-rastisi-action="templates" class="primary full">{% rs_icon "grid" %}دیدن {{ studio.template_cards|length|fa_number }} قالب آماده</button>
+  <div class="note" style="margin-top:17px">قالب، دستور طراحی تمام فروشگاه است. تغییر قالب محتوای شما را حفظ می‌کند؛ با واگرد هم قابل بازگشت است.</div>
+  <div class="section-divider"></div>
+  <button type="button" data-rastisi-action="lab" class="outline full">{% rs_icon "spark" %}آزمایش ترکیب‌های تازه</button>
+  {% if storefront_has_baseline %}
+  <div class="section-divider"></div>
+  <button type="button" id="r4ResetStorefrontButton" class="quiet full small">{% rs_icon "refresh" %}بازنشانی کل ظاهر فروشگاه به قالب</button>
+  {% endif %}
+</section>
+
+<section class="rs-tab-pane" data-rs-tab-pane="theme">
+  {% if global_design.theme %}
+  <div class="r4-theme-controls" data-r4-theme-panel>
+    <div class="theme-demo {% if global_design.theme.current_component and global_design.theme.current_component != 'theme.none.v1' %}active{% else %}none{% endif %}">{% for occasion in global_design.theme.occasions %}{% if occasion.component_key == global_design.theme.current_component %}{% if occasion.component_key == 'theme.none.v1' %}طراحی شما، بدون پوشش مناسبتی{% else %}{{ occasion.label_fa }}؛ روی طراحی شما{% endif %}{% endif %}{% endfor %}</div>
+    <div class="section-label"><span>حال‌وهوای فروشگاه</span><span class="pill">برگشت‌پذیر</span></div>
+    <div class="theme-grid" role="group" aria-label="تم مناسبتی">
+      {% for occasion in global_design.theme.occasions %}
+      <button type="button" data-r4-theme-apply="{{ occasion.component_key }}" class="{% if occasion.component_key == global_design.theme.current_component %}active{% endif %}" aria-pressed="{% if occasion.component_key == global_design.theme.current_component %}true{% else %}false{% endif %}">{{ occasion.label_fa }}</button>
+      {% endfor %}
+    </div>
+    {% if global_design.theme.current_component and global_design.theme.current_component != 'theme.none.v1' %}
+    <label class="field" style="margin-top:21px"><span>شدت حضور مناسبت</span>
+      <select data-r4-theme-intensity>
+        {% for value in global_design.theme.intensity_choices %}
+        <option value="{{ value }}" {% if value == global_design.theme.current_intensity %}selected{% endif %}>{% if value == "subtle" %}ملایم؛ یک اشارهٔ کوچک{% elif value == "balanced" %}متعادل؛ هماهنگ با طراحی{% else %}پررنگ؛ حال‌وهوای کامل{% endif %}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% endif %}
+    {# Always present (R4 clear hook); only shown while an occasion is active, as in the reference. #}
+    <button type="button" data-r4-theme-clear class="full outline small" {% if not global_design.theme.current_component or global_design.theme.current_component == 'theme.none.v1' %}hidden{% endif %}>{% rs_icon "close" %}برداشتن پوشش، حفظ طراحی</button>
+    <div class="note" style="margin-top:17px">مناسبت، یک لایه روی طراحی شماست. برداشتن آن، رنگ‌ها و چیدمان زیر آن را تغییر نمی‌دهد و ترکیب تصادفی هم آن را عوض نمی‌کند.</div>
+  </div>
+  {% endif %}
+</section>

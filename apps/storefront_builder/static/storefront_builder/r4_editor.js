@@ -38,7 +38,6 @@ window.RastiSiR4 = {
   var undoButton = document.getElementById('r4UndoButton');
   var redoButton = document.getElementById('r4RedoButton');
   var publishButton = document.getElementById('r4PublishButton');
-  var discardButton = document.getElementById('r4DiscardButton');
 
   // ---- Admin sidebar: R4-page-only, defaults to collapsed on every fresh
   // load (nothing persisted between page loads) — driven purely by a data
@@ -65,15 +64,31 @@ window.RastiSiR4 = {
   }
 
   var SAVE_STATE_LABELS = {
-    saved: 'ذخیره شد',
-    saving: 'در حال ذخیره...',
-    error: 'خطا در ذخیره تغییرات',
-    conflict: 'نسخه‌ی جدیدتری از این صفحه موجود است',
+    saved: 'پیش‌نویس ذخیره شد',
+    saving: 'در حال ذخیره…',
+    error: 'ذخیره ناموفق',
+    conflict: 'تعارض نسخه',
+  };
+
+  // Design Studio — R4 announces its own state changes as DOM events on the
+  // shell so the UI-only presentation layer (r4_studio.js) can follow them
+  // without ever owning or duplicating business state.
+  R4.emit = function (name, detail) {
+    if (!shell) return;
+    shell.dispatchEvent(new CustomEvent(name, { detail: detail || {} }));
+  };
+
+  // Lifecycle confirmations (reset page/storefront, discard) go through ONE
+  // hook the presentation layer may replace with the workspace dialog; the
+  // default stays the browser confirm so R4 works without the Studio layer.
+  R4.confirm = function (message) {
+    return Promise.resolve(window.confirm(message));
   };
 
   function setSaveState(state) {
     R4.saveState = state;
     if (saveStateEl) saveStateEl.textContent = SAVE_STATE_LABELS[state] || '';
+    R4.emit('r4:savestate', { state: state });
   }
 
   function showConflictBanner() {
@@ -160,6 +175,7 @@ window.RastiSiR4 = {
         var freshDoc = new DOMParser().parseFromString(html, 'text/html');
         var freshStructure = freshDoc.getElementById('r4Structure');
         if (freshStructure) structurePanel.innerHTML = freshStructure.innerHTML;
+        R4.emit('r4:structure-refreshed');
       })
       .catch(function () {
         // The mutation itself already succeeded and the server-authoritative
@@ -183,6 +199,39 @@ window.RastiSiR4 = {
         });
       }
       return result;
+    });
+  };
+
+  // One section-level structural command entry point (Studio inspector
+  // actions + the preview toolbar bridge). Each command maps to exactly one
+  // existing canonical mutation type through the SAME structural queue.
+  var SECTION_COMMAND_TYPES = {
+    up: 'section.move',
+    down: 'section.move',
+    duplicate: 'section.duplicate',
+    remove: 'section.remove',
+    toggle_active: 'section.toggle_active',
+    toggle_locked: 'section.toggle_locked',
+    reset_to_baseline: 'section.reset_to_baseline',
+    move_to_cell: 'section.move_to_cell',
+  };
+  R4.sectionCommand = function (sectionId, command, extra) {
+    var type = SECTION_COMMAND_TYPES[command];
+    if (!type || !sectionId) return Promise.resolve();
+    var mutation = { type: type, section_id: Number(sectionId) };
+    if (command === 'up' || command === 'down') mutation.direction = command;
+    if (command === 'move_to_cell') mutation.cell_id = Number(extra && extra.cellId);
+    return R4.enqueueStructuralMutation(mutation);
+  };
+  R4.addSection = function (sectionKey, cellId) {
+    if (!sectionKey) return Promise.resolve();
+    if (cellId) {
+      return R4.enqueueStructuralMutation({ type: 'cell.add_section', section_key: sectionKey, cell_id: Number(cellId) });
+    }
+    return R4.enqueueStructuralMutation({
+      type: 'section.add',
+      section_key: sectionKey,
+      page_type: shell ? shell.dataset.r4PageType : 'home',
     });
   };
 
@@ -353,7 +402,8 @@ window.RastiSiR4 = {
   // message shape/type mirror the legacy editor's own outbound selection
   // sync exactly; origin-targeted, never "*".
   function syncPreviewSelection() {
-    if (!previewFrame || !previewFrame.contentWindow || R4.selected == null) return;
+    // A null selection clears the preview highlight (Inspector closed).
+    if (!previewFrame || !previewFrame.contentWindow) return;
     previewFrame.contentWindow.postMessage({
       type: 'sfb:setSelection',
       sectionId: R4.selected,
@@ -399,6 +449,7 @@ window.RastiSiR4 = {
         // targeted to this window's origin.
         syncPreviewSelection();
         activateTab('basic');
+        R4.emit('r4:inspector-opened', { sectionId: sectionId });
         // Hydrate the raw backing values (incl. the rich_text textarea)
         // BEFORE Alpine mounts CKEditor, so it initializes from the real
         // current body_html rather than an empty source element.
@@ -421,7 +472,10 @@ window.RastiSiR4 = {
     if (shell) shell.dataset.r4InspectorOpen = 'false';
     R4.selected = null;
     R4.inspectorOpen = false;
+    syncPreviewSelection();
+    R4.emit('r4:inspector-closed');
   }
+  R4.closeInspector = closeInspector;
 
   if (inspector) {
     // One delegated field-change path — no per-section save handler.
@@ -695,49 +749,15 @@ window.RastiSiR4 = {
       }
       var resetPageBtn = evt.target.closest('#r4ResetPageButton');
       if (resetPageBtn) {
-        if (!window.confirm('این صفحه به ترکیبِ اولیه‌یِ قالب بازنشانی می‌شود — بخش‌هایِ دستیِ همین صفحه هم از بین می‌روند. ادامه می‌دهید؟')) return;
-        R4.queue = (R4.queue || Promise.resolve()).then(function () {
-          return sendReplaceDraftAction('reset-page/', { page_type: shell ? shell.dataset.r4PageType : 'home' });
+        R4.confirm('این صفحه به ترکیبِ اولیه‌یِ قالب بازنشانی می‌شود — بخش‌هایِ دستیِ همین صفحه هم از بین می‌روند. ادامه می‌دهید؟').then(function (confirmed) {
+          if (!confirmed) return;
+          R4.queue = (R4.queue || Promise.resolve()).then(function () {
+            return sendReplaceDraftAction('reset-page/', { page_type: shell ? shell.dataset.r4PageType : 'home' });
+          });
+          R4.queue.then(function (result) {
+            if (result && result.ok) window.location.reload();
+          });
         });
-        R4.queue.then(function (result) {
-          if (result && result.ok) window.location.reload();
-        });
-        return;
-      }
-      var addBtn = evt.target.closest('#r4StructureAddButton');
-      if (addBtn) {
-        var addSelect = structurePanel.querySelector('#r4StructureAddSelect');
-        var sectionKey = addSelect ? addSelect.value : '';
-        if (!sectionKey) return;
-        // Phase 4 (Task 3B) — every section.add mutation must name its
-        // target page explicitly; read from the shell's own data attribute
-        // (server-rendered from the SAME validated page_type the current
-        // editor load resolved — never re-derived/guessed client-side).
-        R4.enqueueStructuralMutation({
-          type: 'section.add',
-          section_key: sectionKey,
-          page_type: shell ? shell.dataset.r4PageType : 'home',
-        });
-        if (addSelect) addSelect.value = '';
-        return;
-      }
-      // Phase 5 Task 6 — Storefront Showcase creation FACADE. A Showcase choice
-      // carries ONLY a canonical section_key (data-section-key); it reuses the
-      // exact same section.add path as #r4StructureAddButton above — no new
-      // mutation type, no direct fetch, no pseudo Showcase section key, no
-      // auto-select heuristic (the merchant selects the new Structure row).
-      var showcaseChoice = evt.target.closest('[data-r4-showcase-choice]');
-      if (showcaseChoice) {
-        var showcaseKey = showcaseChoice.getAttribute('data-section-key');
-        if (!showcaseKey) return;
-        R4.enqueueStructuralMutation({
-          type: 'section.add',
-          section_key: showcaseKey,
-          page_type: shell ? shell.dataset.r4PageType : 'home',
-        });
-        // Collapse the inline chooser after a choice is made.
-        var showcaseDisclosure = showcaseChoice.closest('[data-r4-showcase]');
-        if (showcaseDisclosure) showcaseDisclosure.removeAttribute('open');
         return;
       }
       // R4 Task 7 (final-review fix, IMPORTANT-2) — one "add section" row
@@ -847,6 +867,48 @@ window.RastiSiR4 = {
             background_color: colorField ? colorField.value : '',
             background_pattern: 'commerce-doodle',
           },
+        });
+      }
+    });
+  }
+
+  // ---- Add section. The chooser (full page-legal library + the Phase 5
+  // Task 6 Showcase facade) is rendered by the server into the Structure
+  // panel and presented by the Studio as a workspace dialog, so this ONE
+  // delegated listener is bound on the shell (it survives both the dialog
+  // and refreshStructureAndPreview() replacing the panel's innerHTML).
+  if (shell) {
+    shell.addEventListener('click', function (evt) {
+      var addBtn = evt.target.closest('#r4StructureAddButton');
+      if (addBtn) {
+        var addScope = addBtn.closest('[data-r4-add-section]') || structurePanel;
+        var addSelect = addScope ? addScope.querySelector('#r4StructureAddSelect') : null;
+        var sectionKey = addSelect ? addSelect.value : '';
+        if (!sectionKey) return;
+        // Phase 4 (Task 3B) — every section.add mutation must name its
+        // target page explicitly; read from the shell's own data attribute
+        // (server-rendered from the SAME validated page_type the current
+        // editor load resolved — never re-derived/guessed client-side).
+        R4.enqueueStructuralMutation({
+          type: 'section.add',
+          section_key: sectionKey,
+          page_type: shell.dataset.r4PageType || 'home',
+        });
+        if (addSelect) addSelect.value = '';
+        return;
+      }
+      // Phase 5 Task 6 — Storefront Showcase creation FACADE. A Showcase choice
+      // carries ONLY a canonical section_key (data-section-key); it reuses the
+      // exact same section.add path as #r4StructureAddButton above — no new
+      // mutation type, no direct fetch, no pseudo Showcase section key.
+      var showcaseChoice = evt.target.closest('[data-r4-showcase-choice]');
+      if (showcaseChoice) {
+        var showcaseKey = showcaseChoice.getAttribute('data-section-key');
+        if (!showcaseKey) return;
+        R4.enqueueStructuralMutation({
+          type: 'section.add',
+          section_key: showcaseKey,
+          page_type: shell.dataset.r4PageType || 'home',
         });
       }
     });
@@ -1193,6 +1255,10 @@ window.RastiSiR4 = {
     if (!previewFrame || evt.source !== previewFrame.contentWindow) return;
     if (!evt.data) return;
     var type = evt.data.type;
+    // While the SAME iframe shows a transient surface (a Design Lab candidate
+    // or a Ready Template live preview) its sections are not the Draft's
+    // editable targets, so edit commands from it are ignored.
+    if (R4.previewInteractive === false) return;
     if (type === 'sfb:selectSection' || type === 'sfb:openSectionSettings') {
       var sectionId = evt.data.sectionId;
       if (!sectionId) return;
@@ -1233,9 +1299,11 @@ window.RastiSiR4 = {
   // the SAME R4.queue — never a second/independent queue of their own.
   function closeGlobalDesign() {
     if (!globalDesignPanel) return;
+    var wasOpen = !globalDesignPanel.hidden;
     globalDesignPanel.hidden = true;
     if (globalDesignToggle) globalDesignToggle.setAttribute('aria-expanded', 'false');
     if (shell) shell.dataset.r4GlobalDesignOpen = 'false';
+    if (wasOpen) R4.emit('r4:global-closed');
   }
 
   function openGlobalDesign() {
@@ -1244,12 +1312,41 @@ window.RastiSiR4 = {
     globalDesignPanel.hidden = false;
     if (globalDesignToggle) globalDesignToggle.setAttribute('aria-expanded', 'true');
     if (shell) shell.dataset.r4GlobalDesignOpen = 'true';
+    R4.emit('r4:global-opened');
   }
 
-  if (globalDesignToggle) {
-    globalDesignToggle.addEventListener('click', function () {
-      if (globalDesignPanel && globalDesignPanel.hidden) openGlobalDesign();
-      else closeGlobalDesign();
+  // The Studio top navigation («طراحی سراسری», #r4GlobalDesignToggle) is a
+  // workspace-mode switch owned by the presentation layer; it calls these
+  // two entry points, so ONE click reaches ONE open/close operation.
+  R4.openGlobalDesign = openGlobalDesign;
+  R4.closeGlobalDesign = closeGlobalDesign;
+  R4.isGlobalDesignOpen = function () {
+    return Boolean(globalDesignPanel && !globalDesignPanel.hidden);
+  };
+
+  var THEME_NONE_KEY = 'theme.none.v1';
+
+  function applyTheme(componentKey) {
+    var themeDraftId = Number(shell && shell.dataset.r4DraftId);
+    if (!componentKey || !themeDraftId) return Promise.resolve();
+    // No Theme -> canonical Clear (never a no-op selection with a
+    // meaningless intensity; the server also normalizes, this keeps the wire
+    // payload honest).
+    var mutation;
+    if (componentKey === THEME_NONE_KEY) {
+      mutation = { type: 'theme.clear', draft_id: themeDraftId };
+    } else {
+      var intensitySelect = globalDesignPanel && globalDesignPanel.querySelector('[data-r4-theme-intensity]');
+      mutation = {
+        type: 'theme.apply',
+        draft_id: themeDraftId,
+        component_key: componentKey,
+        intensity: intensitySelect ? intensitySelect.value : 'balanced',
+      };
+    }
+    return R4.enqueueMutation(mutation).then(function (result) {
+      if (result && result.ok) return refreshGlobalDesignAndPreview().then(function () { return result; });
+      return result;
     });
   }
 
@@ -1260,38 +1357,15 @@ window.RastiSiR4 = {
       // P5-W2 — reversible occasion Theme. A Theme change carries a component
       // selection AND a bounded intensity, plus an explicit Clear, so it needs
       // its own branch (the generic single-scalar data-r4-global-field handler
-      // cannot express it). Both routes go through the ONE mutation boundary
+      // cannot express it). Every route goes through the ONE mutation boundary
       // (R4.enqueueMutation -> apply_mutation) exactly like every other edit.
-      if (evt.target.closest('[data-r4-theme-apply]')) {
-        var occasionSelect = document.getElementById('r4ThemeOccasion');
-        var intensitySelect = document.getElementById('r4ThemeIntensity');
-        var themeDraftId = Number(shell && shell.dataset.r4DraftId);
-        if (!occasionSelect || !themeDraftId) return;
-        // No Theme selected -> canonical Clear (never a no-op selection with a
-        // meaningless intensity; server also normalizes, this keeps the wire
-        // payload honest).
-        if (occasionSelect.value === 'theme.none.v1') {
-          R4.enqueueMutation({ type: 'theme.clear', draft_id: themeDraftId }).then(function (result) {
-            if (result && result.ok) refreshGlobalDesignAndPreview();
-          });
-          return;
-        }
-        R4.enqueueMutation({
-          type: 'theme.apply',
-          draft_id: themeDraftId,
-          component_key: occasionSelect.value,
-          intensity: intensitySelect ? intensitySelect.value : 'balanced',
-        }).then(function (result) {
-          if (result && result.ok) refreshGlobalDesignAndPreview();
-        });
+      var themeApplyButton = evt.target.closest('[data-r4-theme-apply]');
+      if (themeApplyButton) {
+        applyTheme(themeApplyButton.getAttribute('data-r4-theme-apply'));
         return;
       }
       if (evt.target.closest('[data-r4-theme-clear]')) {
-        var clearDraftId = Number(shell && shell.dataset.r4DraftId);
-        if (!clearDraftId) return;
-        R4.enqueueMutation({ type: 'theme.clear', draft_id: clearDraftId }).then(function (result) {
-          if (result && result.ok) refreshGlobalDesignAndPreview();
-        });
+        applyTheme(THEME_NONE_KEY);
         return;
       }
 
@@ -1331,53 +1405,25 @@ window.RastiSiR4 = {
       // (like Discard/Publish), so it still needs its own confirm +
       // sendReplaceDraftAction + reload, unlike the in-place resets above.
       if (evt.target.closest('#r4ResetStorefrontButton')) {
-        if (!window.confirm('کل ظاهر فروشگاه (همه‌یِ صفحاتِ پوشش‌داده‌شده، هدر، فوتر، ظاهر) به قالب بازنشانی می‌شود. ادامه می‌دهید؟')) return;
-        R4.queue = (R4.queue || Promise.resolve()).then(function () {
-          return sendReplaceDraftAction('reset-storefront/');
-        });
-        R4.queue.then(function (result) {
-          if (result && result.ok) window.location.reload();
-        });
-        return;
-      }
-      // R4 Task 8 (Batch 1) — same delegation requirement as
-      // #r4ResetStorefrontButton just above: #r4SwitchTemplateButton
-      // lives inside #r4GlobalDesign too. Content-preserving Template
-      // Switch REPLACES the Draft's identity (a fresh checkpoint clone —
-      // see preset_service.switch_template_preserving_content), so it
-      // needs the same confirm + sendReplaceDraftAction + reload shape,
-      // never an in-place R4.enqueueMutation.
-      if (evt.target.closest('#r4SwitchTemplateButton')) {
-        var templateSelect = document.getElementById('r4TemplateSwitchSelect');
-        if (!templateSelect || !templateSelect.value) return;
-        var selectedOption = templateSelect.options[templateSelect.selectedIndex];
-        var templateVersion = selectedOption ? selectedOption.getAttribute('data-r4-template-version') : null;
-        if (!templateVersion) return;
-        if (!window.confirm('ظاهرِ این قالب (پالت، هدر، فوتر، طراحیِ کلی) اعمال می‌شود — محتوایِ بخش‌های موجود دست‌نخورده می‌ماند. ادامه می‌دهید؟')) return;
-        R4.queue = (R4.queue || Promise.resolve()).then(function () {
-          return sendReplaceDraftAction('switch-template/', {
-            template_key: templateSelect.value,
-            template_version: templateVersion,
+        R4.confirm('کل ظاهر فروشگاه (همه‌یِ صفحاتِ پوشش‌داده‌شده، هدر، فوتر، ظاهر) به قالب بازنشانی می‌شود. ادامه می‌دهید؟').then(function (confirmed) {
+          if (!confirmed) return;
+          R4.queue = (R4.queue || Promise.resolve()).then(function () {
+            return sendReplaceDraftAction('reset-storefront/');
           });
-        });
-        R4.queue.then(function (result) {
-          if (result && result.ok) window.location.reload();
+          R4.queue.then(function (result) {
+            if (result && result.ok) window.location.reload();
+          });
         });
       }
     });
 
-    // P5-W2 — when "No Theme" is selected, intensity is meaningless, so
-    // disable the intensity control (server also ignores/normalizes it).
-    function syncThemeIntensityEnabled() {
-      var occasionSelect = document.getElementById('r4ThemeOccasion');
-      var intensitySelect = document.getElementById('r4ThemeIntensity');
-      if (!occasionSelect || !intensitySelect) return;
-      intensitySelect.disabled = occasionSelect.value === 'theme.none.v1';
-    }
+    // Changing the intensity of the active occasion re-applies that SAME
+    // occasion with the new intensity (one theme.apply mutation).
     globalDesignPanel.addEventListener('change', function (evt) {
-      if (evt.target.closest('[data-r4-theme-occasion]')) syncThemeIntensityEnabled();
+      if (!evt.target.closest('[data-r4-theme-intensity]')) return;
+      var activeTheme = globalDesignPanel.querySelector('[data-r4-theme-apply][aria-pressed="true"]');
+      if (activeTheme) applyTheme(activeTheme.getAttribute('data-r4-theme-apply'));
     });
-    syncThemeIntensityEnabled();
 
     // One delegated change handler — the mutation `type` and patch `key`
     // both come from data attributes already rendered by the server
@@ -1521,6 +1567,7 @@ window.RastiSiR4 = {
         var freshDoc = new DOMParser().parseFromString(html, 'text/html');
         var freshPanel = freshDoc.getElementById('r4GlobalDesign');
         if (freshPanel) globalDesignPanel.innerHTML = freshPanel.innerHTML;
+        R4.emit('r4:global-refreshed', { doc: freshDoc });
       })
       .catch(function () {
         // The mutation itself already succeeded — a failed read-side
@@ -1528,6 +1575,8 @@ window.RastiSiR4 = {
         // until the merchant's next action.
       });
   }
+
+  R4.refreshGlobalDesignAndPreview = refreshGlobalDesignAndPreview;
 
   // ---- Undo/Redo: a dedicated command sender (not a `mutation` payload)
   // that still updates R4.revision/save-state/conflict exactly like
@@ -1567,30 +1616,29 @@ window.RastiSiR4 = {
       });
   }
 
-  if (undoButton) {
-    undoButton.addEventListener('click', function () {
-      R4.queue = (R4.queue || Promise.resolve()).then(function () {
-        return sendHistoryCommand('undo');
-      });
-      R4.queue.then(function (result) {
-        // A restored Draft may change sections/containers/appearance/
-        // header/footer all at once — a full reload is the deliberate,
-        // non-fragile choice (Task 11 Section 21), never a partial
-        // fake re-render of a whole restored Draft.
-        if (result && result.ok && result.changed) window.location.reload();
-      });
+  function runHistoryCommand(command) {
+    R4.queue = (R4.queue || Promise.resolve()).then(function () {
+      return sendHistoryCommand(command);
     });
+    return R4.queue.then(function (result) {
+      R4.emit('r4:history', { command: command, result: result || null });
+      // A restored Draft may change sections/containers/appearance/
+      // header/footer all at once — a full reload is the deliberate,
+      // non-fragile choice (Task 11 Section 21), never a partial
+      // fake re-render of a whole restored Draft.
+      if (result && result.ok && result.changed) window.location.reload();
+      return result;
+    });
+  }
+  R4.undo = function () { return runHistoryCommand('undo'); };
+  R4.redo = function () { return runHistoryCommand('redo'); };
+
+  if (undoButton) {
+    undoButton.addEventListener('click', function () { R4.undo(); });
   }
 
   if (redoButton) {
-    redoButton.addEventListener('click', function () {
-      R4.queue = (R4.queue || Promise.resolve()).then(function () {
-        return sendHistoryCommand('redo');
-      });
-      R4.queue.then(function (result) {
-        if (result && result.ok && result.changed) window.location.reload();
-      });
-    });
+    redoButton.addEventListener('click', function () { R4.redo(); });
   }
 
   // ---- Publish/Discard/Reset-page/Reset-storefront: all four REPLACE the
@@ -1638,32 +1686,60 @@ window.RastiSiR4 = {
     return sendReplaceDraftAction('publish/');
   }
 
-  if (publishButton) {
-    publishButton.addEventListener('click', function () {
-      R4.queue = (R4.queue || Promise.resolve()).then(function () {
-        return sendPublish();
-      });
-      R4.queue.then(function (result) {
-        // A successful Publish must not continue editing the now-Published
-        // Draft — reload so the normal R4 GET resolves/creates the NEXT
-        // Draft through the existing layout_service.get_or_create_draft
-        // lifecycle (never manually cloned/created here).
-        if (result && result.ok) window.location.reload();
-      });
-    });
+  // Identity-replacing actions reload the workspace; a one-shot query flag
+  // (read and removed by the Studio on load) only lets it announce what
+  // happened. Nothing is stored anywhere.
+  function reloadWithNotice(notice) {
+    var next = new URL(window.location.href);
+    next.searchParams.set('studio_notice', notice);
+    window.location.replace(next.pathname + next.search);
   }
 
-  if (discardButton) {
-    discardButton.addEventListener('click', function () {
-      if (!window.confirm('پیش‌نویسِ فعلی رد می‌شود و همه‌ی تغییراتِ منتشرنشده از بین می‌رود. ادامه می‌دهید؟')) return;
-      R4.queue = (R4.queue || Promise.resolve()).then(function () {
-        return sendReplaceDraftAction('discard/');
-      });
-      R4.queue.then(function (result) {
-        if (result && result.ok) window.location.reload();
+  // #r4PublishButton opens the Studio's publish confirmation; its confirm
+  // button calls R4.publish() — ONE click path, ONE publish operation.
+  R4.publish = function () {
+    R4.queue = (R4.queue || Promise.resolve()).then(function () {
+      return sendPublish();
+    });
+    return R4.queue.then(function (result) {
+      // A successful Publish must not continue editing the now-Published
+      // Draft — reload so the normal R4 GET resolves/creates the NEXT
+      // Draft through the existing layout_service.get_or_create_draft
+      // lifecycle (never manually cloned/created here). The query flag
+      // only lets the reloaded workspace announce the result.
+      if (result && result.ok) reloadWithNotice('published');
+      return result;
+    });
+  };
+
+  R4.discard = function () {
+    R4.queue = (R4.queue || Promise.resolve()).then(function () {
+      return sendReplaceDraftAction('discard/');
+    });
+    return R4.queue.then(function (result) {
+      if (result && result.ok) reloadWithNotice('discarded');
+      return result;
+    });
+  };
+
+  // Content-preserving Ready Template switch (preset_service.
+  // switch_template_preserving_content) REPLACES the Draft's identity, so it
+  // uses the same replace-draft request + reload, never an in-place
+  // R4.enqueueMutation. The exact key + version come from the server-rendered
+  // template catalog the merchant picked from.
+  R4.switchTemplate = function (templateKey, templateVersion) {
+    if (!templateKey || !templateVersion) return Promise.resolve();
+    R4.queue = (R4.queue || Promise.resolve()).then(function () {
+      return sendReplaceDraftAction('switch-template/', {
+        template_key: templateKey,
+        template_version: String(templateVersion),
       });
     });
-  }
+    return R4.queue.then(function (result) {
+      if (result && result.ok) reloadWithNotice('template');
+      return result;
+    });
+  };
 
   // Pre-Task-10 remediation (R4 live cutover) — the dashboard nav's
   // ``?panel=appearance``/``?panel=header``/``?panel=footer`` deep links
@@ -1678,50 +1754,81 @@ window.RastiSiR4 = {
     }
   }
 
-  // ---- Phase 5 Task 4C — device preview (Desktop / Tablet / Mobile).
-  // Ported from the legacy editor's syncPreviewViewport transform-scale
-  // approach: the SAME #r4PreviewFrame iframe is rendered at the real device
-  // pixel width and CSS-transform-scaled to fit the canvas — it reuses the
-  // one existing preview surface, never a second one. UI-only state
-  // (currentDevice) held in memory only: never persisted to Store/Draft/
-  // browser storage, never sent through the mutation queue.
+  // ---- The ONE preview surface. #r4PreviewFrame normally renders the
+  // editable Draft; a Design Lab candidate (?design_lab=<token>) or a Ready
+  // Template live preview (non-destructive, ?data=merchant) is shown by
+  // pointing the SAME iframe at that existing read-only route — never a
+  // second iframe, never inline HTML documents, never a client-side renderer. Only the Draft
+  // surface is interactive (its section clicks open the Inspector).
+  R4.previewInteractive = true;
+  R4.showPreview = function (url, options) {
+    if (!previewFrame) return;
+    var draftSrc = previewFrame.getAttribute('data-rs-draft-src') || previewFrame.getAttribute('src');
+    var next = url || draftSrc;
+    R4.previewInteractive = !url;
+    previewFrame.setAttribute('data-rastisi-state', (options && options.state) || (url ? 'preview' : 'draft'));
+    if (previewFrame.getAttribute('src') !== next) previewFrame.setAttribute('src', next);
+    else if (options && options.reload && previewFrame.contentWindow) previewFrame.contentWindow.location.reload();
+  };
+
+  // ---- Phase 5 Task 4C — device preview (Desktop / Tablet / Mobile) + zoom.
+  // The SAME #r4PreviewFrame iframe is rendered at the real device pixel
+  // width and CSS-transform-scaled to fit the canvas (the approved Studio's
+  // scalePreview rule) — it reuses the one existing preview surface, never a
+  // second one. UI-only state (device, zoom) held in memory only: never
+  // persisted to Store/Draft/browser storage, never sent through the queue.
   if (deviceSwitcher && previewFrame && previewCanvas) {
     var currentDevice = 'desktop';
+    var currentZoom = 'width';
+    var stageCanvas = previewCanvas.closest('.canvas') || previewCanvas.parentElement;
+    var browserChrome = stageCanvas ? stageCanvas.querySelector('.browser-chrome') : null;
 
-    function syncPreviewViewport() {
+    function deviceWidth(device) {
       var widths = {
-        desktop: parseInt(previewFrame.dataset.desktopViewportWidth, 10) || 1200,
+        desktop: parseInt(previewFrame.dataset.desktopViewportWidth, 10) || 1440,
         tablet: parseInt(previewFrame.dataset.tabletViewportWidth, 10) || 768,
         mobile: parseInt(previewFrame.dataset.mobileViewportWidth, 10) || 390,
       };
-      if (currentDevice === 'desktop') {
-        // Desktop fills the canvas naturally — no fixed width / scaling.
-        previewFrame.style.width = '';
-        previewFrame.style.height = '';
-        previewFrame.style.transform = '';
-        previewFrame.style.margin = '';
-        return;
-      }
-      var requestedWidth = widths[currentDevice] || widths.desktop;
-      var availableWidth = Math.max(1, previewCanvas.clientWidth - 2);
-      var fitScale = Math.min(1, availableWidth / requestedWidth);
-      var scale = Math.max(0.35, fitScale);
-      previewFrame.style.width = requestedWidth + 'px';
-      previewFrame.style.height = Math.ceil(previewCanvas.clientHeight / scale) + 'px';
-      previewFrame.style.transform = 'scale(' + scale + ')';
-      previewFrame.style.transformOrigin = 'top center';
-      previewFrame.style.margin = '0 auto';
+      return widths[device] || widths.desktop;
     }
+
+    function syncPreviewViewport() {
+      var requestedWidth = deviceWidth(currentDevice);
+      var available = stageCanvas ? stageCanvas.clientWidth : previewCanvas.clientWidth;
+      if (!available) return;
+      var scale = Math.min(1, available / requestedWidth);
+      if (currentDevice === 'desktop') {
+        if (currentZoom === 'overview') scale = Math.min(scale, previewCanvas.clientHeight / 980);
+        else if (currentZoom !== 'width') scale = Math.min(scale, Number(currentZoom) || 1);
+      }
+      var displayWidth = requestedWidth * scale;
+      previewCanvas.style.maxWidth = displayWidth + 'px';
+      if (browserChrome) browserChrome.style.maxWidth = displayWidth + 'px';
+      previewFrame.style.width = requestedWidth + 'px';
+      previewFrame.style.height = (previewCanvas.clientHeight / scale) + 'px';
+      previewFrame.style.transform = 'scale(' + scale + ')';
+    }
+    R4.syncPreviewViewport = syncPreviewViewport;
 
     function setDevice(device) {
       if (['desktop', 'tablet', 'mobile'].indexOf(device) === -1) return;
       currentDevice = device;
       previewCanvas.setAttribute('data-r4-device', device);
+      if (shell) shell.dataset.rsDevice = device;
       deviceSwitcher.querySelectorAll('[data-r4-device]').forEach(function (btn) {
-        btn.setAttribute('aria-pressed', btn.getAttribute('data-r4-device') === device ? 'true' : 'false');
+        var active = btn.getAttribute('data-r4-device') === device;
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        btn.classList.toggle('active', active);
       });
       syncPreviewViewport();
+      R4.emit('r4:device', { device: device, width: deviceWidth(device) });
     }
+    R4.setDevice = setDevice;
+    R4.getDevice = function () { return currentDevice; };
+    R4.setZoom = function (zoom) {
+      currentZoom = zoom || 'width';
+      syncPreviewViewport();
+    };
 
     deviceSwitcher.addEventListener('click', function (evt) {
       var btn = evt.target.closest('[data-r4-device]');
@@ -1730,121 +1837,107 @@ window.RastiSiR4 = {
     });
 
     if (window.ResizeObserver) {
-      new ResizeObserver(function () { syncPreviewViewport(); }).observe(previewCanvas);
-    } else {
-      window.addEventListener('resize', syncPreviewViewport);
+      new ResizeObserver(function () { syncPreviewViewport(); }).observe(stageCanvas || previewCanvas);
     }
+    window.addEventListener('resize', syncPreviewViewport);
+    syncPreviewViewport();
   }
 
-  // ---- P5-W3 — Design Lab / Random Mix.
-  // Transient experimentation surface. The merchant explores DNA combinations
-  // that are computed SERVER-SIDE (design_lab_service via the /design-lab/
-  // endpoint) and previewed in the SAME #r4PreviewFrame iframe through the
-  // EXISTING storefront_preview ?design_lab=<token> route. Nothing is saved
-  // until an explicit Apply, which enqueues the ONE canonical
+  // ---- P5-W3 — Design Lab / Random Mix (Studio experiment dock).
+  // Transient experimentation surface. Candidates are computed SERVER-SIDE
+  // (design_lab_service via the read-only /design-lab/ endpoint) and
+  // previewed in the SAME #r4PreviewFrame iframe through the EXISTING
+  // storefront_preview ?design_lab=<token> route. Nothing is saved until an
+  // explicit Apply, which enqueues the ONE canonical
   // design_lab.apply_candidate mutation through the SAME R4.enqueueMutation
-  // queue as every other edit. The client holds only the opaque candidate
-  // token + the transient locked-family set — never a component key, seed,
-  // manifest, or any client-side authority (no browser storage of state).
+  // queue as every other edit. The client holds only the opaque signed
+  // tokens + the transient locked-family set — no seed, no manifest, no
+  // browser storage. The Studio layer renders this state; it never calls the
+  // endpoint itself.
   (function initDesignLab() {
     if (!shell) return;
+    var FAMILY_COUNT = 7;
     var DL = {
+      active: false,
+      busy: false,
+      status: 'idle',          // idle | preview | generating | comparing | applying | stale | error
+      error: null,             // last controlled error code
       token: null,             // opaque candidate token (server-issued)
-      locked: [],              // transient locked family keys
+      baseToken: null,         // token of the fixed experiment Base (candidate == Base)
       draftId: Number(shell.dataset.r4DraftId) || null,
-      hasCandidate: false,
+      baseRevision: null,
+      locked: [],              // transient locked family keys
+      diffs: [],
+      candidateLabels: {},
+      baseLabels: {},
+      compareBase: false,
     };
 
     function panel() { return document.querySelector('[data-r4-design-lab-panel]'); }
 
-    function lockedFamiliesFromDom() {
+    function snapshot() {
+      return {
+        active: DL.active,
+        busy: DL.busy,
+        status: DL.status,
+        error: DL.error,
+        locked: DL.locked.slice(),
+        diffs: DL.diffs.slice(),
+        candidateLabels: Object.assign({}, DL.candidateLabels),
+        baseLabels: Object.assign({}, DL.baseLabels),
+        compareBase: DL.compareBase,
+        stale: DL.status === 'stale',
+        canApply: DL.active && !DL.busy && DL.status !== 'stale' && Boolean(DL.token) && DL.diffs.length > 0,
+      };
+    }
+
+    function announce(extra) {
+      var state = snapshot();
       var p = panel();
-      if (!p) return [];
-      return Array.prototype.slice
-        .call(p.querySelectorAll('[data-r4-design-lab-family-row]'))
-        .filter(function (row) {
-          var btn = row.querySelector('[data-r4-design-lab-lock]');
-          return btn && btn.getAttribute('aria-pressed') === 'true';
-        })
-        .map(function (row) { return row.getAttribute('data-r4-design-lab-family'); });
+      if (p) p.setAttribute('data-rastisi-state', DL.active ? DL.status : 'idle');
+      var applyButton = p && p.querySelector('[data-r4-design-lab-apply]');
+      if (applyButton) applyButton.disabled = !state.canApply;
+      R4.emit('r4:lab', Object.assign(state, extra || {}));
     }
 
-    function setState(text) {
-      var el = panel() && panel().querySelector('[data-r4-design-lab-state]');
-      if (el) el.textContent = text;
+    function tokenPreviewUrl(token) {
+      var draftSrc = previewFrame ? (previewFrame.getAttribute('data-rs-draft-src') || previewFrame.getAttribute('src')) : '';
+      var url = new URL(draftSrc, window.location.href);
+      url.searchParams.set('page', shell.dataset.r4PageType || 'home');
+      url.searchParams.set('design_lab', token);
+      return url.pathname + url.search;
     }
 
-    function setApplyEnabled(enabled) {
-      var btn = panel() && panel().querySelector('[data-r4-design-lab-apply]');
-      if (btn) btn.disabled = !enabled;
+    // Preview the Base or the current candidate in the EXISTING iframe.
+    function syncLabPreview() {
+      if (!DL.active) { R4.showPreview(null); return; }
+      var token = DL.compareBase ? (DL.baseToken || DL.token) : DL.token;
+      if (token) R4.showPreview(tokenPreviewUrl(token), { state: DL.compareBase ? 'base' : DL.status });
     }
 
-    // Preview the current candidate token in the EXISTING preview iframe.
-    function previewCandidate() {
-      if (!previewFrame) return;
-      var pageType = shell.dataset.r4PageType || 'home';
-      var url = new URL(previewFrame.src, window.location.href);
-      url.searchParams.set('page', pageType);
-      if (DL.token) url.searchParams.set('design_lab', DL.token);
-      else url.searchParams.delete('design_lab');
-      previewFrame.src = url.pathname + url.search;
+    function adopt(body) {
+      DL.token = body.token;
+      DL.draftId = body.draft_id || DL.draftId;
+      DL.baseRevision = body.base_revision;
+      DL.diffs = body.diffs || [];
+      DL.candidateLabels = body.candidate_labels || {};
+      DL.baseLabels = body.base_labels || {};
     }
 
-    function renderCompare(diffs) {
+    function callDesignLab(action, extra, status) {
       var p = panel();
-      if (!p) return;
-      var box = p.querySelector('[data-r4-design-lab-compare-output]');
-      var list = p.querySelector('[data-r4-design-lab-compare-list]');
-      if (!box || !list) return;
-      list.innerHTML = '';
-      if (!diffs || !diffs.length) {
-        var li = document.createElement('li');
-        li.textContent = 'تفاوتی با حالتِ پایه وجود ندارد.';
-        list.appendChild(li);
-      } else {
-        diffs.forEach(function (d) {
-          var li = document.createElement('li');
-          // Merchant-facing labels only (never raw keys).
-          li.textContent = d.family_label + '： ' + (d.base_label || '—') + ' ← ' + (d.candidate_label || '—');
-          list.appendChild(li);
-        });
-      }
-      box.hidden = false;
-    }
-
-    // Reflect the server's authoritative current-selection labels after an
-    // op. Refreshes EVERY family row from ``candidate_labels`` (Architect
-    // IMPORTANT 2) — NOT just the families present in ``diffs``. A family
-    // that returns to its Base value (Return to Original DNA, Reset, or a
-    // Random Mix draw that lands back on the same component) disappears from
-    // ``diffs`` but its visible label must still be refreshed, never left
-    // stale. Labels are always server-computed; nothing is derived here.
-    function refreshFamilyCurrentLabels(candidateLabels) {
-      var p = panel();
-      if (!p || !candidateLabels) return;
-      Array.prototype.forEach.call(
-        p.querySelectorAll('[data-r4-design-lab-family-row]'),
-        function (row) {
-          var family = row.getAttribute('data-r4-design-lab-family');
-          var label = candidateLabels[family];
-          if (label === undefined) return;
-          var cur = row.querySelector('[data-r4-design-lab-current]');
-          if (cur) cur.textContent = label;
-        }
-      );
-    }
-
-    function callDesignLab(action, extra) {
-      var p = panel();
-      if (!p) return Promise.resolve();
+      if (!p || DL.busy) return Promise.resolve(null);
       var url = p.getAttribute('data-r4-design-lab-url');
       var body = {
         action: action,
-        candidate_token: DL.token,
-        locked_families: lockedFamiliesFromDom(),
+        candidate_token: action === 'reset' ? null : DL.token,
+        locked_families: DL.locked.slice(),
       };
       if (extra) Object.keys(extra).forEach(function (k) { body[k] = extra[k]; });
-      setState('در حال محاسبه...');
+      DL.busy = true;
+      DL.status = status || 'generating';
+      DL.error = null;
+      announce();
       return fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
@@ -1852,81 +1945,62 @@ window.RastiSiR4 = {
       })
         .then(function (r) { return r.json().then(function (b) { return { status: r.status, body: b }; }); })
         .then(function (result) {
+          DL.busy = false;
           if (result.status === 200 && result.body && result.body.ok) {
-            DL.token = result.body.token;
-            DL.draftId = result.body.draft_id || DL.draftId;
-            DL.hasCandidate = true;
-            renderCompare(result.body.diffs);
-            refreshFamilyCurrentLabels(result.body.candidate_labels);
-            previewCandidate();
-            setApplyEnabled(true);
-            setState('این فقط پیش‌نمایش است — برای ذخیره «اعمال تغییرات» را بزنید');
+            adopt(result.body);
+            DL.status = 'preview';
+            DL.compareBase = false;
             return result.body;
           }
-          setState('انجام نشد؛ دوباره تلاش کنید');
-          return result.body;
+          DL.status = 'error';
+          DL.error = (result.body && result.body.code) || 'request_failed';
+          return null;
         })
-        .catch(function () { setState('خطا در ارتباط'); });
+        .catch(function () {
+          DL.busy = false;
+          DL.status = 'error';
+          DL.error = 'network';
+          return null;
+        })
+        .then(function (resultBody) {
+          syncLabPreview();
+          announce({ action: action, ok: Boolean(resultBody) });
+          return resultBody;
+        });
     }
 
-    // Delegated click handler on the shell (survives panel innerHTML refreshes).
-    shell.addEventListener('click', function (evt) {
-      if (evt.target.closest('[data-r4-design-lab-random-mix]')) {
-        callDesignLab('random_mix');
-        return;
-      }
-      if (evt.target.closest('[data-r4-design-lab-randomize-one]')) {
-        var row = evt.target.closest('[data-r4-design-lab-family-row]');
-        if (row) callDesignLab('randomize_one', { family: row.getAttribute('data-r4-design-lab-family') });
-        return;
-      }
-      var lockBtn = evt.target.closest('[data-r4-design-lab-lock]');
-      if (lockBtn) {
-        var pressed = lockBtn.getAttribute('aria-pressed') === 'true';
-        lockBtn.setAttribute('aria-pressed', pressed ? 'false' : 'true');
-        lockBtn.textContent = pressed ? '🔓' : '🔒';
-        return;
-      }
-      if (evt.target.closest('[data-r4-design-lab-compare]')) {
-        callDesignLab('compare');
-        return;
-      }
-      if (evt.target.closest('[data-r4-design-lab-return-dna]')) {
-        callDesignLab('return_to_dna');
-        return;
-      }
-      if (evt.target.closest('[data-r4-design-lab-remove-theme]')) {
-        callDesignLab('remove_theme');
-        return;
-      }
-      if (evt.target.closest('[data-r4-design-lab-reset]')) {
-        DL.token = null;
-        DL.hasCandidate = false;
-        callDesignLab('reset').then(function () {
-          // Reset returns to the real committed Draft; show that (no token).
-          DL.token = null;
-          setApplyEnabled(false);
-          previewCandidate();
-          setState('این فقط پیش‌نمایش است');
-        });
-        return;
-      }
-      if (evt.target.closest('[data-r4-design-lab-apply]')) {
-        if (!DL.hasCandidate || !DL.token || !DL.draftId) return;
-        if (!window.confirm('ترکیبِ فعلی روی طراحیِ فروشگاه اعمال می‌شود (قابلِ بازگشت با «واگرد» است). ادامه می‌دهید؟')) return;
-        // The ONE atomic canonical mutation. The server re-validates the
-        // candidate; the client sends only the opaque intent + draft id, plus
-        // the resolved selections/theme via the /design-lab/ compare payload.
-        // To keep the client free of component keys, we ask the server to
-        // materialise the apply mutation by re-deriving it from the token.
-        callDesignLab('compare').then(function () {
-          // The apply payload is built server-side from the token by a small
-          // round-trip: fetch the mutation via a dedicated apply action.
-          applyCandidate();
-        });
-        return;
-      }
-    });
+    function begin() {
+      // A fresh experiment always starts from the CURRENT committed Draft;
+      // its first token is both the candidate and the fixed Base.
+      DL.token = null;
+      DL.baseToken = null;
+      DL.locked = [];
+      DL.diffs = [];
+      DL.compareBase = false;
+      DL.active = true;
+      return callDesignLab('reset', null, 'generating').then(function (body) {
+        if (body) DL.baseToken = body.token;
+        else DL.active = Boolean(DL.token);
+        announce();
+        return body;
+      });
+    }
+
+    function exit() {
+      DL.active = false;
+      DL.busy = false;
+      DL.status = 'idle';
+      DL.error = null;
+      DL.token = null;
+      DL.baseToken = null;
+      DL.locked = [];
+      DL.diffs = [];
+      DL.candidateLabels = {};
+      DL.baseLabels = {};
+      DL.compareBase = false;
+      R4.showPreview(null);
+      announce();
+    }
 
     // Apply: server-side materialise the canonical mutation from the current
     // signed token (which carries the candidate's generation revision), then
@@ -1934,11 +2008,22 @@ window.RastiSiR4 = {
     // /design-lab/ apply_payload preflight rejects a stale candidate (HTTP 409,
     // code=stale_candidate) BEFORE any mutation is produced; the canonical
     // mutate endpoint remains the final transactional stale-write enforcement.
+    // A stale experiment is never rebased: the merchant restarts it.
     function applyCandidate() {
       var p = panel();
-      if (!p || !DL.token || !DL.draftId) return;
+      if (!p || !DL.token || !DL.draftId || DL.busy || DL.status === 'stale') return Promise.resolve(null);
       var url = p.getAttribute('data-r4-design-lab-url');
-      fetch(url, {
+      DL.busy = true;
+      DL.status = 'applying';
+      announce();
+      function fail(status, code) {
+        DL.busy = false;
+        DL.status = status;
+        DL.error = code;
+        announce({ action: 'apply', ok: false });
+        return null;
+      }
+      return fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
         body: JSON.stringify({ action: 'apply_payload', candidate_token: DL.token }),
@@ -1946,45 +2031,89 @@ window.RastiSiR4 = {
         .then(function (r) { return r.json().then(function (body) { return { status: r.status, body: body }; }); })
         .then(function (res) {
           var body = res.body;
-          if (res.status === 409 && body && body.code === 'stale_candidate') {
-            // The Draft moved since this candidate was generated — never
-            // silently rebase. Ask the merchant to re-run Random Mix.
-            DL.token = null;
-            DL.hasCandidate = false;
-            setApplyEnabled(false);
-            setState('طرحِ فروشگاه از زمانِ این آزمایش تغییر کرده — دوباره «ترکیب تصادفی» را بزنید');
-            return;
-          }
-          if (!body || !body.ok || !body.mutation) { setState('اعمال نشد'); return; }
-          R4.enqueueMutation(body.mutation).then(function (result) {
+          if (res.status === 409 && body && body.code === 'stale_candidate') return fail('stale', 'stale_candidate');
+          if (!body || !body.ok || !body.mutation) return fail('error', (body && body.code) || 'apply_failed');
+          return R4.enqueueMutation(body.mutation).then(function (result) {
             if (result && result.ok) {
-              // Clear the candidate + disable Apply immediately (the
-              // transient experiment is gone the instant the canonical
-              // mutation succeeds), but do NOT claim "Applied/Saved" until
-              // the fresh committed DOM is actually installed (Architect
-              // IMPORTANT 2) — otherwise the merchant can see the real
-              // revision/preview lag behind a success message that already
-              // fired, or a stale "این فقط پیش‌نمایش است" state persisting
-              // after a real save.
-              DL.token = null;
-              DL.hasCandidate = false;
-              setApplyEnabled(false);
-              refreshGlobalDesignAndPreview().then(function () {
-                setState('اعمال شد ✔');
+              // The transient experiment is gone the instant the canonical
+              // mutation succeeds; success is announced only once the fresh
+              // committed Global Design DOM is installed.
+              exit();
+              return refreshGlobalDesignAndPreview().then(function () {
+                R4.emit('r4:lab-applied', { revision: R4.revision });
+                return result;
               });
-            } else if (result && result.code === 'stale_revision') {
-              // Final transactional enforcement caught a race after preflight.
-              DL.token = null;
-              DL.hasCandidate = false;
-              setApplyEnabled(false);
-              setState('طرحِ فروشگاه تغییر کرده — دوباره «ترکیب تصادفی» را بزنید');
-            } else {
-              setState('اعمال نشد');
             }
+            if (result && result.code === 'stale_revision') return fail('stale', 'stale_revision');
+            return fail('error', (result && result.code) || 'apply_failed');
           });
         })
-        .catch(function () { setState('خطا در اعمال'); });
+        .catch(function () { return fail('error', 'network'); });
     }
+
+    R4.lab = {
+      state: snapshot,
+      isActive: function () { return DL.active; },
+      start: begin,
+      // Stale experiment: discard the old token and start again from the
+      // newest Draft (never a silent rebase of the old candidate).
+      restart: begin,
+      exit: exit,
+      randomMix: function () {
+        if (!DL.active) return Promise.resolve(null);
+        if (DL.locked.length >= FAMILY_COUNT) {
+          announce({ notice: 'all_locked' });
+          return Promise.resolve(null);
+        }
+        return callDesignLab('random_mix');
+      },
+      randomizeFamily: function (family) {
+        if (!DL.active || DL.locked.indexOf(family) !== -1) return Promise.resolve(null);
+        return callDesignLab('randomize_one', { family: family });
+      },
+      toggleLock: function (family) {
+        if (!DL.active || DL.busy || !family) return;
+        var at = DL.locked.indexOf(family);
+        if (at === -1) DL.locked.push(family);
+        else DL.locked.splice(at, 1);
+        announce();
+      },
+      setTheme: function (componentKey, intensity) {
+        if (!DL.active) return Promise.resolve(null);
+        return callDesignLab('set_theme', { theme_component_key: componentKey, intensity: intensity });
+      },
+      removeTheme: function () {
+        if (!DL.active) return Promise.resolve(null);
+        return callDesignLab('remove_theme');
+      },
+      // «برگشت به شروع»: Candidate -> the fixed experiment Base, locks cleared.
+      resetToBase: function () {
+        if (!DL.active) return Promise.resolve(null);
+        return callDesignLab('reset_to_base').then(function (body) {
+          if (body) { DL.locked = []; announce(); }
+          return body;
+        });
+      },
+      // «بازگشت به سبک اولیه»: design families -> the exact current Ready
+      // Template's DNA (Theme, locks and Base untouched; fails closed).
+      returnToTemplateDna: function () {
+        if (!DL.active) return Promise.resolve(null);
+        return callDesignLab('return_to_template_dna');
+      },
+      showBase: function () {
+        if (!DL.active) return;
+        DL.compareBase = true;
+        syncLabPreview();
+        announce();
+      },
+      showCandidate: function () {
+        if (!DL.active) return;
+        DL.compareBase = false;
+        syncLabPreview();
+        announce();
+      },
+      apply: applyCandidate,
+    };
   })();
 
 })();

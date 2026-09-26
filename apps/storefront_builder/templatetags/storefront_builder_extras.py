@@ -130,3 +130,91 @@ def icon_svg(icon_slug):
         f'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{path}</svg>'
     )
     return mark_safe(svg)
+
+
+@register.simple_tag
+def rs_icon(name):
+    """R4 Design Studio stroke icon (see ``studio_icons``)."""
+    from ..studio_icons import icon_svg
+
+    return mark_safe(icon_svg(str(name)))
+
+
+@register.simple_tag
+def rs_family_icon(family_key):
+    """R4 Design Studio icon for a Design Lab family key."""
+    from ..studio_icons import DESIGN_LAB_FAMILY_ICONS, icon_svg
+
+    return mark_safe(icon_svg(DESIGN_LAB_FAMILY_ICONS.get(str(family_key), "grid")))
+
+
+@register.simple_tag
+def rs_section_icon(section_key):
+    """Design Studio outline icon for a canonical section key (presentation only)."""
+    from apps.storefront_builder.studio_icons import icon_svg
+
+    key = str(section_key or "")
+    if "hero" in key or "banner" in key or "image" in key or "video" in key:
+        name = "image"
+    elif "product" in key or "catalog" in key:
+        name = "grid"
+    elif "brand" in key or "promo" in key or "offer" in key:
+        name = "tag"
+    elif "collection" in key:
+        name = "card"
+    elif "search" in key:
+        name = "search"
+    elif "cart" in key:
+        name = "bag"
+    else:
+        name = "layers"
+    return mark_safe(icon_svg(name))
+
+
+@register.simple_tag
+def rs_featured(items, attr, current, count):
+    """Split a real choice list for the Design Studio: the current choice
+    first plus the next ones up to ``count`` stay visible, the rest go into a
+    "more" disclosure. Pure presentation; never filters anything out."""
+    items = list(items or [])
+
+    def _value(item):
+        return item.get(attr) if isinstance(item, dict) else getattr(item, attr, None)
+
+    current_items = [item for item in items if _value(item) == current]
+    others = [item for item in items if _value(item) != current]
+    ordered = current_items + others
+    return {"featured": ordered[: int(count)], "more": ordered[int(count):]}
+
+
+_STUDIO_FONT_LABELS_FA = {
+    "Vazirmatn": "وزیرمتن · خوانا و امروزی",
+    "Tahoma": "تاهوما · ساده و آشنا",
+    "Arial": "آریال · بی‌پیرایه",
+    "Georgia": "جورجیا · سریف و روایی",
+}
+
+
+@register.filter
+def rs_font_label(value):
+    """Merchant-facing Persian label for a canonical font choice (display only;
+    the stored value stays the canonical font name)."""
+    return _STUDIO_FONT_LABELS_FA.get(str(value), value)
+
+
+#: Design Studio vocabulary for the seven Design Lab families (the approved
+#: reference's terminology). Presentation only; family keys are unchanged.
+STUDIO_FAMILY_LABELS_FA = {
+    "header": "سربرگ",
+    "hero": "بنر اصلی",
+    "product_view": "چیدمان محصولات",
+    "card": "کارت محصول",
+    "footer": "پایین صفحه",
+    "badge": "نشان محصول",
+    "bottom_nav": "نوار موبایل",
+}
+
+
+@register.filter
+def rs_family_label(family_key, fallback=""):
+    return STUDIO_FAMILY_LABELS_FA.get(str(family_key), fallback or family_key)
