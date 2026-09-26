@@ -1,0 +1,49 @@
+%% Data / model relationships — key FKs (Phase 1, code-derived, doc 03/07)
+%% Store is the tenant root. Only architecturally significant relations shown.
+erDiagram
+    Store ||--o{ StoreDomain : "domains"
+    Store ||--o{ StoreMembership : "memberships"
+    Store ||--o| StoreOwnershipTransfer : "pending transfer"
+    Store ||--o{ StoreIntegrationConnection : "integrations"
+    Store ||--|| ShopSettings : "OneToOne"
+    Store ||--|| StorefrontLayout : "OneToOne"
+    Store ||--o| StoreSubscription : "current (is_current)"
+    Store ||--o| StoreBillingAccount : "OneToOne"
+
+    User ||--o| OwnerProfile : "OneToOne"
+    User ||--o| Customer : "OneToOne (global)"
+    StoreMembership }o--|| User : "PROTECT"
+
+    Store ||--o{ Product : "catalog"
+    Product }o--o| Category : "PROTECT"
+    Product ||--o{ ProductVariant : "variants"
+    Product ||--o{ StockMovement : "ledger"
+
+    Store ||--o{ Order : "orders"
+    Order }o--|| Customer : "PROTECT"
+    Order ||--o{ OrderItem : "lines"
+    Order ||--o{ Transaction : "legacy payment"
+    Order ||--o{ PaymentAttempt : "new payment"
+    Order ||--o{ Refund : "manual only"
+
+    Cart ||--o{ CartItem : "items"
+    Order }o--o| Coupon : "SET_NULL"
+
+    StoreSubscription ||--o{ SubscriptionEvent : "history"
+    StoreSubscription ||--o{ SubscriptionInvoice : "PROTECT"
+    SubscriptionInvoice ||--o{ SubscriptionInvoiceLine : "lines"
+    SubscriptionInvoice ||--o{ SubscriptionPaymentAttempt : "attempts"
+    SubscriptionInvoice ||--o| SubscriptionDunningState : "OneToOne"
+
+    StorefrontLayout ||--o{ StorefrontLayoutVersion : "versions (published/draft pointers)"
+    StorefrontLayoutVersion ||--o{ StorefrontPage : "6 typed pages"
+    StorefrontPage ||--o{ StorefrontSection : "sections"
+    StorefrontPage ||--o{ StorefrontContainer : "containers"
+    StorefrontContainer ||--o{ StorefrontCell : "cells"
+    StorefrontCell ||--o| StorefrontSection : "OneToOne (executing truth)"
+
+    StorefrontSection ||--o{ HeroSlide : "content placement (CASCADE)"
+    StorefrontSection ||--o{ PromotionalBanner : "content placement (CASCADE)"
+    Store ||--o{ ContentPage : "cms pages"
+    Store ||--o| FooterSettings : "OneToOne"
+    Store ||--o{ Menu : "navigation"

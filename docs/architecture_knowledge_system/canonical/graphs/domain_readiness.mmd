@@ -1,0 +1,31 @@
+%% PHASE-4 PRE-PACK documentation readiness per domain (READY/PARTIAL/POOR/MISSING/CONFLICTED)
+%% HISTORICAL VIEW: this is the Phase-4 assessment made BEFORE the Phase-6 canonical packs existed.
+%% CURRENT STATE: all 15 domains now have canonical_pack_status = CANONICAL (see canonical/README.md).
+%% NOTE: documentation readiness, NOT code quality. Totals: READY 1 / PARTIAL 7 / POOR 4 / MISSING 2 / CONFLICTED 1 = 15
+%% Canonical navigation graph. code_baseline: 5883a140
+graph TB
+    subgraph READY_1
+        D1[stores D1]
+    end
+    subgraph PARTIAL_7
+        D2[portal D2]
+        D4[catalog D4]
+        D6[orders D6]
+        D7[subscriptions D7]
+        D8[billing D8]
+        D11[dashboard D11]
+        D14[core D14]
+    end
+    subgraph POOR_4
+        D3[customers D3]
+        D5[cart D5]
+        D10[content D10]
+        D12[sms D12]
+    end
+    subgraph MISSING_2
+        D13[notifications D13]
+        D15[blog D15]
+    end
+    subgraph CONFLICTED_1
+        D9[storefront_builder D9]
+    end

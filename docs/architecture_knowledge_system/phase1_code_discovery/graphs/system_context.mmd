@@ -1,0 +1,43 @@
+%% System context — Rastisi (Phase 1, code-derived, source commit 5883a140)
+%% VERIFIED from shop_core/settings.py, urls*.py, middleware, service adapters.
+graph TB
+    subgraph Actors
+        SHOP["Storefront shopper"]
+        OWNER["Store owner / staff"]
+        STAFF["Platform staff / superuser"]
+        DEVICE["SmsRasti Android device"]
+        GWCB["Payment gateway (callback/webhook)"]
+    end
+
+    subgraph Rastisi["Rastisi Django project (shop_core)"]
+        MW["PlatformHostRoutingMiddleware\n+ StoreResolutionMiddleware"]
+        STORE_URLS["ROOT_URLCONF: shop_core.urls\n(storefront + merchant dashboard)"]
+        PORTAL_URLS["urls_platform\n(marketing + owner portal)"]
+        ADMIN_URLS["urls_platform_admin\n(platform admin)"]
+    end
+
+    subgraph External
+        ZIBAL["Zibal / COD gateways"]
+        SMSP["Melipayamak / Kavenegar / SmsRasti"]
+        DNS["DNS + TLS (dnspython, SSL socket)"]
+        SMTP["SMTP email"]
+        TURN["Cloudflare Turnstile"]
+    end
+
+    SHOP -->|"HTTP (store host)"| MW
+    OWNER -->|"HTTP (platform host / admin subdomain)"| MW
+    STAFF -->|"HTTP (platform-admin host)"| MW
+    MW --> STORE_URLS
+    MW --> PORTAL_URLS
+    MW --> ADMIN_URLS
+
+    GWCB -->|"billing/webhook, gateway/callback"| STORE_URLS
+    DEVICE -->|"sms/ poll + ack (device token)"| STORE_URLS
+
+    STORE_URLS -->|"orders payment"| ZIBAL
+    PORTAL_URLS -->|"billing payment"| ZIBAL
+    STORE_URLS -->|"SMS send"| SMSP
+    PORTAL_URLS -->|"owner OTP"| SMSP
+    PORTAL_URLS -->|"custom-domain verify"| DNS
+    PORTAL_URLS -->|"password reset"| SMTP
+    PORTAL_URLS -->|"bot check"| TURN

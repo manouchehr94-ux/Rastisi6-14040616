@@ -1,0 +1,32 @@
+%% Domain map — Rastisi apps grouped by cluster (Phase 1, code-derived)
+%% VERIFIED from apps/* structure, models, services (doc 02).
+graph TB
+    subgraph Identity_Tenancy["Identity & Tenancy"]
+        STORES["stores\n(Store, StoreDomain, StoreMembership,\nresolution, authorization)"]
+        PORTAL["portal\n(OwnerProfile, PlatformConfiguration,\nprovisioning, owner auth/OTP, platform admin)"]
+        CUSTOMERS["customers\n(Customer global, CRM, segments)"]
+        CORE["core\n(ShopSettings, TimeStampedModel,\naudit, export/import, SEO)"]
+    end
+
+    subgraph Commerce["Commerce (storefront money)"]
+        CART["cart\n(Cart, CartItem, Coupon)"]
+        ORDERS["orders\n(Order, PaymentAttempt, Transaction,\nRefund, Return, gateways)"]
+        CATALOG["catalog\n(Product, Variant, Inventory,\nCategory, IndustryTemplate)"]
+    end
+
+    subgraph SaaS["SaaS (platform money)"]
+        SUBS["subscriptions\n(StoreSubscription state machine,\nPlan, entitlements)"]
+        BILLING["billing\n(Invoice, PaymentAttempt, webhook,\ndunning, renewal, refund)"]
+    end
+
+    subgraph Presentation["Storefront presentation"]
+        SFB["storefront_builder\n(Layout/Version/Page/Section,\nR4 editor, A8 templates, registries)"]
+        CONTENT["content\n(ContentPage, Menu, Footer,\nHero/Banner, MediaAsset)"]
+    end
+
+    subgraph Control_Messaging["Control & Messaging"]
+        DASH["dashboard\n(merchant admin controller;\nno models)"]
+        SMS["sms\n(templates, credits, backends,\ndevice gateway, OTP)"]
+        NOTIF["notifications\n(outbox)"]
+        BLOG["blog\n(BlogPost; admin-only)"]
+    end

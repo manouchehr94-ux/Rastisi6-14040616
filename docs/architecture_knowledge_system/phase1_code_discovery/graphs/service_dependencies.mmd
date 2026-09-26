@@ -1,0 +1,55 @@
+%% Service dependencies — key call edges (Phase 1, code-derived, doc 04)
+graph TB
+    %% Orders
+    subgraph orders_svc[orders services]
+        OS[order_service.change_order_status]
+        OCC[order_service.create_order_from_cart]
+        PS[payment_service.simulate_payment]
+        GPS[gateway_payment_service]
+        RS[refund_service]
+        RTN[return_service]
+        CHK[checkout_service.finalize_order]
+    end
+    %% Subscriptions / billing
+    SUB["subscription_service._transition"]
+    CONF[billing.confirmation_service.confirm_payment]
+    PF[billing.payment_flow_service]
+    WH[billing.webhook_service.ingest_webhook]
+    REN[billing.renewal_service]
+    DUN[billing.dunning_service]
+    CAN[billing.cancellation_service]
+    INV[billing.invoice_service]
+    PCB[billing.plan_change_billing_service]
+    %% Storefront
+    R4[r4_mutation_service]
+    LAY[layout_service.publish]
+    PRE[preset_service]
+    REND[render_service.build_render_items]
+    %% Tenancy
+    PROV[portal.provisioning_service]
+    SUBSVC[subscription_service.provision_default]
+
+    OCC --> OS
+    PS --> OS
+    GPS --> OS
+    GPS -->|verify| EXTG[(gateway adapter)]
+    RTN --> RS
+    CHK -.->|delete items| CART[(cart.items)]
+
+    WH --> PF
+    PF --> CONF
+    CONF -->|activate/renew/change| SUB
+    REN --> SUB
+    DUN --> SUB
+    CAN --> SUB
+    PCB --> INV
+    REN --> INV
+    CONF --> INV
+
+    R4 --> LAY
+    PRE --> LAY
+    CATHOME[catalog.views.home] --> REND
+    CONTPD[content.views.page_detail] --> REND
+
+    PROV --> SUBSVC
+    PROV -->|create| STORESM[(stores/core/catalog models)]
