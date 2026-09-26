@@ -410,7 +410,7 @@ after each successful global edit.
         </section>
     </div>
   </details>
-  <div class="template-nudge"><h3>طرح فعلی: {% if studio.current_template %}{{ studio.current_template.preset.label_fa }}{% else %}بدون قالب آماده{% endif %}</h3><p>برای تغییر چیدمان، یک قالب تازه انتخاب کنید.</p><button type="button" data-rastisi-action="templates">{% rs_icon "arrow" %}کاوش قالب‌ها</button></div>
+  <div class="template-nudge"><h3>طرح فعلی: {% if studio.current_template %}{{ studio.current_template.preset.label_fa }}{% if studio.current_template_is_historical %} · نسخهٔ {{ studio.current_template.preset.version|fa_number }}{% endif %}{% elif studio.current_template_unresolved %}قالبِ اعمال‌شده (نسخهٔ آن در فهرست نیست){% else %}بدون قالب آماده{% endif %}</h3><p>برای تغییر چیدمان، یک قالب تازه انتخاب کنید.</p><button type="button" data-rastisi-action="templates">{% rs_icon "arrow" %}کاوش قالب‌ها</button></div>
 </section>
 
 <section class="rs-tab-pane" data-rs-tab-pane="template">
@@ -420,6 +420,11 @@ after each successful global edit.
     {% if studio.current_template.thumbnail_kind == "screenshot" %}<img src="{{ studio.current_template.thumbnail_url }}" alt="پیش‌نمایش قالب {{ studio.current_template.preset.label_fa }}" loading="lazy">{% else %}<div class="rs-thumb-svg">{{ studio.current_template.thumbnail_svg|safe }}</div>{% endif %}
     <div><h3>{{ studio.current_template.preset.label_fa }}</h3><p>{{ studio.current_template.preset.description_fa }}</p></div>
   </div>
+  {% if studio.current_template_is_historical %}
+  <div class="note" style="margin-top:12px" data-rs-historical-template>این فروشگاه روی نسخهٔ {{ studio.current_template.preset.version|fa_number }} این قالب است. نسخهٔ تازه‌تر در گالری قالب‌ها آمادهٔ اعمال است.</div>
+  {% endif %}
+  {% elif studio.current_template_unresolved %}
+  <div class="note warn" data-rs-historical-template>قالبِ اعمال‌شده روی این پیش‌نویس در فهرست قالب‌ها پیدا نشد؛ طراحی فعلی دست‌نخورده است.</div>
   {% else %}
   <div class="note">هنوز هیچ قالب آماده‌ای روی این فروشگاه اعمال نشده است.</div>
   {% endif %}

@@ -44,7 +44,7 @@ single shared #r4PreviewFrame renderer. r4_studio.js holds UI-only state
         <div class="project-avatar">{% rs_icon "bag" %}</div>
         <div>
           <h1>{{ studio.store_name }} <span class="pill {% if studio.draft_changed %}amber{% else %}green{% endif %}" data-rs-status-pill>{% if studio.draft_changed %}منتشرنشده{% else %}همگام با سایت{% endif %}</span></h1>
-          <p data-rs-project-sub>{% if studio.current_template %}قالب: {{ studio.current_template.preset.label_fa }}{% else %}بدون قالب آماده{% endif %}{% if studio.has_published %} · آخرین انتشار: {{ studio.published_at|jalali:"%Y/%m/%d" }}{% else %} · هنوز منتشر نشده{% endif %}</p>
+          <p data-rs-project-sub>قالب: {% if studio.current_template %}{{ studio.current_template.preset.label_fa }}{% if studio.current_template_is_historical %} · نسخهٔ {{ studio.current_template.preset.version|fa_number }}{% endif %}{% elif studio.current_template_unresolved %}قالبِ اعمال‌شده (نسخهٔ آن در فهرست نیست){% else %}بدون قالب آماده{% endif %}{% if studio.has_published %} · آخرین انتشار: {{ studio.published_at|jalali:"%Y/%m/%d" }}{% else %} · هنوز منتشر نشده{% endif %}</p>
         </div>
       </div>
       <div class="project-actions">

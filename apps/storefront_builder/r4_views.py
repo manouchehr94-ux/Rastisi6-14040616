@@ -724,7 +724,7 @@ def _build_studio_context(
 
     from . import appearance_registry, theme_catalog
     from .studio_icons import STUDIO_ICON_PATHS
-    from .views import build_ready_template_cards
+    from .views import build_ready_template_cards, resolve_applied_template_card
 
     provenance = variant_contract.validate_template_provenance(draft.template_provenance)
     current_key = provenance["template"]["key"]
@@ -739,8 +739,15 @@ def _build_studio_context(
         draft.compute_fingerprint() != (published.content_fingerprint or "")
     )
 
-    cards = build_ready_template_cards(draft, current_template_key=current_key)
-    current_card = next((card for card in cards if card["is_current"]), None)
+    cards = build_ready_template_cards(
+        draft, current_template_key=current_key, current_template_version=current_version,
+    )
+    # The exact applied template (key + version): the catalog card when the
+    # Draft is on the latest version, else the exact historical version.
+    current_card = resolve_applied_template_card(
+        draft, cards, current_template_key=current_key, current_template_version=current_version,
+    )
+    current_is_historical = bool(current_card is not None and not any(card["is_current"] for card in cards))
 
     palettes = []
     for palette in appearance_registry.list_palettes():
@@ -780,6 +787,13 @@ def _build_studio_context(
         "draft_changed": draft_changed,
         "public_url": public_url or "",
         "current_template_key": current_key or "",
+        # Display label of the EXACT applied template (historical versions
+        # included); the catalog cards' is_current is version-exact too.
+        "current_template_label": (
+            current_card["preset"].label_fa
+            + (f" · نسخهٔ {current_card['preset'].version}" if current_is_historical else "")
+            if current_card is not None else ""
+        ),
         "live_preview_url": live_preview_url,
         "preview_url": reverse("dashboard:storefront-builder-preview"),
         "templates": [
@@ -822,6 +836,10 @@ def _build_studio_context(
         "public_url": public_url,
         "current_template": current_card,
         "current_template_version": current_version,
+        "current_template_is_historical": current_is_historical,
+        # A provenance key that cannot be resolved to its exact version is
+        # shown as such — never as "no template" and never as the latest.
+        "current_template_unresolved": bool(current_key) and current_card is None,
         "template_cards": cards,
         "palettes": palettes,
         "history_entries": history_entries,

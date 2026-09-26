@@ -2257,7 +2257,11 @@ def storefront_template_gallery(request):
     provenance = validate_template_provenance(draft.template_provenance)
     current_template_key = provenance["template"]["key"]
 
-    template_cards = build_ready_template_cards(draft, current_template_key=current_template_key)
+    template_cards = build_ready_template_cards(
+        draft,
+        current_template_key=current_template_key,
+        current_template_version=provenance["template"]["version"],
+    )
 
     context = {
         "active_page": "storefront_builder",
@@ -2267,13 +2271,11 @@ def storefront_template_gallery(request):
     return render(request, "dashboard/storefront_builder/template_gallery.html", context)
 
 
-def build_ready_template_cards(draft, *, current_template_key):
-    """Read projection of the ONE Ready Template catalog for merchant-facing
-    galleries (the standalone Template Gallery page and the R4 Design Studio
-    gallery). Pure read — never a second catalog/registry: every card comes
-    from ``layout_preset_registry.list_ready_templates()`` with its exact
-    ``version``, its real preview thumbnail and its default palette swatch."""
-    from . import appearance_registry, global_region_registry, layout_preset_registry
+def build_ready_template_card(draft, preset, *, is_current):
+    """One merchant-facing Ready Template card for an exact registered preset
+    version: its real preview thumbnail, default palette swatch and global
+    region labels. Pure read."""
+    from . import appearance_registry, global_region_registry
     from .services import template_preview_service
 
     def _variant_label(region, variant_key):
@@ -2296,22 +2298,69 @@ def build_ready_template_cards(draft, *, current_template_key):
             return {"thumbnail_kind": "screenshot", "thumbnail_url": static(screenshot_relpath), "thumbnail_svg": ""}
         return {"thumbnail_kind": "svg", "thumbnail_url": "", "thumbnail_svg": template_preview_service.resolve_gallery_thumbnail(preset)}
 
+    return {
+        "preset": preset,
+        "is_current": is_current,
+        "would_replace_existing_content": _preset_would_replace_content(draft, preset),
+        "palette_swatch": _palette_swatch(preset),
+        **_thumbnail_fields(preset),
+        "header_variant_label": _variant_label(
+            global_region_registry.GLOBAL_HEADER_REGION, (preset.header or {}).get("header_variant"),
+        ),
+        "footer_variant_label": _variant_label(
+            global_region_registry.GLOBAL_FOOTER_REGION, (preset.footer or {}).get("footer_variant"),
+        ),
+    }
+
+
+def build_ready_template_cards(draft, *, current_template_key, current_template_version):
+    """Read projection of the ONE Ready Template catalog for merchant-facing
+    galleries (the standalone Template Gallery page and the R4 Design Studio
+    gallery). Pure read — never a second catalog/registry: every card comes
+    from ``layout_preset_registry.list_ready_templates()`` (the latest
+    merchant-facing version per key).
+
+    A card is "current" only for the Draft's EXACT applied template identity
+    (key AND version from its provenance). A Draft on an older historical
+    version of the same key therefore never marks the newer catalog card as
+    current; that card stays available for an explicit switch."""
+    from . import layout_preset_registry
+
     return [
-        {
-            "preset": preset,
-            "is_current": preset.key == current_template_key,
-            "would_replace_existing_content": _preset_would_replace_content(draft, preset),
-            "palette_swatch": _palette_swatch(preset),
-            **_thumbnail_fields(preset),
-            "header_variant_label": _variant_label(
-                global_region_registry.GLOBAL_HEADER_REGION, (preset.header or {}).get("header_variant"),
+        build_ready_template_card(
+            draft,
+            preset,
+            is_current=bool(
+                current_template_key
+                and current_template_version
+                and preset.key == current_template_key
+                and preset.version == current_template_version
             ),
-            "footer_variant_label": _variant_label(
-                global_region_registry.GLOBAL_FOOTER_REGION, (preset.footer or {}).get("footer_variant"),
-            ),
-        }
+        )
         for preset in layout_preset_registry.list_ready_templates()
     ]
+
+
+def resolve_applied_template_card(draft, cards, *, current_template_key, current_template_version):
+    """The Draft's applied Ready Template as a display card, resolved by its
+    EXACT provenance identity: the current catalog card when the Draft is on
+    the latest version, otherwise the exact historical version from the
+    canonical ``get_layout_preset_version``. ``None`` when no template is
+    applied or the exact version cannot be resolved — never guesses that the
+    latest version is the applied one. Pure read; never repairs the Draft."""
+    from . import layout_preset_registry
+
+    current_card = next((card for card in cards if card["is_current"]), None)
+    if current_card is not None:
+        return current_card
+    if not (current_template_key and current_template_version):
+        return None
+    historical = layout_preset_registry.get_layout_preset_version(
+        current_template_key, current_template_version,
+    )
+    if historical is None:
+        return None
+    return build_ready_template_card(draft, historical, is_current=True)
 
 
 #: Phase 5, Task 2 — the ONE canonical Demo Store this live-preview view is

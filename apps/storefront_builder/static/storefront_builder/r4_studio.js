@@ -752,7 +752,7 @@
         title = 'این طراحی را به مشتری‌ها نشان دهیم؟';
         sub = 'انتشار تمام فروشگاه';
         body = '<p class="modal-message">پیش‌نویس فعلی به نسخهٔ عمومی تبدیل می‌شود. همهٔ صفحه‌های فروشگاه با همین طراحی نمایش داده خواهند شد.</p>' +
-          '<div class="publish-summary"><div><span>فروشگاه</span><strong>' + esc(DATA.store_name) + '</strong></div><div><span>قالب</span><strong>' + esc(tmpl ? tmpl.label : '—') + '</strong></div><div><span>محدودهٔ انتشار</span><strong>تمام صفحه‌ها</strong></div></div>' +
+          '<div class="publish-summary"><div><span>فروشگاه</span><strong>' + esc(DATA.store_name) + '</strong></div><div><span>قالب</span><strong>' + esc(faDigits(DATA.current_template_label || (tmpl ? tmpl.label : '')) || '—') + '</strong></div><div><span>محدودهٔ انتشار</span><strong>تمام صفحه‌ها</strong></div></div>' +
           (ui.publishing ? '<div class="progress"></div><p class="small muted" role="status">در حال انتشار طراحی…</p>' : '<p class="small muted">پس از انتشار، پیش‌نویس و نسخهٔ عمومی همگام می‌شوند.</p>');
         foot = btn('confirm-publish', ui.publishing ? 'در حال انتشار…' : 'بله، منتشر کن', 'globe', 'primary', ui.publishing ? 'disabled' : '') + btn('close-modal', 'هنوز نه', '', 'outline', ui.publishing ? 'disabled' : '');
         break;

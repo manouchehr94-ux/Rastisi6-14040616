@@ -56,7 +56,8 @@ Base: `b55e1ac1420e6ec4fa8e4a1b8a7023eb47361cb9`. Branch: `feature/r4-design-stu
 ## Windows run instructions
 
 ```
-git fetch rastisi5 feature/r4-design-studio-ui
+git remote -v    # this R6 repository uses "origin"
+git fetch origin feature/r4-design-studio-ui
 git switch feature/r4-design-studio-ui
 .venv\Scripts\python manage.py check
 .venv\Scripts\python manage.py runserver
