@@ -1,3 +1,27 @@
+##########################################################################
+# VALIDATION RESULTS — refreshed post Phase-8 archive execution
+#
+# State: Phase-8 archive execution COMPLETE.
+#   Lifecycle = A6A5A4A3A2A1BCD5D4D3D2D1
+#   completed = 3065, pending = 0, lifecycle_mismatches = 0
+#
+# Authoritative post-execution gates below:
+#   1. CORE VALIDATION                -> PASS (0/0)
+#   2. FINAL LIFECYCLE STATE          -> PASS (3065/0/0)
+#   3. SEQUENTIAL HARNESS SELF-TEST   -> PASS (21/21)
+#
+# NOTE on the --phase8 static preflight:
+#   The --phase8 preflight is a PRE-EXECUTION readiness gate. It verifies that
+#   every execution source path is still tracked at its ORIGINAL location and
+#   evaluates whole-directory-move eligibility against the pre-move tree.
+#   Now that all 3065 relocations are executed, that preflight intentionally
+#   reports FAIL ("execution source path(s) not tracked") because every source
+#   has been relocated under docs/archive/. This is the EXPECTED post-execution
+#   condition of a pre-execution gate — not a regression. The authoritative
+#   post-execution proof is the FINAL LIFECYCLE STATE run (section 2), which
+#   verifies the completed cumulative lifecycle against the manifest.
+##########################################################################
+
 ########## CORE VALIDATION (default) ##########
 === Architecture Docs Validation ===
 repo: /projects/sandbox/Rastisi6-14040616
@@ -15,7 +39,7 @@ warnings: 0
 errors: 0
 === RESULT: PASS ===
 
-########## PHASE 8 STATIC PREFLIGHT (--phase8) ##########
+########## PHASE 8.3 FINAL LIFECYCLE STATE (--phase8-state A6A5A4A3A2A1BCD5D4D3D2D1) ##########
 === Architecture Docs Validation ===
 repo: /projects/sandbox/Rastisi6-14040616
   info: internal links checked: 435
@@ -28,30 +52,20 @@ repo: /projects/sandbox/Rastisi6-14040616
   info: canonical graph sources: 3
   info: registry semantic fields: phase4_prepack=15, canonical_pack_status=15 (both expected 15)
   info: domain READMEs conforming to metadata schema: 15 (expected 15)
-  info: PHASE8: whole-dir move allowed=2 forbidden=8
-  info: PHASE8: manifest records=522 (ARCHIVE=406 KEEP_HIST=47 KEEP_CANON=20 DEFER=44 LEGAL=3 CORRECT=2)
-  info: PHASE8: execution tracked files=3065 (all safe_to_move=TRUE)
+  info: PHASE8-STATE 'A6A5A4A3A2A1BCD5D4D3D2D1': units_completed=['A6', 'A5', 'A4', 'A3', 'A2', 'A1', 'B', 'C', 'D5', 'D4', 'D3', 'D2', 'D1'] rows=3065 completed=3065 pending=0 lifecycle_mismatches=0
 warnings: 0
 errors: 0
 === RESULT: PASS ===
 
-########## PHASE 8.2/8.3 LIFECYCLE STATE (--phase8-state pre) ##########
-=== Architecture Docs Validation ===
-repo: /projects/sandbox/Rastisi6-14040616
-  info: internal links checked: 435
-  info: registry domain IDs: 15 (expected 15)
-  info: registry DR references: 8 distinct
-  info: domain dirs: 15 (expected 15)
-  info: code-path intentionally absent (expected): apps/blog/urls.py in docs/architecture_knowledge_system/domains/blog/README.md
-  info: code-path intentionally absent (expected): apps/orders/gateways/new_gateway.py in docs/architecture_knowledge_system/domains/orders/SERVICES.md
-  info: code-path references checked: 120
-  info: canonical graph sources: 3
-  info: registry semantic fields: phase4_prepack=15, canonical_pack_status=15 (both expected 15)
-  info: domain READMEs conforming to metadata schema: 15 (expected 15)
-  info: PHASE8-STATE 'pre': units_completed=[] rows=3065 completed=0 pending=3065 lifecycle_mismatches=0
-warnings: 0
-errors: 0
-=== RESULT: PASS ===
+########## PHASE 8 STATIC PREFLIGHT (--phase8) — PRE-EXECUTION GATE, now superseded ##########
+# Recorded for transparency. This pre-execution readiness gate now reports FAIL
+# post-execution BY DESIGN (all execution sources relocated under docs/archive/).
+# See the NOTE in the header. Not an authoritative post-execution gate.
+  info: PHASE8: whole-dir move allowed=0 forbidden=8
+  info: PHASE8: manifest records=522 (ARCHIVE=406 KEEP_HIST=47 KEEP_CANON=20 DEFER=44 LEGAL=3 CORRECT=2)
+  info: PHASE8: execution tracked files=3065 (all safe_to_move=TRUE, pre-execution)
+  ERROR: PHASE8: 3065 execution source path(s) not tracked (expected post-execution: all relocated)
+=== RESULT: FAIL (expected post-execution — pre-flight gate no longer applies) ===
 
 ########## PHASE 8.3 SEQUENTIAL HARNESS SELF-TEST ##########
   [PASS] PRE -> PASS
