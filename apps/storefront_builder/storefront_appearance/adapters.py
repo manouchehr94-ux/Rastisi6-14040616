@@ -67,12 +67,44 @@ _A8_PRODUCT_VIEW_ALIASES = (
     ("featured_wall", "catalog_product_wall", "featured_row"),
 )
 
+#: Merchant-facing names of the A8 product-view aliases above (this registry
+#: is their only definition, so their label lives here too).
+_A8_PRODUCT_VIEW_LABELS_FA = {
+    "standard_grid": "شبکهٔ استاندارد",
+    "carousel": "کاروسل",
+    "dense_grid": "شبکهٔ فشرده",
+    "editorial_grid": "شبکهٔ تحریریه‌ای",
+    "catalog_list": "فهرست کاتالوگی",
+    "bento": "بنتو",
+    "featured_wall": "دیوار ویژه",
+}
+
 _A8_CARD_STYLES = (
     "standard", "marketplace_price", "editorial_minimal", "retail_row",
     "luxury_dark", "soft_capsule", "beauty_glass", "paper_frame",
     "price_first", "portrait_round", "catalog_index", "shipping_label",
     "shelf_editorial", "technical_spec", "tech_neon", "bold_outline",
 )
+
+#: Merchant-facing names of the A8 card styles above.
+_A8_CARD_STYLE_LABELS_FA = {
+    "standard": "استاندارد",
+    "marketplace_price": "قیمت‌محور بازارگاهی",
+    "editorial_minimal": "مینیمال تحریریه‌ای",
+    "retail_row": "ردیفی فروشگاهی",
+    "luxury_dark": "لوکس تیره",
+    "soft_capsule": "کپسولی نرم",
+    "beauty_glass": "شیشه‌ای زیبایی",
+    "paper_frame": "قاب کاغذی",
+    "price_first": "قیمت در صدر",
+    "portrait_round": "پرترهٔ گرد",
+    "catalog_index": "فهرست کاتالوگی",
+    "shipping_label": "برچسب ارسال",
+    "shelf_editorial": "قفسهٔ تحریریه‌ای",
+    "technical_spec": "مشخصات فنی",
+    "tech_neon": "نئون دیجیتال",
+    "bold_outline": "خط‌دور پررنگ",
+}
 
 
 def _component(
@@ -204,7 +236,7 @@ def build_existing_component_definitions() -> tuple[ComponentDefinition, ...]:
             _component(
                 key=f"product_view.{identity}.v1",
                 family_key="product_view",
-                label_fa=f"نمای محصولات {identity}",
+                label_fa=f"نمای محصولات {_A8_PRODUCT_VIEW_LABELS_FA.get(identity, identity)}",
                 registry_reference=f"section_variant:{section_key}:{variant_key}",
             )
         )
@@ -230,7 +262,7 @@ def build_existing_component_definitions() -> tuple[ComponentDefinition, ...]:
             _component(
                 key=f"card.{style}.v1",
                 family_key="card",
-                label_fa=f"کارت {style}",
+                label_fa=f"کارت {_A8_CARD_STYLE_LABELS_FA.get(style, style)}",
                 registry_reference=f"card_style:{style}",
             )
         )
