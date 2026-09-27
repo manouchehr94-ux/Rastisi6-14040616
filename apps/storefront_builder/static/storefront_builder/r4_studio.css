@@ -144,4 +144,22 @@ body:has(.rs-studio[data-r4-sidebar-expanded="true"]) .sidebar{display:flex!impo
 /* Toast container is the reference #toast. */
 .rs-studio .rs-toast:empty{display:none}
 
+/* Final-QA Defect 3 — at the narrow (<=560px) breakpoint the stage toolbar
+   wraps onto a second row (the Desktop/Tablet/Mobile device-preview buttons
+   live there), growing taller than the single-row height the reference
+   mockup's fixed `.context-panel` `top` offset was measured against. With
+   the Settings/Inspector panel open, the panel's un-updated `top` started
+   above the toolbar's real (wrapped) bottom edge, so it visually and
+   pointer-event-wise covered the toolbar's second row: the device buttons
+   kept rendering but a real click/tap there hit the panel, not the button
+   (only keyboard activation still worked). Re-anchoring `top` to clear the
+   wrapped toolbar's real height (measured live at both breakpoint-scoped
+   reference values, 205px/206px) fixes the overlap without touching the
+   reference layer above, the panel open/close mechanics, or any other
+   breakpoint (561px and up keeps the reference `top`, where the toolbar
+   still fits on one row). */
+@media(max-width:560px){
+  .rs-studio .context-panel{top:208px}
+}
+
 @media (prefers-reduced-motion:reduce){.rs-studio *{transition:none!important;animation:none!important;scroll-behavior:auto!important}}

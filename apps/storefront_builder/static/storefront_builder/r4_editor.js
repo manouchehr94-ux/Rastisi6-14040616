@@ -1578,6 +1578,121 @@ window.RastiSiR4 = {
 
   R4.refreshGlobalDesignAndPreview = refreshGlobalDesignAndPreview;
 
+  // ---- Final-QA Defect 1 fix — resync R4's own outer optimistic-concurrency
+  // cursor (R4.revision) after a Design Lab restart observes a NEWER
+  // committed Draft revision than the outer editor currently holds (e.g. a
+  // real mutation landed elsewhere while the experiment was open). Design
+  // Lab's own candidate is already correctly bound to that newer revision
+  // (server-authoritative `action=reset` response) — the bug was that
+  // R4.revision, which EVERY canonical mutation (including the Apply this
+  // restart leads to) stamps its outer `/mutate/` envelope with, was never
+  // told about it, so a legitimate post-restart Apply was wrongly rejected
+  // as stale (409).
+  //
+  // This deliberately does NOT do `R4.revision = freshRevision` in
+  // isolation: that would let the number outrun the rest of the editor's
+  // own visible state (Structure/Global Design panels), which are still
+  // rendering the OLD revision's DOM — a subsequent, unrelated mutation
+  // built from that stale DOM would then be wrongly ACCEPTED by the server
+  // (it would carry a now-"correct" revision number) even though the
+  // merchant's screen does not reflect what actually changed. So the
+  // revision is only ever adopted from a genuine fresh read of the SAME
+  // canonical editor page every other successful mutation already
+  // refreshes from (`refreshStructureAndPreview` / `refreshGlobalDesignAndPreview`
+  // above) — never a bare number copy — and only when a fresh value has
+  // actually been confirmed to differ from what R4 currently holds.
+  //
+  // Correction — identity, not just revision: the fresh canonical read also
+  // carries the CURRENT Draft's own id (`data-r4-draft-id`). A Draft is not
+  // only edited, it can be REPLACED wholesale by a lifecycle operation in
+  // another tab (Publish archives it and opens a new draft; Discard/most
+  // reset actions do the same) while this tab's Design Lab experiment is
+  // open. If that happened, the fresh revision number belongs to a
+  // DIFFERENT Draft than the one this tab's Structure/Global-Design DOM,
+  // Design Lab candidate and every other client-side authority still
+  // reflect — pairing `R4.revision = <new Draft's revision>` with the OLD
+  // `shell.dataset.r4DraftId` would be internally inconsistent and unsafe
+  // (a subsequent mutation could target the wrong Draft's id while carrying
+  // the new Draft's revision number). When the fresh read's Draft id
+  // differs from (or cannot be compared against) the one this tab currently
+  // holds, the only safe recovery is a full page reload: it re-derives
+  // EVERY client-side authority — R4.revision, the Draft id, Structure,
+  // Global Design, Design Lab, Undo/Redo — from the replacement Draft in
+  // one shot, never silently rebasing old state onto it. The Draft id is
+  // read only from this same fresh canonical GET, never from a Design Lab
+  // token (a token's `draft_id`/`base_revision` are themselves just a
+  // signed echo of whatever Draft existed when the candidate was
+  // generated — never trusted as current-state authority).
+  //
+  // Correction 2 — equal revision numbers are NOT proof of unchanged
+  // identity: a replacement Draft can start at the SAME numeric revision
+  // the old one was at (e.g. both at 0). Short-circuiting here whenever
+  // `confirmedFreshRevision === R4.revision` would skip the fresh read —
+  // and therefore the Draft-id check above — precisely in that case,
+  // silently leaving the OLD Draft id paired with a client state that now
+  // (coincidentally) looks "already correct". So the ONLY thing that may
+  // skip the fresh canonical read is an outright invalid input; whenever
+  // Design Lab hands this a real revision number, the read (and the
+  // identity check inside it) always happens, whether or not the number
+  // itself has changed.
+  function resyncEditorRevisionFromServer(confirmedFreshRevision) {
+    if (typeof confirmedFreshRevision !== 'number') {
+      return Promise.resolve();
+    }
+    return fetch(window.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (response) { return response.text(); })
+      .then(function (html) {
+        var freshDoc = new DOMParser().parseFromString(html, 'text/html');
+        var freshShell = freshDoc.querySelector('[data-r4-shell]');
+        var serverRevision = freshShell ? Number(freshShell.dataset.editRevision) : NaN;
+        var freshDraftId = freshShell ? Number(freshShell.dataset.r4DraftId) : NaN;
+        var currentDraftId = shell ? Number(shell.dataset.r4DraftId) : NaN;
+        // The freshly-fetched page is the true canonical resync point — it
+        // is what makes the revision bump SAFE to adopt (the rest of the
+        // editor's DOM is resynced in the same breath, never left behind).
+        if (!freshShell || Number.isNaN(serverRevision)) return;
+        if (
+          Number.isNaN(currentDraftId) ||
+          Number.isNaN(freshDraftId) ||
+          freshDraftId !== currentDraftId
+        ) {
+          // The canonical Draft identity itself changed underneath this
+          // tab (or could not be confirmed unchanged) — never merge the new
+          // revision into the old Draft's client workspace. Reload is the
+          // whole-editor-safe recovery; nothing further in this chain must
+          // run against the now-superseded state, so this promise is left
+          // deliberately unsettled.
+          window.location.reload();
+          return new Promise(function () {});
+        }
+        // Same Draft id, confirmed by this fresh read — the ONLY thing that
+        // ever proves identity is unchanged. Adopt the server state below
+        // even when `serverRevision` happens to equal what R4 already held
+        // (that equality was never the safety check; the id comparison
+        // above was).
+        if (structurePanel) {
+          var freshStructure = freshDoc.getElementById('r4Structure');
+          if (freshStructure) structurePanel.innerHTML = freshStructure.innerHTML;
+        }
+        if (globalDesignPanel) {
+          var freshGlobal = freshDoc.getElementById('r4GlobalDesign');
+          if (freshGlobal) globalDesignPanel.innerHTML = freshGlobal.innerHTML;
+        }
+        R4.revision = serverRevision;
+        if (shell) shell.dataset.editRevision = String(R4.revision);
+        if (previewFrame && previewFrame.contentWindow) {
+          previewFrame.contentWindow.location.reload();
+        }
+        R4.emit('r4:structure-refreshed');
+        R4.emit('r4:global-refreshed', { doc: freshDoc });
+      })
+      .catch(function () {
+        // A failed read-side refresh must NOT silently adopt an unconfirmed
+        // number — R4.revision stays exactly as it was; the next real
+        // mutation attempt (or a manual reload) re-establishes it safely.
+      });
+  }
+
   // ---- Undo/Redo: a dedicated command sender (not a `mutation` payload)
   // that still updates R4.revision/save-state/conflict exactly like
   // R4.sendMutation, and is still serialized behind the SAME R4.queue.
@@ -1979,8 +2094,20 @@ window.RastiSiR4 = {
       DL.compareBase = false;
       DL.active = true;
       return callDesignLab('reset', null, 'generating').then(function (body) {
-        if (body) DL.baseToken = body.token;
-        else DL.active = Boolean(DL.token);
+        if (body) {
+          DL.baseToken = body.token;
+          // Final-QA Defect 1 fix: a (re)start can observe a newer
+          // committed revision than R4 currently holds — resync it (and the
+          // rest of the editor's own visible state) from a genuine fresh
+          // read before announcing, so the Apply this restart leads to is
+          // stamped with the same revision the restarted candidate itself
+          // is bound to, never a stale client-cached one.
+          return resyncEditorRevisionFromServer(body.base_revision).then(function () {
+            announce();
+            return body;
+          });
+        }
+        DL.active = Boolean(DL.token);
         announce();
         return body;
       });

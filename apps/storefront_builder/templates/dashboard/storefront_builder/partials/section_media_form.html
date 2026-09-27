@@ -1,4 +1,5 @@
 {% extends "dashboard/base_admin.html" %}
+{% load static %}
 {% load storefront_builder_extras %}
 {% block title %}{% if item %}ویرایش{% else %}افزودن{% endif %} {{ config.label }} | پنل مدیریت{% endblock %}
 {% block page_title %}{% if item %}ویرایش{% else %}افزودن{% endif %} {{ config.label }}{% endblock %}
@@ -9,7 +10,13 @@ Phase 5 Task 4 (remediation R1a) — the full-page legacy media form now
 includes the SAME body partial the R4 Inspector embeds inline, so there is a
 single source for the form fields (no duplicate form). ``inline_media`` is not
 set here, so the shared partial renders a normal (non-htmx) form for the
-standalone page. The destinationPicker() Alpine factory lives in the partial.
+standalone page. The destinationPicker() Alpine factory is loaded below (the
+one shared definition for this page and the R4 Studio — see
+static/storefront_builder/destination_picker.js).
 {% endcomment %}
 {% include "dashboard/storefront_builder/partials/section_media_form_body.html" %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'storefront_builder/destination_picker.js' %}"></script>
 {% endblock %}

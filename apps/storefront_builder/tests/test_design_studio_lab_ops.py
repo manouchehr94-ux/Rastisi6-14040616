@@ -450,3 +450,146 @@ class DesignLabFullChainWritesNothingTests(_LabEndpointMixin, DesignLabBaseTestC
             candidate = self._decode(token)
             self.assertEqual(candidate.candidate_selections["theme"], key, family)
             self.assertEqual(candidate.candidate_settings["theme"]["intensity"], "strong", family)
+
+
+# ===========================================================================
+# Final-QA Defect 1 — restart-after-stale must recover, race stays protected
+# ===========================================================================
+class DesignLabRestartRevisionResyncTests(_LabEndpointMixin, DesignLabBaseTestCase):
+    """Browser QA defect: after a legitimate Design Lab restart (a stale
+    candidate is discarded and ``action=reset`` correctly returns the
+    CURRENT committed Draft's ``edit_revision``), the client-side outer
+    ``/mutate/`` envelope must be stamped with THAT SAME fresh revision —
+    never a client-cached, pre-restart one — or a legitimate Apply is
+    wrongly rejected as ``stale_revision``.
+
+    This class locks in the HTTP-layer contract the browser-side repair
+    (``r4_editor.js``) depends on: it proves the server ALREADY returns the
+    correct fresh ``base_revision`` on restart (§ ``action=reset``) and that
+    an Apply stamped with that fresh value succeeds, while one stamped with
+    a stale value — exactly what the unpatched client bug sent — is
+    correctly rejected. It cannot exercise the browser bug itself (no JS
+    test harness in this repo); that is proven separately by live two-
+    browser-context testing.
+    """
+
+    def test_case_a_restart_recovers_and_apply_succeeds(self):
+        old_token = self._mix()["token"]
+
+        # Browser B: a real Draft mutation elsewhere advances the revision.
+        other = self._mutate(
+            {"type": "theme.apply", "component_key": _occasion_key(), "intensity": "subtle"}
+        )
+        self.assertEqual(other.status_code, 200, other.content)
+        self.draft.refresh_from_db()
+
+        # The old (pre-mutation) candidate is correctly rejected as stale.
+        stale_preflight = self._lab("apply_payload", candidate_token=old_token)
+        self.assertEqual(stale_preflight.status_code, 409)
+        self.assertEqual(stale_preflight.json()["code"], "stale_candidate")
+
+        # Restart: action=reset must return a fresh candidate bound to the
+        # NEWEST committed revision (the server side of this already works).
+        restarted = self._lab("reset", candidate_token=old_token)
+        self.assertEqual(restarted.status_code, 200, restarted.content)
+        fresh_base_revision = restarted.json()["base_revision"]
+        self.assertEqual(fresh_base_revision, self.draft.edit_revision)
+        new_token = restarted.json()["token"]
+
+        # Apply the fresh candidate, stamping the OUTER /mutate/ envelope
+        # with the SAME fresh revision the restart just confirmed — exactly
+        # what the repaired client must do. Must succeed.
+        payload = self._lab("apply_payload", candidate_token=new_token)
+        self.assertEqual(payload.status_code, 200, payload.content)
+        mutation_resp = self._mutate(
+            payload.json()["mutation"], base_revision=fresh_base_revision
+        )
+        self.assertEqual(mutation_resp.status_code, 200, mutation_resp.content)
+        self.assertTrue(mutation_resp.json()["ok"])
+
+    def test_reported_symptom_stale_client_revision_after_restart_is_rejected(self):
+        """Reproduces the exact reported symptom: even though the RESTARTED
+        candidate itself is fresh, stamping the outer envelope with the
+        PRE-restart client-cached revision (what the unpatched
+        ``r4_editor.js`` bug does) is correctly rejected as stale — proving
+        why the client MUST resync its outer revision, not just discard the
+        old candidate."""
+        old_token = self._mix()["token"]
+        self.draft.refresh_from_db()
+        stale_client_revision = self.draft.edit_revision
+
+        other = self._mutate(
+            {"type": "theme.apply", "component_key": _occasion_key(), "intensity": "subtle"}
+        )
+        self.assertEqual(other.status_code, 200, other.content)
+
+        restarted = self._lab("reset", candidate_token=old_token)
+        self.assertEqual(restarted.status_code, 200, restarted.content)
+        new_token = restarted.json()["token"]
+
+        payload = self._lab("apply_payload", candidate_token=new_token)
+        self.assertEqual(payload.status_code, 200, payload.content)
+        mutation_resp = self._mutate(
+            payload.json()["mutation"], base_revision=stale_client_revision
+        )
+        self.assertEqual(mutation_resp.status_code, 409)
+
+    def test_case_b_race_after_restart_still_rejected_zero_write(self):
+        old_token = self._mix()["token"]
+        other = self._mutate(
+            {"type": "theme.apply", "component_key": _occasion_key(), "intensity": "subtle"}
+        )
+        self.assertEqual(other.status_code, 200, other.content)
+
+        restarted = self._lab("reset", candidate_token=old_token)
+        self.assertEqual(restarted.status_code, 200, restarted.content)
+        fresh_base_revision = restarted.json()["base_revision"]
+        new_token = restarted.json()["token"]
+
+        # A further REAL mutation happens AFTER the restart.
+        another = self._mutate(
+            {"type": "theme.apply", "component_key": _occasion_key(1), "intensity": "strong"}
+        )
+        self.assertEqual(another.status_code, 200, another.content)
+
+        before = _draft_persistent_fingerprint(self.draft)
+
+        # The design-lab preflight itself now considers the restarted
+        # candidate stale (the draft moved again after restart).
+        preflight = self._lab("apply_payload", candidate_token=new_token)
+        self.assertEqual(preflight.status_code, 409)
+        self.assertEqual(preflight.json()["code"], "stale_candidate")
+
+        # Even a request forged to bypass that preflight and hit the
+        # canonical mutation boundary directly, stamped with the revision
+        # that was fresh right after restart (now stale again), is rejected
+        # — zero write. Proves the race protection is not weakened.
+        forced = self._mutate(
+            {
+                "type": design_lab_service.DESIGN_LAB_APPLY_MUTATION_TYPE,
+                "draft_id": self.draft.pk,
+                "candidate_token": new_token,
+            },
+            base_revision=fresh_base_revision,
+        )
+        self.assertEqual(forced.status_code, 409)
+        self.assertEqual(_draft_persistent_fingerprint(self.draft), before)
+
+    def test_case_c_restart_does_not_mutate_draft(self):
+        old_token = self._mix(locked=["header"])["token"]
+        before = _draft_persistent_fingerprint(self.draft)
+        resp = self._lab("reset", candidate_token=old_token)
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(_draft_persistent_fingerprint(self.draft), before)
+
+    def test_case_d_lab_remains_transient_until_apply(self):
+        old_token = self._mix()["token"]
+        other = self._mutate(
+            {"type": "theme.apply", "component_key": _occasion_key(), "intensity": "subtle"}
+        )
+        self.assertEqual(other.status_code, 200, other.content)
+        before = _draft_persistent_fingerprint(self.draft)
+        resp = self._lab("reset", candidate_token=old_token)
+        self.assertEqual(resp.status_code, 200, resp.content)
+        # Restart alone, with no explicit Apply, still writes nothing.
+        self.assertEqual(_draft_persistent_fingerprint(self.draft), before)

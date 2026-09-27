@@ -6,6 +6,13 @@ R4 Inspector's inline media manager (loaded via HX-Request). Same canonical
 media_views form view / persistence; no second form. When embedded in R4 the
 form submits via htmx back into the inline manager container so the merchant
 never leaves R4; the full-page host submits normally.
+
+The `destinationPicker()` Alpine factory this form's `x-data` below needs is
+declared exactly once, in static/storefront_builder/destination_picker.js,
+loaded as a normal page script by both of this partial's real hosts
+(r4/editor.html and section_media_form.html) — never inline here, since a
+<script> embedded in this fragment never executes when the R4 Inspector
+inserts it via innerHTML/htmx (per the DOM spec).
 {% endcomment %}
 <div class="panel" style="max-width:640px">
   <a href="{% url 'dashboard:storefront-builder-section-media-list' pk=section.pk kind=kind %}"
@@ -14,7 +21,7 @@ never leaves R4; the full-page host submits normally.
      hx-target="closest [data-r4-media-manager]" hx-swap="innerHTML"{% endif %}>← بازگشت به {{ config.label_plural }}</a>
 
   <form method="post" enctype="multipart/form-data"
-        {% if inline_media %}{% if item %}hx-post="{% url 'dashboard:storefront-builder-section-media-edit' pk=section.pk kind=kind item_pk=item.pk %}"{% else %}hx-post="{% url 'dashboard:storefront-builder-section-media-add' pk=section.pk kind=kind %}"{% endif %}
+        {% if inline_media %}{% if item.pk %}hx-post="{% url 'dashboard:storefront-builder-section-media-edit' pk=section.pk kind=kind item_pk=item.pk %}"{% else %}hx-post="{% url 'dashboard:storefront-builder-section-media-add' pk=section.pk kind=kind %}"{% endif %}
         hx-target="closest [data-r4-media-manager]" hx-swap="innerHTML" hx-encoding="multipart/form-data"{% endif %}
         x-data="destinationPicker(
           '{{ item.destination_type|default:"none" }}',
@@ -144,14 +151,3 @@ never leaves R4; the full-page host submits normally.
     </div>
   </form>
 </div>
-<script>
-if (typeof window.destinationPicker !== 'function') {
-  window.destinationPicker = function (initialType, initialId, initialName) {
-    return {
-      type: initialType || 'none',
-      productId: initialType === 'product' ? initialId : null,
-      productName: initialType === 'product' ? initialName : '',
-    };
-  };
-}
-</script>
