@@ -1578,6 +1578,19 @@ window.RastiSiR4 = {
 
   R4.refreshGlobalDesignAndPreview = refreshGlobalDesignAndPreview;
 
+  // Media-publish-dirty final hardening — a pure preview-only reload,
+  // reusing the exact same #r4PreviewFrame idiom used throughout this file
+  // (refreshStructureAndPreview/refreshGlobalDesignAndPreview/undo/redo/
+  // publish/discard) with no read-side panel refresh of its own, so callers
+  // that only need the Draft Preview iframe to reflect a real section-media
+  // write (see r4_studio.js's r4:media-changed listener) don't have to
+  // reach for a heavier function or stand up a second preview authority.
+  R4.refreshPreview = function () {
+    if (previewFrame && previewFrame.contentWindow) {
+      previewFrame.contentWindow.location.reload();
+    }
+  };
+
   // ---- Final-QA Defect 1 fix — resync R4's own outer optimistic-concurrency
   // cursor (R4.revision) after a Design Lab restart observes a NEWER
   // committed Draft revision than the outer editor currently holds (e.g. a

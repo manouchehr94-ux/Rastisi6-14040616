@@ -735,8 +735,24 @@ def _build_studio_context(
         published is not None
         and published.status == StorefrontLayoutVersion.Status.PUBLISHED
     )
+    # Media-publish-dirty repair — compare two FRESHLY-computed fingerprints
+    # (both under the CURRENT algorithm), never the Draft's fresh one against
+    # ``published.content_fingerprint`` (a value persisted once, at that
+    # version's own Publish time, by whatever ``compute_fingerprint`` looked
+    # like back then). Trusting that stored string here would silently break
+    # every store whose Published version predates a ``compute_fingerprint``
+    # change (this repair's own section-scoped-media addition included): its
+    # persisted hash and a freshly-computed one would disagree over a
+    # dimension nothing about the store's actual content changed, forcing a
+    # permanent, unfixable "منتشرنشده" even on an untouched Draft. Recomputing
+    # both sides here costs one extra read-only pass over ``published`` (this
+    # runs on editor-status reads, never a hot public-render path) and keeps
+    # exactly ONE definition of "publication content" — the persisted field
+    # itself is untouched and still written at Publish time (``layout_service
+    # .publish``) as the version's own historical record, just no longer the
+    # thing this specific comparison trusts.
     draft_changed = (not has_published) or (
-        draft.compute_fingerprint() != (published.content_fingerprint or "")
+        draft.compute_fingerprint() != published.compute_fingerprint()
     )
 
     cards = build_ready_template_cards(

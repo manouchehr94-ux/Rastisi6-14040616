@@ -26,6 +26,11 @@ from apps.core.services.rate_limit import enforce_rate_limit
 
 from .. import appearance_registry, global_region_registry, layout_preset_registry
 from . import container_service
+from ..section_media_contract import (
+    ASSET_FK_FIELDS as _ASSET_FK_FIELDS,
+    PLACEMENT_CONTENT_FIELDS as _PLACEMENT_CONTENT_FIELDS,
+    SCOPED_MEDIA_MODELS as _SCOPED_MEDIA_MODELS,
+)
 from ..models import (
     APPEARANCE_COLOR_KEYS,
     APPEARANCE_CONFIG_DEFAULTS,
@@ -611,48 +616,14 @@ def _next_version_number(layout: StorefrontLayout) -> int:
     return (last.version_number + 1) if last else 1
 
 
-#: نگاشتِ نوعِ رسانه‌یِ مقیّد به section → (نامِ related_name رویِ
-#: StorefrontSection، لیستِ فیلدهایی که مستقیماً کپی می‌شوند بدونِ تغییرِ
-#: معنا). ``asset`` فیلدهای FKِ اشاره‌گر به ``MediaAsset`` عمداً از این
-#: لیست جدا نگه داشته شده‌اند (نگاه کنید به ``_ASSET_FK_FIELDS`` پایین) —
-#: تصمیمِ مالک ۴/۵: کلون‌کردنِ Placement هرگز نباید Placementِ منبع (که
-#: معمولاً به نسخه‌ی Published تعلق دارد) را تغییر دهد؛ فقط یک ردیفِ
-#: **جدید** با همان اشاره‌گرِ MediaAsset ساخته می‌شود.
-_SCOPED_MEDIA_MODELS = ("hero_slides", "banners", "story_items")
-
-#: هر مدلِ Placement کدام فیلدهایِ FKِ اشاره‌گر به ``MediaAsset`` دارد —
-#: این‌ها هم دقیقاً مثلِ بقیه‌ی فیلدها کپی می‌شوند (همان مقدارِ
-#: asset_id، نه ساختنِ asset تازه) چون تصمیمِ مالک ۵ صریحاً می‌گوید
-#: Placementِ کلون‌شده باید به **همان** ``MediaAsset`` اشاره کند، نه یک
-#: کپیِ تازه از فایل.
-_ASSET_FK_FIELDS = {
-    "hero_slides": ("desktop_asset_id", "mobile_asset_id"),
-    "banners": ("desktop_asset_id", "mobile_asset_id"),
-    "story_items": ("image_asset_id",),
-}
-
-#: فیلدهایِ محتواییِ غیرِ FK هر مدلِ Placement — کپی می‌شوند دقیقاً همان‌طور
-#: که هستند (بدونِ منطقِ خاص).
-_PLACEMENT_CONTENT_FIELDS = {
-    "hero_slides": (
-        "title", "subtitle", "button_label", "show_button", "is_active", "display_order",
-        "destination_type", "destination_category_id", "destination_product_id",
-        "destination_brand_id", "destination_collection_id", "destination_external_url",
-        "open_in_new_tab",
-    ),
-    "banners": (
-        "title", "description", "button_label", "show_button", "is_active", "display_order",
-        "destination_type", "destination_category_id", "destination_product_id",
-        "destination_brand_id", "destination_collection_id", "destination_external_url",
-        "open_in_new_tab",
-    ),
-    "story_items": (
-        "title", "is_active", "display_order",
-        "destination_type", "destination_category_id", "destination_product_id",
-        "destination_brand_id", "destination_collection_id", "destination_external_url",
-        "open_in_new_tab",
-    ),
-}
+#: Media-publish-dirty repair (final hardening) — ``_SCOPED_MEDIA_MODELS``/
+#: ``_ASSET_FK_FIELDS``/``_PLACEMENT_CONTENT_FIELDS`` used to be defined
+#: directly here; they now live in the neutral shared contract
+#: (``..section_media_contract``, imported above, aliased back to their
+#: original private names) so ``models.compute_fingerprint`` can import
+#: the exact same definitions without depending on this service module's
+#: private constants, and without this service depending on a second,
+#: independently-maintained copy.
 
 
 def _clone_section_scoped_media(source_section: StorefrontSection, target_section: StorefrontSection) -> None:

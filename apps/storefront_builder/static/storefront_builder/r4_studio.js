@@ -1147,6 +1147,27 @@
     renderChrome();
   });
 
+  // Media-publish-dirty repair — the R4-inline media manager (Hero Slides/
+  // Banners/Story Rail: add, edit, delete, toggle, move, reorder) is a
+  // separate canonical write path from the R4 mutation queue (see
+  // ``apps.storefront_builder.media_views``'s own docstring) — it never
+  // fires ``r4:savestate``. Its own endpoints set the ``HX-Trigger:
+  // r4:media-changed`` response header on every response that actually
+  // persisted a publication-visible change (never on a GET, an invalid
+  // submission's re-rendered form, or a request that changed nothing);
+  // htmx turns that header into exactly this bubbling DOM event on the
+  // element that made the request, which bubbles up to this shell root the
+  // same way every other R4 state event does. Same optimistic-then-confirm
+  // pattern as ``r4:lab-applied`` above: flip the pill immediately, then
+  // let ``scheduleStatusRefresh`` confirm against the server's own
+  // ``draft_changed`` projection.
+  root.addEventListener('r4:media-changed', function () {
+    ui.draftChanged = true;
+    if (R4.refreshPreview) R4.refreshPreview();
+    scheduleStatusRefresh();
+    renderChrome();
+  });
+
   // ---- initial state -----------------------------------------------------
   (function init() {
     // Deep links (?panel=appearance|header|footer) already opened Global

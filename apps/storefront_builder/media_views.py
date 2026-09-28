@@ -32,6 +32,7 @@ from apps.content.models import HeroSlide, PromotionalBanner, StoryRailItem
 from apps.dashboard.decorators import permission_required, staff_required
 from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
 
+from .section_media_contract import placement_semantic_payload
 from .views import _get_scoped_section, _resolve_store
 
 #: پیکربندیِ عمومیِ هر دو نوعِ رسانه — کلیدِ URL (``kind``) → مدل + برچسبِ
@@ -108,6 +109,20 @@ _MEDIA_KINDS = {
 }
 
 
+#: Media-publish-dirty final hardening — ``_MEDIA_KINDS``' own URL-facing
+#: ``kind`` keys are hyphenated (this module's own vocabulary, predating
+#: this repair); ``section_media_contract``/``layout_service`` key
+#: everything by the underscored Django ``related_name`` on
+#: ``StorefrontSection`` instead (``hero_slides``/``banners``/
+#: ``story_items``). This is the one explicit translation between the two
+#: vocabularies — never inferred, never duplicated ad hoc at each call site.
+_RELATED_NAME_FOR_KIND = {
+    "hero-slides": "hero_slides",
+    "banners": "banners",
+    "story-items": "story_items",
+}
+
+
 def media_kind_for_section_key(section_key: str) -> str | None:
     """R4 Task 7 (Batch 3) — the reverse lookup R4's Inspector needs: given
     a section_key, which (if any) ``_MEDIA_KINDS`` entry owns its media.
@@ -168,6 +183,38 @@ def _is_r4_inline(request) -> bool:
     """True only when the request explicitly declares R4-inline context via the
     ``HX-R4-Inline`` header — never merely because it is an HX request."""
     return request.headers.get(_R4_INLINE_HEADER) == "1"
+
+
+#: Media-publish-dirty repair — the ONE event name every successful,
+#: persistent, publication-visible media write fires so the R4 Studio shell
+#: (``r4_studio.js``) can refresh its "منتشرنشده"/Publish-enabled state the
+#: same way it already does after an ``R4.sendMutation``/Design-Lab-apply
+#: write (``r4:savestate``/``r4:lab-applied`` — see that file's
+#: ``scheduleStatusRefresh``). Media CRUD is a genuinely separate endpoint
+#: family from the R4 mutation queue (own canonical ownership boundary — see
+#: this module's docstring), so it needs its own signal; this is that
+#: signal, and the ONLY one — every write endpoint below funnels its
+#: successful-response through ``_media_changed_response`` instead of each
+#: hand-rolling its own header.
+_R4_MEDIA_CHANGED_EVENT = "r4:media-changed"
+
+
+def _media_changed_response(response):
+    """Mark ``response`` as following a real, persisted, publication-visible
+    media change — set as an htmx ``HX-Trigger`` response header, which
+    htmx dispatches as a bubbling DOM event on the element that issued the
+    request; the R4 shell listens for it on ``[data-r4-shell]`` (an
+    ancestor of the embedded media manager), the same place it already
+    listens for ``r4:savestate``/``r4:lab-applied``.
+
+    Callers pass this ONLY the response for a write that actually happened
+    (a successful form save, an executed delete/toggle/move/reorder) —
+    never a GET, never a validation-failure re-render, never a no-op
+    (duplicate reorder ids, a move at a list boundary). Getting that call
+    site right is what keeps an invalid submission or a read from ever
+    flipping the Draft to "منتشرنشده" on its own."""
+    response.headers["HX-Trigger"] = _R4_MEDIA_CHANGED_EVENT
+    return response
 
 
 def _media_list_body(request, section, kind, config):
@@ -286,6 +333,14 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
             f["name"]: (getattr(obj, f["name"]).name if obj.pk and getattr(obj, f["name"]) else None)
             for f in file_fields
         }
+        # Media-publish-dirty final hardening — captured BEFORE any field on
+        # ``obj`` is mutated below, so this is genuinely "what the Placement
+        # meant, before this request". ``None`` for a brand-new row (ADD is
+        # unconditionally a real semantic change — nothing to compare
+        # against).
+        before_semantic = (
+            placement_semantic_payload(item, _RELATED_NAME_FOR_KIND[kind]) if item else None
+        )
 
         obj.title = request.POST.get("title", "").strip()
         setattr(obj, config["text_field"], request.POST.get(config["text_field"], "").strip())
@@ -355,6 +410,16 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
             for legacy_name in legacy_files_to_cleanup:
                 cleanup_reusable_media_file(legacy_name, storage)
             messages.success(request, f"«{config['label']}» ذخیره شد")
+            # Media-publish-dirty final hardening — ``r4:media-changed`` must
+            # mean a publication-semantic change actually happened, not
+            # merely that ``.save()`` ran. ADD (``before_semantic is None``)
+            # is unconditionally real; an EDIT that re-saves the exact same
+            # render-visible values (only e.g. touching ``updated_at``, which
+            # is never part of this payload) must NOT flip the Draft to
+            # "منتشرنشده". Same shared helper ``compute_fingerprint`` uses —
+            # "the same Placement, unchanged" is defined exactly once.
+            after_semantic = placement_semantic_payload(obj, _RELATED_NAME_FOR_KIND[kind])
+            semantic_changed = before_semantic is None or before_semantic != after_semantic
             # Phase 5 Task 4 (final review fix) — when the save came from the R4
             # inline manager (explicit marker), return the refreshed manager
             # body so the merchant stays inside R4; a redirect would be
@@ -363,12 +428,14 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
             # exactly as before. Same canonical list body either way.
             if _is_r4_inline(request):
                 items = model.objects.filter(section=section).order_by("display_order", "id")
-                return render(
+                response = render(
                     request,
                     "dashboard/storefront_builder/partials/section_media_manager_body.html",
                     {"section": section, "items": items, "kind": kind, "config": config},
                 )
-            return redirect("dashboard:storefront-builder-section-media-list", pk=section.pk, kind=kind)
+                return _media_changed_response(response) if semantic_changed else response
+            response = redirect("dashboard:storefront-builder-section-media-list", pk=section.pk, kind=kind)
+            return _media_changed_response(response) if semantic_changed else response
         except (ValidationError, IntegrityError) as exc:
             error_message = str(exc.message_dict if hasattr(exc, "message_dict") else exc)
             messages.error(request, error_message)
@@ -454,7 +521,7 @@ def storefront_section_media_delete(request, pk, kind, item_pk):
             cleanup_reusable_media_file(legacy_name, storage)
 
     messages.success(request, f"«{config['label']}» حذف شد")
-    return _media_list_body(request, section, kind, config)
+    return _media_changed_response(_media_list_body(request, section, kind, config))
 
 
 @require_POST
@@ -466,7 +533,7 @@ def storefront_section_media_toggle(request, pk, kind, item_pk):
     item = get_object_or_404(config["model"], pk=item_pk, section=section)
     item.is_active = not item.is_active
     item.save(update_fields=["is_active", "updated_at"])
-    return _media_list_body(request, section, kind, config)
+    return _media_changed_response(_media_list_body(request, section, kind, config))
 
 
 @require_POST
@@ -478,17 +545,48 @@ def storefront_section_media_move(request, pk, kind, item_pk):
     section = _get_scoped_section(request, pk)
     config = _media_config(kind, section)
     model = config["model"]
+    related_name = _RELATED_NAME_FOR_KIND[kind]
     direction = request.POST.get("direction")
     item = get_object_or_404(model, pk=item_pk, section=section)
     siblings = list(model.objects.filter(section=section).order_by("display_order", "id"))
     index = next((i for i, s in enumerate(siblings) if s.pk == item.pk), None)
+    moved = False
     if index is not None:
         swap_index = index - 1 if direction == "up" else index + 1
         if 0 <= swap_index < len(siblings):
-            other = siblings[swap_index]
-            item.display_order, other.display_order = other.display_order, item.display_order
-            model.objects.bulk_update([item, other], ["display_order"])
-    return _media_list_body(request, section, kind, config)
+            # Media-publish-dirty final hardening (MOVE semantic-event gap)
+            # — an in-range positional swap alone is NOT proof anything
+            # publication-visible changed: two adjacent rows can already
+            # share the same ``display_order`` (no DB constraint prevents
+            # that — see ``HeroSlide``/``PromotionalBanner``/
+            # ``StoryRailItem`` Meta, ordering-only) or can otherwise be
+            # publication-semantically identical, in which case swapping
+            # them produces the exact same rendered sequence. Compare the
+            # CANONICAL ORDERED SEQUENCE of semantic payloads — via the
+            # SAME shared ``placement_semantic_payload`` helper
+            # ``compute_fingerprint`` and the EDIT before/after check both
+            # already use, never a second definition of "did the rendered
+            # order actually change" — before vs. after the swap, and only
+            # persist/emit when that sequence genuinely differs.
+            before_sequence = [placement_semantic_payload(s, related_name) for s in siblings]
+            siblings[index].display_order, siblings[swap_index].display_order = (
+                siblings[swap_index].display_order, siblings[index].display_order,
+            )
+            after_sequence = [
+                placement_semantic_payload(s, related_name)
+                for s in sorted(siblings, key=lambda s: (s.display_order, s.id))
+            ]
+            if after_sequence != before_sequence:
+                model.objects.bulk_update(
+                    [siblings[index], siblings[swap_index]], ["display_order"],
+                )
+                moved = True
+    response = _media_list_body(request, section, kind, config)
+    # An out-of-range move (already first/last item) is a legitimate no-op,
+    # and so is an in-range swap that changes nothing publication-semantic
+    # (equal display_order, or semantically-identical placements) — never
+    # mark the Draft dirty for a request that changed nothing real.
+    return _media_changed_response(response) if moved else response
 
 
 @require_POST
@@ -507,8 +605,23 @@ def storefront_section_media_reorder(request, pk, kind):
         messages.error(request, "فهرست مرتب‌سازی شامل شناسه‌ی تکراری است — ترتیب تغییر نکرد")
         return _media_list_body(request, section, kind, config)
 
+    if not ordered_ids:
+        # Nothing valid to reorder — a no-op, not a persisted change.
+        return _media_list_body(request, section, kind, config)
+
+    # Media-publish-dirty final hardening — if the requested valid order
+    # already equals the CURRENT effective order (every item's existing
+    # ``display_order`` already matches its requested index), this request
+    # changes nothing: skip the write entirely (no unnecessary DB churn)
+    # and never fire ``r4:media-changed`` for it.
+    existing_orders = dict(
+        model.objects.filter(section=section, pk__in=ordered_ids).values_list("pk", "display_order")
+    )
+    if all(existing_orders.get(item_id) == index for index, item_id in enumerate(ordered_ids)):
+        return _media_list_body(request, section, kind, config)
+
     with transaction.atomic():
         for index, item_id in enumerate(ordered_ids):
             model.objects.filter(pk=item_id, section=section).update(display_order=index)
 
-    return _media_list_body(request, section, kind, config)
+    return _media_changed_response(_media_list_body(request, section, kind, config))
