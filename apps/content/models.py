@@ -382,6 +382,36 @@ def _resolve_placement_media_url(asset, legacy_field):
     return ""
 
 
+def _require_effective_media(instance, *, asset_id_field: str, legacy_field: str) -> None:
+    """Cloned Media Edit Safety repair — the ONE canonical "does this
+    Placement have render-visible media at all" rule, reused by every
+    section-scoped media model's own ``clean()`` instead of each model
+    re-deriving it. Mirrors ``_resolve_placement_media_url``'s own
+    precedence exactly (MediaAsset first, legacy ``ImageField`` second) —
+    a Placement is valid the moment EITHER source exists.
+
+    Before this repair, the legacy ``ImageField`` was ``blank=False``
+    unconditionally at the FIELD level, so ``full_clean()`` rejected a
+    Draft cloned from an asset-backed Published Placement
+    (``layout_service._clone_section_scoped_media`` deliberately never
+    copies legacy bytes — see its own docstring) the instant it was
+    re-saved, even though that same row already renders correctly via
+    ``_resolve_placement_media_url`` and was already considered a fully
+    valid clone by the clone contract itself. The legacy field is now
+    ``blank=True`` at the field level, and THIS check — run from each
+    model's ``clean()``, after ``clean_fields()`` — is the single place
+    that still enforces "a Placement must have SOME effective media",
+    raised against the legacy field name (the one the merchant actually
+    sees as the upload control) only when NEITHER source exists."""
+    if getattr(instance, asset_id_field, None):
+        return
+    if getattr(instance, legacy_field):
+        return
+    raise ValidationError({
+        legacy_field: "تصویر الزامی است — یک تصویر آپلود کنید یا یک فایل رسانه‌ی موجود انتخاب کنید.",
+    })
+
+
 class MediaAsset(TimeStampedModel):
     """فایلِ فیزیکیِ رسانه — مالکیتِ آن مستقل از هر Placementِ خاص (Section/
     نسخه/صفحه) است.
@@ -471,7 +501,7 @@ class HeroSlide(TimeStampedModel, DestinationMixin):
     )
     title = models.CharField("عنوان", max_length=200, blank=True)
     subtitle = models.CharField("زیرعنوان", max_length=300, blank=True)
-    desktop_image = models.ImageField("تصویر دسکتاپ", upload_to="homepage/hero/", validators=[validate_image_size, validate_image_content])
+    desktop_image = models.ImageField("تصویر دسکتاپ", upload_to="homepage/hero/", blank=True, validators=[validate_image_size, validate_image_content])
     mobile_image = models.ImageField("تصویر موبایل", upload_to="homepage/hero/", blank=True, validators=[validate_image_size, validate_image_content])
     desktop_asset = models.ForeignKey(
         "MediaAsset", verbose_name="فایلِ رسانه — دسکتاپ",
@@ -510,6 +540,7 @@ class HeroSlide(TimeStampedModel, DestinationMixin):
         if self.show_button and self.destination_type == DestinationType.NONE:
             raise ValidationError({"destination_type": "وقتی دکمه فعال است، مقصد باید انتخاب شود"})
         self._validate_asset_store_ownership()
+        _require_effective_media(self, asset_id_field="desktop_asset_id", legacy_field="desktop_image")
 
     def _validate_asset_store_ownership(self):
         """Phase 0.5 — تصمیمِ مالک ۵ (ایمنیِ ارجاع): یک Placement نمی‌تواند
@@ -552,7 +583,7 @@ class PromotionalBanner(TimeStampedModel, DestinationMixin):
     )
     title = models.CharField("عنوان", max_length=200, blank=True)
     description = models.CharField("توضیحات", max_length=500, blank=True)
-    desktop_image = models.ImageField("تصویر دسکتاپ", upload_to="homepage/banners/", validators=[validate_image_size, validate_image_content])
+    desktop_image = models.ImageField("تصویر دسکتاپ", upload_to="homepage/banners/", blank=True, validators=[validate_image_size, validate_image_content])
     mobile_image = models.ImageField("تصویر موبایل", upload_to="homepage/banners/", blank=True, validators=[validate_image_size, validate_image_content])
     desktop_asset = models.ForeignKey(
         "MediaAsset", verbose_name="فایلِ رسانه — دسکتاپ",
@@ -587,6 +618,7 @@ class PromotionalBanner(TimeStampedModel, DestinationMixin):
         if self.show_button and self.destination_type == DestinationType.NONE:
             raise ValidationError({"destination_type": "وقتی دکمه فعال است، مقصد باید انتخاب شود"})
         self._validate_asset_store_ownership()
+        _require_effective_media(self, asset_id_field="desktop_asset_id", legacy_field="desktop_image")
 
     def _validate_asset_store_ownership(self):
         """Phase 0.5 — همان الگویِ ``HeroSlide._validate_asset_store_ownership``."""
@@ -1042,7 +1074,7 @@ class StoryRailItem(TimeStampedModel, DestinationMixin):
     )
     title = models.CharField("عنوان", max_length=60, blank=True)
     image = models.ImageField(
-        "تصویر", upload_to="storyrail/",
+        "تصویر", upload_to="storyrail/", blank=True,
         validators=[validate_image_size, validate_image_content],
     )
     image_asset = models.ForeignKey(
@@ -1069,6 +1101,7 @@ class StoryRailItem(TimeStampedModel, DestinationMixin):
         super().clean()
         if self.image_asset is not None and self.store_id is not None and self.image_asset.store_id != self.store_id:
             raise ValidationError({"image_asset": "فایلِ رسانه‌ی انتخاب‌شده متعلق به فروشگاهِ دیگری است"})
+        _require_effective_media(self, asset_id_field="image_asset_id", legacy_field="image")
 
     @property
     def image_url(self):
