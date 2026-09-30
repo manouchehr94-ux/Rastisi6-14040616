@@ -797,7 +797,7 @@
             '<div class="lab-option">' + icon('sliders') + '<h3>طراحی سراسری</h3><p>رنگ، نوشتار، قالب و مناسبت؛ روی تمام صفحه‌های فروشگاه.</p></div>' +
             '<div class="lab-option">' + icon('spark') + '<h3>آزمایشگاه</h3><p>ترکیب‌های تازه را موقت ببینید و فقط اگر دوست داشتید در پیش‌نویس اعمال کنید.</p></div>' +
             '<div class="lab-option">' + icon('globe') + '<h3>انتشار</h3><p>پیش‌نویس را به نسخهٔ عمومی تبدیل می‌کند؛ تا آن لحظه مشتری‌ها طرح قبلی را می‌بینند.</p></div>' +
-          '</div><div class="section-divider"></div><p class="small muted">Ctrl / ⌘ + Z: واگرد · Shift + Z: بازگردانی · Escape: بستن پنجره</p>';
+          '</div><div class="section-divider"></div><p class="small muted">Ctrl / ⌘ + Z: واگرد · Ctrl / ⌘ + Shift + Z: بازگردانی · Escape: بستن پنجره</p>';
         foot = btn('close-modal', 'متوجه شدم', '', 'primary');
         break;
       default:

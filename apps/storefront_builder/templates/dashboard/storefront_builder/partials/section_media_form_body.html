@@ -25,7 +25,7 @@ inserts it via innerHTML/htmx (per the DOM spec).
         hx-target="closest [data-r4-media-manager]" hx-swap="innerHTML" hx-encoding="multipart/form-data"{% endif %}
         x-data="destinationPicker(
           '{{ item.destination_type|default:"none" }}',
-          {% if item.destination_type == "category" %}{{ item.destination_category_id }}{% elif item.destination_type == "product" %}{{ item.destination_product_id }}{% elif item.destination_type == "brand" %}{{ item.destination_brand_id }}{% elif item.destination_type == "collection" %}{{ item.destination_collection_id }}{% else %}null{% endif %},
+          {% if item.destination_type == "category" %}{{ item.destination_category_id|default_if_none:"null" }}{% elif item.destination_type == "product" %}{{ item.destination_product_id|default_if_none:"null" }}{% elif item.destination_type == "brand" %}{{ item.destination_brand_id|default_if_none:"null" }}{% elif item.destination_type == "collection" %}{{ item.destination_collection_id|default_if_none:"null" }}{% else %}null{% endif %},
           '{% if item.destination_type == "product" %}{{ item.destination_product.name|default:""|escapejs }}{% endif %}')">
     {% csrf_token %}
 
@@ -138,7 +138,7 @@ inserts it via innerHTML/htmx (per the DOM spec).
 
     <div class="form-group" style="margin-top:10px">
       <label style="display:flex;align-items:center;gap:6px;font-weight:normal">
-        <input type="checkbox" name="is_active" {% if item.is_active|default:True %}checked{% endif %}>
+        <input type="checkbox" name="is_active" {% if not item or item.is_active %}checked{% endif %}>
         فعال (نمایش در فروشگاه)
       </label>
     </div>

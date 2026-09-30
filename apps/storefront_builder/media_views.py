@@ -259,18 +259,34 @@ def storefront_section_media_list(request, pk, kind):
     })
 
 
+#: destination_type → the ONE POST field (and model attr) that type owns. The
+#: form keeps every sibling control in the DOM (``x-show`` hides, never
+#: disables), so a browser submits stale values for the non-selected types;
+#: only the selected type's own value may be read.
+_DESTINATION_FIELD_BY_TYPE = {
+    "category": ("destination_category", "destination_category_id"),
+    "product": ("destination_product", "destination_product_id"),
+    "brand": ("destination_brand", "destination_brand_id"),
+    "collection": ("destination_collection", "destination_collection_id"),
+}
+_DESTINATION_ID_ATTRS = tuple(attr for _, attr in _DESTINATION_FIELD_BY_TYPE.values())
+
+
 def _apply_destination_fields(obj, request):
-    obj.destination_type = request.POST.get("destination_type", "none")
-    obj.destination_external_url = request.POST.get("destination_external_url", "").strip()
+    dtype = request.POST.get("destination_type", "none")
+    obj.destination_type = dtype
     obj.open_in_new_tab = request.POST.get("open_in_new_tab") == "on"
-    cat_id = request.POST.get("destination_category") or None
-    prod_id = request.POST.get("destination_product") or None
-    brand_id = request.POST.get("destination_brand") or None
-    collection_id = request.POST.get("destination_collection") or None
-    obj.destination_category_id = int(cat_id) if cat_id else None
-    obj.destination_product_id = int(prod_id) if prod_id else None
-    obj.destination_brand_id = int(brand_id) if brand_id else None
-    obj.destination_collection_id = int(collection_id) if collection_id else None
+    # Clear every destination value first, then set only the one the selected
+    # type owns (none/search/cart own nothing).
+    for attr in _DESTINATION_ID_ATTRS:
+        setattr(obj, attr, None)
+    obj.destination_external_url = ""
+    if dtype == "external":
+        obj.destination_external_url = request.POST.get("destination_external_url", "").strip()
+    elif dtype in _DESTINATION_FIELD_BY_TYPE:
+        post_field, attr = _DESTINATION_FIELD_BY_TYPE[dtype]
+        raw = request.POST.get(post_field) or None
+        setattr(obj, attr, int(raw) if raw else None)
 
 
 def _sync_asset_references(obj, config, store, *, changed_fields: set[str]) -> None:
@@ -346,7 +362,10 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
         setattr(obj, config["text_field"], request.POST.get(config["text_field"], "").strip())
         obj.button_label = request.POST.get("button_label", "").strip()
         obj.show_button = request.POST.get("show_button") == "on"
-        obj.is_active = request.POST.get("is_active", "on") == "on"
+        # Standard HTML checkbox semantics: an unchecked box OMITS the key, so an
+        # absent key means False (the old ``get("is_active", "on")`` default made
+        # every unchecked Save silently keep/restore is_active=True).
+        obj.is_active = request.POST.get("is_active") == "on"
         if not item:
             last = model.objects.filter(section=section).order_by("-display_order").first()
             obj.display_order = (last.display_order + 1) if last else 0
