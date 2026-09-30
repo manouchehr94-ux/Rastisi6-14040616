@@ -1,20 +1,48 @@
 {% extends "portal/public/base_public.html" %}
-{% block title %}پذیرش مالکیت فروشگاه | راستیسی{% endblock %}
+{% block title %}پذیرش مالکیت فروشگاه | راستی‌سی{% endblock %}
 {% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+
 {% block content %}
-<section class="r-auth-section"><div class="r-wrap"><div class="r-auth-shell">
-  <aside class="r-auth-story"><span class="r-overline">انتقال مالکیت</span><h1>یک عملیات حساس؛ با اطلاعات روشن و تأیید صریح.</h1><p>پیش از پذیرش، اطلاعات مقصد را بررسی کنید و انتقال را فقط با کد تأیید نهایی کنید.</p><div class="r-auth-points"><div class="r-auth-point">تأیید مقصد انتقال</div><div class="r-auth-point">دریافت کد قبل از پذیرش</div><div class="r-auth-point">پذیرش صریح مالکیت</div></div></aside>
-  <div class="r-auth-form">
-    {% if not transfer %}
-      <div class="r-auth-form-head"><h2>این پیوند معتبر نیست</h2><p>این درخواست انتقال مالکیت یافت نشد یا منقضی شده است.</p></div><div class="r-form-links"><a href="{% url 'portal:home' %}">بازگشت به راستیسی</a></div>
-    {% else %}
-      <div class="r-auth-form-head"><h2>پذیرش مالکیت فروشگاه</h2><p>فروشگاه «{{ transfer.store.name }}» به شما (<span dir="ltr" style="display:inline-block;font-weight:800;color:var(--r-ink)">{{ transfer.target_phone }}</span>) منتقل می‌شود.</p></div>
-      {% if messages %}{% for message in messages %}<div class="p-alert {% if message.tags == 'error' %}p-alert-error{% else %}p-alert-success{% endif %}">{{ message }}</div>{% endfor %}{% endif %}
-      <form method="post" style="margin-bottom:12px">{% csrf_token %}<input type="hidden" name="action" value="request_code"><button type="submit" class="r-btn r-btn-secondary r-form-submit">دریافت کد</button></form>
-      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="verify_code"><div class="p-field"><label for="id_code">کد تأیید</label><input type="text" id="id_code" name="code" maxlength="6" minlength="6" inputmode="numeric" autocomplete="one-time-code"></div><button type="submit" class="r-btn r-btn-primary r-form-submit">پذیرش مالکیت</button></form>
-      <div class="r-security-note">پذیرش مالکیت یک اقدام حساس است. نام فروشگاه و شماره مقصد را پیش از ثبت نهایی بررسی کنید.</div>
-    {% endif %}
+<section class="r-auth-section">
+  <div class="rs-container">
+    <div class="r-auth-shell">
+      <aside class="r-auth-story">
+        <div class="rs-eyebrow">انتقال مالکیت</div>
+        <h1>یک عملیات حساس؛<br>با تأیید صریح.</h1>
+        <p>پیش از پذیرش، اطلاعات مقصد را بررسی کنید و انتقال را فقط با کد تأیید نهایی کنید.</p>
+        <div class="r-auth-points">
+          <div class="r-auth-point">تأیید مقصد انتقال</div>
+          <div class="r-auth-point">دریافت کد قبل از پذیرش</div>
+          <div class="r-auth-point">پذیرش صریح مالکیت</div>
+        </div>
+      </aside>
+
+      <div class="r-auth-form">
+        {% if not transfer %}
+          <div class="r-auth-form-head"><h2>این پیوند معتبر نیست</h2><p>این درخواست انتقال مالکیت یافت نشد یا منقضی شده است.</p></div>
+          <div class="r-form-links"><a href="{% url 'portal:home' %}">بازگشت به راستی‌سی</a></div>
+        {% else %}
+          <div class="r-auth-form-head">
+            <h2>پذیرش مالکیت فروشگاه</h2>
+            <p>فروشگاه «{{ transfer.store.name }}» به شماره <span class="r-phone-inline">{{ transfer.target_phone }}</span> منتقل می‌شود.</p>
+          </div>
+
+          {% if messages %}{% for message in messages %}<div class="p-alert {% if message.tags == 'error' %}p-alert-error{% else %}p-alert-success{% endif %}">{{ message }}</div>{% endfor %}{% endif %}
+
+          <div class="r-auth-form-stack">
+            <form method="post">{% csrf_token %}<input type="hidden" name="action" value="request_code"><button type="submit" class="rs-btn rs-btn-outline r-form-submit">دریافت کد</button></form>
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="verify_code">
+              <div class="p-field"><label for="id_code">کد تأیید</label><input class="r-otp-input" type="text" id="id_code" name="code" maxlength="6" minlength="6" inputmode="numeric" autocomplete="one-time-code"></div>
+              <button type="submit" class="rs-btn rs-btn-primary r-form-submit">پذیرش مالکیت</button>
+            </form>
+          </div>
+
+          <div class="r-security-note">پذیرش مالکیت یک اقدام حساس است. نام فروشگاه و شماره مقصد را پیش از ثبت نهایی بررسی کنید.</div>
+        {% endif %}
+      </div>
+    </div>
   </div>
-</div></div></section>
+</section>
 {% endblock %}
-{% block public_extra_css %}<style>#id_code{direction:ltr;text-align:center;letter-spacing:8px;font-size:22px;font-weight:900}</style>{% endblock %}
