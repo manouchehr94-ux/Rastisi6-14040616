@@ -1,7 +1,7 @@
 {% extends "portal/public/base_public.html" %}
 {% load persian %}
 {% block title %}تعرفه‌ها | راستی‌سی{% endblock %}
-{% block meta_description %}<meta name="description" content="پلن‌ها و تعرفه‌های فعال راستی‌سی؛ قیمت، دوره پرداخت و دوره آزمایشی هر پلن را شفاف مقایسه کنید.">{% endblock %}
+{% block meta_description %}<meta name="description" content="پلن‌ها و تعرفه‌های فعال راستی‌سی؛ قیمت، دوره پرداخت و دوره آزمایشی هر پلن را شفاف ببینید و مقایسه کنید.">{% endblock %}
 
 {% block content %}
 <section class="rs-page-hero">
@@ -11,10 +11,17 @@
       <div>
         <div class="rs-eyebrow">تعرفه‌ها و شرایط</div>
         <h1>قبل از انتخاب،<br>همه‌چیز باید روشن باشد.</h1>
-        <p>قیمت، دوره پرداخت و دوره آزمایشی هر پلن از اطلاعات واقعی و فعال پلتفرم خوانده می‌شود؛ این صفحه قیمت فرضی نمایش نمی‌دهد.</p>
+        <p>قیمت، دوره پرداخت و دوره آزمایشی هر پلن از اطلاعات فعال پلتفرم خوانده می‌شود؛ بدون عدد فرضی و بدون شرایط پنهان در صفحه معرفی.</p>
       </div>
       <span class="rs-page-count">03</span>
     </div>
+  </div>
+</section>
+
+<section class="rs-kinetic-band" aria-label="اصول تعرفه">
+  <div class="rs-kinetic-track" aria-hidden="true">
+    <span>قیمت منتشرشده</span><span>دوره پرداخت روشن</span><span>آزمایش در صورت فعال بودن</span><span>انتخاب متناسب با نیاز فروشگاه</span>
+    <span>قیمت منتشرشده</span><span>دوره پرداخت روشن</span><span>آزمایش در صورت فعال بودن</span><span>انتخاب متناسب با نیاز فروشگاه</span>
   </div>
 </section>
 
@@ -22,7 +29,7 @@
   {% if plan_rows %}
     <div class="rs-pricing-head">
       <div><div class="rs-eyebrow">پلن‌های فعال</div><h2 class="rs-title">گزینه‌ای را انتخاب کنید که<br>با نیاز امروز فروشگاهتان هماهنگ است.</h2></div>
-      <div><p class="rs-lead">اطلاعات زیر مستقیماً از پلن‌های منتشرشده پلتفرم می‌آید. اگر دوره آزمایشی برای پلنی فعال باشد، همان‌جا نمایش داده می‌شود.</p></div>
+      <div><p class="rs-lead">لازم نیست از بزرگ‌ترین پلن شروع کنید. شرایط واقعی هر گزینه را ببینید و از چیزی شروع کنید که برای مرحله فعلی کسب‌وکارتان مناسب است.</p></div>
     </div>
 
     <div class="rs-pricing-grid">
@@ -58,9 +65,42 @@
   </div>
 </section>
 
+<section class="rs-section rs-container">
+  <div class="rs-pricing-guide">
+    <div>
+      <div class="rs-eyebrow">چطور انتخاب کنم؟</div>
+      <h2 class="rs-title">از نیاز امروز شروع کنید،<br>نه از فهرست بلند قابلیت‌ها.</h2>
+      <p class="rs-lead">برای انتخاب پلن، سه سؤال ساده کمک می‌کند محدوده نیازتان روشن‌تر شود. بعد، جزئیات همان پلن را در مسیر ثبت‌نام بررسی کنید.</p>
+    </div>
+    <div class="rs-pricing-guide-list">
+      <article class="rs-pricing-guide-item"><span>01</span><div><h3>فروشگاهتان الان در چه مرحله‌ای است؟</h3><p>شروع تازه، فروش فعال یا رشد عملیاتی هر کدام نیاز متفاوتی دارند.</p></div></article>
+      <article class="rs-pricing-guide-item"><span>02</span><div><h3>چه محدودیت‌هایی برایتان مهم است؟</h3><p>تعداد محصولات، سطح دسترسی‌ها و امکانات عملیاتی را با نیاز واقعی خودتان مقایسه کنید.</p></div></article>
+      <article class="rs-pricing-guide-item"><span>03</span><div><h3>دوره پرداخت و آزمایش را ببینید.</h3><p>اگر برای پلنی دوره آزمایشی تعریف شده باشد، همان مقدار واقعی در کارت آن نمایش داده می‌شود.</p></div></article>
+    </div>
+  </div>
+</section>
+
+<section class="rs-section-sm rs-container rs-home-faq">
+  <div>
+    <div class="rs-eyebrow">پیش از انتخاب</div>
+    <h2 class="rs-title">چند سؤال<br>طبیعی درباره پلن‌ها.</h2>
+    <a class="rs-link" href="{% url 'portal:help' %}">همه پرسش‌ها</a>
+  </div>
+  <div>
+    <details class="rs-faq-item" open><summary>قیمت‌هایی که اینجا می‌بینم واقعی‌اند؟</summary><p>بله؛ این صفحه قیمت نسخه منتشرشدهٔ پلن‌های عمومی را از اطلاعات پلتفرم نمایش می‌دهد.</p></details>
+    <details class="rs-faq-item"><summary>اگر قیمت یک پلن تغییر کند چه می‌شود؟</summary><p>شرایط جدید به‌صورت نسخه تازهٔ پلن منتشر می‌شود؛ نسخه‌های منتشرشده قبلی مستقیماً بازنویسی نمی‌شوند.</p></details>
+    <details class="rs-faq-item"><summary>دوره آزمایشی برای همه پلن‌ها یکسان است؟</summary><p>خیر؛ فقط اگر برای نسخهٔ همان پلن دوره آزمایشی تعریف شده باشد، تعداد روزهای آن در کارت پلن نمایش داده می‌شود.</p></details>
+  </div>
+</section>
+
 <section class="rs-section-sm rs-container">
   <div class="rs-note">خرید و فعال‌سازی اشتراک در مسیر حساب مالک و فروشگاه انجام می‌شود. این صفحه فقط پلن‌های عمومی قابل انتخاب را معرفی می‌کند.</div>
 </section>
 
-<section class="rs-final"><div class="rs-container rs-final-inner"><div><div class="rs-eyebrow">آماده شروع هستید؟</div><h2>فروشگاهتان را بسازید.<br>پلن را با اطلاعات روشن انتخاب کنید.</h2></div><a class="rs-btn rs-btn-primary" href="{% url 'portal:register' %}">ساخت حساب</a></div></section>
+<section class="rs-final">
+  <div class="rs-container rs-final-inner">
+    <div><div class="rs-eyebrow">آماده شروع هستید؟</div><h2>فروشگاهتان را بسازید.<br>پلن را با اطلاعات روشن انتخاب کنید.</h2><p>ابتدا حساب را بسازید؛ انتخاب سرویس در مسیر واقعی محصول ادامه پیدا می‌کند.</p></div>
+    <a class="rs-btn rs-btn-primary" href="{% url 'portal:register' %}">ساخت حساب</a>
+  </div>
+</section>
 {% endblock %}
