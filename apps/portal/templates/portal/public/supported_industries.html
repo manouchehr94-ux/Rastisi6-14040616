@@ -1,22 +1,49 @@
 {% extends "portal/public/base_public.html" %}
 {% load persian %}
-{% block title %}صنوف پشتیبانی‌شده | راستیسی{% endblock %}
-{% block meta_description %}<meta name="description" content="{% if industry_count %}{{ industry_count }} ساختار صنفی آماده در راستیسی؛ صنف کسب‌وکار خود را جست‌وجو کنید.{% else %}صنوف و ساختارهای آماده برای شروع فروشگاه در راستیسی.{% endif %}">{% endblock %}
+{% block title %}صنوف پشتیبانی‌شده | راستی‌سی{% endblock %}
+{% block meta_description %}<meta name="description" content="{% if industry_count %}{{ industry_count }} ساختار صنفی آماده در راستی‌سی؛ صنف کسب‌وکار خود را جست‌وجو کنید.{% else %}صنوف و ساختارهای آماده برای شروع فروشگاه در راستی‌سی.{% endif %}">{% endblock %}
+
 {% block content %}
 <div class="r-industries-page">
-<section class="r-page-hero"><div class="r-wrap r-page-hero-grid">
-  <div><span class="r-overline">صنوف</span><h1 class="r-h1">یک نقطه‌ی شروع متناسب با نوع کسب‌وکار.</h1></div>
-  <div>{% if industry_count %}<p class="r-lead">در حال حاضر {{ industry_count|fa_number }} قالب صنفی آماده قابل انتخاب است. اگر صنف شما در فهرست نباشد، همچنان می‌توانید فروشگاه را بدون قالب آماده بسازید و ساختارش را خودتان تعریف کنید.</p>{% else %}<p class="r-lead">در حال حاضر قالب صنفی آماده‌ای برای نمایش وجود ندارد؛ فروشگاه همچنان می‌تواند بدون قالب آماده ساخته و به‌صورت دستی تنظیم شود.</p>{% endif %}</div>
-</div></section>
-<section class="r-section" style="padding-top:24px"><div class="r-wrap">
-  {% include "catalog/partials/industry_filter_bar.html" with sector_tabs=industry_sector_tabs search_placeholder="جستجوی صنف شغلی..." search_input_id="publicIndustrySearch" %}
-  <div class="industry-grid">
-    {% for template in industry_templates %}
-    <div class="industry-card" data-name="{{ template.name }}" data-sector="{{ template.sector }}" data-sector-label="{{ template.get_sector_display }}"><div class="ic-emoji">{{ template.icon|default:"•" }}</div><div class="ic-name">{{ template.name }}</div><div class="ic-sector">{{ template.get_sector_display }}</div></div>
-    {% endfor %}
-  </div>
-  {% include "catalog/partials/industry_empty_state.html" %}
-  <div class="r-empty-state" style="margin-top:40px"><span class="r-overline">صنف شما اینجا نیست؟</span><h2 class="r-h3" style="margin-top:14px">فروشگاه را بدون ساختار آماده شروع کنید.</h2><p class="r-copy">می‌توانید گزینه «سایر» را انتخاب کنید و ساختار کسب‌وکارتان را به‌صورت دستی تعریف کنید.</p><a href="{% url 'portal:register' %}" class="r-btn r-btn-primary">شروع ساخت فروشگاه</a></div>
-</div></section>
+  <section class="rs-page-hero">
+    <div class="rs-container">
+      <div class="rs-breadcrumbs"><a href="{% url 'portal:home' %}">راستی‌سی</a><span>/</span><span>صنوف</span></div>
+      <div class="rs-page-hero-row">
+        <div>
+          <div class="rs-eyebrow">نقطه شروع متناسب با کسب‌وکار</div>
+          <h1>از ساختاری شروع کنید<br>که به کار شما نزدیک‌تر است.</h1>
+          {% if industry_count %}
+            <p>در حال حاضر {{ industry_count|fa_number }} ساختار صنفی آماده قابل انتخاب است. اگر صنف شما در فهرست نباشد، فروشگاه همچنان بدون قالب صنفی آماده قابل ساخت است.</p>
+          {% else %}
+            <p>در حال حاضر ساختار صنفی آماده‌ای برای نمایش وجود ندارد؛ فروشگاه همچنان می‌تواند بدون قالب آماده ساخته و به‌صورت دستی تنظیم شود.</p>
+          {% endif %}
+        </div>
+        <span class="rs-page-count">08</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="rs-page-section rs-container">
+    {% include "catalog/partials/industry_filter_bar.html" with sector_tabs=industry_sector_tabs search_placeholder="جستجوی صنف شغلی..." search_input_id="publicIndustrySearch" %}
+
+    <div class="industry-grid">
+      {% for template in industry_templates %}
+      <div class="industry-card" data-name="{{ template.name }}" data-sector="{{ template.sector }}" data-sector-label="{{ template.get_sector_display }}">
+        <div class="ic-emoji">{{ template.icon|default:"•" }}</div>
+        <div class="ic-name">{{ template.name }}</div>
+        <div class="ic-sector">{{ template.get_sector_display }}</div>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% include "catalog/partials/industry_empty_state.html" %}
+
+    <div class="rs-empty-state">
+      <div class="rs-eyebrow">صنف شما اینجا نیست؟</div>
+      <h2>فروشگاه را بدون ساختار آماده شروع کنید.</h2>
+      <p>می‌توانید مسیر ساخت فروشگاه را ادامه دهید و ساختار مناسب کسب‌وکارتان را در مراحل بعد تنظیم کنید.</p>
+      <a href="{% url 'portal:register' %}" class="rs-btn rs-btn-primary">شروع ساخت فروشگاه</a>
+    </div>
+  </section>
 </div>
 {% endblock %}
