@@ -142,6 +142,36 @@
     });
   }
 
+  const faqSearch = document.querySelector('[data-rs-faq-search]');
+  if (faqSearch) {
+    const faqItems = [...document.querySelectorAll('.rs-faq-list .rs-faq-item')];
+    const faqCount = document.querySelector('[data-rs-faq-count]');
+    const normalize = (value) => value.toLocaleLowerCase('fa-IR').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim();
+    const applyFaqSearch = () => {
+      const query = normalize(faqSearch.value);
+      let visible = 0;
+      faqItems.forEach((item) => {
+        const matches = !query || normalize(item.textContent || '').includes(query);
+        item.hidden = !matches;
+        if (matches) visible += 1;
+      });
+      document.querySelectorAll('.rs-faq-list > .rs-eyebrow[id]').forEach((heading) => {
+        let node = heading.nextElementSibling;
+        let hasVisible = false;
+        while (node && !node.matches('.rs-eyebrow[id]')) {
+          if (node.matches('.rs-faq-item') && !node.hidden) hasVisible = true;
+          node = node.nextElementSibling;
+        }
+        heading.hidden = !hasVisible;
+      });
+      if (faqCount) {
+        faqCount.textContent = query ? `${new Intl.NumberFormat('fa-IR').format(visible)} پاسخ مرتبط` : '';
+      }
+    };
+    faqSearch.addEventListener('input', applyFaqSearch);
+    applyFaqSearch();
+  }
+
   document.querySelectorAll('.rs-faq-item').forEach((item) => {
     item.addEventListener('toggle', () => {
       if (!item.open) return;
