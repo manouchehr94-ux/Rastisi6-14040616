@@ -17,6 +17,13 @@
   </div>
 </section>
 
+<section class="rs-kinetic-band" aria-label="موضوعات راهنما">
+  <div class="rs-kinetic-track" aria-hidden="true">
+    <span>شروع فروشگاه</span><span>طراحی و ظاهر</span><span>تعرفه و اشتراک</span><span>محصول و سفارش</span><span>دامنه و مدیریت</span>
+    <span>شروع فروشگاه</span><span>طراحی و ظاهر</span><span>تعرفه و اشتراک</span><span>محصول و سفارش</span><span>دامنه و مدیریت</span>
+  </div>
+</section>
+
 <section class="rs-page-section rs-container rs-faq-layout">
   <aside class="rs-faq-sidebar" aria-label="دسته‌بندی پرسش‌ها">
     <a href="#getting-started">شروع کار</a>
@@ -26,6 +33,12 @@
   </aside>
 
   <div class="rs-faq-list">
+    <div class="rs-faq-searchbox">
+      <label class="sr-only" for="rsFaqSearch">جست‌وجو در پرسش‌های متداول</label>
+      <input id="rsFaqSearch" type="search" data-rs-faq-search placeholder="مثلاً: قالب، دامنه، تعرفه یا سفارش" autocomplete="off">
+    </div>
+    <p class="rs-faq-search-count" data-rs-faq-count aria-live="polite"></p>
+
     <div class="rs-eyebrow" id="getting-started">شروع کار</div>
 
     <details class="rs-faq-item" open>
@@ -80,6 +93,13 @@
     </details>
 
     <div class="rs-faq-helper"><span>پاسخ سؤال شما اینجا نبود؟</span><a class="rs-btn rs-btn-outline rs-btn-sm" href="{% url 'portal:contact' %}">سؤالتان را بنویسید</a></div>
+  </div>
+</section>
+
+<section class="rs-final">
+  <div class="rs-container rs-final-inner">
+    <div><div class="rs-eyebrow">پاسخ پیدا نشد؟</div><h2>سؤال شما،<br>می‌تواند شروع گفت‌وگو باشد.</h2><p>اگر پاسخ دقیق نیازتان در این صفحه نیست، موضوع را برای ما بنویسید.</p></div>
+    <a class="rs-btn rs-btn-primary" href="{% url 'portal:contact' %}">تماس با راستی‌سی</a>
   </div>
 </section>
 {% endblock %}
