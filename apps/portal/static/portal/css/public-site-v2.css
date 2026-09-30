@@ -780,3 +780,33 @@ h1,h2,h3,h4,p{margin-top:0}
 .rs-faq-item[hidden],.rs-faq-list>.rs-eyebrow[hidden]{display:none}
 .rs-contact-process{margin-top:50px}
 .rs-contact-process .rs-flow{margin-top:22px}
+
+@keyframes rs-hero-enter{
+  from{opacity:0;transform:translateY(22px);filter:blur(5px)}
+  to{opacity:1;transform:none;filter:none}
+}
+@keyframes rs-preview-enter{
+  from{opacity:0;transform:translateY(24px) scale(.975)}
+  to{opacity:1;transform:none}
+}
+.rs-js .rs-hero-copy>.rs-eyebrow,
+.rs-js .rs-hero-copy>h1,
+.rs-js .rs-hero-copy>.rs-hero-desc,
+.rs-js .rs-hero-copy>.rs-actions,
+.rs-js .rs-hero-copy>.rs-hero-note,
+.rs-js .rs-page-hero-row>div>.rs-eyebrow,
+.rs-js .rs-page-hero-row>div>h1,
+.rs-js .rs-page-hero-row>div>p{
+  opacity:0;animation:rs-hero-enter .75s cubic-bezier(.2,.75,.2,1) forwards
+}
+.rs-js .rs-hero-copy>h1,.rs-js .rs-page-hero-row>div>h1{animation-delay:.08s}
+.rs-js .rs-hero-copy>.rs-hero-desc,.rs-js .rs-page-hero-row>div>p{animation-delay:.16s}
+.rs-js .rs-hero-copy>.rs-actions{animation-delay:.24s}
+.rs-js .rs-hero-copy>.rs-hero-note{animation-delay:.31s}
+.rs-js .rs-hero-art{opacity:0;animation:rs-preview-enter .9s .18s cubic-bezier(.2,.75,.2,1) forwards}
+.rs-demo-art::after,.rs-gallery-scene::after{animation:rs-ambient-shift 8s ease-in-out infinite alternate}
+@keyframes rs-ambient-shift{to{transform:translate(10px,-8px) scale(1.05)}}
+@media(prefers-reduced-motion:reduce){
+  .rs-js .rs-hero-copy>*,.rs-js .rs-page-hero-row>div>*,.rs-js .rs-hero-art{opacity:1!important;animation:none!important;filter:none!important;transform:none!important}
+  .rs-demo-art::after,.rs-gallery-scene::after{animation:none!important}
+}
