@@ -1,11 +1,104 @@
 {% extends "portal/public/base_public.html" %}
 {% block title %}درباره راستی‌سی{% endblock %}
-{% block meta_description %}<meta name="description" content="راستی‌سی برای نزدیک کردن ویترین فروشگاه و ابزارهای مدیریت روزمره کسب‌وکار ساخته می‌شود.">{% endblock %}
+{% block meta_description %}<meta name="description" content="راستی‌سی برای نزدیک کردن ویترین فروشگاه و ابزارهای مدیریت روزمره کسب‌وکار ساخته می‌شود؛ با تمرکز بر سادگی، هویت و یکپارچگی.">{% endblock %}
+
 {% block content %}
-<section class="rs-page-hero"><div class="rs-container"><div class="rs-breadcrumbs"><a href="{% url 'portal:home' %}">راستی‌سی</a><span>/</span><span>درباره ما</span></div><div class="rs-page-hero-row"><div><div class="rs-eyebrow">درباره راستی‌سی</div><h1>فروشگاه خوب،<br>نباید از پیچیدگی شروع شود.</h1><p>راستی‌سی برای نزدیک‌کردن دو چیز ساخته می‌شود: ویترینی که مشتری می‌بیند و ابزارهایی که صاحب کسب‌وکار هر روز با آن‌ها کار می‌کند.</p></div><span class="rs-page-count">04</span></div></div></section>
-<section class="rs-section rs-container"><div class="rs-intro"><div class="rs-eyebrow">نگاه ما</div><p>صاحب کسب‌وکار باید بتواند روی <span>محصول، مشتری و برندش</span> تمرکز کند؛ نه روی کنار هم گذاشتن یک فروشگاه از صفر.</p></div></section>
-<section class="rs-section-sm rs-container rs-rule"><div class="rs-section-head"><div><div class="rs-eyebrow">مسئله‌ای که دنبال می‌کنیم</div><h2 class="rs-title">ویترین و مدیریت،<br>دو جهان جدا نیستند.</h2></div><div><p class="rs-lead">محصول باید درست معرفی شود، تجربه خرید قابل فهم باشد و کارهای روزانه فروشگاه هم مسیر مشخصی داشته باشند. راستی‌سی این بخش‌ها را در یک تجربه منسجم کنار هم قرار می‌دهد.</p></div></div></section>
-<section class="rs-section-sm rs-container"><div class="rs-journey"><article class="rs-journey-item"><span class="rs-journey-index">01</span><h3>یکپارچگی، نه پراکندگی</h3><p>طراحی، اطلاعات محصول و مدیریت فروشگاه باید به هم مرتبط باشند.</p></article><article class="rs-journey-item"><span class="rs-journey-index">02</span><h3>وضوح، نه وعده بزرگ</h3><p>امکانات و شرایط را روشن و مبتنی بر محصول واقعی معرفی می‌کنیم.</p></article><article class="rs-journey-item"><span class="rs-journey-index">03</span><h3>هویت، نه شبیه‌شدن</h3><p>فروشگاه باید امکان تفاوت و بیان برند خود کسب‌وکار را داشته باشد.</p></article></div></section>
-<section class="rs-section-sm rs-container"><div class="rs-note">اطلاعات شرکتی مانند تاریخ تأسیس، اندازه تیم یا آمار مشتریان فقط زمانی باید در این صفحه قرار بگیرند که اطلاعات رسمی و تأییدشده برای انتشار داشته باشیم.</div></section>
-<section class="rs-final"><div class="rs-container rs-final-inner"><div><div class="rs-eyebrow">شروع همکاری</div><h2>محصول شما.<br>روایت شما.<br>فروشگاه شما.</h2></div><a class="rs-btn rs-btn-primary" href="{% url 'portal:register' %}">ساخت فروشگاه</a></div></section>
+<section class="rs-page-hero">
+  <div class="rs-container">
+    <div class="rs-breadcrumbs"><a href="{% url 'portal:home' %}">راستی‌سی</a><span>/</span><span>درباره ما</span></div>
+    <div class="rs-page-hero-row">
+      <div>
+        <div class="rs-eyebrow">درباره راستی‌سی</div>
+        <h1>فروشگاه خوب،<br>نباید از پیچیدگی شروع شود.</h1>
+        <p>راستی‌سی برای نزدیک‌کردن دو چیز ساخته می‌شود: ویترینی که مشتری می‌بیند و ابزارهایی که صاحب کسب‌وکار هر روز با آن‌ها کار می‌کند.</p>
+      </div>
+      <span class="rs-page-count">04</span>
+    </div>
+  </div>
+</section>
+
+<section class="rs-kinetic-band" aria-label="اصول راستی‌سی">
+  <div class="rs-kinetic-track" aria-hidden="true">
+    <span>وضوح پیش از پیچیدگی</span><span>هویت پیش از شباهت</span><span>یکپارچگی پیش از پراکندگی</span><span>محصول واقعی پیش از وعده بزرگ</span>
+    <span>وضوح پیش از پیچیدگی</span><span>هویت پیش از شباهت</span><span>یکپارچگی پیش از پراکندگی</span><span>محصول واقعی پیش از وعده بزرگ</span>
+  </div>
+</section>
+
+<section class="rs-section rs-container">
+  <div class="rs-intro">
+    <div class="rs-eyebrow">نگاه ما</div>
+    <p>صاحب کسب‌وکار باید بتواند روی <span>محصول، مشتری و برندش</span> تمرکز کند؛ نه روی کنار هم گذاشتن یک فروشگاه از صفر.</p>
+  </div>
+</section>
+
+<section class="rs-section-sm rs-container">
+  <div class="rs-about-panels">
+    <article class="rs-about-panel is-dark">
+      <div class="rs-eyebrow">مسئله‌ای که دنبال می‌کنیم</div>
+      <h3>ویترین و مدیریت،<br>دو جهان جدا نیستند.</h3>
+      <p>محصول باید درست معرفی شود، تجربه خرید قابل فهم باشد و کارهای روزانه فروشگاه هم مسیر مشخصی داشته باشند. این اجزا باید به هم متصل باشند، نه اینکه صاحب فروشگاه بین ابزارهای جدا رفت‌وآمد کند.</p>
+      <div class="rs-about-orbit" aria-hidden="true"></div>
+    </article>
+    <article class="rs-about-panel">
+      <div class="rs-eyebrow">چیزی که مهم است</div>
+      <h3>فروشگاه باید ادامهٔ هویت کسب‌وکار باشد.</h3>
+      <p>قالب و ابزار قرار نیست همه فروشگاه‌ها را شبیه هم کنند. نقطه شروع باید آماده باشد، اما نتیجه باید بتواند به زبان برند خود فروشنده نزدیک شود.</p>
+    </article>
+  </div>
+
+  <div class="rs-about-principles">
+    <article class="rs-about-principle"><span>01</span><h3>یکپارچگی، نه پراکندگی</h3><p>طراحی، اطلاعات محصول و مدیریت فروشگاه باید به هم مرتبط باشند.</p></article>
+    <article class="rs-about-principle"><span>02</span><h3>وضوح، نه وعده بزرگ</h3><p>امکانات و شرایط را بر اساس چیزی که واقعاً در محصول وجود دارد معرفی می‌کنیم.</p></article>
+    <article class="rs-about-principle"><span>03</span><h3>هویت، نه شبیه‌شدن</h3><p>ابزار باید به برندها فرصت تفاوت بدهد، نه اینکه آن‌ها را در یک ظاهر ثابت محدود کند.</p></article>
+  </div>
+</section>
+
+<section class="rs-section rs-dark">
+  <div class="rs-container rs-operations">
+    <div>
+      <div class="rs-eyebrow">از نگاه صاحب فروشگاه</div>
+      <h2>کمتر درگیر ابزار.<br>بیشتر درگیر کسب‌وکار.</h2>
+      <p class="rs-lead">هدف یک تجربه خوب این نیست که قابلیت‌های بیشتری جلوی کاربر بگذارد؛ باید تصمیم‌های روزمره را واضح‌تر کند.</p>
+      <div class="rs-operation-list">
+        <div class="rs-operation"><strong>محصول را بهتر معرفی کنید</strong><p>اطلاعات محصول و ظاهر ویترین باید یکدیگر را تقویت کنند.</p></div>
+        <div class="rs-operation"><strong>کار روزانه را گم نکنید</strong><p>سفارش، محصول و تنظیمات باید جای مشخص و قابل پیش‌بینی داشته باشند.</p></div>
+        <div class="rs-operation"><strong>رشد را روی ساختار منظم بنا کنید</strong><p>تغییر ظاهر یا توسعه فروشگاه نباید داده‌های اصلی کسب‌وکار را از نو بسازد.</p></div>
+      </div>
+    </div>
+    <div class="rs-admin">
+      <div class="rs-admin-head"><strong>راستی‌سی</strong><span>ویترین + مدیریت</span></div>
+      <div class="rs-admin-content">
+        <div class="rs-admin-top"><h3>یک تجربه متصل</h3><span class="rs-admin-add">ساده و روشن</span></div>
+        <div class="rs-admin-row"><strong>ویترین فروشگاه</strong><span>برای مشتری</span><span class="rs-status">متصل</span></div>
+        <div class="rs-admin-row"><strong>محصول و رسانه</strong><span>برای محتوا</span><span class="rs-status">متصل</span></div>
+        <div class="rs-admin-row"><strong>سفارش‌ها</strong><span>برای عملیات</span><span class="rs-status">متصل</span></div>
+        <div class="rs-admin-row"><strong>طراحی فروشگاه</strong><span>برای هویت</span><span class="rs-status">متصل</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="rs-section-sm rs-container">
+  <div class="rs-section-head">
+    <div><div class="rs-eyebrow">چطور به محصول نگاه می‌کنیم</div><h2 class="rs-title">هر قابلیت، باید یک کار روشن<br>برای فروشنده انجام دهد.</h2></div>
+    <div><p class="rs-lead">این اصل کمک می‌کند صفحات و ابزارها از انباشت گزینه‌های بی‌هدف دور بمانند و هر بخش جای مشخصی در مسیر فروشگاه داشته باشد.</p></div>
+  </div>
+  <div class="rs-flow">
+    <article class="rs-flow-step"><span>01</span><h3>نیاز را بفهمیم</h3><p>از مسئلهٔ واقعی فروشنده و مشتری شروع کنیم.</p></article>
+    <article class="rs-flow-step"><span>02</span><h3>مسیر را ساده کنیم</h3><p>قدم‌های غیرضروری را کم کنیم و تصمیم‌ها را روشن نگه داریم.</p></article>
+    <article class="rs-flow-step"><span>03</span><h3>ظاهر و عملکرد را وصل کنیم</h3><p>زیبایی نباید جدا از کاربرد و داده‌های فروشگاه باشد.</p></article>
+    <article class="rs-flow-step"><span>04</span><h3>فقط واقعیت را معرفی کنیم</h3><p>ادعاهای عمومی باید با قابلیت و اطلاعات تأییدشده پشتیبانی شوند.</p></article>
+  </div>
+</section>
+
+<section class="rs-section-sm rs-container">
+  <div class="rs-note">اطلاعات شرکتی مانند تاریخ تأسیس، اندازه تیم یا آمار مشتریان فقط زمانی در این صفحه قرار می‌گیرند که اطلاعات رسمی و تأییدشده برای انتشار در اختیار سایت باشد.</div>
+</section>
+
+<section class="rs-final">
+  <div class="rs-container rs-final-inner">
+    <div><div class="rs-eyebrow">شروع همکاری</div><h2>محصول شما.<br>روایت شما.<br>فروشگاه شما.</h2><p>راستی‌سی ساختار را فراهم می‌کند؛ هویت فروشگاه را کسب‌وکار شما می‌سازد.</p></div>
+    <a class="rs-btn rs-btn-primary" href="{% url 'portal:register' %}">ساخت فروشگاه</a>
+  </div>
+</section>
 {% endblock %}
