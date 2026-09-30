@@ -460,3 +460,15 @@ h1,h2,h3,h4,p{margin-top:0}
 @media(max-width:480px){
   .r-industries-page .industry-grid{grid-template-columns:1fr}.r-auth-form,.r-auth-story{padding:23px}.r-auth-tabs{grid-template-columns:1fr}.r-legal{width:calc(100% - 32px)}
 }
+
+
+/* Public auth utility details */
+.r-phone-inline{display:inline-block;direction:ltr;color:var(--rs-ink);font-weight:800}
+.r-otp-input,#id_code{direction:ltr;text-align:center;letter-spacing:8px;font-size:22px!important;font-weight:900!important}
+.r-otp-resend{margin-top:18px;text-align:center}
+.r-otp-resend .rs-link{border:0;background:transparent;cursor:pointer}
+.r-otp-hint{display:block;margin-top:6px;color:var(--rs-muted);font-size:11px}
+.r-auth-form-stack{display:grid;gap:12px}
+.r-state-mark{width:22px;height:22px;margin:0 auto 16px;border-radius:50%;background:var(--rs-soft);border:6px solid var(--rs-brand)}
+.p-turnstile-wrap{margin:12px 0 16px;display:flex;justify-content:center}
+.p-turnstile-noscript{margin:12px 0}
