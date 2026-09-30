@@ -83,6 +83,14 @@ def features(request):
     return render(request, "portal/public/features.html")
 
 
+def design(request):
+    return render(request, "portal/public/design.html")
+
+
+def about(request):
+    return render(request, "portal/public/about.html")
+
+
 def supported_industries(request):
     """صفحه‌ی عمومیِ «صنوفِ پشتیبانی‌شده» — بخشِ ۶. تمامِ کارت‌ها از رکوردهایِ
     واقعیِ ``IndustryTemplate`` خوانده می‌شوند (تکِ منبعِ حقیقتِ کاتالوگِ
@@ -138,6 +146,8 @@ def platform_sitemap_xml(request):
     entries = [
         {"loc": request.build_absolute_uri(reverse("portal:home")), "priority": "1.0", "lastmod": None},
         {"loc": request.build_absolute_uri(reverse("portal:features")), "priority": "0.8", "lastmod": None},
+        {"loc": request.build_absolute_uri(reverse("portal:design")), "priority": "0.8", "lastmod": None},
+        {"loc": request.build_absolute_uri(reverse("portal:about")), "priority": "0.6", "lastmod": None},
         {"loc": request.build_absolute_uri(reverse("portal:supported-industries")), "priority": "0.8", "lastmod": None},
         {"loc": request.build_absolute_uri(reverse("portal:plans")), "priority": "0.9", "lastmod": None},
         {"loc": request.build_absolute_uri(reverse("portal:help")), "priority": "0.6", "lastmod": None},
