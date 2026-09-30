@@ -1,14 +1,85 @@
 {% extends "portal/public/base_public.html" %}
-{% block title %}راهنما و سؤالات متداول | راستیسی{% endblock %}
-{% block meta_description %}<meta name="description" content="پاسخ سؤالات متداول درباره ساخت فروشگاه، دوره آزمایشی، دامنه، طراحی و مدیریت فروشگاه در راستیسی.">{% endblock %}
+{% block title %}پرسش‌های متداول | راستی‌سی{% endblock %}
+{% block meta_description %}<meta name="description" content="پاسخ‌های کوتاه و روشن درباره ساخت فروشگاه، طراحی، محصولات، اشتراک و شرایط استفاده از راستی‌سی.">{% endblock %}
+
 {% block content %}
-<section class="r-page-hero"><div class="r-wrap r-page-hero-grid"><div><span class="r-overline">راهنما</span><h1 class="r-h1">قبل از شروع، جواب سؤال‌های مهم را بدان.</h1></div><div><p class="r-lead">اگر هنوز درباره‌ی ساخت فروشگاه، طراحی، دامنه یا پلن‌ها سؤال دارید، از اینجا شروع کنید.</p></div></div></section>
-<section class="r-section" style="padding-top:24px"><div class="r-wrap r-faq-wrap"><div class="r-faq-list">
-  <details class="r-faq-item" open><summary>چطور فروشگاهم را در راستیسی بسازم؟</summary><div class="r-faq-answer">ثبت‌نام را شروع کنید، مراحل ایجاد فروشگاه را طی کنید و پس از آن می‌توانید اطلاعات و ظاهر فروشگاه را تکمیل کنید.</div></details>
-  <details class="r-faq-item"><summary>آیا برای ساخت فروشگاه نیاز به برنامه‌نویسی دارم؟</summary><div class="r-faq-answer">خیر. هدف راستیسی این است که صاحب کسب‌وکار بتواند بدون درگیر شدن با کدنویسی، فروشگاهش را ایجاد و مدیریت کند.</div></details>
-  <details class="r-faq-item"><summary>آیا دوره‌ی آزمایشی وجود دارد؟</summary><div class="r-faq-answer">فروشگاه‌های جدید می‌توانند بر اساس تنظیمات فعال پلتفرم با دوره‌ی آزمایشی شروع شوند. مدت دقیق هر دوره در همان پلن و جریان ثبت‌نام نمایش داده می‌شود.</div></details>
-  <details class="r-faq-item"><summary>آیا می‌توانم ظاهر فروشگاهم را تغییر بدهم؟</summary><div class="r-faq-answer">راستیسی برای شخصی‌سازی ظاهر و چیدمان فروشگاه طراحی شده است تا فروشگاه بتواند با هویت برند شما هماهنگ‌تر شود.</div></details>
-  <details class="r-faq-item"><summary>آیا می‌توانم دامنه‌ی اختصاصی خودم را متصل کنم؟</summary><div class="r-faq-answer">جریان اتصال دامنه از داخل پنل مالک انجام می‌شود و دسترسی به آن بر اساس وضعیت و پلن فروشگاه مدیریت می‌شود.</div></details>
-  <details class="r-faq-item"><summary>اگر صنف من در فهرست آماده نبود چه می‌شود؟</summary><div class="r-faq-answer">می‌توانید فروشگاه را بدون قالب صنفی آماده بسازید و ساختار آن را متناسب با کسب‌وکار خودتان تعریف کنید.</div></details>
-</div><div class="r-empty-state" style="margin-top:28px"><h2 class="r-h3">هنوز سؤال دارید؟</h2><p class="r-copy">پیامتان را برای ما بفرستید تا از مسیر مناسب راهنمایی شوید.</p><a class="r-btn r-btn-primary" href="{% url 'portal:contact' %}">تماس با ما</a></div></div></section>
+<section class="rs-page-hero">
+  <div class="rs-container">
+    <div class="rs-breadcrumbs"><a href="{% url 'portal:home' %}">راستی‌سی</a><span>/</span><span>پرسش‌های متداول</span></div>
+    <div class="rs-page-hero-row">
+      <div>
+        <div class="rs-eyebrow">پرسش‌های متداول</div>
+        <h1>سؤال خوب،<br>شروعِ یک انتخاب خوب است.</h1>
+        <p>پاسخ‌های کوتاه و روشن درباره ساخت فروشگاه، طراحی، محصولات و شرایط استفاده.</p>
+      </div>
+      <span class="rs-page-count">06</span>
+    </div>
+  </div>
+</section>
+
+<section class="rs-page-section rs-container rs-faq-layout">
+  <aside class="rs-faq-sidebar" aria-label="دسته‌بندی پرسش‌ها">
+    <a href="#getting-started">شروع کار</a>
+    <a href="#design">طراحی و ظاهر</a>
+    <a href="#pricing">تعرفه و اشتراک</a>
+    <a href="#operations">مدیریت فروشگاه</a>
+  </aside>
+
+  <div class="rs-faq-list">
+    <div class="rs-eyebrow" id="getting-started">شروع کار</div>
+
+    <details class="rs-faq-item" open>
+      <summary>راستی‌سی دقیقاً چه کاری انجام می‌دهد؟</summary>
+      <div class="rs-faq-answer">راستی‌سی بستری برای ساخت و مدیریت فروشگاه اینترنتی است. ظاهر فروشگاه را شکل می‌دهید، محصولات و تصاویر را اضافه می‌کنید و سفارش‌ها را از محیط مدیریت همان فروشگاه پیگیری می‌کنید.</div>
+    </details>
+    <details class="rs-faq-item">
+      <summary>راستی‌سی یک فروشگاه است یا فروشگاه‌ساز؟</summary>
+      <div class="rs-faq-answer">راستی‌سی فروشگاه‌ساز است، نه فروشنده کالا و نه یک بازار مشترک. هر کسب‌وکار فروشگاه خودش را دارد.</div>
+    </details>
+    <details class="rs-faq-item">
+      <summary>چطور فروشگاهم را بسازم؟</summary>
+      <div class="rs-faq-answer">از ساخت حساب شروع می‌کنید، شماره موبایل را تأیید می‌کنید و سپس مسیر ساخت فروشگاه را در حساب مالک ادامه می‌دهید.</div>
+    </details>
+
+    <div class="rs-eyebrow" id="design">طراحی و ظاهر</div>
+    <details class="rs-faq-item">
+      <summary>برای طراحی فروشگاه باید برنامه‌نویسی بلد باشم؟</summary>
+      <div class="rs-faq-answer">برای انتخاب قالب، تنظیم رنگ و تغییر بخش‌های قابل ویرایش با ابزارهای خود محصول کار می‌کنید؛ نه با کدنویسی از صفر. امکانات دقیق طراحی باید با نسخه منتشرشده محصول هماهنگ باشد.</div>
+    </details>
+    <details class="rs-faq-item">
+      <summary>با عوض‌کردن ظاهر، اطلاعات محصولاتم هم عوض می‌شود؟</summary>
+      <div class="rs-faq-answer">اطلاعات محصول از ظاهر فروشگاه جدا نگهداری می‌شود. تغییر ظاهر نباید داده واقعی محصول را با داده نمایشی جایگزین کند.</div>
+    </details>
+    <details class="rs-faq-item">
+      <summary>نمای موبایل هم قابل بررسی است؟</summary>
+      <div class="rs-faq-answer">فروشگاه عمومی برای نمایش روی اندازه‌های مختلف طراحی شده و صفحه طراحی نیز مفهوم بررسی نمای کوچک‌تر را توضیح می‌دهد.</div>
+    </details>
+
+    <div class="rs-eyebrow" id="pricing">تعرفه و اشتراک</div>
+    <details class="rs-faq-item">
+      <summary>هزینه استفاده از راستی‌سی چقدر است؟</summary>
+      <div class="rs-faq-answer">قیمت، دوره پرداخت و شرایط هر پلن در صفحه تعرفه‌ها از اطلاعات واقعی و منتشرشده پلتفرم خوانده می‌شود. مبلغی که در سیستم ثبت نشده باشد در این سایت حدس زده نمی‌شود.</div>
+    </details>
+    <details class="rs-faq-item">
+      <summary>آیا دوره آزمایشی وجود دارد؟</summary>
+      <div class="rs-faq-answer">اگر برای یک پلن منتشرشده دوره آزمایشی فعال باشد، مدت آن در صفحه تعرفه‌ها و مسیرهای مربوط نمایش داده می‌شود.</div>
+    </details>
+
+    <div class="rs-eyebrow" id="operations">مدیریت فروشگاه</div>
+    <details class="rs-faq-item">
+      <summary>سفارش‌ها را از کجا مدیریت می‌کنم؟</summary>
+      <div class="rs-faq-answer">پس از ورود به حساب مالک و ورود به محیط فروشگاه، سفارش‌ها از بخش‌های مدیریتی همان فروشگاه دنبال می‌شوند.</div>
+    </details>
+    <details class="rs-faq-item">
+      <summary>اگر صنف من در فهرست آماده نبود چه می‌شود؟</summary>
+      <div class="rs-faq-answer">می‌توانید فروشگاه را بدون ساختار صنفی آماده شروع کنید و تنظیمات را متناسب با کسب‌وکارتان ادامه دهید.</div>
+    </details>
+    <details class="rs-faq-item">
+      <summary>می‌توانم دامنه اختصاصی خودم را متصل کنم؟</summary>
+      <div class="rs-faq-answer">پروژه مسیر اتصال دامنه را در حساب مالک دارد. دسترسی و شرایط فعال‌سازی می‌تواند به وضعیت فروشگاه و تنظیمات پلتفرم وابسته باشد.</div>
+    </details>
+
+    <div class="rs-faq-helper"><span>پاسخ سؤال شما اینجا نبود؟</span><a class="rs-btn rs-btn-outline rs-btn-sm" href="{% url 'portal:contact' %}">سؤالتان را بنویسید</a></div>
+  </div>
+</section>
 {% endblock %}
