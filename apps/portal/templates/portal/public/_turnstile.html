@@ -1,5 +1,5 @@
 {% if turnstile_enabled %}
-<div class="p-turnstile-wrap" style="margin:12px 0 16px;display:flex;justify-content:center">
+<div class="p-turnstile-wrap">
   <div
     class="cf-turnstile"
     data-sitekey="{{ turnstile_site_key }}"
@@ -11,7 +11,7 @@
   ></div>
 </div>
 <noscript>
-  <div class="p-alert p-alert-warning" style="margin:12px 0">
+  <div class="p-alert p-alert-warning p-turnstile-noscript">
     برای تأیید امنیتی، JavaScript مرورگر باید فعال باشد.
   </div>
 </noscript>
