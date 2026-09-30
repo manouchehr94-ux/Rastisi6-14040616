@@ -1,17 +1,175 @@
 {% extends "portal/public/base_public.html" %}
 {% block title %}طراحی فروشگاه | راستی‌سی{% endblock %}
-{% block meta_description %}<meta name="description" content="با راستی‌سی ظاهر فروشگاه را با هویت برند خود هماهنگ کنید؛ سبک، رنگ و تجربه موبایل را یکجا ببینید.">{% endblock %}
+{% block meta_description %}<meta name="description" content="ظاهر فروشگاه را با سبک، رنگ و اندازه نمایش متفاوت ببینید و یک پیش‌نمایش تعاملی از طراحی فروشگاه در راستی‌سی تجربه کنید.">{% endblock %}
+
 {% block content %}
-<section class="rs-page-hero"><div class="rs-container"><div class="rs-breadcrumbs"><a href="{% url 'portal:home' %}">راستی‌سی</a><span>/</span><span>طراحی فروشگاه</span></div><div class="rs-page-hero-row"><div><div class="rs-eyebrow">طراحی، به زبان برند شما</div><h1>همان محصولات.<br>یک بیان کاملاً متفاوت.</h1><p>سبک و رنگ فروشگاه باید بدون دست‌زدن به اطلاعات محصول تغییر کند. ظاهر، لایه‌ای مستقل روی یک ساختار منظم است.</p></div><span class="rs-page-count">02</span></div></div></section>
-<section class="rs-section rs-container">
-  <div class="rs-section-head"><div><div class="rs-eyebrow">اصل طراحی</div><h2 class="rs-title">تم یک‌جا تعریف می‌شود.<br>همه‌جا هماهنگ دیده می‌شود.</h2></div><div><p class="rs-lead">همین معماری در خود سایت عمومی راستی‌سی هم استفاده می‌شود: صفحه رنگ خودش را تعریف نمی‌کند و فقط از توکن‌های مرکزی استفاده می‌کند.</p></div></div>
-  <div class="rs-gallery">
-    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>مینیمال</b><span>آرام · روشن</span></div><div class="rs-gallery-scene"></div></div></div><div class="rs-gallery-info"><div><h3>مینیمال</h3><p>فضای سفید، تمرکز روی محصول</p></div><span>01</span></div></article>
-    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>ادیتوریال</b><span>روایی · تصویری</span></div><div class="rs-gallery-scene"></div></div></div><div class="rs-gallery-info"><div><h3>ادیتوریال</h3><p>برای برندهایی که روایت تصویری مهم است</p></div><span>02</span></div></article>
-    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>جسور</b><span>پررنگ · مستقیم</span></div><div class="rs-gallery-scene"></div></div></div><div class="rs-gallery-info"><div><h3>جسور</h3><p>برای کمپین و ارائه قدرتمند محصول</p></div><span>03</span></div></article>
+<section class="rs-page-hero">
+  <div class="rs-container">
+    <div class="rs-breadcrumbs"><a href="{% url 'portal:home' %}">راستی‌سی</a><span>/</span><span>طراحی فروشگاه</span></div>
+    <div class="rs-page-hero-row">
+      <div>
+        <div class="rs-eyebrow">طراحی، به زبان برند شما</div>
+        <h1>همان محصولات.<br>یک بیانِ کاملاً متفاوت.</h1>
+        <p>سبک، رنگ و اندازه نمایش را تغییر دهید. این بار به‌جای خواندن دربارهٔ شخصی‌سازی، نتیجه را در یک فروشگاه نمونه ببینید.</p>
+      </div>
+      <span class="rs-page-count">02</span>
+    </div>
   </div>
 </section>
-<section class="rs-section rs-dark"><div class="rs-container rs-operations"><div><div class="rs-eyebrow">یک سیستم، چند ظاهر</div><h2>محصول ثابت می‌ماند.<br>بیان بصری تغییر می‌کند.</h2><p class="rs-lead">رنگ اصلی، سطح‌ها، متن، خط‌ها، شعاع گوشه و سایه‌ها همگی از یک سیستم مشترک می‌آیند.</p></div><div class="rs-admin"><div class="rs-admin-head"><strong>Design Tokens</strong><span>Public Website</span></div><div class="rs-admin-content"><div class="rs-admin-row"><strong>Brand</strong><span>--rs-brand</span><span class="rs-status">مرکزی</span></div><div class="rs-admin-row"><strong>Accent</strong><span>--rs-accent</span><span class="rs-status">مرکزی</span></div><div class="rs-admin-row"><strong>Surface</strong><span>--rs-surface</span><span class="rs-status">مرکزی</span></div><div class="rs-admin-row"><strong>Text</strong><span>--rs-ink</span><span class="rs-status">مرکزی</span></div></div></div></div></section>
-<section class="rs-section-sm rs-container"><div class="rs-note">هدف این صفحه نمایش اصل طراحی است. ویرایشگر واقعی فروشگاه و گزینه‌های قابل‌انتخاب باید به قابلیت‌های منتشرشده محصول متصل بمانند.</div></section>
-<section class="rs-final"><div class="rs-container rs-final-inner"><div><div class="rs-eyebrow">قدم بعدی</div><h2>فروشگاهتان را<br>با هویت خودتان بسازید.</h2></div><a class="rs-btn rs-btn-primary" href="{% url 'portal:register' %}">شروع ساخت فروشگاه</a></div></section>
+
+<section class="rs-kinetic-band" aria-label="ویژگی‌های طراحی">
+  <div class="rs-kinetic-track" aria-hidden="true">
+    <span>ظاهر مستقل از اطلاعات محصول</span><span>طراحی برای موبایل و دسکتاپ</span><span>رنگ هماهنگ در تمام ویترین</span><span>چیدمان متناسب با هویت برند</span>
+    <span>ظاهر مستقل از اطلاعات محصول</span><span>طراحی برای موبایل و دسکتاپ</span><span>رنگ هماهنگ در تمام ویترین</span><span>چیدمان متناسب با هویت برند</span>
+  </div>
+</section>
+
+<section class="rs-section-sm rs-container">
+  <div class="rs-design-intro">
+    <div>
+      <div class="rs-eyebrow">پیش‌نمایش تعاملی</div>
+      <h2 class="rs-title">فروشگاه را تغییر دهید.<br>محصولات ثابت می‌مانند.</h2>
+    </div>
+    <p class="rs-lead">سه سبک بصری، سه حال‌وهوای رنگی و دو اندازه نمایش را امتحان کنید. این نمونه فقط برای نشان‌دادن منطق طراحی است و به فروشگاه مشتری واقعی متصل نیست.</p>
+  </div>
+
+  <div class="rs-design-studio" data-rs-design-studio>
+    <aside class="rs-studio-controls">
+      <h2>فروشگاه را تغییر دهید</h2>
+      <p>انتخاب‌ها فقط همین پیش‌نمایش مفهومی را تغییر می‌دهند.</p>
+
+      <div class="rs-control-group">
+        <span class="rs-control-label">۱. سبک فروشگاه</span>
+        <button class="rs-theme-choice" type="button" data-rs-theme="calm" aria-pressed="true">
+          <span><strong>آرام و مینیمال</strong><small>فضای باز و تمرکز روی محصول</small></span>
+          <span class="rs-theme-shape" aria-hidden="true"><i></i><i></i><i></i></span>
+        </button>
+        <button class="rs-theme-choice" type="button" data-rs-theme="editorial" aria-pressed="false">
+          <span><strong>ادیتوریال</strong><small>روایی، تصویری و مجله‌ای</small></span>
+          <span class="rs-theme-shape" aria-hidden="true"><i></i><i></i><i></i></span>
+        </button>
+        <button class="rs-theme-choice" type="button" data-rs-theme="bold" aria-pressed="false">
+          <span><strong>جسور</strong><small>کنتراست بیشتر و بیان مستقیم</small></span>
+          <span class="rs-theme-shape" aria-hidden="true"><i></i><i></i><i></i></span>
+        </button>
+      </div>
+
+      <div class="rs-control-group">
+        <span class="rs-control-label">۲. حال‌وهوای رنگ</span>
+        <div class="rs-studio-swatches">
+          <button class="rs-studio-swatch" type="button" data-rs-palette="brand" aria-pressed="true" aria-label="رنگ برند راستی‌سی"></button>
+          <button class="rs-studio-swatch" type="button" data-rs-palette="warm" aria-pressed="false" aria-label="رنگ گرم"></button>
+          <button class="rs-studio-swatch" type="button" data-rs-palette="ink" aria-pressed="false" aria-label="رنگ تیره"></button>
+        </div>
+      </div>
+
+      <button class="rs-studio-reset" type="button" data-rs-reset>بازگشت به طرح اولیه</button>
+    </aside>
+
+    <div class="rs-playground-stage" data-rs-stage data-device="desktop">
+      <div class="rs-studio-toolbar">
+        <span>پیش‌نمایش زندهٔ طراحی</span>
+        <div class="rs-device-switch" aria-label="اندازه پیش‌نمایش">
+          <button type="button" data-rs-device="desktop" aria-pressed="true">دسکتاپ</button>
+          <button type="button" data-rs-device="mobile" aria-pressed="false">موبایل</button>
+        </div>
+      </div>
+
+      <div class="rs-studio-canvas">
+        <div class="rs-demo-shop" data-rs-store data-theme="calm" data-palette="brand">
+          <div class="rs-demo-shop-inner">
+            <div class="rs-shop-head">
+              <strong class="rs-shop-brand">خانه آبان</strong>
+              <nav class="rs-shop-nav" aria-label="منوی نمونه"><span>محصولات</span><span>داستان ما</span><span>تماس</span></nav>
+              <div class="rs-shop-cart">سبد <span class="rs-shop-cart-count" data-rs-cart-count>۰</span></div>
+            </div>
+            <div class="rs-shop-hero">
+              <div class="rs-shop-hero-copy">
+                <small>مجموعه تازه</small>
+                <h3>اشیایی برای خانه‌ای که شبیه شماست.</h3>
+                <p>یک ویترین شخصی برای معرفی محصول، روایت برند و تجربه خرید.</p>
+                <span class="rs-shop-cta">دیدن محصولات</span>
+              </div>
+              <div class="rs-shop-hero-art" aria-hidden="true"></div>
+            </div>
+            <div class="rs-shop-products-wrap">
+              <div class="rs-shop-products-head"><strong>محصولات منتخب</strong><span>برای افزودن به سبد، روی محصول بزنید</span></div>
+              <div class="rs-shop-products">
+                <button class="rs-shop-product" type="button" data-rs-demo-product>
+                  <span class="rs-shop-photo" aria-hidden="true"></span><strong>گلدان دست‌ساز</strong><small>نمونه محصول</small>
+                </button>
+                <button class="rs-shop-product" type="button" data-rs-demo-product>
+                  <span class="rs-shop-photo" aria-hidden="true"></span><strong>ظرف سرامیکی</strong><small>نمونه محصول</small>
+                </button>
+                <button class="rs-shop-product" type="button" data-rs-demo-product>
+                  <span class="rs-shop-photo" aria-hidden="true"></span><strong>ست رومیزی</strong><small>نمونه محصول</small>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="rs-studio-help">این پیش‌نمایش نمایشی است؛ به ویرایشگر یا فروشگاه واقعی مشتریان متصل نیست.</p>
+    </div>
+  </div>
+
+  <div class="rs-design-promise">
+    <div><span>01</span><h3>هویت شما، محور طراحی</h3><p>یک نقطه شروع مناسب انتخاب کنید و ظاهر را با حال‌وهوای کسب‌وکارتان هماهنگ کنید.</p></div>
+    <div><span>02</span><h3>ظاهر عوض می‌شود، نه محصول</h3><p>اطلاعات محصول از لایه طراحی جدا می‌ماند؛ بنابراین تغییر ظاهر نباید نیازمند ساخت دوباره کاتالوگ باشد.</p></div>
+    <div><span>03</span><h3>موبایل را هم ببینید</h3><p>با تغییر اندازه نمایش، رفتار ویترین را در قاب کوچک‌تر بررسی کنید.</p></div>
+  </div>
+</section>
+
+<section class="rs-section rs-dark">
+  <div class="rs-container rs-operations">
+    <div>
+      <div class="rs-eyebrow"><span class="rs-eyebrow-index">03</span>طراحی فقط انتخاب رنگ نیست</div>
+      <h2>یک سیستم بصری،<br>از ویترین تا جزئیات.</h2>
+      <p class="rs-lead">تایپوگرافی، فاصله‌ها، سطح‌ها، رنگ‌های برند، کارت‌های محصول و رفتار موبایل باید کنار هم تصمیم‌گیری شوند؛ نه به‌صورت تکه‌های جدا.</p>
+      <div class="rs-operation-list">
+        <div class="rs-operation"><strong>ریتم صفحه</strong><p>فاصله و سلسله‌مراتب کمک می‌کند مشتری بداند کجا نگاه کند و بعد چه کاری انجام دهد.</p></div>
+        <div class="rs-operation"><strong>زبان برند</strong><p>رنگ و شدت بصری، فروشگاه آرام، لوکس، ادیتوریال یا مستقیم را از هم متمایز می‌کند.</p></div>
+        <div class="rs-operation"><strong>پاسخ‌گویی</strong><p>یک طراحی خوب باید در موبایل هم قابل فهم و قابل استفاده باقی بماند.</p></div>
+      </div>
+    </div>
+    <div class="rs-admin">
+      <div class="rs-admin-head"><strong>سیستم طراحی</strong><span>یک منبع مشترک</span></div>
+      <div class="rs-admin-content">
+        <div class="rs-admin-top"><h3>لایه‌های ظاهر</h3><span class="rs-admin-add">هماهنگ</span></div>
+        <div class="rs-admin-row"><strong>رنگ برند</strong><span>Theme Token</span><span class="rs-status">مرکزی</span></div>
+        <div class="rs-admin-row"><strong>تایپوگرافی</strong><span>Scale</span><span class="rs-status">مرکزی</span></div>
+        <div class="rs-admin-row"><strong>فاصله و چیدمان</strong><span>Layout</span><span class="rs-status">مرکزی</span></div>
+        <div class="rs-admin-row"><strong>حالت موبایل</strong><span>Responsive</span><span class="rs-status">هماهنگ</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="rs-section-sm rs-container">
+  <div class="rs-section-head">
+    <div><div class="rs-eyebrow">دفتر ایده‌های فروشگاهی</div><h2 class="rs-title">برندهای متفاوت.<br>ویترین‌های متفاوت.</h2></div>
+    <div><p class="rs-lead">این نمونه‌ها برای نشان‌دادن دامنهٔ بیان بصری‌اند. نام‌ها و محتوا نمایشی هستند و فهرست مشتریان راستی‌سی محسوب نمی‌شوند.</p></div>
+  </div>
+  <div class="rs-gallery">
+    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>خانه آبان</b><span>Home · Objects</span></div><div class="rs-gallery-scene"></div></div></div><div class="rs-gallery-info"><div><h3>آرام و طبیعی</h3><p>برای خانه، لایف‌استایل و محصولات دست‌ساز</p></div><span>01</span></div></article>
+    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>نورا</b><span>Fashion · Edit</span></div><div class="rs-gallery-scene"></div></div></div><div class="rs-gallery-info"><div><h3>روایی و ادیتوریال</h3><p>برای پوشاک، اکسسوری و برندهای تصویری</p></div><span>02</span></div></article>
+    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>رُزا</b><span>Beauty · Care</span></div><div class="rs-gallery-scene"></div></div></div><div class="rs-gallery-info"><div><h3>جسور و مستقیم</h3><p>برای کمپین‌ها و معرفی قوی محصول</p></div><span>03</span></div></article>
+  </div>
+</section>
+
+<section class="rs-section-sm rs-container">
+  <div class="rs-flow">
+    <article class="rs-flow-step"><span>01</span><h3>نقطه شروع را انتخاب کنید</h3><p>سبک اولیه را نزدیک به شخصیت برند انتخاب کنید.</p></article>
+    <article class="rs-flow-step"><span>02</span><h3>رنگ و تصویر را هماهنگ کنید</h3><p>هویت بصری باید در اجزای اصلی فروشگاه تکرار شود.</p></article>
+    <article class="rs-flow-step"><span>03</span><h3>ویترین را مرتب کنید</h3><p>محتوا و محصولات مهم را در جای درست قرار دهید.</p></article>
+    <article class="rs-flow-step"><span>04</span><h3>موبایل را بررسی کنید</h3><p>قبل از انتشار، تجربهٔ صفحه کوچک را هم ببینید.</p></article>
+  </div>
+</section>
+
+<section class="rs-final">
+  <div class="rs-container rs-final-inner">
+    <div><div class="rs-eyebrow">قدم بعدی</div><h2>فروشگاهتان را<br>با هویت خودتان بسازید.</h2><p>از یک ساختار آماده شروع کنید و ظاهر را به زبان برند خودتان نزدیک کنید.</p></div>
+    <a class="rs-btn rs-btn-primary" href="{% url 'portal:register' %}">شروع ساخت فروشگاه</a>
+  </div>
+</section>
 {% endblock %}
