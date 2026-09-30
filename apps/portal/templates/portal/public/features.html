@@ -1,22 +1,115 @@
 {% extends "portal/public/base_public.html" %}
-{% block title %}امکانات | راستیسی{% endblock %}
-{% block meta_description %}<meta name="description" content="امکانات راستیسی برای ساخت، شخصی‌سازی و مدیریت فروشگاه اینترنتی؛ از کاتالوگ و تنوع محصول تا سفارش، مشتری، دامنه و ابزارهای مدیریت.">{% endblock %}
+{% block title %}راستی‌سی چیست؟ | امکانات و مسیر کار{% endblock %}
+{% block meta_description %}<meta name="description" content="راستی‌سی از ویترین فروشگاه تا مدیریت محصول و سفارش را در یک تجربه کنار هم قرار می‌دهد.">{% endblock %}
+
 {% block content %}
-<section class="r-page-hero"><div class="r-wrap r-page-hero-grid">
-  <div class="r-page-hero-copy"><span class="r-overline">امکانات پلتفرم</span><h1 class="r-h1">ابزارهایی برای ساخت فروشگاه؛ نه فقط یک صفحه‌ی زیبا.</h1></div>
-  <div><p class="r-lead">راستیسی ظاهر فروشگاه و عملیات روزمره‌ی آن را کنار هم قرار می‌دهد تا محصول، سفارش، مشتری و هویت فروشگاه در یک مسیر منسجم مدیریت شوند.</p><div class="r-page-actions"><a class="r-btn r-btn-primary" href="{% url 'portal:register' %}">شروع ساخت فروشگاه</a><a class="r-btn r-btn-secondary" href="{% url 'portal:plans' %}">مشاهده تعرفه‌ها</a></div></div>
-</div></section>
-
-<section class="r-section" style="padding-top:34px"><div class="r-wrap">
-  <div class="r-feature-rows">
-    <article class="r-feature-row"><div class="r-feature-index"><span>01 / DESIGN</span><strong>طراحی و شخصی‌سازی فروشگاه</strong></div><div class="r-feature-content"><p>سبک فروشگاه را انتخاب کنید، بخش‌های صفحه را متناسب با برندتان بچینید و ظاهر را به تجربه‌ای نزدیک‌تر به هویت کسب‌وکار تبدیل کنید.</p><div class="r-feature-points"><div class="r-feature-point">سبک‌ها و خانواده‌های متفاوت طراحی</div><div class="r-feature-point">چیدمان بخش‌های صفحه</div><div class="r-feature-point">رنگ و هویت بصری فروشگاه</div></div></div></article>
-    <article class="r-feature-row"><div class="r-feature-index"><span>02 / CATALOG</span><strong>کاتالوگ و تنوع محصول</strong></div><div class="r-feature-content"><p>محصولات، دسته‌بندی‌ها، ویژگی‌ها و تنوع‌هایی مانند رنگ یا سایز را در ساختاری منظم مدیریت کنید.</p><div class="r-feature-points"><div class="r-feature-point">دسته‌بندی و ویژگی محصول</div><div class="r-feature-point">Variant و ترکیب‌های محصول</div><div class="r-feature-point">مدیریت موجودی و ساختار کالا</div></div></div></article>
-    <article class="r-feature-row"><div class="r-feature-index"><span>03 / OPERATIONS</span><strong>سفارش و مشتری</strong></div><div class="r-feature-content"><p>جریان خرید، سفارش‌ها و اطلاعات مشتریان را از محیط مدیریتی فروشگاه دنبال کنید.</p><div class="r-feature-points"><div class="r-feature-point">سبد خرید و تسویه‌حساب</div><div class="r-feature-point">پیگیری و مدیریت سفارش</div><div class="r-feature-point">پروفایل و تاریخچه مشتری</div></div></div></article>
-    <article class="r-feature-row"><div class="r-feature-index"><span>04 / BUSINESS</span><strong>ساختار مناسب کسب‌وکار</strong></div><div class="r-feature-content"><p>انتخاب صنف می‌تواند نقطه‌ی شروع مناسب‌تری برای ساختار فروشگاه ایجاد کند و در ادامه فروشگاه بر اساس نیاز کسب‌وکار تنظیم شود.</p><div class="r-feature-points"><div class="r-feature-point">قالب‌ها و ساختارهای صنفی</div><div class="r-feature-point">دامنه و هویت مستقل فروشگاه</div><div class="r-feature-point">پلن و صورتحساب شفاف</div></div></div></article>
+<section class="rs-page-hero">
+  <div class="rs-container">
+    <div class="rs-breadcrumbs"><a href="{% url 'portal:home' %}">راستی‌سی</a><span>/</span><span>راستی‌سی چیست؟</span></div>
+    <div class="rs-page-hero-row">
+      <div>
+        <div class="rs-eyebrow">راستی‌سی از نزدیک</div>
+        <h1>از ویترین تا<br>پشتِ ویترین.</h1>
+        <p>راستی‌سی، طراحی فروشگاه و کارهای روزانهٔ آن را در یک تجربه کنار هم قرار می‌دهد. هر بخش، کاری روشن برای کسب‌وکار شما دارد.</p>
+      </div>
+      <span class="rs-page-count">01</span>
+    </div>
   </div>
-</div></section>
+</section>
 
-<section class="r-section r-dark-section" style="padding:76px 0"><div class="r-wrap" style="position:relative;z-index:1">
-  <div class="r-section-head" style="margin-bottom:0"><div><span class="r-overline" style="color:#9fd0c8">بیشتر از یک قالب</span><h2 class="r-h2">ظاهر فروشگاه و مدیریت کسب‌وکار باید یک تجربه‌ی پیوسته باشند.</h2></div><div><p class="r-lead">هدف راستیسی این است که صاحب فروشگاه بتواند بدون درگیری با جزئیات فنی، روی ارائه‌ی محصول و رشد کسب‌وکار تمرکز کند.</p><div style="margin-top:24px"><a class="r-btn r-btn-light" href="{% url 'portal:register' %}">شروع دوره آزمایشی</a></div></div></div>
-</div></section>
+<section class="rs-section rs-container rs-feature-layout">
+  <nav class="rs-feature-nav" aria-label="بخش‌های معرفی محصول">
+    <a href="#store"><span>01</span>ساخت فروشگاه</a>
+    <a href="#appearance"><span>02</span>ظاهر فروشگاه</a>
+    <a href="#catalog"><span>03</span>محصول و رسانه</a>
+    <a href="#orders"><span>04</span>مدیریت سفارش</a>
+    <a href="#shopping"><span>05</span>تجربه خرید</a>
+  </nav>
+
+  <div>
+    <article class="rs-feature" id="store">
+      <div class="rs-eyebrow"><span class="rs-eyebrow-index">01</span>یک مقصد مستقل برای برند شما</div>
+      <h2>این فروشگاه، متعلق به شماست.</h2>
+      <p>راستی‌سی برای کسب‌وکاری است که می‌خواهد فروشگاه اینترنتی خودش را داشته باشد؛ یک ویترین متصل به محصولات، سفارش‌ها و محیط مدیریت صاحب فروشگاه.</p>
+      <div class="rs-feature-points">
+        <span class="rs-feature-point">هویت و اطلاعات فروشگاه خودتان</span>
+        <span class="rs-feature-point">مسیر راه‌اندازی فروشگاه</span>
+        <span class="rs-feature-point">صفحات محصولات و سبد خرید</span>
+        <span class="rs-feature-point">محیط مدیریت صاحب فروشگاه</span>
+      </div>
+      <div class="rs-feature-preview">
+        <div class="rs-preview">
+          <div class="rs-browser"><span class="rs-browser-dots"><i></i><i></i><i></i></span><span>نمونهٔ مفهومی فروشگاه</span></div>
+          <div class="rs-demo-store">
+            <div class="rs-demo-head"><strong class="rs-demo-brand">خانه آبان</strong><span class="rs-demo-nav"><span>محصولات</span><span>درباره ما</span><span>تماس</span></span></div>
+            <div class="rs-demo-hero"><div class="rs-demo-copy"><small>مجموعه تازه</small><h3>یک ویترین مستقل برای برند شما.</h3><p>نمونهٔ نمایشی برای معرفی تجربه محصول.</p><span class="rs-demo-action">محصولات</span></div><div class="rs-demo-art"></div></div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="rs-feature" id="appearance">
+      <div class="rs-eyebrow"><span class="rs-eyebrow-index">02</span>ظاهر، بخشی از هویت است</div>
+      <h2>قالب را انتخاب کنید.<br>بیانِ خودتان را بسازید.</h2>
+      <p>قالب نقطهٔ شروع است. رنگ، تصویر و چیدمان بخش‌های قابل ویرایش به فروشگاه شخصیت می‌دهند و اطلاعات محصول از انتخاب ظاهر جدا می‌ماند.</p>
+      <div class="rs-feature-points">
+        <span class="rs-feature-point">انتخاب و شخصی‌سازی قالب</span>
+        <span class="rs-feature-point">رنگ‌های هماهنگ در فروشگاه</span>
+        <span class="rs-feature-point">ویرایش بخش‌های ویترین</span>
+        <span class="rs-feature-point">بررسی نمای موبایل</span>
+      </div>
+      <div class="rs-feature-cta"><a class="rs-btn rs-btn-outline" href="{% url 'portal:design' %}">دیدن طراحی فروشگاه</a></div>
+      <div class="rs-note">جزئیات امکانات طراحی باید همیشه با قابلیت‌های منتشرشدهٔ محصول هماهنگ بماند؛ این صفحه چیزی فراتر از محصول واقعی وعده نمی‌دهد.</div>
+    </article>
+
+    <article class="rs-feature" id="catalog">
+      <div class="rs-eyebrow"><span class="rs-eyebrow-index">03</span>اطلاعات منظم، نمایش بهتر</div>
+      <h2>محصول و تصویر،<br>کنارِ هم.</h2>
+      <p>نام، توضیح، قیمت و تصویر محصول باید اطلاعاتی منسجم بسازند؛ همان اطلاعاتی که مشتری در ویترین می‌بیند و صاحب فروشگاه در محیط مدیریت نگهداری می‌کند.</p>
+      <div class="rs-feature-preview">
+        <div class="rs-admin">
+          <div class="rs-admin-head"><strong>مدیریت فروشگاه</strong><span>محصولات</span></div>
+          <div class="rs-admin-body">
+            <div class="rs-admin-nav"><span>محصولات</span><span>سفارش‌ها</span><span>مشتری‌ها</span><span>تنظیمات</span></div>
+            <div class="rs-admin-content">
+              <div class="rs-admin-top"><h3>محصولات</h3><span class="rs-admin-add">+ محصول جدید</span></div>
+              <div class="rs-admin-row"><strong>گلدان دست‌ساز</strong><span>نمونه</span><span class="rs-status">فعال</span></div>
+              <div class="rs-admin-row"><strong>ظرف سرامیکی</strong><span>نمونه</span><span class="rs-status">فعال</span></div>
+              <div class="rs-admin-row"><strong>ست رومیزی</strong><span>نمونه</span><span class="rs-status">فعال</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="rs-muted">داده‌های این نما صرفاً برای معرفی رابط کاربری هستند.</p>
+    </article>
+
+    <article class="rs-feature" id="orders">
+      <div class="rs-eyebrow"><span class="rs-eyebrow-index">04</span>بعد از انتخاب مشتری</div>
+      <h2>سفارش ثبت می‌شود.<br>شما آن را دنبال می‌کنید.</h2>
+      <p>خرید مشتری پایان تجربهٔ فروشگاه نیست. سفارش‌ها باید در محیط مدیریت دیده شوند تا صاحب فروشگاه بتواند کارهای مربوط به آن‌ها را پیگیری کند.</p>
+      <div class="rs-feature-points">
+        <span class="rs-feature-point">مشاهده سفارش‌ها</span>
+        <span class="rs-feature-point">پیگیری وضعیت سفارش</span>
+        <span class="rs-feature-point">دسترسی از محیط مدیریت</span>
+        <span class="rs-feature-point">اتصال به جریان واقعی فروشگاه</span>
+      </div>
+      <div class="rs-note">روش‌های پرداخت، ارسال و امکانات هر اشتراک از تنظیمات و اطلاعات رسمی محصول می‌آیند؛ این معرفی شریک تجاری یا سرویس تأییدنشده‌ای را فرض نمی‌کند.</div>
+    </article>
+
+    <article class="rs-feature" id="shopping">
+      <div class="rs-eyebrow"><span class="rs-eyebrow-index">05</span>از نگاه مشتری</div>
+      <h2>محصول را ببیند.<br>با مسیر خرید آشنا باشد.</h2>
+      <p>صفحه محصول، سبد خرید و تکمیل سفارش باید اجزای یک تجربهٔ پیوسته باشند و ظاهر این مسیرها با هویت فروشگاه هماهنگ بماند.</p>
+      <div class="rs-feature-points">
+        <span class="rs-feature-point">معرفی روشن محصول</span>
+        <span class="rs-feature-point">دسترسی به سبد خرید</span>
+        <span class="rs-feature-point">توجه به نمایش موبایل</span>
+        <span class="rs-feature-point">هماهنگی ظاهر صفحات</span>
+      </div>
+      <div class="rs-feature-cta"><a class="rs-btn rs-btn-primary" href="{% url 'portal:register' %}">ساخت فروشگاه</a><a class="rs-btn rs-btn-outline" href="{% url 'portal:plans' %}">تعرفه‌ها</a></div>
+    </article>
+  </div>
+</section>
+
+<section class="rs-final"><div class="rs-container rs-final-inner"><div><div class="rs-eyebrow">قدم بعدی</div><h2>حالا نوبتِ<br>فروشگاه شماست.</h2><p>از ساخت حساب شروع کنید و مسیر راه‌اندازی فروشگاه را ادامه دهید.</p></div><a class="rs-btn rs-btn-primary" href="{% url 'portal:register' %}">شروع ساخت فروشگاه</a></div></section>
 {% endblock %}
