@@ -72,12 +72,17 @@
         const rect = stage.getBoundingClientRect();
         const x = (event.clientX - rect.left) / rect.width - 0.5;
         const y = (event.clientY - rect.top) / rect.height - 0.5;
-        stage.style.setProperty('--rs-pointer-x', x.toFixed(3));
-        stage.style.setProperty('--rs-pointer-y', y.toFixed(3));
+        const tilt = stage.matches('.rs-playground-stage') ? 1.4 : 2;
+        stage.style.setProperty('--rs-tilt-y', `${(x * tilt).toFixed(2)}deg`);
+        stage.style.setProperty('--rs-tilt-x', `${(y * -tilt).toFixed(2)}deg`);
+        stage.style.setProperty('--rs-shift-x', `${(x * -12).toFixed(2)}px`);
+        stage.style.setProperty('--rs-shift-y', `${(y * -12).toFixed(2)}px`);
       });
       stage.addEventListener('pointerleave', () => {
-        stage.style.setProperty('--rs-pointer-x', 0);
-        stage.style.setProperty('--rs-pointer-y', 0);
+        stage.style.setProperty('--rs-tilt-y', '0deg');
+        stage.style.setProperty('--rs-tilt-x', '0deg');
+        stage.style.setProperty('--rs-shift-x', '0px');
+        stage.style.setProperty('--rs-shift-y', '0px');
       });
     });
 
