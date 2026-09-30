@@ -362,6 +362,15 @@ h1,h2,h3,h4,p{margin-top:0}
 .rs-faq-helper{margin-top:30px;padding:22px;background:var(--rs-soft);border:1px solid var(--rs-line);border-radius:var(--rs-radius-sm);display:flex;align-items:center;justify-content:space-between;gap:18px}
 
 /* Industries — only the public page is restyled; catalog/storefront CSS is untouched. */
+.r-industries-page{
+  --is-border:var(--rs-line);
+  --is-surface:var(--rs-surface);
+  --is-primary:var(--rs-brand);
+  --is-primary-glow:color-mix(in srgb,var(--rs-brand) 18%,transparent);
+  --is-muted:var(--rs-muted);
+  --is-text:var(--rs-ink);
+  --is-primary-soft:var(--rs-soft);
+}
 .r-industries-page .industry-filter-bar,
 .r-industries-page .industry-tabs,
 .r-industries-page .industry-search{
