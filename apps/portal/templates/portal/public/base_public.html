@@ -3,6 +3,7 @@
 
 {% block header %}
 <header class="r-header" x-data="{ mobileOpen: false }">
+  <div class="rs-scroll-progress" aria-hidden="true"></div>
   <div class="rs-container r-header-inner">
     <a class="r-brand" href="{% url 'portal:home' %}" aria-label="راستی‌سی، صفحه اصلی">
       <span class="r-brand-mark" aria-hidden="true"></span>
@@ -100,4 +101,8 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'portal/css/public-site-v2.css' %}?v=20260930-2">
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'portal/js/public-site-v3.js' %}?v=20260930-1" defer></script>
 {% endblock %}
