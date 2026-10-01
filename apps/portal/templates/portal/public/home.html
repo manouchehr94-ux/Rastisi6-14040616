@@ -1,225 +1,176 @@
 {% extends "portal/public/base_public.html" %}
-{% block title %}راستیسی | فروشگاه اینترنتی خودت را با هویت برندت بساز{% endblock %}
-{% block meta_description %}<meta name="description" content="راستیسی پلتفرم ساخت و مدیریت فروشگاه اینترنتی است؛ فروشگاه خودتان را بدون نیاز به برنامه‌نویسی بسازید، شخصی‌سازی کنید و مدیریت کنید.">{% endblock %}
-
-{% block public_extra_css %}
-<style>
-.alive-hero{padding:58px 0 86px}
-.alive-hero-grid{display:grid;grid-template-columns:.86fr 1.14fr;gap:48px;align-items:center}
-.alive-copy{position:relative}
-.alive-copy:after{content:"01";position:absolute;left:0;top:-18px;font-size:110px;font-weight:900;line-height:1;color:rgba(16,24,32,.035);pointer-events:none}
-.alive-title{margin:16px 0 0;font-size:clamp(46px,6vw,92px);line-height:1.22;font-weight:800;color:var(--r-ink);position:relative;z-index:1}
-.alive-title span{color:var(--r-terracotta)}
-.alive-text{margin:24px 0 30px;color:var(--r-muted);font-size:18px;line-height:2.05;max-width:620px}
-.alive-actions{display:flex;gap:12px;flex-wrap:wrap}
-.alive-note{font-size:12px;color:#7d8791;margin-top:16px}
-.alive-visual{display:grid;grid-template-columns:1fr 180px;gap:14px;align-items:stretch}
-.alive-main{min-height:620px;background:var(--r-ink);border-radius:30px 30px 30px 6px;padding:20px;position:relative;overflow:hidden;box-shadow:0 32px 80px rgba(16,24,32,.18)}
-.alive-main:before{content:"";position:absolute;width:240px;height:240px;border-radius:50%;border:38px solid rgba(201,95,66,.15);left:-80px;top:-70px}
-.alive-main:after{content:"";position:absolute;width:180px;height:180px;border-radius:50%;border:28px solid rgba(215,163,58,.13);right:-60px;bottom:-60px}
-.alive-browser{position:relative;z-index:2;background:#fffaf3;border-radius:17px;overflow:hidden;box-shadow:0 22px 46px rgba(0,0,0,.22)}
-.alive-browserbar{height:40px;border-bottom:1px solid #e7ded1;display:flex;align-items:center;gap:6px;padding:0 14px}
-.alive-browserbar i{width:7px;height:7px;border-radius:50%;background:#ddd2c4}
-.alive-store-top{height:52px;padding:0 16px;display:flex;align-items:center;border-bottom:1px solid #eee5da}
-.alive-store-top b{margin-inline-start:auto;font-size:15px;color:var(--r-ink)}
-.alive-store-links{display:flex;gap:12px;font-size:10px;color:#7b838b}
-.alive-store-hero{margin:14px;min-height:175px;border-radius:15px;padding:20px;display:grid;grid-template-columns:1fr .8fr;gap:14px;align-items:center;background:linear-gradient(135deg,#efe5d6,#f8f3eb 52%,#dcece5)}
-.alive-store-hero h3{font-size:25px;line-height:1.6;margin:0;color:var(--r-ink);font-weight:800}
-.alive-store-hero p{font-size:11px;color:#66717e;margin:7px 0 0}
-.alive-art{height:130px;border-radius:14px;position:relative;overflow:hidden;background:linear-gradient(145deg,#d8e9e3,#f1dfcf)}
-.alive-art:before{content:"";position:absolute;width:90px;height:90px;border-radius:50%;border:16px solid rgba(13,109,97,.22);right:14px;top:18px}
-.alive-art:after{content:"";position:absolute;width:90px;height:90px;border-radius:25px;background:rgba(201,95,66,.17);left:18px;bottom:-30px;transform:rotate(25deg)}
-.alive-products{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;padding:0 14px 14px}
-.alive-product{background:#fff;border:1px solid #ede4d9;border-radius:11px;padding:7px;height:106px}
-.alive-product:before{content:"";display:block;height:57px;border-radius:7px;background:#e7efeb}
-.alive-product:nth-child(2):before{background:#f2e2d9}.alive-product:nth-child(3):before{background:#e4e0eb}.alive-product:nth-child(4):before{background:#f1ebd8}
-.alive-product span{display:block;height:6px;border-radius:9px;background:#eceff0;margin-top:7px;width:85%}
-.alive-builder{position:absolute;z-index:4;left:13px;bottom:16px;width:194px;border-radius:15px;background:#fff;padding:13px;box-shadow:0 16px 34px rgba(0,0,0,.22);color:var(--r-ink)}
-.alive-builder small{font-size:10px;color:#7c8792}
-.alive-brow{height:30px;border:1px solid #e7e9e9;border-radius:8px;margin-top:7px;padding:5px 8px;font-size:9px}
-.alive-colors{display:flex;gap:6px;margin-top:9px}.alive-colors i{width:16px;height:16px;border-radius:50%}
-.alive-colors i:nth-child(1){background:var(--r-ink)}.alive-colors i:nth-child(2){background:var(--r-teal)}.alive-colors i:nth-child(3){background:var(--r-terracotta)}.alive-colors i:nth-child(4){background:var(--r-saffron)}
-.alive-rail{display:grid;gap:14px}.alive-rail-card{border-radius:18px;padding:18px;border:1px solid rgba(16,24,32,.08)}.alive-rail-card.orange{background:#f5e6df}.alive-rail-card.green{background:#e3efe9}
-.alive-rail-card strong{display:block;font-size:14px;line-height:1.9;color:var(--r-ink)}.alive-rail-card p{font-size:11px;color:#66717f;margin:7px 0 0;line-height:1.95}.alive-big{font-size:42px;line-height:1;font-weight:900;color:var(--r-terracotta)}
-.alive-manifesto{background:var(--r-bg);border-block:1px solid var(--r-line)}
-.alive-manifesto-grid{display:grid;grid-template-columns:1.4fr .8fr .8fr}.alive-manifesto-main{padding:40px 28px;font-size:29px;font-weight:800;line-height:1.72;color:var(--r-ink)}
-.alive-manifesto-item{padding:34px 26px;border-inline-start:1px solid var(--r-line)}.alive-manifesto-item span{font-size:11px;color:var(--r-terracotta);font-weight:800}.alive-manifesto-item b{display:block;margin-top:8px;font-size:16px;color:var(--r-ink)}.alive-manifesto-item p{font-size:12px;color:var(--r-muted);margin:6px 0 0}
-.alive-head{display:grid;grid-template-columns:.8fr 1.2fr;gap:70px;align-items:end;margin-bottom:42px}.alive-head p{font-size:17px;color:var(--r-muted);margin:0}
-.alive-story{display:grid;grid-template-columns:1.25fr .75fr;border-block:1px solid var(--r-ink)}
-.alive-canvas{min-height:420px;padding:24px;background:#fff;display:grid;grid-template-columns:repeat(12,1fr);gap:11px;border-inline-start:1px solid var(--r-line)}
-.alive-canvas div{border-radius:10px}.alive-canvas .a{grid-column:span 8;grid-row:span 2;background:#dbe9e3}.alive-canvas .b{grid-column:span 4;grid-row:span 2;background:var(--r-ink)}.alive-canvas .c{grid-column:span 3;background:#f4dfd6}.alive-canvas .d{grid-column:span 3;background:#eee8d5}.alive-canvas .e{grid-column:span 3;background:#e3e0eb}.alive-canvas .f{grid-column:span 3;background:#e5eeeb}.alive-canvas .g{grid-column:span 5;background:#eee5d9}.alive-canvas .h{grid-column:span 7;background:#e6ecea}
-.alive-panel{padding:30px;background:#f2eadf}.alive-panel h3{font-size:25px;line-height:1.65;margin:10px 0 16px;color:var(--r-ink)}.alive-panel ul{list-style:none;margin:0;padding:0}.alive-panel li{padding:12px 0;border-top:1px solid var(--r-line);display:flex;justify-content:space-between;font-size:13px}.alive-panel li:after{content:"←";color:var(--r-terracotta)}
-.alive-templates{background:#0d1724;color:#fff;position:relative;overflow:hidden}.alive-templates:before{content:"";position:absolute;right:-110px;top:80px;width:300px;height:300px;border-radius:50%;border:45px solid rgba(13,109,97,.14)}
-.alive-templates .r-h2{color:#fff}.alive-templates .alive-head p{color:#b3bdc7}
-.alive-template-grid{display:grid;grid-template-columns:1.25fr .75fr;gap:18px}.alive-wall{border:1px solid rgba(255,255,255,.08);border-radius:24px;padding:18px;background:rgba(255,255,255,.025);display:grid;grid-template-columns:1fr 1fr;gap:13px}
-.alive-tw{min-height:215px;background:#f7f2e9;border-radius:15px;overflow:hidden;color:#111}.alive-tw .bar{height:30px;background:#e9e1d4}.alive-tw .hero{height:76px;margin:12px;border-radius:10px;background:#dce9e3}.alive-tw:nth-child(2) .hero{background:#202b3b}.alive-tw:nth-child(3) .hero{background:#eedfd7}.alive-tw:nth-child(4) .hero{background:#e4e0ed}.alive-lines{padding:0 12px}.alive-lines i{display:block;height:7px;background:#e5e9ec;border-radius:20px;margin-top:7px}
-.alive-template-side{display:grid;gap:12px}.alive-tnote{border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:17px;background:rgba(255,255,255,.03)}.alive-tnote strong{font-size:15px}.alive-tnote p{font-size:12px;color:#abb7c3;margin:6px 0 0}
-.alive-industries-grid{display:grid;grid-template-columns:.9fr 1.1fr;gap:20px}.alive-industry-copy{border-radius:24px;background:#fff3e9;border:1px solid rgba(16,24,32,.08);padding:28px}.alive-industry-copy h3{font-size:28px;line-height:1.65;margin:9px 0 12px;color:var(--r-ink)}.alive-industry-copy p{color:var(--r-muted)}
-.alive-tags{display:flex;flex-wrap:wrap;gap:9px;margin-top:20px}.alive-tags span{padding:9px 13px;border-radius:11px;background:#fff;border:1px solid var(--r-line);font-size:13px}
-.alive-mosaic{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.alive-tile{min-height:112px;border-radius:15px;padding:13px;display:flex;flex-direction:column;justify-content:space-between}.alive-tile:nth-child(1),.alive-tile:nth-child(5){background:#e3eee9}.alive-tile:nth-child(2),.alive-tile:nth-child(6){background:#f1e1d8}.alive-tile:nth-child(3),.alive-tile:nth-child(7){background:#e8e4ef}.alive-tile:nth-child(4),.alive-tile:nth-child(8){background:#f0ead8}.alive-tile b{font-size:14px}.alive-tile small{font-size:10px;color:#6d7680}
-.alive-management{display:grid;grid-template-columns:1.05fr .95fr;border:1px solid var(--r-line);border-radius:26px;overflow:hidden;background:#fff;box-shadow:var(--r-shadow-sm)}
-.alive-dash{padding:28px;background:linear-gradient(180deg,#fbf7ef,#fff)}.alive-dash-card{border:1px solid #ebe4d9;border-radius:18px;overflow:hidden;background:#fff;min-height:350px}.alive-dash-head{height:54px;border-bottom:1px solid #eee8df;display:flex;align-items:center;justify-content:space-between;padding:0 16px}.alive-dash-head b{font-size:14px;color:var(--r-ink)}.alive-dash-body{display:grid;grid-template-columns:170px 1fr;min-height:295px}.alive-sidebar{background:#fbfaf6;border-inline-start:1px solid #efebe3;padding:14px}.alive-sidebar i{display:block;height:35px;border-radius:10px;background:#fff;border:1px solid #eee8df;margin-top:9px}.alive-mainpanel{padding:14px}.alive-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.alive-stats i,.alive-panels i{display:block;border:1px solid #ebe5dc;border-radius:11px;background:#fff}.alive-stats i{height:76px}.alive-panels{display:grid;grid-template-columns:1.2fr .8fr;gap:9px;margin-top:9px}.alive-panels i{height:164px}.alive-management-copy{padding:34px;border-inline-start:1px solid var(--r-line)}.alive-management-copy p{color:var(--r-muted)}
-.alive-checks{list-style:none;padding:0;margin:24px 0 0;display:grid;gap:10px}.alive-checks li{padding:11px 13px;border-radius:12px;background:#faf7f1;border:1px solid #eee8df;font-size:13px}.alive-checks li:before{content:"✓";color:var(--r-teal);font-weight:900;margin-inline-start:8px}
-.alive-cta{padding:0 0 90px}.alive-cta-box{border-radius:28px;background:linear-gradient(120deg,var(--r-teal-deep),#0e1724);color:#fff;padding:46px 50px;display:flex;align-items:center;gap:24px}.alive-cta-box h2{font-size:35px;line-height:1.55;margin:0;color:#fff}.alive-cta-box p{margin:8px 0 0;color:#d3e5e0}.alive-cta-box .r-btn{margin-inline-start:auto;background:#fff;color:var(--r-ink)}
-@media(max-width:1050px){.alive-hero-grid,.alive-head,.alive-industries-grid{grid-template-columns:1fr}.alive-visual{grid-template-columns:1fr}.alive-template-grid,.alive-story,.alive-management{grid-template-columns:1fr}.alive-manifesto-grid{grid-template-columns:1fr 1fr}.alive-manifesto-main{grid-column:1/-1}.alive-management-copy{border-inline-start:0;border-top:1px solid var(--r-line)}}
-@media(max-width:800px){.alive-hero{padding-top:34px}.alive-title{font-size:54px}.alive-manifesto-grid{grid-template-columns:1fr}.alive-manifesto-item{border-inline-start:0;border-top:1px solid var(--r-line)}.alive-canvas{border-inline-start:0;border-bottom:1px solid var(--r-line)}}
-@media(max-width:600px){.alive-title{font-size:42px;line-height:1.35}.alive-text{font-size:16px}.alive-actions .r-btn{width:100%}.alive-main{min-height:auto;padding:14px;border-radius:22px 22px 22px 5px}.alive-store-hero{grid-template-columns:1fr}.alive-store-links{display:none}.alive-products{grid-template-columns:1fr 1fr}.alive-product:nth-child(n+3){display:none}.alive-builder{width:155px;left:7px;bottom:8px}.alive-wall,.alive-mosaic{grid-template-columns:1fr 1fr}.alive-canvas{grid-template-columns:repeat(6,1fr);min-height:310px}.alive-canvas .a,.alive-canvas .b,.alive-canvas .g,.alive-canvas .h{grid-column:span 6}.alive-canvas .c,.alive-canvas .d,.alive-canvas .e,.alive-canvas .f{grid-column:span 3}.alive-dash-body{grid-template-columns:1fr}.alive-sidebar{display:none}.alive-stats{grid-template-columns:1fr}.alive-panels{grid-template-columns:1fr}.alive-panels i{height:100px}.alive-cta-box{display:block;padding:32px 24px}.alive-cta-box h2{font-size:27px}.alive-cta-box .r-btn{width:100%;margin-top:20px}}
-</style>
-{% endblock %}
+{% load static %}
+{% load public_photos %}
+{% block title %}راستی‌سی | فروشگاه شما، با امضای خودتان{% endblock %}
+{% block meta_description %}<meta name="description" content="راستی‌سی؛ ساخت و مدیریت فروشگاه اینترنتی با ظاهر اختصاصی، مدیریت محصولات و سفارش‌ها و تجربه خرید مناسب موبایل.">{% endblock %}
 
 {% block content %}
-<section class="alive-hero">
-  <div class="r-wrap alive-hero-grid">
-    <div class="alive-copy">
-      <div class="r-overline">فروشگاه‌ساز برای برندهایی که می‌خواهند متفاوت دیده شوند</div>
-      <h1 class="alive-title">فروشگاهت را بساز؛<br><span>با شخصیت خودت.</span></h1>
-      <p class="alive-text">راستیسی فقط راهی برای آنلاین شدن نیست. قرار است فروشگاهت از همان ابتدا حرفه‌ای، قابل شخصی‌سازی و متناسب با کسب‌وکارت ساخته شود؛ بدون اینکه درگیر پیچیدگی‌های فنی شوی.</p>
-      <div class="alive-actions">
-        <a class="r-btn r-btn-primary" href="{% url 'portal:register' %}">شروع ساخت فروشگاه</a>
-        <a class="r-btn r-btn-secondary" href="#design">دیدن تجربه طراحی</a>
+{% public_photo 'stilllife' as public_stilllife %}
+{% public_photo 'olive' as public_olive %}
+{% public_photo 'clay' as public_clay %}
+{% public_photo 'ivory' as public_ivory %}
+{% public_photo 'ceramics' as public_ceramics %}
+{% public_photo 'fashion' as public_fashion %}
+{% public_photo 'skincare' as public_skincare %}
+{% public_photo 'bag' as public_bag %}
+<section class="rs-hero">
+  <div class="rs-container">
+    <div class="rs-hero-grid">
+      <div class="rs-hero-copy">
+        <div class="rs-eyebrow">ساخت و مدیریت فروشگاه اینترنتی</div>
+        <h1>فروشگاهِ شما.<br><em>با امضای خودتان.</em></h1>
+        <p class="rs-hero-desc">با راستی‌سی، فروشگاه آنلاین خودتان را بسازید؛ از چیدمان ویترین تا محصولات و سفارش‌ها، همه را از یک‌جا مدیریت کنید.</p>
+        <div class="rs-actions">
+          <a class="rs-btn rs-btn-primary" href="{% url 'portal:register' %}">ساخت فروشگاه</a>
+          <a class="rs-link" href="{% url 'portal:design' %}">اول، طراحی را ببینم</a>
+        </div>
+        <p class="rs-hero-note"><span class="rs-value-dot"></span>فروشگاه مستقل شما؛ نه یک غرفه در بازار دیگران.</p>
       </div>
-      <div class="alive-note">بدون نیاز به برنامه‌نویسی · مناسب موبایل · قابل توسعه همراه کسب‌وکار</div>
-    </div>
 
-    <div class="alive-visual" aria-label="نمایش مفهومی فروشگاه و ابزار طراحی راستیسی">
-      <div class="alive-main">
-        <div class="alive-browser">
-          <div class="alive-browserbar"><i></i><i></i><i></i></div>
-          <div class="alive-store-top">
-            <div class="alive-store-links"><span>جدیدها</span><span>دسته‌بندی‌ها</span><span>پرفروش‌ها</span></div>
-            <b>خانه‌ی ماه</b>
-          </div>
-          <div class="alive-store-hero">
-            <div><h3>فروشگاهی که شبیه برند توست.</h3><p>رنگ، چیدمان و نمایش محصولات را متناسب با هویت کسب‌وکارت تنظیم کن.</p></div>
-            <div class="alive-art"></div>
-          </div>
-          <div class="alive-products">
-            <div class="alive-product"><span></span></div><div class="alive-product"><span></span></div>
-            <div class="alive-product"><span></span></div><div class="alive-product"><span></span></div>
+      <div class="rs-hero-art">
+        <div class="rs-preview">
+          <div class="rs-browser"><span class="rs-browser-dots"><i></i><i></i><i></i></span><span>فروشگاه نمونه راستی‌سی</span></div>
+          <div class="rs-demo-store">
+            <div class="rs-demo-head"><strong class="rs-demo-brand">خانه آبان</strong><span class="rs-demo-nav"><span>محصولات</span><span>درباره ما</span><span>تماس</span></span></div>
+            <div class="rs-demo-hero">
+              <div class="rs-demo-copy"><small>مجموعه تازه</small><h3>اشیایی برای خانه‌ای که شبیه شماست.</h3><p>یک ویترین روشن و شخصی برای معرفی محصولات و روایت برند.</p><span class="rs-demo-action">دیدن محصولات</span></div>
+              <div class="rs-demo-art"><img src="{{ public_stilllife.url }}" alt="{{ public_stilllife.alt|default:'گلدان سفید و ظروف دست‌ساز در نور طبیعی' }}" width="1100" height="825" loading="eager" decoding="async"></div>
+            </div>
+            <div class="rs-demo-products">
+              <div class="rs-demo-products-head"><strong>محصولات منتخب</strong><small>مشاهده همه</small></div>
+              <div class="rs-demo-grid">
+                <div class="rs-demo-card"><div class="rs-demo-photo"><img src="{{ public_olive.url }}" alt="" width="400" height="447" loading="lazy" decoding="async"></div><strong>گلدان دست‌ساز</strong><small>۱٬۲۸۰٬۰۰۰ تومان</small></div>
+                <div class="rs-demo-card"><div class="rs-demo-photo"><img src="{{ public_clay.url }}" alt="" width="368" height="311" loading="lazy" decoding="async"></div><strong>ظرف سرامیکی</strong><small>۹۸۰٬۰۰۰ تومان</small></div>
+                <div class="rs-demo-card"><div class="rs-demo-photo"><img src="{{ public_ivory.url }}" alt="" width="360" height="536" loading="lazy" decoding="async"></div><strong>ست رومیزی</strong><small>۱٬۶۴۰٬۰۰۰ تومان</small></div>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="alive-builder">
-          <small>ظاهر فروشگاه</small>
-          <div class="alive-brow">هدر و منوی اصلی</div><div class="alive-brow">بنر و روایت برند</div><div class="alive-brow">محصولات منتخب</div>
-          <div class="alive-colors"><i></i><i></i><i></i><i></i></div>
-        </div>
+        <div class="rs-theme-card"><div class="rs-theme-card-head"><span>رنگ برندتان</span><span>●</span></div><div class="rs-swatches"><i class="rs-swatch"></i><i class="rs-swatch"></i><i class="rs-swatch"></i><i class="rs-swatch"></i></div></div>
       </div>
-      <div class="alive-rail">
-        <div class="alive-rail-card orange"><div class="alive-big">01</div><strong>برند اول، قالب دوم.</strong><p>فروشگاه نباید هویت خودش را از قالب بگیرد؛ قالب باید با برند هماهنگ شود.</p></div>
-        <div class="alive-rail-card green"><strong>طراحی فقط رنگ نیست.</strong><p>چیدمان، فضای خالی، نمایش محصول و ریتم صفحه هم بخشی از تجربه برند هستند.</p></div>
-      </div>
+    </div>
+
+    <div class="rs-value-rail">
+      <div><span class="rs-value-dot"></span>فروشگاه مستقل</div>
+      <div><span class="rs-value-dot"></span>طراحی بدون کدنویسی</div>
+      <div><span class="rs-value-dot"></span>محصول و سفارش، یک‌جا</div>
+      <div><span class="rs-value-dot"></span>تجربه مناسب موبایل</div>
     </div>
   </div>
 </section>
-
-<section class="alive-manifesto">
-  <div class="r-wrap alive-manifesto-grid">
-    <div class="alive-manifesto-main">یک فروشگاه خوب فقط کار نمی‌کند؛ درست دیده می‌شود، درست فهمیده می‌شود و اعتماد می‌سازد.</div>
-    <div class="alive-manifesto-item"><span>01 / طراحی</span><b>ظاهر قابل شخصی‌سازی</b><p>برای ساخت فروشگاهی که هویت برندت را حفظ کند.</p></div>
-    <div class="alive-manifesto-item"><span>02 / کسب‌وکار</span><b>مدیریت یکپارچه</b><p>محصول، سفارش و مشتری در یک فضای مشخص و حرفه‌ای.</p></div>
+<section class="rs-kinetic-band" aria-label="مسیر راستی‌سی">
+  <div class="rs-kinetic-track" aria-hidden="true">
+    <span>ساخت فروشگاه</span><span>طراحی ویترین</span><span>مدیریت محصول</span><span>پیگیری سفارش</span><span>تجربه موبایل</span><span>هویت مستقل</span>
+    <span>ساخت فروشگاه</span><span>طراحی ویترین</span><span>مدیریت محصول</span><span>پیگیری سفارش</span><span>تجربه موبایل</span><span>هویت مستقل</span>
   </div>
 </section>
 
-<section class="r-section" id="design">
-  <div class="r-wrap">
-    <div class="alive-head">
-      <div><span class="r-overline">آزادی در طراحی</span><h2 class="r-h2">چیدمان را به کسب‌وکارت نزدیک کن، نه کسب‌وکارت را به قالب.</h2></div>
-      <p>کاربر باید بتواند فروشگاه را متناسب با محصول، مخاطب و هویت برند خودش شکل دهد. از نحوه نمایش بخش‌ها تا ترکیب رنگ و ساختار صفحه، همه باید در خدمت فروش باشد.</p>
-    </div>
-    <div class="alive-story">
-      <div class="alive-canvas"><div class="a"></div><div class="b"></div><div class="c"></div><div class="d"></div><div class="e"></div><div class="f"></div><div class="g"></div><div class="h"></div></div>
-      <aside class="alive-panel">
-        <span class="r-overline">کنترل بیشتر، پیچیدگی کمتر</span>
-        <h3>ساختار فروشگاه را آگاهانه انتخاب کن.</h3>
-        <ul><li>سبک کلی فروشگاه</li><li>چیدمان بخش‌ها</li><li>رنگ و هویت بصری</li><li>نمای موبایل و دسکتاپ</li><li>ساختار مناسب صنف</li></ul>
-      </aside>
-    </div>
+<section class="rs-section rs-container rs-intro">
+  <div class="rs-eyebrow">راستی‌سی، در یک جمله</div>
+  <p>یک فروشگاه خوب، فقط یک صفحه زیبا نیست.<br><span>جایی‌ست که هویت شما دیده می‌شود، مشتری خرید می‌کند و شما کسب‌وکارتان را اداره می‌کنید.</span></p>
+</section>
+
+<section class="rs-section-sm rs-container">
+  <div class="rs-section-head">
+    <div><div class="rs-eyebrow">یک فروشگاه، چند کار مهم</div><h2 class="rs-title">ویترین، مدیریت و فروش.<br>در یک مسیر پیوسته.</h2></div>
+    <div><p class="rs-lead">به‌جای کنار هم گذاشتن چند ابزار پراکنده، مسیر اصلی فروشگاه را در یک تجربه دنبال کنید؛ از چیزی که مشتری می‌بیند تا کاری که بعد از سفارش انجام می‌دهید.</p></div>
+  </div>
+  <div class="rs-bento">
+    <article class="rs-bento-card is-wide">
+      <span class="rs-bento-index">01 / ویترین</span>
+      <h3>اولین برخورد مشتری،<br>باید شبیه برند شما باشد.</h3>
+      <p>ظاهر فروشگاه، معرفی محصول و دعوت به خرید باید یک زبان مشترک داشته باشند.</p>
+      <div class="rs-bento-visual" aria-hidden="true"><img src="{{ public_stilllife.url }}" alt="" width="1100" height="825" loading="lazy" decoding="async"></div>
+    </article>
+    <article class="rs-bento-card is-accent"><span class="rs-bento-index">02 / محصول</span><h3>اطلاعات محصول، یک‌بار و منظم.</h3><p>نام، تصویر، قیمت و موجودی در ساختاری نگهداری می‌شوند که ویترین از آن استفاده می‌کند.</p></article>
+    <article class="rs-bento-card is-soft"><span class="rs-bento-index">03 / سفارش</span><h3>بعد از خرید، مسیر ادامه دارد.</h3><p>سفارش باید در محیط مدیریت دیده شود تا پیگیری روزمره روشن بماند.</p></article>
+    <article class="rs-bento-card"><span class="rs-bento-index">04 / موبایل</span><h3>صفحه کوچک، تجربه کوچک نیست.</h3><p>ویترین و مسیر خرید باید برای موبایل هم خوانا، قابل لمس و روشن باشند.</p></article>
+    <article class="rs-bento-card"><span class="rs-bento-index">05 / هویت</span><h3>فروشگاه مستقل، نه یک غرفه تکراری.</h3><p>هدف این است که برند خودتان دیده شود و ساختار فروشگاه پشت آن منظم بماند.</p><div class="rs-bento-photo"><img src="{{ public_bag.url }}" alt="{{ public_bag.alt|default:'کیف و اکسسوری در چیدمان مینیمال' }}" loading="lazy" decoding="async" width="320" height="160"></div></article>
   </div>
 </section>
 
-<section class="r-section alive-templates" id="templates">
-  <div class="r-wrap">
-    <div class="alive-head">
-      <div><span class="r-overline" style="color:#9fd1c6">قالب‌های واقعی، نه تغییر رنگ</span><h2 class="r-h2">هر فروشگاه باید لحن خودش را داشته باشد.</h2></div>
-      <p>تفاوت قالب‌ها باید در ساختار و شخصیت بصری دیده شود. فروشگاه پوشاک، عطر، کالای دیجیتال و لوازم خانه نباید فقط نسخه‌های رنگی یک طرح باشند.</p>
-    </div>
-    <div class="alive-template-grid">
-      <div class="alive-wall">
-        <div class="alive-tw"><div class="bar"></div><div class="hero"></div><div class="alive-lines"><i></i><i style="width:70%"></i></div></div>
-        <div class="alive-tw"><div class="bar"></div><div class="hero"></div><div class="alive-lines"><i></i><i></i></div></div>
-        <div class="alive-tw"><div class="bar"></div><div class="hero"></div><div class="alive-lines"><i></i><i style="width:62%"></i></div></div>
-        <div class="alive-tw"><div class="bar"></div><div class="hero"></div><div class="alive-lines"><i></i><i></i></div></div>
-      </div>
-      <div class="alive-template-side">
-        <div class="alive-tnote"><strong>مدرن و تصویری</strong><p>برای برندهایی که تصویر و محصول قهرمان صفحه‌اند.</p></div>
-        <div class="alive-tnote"><strong>لوکس و منظم</strong><p>برای فروشگاه‌هایی که نیاز به حس اعتماد و کیفیت بالاتر دارند.</p></div>
-        <div class="alive-tnote"><strong>محتوایی و مینیمال</strong><p>برای برندهایی که روایت، داستان و معرفی محصول مهم است.</p></div>
-        <div class="alive-tnote"><strong>کاتالوگی و سریع</strong><p>برای فروشگاه‌های محصول‌محور با دسترسی سریع به کالاها.</p></div>
-      </div>
-    </div>
+<section class="rs-section-sm rs-container">
+  <div class="rs-section-head">
+    <div><div class="rs-eyebrow"><span class="rs-eyebrow-index">01</span>ویترین شما، شبیه خود شما</div><h2 class="rs-title">یک شکل برای<br>همه کسب‌وکارها؟ <span class="rs-title-soft">نه.</span></h2></div>
+    <div><p class="rs-lead">هر کسب‌وکار بیان خودش را دارد. از یک نقطه شروع مناسب آغاز کنید و ظاهر فروشگاه را با هویت برندتان هماهنگ کنید.</p><a class="rs-link" href="{% url 'portal:design' %}">تجربه طراحی فروشگاه</a></div>
+  </div>
+  <div class="rs-gallery">
+    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>خانه آبان</b><span>محصولات · داستان ما</span></div><div class="rs-gallery-scene"><img src="{{ public_ceramics.url }}" alt="{{ public_ceramics.alt|default:'چیدمان گلدان و ظروف سرامیکی در خانه' }}" width="1100" height="738" loading="lazy" decoding="async"></div></div></div><div class="rs-gallery-info"><div><h3>آرام و طبیعی</h3><p>برای خانه، لایف‌استایل و محصولات دست‌ساز</p></div><span>←</span></div></article>
+    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>نورا</b><span>New · Shop</span></div><div class="rs-gallery-scene"><img src="{{ public_fashion.url }}" alt="{{ public_fashion.alt|default:'پیراهن کتانی روشن با چیدمان مینیمال' }}" width="1100" height="738" loading="lazy" decoding="async"></div></div></div><div class="rs-gallery-info"><div><h3>روایی و ادیتوریال</h3><p>برای پوشاک، اکسسوری و برندهای تصویری</p></div><span>←</span></div></article>
+    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>رُزا</b><span>Beauty · Care</span></div><div class="rs-gallery-scene"><img src="{{ public_skincare.url }}" alt="{{ public_skincare.alt|default:'محصولات مراقبت پوست در نور طبیعی' }}" width="640" height="480" loading="lazy" decoding="async"></div></div></div><div class="rs-gallery-info"><div><h3>گرم و شخصی</h3><p>برای زیبایی، مراقبت و محصولات بوتیکی</p></div><span>←</span></div></article>
   </div>
 </section>
 
-<section class="r-section" id="industries">
-  <div class="r-wrap">
-    <div class="alive-head">
-      <div><span class="r-overline">برای کسب‌وکار واقعی</span><h2 class="r-h2">یک فروشگاه عطر نباید شبیه فروشگاه قطعات خودرو باشد.</h2></div>
-      <p>نوع محصول و مدل خرید در هر صنف متفاوت است. راستیسی باید کمک کند ساختار فروشگاه از ابتدا به نیاز واقعی همان کسب‌وکار نزدیک‌تر باشد.</p>
-    </div>
-    <div class="alive-industries-grid">
-      <div class="alive-industry-copy">
-        <span class="r-overline">شروع متناسب با صنف</span>
-        <h3>ساختار مناسب، انتخاب‌های اولیه را ساده‌تر می‌کند.</h3>
-        <p>هر کسب‌وکار باید بتواند با نقطه شروعی متناسب با خودش فروشگاه را شکل دهد، نه اینکه همه مجبور باشند از یک ساختار مشترک شروع کنند.</p>
-        <div class="alive-tags"><span>پوشاک</span><span>عطر</span><span>آرایشی</span><span>موبایل</span><span>خانه و آشپزخانه</span><span>قطعات خودرو</span></div>
-        <div style="margin-top:22px"><a class="r-link" href="{% url 'portal:supported-industries' %}">مشاهده همه صنوف</a></div>
-      </div>
-      <div class="alive-mosaic">
-        <div class="alive-tile"><b>پوشاک</b><small>پوشاک و مد</small></div><div class="alive-tile"><b>عطر</b><small>عطر و زیبایی</small></div>
-        <div class="alive-tile"><b>موبایل</b><small>موبایل و دیجیتال</small></div><div class="alive-tile"><b>آرایشی</b><small>آرایشی و بهداشتی</small></div>
-        <div class="alive-tile"><b>خانه</b><small>خانه و آشپزخانه</small></div><div class="alive-tile"><b>قطعات خودرو</b><small>قطعات و لوازم خودرو</small></div>
-        <div class="alive-tile"><b>کیف و کفش</b><small>کیف، کفش و اکسسوری</small></div><div class="alive-tile"><b>ساختمانی</b><small>ساختمان و تأسیسات</small></div>
+<section class="rs-section rs-dark">
+  <div class="rs-container rs-operations">
+    <div>
+      <div class="rs-eyebrow"><span class="rs-eyebrow-index">02</span>پشت ویترین، یک سیستم یکپارچه</div>
+      <h2>فقط زیبا دیده نشوید.<br>منظم هم اداره کنید.</h2>
+      <p class="rs-lead">ویترین خوب آغاز ماجراست. محصولات، سفارش‌ها و مشتری‌ها باید پشت همان ویترین جای روشنی داشته باشند.</p>
+      <div class="rs-operation-list">
+        <div class="rs-operation"><strong>محصول و موجودی</strong><p>اطلاعات، تصویر، قیمت و موجودی را در یک ساختار منظم نگه دارید.</p></div>
+        <div class="rs-operation"><strong>سفارش‌ها</strong><p>از ثبت سفارش تا پیگیری وضعیت، جریان کار روشن باقی می‌ماند.</p></div>
+        <div class="rs-operation"><strong>مشتری‌ها</strong><p>اطلاعات مشتری و سابقه تعامل از محیط مدیریت قابل دسترسی است.</p></div>
       </div>
     </div>
-  </div>
-</section>
-
-<section class="r-section" style="padding-top:20px">
-  <div class="r-wrap alive-management">
-    <div class="alive-dash">
-      <div class="alive-dash-card">
-        <div class="alive-dash-head"><b>مدیریت فروشگاه</b><span style="font-size:11px;color:#7a8591">محصول · سفارش · مشتری</span></div>
-        <div class="alive-dash-body">
-          <div class="alive-sidebar"><i></i><i></i><i></i><i></i><i></i></div>
-          <div class="alive-mainpanel"><div class="alive-stats"><i></i><i></i><i></i></div><div class="alive-panels"><i></i><i></i></div></div>
+    <div class="rs-admin">
+      <div class="rs-admin-head"><strong>راستی‌سی / مدیریت فروشگاه</strong><span>خانه آبان</span></div>
+      <div class="rs-admin-body">
+        <div class="rs-admin-nav"><span>محصولات</span><span>سفارش‌ها</span><span>مشتری‌ها</span><span>طراحی فروشگاه</span><span>تنظیمات</span></div>
+        <div class="rs-admin-content"><div class="rs-admin-top"><h3>محصولات</h3><span class="rs-admin-add">+ محصول جدید</span></div>
+          <div class="rs-admin-row"><strong>گلدان دست‌ساز</strong><span>۱٬۲۸۰٬۰۰۰</span><span class="rs-status">فعال</span></div>
+          <div class="rs-admin-row"><strong>ظرف سرامیکی</strong><span>۹۸۰٬۰۰۰</span><span class="rs-status">فعال</span></div>
+          <div class="rs-admin-row"><strong>ست رومیزی</strong><span>۱٬۶۴۰٬۰۰۰</span><span class="rs-status">فعال</span></div>
+          <div class="rs-admin-row"><strong>فنجان مینیمال</strong><span>۶۹۰٬۰۰۰</span><span class="rs-status">فعال</span></div>
         </div>
       </div>
     </div>
-    <div class="alive-management-copy">
-      <span class="r-overline">مدیریت یکپارچه</span>
-      <h2 class="r-h2" style="font-size:clamp(30px,3.5vw,48px);margin-top:10px">فروشگاه فقط ظاهر نیست؛ مدیریت هم باید روشن و منظم باشد.</h2>
-      <p>بعد از ساخت ظاهر فروشگاه، محصولات، سفارش‌ها، مشتریان و بخش‌های کاری فروشگاه را از یک فضای مشخص مدیریت کن.</p>
-      <ul class="alive-checks"><li>مدیریت محصولات و دسته‌بندی</li><li>تنوع و ساختار کالا</li><li>سفارش‌ها و مشتریان</li><li>هویت و دامنه فروشگاه</li></ul>
-      <div style="margin-top:24px"><a class="r-link" href="{% url 'portal:features' %}">مشاهده امکانات پلتفرم</a></div>
-    </div>
   </div>
 </section>
 
-<section class="r-section" style="padding-top:24px">
-  <div class="r-wrap">
-    <div class="alive-head" style="margin-bottom:0">
-      <div><span class="r-overline">تعرفه‌ها</span><h2 class="r-h2">پلنی را انتخاب کن که با مرحله‌ی کسب‌وکارت هماهنگ باشد.</h2></div>
-      <div><p>قیمت‌ها و پلن‌های فعال را در صفحه‌ی تعرفه‌ها ببین و گزینه‌ای را انتخاب کن که با مرحله‌ی فعلی کسب‌وکارت هماهنگ‌تر است.</p><div style="margin-top:22px"><a class="r-btn r-btn-secondary" href="{% url 'portal:plans' %}">مشاهده تعرفه‌ها</a></div></div>
-    </div>
+<section class="rs-section rs-container rs-mobile">
+  <div>
+    <div class="rs-eyebrow"><span class="rs-eyebrow-index">03</span>اندازه عوض می‌شود، کیفیت نه</div>
+    <h2 class="rs-title">ویترین شما،<br>همیشه دم دست.</h2>
+    <p class="rs-lead">از دیدن محصول تا رسیدن به سبد خرید، فروشگاه باید برای صفحه کوچک هم روشن، سریع و قابل فهم باشد.</p>
+  </div>
+  <div class="rs-phone-stage"><div class="rs-phone"><div class="rs-phone-screen"><div class="rs-phone-top"></div><div class="rs-demo-store"><div class="rs-demo-head"><strong class="rs-demo-brand">خانه آبان</strong></div><div class="rs-demo-hero"><div class="rs-demo-copy"><small>مجموعه تازه</small><h3>برای خانه شما</h3><p></p><span class="rs-demo-action">خرید</span></div><div class="rs-demo-art"><img src="{{ public_ceramics.url }}" alt="{{ public_ceramics.alt|default:'چیدمان گلدان و ظروف سرامیکی در خانه' }}" width="1100" height="738" loading="lazy" decoding="async"></div></div><div class="rs-demo-products"><div class="rs-demo-grid"><div class="rs-demo-card"><div class="rs-demo-photo"><img src="{{ public_olive.url }}" alt="" width="400" height="447" loading="lazy" decoding="async"></div><strong>گلدان</strong></div><div class="rs-demo-card"><div class="rs-demo-photo"><img src="{{ public_clay.url }}" alt="" width="368" height="311" loading="lazy" decoding="async"></div><strong>ظرف</strong></div><div class="rs-demo-card"><div class="rs-demo-photo"><img src="{{ public_ivory.url }}" alt="" width="360" height="536" loading="lazy" decoding="async"></div><strong>ست</strong></div></div></div></div></div></div></div>
+</section>
+
+<section class="rs-section-sm rs-container">
+  <div class="rs-journey">
+    <article class="rs-journey-item"><span class="rs-journey-index">01</span><h3>فروشگاه را بسازید</h3><p>نام، هویت و ساختار اولیه فروشگاه را مشخص کنید.</p></article>
+    <article class="rs-journey-item"><span class="rs-journey-index">02</span><h3>محصولات را اضافه کنید</h3><p>محصول، قیمت، تصویر و موجودی را وارد کنید.</p></article>
+    <article class="rs-journey-item"><span class="rs-journey-index">03</span><h3>فروش و مدیریت کنید</h3><p>فروشگاه را منتشر کنید و سفارش‌ها را از پنل خودتان دنبال کنید.</p></article>
   </div>
 </section>
 
-<section class="alive-cta">
-  <div class="r-wrap">
-    <div class="alive-cta-box">
-      <div><h2>فروشگاهت را طوری بساز که ارزش برندت دیده شود.</h2><p>شروع ساده، طراحی جدی‌تر و زیرساختی که همراه کسب‌وکارت رشد کند.</p></div>
-      <a class="r-btn" href="{% url 'portal:register' %}">شروع ساخت فروشگاه</a>
-    </div>
+
+<section class="rs-section-sm rs-container">
+  <div class="rs-section-head">
+    <div><div class="rs-eyebrow">از ایده تا فروشگاه</div><h2 class="rs-title">شروع را کوتاه کنید.<br>بعد، مرحله‌به‌مرحله جلو بروید.</h2></div>
+    <div><p class="rs-lead">ساخت فروشگاه قرار نیست با انبوه تنظیمات شروع شود. ابتدا هویت و ساختار اصلی را بسازید و جزئیات را در ادامه کامل کنید.</p></div>
+  </div>
+  <div class="rs-flow">
+    <article class="rs-flow-step"><span>01</span><h3>حساب را بسازید</h3><p>نقطه شروع برای ورود به محیط مالک فروشگاه.</p></article>
+    <article class="rs-flow-step"><span>02</span><h3>فروشگاه را شکل دهید</h3><p>نام، هویت و ساختار اولیه را مشخص کنید.</p></article>
+    <article class="rs-flow-step"><span>03</span><h3>محصولات را وارد کنید</h3><p>اطلاعات و تصاویر محصولات را منظم اضافه کنید.</p></article>
+    <article class="rs-flow-step"><span>04</span><h3>منتشر و مدیریت کنید</h3><p>ویترین را در اختیار مشتری بگذارید و سفارش‌ها را دنبال کنید.</p></article>
   </div>
 </section>
+
+<section class="rs-section-sm rs-container">
+  <div class="rs-pricing-strip"><div><div class="rs-eyebrow">انتخاب روشن، قبل از شروع</div><h2>تعرفه را بشناسید.<br>با اطمینان تصمیم بگیرید.</h2></div><div><p>پلن‌های فعال، دوره پرداخت و شرایط شروع را پیش از تصمیم ببینید.</p><a class="rs-link" href="{% url 'portal:plans' %}">بررسی تعرفه‌ها و شرایط</a></div></div>
+</section>
+
+<section class="rs-section rs-container rs-home-faq">
+  <div><div class="rs-eyebrow">پیش از شروع</div><h2 class="rs-title">شاید سؤال<br>شما هم باشد.</h2><a class="rs-link" href="{% url 'portal:help' %}">همه پرسش‌ها</a></div>
+  <div>
+    <details class="rs-faq-item" open><summary>راستی‌سی دقیقاً چه کاری انجام می‌دهد؟</summary><p>برای ساخت و مدیریت فروشگاه اینترنتی است؛ از ظاهر ویترین تا محصول، سفارش و مدیریت روزانه.</p></details>
+    <details class="rs-faq-item"><summary>آیا برای ساخت فروشگاه باید برنامه‌نویسی بلد باشم؟</summary><p>خیر. مسیرهای اصلی ساخت و شخصی‌سازی برای استفاده بدون کدنویسی طراحی شده‌اند.</p></details>
+    <details class="rs-faq-item"><summary>می‌توانم ظاهر فروشگاهم را تغییر بدهم؟</summary><p>بله. ساختار طراحی راستی‌سی برای انتخاب سبک، رنگ و تنظیم ظاهر فروشگاه ساخته شده است.</p></details>
+  </div>
+</section>
+
+<section class="rs-final"><div class="rs-container rs-final-inner"><div><div class="rs-eyebrow">شروع از همین‌جا</div><h2>فروشگاهتان را<br>با نام خودتان بسازید.</h2><p>از ایجاد حساب تا ساخت اولین فروشگاه، مسیر را مرحله‌به‌مرحله پیش ببرید.</p></div><a class="rs-btn rs-btn-primary" href="{% url 'portal:register' %}">ساخت فروشگاه</a></div></section>
 {% endblock %}

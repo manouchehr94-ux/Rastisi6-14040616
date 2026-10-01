@@ -972,6 +972,13 @@ def plan_form(request, plan_id=None):
         billing_interval = request.POST.get("billing_interval") or "monthly"
         display_order = request.POST.get("display_order") or "0"
         is_recommended = request.POST.get("is_recommended") == "on"
+        # Old API/test POST payloads omit this new field; preserve their old
+        # default. The new form sends the hidden submitted marker explicitly.
+        is_publicly_selectable = (
+            request.POST.get("is_publicly_selectable") == "on"
+            if "public_selectable_submitted" in request.POST
+            else (plan.is_publicly_selectable if plan else True)
+        )
 
         if not name or not code:
             messages.error(request, "نام و کدِ پلن الزامی است.")
@@ -984,6 +991,7 @@ def plan_form(request, plan_id=None):
                 code=code, name=name, public_title=public_title, description=description,
                 display_order=int(display_order) if display_order.isdigit() else 0,
                 is_recommended=is_recommended,
+                is_publicly_selectable=is_publicly_selectable,
             )
             action_code = "platform_admin.plan_created"
         else:
@@ -992,7 +1000,11 @@ def plan_form(request, plan_id=None):
             plan.description = description
             plan.display_order = int(display_order) if display_order.isdigit() else 0
             plan.is_recommended = is_recommended
-            plan.save(update_fields=["name", "public_title", "description", "display_order", "is_recommended", "updated_at"])
+            plan.is_publicly_selectable = is_publicly_selectable
+            plan.save(update_fields=[
+                "name", "public_title", "description", "display_order",
+                "is_recommended", "is_publicly_selectable", "updated_at",
+            ])
             action_code = "platform_admin.plan_updated"
 
         version = create_plan_version(

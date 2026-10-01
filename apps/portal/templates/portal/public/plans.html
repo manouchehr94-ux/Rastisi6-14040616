@@ -1,32 +1,106 @@
 {% extends "portal/public/base_public.html" %}
 {% load persian %}
-{% block title %}تعرفه‌ها | راستیسی{% endblock %}
-{% block meta_description %}<meta name="description" content="پلن‌ها و تعرفه‌های راستیسی؛ گزینه‌های موجود را بر اساس قیمت، دوره پرداخت و دوره آزمایشی مقایسه کنید.">{% endblock %}
+{% block title %}تعرفه‌ها | راستی‌سی{% endblock %}
+{% block meta_description %}<meta name="description" content="پلن‌ها و تعرفه‌های فعال راستی‌سی؛ قیمت، دوره پرداخت و دوره آزمایشی هر پلن را شفاف ببینید و مقایسه کنید.">{% endblock %}
+
 {% block content %}
-<section class="r-page-hero"><div class="r-wrap r-page-hero-grid">
-  <div><span class="r-overline">تعرفه‌ها</span><h1 class="r-h1">پلنی برای مرحله‌ای که کسب‌وکارت امروز در آن است.</h1></div>
-  <div><p class="r-lead">پلن‌های فعال را با قیمت، دوره‌ی پرداخت و شرایط شروع هرکدام ببینید و گزینه‌ای را انتخاب کنید که با نیاز امروز فروشگاه شما هماهنگ‌تر است.</p></div>
-</div></section>
-<section class="r-section" style="padding-top:28px"><div class="r-wrap">
+<section class="rs-page-hero">
+  <div class="rs-container">
+    <div class="rs-breadcrumbs"><a href="{% url 'portal:home' %}">راستی‌سی</a><span>/</span><span>تعرفه‌ها</span></div>
+    <div class="rs-page-hero-row">
+      <div>
+        <div class="rs-eyebrow">تعرفه‌ها و شرایط</div>
+        <h1>قبل از انتخاب،<br>همه‌چیز باید روشن باشد.</h1>
+        <p>قیمت، دوره پرداخت و دوره آزمایشی هر پلن از اطلاعات فعال پلتفرم خوانده می‌شود؛ بدون عدد فرضی و بدون شرایط پنهان در صفحه معرفی.</p>
+      </div>
+      <span class="rs-page-count">03</span>
+    </div>
+  </div>
+</section>
+
+<section class="rs-kinetic-band" aria-label="اصول تعرفه">
+  <div class="rs-kinetic-track" aria-hidden="true">
+    <span>قیمت منتشرشده</span><span>دوره پرداخت روشن</span><span>آزمایش در صورت فعال بودن</span><span>انتخاب متناسب با نیاز فروشگاه</span>
+    <span>قیمت منتشرشده</span><span>دوره پرداخت روشن</span><span>آزمایش در صورت فعال بودن</span><span>انتخاب متناسب با نیاز فروشگاه</span>
+  </div>
+</section>
+
+<section class="rs-page-section rs-container">
   {% if plan_rows %}
-  <div class="r-pricing-shell">
-    <div class="r-pricing-head"><div><span class="r-overline">پلن‌های فعال</span><h2 class="r-h2" style="font-size:clamp(28px,3.5vw,46px)">انتخاب روشن، با اطلاعات شفاف هر پلن.</h2></div><span class="r-copy">می‌توانید با توجه به نیاز فروشگاه، پلن مناسب را انتخاب کنید.</span></div>
-    <div class="r-pricing-rail">
+    <div class="rs-pricing-head">
+      <div><div class="rs-eyebrow">پلن‌های فعال</div><h2 class="rs-title">گزینه‌ای را انتخاب کنید که<br>با نیاز امروز فروشگاهتان هماهنگ است.</h2></div>
+      <div><p class="rs-lead">لازم نیست از بزرگ‌ترین پلن شروع کنید. شرایط واقعی هر گزینه را ببینید و از چیزی شروع کنید که برای مرحله فعلی کسب‌وکارتان مناسب است.</p></div>
+    </div>
+
+    <div class="rs-pricing-grid">
       {% for row in plan_rows %}
-      <article class="r-plan {% if row.plan.is_recommended %}r-plan-recommended{% endif %}">
-        {% if row.plan.is_recommended %}<span class="r-plan-badge">پیشنهادی</span>{% endif %}
-        <h3>{{ row.plan.public_title|default:row.plan.name }}</h3>
-        <p class="r-plan-desc">{{ row.plan.description }}</p>
-        <div class="r-plan-price">{{ row.version.display_price|toman }}<small>{{ row.version.get_billing_interval_display }}</small></div>
-        {% if row.version.trial_days %}<span class="r-plan-trial">{{ row.version.trial_days|fa_number }} روز دوره آزمایشی</span>{% endif %}
-        <a class="r-btn {% if row.plan.is_recommended %}r-btn-primary{% else %}r-btn-secondary{% endif %}" href="{% url 'portal:register' %}">شروع کنید</a>
+      <article class="rs-plan-card {% if row.plan.is_recommended %}is-recommended{% endif %}">
+        <div class="rs-plan-copy">
+          {% if row.plan.is_recommended %}<span class="rs-plan-badge">پیشنهادی</span>{% endif %}
+          <h2>{{ row.plan.public_title|default:row.plan.name }}</h2>
+          <p>{{ row.plan.description }}</p>
+          <div class="rs-plan-price">{{ row.version.display_price|toman }}<small>{{ row.version.get_billing_interval_display }}</small></div>
+          {% if row.version.trial_days %}<span class="rs-plan-trial">{{ row.version.trial_days|fa_number }} روز دوره آزمایشی</span>{% endif %}
+        </div>
+        <a class="rs-btn {% if row.plan.is_recommended %}rs-btn-primary{% else %}rs-btn-outline{% endif %}" href="{% url 'portal:register' %}">شروع با این پلن</a>
       </article>
       {% endfor %}
     </div>
-  </div>
   {% else %}
-  <div class="r-empty-state"><span class="r-overline">تعرفه‌ها</span><h2 class="r-h3" style="margin-top:14px">هنوز پلن عمومی برای نمایش تنظیم نشده است.</h2><p class="r-copy">برای اطلاعات بیشتر می‌توانید با تیم راستیسی در ارتباط باشید.</p><a class="r-btn r-btn-primary" href="{% url 'portal:contact' %}">تماس با ما</a></div>
+    <div class="rs-empty-state">
+      <div class="rs-eyebrow">تعرفه‌ها</div>
+      <h2>هنوز پلن عمومی برای نمایش تنظیم نشده است.</h2>
+      <p>برای اطلاعات بیشتر می‌توانید از صفحه تماس با راستی‌سی پیام بفرستید.</p>
+      <a class="rs-btn rs-btn-primary" href="{% url 'portal:contact' %}">تماس با ما</a>
+    </div>
   {% endif %}
-</div></section>
-<section class="r-section" style="padding-top:0"><div class="r-wrap"><div class="r-editorial-band" style="border:1px solid var(--r-line);border-radius:24px;overflow:hidden"><div class="r-editorial-grid"><div class="r-editorial-main">پلن امروز نباید مسیر رشد فردای فروشگاه را محدود کند.</div><div class="r-editorial-item"><span class="r-num">01</span><b>قیمت واقعی</b><p>قیمت و دوره پرداخت هر پلن به‌صورت روشن نمایش داده می‌شود.</p></div><div class="r-editorial-item"><span class="r-num">02</span><b>دوره‌ی واقعی</b><p>اگر دوره آزمایشی برای پلنی فعال باشد، مدت آن همان‌جا مشخص است.</p></div><div class="r-editorial-item"><span class="r-num">03</span><b>قابل توسعه</b><p>می‌توانید گزینه‌های فعال را کنار هم بررسی و انتخاب کنید.</p></div></div></div></div></section>
+</section>
+
+<section class="rs-section-sm rs-container">
+  <div class="rs-pricing-principles">
+    <div>تعرفه خوب، فقط یک عدد نیست؛<br>شرایطش هم باید روشن باشد.</div>
+    <div><span>01</span><b>قیمت واقعی</b><p>فقط قیمت ثبت‌شده و منتشرشدهٔ همان پلن نمایش داده می‌شود.</p></div>
+    <div><span>02</span><b>دوره واقعی</b><p>دوره پرداخت و مدت آزمایشی، در صورت فعال بودن، از داده واقعی می‌آید.</p></div>
+    <div><span>03</span><b>بدون حدس</b><p>اگر اطلاعات رسمی برای چیزی وجود نداشته باشد، در این صفحه فرض نمی‌شود.</p></div>
+  </div>
+</section>
+
+<section class="rs-section rs-container">
+  <div class="rs-pricing-guide">
+    <div>
+      <div class="rs-eyebrow">چطور انتخاب کنم؟</div>
+      <h2 class="rs-title">از نیاز امروز شروع کنید،<br>نه از فهرست بلند قابلیت‌ها.</h2>
+      <p class="rs-lead">برای انتخاب پلن، سه سؤال ساده کمک می‌کند محدوده نیازتان روشن‌تر شود. بعد، جزئیات همان پلن را در مسیر ثبت‌نام بررسی کنید.</p>
+    </div>
+    <div class="rs-pricing-guide-list">
+      <article class="rs-pricing-guide-item"><span>01</span><div><h3>فروشگاهتان الان در چه مرحله‌ای است؟</h3><p>شروع تازه، فروش فعال یا رشد عملیاتی هر کدام نیاز متفاوتی دارند.</p></div></article>
+      <article class="rs-pricing-guide-item"><span>02</span><div><h3>چه محدودیت‌هایی برایتان مهم است؟</h3><p>تعداد محصولات، سطح دسترسی‌ها و امکانات عملیاتی را با نیاز واقعی خودتان مقایسه کنید.</p></div></article>
+      <article class="rs-pricing-guide-item"><span>03</span><div><h3>دوره پرداخت و آزمایش را ببینید.</h3><p>اگر برای پلنی دوره آزمایشی تعریف شده باشد، همان مقدار واقعی در کارت آن نمایش داده می‌شود.</p></div></article>
+    </div>
+  </div>
+</section>
+
+<section class="rs-section-sm rs-container rs-home-faq">
+  <div>
+    <div class="rs-eyebrow">پیش از انتخاب</div>
+    <h2 class="rs-title">چند سؤال<br>طبیعی درباره پلن‌ها.</h2>
+    <a class="rs-link" href="{% url 'portal:help' %}">همه پرسش‌ها</a>
+  </div>
+  <div>
+    <details class="rs-faq-item" open><summary>قیمت‌هایی که اینجا می‌بینم واقعی‌اند؟</summary><p>بله؛ این صفحه قیمت نسخه منتشرشدهٔ پلن‌های عمومی را از اطلاعات پلتفرم نمایش می‌دهد.</p></details>
+    <details class="rs-faq-item"><summary>اگر قیمت یک پلن تغییر کند چه می‌شود؟</summary><p>شرایط جدید به‌صورت نسخه تازهٔ پلن منتشر می‌شود؛ نسخه‌های منتشرشده قبلی مستقیماً بازنویسی نمی‌شوند.</p></details>
+    <details class="rs-faq-item"><summary>دوره آزمایشی برای همه پلن‌ها یکسان است؟</summary><p>خیر؛ فقط اگر برای نسخهٔ همان پلن دوره آزمایشی تعریف شده باشد، تعداد روزهای آن در کارت پلن نمایش داده می‌شود.</p></details>
+  </div>
+</section>
+
+<section class="rs-section-sm rs-container">
+  <div class="rs-note">خرید و فعال‌سازی اشتراک در مسیر حساب مالک و فروشگاه انجام می‌شود. این صفحه فقط پلن‌های عمومی قابل انتخاب را معرفی می‌کند.</div>
+</section>
+
+<section class="rs-final">
+  <div class="rs-container rs-final-inner">
+    <div><div class="rs-eyebrow">آماده شروع هستید؟</div><h2>فروشگاهتان را بسازید.<br>پلن را با اطلاعات روشن انتخاب کنید.</h2><p>ابتدا حساب را بسازید؛ انتخاب سرویس در مسیر واقعی محصول ادامه پیدا می‌کند.</p></div>
+    <a class="rs-btn rs-btn-primary" href="{% url 'portal:register' %}">ساخت حساب</a>
+  </div>
+</section>
 {% endblock %}

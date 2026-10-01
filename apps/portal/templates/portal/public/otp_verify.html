@@ -1,14 +1,51 @@
 {% extends "portal/public/base_public.html" %}
-{% block title %}تأیید کد | راستیسی{% endblock %}
+{% block title %}تأیید کد | راستی‌سی{% endblock %}
 {% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+
 {% block content %}
-<section class="r-auth-section"><div class="r-wrap"><div class="r-auth-shell">
-  <aside class="r-auth-story"><span class="r-overline">تأیید شماره</span><h1>یک مرحله‌ی کوتاه برای ورود امن.</h1><p>کدی که برای شماره موبایل شما ارسال شده را وارد کنید تا ورود یا ثبت‌نام با امنیت بیشتری ادامه پیدا کند.</p><div class="r-auth-points"><div class="r-auth-point">کد ۶ رقمی</div><div class="r-auth-point">امکان درخواست دوباره‌ی کد</div><div class="r-auth-point">ورود امن به جریان مالک</div></div></aside>
-  <div class="r-auth-form"><div class="r-auth-form-head"><h2>کد تأیید</h2><p>کد ارسال‌شده به <span dir="ltr" style="display:inline-block;color:var(--r-ink);font-weight:800">{{ phone }}</span> را وارد کنید.</p></div>
-    <form method="post" novalidate>{% csrf_token %}{{ form.phone }}{{ form.full_name }}{% if form.non_field_errors %}<div class="p-alert p-alert-error">{{ form.non_field_errors.0 }}</div>{% endif %}<div class="p-field"><label for="id_code">کد ۶ رقمی</label>{{ form.code }}{% if form.code.errors %}<div class="p-error">{{ form.code.errors.0 }}</div>{% endif %}</div><button type="submit" class="r-btn r-btn-primary r-form-submit">تأیید و ورود</button></form>
-    <form method="post" action="{{ resend_url }}" style="text-align:center;margin-top:18px">{% csrf_token %}<input type="hidden" name="phone" value="{{ phone }}">{% if resend_full_name %}<input type="hidden" name="full_name" value="{{ resend_full_name }}">{% endif %}{% if resend_remember_me %}<input type="hidden" name="remember_me" value="on">{% endif %}{% if resend_next %}<input type="hidden" name="next" value="{{ resend_next }}">{% endif %}{% if resend_admin_return %}<input type="hidden" name="admin_return" value="{{ resend_admin_return }}">{% endif %}<button type="submit" class="r-link" style="border:0;background:transparent">ارسال دوباره‌ی کد</button><span style="display:block;margin-top:6px;color:var(--r-muted);font-size:11px">اگر کد نرسیده، کمی صبر کنید و دوباره درخواست دهید.</span></form>
-    <div class="r-form-links"><a href="{% url 'portal:login' %}">تغییر شماره موبایل</a></div>
+<section class="r-auth-section">
+  <div class="rs-container">
+    <div class="r-auth-shell">
+      <aside class="r-auth-story">
+        <div class="rs-eyebrow">تأیید شماره</div>
+        <h1>یک مرحله کوتاه<br>برای ورود امن.</h1>
+        <p>کدی که برای شماره موبایل شما ارسال شده را وارد کنید تا ورود یا ثبت‌نام ادامه پیدا کند.</p>
+        <div class="r-auth-points">
+          <div class="r-auth-point">کد ۶ رقمی</div>
+          <div class="r-auth-point">امکان درخواست دوباره کد</div>
+          <div class="r-auth-point">ادامه به جریان امن حساب مالک</div>
+        </div>
+      </aside>
+
+      <div class="r-auth-form">
+        <div class="r-auth-form-head">
+          <h2>کد تأیید</h2>
+          <p>کد ارسال‌شده به <span class="r-phone-inline">{{ phone }}</span> را وارد کنید.</p>
+        </div>
+
+        <form method="post" novalidate>
+          {% csrf_token %}
+          {{ form.phone }}
+          {{ form.full_name }}
+          {% if form.non_field_errors %}<div class="p-alert p-alert-error">{{ form.non_field_errors.0 }}</div>{% endif %}
+          <div class="p-field"><label for="id_code">کد ۶ رقمی</label>{{ form.code }}{% if form.code.errors %}<div class="p-error">{{ form.code.errors.0 }}</div>{% endif %}</div>
+          <button type="submit" class="rs-btn rs-btn-primary r-form-submit">تأیید و ورود</button>
+        </form>
+
+        <form method="post" action="{{ resend_url }}" class="r-otp-resend">
+          {% csrf_token %}
+          <input type="hidden" name="phone" value="{{ phone }}">
+          {% if resend_full_name %}<input type="hidden" name="full_name" value="{{ resend_full_name }}">{% endif %}
+          {% if resend_remember_me %}<input type="hidden" name="remember_me" value="on">{% endif %}
+          {% if resend_next %}<input type="hidden" name="next" value="{{ resend_next }}">{% endif %}
+          {% if resend_admin_return %}<input type="hidden" name="admin_return" value="{{ resend_admin_return }}">{% endif %}
+          <button type="submit" class="rs-link">ارسال دوباره کد</button>
+          <span class="r-otp-hint">اگر کد نرسیده، کمی صبر کنید و دوباره درخواست دهید.</span>
+        </form>
+
+        <div class="r-form-links"><a href="{% url 'portal:login' %}">تغییر شماره موبایل</a></div>
+      </div>
+    </div>
   </div>
-</div></div></section>
+</section>
 {% endblock %}
-{% block public_extra_css %}<style>#id_code{direction:ltr;text-align:center;letter-spacing:8px;font-size:22px;font-weight:900}</style>{% endblock %}

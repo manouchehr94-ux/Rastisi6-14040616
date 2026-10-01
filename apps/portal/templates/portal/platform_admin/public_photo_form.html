@@ -1,0 +1,29 @@
+{% extends "portal/platform_admin/base.html" %}
+{% block title %}ویرایش تصویر سایت عمومی | پنل مالک پلتفرم{% endblock %}
+{% block content %}
+<p><a href="{% url 'portal_platform_admin:public-photos' %}" class="pa-help">← بازگشت به تصاویر سایت عمومی</a></p>
+<div class="pa-pagehead"><div><h1>{{ label }}</h1><p>تصویر این جایگاه در تمام محل‌های استفاده در سایت عمومی جایگزین می‌شود.</p></div></div>
+
+<div class="pa-card">
+  <div class="pa-cardbody">
+    <img src="{{ preview_url }}" alt="{{ label }}" width="440" height="260" style="display:block;max-width:100%;height:240px;object-fit:cover;border-radius:6px;margin-bottom:22px">
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      {% if form.non_field_errors %}<div class="pa-alert pa-alert-error">{{ form.non_field_errors }}</div>{% endif %}
+      <div class="pa-field">
+        <label for="{{ form.image.id_for_label }}">تصویر تازه</label>
+        {{ form.image }}
+        {% if form.image.errors %}<div class="pa-alert pa-alert-error">{{ form.image.errors }}</div>{% endif %}
+        <p class="pa-help">فقط JPEG، PNG یا WebP. حداکثر ۴ مگابایت و حداکثر ۵۰۰۰ پیکسل در هر ضلع.</p>
+      </div>
+      <div class="pa-field">
+        <label for="{{ form.alt_text.id_for_label }}">متن جایگزین تصویر</label>
+        {{ form.alt_text }}
+        {% if form.alt_text.errors %}<div class="pa-alert pa-alert-error">{{ form.alt_text.errors }}</div>{% endif %}
+        <p class="pa-help">برای عکس جدید، توضیح دقیق و کوتاه فارسی بنویسید.</p>
+      </div>
+      <button class="pa-btn pa-primary" type="submit">ذخیرهٔ تصویر</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

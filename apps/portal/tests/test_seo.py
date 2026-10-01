@@ -21,7 +21,7 @@ class PublicPageIndexabilityTests(TestCase):
 
     def test_features_plans_help_contact_are_indexable_with_unique_descriptions(self):
         seen_descriptions = set()
-        for path in ["/features/", "/plans/", "/help/", "/contact/"]:
+        for path in ["/features/", "/design/", "/plans/", "/about/", "/help/", "/contact/"]:
             response = self.client.get(path, HTTP_HOST=_HOST)
             self.assertNotContains(response, "noindex")
             content = response.content.decode()
@@ -87,6 +87,8 @@ class PlatformRobotsAndSitemapTests(TestCase):
         self.assertEqual(response["Content-Type"], "application/xml")
         body = response.content.decode()
         self.assertIn("/features/", body)
+        self.assertIn("/design/", body)
+        self.assertIn("/about/", body)
         self.assertIn("/supported-industries/", body)
         self.assertIn("/plans/", body)
         self.assertIn("/register/", body)

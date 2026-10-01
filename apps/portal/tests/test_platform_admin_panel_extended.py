@@ -134,6 +134,22 @@ class PlansTests(PlatformAdminExtendedTestCase):
         version = plan.versions.get()
         self.assertEqual(version.status, PlanVersion.Status.DRAFT)
 
+    def test_public_visibility_checkbox(self):
+        plan, _ = _make_plan_version(code="visibility")
+        payload = {
+            "name": "Visibility", "code": "visibility", "display_price": "100000",
+            "billing_interval": "monthly", "public_selectable_submitted": "1",
+        }
+        response = self.client.post(f"/plans/{plan.pk}/edit/", payload, HTTP_HOST=_HOST)
+        self.assertEqual(response.status_code, 302)
+        plan.refresh_from_db()
+        self.assertFalse(plan.is_publicly_selectable)
+        payload["is_publicly_selectable"] = "on"
+        response = self.client.post(f"/plans/{plan.pk}/edit/", payload, HTTP_HOST=_HOST)
+        self.assertEqual(response.status_code, 302)
+        plan.refresh_from_db()
+        self.assertTrue(plan.is_publicly_selectable)
+
     def test_editing_existing_plan_creates_new_version_not_mutate_published_one(self):
         plan, v1 = _make_plan_version(code="growth")
         self.client.post(f"/plans/{plan.pk}/edit/", {
