@@ -857,6 +857,7 @@ h1,h2,h3,h4,p{margin-top:0}
 .rs-bento-card.is-wide:hover .rs-bento-visual img{transform:scale(1.04)}
 .rs-shop-hero-art{background:var(--rs-demo-accent)}
 .rs-shop-hero-art img{position:absolute;inset:0}
+.rs-shop-photo{display:block;height:104px}
 .rs-shop-photo img{height:104px;object-position:center 43%}
 .rs-shop-product:hover .rs-shop-photo img{transform:scale(1.06)}
 .rs-demo-shop[data-theme=bold] .rs-shop-hero-art img{filter:saturate(.85) contrast(1.07)}
