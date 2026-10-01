@@ -1,6 +1,10 @@
 {% extends "portal/public/base_public.html" %}
 {% load static %}
 {% load public_photos %}
+{% block title %}طراحی فروشگاه | راستی‌سی{% endblock %}
+{% block meta_description %}<meta name="description" content="ظاهر فروشگاه را با سبک، رنگ و اندازه نمایش متفاوت ببینید و یک پیش‌نمایش تعاملی از طراحی فروشگاه در راستی‌سی تجربه کنید.">{% endblock %}
+
+{% block content %}
 {% public_photo 'stilllife' as public_stilllife %}
 {% public_photo 'olive' as public_olive %}
 {% public_photo 'clay' as public_clay %}
@@ -8,10 +12,6 @@
 {% public_photo 'ceramics' as public_ceramics %}
 {% public_photo 'fashion' as public_fashion %}
 {% public_photo 'beauty' as public_beauty %}
-{% block title %}طراحی فروشگاه | راستی‌سی{% endblock %}
-{% block meta_description %}<meta name="description" content="ظاهر فروشگاه را با سبک، رنگ و اندازه نمایش متفاوت ببینید و یک پیش‌نمایش تعاملی از طراحی فروشگاه در راستی‌سی تجربه کنید.">{% endblock %}
-
-{% block content %}
 <section class="rs-page-hero">
   <div class="rs-container">
     <div class="rs-breadcrumbs"><a href="{% url 'portal:home' %}">راستی‌سی</a><span>/</span><span>طراحی فروشگاه</span></div>
