@@ -467,3 +467,43 @@ class ContactMessage(TimeStampedModel):
 
     def __str__(self):
         return f"{self.full_name} <{self.email}>"
+
+
+class PublicSitePhoto(models.Model):
+    """Optional platform-owned photo overrides for the public marketing website.
+
+    Customer storefront media is deliberately stored elsewhere. Removing an
+    override makes the public website use its versioned static WebP fallback.
+    """
+
+    SLOT_CHOICES = (
+        ("stilllife", "تصویر اصلی محصولات دکور و Hero"),
+        ("ceramics", "نمای فروشگاه و محصولات سرامیکی"),
+        ("ivory", "محصول سرامیکی روشن"),
+        ("olive", "محصول سرامیکی زیتونی"),
+        ("clay", "محصول سفالی"),
+        ("fashion", "گالری پوشاک"),
+        ("beauty", "گالری محصولات زیبایی"),
+        ("skincare", "محصولات مراقبت پوست"),
+        ("bag", "عکس کیف و اکسسوری"),
+    )
+
+    slot = models.CharField("جایگاه تصویر", max_length=24, primary_key=True, choices=SLOT_CHOICES)
+    image = models.ImageField("تصویر", upload_to="portal/public-photos/")
+    alt_text = models.CharField(
+        "متن جایگزین تصویر", max_length=180, blank=True, default="",
+        help_text="برای دسترس‌پذیری و موتورهای جست‌وجو، تصویر را کوتاه و دقیق توصیف کنید.",
+    )
+    updated_at = models.DateTimeField("آخرین تغییر", auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="ویرایشگر",
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="public_site_photo_updates",
+    )
+
+    class Meta:
+        verbose_name = "تصویر سایت عمومی"
+        verbose_name_plural = "تصاویر سایت عمومی"
+
+    def __str__(self):
+        return self.get_slot_display()
