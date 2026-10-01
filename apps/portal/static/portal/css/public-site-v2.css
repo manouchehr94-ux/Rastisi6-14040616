@@ -810,3 +810,68 @@ h1,h2,h3,h4,p{margin-top:0}
   .rs-js .rs-hero-copy>*,.rs-js .rs-page-hero-row>div>*,.rs-js .rs-hero-art{opacity:1!important;animation:none!important;filter:none!important;transform:none!important}
   .rs-demo-art::after,.rs-gallery-scene::after{animation:none!important}
 }
+
+
+/* Public editorial photography — files live only in apps/portal/static/portal/images/public. */
+.rs-demo-art,
+.rs-demo-photo,
+.rs-gallery-scene,
+.rs-shop-hero-art,
+.rs-shop-photo,
+.rs-bento-visual,
+.rs-about-photo{
+  position:relative;
+  overflow:hidden;
+  background:var(--rs-soft);
+}
+.rs-demo-art::before,.rs-demo-art::after,
+.rs-gallery-scene::after,
+.rs-shop-hero-art::before,.rs-shop-hero-art::after,
+.rs-shop-photo::after,
+.rs-bento-visual::before,.rs-bento-visual::after{
+  content:none!important;
+  display:none!important;
+}
+.rs-demo-art img,
+.rs-demo-photo img,
+.rs-gallery-scene img,
+.rs-shop-hero-art img,
+.rs-shop-photo img,
+.rs-bento-visual img,
+.rs-about-photo img{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  object-position:center;
+  transition:transform .6s cubic-bezier(.2,.72,.2,1),filter .4s ease;
+}
+.rs-demo-art img{object-position:center 53%}
+.rs-demo-photo img{object-position:center 48%}
+.rs-demo-card:first-child .rs-demo-photo img{object-position:center 48%}
+.rs-demo-card:last-child .rs-demo-photo img{object-position:center 57%}
+.rs-gallery-scene img{object-position:center 45%}
+.rs-gallery-card:hover .rs-gallery-scene img{transform:scale(1.045)}
+.rs-bento-visual{background:var(--rs-sand)}
+.rs-bento-visual img{object-position:center 47%}
+.rs-bento-card.is-wide:hover .rs-bento-visual img{transform:scale(1.04)}
+.rs-shop-hero-art{background:var(--rs-demo-accent)}
+.rs-shop-hero-art img{position:absolute;inset:0}
+.rs-shop-photo img{height:104px;object-position:center 43%}
+.rs-shop-product:hover .rs-shop-photo img{transform:scale(1.06)}
+.rs-demo-shop[data-theme=bold] .rs-shop-hero-art img{filter:saturate(.85) contrast(1.07)}
+.rs-demo-shop[data-theme=editorial] .rs-shop-hero-art img{object-position:center 62%}
+.rs-playground-stage[data-device=mobile] .rs-shop-hero-art img{object-position:center 46%}
+.rs-about-photo{height:160px;margin-top:22px;border-radius:var(--rs-radius-sm)}
+.rs-about-photo img{object-position:center 47%}
+.rs-about-panel:hover .rs-about-photo img{transform:scale(1.035)}
+@media(max-width:720px){
+  .rs-about-photo{height:175px}
+  .rs-gallery-scene img{object-position:center}
+}
+@media(prefers-reduced-motion:reduce){
+  .rs-demo-art img,.rs-demo-photo img,.rs-gallery-scene img,
+  .rs-shop-hero-art img,.rs-shop-photo img,.rs-bento-visual img,.rs-about-photo img{
+    transition:none!important;transform:none!important;
+  }
+}
