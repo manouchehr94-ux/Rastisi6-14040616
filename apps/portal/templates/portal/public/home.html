@@ -8,6 +8,7 @@
 {% public_photo 'ceramics' as public_ceramics %}
 {% public_photo 'fashion' as public_fashion %}
 {% public_photo 'skincare' as public_skincare %}
+{% public_photo 'bag' as public_bag %}
 {% block title %}راستی‌سی | فروشگاه شما، با امضای خودتان{% endblock %}
 {% block meta_description %}<meta name="description" content="راستی‌سی؛ ساخت و مدیریت فروشگاه اینترنتی با ظاهر اختصاصی، مدیریت محصولات و سفارش‌ها و تجربه خرید مناسب موبایل.">{% endblock %}
 
@@ -84,7 +85,7 @@
     <article class="rs-bento-card is-accent"><span class="rs-bento-index">02 / محصول</span><h3>اطلاعات محصول، یک‌بار و منظم.</h3><p>نام، تصویر، قیمت و موجودی در ساختاری نگهداری می‌شوند که ویترین از آن استفاده می‌کند.</p></article>
     <article class="rs-bento-card is-soft"><span class="rs-bento-index">03 / سفارش</span><h3>بعد از خرید، مسیر ادامه دارد.</h3><p>سفارش باید در محیط مدیریت دیده شود تا پیگیری روزمره روشن بماند.</p></article>
     <article class="rs-bento-card"><span class="rs-bento-index">04 / موبایل</span><h3>صفحه کوچک، تجربه کوچک نیست.</h3><p>ویترین و مسیر خرید باید برای موبایل هم خوانا، قابل لمس و روشن باشند.</p></article>
-    <article class="rs-bento-card"><span class="rs-bento-index">05 / هویت</span><h3>فروشگاه مستقل، نه یک غرفه تکراری.</h3><p>هدف این است که برند خودتان دیده شود و ساختار فروشگاه پشت آن منظم بماند.</p></article>
+    <article class="rs-bento-card"><span class="rs-bento-index">05 / هویت</span><h3>فروشگاه مستقل، نه یک غرفه تکراری.</h3><p>هدف این است که برند خودتان دیده شود و ساختار فروشگاه پشت آن منظم بماند.</p><div class="rs-bento-photo"><img src="{{ public_bag.url }}" alt="{{ public_bag.alt|default:'کیف و اکسسوری در چیدمان مینیمال' }}" loading="lazy" decoding="async" width="320" height="160"></div></article>
   </div>
 </section>
 
