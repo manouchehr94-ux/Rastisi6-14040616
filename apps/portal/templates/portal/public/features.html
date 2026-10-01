@@ -1,5 +1,7 @@
 {% extends "portal/public/base_public.html" %}
 {% load static %}
+{% load public_photos %}
+{% public_photo 'ceramics' as public_ceramics %}
 {% block title %}راستی‌سی چیست؟ | امکانات و مسیر کار{% endblock %}
 {% block meta_description %}<meta name="description" content="راستی‌سی از ویترین فروشگاه تا مدیریت محصول و سفارش را در یک تجربه کنار هم قرار می‌دهد.">{% endblock %}
 
@@ -49,7 +51,7 @@
           <div class="rs-browser"><span class="rs-browser-dots"><i></i><i></i><i></i></span><span>نمونهٔ مفهومی فروشگاه</span></div>
           <div class="rs-demo-store">
             <div class="rs-demo-head"><strong class="rs-demo-brand">خانه آبان</strong><span class="rs-demo-nav"><span>محصولات</span><span>درباره ما</span><span>تماس</span></span></div>
-            <div class="rs-demo-hero"><div class="rs-demo-copy"><small>مجموعه تازه</small><h3>یک ویترین مستقل برای برند شما.</h3><p>نمونهٔ نمایشی برای معرفی تجربه محصول.</p><span class="rs-demo-action">محصولات</span></div><div class="rs-demo-art"><img src="{% static 'portal/images/public/ceramics.webp' %}" alt="چیدمان گلدان و ظروف سرامیکی در خانه" width="1100" height="738" loading="lazy" decoding="async"></div></div>
+            <div class="rs-demo-hero"><div class="rs-demo-copy"><small>مجموعه تازه</small><h3>یک ویترین مستقل برای برند شما.</h3><p>نمونهٔ نمایشی برای معرفی تجربه محصول.</p><span class="rs-demo-action">محصولات</span></div><div class="rs-demo-art"><img src="{{ public_ceramics.url }}" alt="{{ public_ceramics.alt|default:'چیدمان گلدان و ظروف سرامیکی در خانه' }}" width="1100" height="738" loading="lazy" decoding="async"></div></div>
           </div>
         </div>
       </div>
