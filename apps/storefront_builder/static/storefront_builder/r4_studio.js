@@ -78,6 +78,7 @@
     panelVisible: true,
     modal: null,
     lastFocus: null,
+    media: null,
     filter: 'all',
     query: '',
     previewTemplate: null,
@@ -654,11 +655,18 @@
     });
   }
 
-  function closeModal(restore) {
+  function closeModal(restore, force) {
+    if (ui.modal && ui.modal.type === 'media-editor' && ui.media) {
+      // Never drop an in-flight save, and never silently discard edits: an
+      // accidental close (Escape / X / Cancel) on a dirty form asks first.
+      if (ui.media.saving) return;
+      if (ui.media.dirty && !force) { toggleMediaDiscardPrompt(true); return; }
+    }
     if (ui.busy && !ui.publishing) return;
     if (ui.publishing) return;
     var modal = ui.modal;
     ui.modal = null;
+    if (modal && modal.type === 'media-editor') ui.media = null;
     if (app) app.inert = false;
     modalRoot.innerHTML = '';
     if (modal && modal.type === 'confirm' && confirmResolver) {
@@ -674,6 +682,10 @@
   function renderModal() {
     var m = ui.modal;
     if (!m) { modalRoot.innerHTML = ''; return; }
+    // The media-editor dialog hosts a live, server-rendered form (htmx + Alpine).
+    // Other Studio state changes re-render the modal root; rebuilding it here
+    // would destroy the merchant's unsaved input, so it is built exactly once.
+    if (m.type === 'media-editor' && modalRoot.querySelector('.modal.media-modal')) return;
     var focus = document.activeElement;
     var restoreFocus = focus && modalRoot.contains(focus);
     var focusControl = restoreFocus ? focus.getAttribute('data-control') : null;
@@ -799,6 +811,17 @@
             '<div class="lab-option">' + icon('globe') + '<h3>انتشار</h3><p>پیش‌نویس را به نسخهٔ عمومی تبدیل می‌کند؛ تا آن لحظه مشتری‌ها طرح قبلی را می‌بینند.</p></div>' +
           '</div><div class="section-divider"></div><p class="small muted">Ctrl / ⌘ + Z: واگرد · Ctrl / ⌘ + Shift + Z: بازگردانی · Escape: بستن پنجره</p>';
         foot = btn('close-modal', 'متوجه شدم', '', 'primary');
+        break;
+      case 'media-editor':
+        cls = 'media-modal';
+        title = esc(m.title || 'ویرایش');
+        body = '<div class="media-status" data-rs-media-status role="alert" hidden></div>' +
+          '<div id="r4MediaModalSlot" data-rs-media-slot aria-live="polite"><p class="modal-message"><i class="spinner"></i> در حال بارگذاری فرم…</p></div>';
+        foot = '<div class="media-discard" data-rs-media-discard role="alertdialog" aria-label="تأیید بستن" hidden>' +
+            '<p>تغییرات ذخیره‌نشده از بین می‌رود. ادامه می‌دهید؟</p>' +
+            '<div class="media-foot-buttons">' + btn('media-keep', 'ادامهٔ ویرایش', '', 'primary') + btn('media-discard', 'دور انداختن تغییرات', '', 'outline danger') + '</div></div>' +
+          '<div class="media-foot-buttons" data-rs-media-actions>' + btn('close-modal', 'انصراف', '', 'outline') +
+            '<button type="submit" form="r4MediaForm" id="r4MediaSave" class="primary" disabled>ذخیره</button></div>';
         break;
       default:
         return;
@@ -926,6 +949,8 @@
         closeModal(false);
         break;
       case 'close-modal': closeModal(); break;
+      case 'media-keep': toggleMediaDiscardPrompt(false); break;
+      case 'media-discard': closeModal(true, true); break;
       case 'template-filter':
         ui.filter = el.getAttribute('data-filter') || 'all';
         renderModal();
@@ -1052,7 +1077,11 @@
       return;
     }
     if (evt.key === 'Tab' && ui.modal) {
-      var focusable = $all('.modal button:not(:disabled), .modal input:not(:disabled), .modal select:not(:disabled), .modal summary, .modal [tabindex="0"]', modalRoot);
+      // Visible controls only: inactive tab panels (display:none) and hidden
+      // discard prompts are never focus-trap boundaries.
+      var focusable = $all('.modal button:not(:disabled), .modal input:not(:disabled), .modal select:not(:disabled), .modal textarea:not(:disabled), .modal summary, .modal [tabindex="0"]', modalRoot).filter(function (el) {
+        return el.getClientRects().length > 0 && !el.closest('[hidden]');
+      });
       if (!focusable.length) return;
       var inside = document.activeElement && modalRoot.contains(document.activeElement);
       var first = focusable[0], last = focusable[focusable.length - 1];
@@ -1076,6 +1105,114 @@
       evt.preventDefault();
       historyCommand(evt.shiftKey ? 'redo' : 'undo');
     }
+  });
+
+  // ---- media-editor dialog (heavy entity create/edit) ------------------------
+  // The Inspector stays the lightweight contextual surface; creating/editing a
+  // media item (Hero slide, banner, story item) is a heavy form, so it opens the
+  // SAME canonical server-rendered form (media_views + section_media_form_body)
+  // in a large dialog. This layer only presents it: the write is the form's own
+  // htmx POST to the existing media endpoint (never an R4.sendMutation, never a
+  // second CRUD path). Tabs are navigation only — one form, one Save.
+  function mediaSlot() { return modalRoot.querySelector('#r4MediaModalSlot'); }
+  function mediaStatus(text) {
+    var el = modalRoot.querySelector('[data-rs-media-status]');
+    if (!el) return;
+    el.textContent = text || '';
+    el.hidden = !text;
+  }
+  function toggleMediaDiscardPrompt(show) {
+    var prompt = modalRoot.querySelector('[data-rs-media-discard]');
+    var actions = modalRoot.querySelector('[data-rs-media-actions]');
+    if (!prompt || !actions) return;
+    if (show && !prompt.hidden) show = false; // Escape on the prompt = keep editing
+    prompt.hidden = !show;
+    actions.hidden = show;
+    var target = show ? prompt.querySelector('[data-rastisi-action="media-keep"]')
+      : modalRoot.querySelector('#r4MediaSave');
+    if (target) target.focus({ preventScroll: true });
+  }
+  function loadMediaForm() {
+    var slot = mediaSlot();
+    if (!slot || !ui.media) return;
+    if (!window.htmx) { mediaStatus('بارگذاری فرم انجام نشد؛ صفحه را دوباره باز کنید.'); return; }
+    window.htmx.ajax('GET', ui.media.url, { target: slot, swap: 'innerHTML', headers: { 'HX-R4-Inline': '1' } });
+  }
+  function openMediaEditor(trigger) {
+    var url = trigger.getAttribute('data-r4-media-open');
+    if (!url || ui.modal || ui.busy) return;
+    ui.media = { url: url, dirty: false, saving: false };
+    openModal('media-editor', { title: trigger.getAttribute('data-r4-media-title') || 'ویرایش' });
+    loadMediaForm();
+  }
+  root.addEventListener('click', function (evt) {
+    var trigger = evt.target.closest('[data-r4-media-open]');
+    if (trigger && root.contains(trigger)) { evt.preventDefault(); openMediaEditor(trigger); return; }
+    // Picking a product from the destination search results changes the form
+    // programmatically (no input event), so count it as an edit too.
+    if (ui.media && evt.target.closest('#r4MediaModalSlot .dest-product-results')) ui.media.dirty = true;
+  });
+  function markMediaDirty(evt) {
+    if (!ui.media || !evt.target.closest || !evt.target.closest('#r4MediaForm')) return;
+    if (evt.target.name === 'q_dest_product') return; // search box text is not a form value
+    ui.media.dirty = true;
+  }
+  modalRoot.addEventListener('input', markMediaDirty);
+  modalRoot.addEventListener('change', markMediaDirty);
+  // htmx "settles" class/style from the server markup onto any new element whose
+  // id matches an OLD element, after the swap — which would wipe the inline
+  // display:none Alpine put on the inactive tab panels (same r4MediaPanel-* ids
+  // on a failed-save re-render) and show every panel at once. Dropping the old
+  // form first leaves nothing to match. Only for a swap that will really
+  // happen: a 4xx/5xx must never clear the merchant's form.
+  modalRoot.addEventListener('htmx:beforeSwap', function (evt) {
+    var d = evt.detail;
+    if (ui.media && d && d.shouldSwap && d.target && d.target.id === 'r4MediaModalSlot') d.target.innerHTML = '';
+  });
+  modalRoot.addEventListener('htmx:afterSwap', function (evt) {
+    if (!ui.media || !evt.detail || !evt.detail.target || evt.detail.target.id !== 'r4MediaModalSlot') return;
+    // The form that issued a save is REPLACED by this swap, so htmx fires its
+    // afterRequest on a detached node that never bubbles here: the swap itself
+    // is the request-finished signal.
+    ui.media.saving = false;
+    var save = modalRoot.querySelector('#r4MediaSave');
+    var form = modalRoot.querySelector('#r4MediaForm');
+    if (save) save.disabled = !form;
+    mediaStatus('');
+    // First load, and after a failed save re-renders the form: put focus on the
+    // active tab (the server already activated the first invalid field's tab).
+    var tab = modalRoot.querySelector('[role="tab"][aria-selected="true"]') || modalRoot.querySelector('[role="tab"]');
+    if (tab) tab.focus({ preventScroll: true });
+  });
+  modalRoot.addEventListener('htmx:beforeRequest', function (evt) {
+    if (ui.media && evt.detail && evt.detail.elt && evt.detail.elt.id === 'r4MediaForm') { ui.media.saving = true; mediaStatus(''); }
+  });
+  modalRoot.addEventListener('htmx:afterRequest', function (evt) {
+    if (ui.media && evt.detail && evt.detail.elt && evt.detail.elt.id === 'r4MediaForm') ui.media.saving = false;
+  });
+  function mediaRequestFailed() {
+    if (!ui.media) return;
+    ui.media.saving = false;
+    var slot = mediaSlot();
+    if (slot && !slot.querySelector('#r4MediaForm')) slot.innerHTML = '';
+    mediaStatus('انجام نشد؛ اتصال یا دسترسی را بررسی کنید و دوباره تلاش کنید. تغییرات شما در فرم حفظ شده است.');
+  }
+  modalRoot.addEventListener('htmx:responseError', mediaRequestFailed);
+  modalRoot.addEventListener('htmx:sendError', mediaRequestFailed);
+  modalRoot.addEventListener('htmx:timeout', mediaRequestFailed);
+  // Fired by media_views (HX-Trigger-After-Swap) after every successful modal save.
+  root.addEventListener('r4:media-modal-saved', function () {
+    if (!ui.modal || ui.modal.type !== 'media-editor' || !ui.media) return;
+    var url = ui.media.url;
+    ui.media.dirty = false;
+    ui.media.saving = false;
+    closeModal(false, true);
+    notify('تغییرات ذخیره شد.');
+    // The manager body was just swapped, so the original trigger is gone;
+    // return focus to its fresh equivalent.
+    var again = null;
+    $all('[data-r4-media-open]').forEach(function (el) { if (el.getAttribute('data-r4-media-open') === url) again = el; });
+    (again || $('[data-r4-media-open]') || document.body).focus({ preventScroll: true });
   });
 
   // ---- R4 state events ---------------------------------------------------

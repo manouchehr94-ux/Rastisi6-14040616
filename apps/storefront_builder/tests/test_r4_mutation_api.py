@@ -969,7 +969,9 @@ class Task4AR4NativeMediaHtmxTests(R4MutationApiTestCase):
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
         self.assertIn('id="mediaList"', content)
-        self.assertIn("data-r4-media-manager", content)
+        # The manager body (add toolbar + list); the [data-r4-media-manager]
+        # container itself lives in the Inspector, not in this response.
+        self.assertIn("r4-media-manager-toolbar", content)
         # Body-only: no full base_admin chrome.
         self.assertNotIn("<html", content.lower())
 
@@ -1032,7 +1034,11 @@ class Task4MediaContextBoundaryTests(R4MutationApiTestCase):
     media_views endpoints own everything — no new endpoint/service/CRUD path."""
 
     R4_INLINE_HEADER = "HTTP_HX_R4_INLINE"  # -> request header "HX-R4-Inline"
-    R4_TARGET = 'closest [data-r4-media-manager]'
+    # R4-inline-only marker. Edit/Add used to load the form inline via
+    # ``hx-target="closest [data-r4-media-manager]"``; they now open the Studio's
+    # media-editor dialog (``data-r4-media-open``). The marker is still present
+    # ONLY under the explicit R4-inline header, never for HX-Request alone.
+    R4_TARGET = 'data-r4-media-open'
 
     def setUp(self):
         super().setUp()
@@ -1078,7 +1084,7 @@ class Task4MediaContextBoundaryTests(R4MutationApiTestCase):
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
         self.assertIn('id="mediaList"', content)
-        # The Edit link keeps loading inside the R4 inline manager.
+        # The Edit control keeps opening the R4 media-editor dialog.
         self.assertIn(self.R4_TARGET, content)
 
     def test_r4_inline_list_get_embeds_inline_manager(self):
@@ -1086,7 +1092,7 @@ class Task4MediaContextBoundaryTests(R4MutationApiTestCase):
             self._list_url(), HTTP_HX_REQUEST="true", **{self.R4_INLINE_HEADER: "1"},
         )
         content = response.content.decode()
-        self.assertIn("data-r4-media-manager", content)
+        self.assertIn("r4-media-manager-toolbar", content)
         self.assertIn(self.R4_TARGET, content)
 
     def test_context_boundary_is_not_hx_request_alone(self):

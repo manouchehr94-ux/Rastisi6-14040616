@@ -23,3 +23,35 @@ window.destinationPicker = window.destinationPicker || function (initialType, in
     productName: initialType === 'product' ? initialName : '',
   };
 };
+
+// R4 heavy-editor modal — Alpine state for the media form's presentation-only
+// tabs (partials/section_media_form_body.html, inline/modal mode). Tabs are
+// pure navigation: every panel stays in the DOM (x-show only hides), so this
+// state never owns or drops a form value. Roving-tabindex keyboard support is
+// direction-aware (ArrowLeft moves "forward" in RTL).
+window.mediaFormTabs = window.mediaFormTabs || function (initialTab) {
+  var order = ['content', 'media', 'destination', 'status'];
+  return {
+    tab: order.indexOf(initialTab) === -1 ? 'content' : initialTab,
+    order: order,
+    go: function (index) {
+      var next = this.order[(index + this.order.length) % this.order.length];
+      this.tab = next;
+      var self = this;
+      this.$nextTick(function () {
+        var el = document.getElementById('r4MediaTab-' + next);
+        if (el) el.focus();
+      });
+    },
+    onKey: function (evt) {
+      var i = this.order.indexOf(this.tab);
+      var rtl = window.getComputedStyle(this.$el).direction === 'rtl';
+      if (evt.key === 'ArrowLeft') this.go(i + (rtl ? 1 : -1));
+      else if (evt.key === 'ArrowRight') this.go(i + (rtl ? -1 : 1));
+      else if (evt.key === 'Home') this.go(0);
+      else if (evt.key === 'End') this.go(this.order.length - 1);
+      else return;
+      evt.preventDefault();
+    },
+  };
+};

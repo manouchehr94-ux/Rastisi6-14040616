@@ -1,8 +1,9 @@
 {% load storefront_builder_extras %}
 <div class="stack" id="mediaList" x-data="{ dragId: null }">
   {% for item in items %}
-  <div class="panel" draggable="true" data-id="{{ item.pk }}"
-       style="display:flex;align-items:center;gap:14px;{% if not item.is_active %}opacity:.55{% endif %}"
+  {# Row layout: wraps (never a fixed-width flex row) so Edit / Deactivate / Delete stay reachable inside the narrow R4 Inspector; R4 refinements live in r4_studio.css (.sfb-media-row). #}
+  <div class="panel sfb-media-row" draggable="true" data-id="{{ item.pk }}"
+       style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;{% if not item.is_active %}opacity:.55{% endif %}"
        @dragstart="dragId = {{ item.pk }}; $event.dataTransfer.effectAllowed = 'move'"
        @dragover.prevent
        @drop.prevent="
@@ -15,7 +16,7 @@
          }
          dragId = null;
        ">
-    <span style="cursor:grab" title="برای مرتب‌سازی بکشید" aria-hidden="true">⠿</span>
+    <span class="sfb-media-handle" style="cursor:grab" title="برای مرتب‌سازی بکشید" aria-hidden="true">⠿</span>
     <div class="sfb-section-actions" style="display:flex;gap:4px">
       <button type="button" class="btn btn-sm" title="جابه‌جایی به بالا" {% if forloop.first %}disabled{% endif %}
               hx-post="{% url 'dashboard:storefront-builder-section-media-move' pk=section.pk kind=kind item_pk=item.pk %}"
@@ -25,24 +26,30 @@
               hx-vals='{"direction": "down"}' hx-target="#mediaList" hx-swap="outerHTML">▼</button>
     </div>
     {% if item|getattribute:config.thumb_field %}
-    <img src="{{ item|getattribute:config.thumb_field }}" alt="" style="width:64px;height:48px;object-fit:cover;border-radius:8px">
+    <img src="{{ item|getattribute:config.thumb_field }}" class="sfb-media-thumb" alt="" style="width:64px;height:48px;object-fit:cover;border-radius:8px;flex:none">
     {% endif %}
-    <div style="flex:1">
-      <strong>{{ item.title|default:"(بدون عنوان)" }}</strong>
+    <div class="sfb-media-title" style="flex:1 1 90px;min-width:0">
+      <strong title="{{ item.title }}">{{ item.title|default:"(بدون عنوان)" }}</strong>
       <div style="font-size:12px;color:var(--muted)">
         {% if item.is_active %}فعال{% else %}غیرفعال{% endif %}
         {% if item.show_button %} • دکمه: {{ item.button_label }}{% endif %}
       </div>
     </div>
-    <a href="{% url 'dashboard:storefront-builder-section-media-edit' pk=section.pk kind=kind item_pk=item.pk %}" class="btn btn-sm"
-       {% if inline_media %}hx-get="{% url 'dashboard:storefront-builder-section-media-edit' pk=section.pk kind=kind item_pk=item.pk %}"
-       hx-target="closest [data-r4-media-manager]" hx-swap="innerHTML"{% endif %}>ویرایش</a>
-    <button type="button" class="btn btn-sm"
-            hx-post="{% url 'dashboard:storefront-builder-section-media-toggle' pk=section.pk kind=kind item_pk=item.pk %}"
-            hx-target="#mediaList" hx-swap="outerHTML">{% if item.is_active %}غیرفعال‌سازی{% else %}فعال‌سازی{% endif %}</button>
-    <button type="button" class="btn btn-sm btn-danger"
-            hx-post="{% url 'dashboard:storefront-builder-section-media-delete' pk=section.pk kind=kind item_pk=item.pk %}"
-            hx-target="#mediaList" hx-swap="outerHTML" hx-confirm="حذف شود؟">حذف</button>
+    <div class="sfb-media-actions" style="display:flex;flex-wrap:wrap;gap:6px;margin-inline-start:auto">
+      {% if inline_media %}
+      <button type="button" class="btn btn-sm"
+              data-r4-media-open="{% url 'dashboard:storefront-builder-section-media-edit' pk=section.pk kind=kind item_pk=item.pk %}"
+              data-r4-media-title="ویرایش {{ config.label }}">ویرایش</button>
+      {% else %}
+      <a href="{% url 'dashboard:storefront-builder-section-media-edit' pk=section.pk kind=kind item_pk=item.pk %}" class="btn btn-sm">ویرایش</a>
+      {% endif %}
+      <button type="button" class="btn btn-sm"
+              hx-post="{% url 'dashboard:storefront-builder-section-media-toggle' pk=section.pk kind=kind item_pk=item.pk %}"
+              hx-target="#mediaList" hx-swap="outerHTML">{% if item.is_active %}غیرفعال‌سازی{% else %}فعال‌سازی{% endif %}</button>
+      <button type="button" class="btn btn-sm btn-danger"
+              hx-post="{% url 'dashboard:storefront-builder-section-media-delete' pk=section.pk kind=kind item_pk=item.pk %}"
+              hx-target="#mediaList" hx-swap="outerHTML" hx-confirm="حذف شود؟">حذف</button>
+    </div>
   </div>
   {% empty %}
   <p style="color:var(--muted);padding:24px 0;text-align:center">

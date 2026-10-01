@@ -63,8 +63,8 @@ _MEDIA_KINDS = {
         # فقط با اشاره‌گر به همان فایلِ تازه‌آپلودشده.
         "asset_fields": {"desktop_image": "desktop_asset", "mobile_image": "mobile_asset"},
         "file_fields": (
-            {"name": "desktop_image", "label": "تصویر دسکتاپ", "required": True},
-            {"name": "mobile_image", "label": "تصویر موبایل (اختیاری)", "required": False,
+            {"name": "desktop_image", "label": "تصویر دسکتاپ", "required": True, "thumb": "desktop_image_url"},
+            {"name": "mobile_image", "label": "تصویر موبایل (اختیاری)", "required": False, "thumb": "mobile_image_url",
              "remove_field": "remove_mobile", "remove_label": "حذف تصویر موبایلِ فعلی"},
         ),
         # Phase 4 (Task 6) — the model attribute the media LIST partial shows
@@ -81,8 +81,8 @@ _MEDIA_KINDS = {
         "section_keys": {"single_banner", "multi_banner"},
         "asset_fields": {"desktop_image": "desktop_asset", "mobile_image": "mobile_asset"},
         "file_fields": (
-            {"name": "desktop_image", "label": "تصویر دسکتاپ", "required": True},
-            {"name": "mobile_image", "label": "تصویر موبایل (اختیاری)", "required": False,
+            {"name": "desktop_image", "label": "تصویر دسکتاپ", "required": True, "thumb": "desktop_image_url"},
+            {"name": "mobile_image", "label": "تصویر موبایل (اختیاری)", "required": False, "thumb": "mobile_image_url",
              "remove_field": "remove_mobile", "remove_label": "حذف تصویر موبایلِ فعلی"},
         ),
         "thumb_field": "desktop_image_url",
@@ -100,7 +100,7 @@ _MEDIA_KINDS = {
         # pair exists.
         "asset_fields": {"image": "image_asset"},
         "file_fields": (
-            {"name": "image", "label": "تصویر", "required": True},
+            {"name": "image", "label": "تصویر", "required": True, "thumb": "image_url"},
         ),
         # ``StoryRailItem`` has no ``desktop_image_url``; its own resolved
         # thumbnail property is ``image_url`` (``apps.content.models.StoryRailItem``).
@@ -198,6 +198,13 @@ def _is_r4_inline(request) -> bool:
 #: hand-rolling its own header.
 _R4_MEDIA_CHANGED_EVENT = "r4:media-changed"
 
+#: R4 heavy-editor modal — fired (HX-Trigger-After-Swap) after a successful
+#: modal save so r4_studio.js closes the media-editor dialog without a
+#: discard prompt. Separate from ``r4:media-changed`` on purpose: that one
+#: means "the publication-visible draft changed" and is suppressed for a
+#: no-op edit, whereas the dialog must close after EVERY successful save.
+_R4_MEDIA_MODAL_SAVED_EVENT = "r4:media-modal-saved"
+
 
 def _media_changed_response(response):
     """Mark ``response`` as following a real, persisted, publication-visible
@@ -257,6 +264,42 @@ def storefront_section_media_list(request, pk, kind):
     return render(request, template_name, {
         "section": section, "items": items, "kind": kind, "config": config,
     })
+
+
+#: R4 heavy-editor modal — which presentation tab owns a validation error's
+#: field. Tabs are navigation only; this just lets the re-rendered dialog open
+#: on (and flag) the tab that holds the first invalid field. Non-field
+#: (``__all__``) errors from the models' ``clean()`` are destination-coherence
+#: errors, so they belong to the destination tab.
+#: Browsers never restore a selected <input type="file"> after the server
+#: re-renders the form, so a failed save loses the chosen image. This is the
+#: one-line summary (shown at the top of the dialog, whatever tab is active);
+#: the per-field note lives in media_form/_files.html.
+_RESELECT_FILE_SUMMARY = "فایل تصویرِ انتخاب‌شده ذخیره نشد؛ پس از رفع خطا، آن را در تب «تصاویر» دوباره انتخاب کنید."
+
+
+def _media_form_tab_for_field(field_name: str) -> str:
+    if field_name in ("is_active", "display_order"):
+        return "status"
+    if field_name.startswith("destination") or field_name in ("open_in_new_tab", "__all__"):
+        return "destination"
+    if field_name.endswith(("_image", "_asset")) or field_name in ("image", "remove_mobile"):
+        return "media"
+    return "content"
+
+
+def _media_form_errors(exc):
+    """→ (messages, tabs_with_errors, first_error_tab) for a save failure."""
+    if hasattr(exc, "message_dict"):
+        messages_out, tabs = [], []
+        for field_name, field_messages in exc.message_dict.items():
+            messages_out.extend(str(m) for m in field_messages)
+            tab = _media_form_tab_for_field(field_name)
+            if tab not in tabs:
+                tabs.append(tab)
+        first = tabs[0] if tabs else "content"
+        return messages_out, tabs, first
+    return [str(exc)], ["content"], "content"
 
 
 #: destination_type → the ONE POST field (and model attr) that type owns. The
@@ -342,6 +385,7 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
     item = get_object_or_404(model, pk=item_pk, section=section) if item_pk else None
 
     file_fields = config["file_fields"]
+    form_errors, error_tabs, error_tab, reselect_fields = [], [], "content", []
 
     if request.method == "POST":
         obj = item or model(store=store, section=section)
@@ -452,12 +496,35 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
                     "dashboard/storefront_builder/partials/section_media_manager_body.html",
                     {"section": section, "items": items, "kind": kind, "config": config},
                 )
+                # R4 heavy-editor modal — the form lives in the Studio's
+                # media-editor dialog (its own htmx target), so the refreshed
+                # list is retargeted into the Inspector's manager and the
+                # dialog is told (after the swap) that the save finished. A
+                # validation failure never reaches here: it re-renders the
+                # form into the dialog's own target with no retarget.
+                response.headers["HX-Retarget"] = "[data-r4-media-manager]"
+                response.headers["HX-Reswap"] = "innerHTML"
+                response.headers["HX-Trigger-After-Swap"] = _R4_MEDIA_MODAL_SAVED_EVENT
                 return _media_changed_response(response) if semantic_changed else response
             response = redirect("dashboard:storefront-builder-section-media-list", pk=section.pk, kind=kind)
             return _media_changed_response(response) if semantic_changed else response
         except (ValidationError, IntegrityError) as exc:
             error_message = str(exc.message_dict if hasattr(exc, "message_dict") else exc)
-            messages.error(request, error_message)
+            form_errors, error_tabs, error_tab = _media_form_errors(exc)
+            if not _is_r4_inline(request):
+                # The R4 dialog shows the errors in-form; queuing a Django
+                # message there would leak it onto the next unrelated page.
+                messages.error(request, error_message)
+            # The failed save persisted NO file, but ``obj`` holds the in-memory
+            # upload, which would make the re-rendered form claim a "current
+            # image" that was never stored. Show the persisted truth, and name
+            # every field whose just-selected file was lost: a browser cannot
+            # re-populate a file input, so the merchant must pick it again.
+            reselect_fields = [f["name"] for f in file_fields if f["name"] in request.FILES]
+            for f in file_fields:
+                setattr(obj, f["name"], old_names[f["name"]] or "")
+            if reselect_fields:
+                form_errors = form_errors + [_RESELECT_FILE_SUMMARY]
             item = obj
 
     from apps.catalog.models import Brand, Category, MerchantCollection
@@ -482,6 +549,8 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
         "section": section, "item": item, "kind": kind, "config": config,
         "categories": categories, "brands": brands, "collections": collections,
         "inline_media": is_r4_inline,
+        "form_errors": form_errors, "error_tabs": error_tabs, "error_tab": error_tab,
+        "reselect_fields": reselect_fields,
     })
 
 
