@@ -1,6 +1,10 @@
 {% extends "portal/public/base_public.html" %}
 {% load static %}
 {% load public_photos %}
+{% block title %}راستی‌سی | فروشگاه شما، با امضای خودتان{% endblock %}
+{% block meta_description %}<meta name="description" content="راستی‌سی؛ ساخت و مدیریت فروشگاه اینترنتی با ظاهر اختصاصی، مدیریت محصولات و سفارش‌ها و تجربه خرید مناسب موبایل.">{% endblock %}
+
+{% block content %}
 {% public_photo 'stilllife' as public_stilllife %}
 {% public_photo 'olive' as public_olive %}
 {% public_photo 'clay' as public_clay %}
@@ -9,10 +13,6 @@
 {% public_photo 'fashion' as public_fashion %}
 {% public_photo 'skincare' as public_skincare %}
 {% public_photo 'bag' as public_bag %}
-{% block title %}راستی‌سی | فروشگاه شما، با امضای خودتان{% endblock %}
-{% block meta_description %}<meta name="description" content="راستی‌سی؛ ساخت و مدیریت فروشگاه اینترنتی با ظاهر اختصاصی، مدیریت محصولات و سفارش‌ها و تجربه خرید مناسب موبایل.">{% endblock %}
-
-{% block content %}
 <section class="rs-hero">
   <div class="rs-container">
     <div class="rs-hero-grid">
