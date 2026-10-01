@@ -1,5 +1,7 @@
 {% extends "portal/public/base_public.html" %}
 {% load static %}
+{% load public_photos %}
+{% public_photo 'stilllife' as public_stilllife %}
 {% block title %}درباره راستی‌سی{% endblock %}
 {% block meta_description %}<meta name="description" content="راستی‌سی برای نزدیک کردن ویترین فروشگاه و ابزارهای مدیریت روزمره کسب‌وکار ساخته می‌شود؛ با تمرکز بر سادگی، هویت و یکپارچگی.">{% endblock %}
 
@@ -44,7 +46,7 @@
       <div class="rs-eyebrow">چیزی که مهم است</div>
       <h3>فروشگاه باید ادامهٔ هویت کسب‌وکار باشد.</h3>
       <p>قالب و ابزار قرار نیست همه فروشگاه‌ها را شبیه هم کنند. نقطه شروع باید آماده باشد، اما نتیجه باید بتواند به زبان برند خود فروشنده نزدیک شود.</p>
-      <div class="rs-about-photo"><img src="{% static 'portal/images/public/stilllife.webp' %}" alt="گلدان سفید و ظروف دست‌ساز در نور طبیعی" width="1100" height="825" loading="lazy" decoding="async"></div>
+      <div class="rs-about-photo"><img src="{{ public_stilllife.url }}" alt="{{ public_stilllife.alt|default:'گلدان سفید و ظروف دست‌ساز در نور طبیعی' }}" width="1100" height="825" loading="lazy" decoding="async"></div>
     </article>
   </div>
 
