@@ -1,11 +1,11 @@
 {% extends "portal/public/base_public.html" %}
 {% load static %}
 {% load public_photos %}
-{% public_photo 'stilllife' as public_stilllife %}
 {% block title %}درباره راستی‌سی{% endblock %}
 {% block meta_description %}<meta name="description" content="راستی‌سی برای نزدیک کردن ویترین فروشگاه و ابزارهای مدیریت روزمره کسب‌وکار ساخته می‌شود؛ با تمرکز بر سادگی، هویت و یکپارچگی.">{% endblock %}
 
 {% block content %}
+{% public_photo 'stilllife' as public_stilllife %}
 <section class="rs-page-hero">
   <div class="rs-container">
     <div class="rs-breadcrumbs"><a href="{% url 'portal:home' %}">راستی‌سی</a><span>/</span><span>درباره ما</span></div>
