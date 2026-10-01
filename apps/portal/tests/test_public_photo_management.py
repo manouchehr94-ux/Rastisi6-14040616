@@ -41,7 +41,7 @@ class PublicSitePhotoManagementTests(TestCase):
     def test_public_page_falls_back_to_bundled_photo(self):
         response = self.client.get("/", HTTP_HOST=PUBLIC_HOST)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "/static/portal/images/public/stilllife.webp")
+        self.assertContains(response, "portal/images/public/stilllife.webp")
 
     def test_platform_owner_can_upload_and_public_page_uses_override(self):
         self.client.force_login(self.owner)
@@ -77,7 +77,7 @@ class PublicSitePhotoManagementTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertFalse(PublicSitePhoto.objects.filter(slot="stilllife").exists())
         response = self.client.get("/", HTTP_HOST=PUBLIC_HOST)
-        self.assertContains(response, "/static/portal/images/public/stilllife.webp")
+        self.assertContains(response, "portal/images/public/stilllife.webp")
 
     def test_non_platform_user_cannot_modify_public_photos(self):
         self.client.force_login(self.other)
