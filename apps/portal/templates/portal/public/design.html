@@ -1,5 +1,13 @@
 {% extends "portal/public/base_public.html" %}
 {% load static %}
+{% load public_photos %}
+{% public_photo 'stilllife' as public_stilllife %}
+{% public_photo 'olive' as public_olive %}
+{% public_photo 'clay' as public_clay %}
+{% public_photo 'ivory' as public_ivory %}
+{% public_photo 'ceramics' as public_ceramics %}
+{% public_photo 'fashion' as public_fashion %}
+{% public_photo 'beauty' as public_beauty %}
 {% block title %}طراحی فروشگاه | راستی‌سی{% endblock %}
 {% block meta_description %}<meta name="description" content="ظاهر فروشگاه را با سبک، رنگ و اندازه نمایش متفاوت ببینید و یک پیش‌نمایش تعاملی از طراحی فروشگاه در راستی‌سی تجربه کنید.">{% endblock %}
 
@@ -91,19 +99,19 @@
                 <p>یک ویترین شخصی برای معرفی محصول، روایت برند و تجربه خرید.</p>
                 <span class="rs-shop-cta">دیدن محصولات</span>
               </div>
-              <div class="rs-shop-hero-art" aria-hidden="true"><img src="{% static 'portal/images/public/stilllife.webp' %}" alt="" width="1100" height="825" loading="lazy" decoding="async"></div>
+              <div class="rs-shop-hero-art" aria-hidden="true"><img src="{{ public_stilllife.url }}" alt="" width="1100" height="825" loading="lazy" decoding="async"></div>
             </div>
             <div class="rs-shop-products-wrap">
               <div class="rs-shop-products-head"><strong>محصولات منتخب</strong><span>برای افزودن به سبد، روی محصول بزنید</span></div>
               <div class="rs-shop-products">
                 <button class="rs-shop-product" type="button" data-rs-demo-product>
-                  <span class="rs-shop-photo" aria-hidden="true"><img src="{% static 'portal/images/public/olive.webp' %}" alt="" width="400" height="447" loading="lazy" decoding="async"></span><strong>گلدان دست‌ساز</strong><small>نمونه محصول</small>
+                  <span class="rs-shop-photo" aria-hidden="true"><img src="{{ public_olive.url }}" alt="" width="400" height="447" loading="lazy" decoding="async"></span><strong>گلدان دست‌ساز</strong><small>نمونه محصول</small>
                 </button>
                 <button class="rs-shop-product" type="button" data-rs-demo-product>
-                  <span class="rs-shop-photo" aria-hidden="true"><img src="{% static 'portal/images/public/clay.webp' %}" alt="" width="368" height="311" loading="lazy" decoding="async"></span><strong>ظرف سرامیکی</strong><small>نمونه محصول</small>
+                  <span class="rs-shop-photo" aria-hidden="true"><img src="{{ public_clay.url }}" alt="" width="368" height="311" loading="lazy" decoding="async"></span><strong>ظرف سرامیکی</strong><small>نمونه محصول</small>
                 </button>
                 <button class="rs-shop-product" type="button" data-rs-demo-product>
-                  <span class="rs-shop-photo" aria-hidden="true"><img src="{% static 'portal/images/public/ivory.webp' %}" alt="" width="360" height="536" loading="lazy" decoding="async"></span><strong>ست رومیزی</strong><small>نمونه محصول</small>
+                  <span class="rs-shop-photo" aria-hidden="true"><img src="{{ public_ivory.url }}" alt="" width="360" height="536" loading="lazy" decoding="async"></span><strong>ست رومیزی</strong><small>نمونه محصول</small>
                 </button>
               </div>
             </div>
@@ -152,9 +160,9 @@
     <div><p class="rs-lead">این نمونه‌ها برای نشان‌دادن دامنهٔ بیان بصری‌اند. نام‌ها و محتوا نمایشی هستند و فهرست مشتریان راستی‌سی محسوب نمی‌شوند.</p></div>
   </div>
   <div class="rs-gallery">
-    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>خانه آبان</b><span>Home · Objects</span></div><div class="rs-gallery-scene"><img src="{% static 'portal/images/public/ceramics.webp' %}" alt="چیدمان گلدان و ظروف سرامیکی در خانه" width="1100" height="738" loading="lazy" decoding="async"></div></div></div><div class="rs-gallery-info"><div><h3>آرام و طبیعی</h3><p>برای خانه، لایف‌استایل و محصولات دست‌ساز</p></div><span>01</span></div></article>
-    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>نورا</b><span>Fashion · Edit</span></div><div class="rs-gallery-scene"><img src="{% static 'portal/images/public/fashion.webp' %}" alt="پیراهن کتانی روشن با چیدمان مینیمال" width="1100" height="738" loading="lazy" decoding="async"></div></div></div><div class="rs-gallery-info"><div><h3>روایی و ادیتوریال</h3><p>برای پوشاک، اکسسوری و برندهای تصویری</p></div><span>02</span></div></article>
-    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>رُزا</b><span>Beauty · Care</span></div><div class="rs-gallery-scene"><img src="{% static 'portal/images/public/beauty.webp' %}" alt="محصولات مراقبت و زیبایی روی سنگ روشن" width="1100" height="738" loading="lazy" decoding="async"></div></div></div><div class="rs-gallery-info"><div><h3>جسور و مستقیم</h3><p>برای کمپین‌ها و معرفی قوی محصول</p></div><span>03</span></div></article>
+    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>خانه آبان</b><span>Home · Objects</span></div><div class="rs-gallery-scene"><img src="{{ public_ceramics.url }}" alt="{{ public_ceramics.alt|default:'چیدمان گلدان و ظروف سرامیکی در خانه' }}" width="1100" height="738" loading="lazy" decoding="async"></div></div></div><div class="rs-gallery-info"><div><h3>آرام و طبیعی</h3><p>برای خانه، لایف‌استایل و محصولات دست‌ساز</p></div><span>01</span></div></article>
+    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>نورا</b><span>Fashion · Edit</span></div><div class="rs-gallery-scene"><img src="{{ public_fashion.url }}" alt="{{ public_fashion.alt|default:'پیراهن کتانی روشن با چیدمان مینیمال' }}" width="1100" height="738" loading="lazy" decoding="async"></div></div></div><div class="rs-gallery-info"><div><h3>روایی و ادیتوریال</h3><p>برای پوشاک، اکسسوری و برندهای تصویری</p></div><span>02</span></div></article>
+    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>رُزا</b><span>Beauty · Care</span></div><div class="rs-gallery-scene"><img src="{{ public_beauty.url }}" alt="{{ public_beauty.alt|default:'محصولات مراقبت و زیبایی روی سنگ روشن' }}" width="1100" height="738" loading="lazy" decoding="async"></div></div></div><div class="rs-gallery-info"><div><h3>جسور و مستقیم</h3><p>برای کمپین‌ها و معرفی قوی محصول</p></div><span>03</span></div></article>
   </div>
 </section>
 
