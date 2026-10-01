@@ -69,7 +69,7 @@ class PublicSitePhotographyContractTests(SimpleTestCase):
                 self.assertIn(".webp' %}\"", content)
                 self.assertNotRegex(
                     content,
-                    r'<(?:div|span) class="(?:rs-demo-art|rs-demo-photo|rs-gallery-scene|rs-shop-photo|rs-shop-hero-art)"[^>]*>\\s*</(?:div|span)>',
+                    r'<(?:div|span) class="(?:rs-demo-art|rs-demo-photo|rs-gallery-scene|rs-shop-photo|rs-shop-hero-art)"[^>]*>\s*</(?:div|span)>',
                 )
 
 
@@ -94,3 +94,5 @@ class PublicSitePageSmokeTests(TestCase):
                 response = self.client.get(path, HTTP_HOST=_HOST)
                 self.assertEqual(response.status_code, 200)
                 self.assertContains(response, "public-site-v2.css")
+                if path in ("/", "/design/", "/features/", "/about/"):
+                    self.assertContains(response, "portal/images/public/")
