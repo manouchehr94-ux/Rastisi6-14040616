@@ -65,8 +65,9 @@ class PublicSitePhotographyContractTests(SimpleTestCase):
                 path = PUBLIC_TEMPLATE_DIR / f"{name}.html"
                 content = path.read_text(encoding="utf-8")
                 self.assertIn("{% load static %}", content)
-                self.assertIn("src=\"{% static 'portal/images/public/", content)
-                self.assertIn(".webp' %}\"", content)
+                self.assertIn("{% load public_photos %}", content)
+                self.assertIn("{% public_photo '", content)
+                self.assertIn('src="{{ public_', content)
                 self.assertNotRegex(
                     content,
                     r'<(?:div|span) class="(?:rs-demo-art|rs-demo-photo|rs-gallery-scene|rs-shop-photo|rs-shop-hero-art)"[^>]*>\s*</(?:div|span)>',
