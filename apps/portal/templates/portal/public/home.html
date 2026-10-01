@@ -1,4 +1,5 @@
 {% extends "portal/public/base_public.html" %}
+{% load static %}
 {% block title %}راستی‌سی | فروشگاه شما، با امضای خودتان{% endblock %}
 {% block meta_description %}<meta name="description" content="راستی‌سی؛ ساخت و مدیریت فروشگاه اینترنتی با ظاهر اختصاصی، مدیریت محصولات و سفارش‌ها و تجربه خرید مناسب موبایل.">{% endblock %}
 
@@ -24,14 +25,14 @@
             <div class="rs-demo-head"><strong class="rs-demo-brand">خانه آبان</strong><span class="rs-demo-nav"><span>محصولات</span><span>درباره ما</span><span>تماس</span></span></div>
             <div class="rs-demo-hero">
               <div class="rs-demo-copy"><small>مجموعه تازه</small><h3>اشیایی برای خانه‌ای که شبیه شماست.</h3><p>یک ویترین روشن و شخصی برای معرفی محصولات و روایت برند.</p><span class="rs-demo-action">دیدن محصولات</span></div>
-              <div class="rs-demo-art"></div>
+              <div class="rs-demo-art"><img src="{% static 'portal/images/public/stilllife.webp' %}" alt="گلدان سفید و ظروف دست‌ساز در نور طبیعی" width="1100" height="825" loading="eager" decoding="async"></div>
             </div>
             <div class="rs-demo-products">
               <div class="rs-demo-products-head"><strong>محصولات منتخب</strong><small>مشاهده همه</small></div>
               <div class="rs-demo-grid">
-                <div class="rs-demo-card"><div class="rs-demo-photo"></div><strong>گلدان دست‌ساز</strong><small>۱٬۲۸۰٬۰۰۰ تومان</small></div>
-                <div class="rs-demo-card"><div class="rs-demo-photo"></div><strong>ظرف سرامیکی</strong><small>۹۸۰٬۰۰۰ تومان</small></div>
-                <div class="rs-demo-card"><div class="rs-demo-photo"></div><strong>ست رومیزی</strong><small>۱٬۶۴۰٬۰۰۰ تومان</small></div>
+                <div class="rs-demo-card"><div class="rs-demo-photo"><img src="{% static 'portal/images/public/olive.webp' %}" alt="" width="400" height="447" loading="lazy" decoding="async"></div><strong>گلدان دست‌ساز</strong><small>۱٬۲۸۰٬۰۰۰ تومان</small></div>
+                <div class="rs-demo-card"><div class="rs-demo-photo"><img src="{% static 'portal/images/public/clay.webp' %}" alt="" width="368" height="311" loading="lazy" decoding="async"></div><strong>ظرف سرامیکی</strong><small>۹۸۰٬۰۰۰ تومان</small></div>
+                <div class="rs-demo-card"><div class="rs-demo-photo"><img src="{% static 'portal/images/public/ivory.webp' %}" alt="" width="360" height="536" loading="lazy" decoding="async"></div><strong>ست رومیزی</strong><small>۱٬۶۴۰٬۰۰۰ تومان</small></div>
               </div>
             </div>
           </div>
@@ -70,7 +71,7 @@
       <span class="rs-bento-index">01 / ویترین</span>
       <h3>اولین برخورد مشتری،<br>باید شبیه برند شما باشد.</h3>
       <p>ظاهر فروشگاه، معرفی محصول و دعوت به خرید باید یک زبان مشترک داشته باشند.</p>
-      <div class="rs-bento-visual" aria-hidden="true"></div>
+      <div class="rs-bento-visual" aria-hidden="true"><img src="{% static 'portal/images/public/stilllife.webp' %}" alt="" width="1100" height="825" loading="lazy" decoding="async"></div>
     </article>
     <article class="rs-bento-card is-accent"><span class="rs-bento-index">02 / محصول</span><h3>اطلاعات محصول، یک‌بار و منظم.</h3><p>نام، تصویر، قیمت و موجودی در ساختاری نگهداری می‌شوند که ویترین از آن استفاده می‌کند.</p></article>
     <article class="rs-bento-card is-soft"><span class="rs-bento-index">03 / سفارش</span><h3>بعد از خرید، مسیر ادامه دارد.</h3><p>سفارش باید در محیط مدیریت دیده شود تا پیگیری روزمره روشن بماند.</p></article>
@@ -85,9 +86,9 @@
     <div><p class="rs-lead">هر کسب‌وکار بیان خودش را دارد. از یک نقطه شروع مناسب آغاز کنید و ظاهر فروشگاه را با هویت برندتان هماهنگ کنید.</p><a class="rs-link" href="{% url 'portal:design' %}">تجربه طراحی فروشگاه</a></div>
   </div>
   <div class="rs-gallery">
-    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>خانه آبان</b><span>محصولات · داستان ما</span></div><div class="rs-gallery-scene"></div></div></div><div class="rs-gallery-info"><div><h3>آرام و طبیعی</h3><p>برای خانه، لایف‌استایل و محصولات دست‌ساز</p></div><span>←</span></div></article>
-    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>نورا</b><span>New · Shop</span></div><div class="rs-gallery-scene"></div></div></div><div class="rs-gallery-info"><div><h3>روایی و ادیتوریال</h3><p>برای پوشاک، اکسسوری و برندهای تصویری</p></div><span>←</span></div></article>
-    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>رُزا</b><span>Beauty · Care</span></div><div class="rs-gallery-scene"></div></div></div><div class="rs-gallery-info"><div><h3>گرم و شخصی</h3><p>برای زیبایی، مراقبت و محصولات بوتیکی</p></div><span>←</span></div></article>
+    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>خانه آبان</b><span>محصولات · داستان ما</span></div><div class="rs-gallery-scene"><img src="{% static 'portal/images/public/ceramics.webp' %}" alt="چیدمان گلدان و ظروف سرامیکی در خانه" width="1100" height="738" loading="lazy" decoding="async"></div></div></div><div class="rs-gallery-info"><div><h3>آرام و طبیعی</h3><p>برای خانه، لایف‌استایل و محصولات دست‌ساز</p></div><span>←</span></div></article>
+    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>نورا</b><span>New · Shop</span></div><div class="rs-gallery-scene"><img src="{% static 'portal/images/public/fashion.webp' %}" alt="پیراهن کتانی روشن با چیدمان مینیمال" width="1100" height="738" loading="lazy" decoding="async"></div></div></div><div class="rs-gallery-info"><div><h3>روایی و ادیتوریال</h3><p>برای پوشاک، اکسسوری و برندهای تصویری</p></div><span>←</span></div></article>
+    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>رُزا</b><span>Beauty · Care</span></div><div class="rs-gallery-scene"><img src="{% static 'portal/images/public/skincare.webp' %}" alt="محصولات مراقبت پوست در نور طبیعی" width="640" height="480" loading="lazy" decoding="async"></div></div></div><div class="rs-gallery-info"><div><h3>گرم و شخصی</h3><p>برای زیبایی، مراقبت و محصولات بوتیکی</p></div><span>←</span></div></article>
   </div>
 </section>
 
@@ -124,7 +125,7 @@
     <h2 class="rs-title">ویترین شما،<br>همیشه دم دست.</h2>
     <p class="rs-lead">از دیدن محصول تا رسیدن به سبد خرید، فروشگاه باید برای صفحه کوچک هم روشن، سریع و قابل فهم باشد.</p>
   </div>
-  <div class="rs-phone-stage"><div class="rs-phone"><div class="rs-phone-screen"><div class="rs-phone-top"></div><div class="rs-demo-store"><div class="rs-demo-head"><strong class="rs-demo-brand">خانه آبان</strong></div><div class="rs-demo-hero"><div class="rs-demo-copy"><small>مجموعه تازه</small><h3>برای خانه شما</h3><p></p><span class="rs-demo-action">خرید</span></div><div class="rs-demo-art"></div></div><div class="rs-demo-products"><div class="rs-demo-grid"><div class="rs-demo-card"><div class="rs-demo-photo"></div><strong>گلدان</strong></div><div class="rs-demo-card"><div class="rs-demo-photo"></div><strong>ظرف</strong></div><div class="rs-demo-card"><div class="rs-demo-photo"></div><strong>ست</strong></div></div></div></div></div></div></div>
+  <div class="rs-phone-stage"><div class="rs-phone"><div class="rs-phone-screen"><div class="rs-phone-top"></div><div class="rs-demo-store"><div class="rs-demo-head"><strong class="rs-demo-brand">خانه آبان</strong></div><div class="rs-demo-hero"><div class="rs-demo-copy"><small>مجموعه تازه</small><h3>برای خانه شما</h3><p></p><span class="rs-demo-action">خرید</span></div><div class="rs-demo-art"><img src="{% static 'portal/images/public/ceramics.webp' %}" alt="چیدمان گلدان و ظروف سرامیکی در خانه" width="1100" height="738" loading="lazy" decoding="async"></div></div><div class="rs-demo-products"><div class="rs-demo-grid"><div class="rs-demo-card"><div class="rs-demo-photo"><img src="{% static 'portal/images/public/olive.webp' %}" alt="" width="400" height="447" loading="lazy" decoding="async"></div><strong>گلدان</strong></div><div class="rs-demo-card"><div class="rs-demo-photo"><img src="{% static 'portal/images/public/clay.webp' %}" alt="" width="368" height="311" loading="lazy" decoding="async"></div><strong>ظرف</strong></div><div class="rs-demo-card"><div class="rs-demo-photo"><img src="{% static 'portal/images/public/ivory.webp' %}" alt="" width="360" height="536" loading="lazy" decoding="async"></div><strong>ست</strong></div></div></div></div></div></div></div>
 </section>
 
 <section class="rs-section-sm rs-container">
