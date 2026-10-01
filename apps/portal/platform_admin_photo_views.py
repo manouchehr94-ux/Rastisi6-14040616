@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import redirect, render
 from django.templatetags.static import static
 from django.views.decorators.http import require_POST
+from urllib.parse import urlsplit
 
 from .forms_public_photos import PublicSitePhotoForm
 from .models import PublicSitePhoto
@@ -13,6 +14,11 @@ from .services.platform_config_service import record_platform_audit_event
 
 def _is_platform_staff(user):
     return user.is_authenticated and user.is_staff and user.is_superuser
+
+
+def _preview_url(photo, slot):
+    url = photo.image.url if photo and photo.image else static(f"portal/images/public/{slot}.webp")
+    return url if urlsplit(url).scheme or url.startswith("/") else "/" + url
 
 
 def _slot_labels():
@@ -29,8 +35,7 @@ def public_photos(request):
             "slot": slot,
             "label": label,
             "photo": photo,
-            "preview_url": photo.image.url if photo and photo.image
-                else static(f"portal/images/public/{slot}.webp"),
+            "preview_url": _preview_url(photo, slot),
         })
     return render(
         request, "portal/platform_admin/public_photos.html",
@@ -70,8 +75,7 @@ def public_photo_edit(request, slot):
         "form": form,
         "slot": slot,
         "label": labels[slot],
-        "preview_url": current.image.url if current and current.image
-            else static(f"portal/images/public/{slot}.webp"),
+        "preview_url": _preview_url(current, slot),
         "is_override": bool(current),
         "active_nav": "public-photos",
     })
