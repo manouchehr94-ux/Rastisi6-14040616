@@ -43,6 +43,38 @@ class PublicSiteThemeContractTests(SimpleTestCase):
             )
 
 
+class PublicSitePhotographyContractTests(SimpleTestCase):
+    PHOTO_DIR = Path("apps/portal/static/portal/images/public")
+    PHOTO_NAMES = (
+        "stilllife", "ceramics", "ivory", "olive", "clay",
+        "fashion", "beauty", "skincare", "bag",
+    )
+
+    def test_public_photos_are_local_webp_assets(self):
+        for name in self.PHOTO_NAMES:
+            with self.subTest(name=name):
+                path = self.PHOTO_DIR / f"{name}.webp"
+                self.assertTrue(path.is_file(), f"Missing photo asset: {path}")
+                signature = path.read_bytes()[:12]
+                self.assertEqual(signature[:4], b"RIFF")
+                self.assertEqual(signature[8:12], b"WEBP")
+
+    def test_visual_marketing_pages_use_local_photos(self):
+        for name in ("home", "design", "features", "about"):
+            with self.subTest(page=name):
+                path = PUBLIC_TEMPLATE_DIR / f"{name}.html"
+                content = path.read_text(encoding="utf-8")
+                self.assertIn("{% load static %}", content)
+                self.assertRegex(
+                    content,
+                    r"""src="\\{% static 'portal/images/public/[^']+\\.webp' %\\}"""",
+                )
+                self.assertNotRegex(
+                    content,
+                    r"<(?:div|span) class=\\\"(?:rs-demo-art|rs-demo-photo|rs-gallery-scene|rs-shop-photo|rs-shop-hero-art)\\\"[^>]*>\\s*</(?:div|span)>",
+                )
+
+
 @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
 class PublicSitePageSmokeTests(TestCase):
     def test_marketing_pages_render(self):
