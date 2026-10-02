@@ -395,3 +395,25 @@ Important interaction: **cash-on-delivery orders are never marked paid** (decisi
 ### 12.4 Corrections / findings
 * The C1 note “counted_on_failed_payment may occur on the gateway path” is **not a defect**: gateway verification failure leaves the order `pending` (retry possible) with the coupon *reserved* by design; the diagnostic only flags `payment_status=failed` (simulation path), which releases the code.
 * Pre-existing, not changed (needs a decision): an unpaid online order keeps its coupon capacity reserved until it is canceled — there is no expiry job for abandoned pending orders; a gateway payment that verifies after the order was canceled rolls back and leaves the money unmatched (error is raised to the caller). Both are documented risks, not regressions.
+
+---
+
+## 13. Final regression after C1 + G1 + L1 (commit `HEAD` before this section)
+
+| Suite | Database | Result |
+|---|---|---|
+| `apps.dashboard` | SQLite | 1494 OK |
+| sms, portal, notifications, engagement, core, customers, cart, orders | SQLite | 1467 OK (8 skipped = PG-only) |
+| catalog, billing, blog, content, subscriptions | SQLite | 1526 OK (1 skipped) |
+| orders, cart, engagement, notifications, sms, segment suites (incl. all concurrency tests) | PostgreSQL 16 | 846 OK |
+
+Not re-run (untouched code): `storefront_builder` and `stores`/`shop_core` — their pre-existing identical failures on the base commit are unchanged (§5.1/§7.1).
+
+### 13.1 Open decisions / remaining architectural risks
+1. **G1 switch of segments to the shared “valid order” definition** — stopped; ~8–19 % of members of typical segments would change (§11.3). Needs owner approval after reviewing `analyze_segment_definitions` on production data.
+2. **COD “mark paid” workflow** — until it exists, COD buyers are absent from every `valid`/campaign-`paid` statistic and keep coupon capacity reserved.
+3. **`CustomerSegmentRule.operator` max_length=20 vs `greater_than_or_equal` (21)** — PostgreSQL DataError on saving such a rule; needs a trivial migration (approval).
+4. Abandoned unpaid online orders hold coupon capacity (no expiry job); late gateway success on a canceled order rolls back unmatched (pre-existing).
+5. Legacy SMS still synchronous (S3 not implemented, by decision); `SmsTemplate` is global across stores (shared by design, now shown in the UI).
+6. Dead fields `Customer.orders_count/total_spent` and the `CustomerProfile.total_spent` cache remain (removal needs migrations).
+7. Not verified: real SMS/e-mail providers, production dataset migration, >100k-customer campaign performance, non-Chromium/mobile/accessibility of the rule builder.
