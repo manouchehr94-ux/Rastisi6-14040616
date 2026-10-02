@@ -69,7 +69,7 @@ Legend: **CT** = COMPLETED AND TESTED · **IN** = IMPLEMENTED — NOT TESTED · 
 | 13 | Campaign / occasion admin UI + rule builder + coupon form | CT (server side). The JavaScript rule builder (`rule_builder.js`) has **no automated browser test**; it was not exercised in a browser. | `test_engagement_views.py` |
 | 14 | Integration: order/cancel/payment-failure/return/refund/events | CT | scenarios A–E |
 | 15 | Scheduler `run_engagement_jobs` | CT | `test_command.py` + `run_due_campaigns` idempotency tests |
-| 16 | Regression + security/perf review | see §5 | — |
+| 16 | Regression + security/perf review | CT — see §5 and §7 | — |
 | 17 | Redemption limit within a period (`per_customer_period_days`) | CT | `PeriodLimitTests` |
 | 18 | Code validity from delivery (`validity_from_delivery`) | CT | `DeliveryValidityTests` |
 | 19 | Free product / gift-with-purchase rewards | NS — optional, needs a product decision (reward model is `coupon | none`) | — |
@@ -116,3 +116,54 @@ Not re-run after the final two small commits: the complete suite as one run (the
 * Use `/usr/local/bin/python` (the graphify venv python on PATH lacks Django). `--parallel` crashes on any failing test (traceback pickling) — run groups as separate processes instead.
 * Remaining optional decisions: items 19–22 above; browser-level test of the rule builder; dedicated test for the management command.
 * Never commit `graphify-out/` or `.graphify-venv/`.
+
+
+## 7. Final pre-merge verification (commit `8d1e08b` + report)
+
+### 7.1 Evidence
+* **Browser-level (Chromium via Playwright, PostgreSQL staging DB, `tools/engagement_e2e/`)**
+  * Rule builder: **22/22** — nested AND/OR/NOT tree built through the UI, serialised JSON asserted, save, detail, HTMX preview (exactly the 2 expected customers; nothing issued), edit page re-hydrates 4 leaves/2 groups, edit + persist, leaf removal, invalid Jalali date and empty condition rejected with messages and builder state preserved, activate + run + issued-codes tab, no JS errors.
+  * Customer/admin workflow: **27/27** — PDP gift-wrap option (price, message appears on select), cart toggle/remove/message edit, server-side invalid and valid coupon, checkout with Jalali birth date, order persisted (gift wrap 20,000, coupon 10 % on items only, edited message), account shows birthday in Jalali, my-coupons tab, admin order page packing instructions, invoice line, customer detail birthday, template edit/preview/unknown-variable rejection/test send, history filters, birthday occasion created in UI → manual run → one 20 % code → second run no duplicate, no JS errors.
+* **Migrations (PostgreSQL 16, populated staging copies, never production)**
+  * Base-commit schema populated (orders with/without gift wrap, used coupon, outbox rows) → forward migrate: counts equal, grand totals unchanged, `gift_wrap_total`/`scope` backfilled correctly, new columns default safely, legacy coupon `used_count` preserved, `makemigrations --check` clean.
+  * Backward: migrated every touched app back to its base migration; **base code read the reverted DB correctly**; re-migrated forward.
+  * Scale: 20,004 orders / 20,004 items / 10,002 coupon orders migrated in **15 s**; 10,002 redemption rows created, 0 coupon orders without one; idempotent re-apply verified.
+  * New in this pass: `orders.0016_backfill_coupon_redemptions` (legacy orders get a ledger row so cancellation/refund after deployment releases capacity correctly; `used_count` untouched).
+* **Regression on the latest code (SQLite, five parallel groups)**: dashboard 1479 OK · catalog/billing/blog/content 1394 OK · core/customers/cart/sms/notifications/engagement/orders 950 OK (4 skipped) · storefront_builder 2617: 30 failures + 2 errors, **identical to the untouched base commit** · portal/stores/subscriptions/shop_core 1284: 1 failure + 1 error, **identical on base** (missing demo media). **Zero regressions attributable to this branch.**
+* **PostgreSQL**: orders/cart-gift-wrap/engagement/notifications 495 OK earlier; after the latest changes the 4 concurrency tests (total limit, per-customer limit, limit N, overlapping campaign runs) re-run OK.
+* **The 3 baseline guest-cart errors** were a stale fixture (test products created with `stock=0`, so add-to-cart is rejected and the cart stays empty). Verified the merge itself works for stocked products (with gift wrap). They do not touch checkout/coupon/gift-wrap code. Fixtures fixed (`stock=10`); the module passes (22/22).
+
+### 7.2 Security / financial-integrity review (summary)
+Checked and covered by tests: server-side recomputation of every amount (client price/gift-wrap price never trusted); owner-only coupons with generic error for wrong customer; capacity via atomic conditional UPDATE + row lock (PG-verified under real threads); idempotent order creation (existing key returns existing order before reserving); redemption lifecycle for failed payment/cancel/refund/retry; refunds net of coupon share and gift wrap with exact-sum rounding across partial returns (per-unit/line/order); no negative totals; store scoping of every admin object and rule-referenced id; permission gating (analyst read-only, 403 on manage); CSRF on all POST actions; template-variable allow-list (no attribute access, HTML escaped in email); PII masked in stored errors; promotional consent vs transactional/security separation; admin audit events for campaign/coupon/template/retry actions.
+Defects fixed during verification: PostgreSQL `FOR UPDATE` on outer join in `restock_order` (order cancellation crashed on PG — pre-existing), legacy gift-wrap settings POST regression, stale guest-cart fixtures.
+
+### 7.3 Readiness matrix
+| Area | Result |
+|---|---|
+| Discount engine (rules, scopes, Jalali periods, mandatory Mehr–Aban scenario) | **PASS** |
+| Coupon redemption limits, ownership, expiry, windows | **PASS** |
+| Concurrent redemption on PostgreSQL | **PASS** |
+| Payment-failure / cancellation / refund / partial-return consistency | **PASS** |
+| Birthday & other occasions (incl. Esfand-30, annual cycle, idempotency) | **PASS** |
+| Birth-date capture (checkout/account) | **PASS** |
+| Gift wrapping end-to-end (storefront → order → invoice → admin → refund) | **PASS** |
+| Notification system (templates, outbox, retry, consent, history, test send) | **PASS** (see risks) |
+| Admin UI incl. rule builder (Chromium) | **PASS** |
+| Migrations (populated PG staging, forward/backward, 20k-order scale) | **PASS** |
+| Regression vs base | **PASS** (no new failures; 32 + 2 pre-existing failures documented) |
+| Security / financial review | **PASS** with the risks below |
+| Real SMS/e-mail provider delivery (credentials/network) | **NOT VERIFIED** |
+| Migration on the actual production dataset / production DB | **NOT VERIFIED** (by design, never touched) |
+| Campaign evaluation performance at very large customer counts (> 100k customers) | **NOT VERIFIED** |
+| Browsers other than Chromium; mobile viewport; screen-reader/keyboard audit of the rule builder | **NOT VERIFIED** |
+| Optional features needing a product decision (free product / gift with purchase, lat/long targeting, unified history for legacy SMS, birthday column in customer list) | **NOT IMPLEMENTED** (awaiting approval) |
+
+### 7.4 Remaining risks
+1. **Legacy order SMS (welcome, placed, paid, status) are still sent by `apps.sms` and appear in the SMS logs, not in the new notification history** (history covers email for those events and everything for new events). Unifying needs an order FK on `SmsLog` or mirroring — decision required.
+2. **Legacy `NotificationOutbox` rows**: rows `FAILED` with `attempts >= 5` are no longer retried automatically (new retry cap); an admin can retry them manually from history.
+3. **Promotional consent defaults to opted-in** (`accepts_promotional_*` = true for existing customers). Confirm this meets your legal requirements before enabling promotional campaigns; flipping the default would need a migration decision.
+4. **No per-store timezone** exists; all Jalali/period/birthday scheduling uses `settings.TIME_ZONE` (`Asia/Tehran`).
+5. `CartItem.unit_price` is a snapshot while order lines re-price at order time (pre-existing); a price change between add-to-cart and order can make line totals differ from cart totals. Not changed here.
+6. Scheduler requires a cron/job runner for `run_engagement_jobs` (documented); without it scheduled/occasion campaigns do not run.
+7. `store_customer_ids` loads ids in memory; evaluation is chunked but very large stores should be measured before enabling heavy rule trees.
+8. Pre-existing unrelated failures remain: 30 failures + 2 errors in `storefront_builder` template-recipe tests and 1 failure + 1 error in the `stores` demo-media command test.
