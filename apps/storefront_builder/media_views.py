@@ -33,6 +33,7 @@ from apps.dashboard.decorators import permission_required, staff_required
 from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
 
 from .section_media_contract import placement_semantic_payload
+from .services import media_defaults_service
 from .views import _get_scoped_section, _resolve_store
 
 #: پیکربندیِ عمومیِ هر دو نوعِ رسانه — کلیدِ URL (``kind``) → مدل + برچسبِ
@@ -552,6 +553,33 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
         "form_errors": form_errors, "error_tabs": error_tabs, "error_tab": error_tab,
         "reselect_fields": reselect_fields,
     })
+
+
+@require_POST
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
+def storefront_section_media_adopt_defaults(request, pk, kind):
+    """Make the store-wide DEFAULT media a section is currently showing editable.
+
+    An explicit, merchant-triggered, non-destructive copy (see
+    ``services.media_defaults_service``): the originals are never touched, so
+    nothing the Published storefront shows changes until the Draft is published.
+    A no-op (no copies, no draft-changed signal) when the fallback is not in
+    effect — which also makes a double submit harmless.
+    """
+    section = _get_scoped_section(request, pk)
+    config = _media_config(kind, section)
+    result = media_defaults_service.adopt_store_defaults(
+        section, model=config["model"], related_name=_RELATED_NAME_FOR_KIND[kind],
+        asset_fields=config.get("asset_fields") or {},
+    )
+    if result.created:
+        messages.success(request, f"{result.created} تصویر پیش‌فرض قابل‌ویرایش شد")
+    if _is_r4_inline(request) or request.headers.get("HX-Request") == "true":
+        response = _media_list_body(request, section, kind, config)
+    else:
+        response = redirect("dashboard:storefront-builder-section-media-list", pk=section.pk, kind=kind)
+    return _media_changed_response(response) if result.created else response
 
 
 @require_POST

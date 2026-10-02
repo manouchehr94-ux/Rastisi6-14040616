@@ -1,5 +1,38 @@
 {% load storefront_builder_extras %}
+{% comment %}
+Store-wide DEFAULT media: when this section has no active item of its own, the
+storefront falls back to the store's store-wide rows (see
+services/media_defaults_service.py). Those rows are not this section's items, so
+they are shown here read-only with an explicit "make editable" action instead of
+an empty-looking list. Nothing is copied until the merchant asks.
+{% endcomment %}
+{% media_default_state section config as dstate %}
 <div class="stack" id="mediaList" x-data="{ dragId: null }">
+  {% if dstate.in_effect %}
+  <div class="sfb-media-defaults" role="note" data-r4-media-defaults
+       style="border:1px dashed #c9ccd6;border-radius:10px;padding:12px;background:#fafafc">
+    <strong>تصاویر پیش‌فرض فروشگاه ({{ dstate.items|length }})</strong>
+    <p class="sfb-media-defaults-text" style="font-size:12.5px;line-height:1.7;margin:6px 0 8px;color:var(--muted)">
+      {% if dstate.all_inactive %}همهٔ {{ config.label_plural }} این بخش غیرفعال‌اند؛ تا یکی را فعال نکنید، تصاویر پیش‌فرض زیر نمایش داده می‌شوند.
+      {% else %}این بخش هنوز {{ config.label }} اختصاصی ندارد و تصاویر پیش‌فرض زیر نمایش داده می‌شوند. آن‌ها مستقیماً قابل‌ویرایش نیستند؛ برای ویرایش، جایگزینی یا مرتب‌سازی، آن‌ها را قابل‌ویرایش کنید.
+      {% endif %}
+      با افزودن {{ config.label }} جدید بدون این کار، فقط {{ config.label_plural }} اختصاصی نمایش داده می‌شوند و پیش‌فرض‌ها پنهان می‌شوند.
+    </p>
+    <div class="sfb-media-default-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+      {% for default in dstate.items %}
+      <div class="sfb-media-default-row" style="display:flex;align-items:center;gap:8px;min-width:0">
+        {% if default|getattribute:config.thumb_field %}<img src="{{ default|getattribute:config.thumb_field }}" alt="" style="width:48px;height:36px;object-fit:cover;border-radius:6px;flex:none">{% endif %}
+        <span style="flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ default.title }}">{{ default.title|default:"(بدون عنوان)" }}</span>
+        <span class="sfb-media-default-badge" style="font-size:11px;color:var(--muted);flex:none">پیش‌فرض</span>
+      </div>
+      {% endfor %}
+    </div>
+    <button type="button" class="btn btn-sm btn-primary" data-r4-media-adopt
+            hx-post="{% url 'dashboard:storefront-builder-section-media-adopt-defaults' pk=section.pk kind=kind %}"
+            hx-target="#mediaList" hx-swap="outerHTML"
+            hx-confirm="تصاویر پیش‌فرض به‌صورت {{ config.label_plural }} قابل‌ویرایش در همین بخش کپی می‌شوند و فایل‌ها و نسخهٔ منتشرشده تغییری نمی‌کنند. ادامه می‌دهید؟">قابل‌ویرایش کردن تصاویر پیش‌فرض</button>
+  </div>
+  {% endif %}
   {% for item in items %}
   {# Row layout: wraps (never a fixed-width flex row) so Edit / Deactivate / Delete stay reachable inside the narrow R4 Inspector; R4 refinements live in r4_studio.css (.sfb-media-row). #}
   <div class="panel sfb-media-row" draggable="true" data-id="{{ item.pk }}"
@@ -52,9 +85,11 @@
     </div>
   </div>
   {% empty %}
+  {% if not dstate.in_effect %}
   <p style="color:var(--muted);padding:24px 0;text-align:center">
     هنوز هیچ {{ config.label }}ی برای این بخش اضافه نشده — تا این کار انجام نشود،
     این بخش به‌صورتِ پیش‌فرض {{ config.label_plural }}ِ سراسریِ فروشگاه (اگر وجود داشته باشند) را نشان می‌دهد.
   </p>
+  {% endif %}
   {% endfor %}
 </div>

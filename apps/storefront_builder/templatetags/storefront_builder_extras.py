@@ -218,3 +218,17 @@ STUDIO_FAMILY_LABELS_FA = {
 @register.filter
 def rs_family_label(family_key, fallback=""):
     return STUDIO_FAMILY_LABELS_FA.get(str(family_key), fallback or family_key)
+
+
+@register.simple_tag
+def media_default_state(section, config):
+    """R4 media manager — are this section's media currently coming from the
+    store-wide DEFAULTS (the renderer's fallback) rather than from items the
+    manager can list? See ``services.media_defaults_service``. Read-only, and
+    safe for any section/config (returns an inert state, never raises)."""
+    from ..services import media_defaults_service
+
+    try:
+        return media_defaults_service.default_media_state(section, config["model"])
+    except Exception:  # a presentation hint must never break the manager
+        return media_defaults_service.DefaultMediaState()

@@ -27,6 +27,7 @@ its original linear layout.
 {% endcomment %}
 {% if inline_media %}
 <div class="r4-media-form" x-data="mediaFormTabs('{{ error_tab|default:"content" }}')">
+  {% include "dashboard/storefront_builder/partials/media_form/_defaults_notice.html" %}
   <div class="r4-media-errors" role="alert" data-r4-media-errors {% if not form_errors %}hidden{% endif %}>
     {% if form_errors %}<strong>ذخیره انجام نشد:</strong>
     <ul>{% for message in form_errors %}<li>{{ message }}</li>{% endfor %}</ul>{% endif %}
@@ -68,6 +69,7 @@ its original linear layout.
   <a href="{% url 'dashboard:storefront-builder-section-media-list' pk=section.pk kind=kind %}"
      class="btn btn-sm" style="margin-bottom:16px;display:inline-block">← بازگشت به {{ config.label_plural }}</a>
 
+  {% include "dashboard/storefront_builder/partials/media_form/_defaults_notice.html" %}
   <form method="post" enctype="multipart/form-data"
         x-data="destinationPicker(
           '{{ item.destination_type|default:"none" }}',
