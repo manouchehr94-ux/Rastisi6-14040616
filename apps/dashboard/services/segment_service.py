@@ -12,13 +12,15 @@
 import time
 from decimal import Decimal, InvalidOperation
 
+from django.conf import settings
 from django.db.models import Count, Max, Min, Q, Sum
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 
 from apps.core.services.audit_service import record_audit_event
 from apps.customers.models import Customer, CustomerSegment, CustomerSegmentMembership, CustomerSegmentRule
-from apps.orders.models import Order, Refund
+from apps.orders.models import Refund
+from apps.orders.services import order_definitions
 
 
 class SegmentError(Exception):
@@ -105,12 +107,25 @@ def _numeric_q(annotation_field: str, operator: str, value) -> Q:
     return ~q if operator == "not_equals" else q
 
 
-def _matching_customer_ids(store, rule: CustomerSegmentRule) -> set:
+def current_definition() -> order_definitions.CustomerOrderDefinition:
+    """تعریفِ سفارشِ آمارِ مشتری که سگمنت‌ها با آن ارزیابی می‌شوند. پیش‌فرض ``legacy``
+    (رفتارِ تاریخی)؛ تغییرِ آن (``settings.SEGMENT_ORDER_DEFINITION = "valid"``) عضویتِ
+    سگمنت‌ها را عوض می‌کند و فقط پس از تأییدِ مالک (و گزارشِ ``analyze_segment_definitions``) مجاز است.
+    مقدارِ ناشناخته ⇒ ``legacy`` (fail-safe)."""
+    return order_definitions.DEFINITIONS.get(
+        getattr(settings, "SEGMENT_ORDER_DEFINITION", "legacy"), order_definitions.LEGACY,
+    )
+
+
+def _matching_customer_ids(store, rule: CustomerSegmentRule, definition=None) -> set:
     """شناسه‌هایِ Customerِ منطبق با یک قاعده‌ی تکی را برمی‌گرداند — همیشه
     Store-scoped، همیشه یک کوئریِ مستقل (نه annotateهایِ ترکیبی که می‌توانند
-    فان‌اوت غلط بدهند)."""
+    فان‌اوت غلط بدهند). ``definition``: کدام سفارش‌ها شمرده شوند (نگاه کنید به
+    ``order_definitions``)؛ پیش‌فرض ``current_definition()``."""
     validate_rule(rule.field, rule.operator)
     meta = ALLOWED_FIELDS[rule.field]
+    d = definition or current_definition()
+    in_store = Q(orders__store=store)
 
     base = Customer.objects.filter(orders__store=store)
 
@@ -121,10 +136,10 @@ def _matching_customer_ids(store, rule: CustomerSegmentRule) -> set:
     if rule.field in ("order_count", "total_spent", "first_order_at", "last_order_at"):
         annotation_field = f"_seg_{rule.field}"
         annotated = base.annotate(**{
-            "_seg_order_count": Count("orders", filter=Q(orders__store=store), distinct=True),
-            "_seg_total_spent": Sum("orders__grand_total", filter=Q(orders__store=store, orders__payment_status=Order.PaymentStatus.PAID)),
-            "_seg_first_order_at": Min("orders__created_at", filter=Q(orders__store=store)),
-            "_seg_last_order_at": Max("orders__created_at", filter=Q(orders__store=store)),
+            "_seg_order_count": Count("orders", filter=in_store & d.count_q, distinct=True),
+            "_seg_total_spent": Sum("orders__grand_total", filter=in_store & d.spent_q),
+            "_seg_first_order_at": Min("orders__created_at", filter=in_store & d.activity_q),
+            "_seg_last_order_at": Max("orders__created_at", filter=in_store & d.activity_q),
         })
         if meta["value_type"] in ("int", "decimal"):
             value = _to_number(rule.value, meta["value_type"])
@@ -143,23 +158,25 @@ def _matching_customer_ids(store, rule: CustomerSegmentRule) -> set:
         days = _to_number(rule.value, "int")
         cutoff = timezone.now() - timezone.timedelta(days=days)
         qs = base.annotate(
-            _seg_last_order_at=Max("orders__created_at", filter=Q(orders__store=store)),
+            _seg_last_order_at=Max("orders__created_at", filter=in_store & d.activity_q),
         ).filter(_seg_last_order_at__lte=cutoff)
         return set(qs.values_list("pk", flat=True))
 
+    # شرطِ «سفارش + کالا/دسته/کد» باید روی *همان* سفارش باشد (یک ``filter`` واحد ⇒ یک join)،
+    # هم در این Store و هم مطابقِ تعریفِ سفارشِ معتبر.
     if rule.field == "has_purchased_product":
         product_id = _to_number(rule.value, "int")
-        qs = base.filter(orders__items__product_id=product_id).distinct()
+        qs = Customer.objects.filter(in_store & d.activity_q & Q(orders__items__product_id=product_id)).distinct()
         return set(qs.values_list("pk", flat=True))
 
     if rule.field == "has_purchased_category":
         category_id = _to_number(rule.value, "int")
-        qs = base.filter(orders__items__product__category_id=category_id).distinct()
+        qs = Customer.objects.filter(in_store & d.activity_q & Q(orders__items__product__category_id=category_id)).distinct()
         return set(qs.values_list("pk", flat=True))
 
     if rule.field == "has_used_coupon":
         coupon_id = _to_number(rule.value, "int")
-        qs = base.filter(orders__coupon_id=coupon_id).distinct()
+        qs = Customer.objects.filter(in_store & d.activity_q & Q(orders__coupon_id=coupon_id)).distinct()
         return set(qs.values_list("pk", flat=True))
 
     if rule.field == "customer_tag":
@@ -168,6 +185,7 @@ def _matching_customer_ids(store, rule: CustomerSegmentRule) -> set:
         return set(qs.values_list("pk", flat=True))
 
     if rule.field == "refund_count":
+        # «تعدادِ استردادِ *موفق*» عمداً فقط SUCCEEDED (برچسبِ UI) — با «استردادِ فعال» (مبلغ) متفاوت و مشروع است.
         value = _to_number(rule.value, "int")
         qs = base.annotate(
             _seg_refund_count=Count(
@@ -181,7 +199,7 @@ def _matching_customer_ids(store, rule: CustomerSegmentRule) -> set:
     raise SegmentError(f"فیلدِ «{rule.field}» پیاده‌سازی نشده است.")
 
 
-def evaluate_segment(segment: CustomerSegment) -> set:
+def evaluate_segment(segment: CustomerSegment, definition=None) -> set:
     """مجموعه‌یِ شناسه‌هایِ Customerِ منطبق با قاعده‌هایِ یک سگمنتِ dynamic را
     برمی‌گرداند — بدونِ نوشتنِ چیزی در دیتابیس (preview-safe). سگمنتِ
     ``static`` را نباید با این تابع صدا زد — عضویتِ آن فقط دستی است."""
@@ -189,7 +207,7 @@ def evaluate_segment(segment: CustomerSegment) -> set:
     if not rules:
         return set()
 
-    rule_sets = [_matching_customer_ids(segment.store, rule) for rule in rules]
+    rule_sets = [_matching_customer_ids(segment.store, rule, definition) for rule in rules]
     if segment.match_mode == CustomerSegment.MatchMode.ANY:
         result = set()
         for s in rule_sets:

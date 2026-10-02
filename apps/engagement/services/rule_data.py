@@ -12,12 +12,12 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 
 from django.db.models import Count, Exists, Max, Min, OuterRef, Subquery, Sum
-from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from apps.core.jalali_utils import store_timezone
 from apps.customers.models import Address, Customer, CustomerProfile, CustomerSegmentMembership
-from apps.orders.models import CouponRedemption, Order, Refund, ReturnRequest
+from apps.orders.models import CouponRedemption, Order, ReturnRequest
+from apps.orders.services import order_definitions
 from apps.orders.services.item_snapshot_service import effective_item_snapshot
 
 ZERO = Decimal("0")
@@ -94,12 +94,8 @@ def store_customer_ids(store):
 
 
 def valid_orders_qs(store, valid_statuses, start=None, end=None):
-    qs = Order.objects.filter(store=store, payment_status__in=valid_statuses).exclude(status=Order.Status.CANCELED)
-    if start is not None:
-        qs = qs.filter(created_at__gte=start)
-    if end is not None:
-        qs = qs.filter(created_at__lt=end)
-    return qs
+    """تعریفِ مشترکِ «سفارشِ معتبر» — ``apps.orders.services.order_definitions``."""
+    return order_definitions.valid_orders(store, valid_statuses, start, end)
 
 
 def customers_with_valid_orders(store, valid_statuses, start=None, end=None) -> set:
@@ -133,10 +129,7 @@ def load_orders(store, customer_ids, valid_statuses, start=None, end=None):
     بازه‌ی نیم‌باز ``[start, end)``. ``valid``: وضعیتِ پرداختِ معتبر و لغونشده؛
     ``all``: همه‌ی وضعیت‌ها (برایِ قواعدِ لغو/مرجوعی/استرداد)."""
     tz = store_timezone()
-    refunded = (
-        Refund.objects.filter(order=OuterRef("pk")).exclude(status__in=(Refund.Status.FAILED, Refund.Status.CANCELLED))
-        .values("order").annotate(total=Sum(Coalesce("approved_amount", "requested_amount"))).values("total")
-    )
+    refunded = order_definitions.refunded_amount_subquery(OuterRef("pk"))
     returned = ReturnRequest.objects.filter(order=OuterRef("pk")).exclude(
         status__in=(ReturnRequest.Status.REJECTED, ReturnRequest.Status.CANCELLED, ReturnRequest.Status.REQUESTED),
     )

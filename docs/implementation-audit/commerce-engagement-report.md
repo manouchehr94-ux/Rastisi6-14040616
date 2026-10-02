@@ -323,3 +323,50 @@ Not re-run for this change (untouched code; previously verified): catalog/billin
 **Tests:** `apps/orders/tests/test_coupon_consistency.py` (10: all surfaces — evaluator, cart totals, `coupon_is_applicable`, My Coupons, order creation — agree for active/inactive/not-started/expired/capacity-full/per-customer/ownership; precedence; legacy signature; command clean after real pay/fail/cancel/reserve flows, detects 10 drift kinds, read-only, scoping, `--fail-on-issues`); PG-only `test_ledger_and_counters_stay_consistent_after_races` (6+3 concurrent orders, zero issues afterwards). Results: SQLite orders/customers/engagement/notifications/cart 585 OK (5 skipped); PostgreSQL concurrency + coupon engine + cart 192 OK (concurrency tests executed, not skipped).
 
 **Finding handed to L1:** `counted_on_failed_payment` is a real possibility on the gateway-failure path (only the simulated payment path releases the redemption on failure) — to be verified in L1.
+
+---
+
+## 11. G1 — shared customer-order definitions (approved with an impact gate; Task #8)
+
+### 11.1 Inconsistencies found (segment engine vs campaign rules engine)
+| Aspect | Segments (`segment_service`) — historical | Campaign rules (`rule_data`) | Verdict |
+|---|---|---|---|
+| Which orders count | **every** order of the store (canceled, unpaid/COD, failed included) | valid: payment status ∈ configured list (default `paid`) and not canceled | **Conflict** |
+| Order count | all orders | valid orders | Conflict |
+| Total spent | `paid` orders only, **even if later canceled**; gross of refunds | valid orders; `lifetime_spent` gross of refunds (`order_total` leaf is net) | Conflict (cancel) / aligned (gross) |
+| Cancelled orders | counted in count/dates/products/coupons; counted in spent if paid | excluded everywhere | Conflict |
+| Refunds / partial refunds | `refund_count` = SUCCEEDED refunds (labelled “successful”); no net spending | amount refunded = all refunds except FAILED/CANCELLED (same as `refund_service`) | Legitimately different (count of successful refunds vs. active refunded money) — kept |
+| Purchase periods / dates | first/last/inactivity from **any** order | from valid orders, half-open `[start,end)` in store tz | Conflict |
+| Purchased product/category/coupon | any order (separate join, not store-scoped on the item join) | valid orders from the order snapshot | Conflict (+ latent cross-store join, see below) |
+| Customer stat caches | `Customer.orders_count/total_spent` (dead, never written), `CustomerProfile.total_spent` cache | computed live | Documented, untouched (removal needs migration) |
+
+### 11.2 What was changed (no behaviour change by default)
+* New `apps/orders/services/order_definitions.py`: the shared base definitions — `valid_order_q`, `valid_orders`, `active_refunds`, `refunded_amount_subquery`, `net_amount`, default valid statuses, and two named segment definitions: **`LEGACY`** (exact historical behaviour) and **`VALID`** (the shared definition).
+* `Refund.INACTIVE_STATUSES = ("failed","cancelled")` — the single “active refund” definition; `refund_service` (5 copies of the tuple) and the rules engine now use it.
+* `rule_data.valid_orders_qs` and its refunded-amount subquery delegate to the shared module (pure move, same results).
+* `segment_service._matching_customer_ids/evaluate_segment` take a `definition`; default = `current_definition()` = **`legacy`** unless `settings.SEGMENT_ORDER_DEFINITION == "valid"` (unknown value ⇒ legacy). The product/category/coupon rules now apply store + definition on the *same* order join (one `filter`), which is behaviour-identical for same-store ids and closes a latent cross-store join (a rule referencing another store's product id used to match customers who bought it elsewhere).
+* Verified identical to the pre-change engine: a one-off differential run of the old module against the new `LEGACY` path over 13 rule/operator combinations on a dataset with cancelled/unpaid/failed/mixed/refunded orders (all equal); golden tests freeze the legacy semantics.
+* **`manage.py analyze_segment_definitions [--store] [--sample N]`** — read-only impact report (stored membership, legacy-now, valid, stale-cache drift, would-add/would-remove).
+* Preserved separation: persisted cached segments vs live campaign evaluation are unchanged; only base definitions are shared.
+
+### 11.3 Impact analysis of switching segments to `valid` (**NOT applied — approval needed**)
+Synthetic but realistic PostgreSQL staging store (2,792 orders: 205 canceled, 209 pending/COD, 121 failed-payment, partial refunds; 1,500 customers; 5 dynamic segments, caches fresh):
+
+| Segment | Members now | Members under `valid` | Would add | Would remove |
+|---|---|---|---|---|
+| VIP: total_spent > 2,999,999 | 422 | 372 | 0 | 50 (−11.8 %) |
+| Repeat: order_count > 1 | 858 | 692 | 0 | 166 (−19.3 %) |
+| Lapsed: no purchase ≥ 60 days | 614 | 611 | 63 | 66 |
+| Bought product X | 1,274 | 1,173 | 0 | 101 (−7.9 %) |
+| New: order_count = 1 | 416 | 481 | 145 | 80 |
+| **Total moves** | | | **208** | **463** |
+
+This is a **material change of existing marketing audiences** (up to ~19 % of a segment) → per the instruction the switch was **stopped**; segments keep the legacy definition. Switching later is a one-line setting plus a refresh (`refresh_customer_segments`) after the owner reviews `analyze_segment_definitions` on production data.
+
+Important interaction: **cash-on-delivery orders are never marked paid** (decision: handled by a separate workflow). Under `valid` (and already in campaign rules with the default `paid`) COD customers do not count at all, so the `valid` definition would exclude every COD buyer until payment collection exists. Another reason to keep `legacy` for now.
+
+### 11.4 Defect found (not fixed — needs a migration decision)
+`CustomerSegmentRule.operator` is `max_length=20` but the allowed operator `greater_than_or_equal` has 21 characters: on **PostgreSQL** saving such a rule raises `DataError` (HTTP 500); SQLite does not enforce the length. Pre-existing, unrelated to this branch. Fix = widen the column (trivial migration) — awaiting approval because the instruction was to avoid unnecessary migrations. (New tests deliberately avoid persisting that operator so they pass on both databases.)
+
+### 11.5 Tests
+`apps/dashboard/tests/test_segment_order_definitions.py` (16): frozen legacy semantics (golden), valid semantics, agreement of `valid` with the rules engine's facts, default/override/unknown setting, store isolation, shared base definitions (valid orders, custom statuses, single active-refund definition consistent between `refund_service` and the rules engine), read-only impact command. Results: dashboard segment suites + engagement + refund 112 OK on PostgreSQL; orders + engagement 445 OK (5 skipped) on SQLite.

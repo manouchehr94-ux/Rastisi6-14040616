@@ -29,7 +29,7 @@ class RefundError(Exception):
 def _active_refunds(order):
     """استردادهایی که در محاسبه‌ی «قبلاً استرداد شده» شرکت می‌کنند — همه به‌جز
     آن‌هایی که نهایتاً هرگز اتفاق نمی‌افتند (ناموفق/لغوشده)."""
-    return order.refunds.exclude(status__in=(Refund.Status.FAILED, Refund.Status.CANCELLED))
+    return order.refunds.exclude(status__in=Refund.INACTIVE_STATUSES)
 
 
 def paid_amount(order: Order) -> Decimal:
@@ -68,7 +68,7 @@ def refunded_shipping_tax_total(order: Order) -> Decimal:
 def _refunded_quantity_for_item(order_item: OrderItem) -> int:
     total = 0
     for refund_item in RefundItem.objects.filter(order_item=order_item).exclude(
-        refund__status__in=(Refund.Status.FAILED, Refund.Status.CANCELLED)
+        refund__status__in=Refund.INACTIVE_STATUSES
     ):
         total += refund_item.quantity
     return total
@@ -79,7 +79,7 @@ def _refunded_tax_for_item(order_item: OrderItem) -> Decimal:
     3B §17: مالیات هرگز دوبار استرداد نمی‌شود، دقیقاً مثلِ خودِ مبلغِ کالا."""
     total = Decimal("0")
     for refund_item in RefundItem.objects.filter(order_item=order_item).exclude(
-        refund__status__in=(Refund.Status.FAILED, Refund.Status.CANCELLED)
+        refund__status__in=Refund.INACTIVE_STATUSES
     ):
         total += refund_item.tax_amount
     return total
@@ -88,7 +88,7 @@ def _refunded_tax_for_item(order_item: OrderItem) -> Decimal:
 def _refunded_amount_for_item(order_item: OrderItem) -> Decimal:
     total = Decimal("0")
     for refund_item in RefundItem.objects.filter(order_item=order_item).exclude(
-        refund__status__in=(Refund.Status.FAILED, Refund.Status.CANCELLED)
+        refund__status__in=Refund.INACTIVE_STATUSES
     ):
         total += refund_item.amount
     return total
@@ -97,7 +97,7 @@ def _refunded_amount_for_item(order_item: OrderItem) -> Decimal:
 def _refunded_gift_wrap_for_item(order_item: OrderItem) -> Decimal:
     total = Decimal("0")
     for refund_item in RefundItem.objects.filter(order_item=order_item).exclude(
-        refund__status__in=(Refund.Status.FAILED, Refund.Status.CANCELLED)
+        refund__status__in=Refund.INACTIVE_STATUSES
     ):
         total += refund_item.gift_wrap_amount
     return total

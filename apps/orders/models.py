@@ -937,6 +937,10 @@ class Refund(TimeStampedModel):
         FAILED = "failed", "ناموفق"
         CANCELLED = "cancelled", "لغوشده"
 
+    #: استردادهایی که نهایتاً هرگز اتفاق نمی‌افتند؛ بقیه (حتی در انتظار/تأییدشده) «استردادِ فعال» حساب می‌شوند.
+    #: تنها تعریفِ «استردادِ فعال» — refund_service، موتورِ قواعد و تعریف‌هایِ مشترکِ سفارش از همین می‌خوانند.
+    INACTIVE_STATUSES = ("failed", "cancelled")
+
     class Method(models.TextChoices):
         MANUAL = "manual", "دستی (واریز خارج از سیستم)"
         GATEWAY = "gateway", "درگاه پرداخت"
