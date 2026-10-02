@@ -444,3 +444,61 @@ Not re-run (untouched code): `storefront_builder` and `stores`/`shop_core` — t
 | 6 | Plan entitlements for the new features | New gating logic | Features are available to every plan |
 | 7 | Optional features: free-product rewards, lat/long targeting, birthday column in customer list | Separate implementation | Not implemented |
 | 8 | Promotional consent default (currently opted-in for existing customers) | Migration to flip default / re-consent campaign | Existing customers can receive promotional messages |
+
+---
+
+## 15. Audit & decision proposal — (A) abandoned unpaid online orders / coupon reservations, (B) cash-on-delivery payment confirmation
+
+**Status: AUDIT ONLY — nothing below is implemented; no code, data or setting was changed. Awaiting approval of the business rules marked ⚑.**
+
+### 15.1 Verified facts (source-checked)
+| Area | Fact |
+|---|---|
+| Order creation | Stock is reserved **and consumed** in the order transaction (`reserve_inventory` + `consume_inventory_reservation`), the coupon capacity is reserved (`CouponRedemption=RESERVED`, `used_count+1`), the discount is baked into `grand_total`. Both are returned **only** by cancellation (`change_order_status(→canceled)`: restock + `release_redemption`). So an abandoned unpaid order holds **stock and coupon capacity**, not only the coupon. |
+| Online attempt lifecycle | `PaymentAttempt`: created → requesting → redirect_ready → pending → succeeded/failed/canceled/**expired**. `EXPIRED` exists but **nothing ever sets it**; no background job touches orders or attempts. Only job precedent: cron command `expire_inventory_reservations` (ADR-49, no Celery). |
+| Callback | `gateway_callback` (GET, public, store-scoped) → `process_callback_and_verify`: row-lock attempt; **already-final attempt ⇒ returns immediately without asking the gateway**; order already paid ⇒ attempt `canceled`; verify success ⇒ `apply_payment_success` (conditional UPDATE from `pending`) — safe against duplicate/concurrent callbacks (PG-tested). Verify failure ⇒ attempt `failed`, order stays `pending`, coupon stays `reserved`, customer may retry (new attempt). |
+| Gap 1 (real) | **No guard against paying a canceled order**: `payment_start`/`payment_initiate`/`initiate_payment` only reject `paid`; a canceled order still has `payment_status=pending`. If the customer pays anyway, `apply_payment_success` → `change_order_status(processing)` raises (canceled is final) → the whole success transaction rolls back (attempt not marked, order unpaid) and the exception is not `PaymentVerificationFailed`, so `gateway_callback` returns a 500 — **money taken at the gateway with no record on our side** (characterised by `test_payment_success_on_canceled_order_rolls_back_atomically`). Also reachable via admin cancellation during an in-flight payment. |
+| Gap 2 (real) | A late callback for an attempt that was ever set final (e.g. once expiry exists) would be ignored without verification → real money silently lost track of. Any expiry feature must close this first. |
+| COD identification | `initiate_payment` for an offline adapter marks the attempt `succeeded` immediately and **leaves the order `pending`** (by design); `cod.verify_payment` always returns failure; `payment_callback` simulation is the only other writer. An order is “COD” only by the convention `order.payment_gateway.slug == PaymentGatewayConfig.gateway_code == "cod"` (no explicit flag). Delivery (`delivered`, final) never touches `payment_status`; `paid_amount()` = 0 for such orders, so refunds are impossible and every statistic treats them as unpaid. |
+| Authorization | Roles use `ORDER_STATUS_CHANGE` (Owner/Admin/Order Manager) and `REFUND_MANAGE`; no permission expresses “confirm money received”. Audit trail via `record_audit_event(request_id=…)` is idempotent. |
+| Side effects of “paid” | `apply_payment_success` (L1): conditional UPDATE, `mark_redeemed`, `payment.succeeded` event, campaign hook, OK `Transaction`, **forces PROCESSING**, `payment_success` SMS. |
+
+### 15.2 (A) Proposal — configurable expiry of abandoned **online** unpaid orders
+**Principle (⚑ P1):** *expiry = cancellation.* Releasing only the coupon while keeping the order payable is unsafe (the discount is already inside the total). Reusing `change_order_status(→canceled)` gives, in one transaction: restock, `release_redemption`, audit, history, `order.canceled` notification — all existing, tested paths.
+
+**Rules to approve**
+1. ⚑ **Setting** `ShopSettings.unpaid_online_order_ttl_minutes` (integer, **0 = disabled — default, so nothing changes on deploy**). Suggested 60 once enabled; must be ≥ the real gateway session lifetime (Zibal value to be confirmed by you) .
+2. ⚑ **Scope:** only orders with `status=pending`, `payment_status=pending`, resolving to an **online** gateway. **COD is never auto-expired.**
+3. ⚑ **Grace/in-flight protection:** skip an order if any attempt is `requesting/pending/redirect_ready` and updated within `grace` (default 30 min after TTL) or any attempt `succeeded`. Re-check all conditions under `SELECT … FOR UPDATE` on the order row before canceling.
+4. **Attempts:** on expiry mark open attempts `expired` (status already exists, no migration) but **keep them verifiable**.
+5. ⚑ **Late callback policy** (decision L): *L-A (recommended)* — a callback for an expired/canceled attempt or canceled order is **still verified with the gateway**; if the gateway confirms money was taken the attempt is recorded `succeeded`, the order is **not** reopened or paid, and a **reconciliation item** is raised (staff notification event + admin filter “پرداخت دیرهنگام”) for manual action (reinstate manually or refund outside the system — gateway refunds are not implemented). *L-B* — auto-reinstate if stock and coupon capacity are still available (more code, stock/price races); not recommended for v1.
+6. **Guard (recommended regardless of the TTL decision, small bug-fix scope):** refuse payment initiation for canceled orders, and make a verified payment on a canceled order follow rule 5 instead of a 500.
+7. **Duplicate callbacks / retries:** unchanged semantics (attempt row lock + conditional update). While unexpired the customer may retry with a new attempt; after expiry they must re-order (cart/coupon are available again).
+8. ⚑ **Customer messaging:** send the normal cancellation SMS/email for expiry, or suppress it? (proposal: send email only, no SMS, to avoid noise).
+9. **Race protection (required):** the callback path must lock the **order** row before deciding (today it locks only the attempt), so “job cancels” vs “callback pays” serialise.
+
+**Implementation scope:** `ShopSettings` +1 field (additive migration, default 0); new `expire_unpaid_orders` command (cron, `--batch-size`, `--dry-run`, `--store`) + `order_expiry_service`; changes in `gateway_payment_service` (verify-on-final for expired/canceled, order lock, late-payment recording), `views.payment_start/payment_initiate` (canceled guard), `business_events` (+ `staff.late_payment` event), dashboard settings form + order list filter; extend `verify_coupon_consistency` (`stale_unpaid_orders`).
+**Risks:** wrong TTL cancels orders customers are still paying (mitigated by grace + in-flight check + verify-on-late); late-payment reconciliation is manual; stock returns to sale (intended).
+**Tests required:** TTL disabled = no-op; COD/paid/processing/recent/in-flight orders untouched; expired order cancelled once (restock, ledger `released`, `used_count` back, history, one notification); idempotent re-run; dry-run read-only; callback vs job race on PostgreSQL (real threads) both orderings; duplicate late callbacks; late success on canceled order → recorded, not paid, reconciliation event once; payment initiation on canceled order refused; retries before expiry; coupon re-usable afterwards; `verify_coupon_consistency` clean.
+
+### 15.3 (B) Proposal — COD payment-collection confirmation
+**Rules to approve**
+1. ⚑ **Who:** new permission `order.confirm_cod_payment` (proposal: Owner, Administrator, Order Manager). Analysts/others: no access (403).
+2. **What qualifies:** order is COD, `payment_status=pending`, `status` ≠ canceled (typical: after `delivered`; also allowed while shipped). One confirmation per order, full `grand_total` only — partial cash collection is out of scope.
+3. **Input:** collected amount (must equal `grand_total`, prevents mis-clicks), collection method (cash / POS-on-delivery), receipt/reference text (optional), note. Idempotency key per submit (double-click safe).
+4. **Reuse:** call the existing `apply_payment_success` (L1) with `from_statuses=(pending,)` — conditional UPDATE guarantees exactly-once: OK `Transaction` (ref = receipt), coupon `reserved→redeemed`, campaign hook, audit event with actor. Needed small change: a flag so COD confirmation **does not force `PROCESSING`** (order may already be shipped/delivered, where the transition is invalid) — advance only when status is `pending`.
+5. ⚑ **Notifications:** send `payment.succeeded` (email, and SMS `payment_success`) **once**, or silence both for COD (proposal: send email receipt, skip SMS). Never twice: guarded by the conditional UPDATE + dedupe key `order:<id>`.
+6. **After confirmation:** `paid_amount` becomes `grand_total` ⇒ existing refund/return flows, statistics, segments/campaign `paid` rules and `verify_coupon_consistency` start counting the order — **this changes campaign/segment eligibility for COD buyers** (they become valid); flagged because it alters audiences (affects only orders confirmed after go-live; no back-fill without your approval).
+7. ⚑ **No undo:** a wrong confirmation is corrected with the existing refund flow (audit trail kept), not by flipping status back.
+8. ⚑ **Coupon capacity for COD:** stays `reserved` until confirmation or cancellation (proposal) vs. auto-redeem at `delivered` even without confirmation.
+9. **Never automatic:** nothing marks COD paid on delivery, callbacks or imports; COD stays excluded from expiry (A).
+
+**Implementation scope:** permission constant + role mapping; `lifecycle.apply_payment_success(advance_to_processing=…)`; `order_is_cod(order)` helper (single place for the slug convention); `cod_payment_service.confirm_collection(order, actor, amount, method, reference, idempotency_key)`; dashboard order-detail form/endpoint (POST, CSRF, permission); optional additive `Transaction.confirmed_by` (nullable FK) + `method` (default `"gateway"`) migration — or audit-log only if you prefer no migration; audit event `order.cod_payment_confirmed`; order timeline entry.
+**Risks:** staff confirming without receiving cash (mitigated by permission, amount match, audit, reference); COD buyers entering segments/campaigns after go-live; notification wording for already-delivered orders.
+**Tests required:** permission matrix (owner/admin/order-manager yes, analyst/catalog no, other store 404); non-COD, canceled, already-paid, wrong-amount rejected; confirmation on pending/shipped/delivered orders (no invalid transition); exactly-once under double submit and parallel requests (PostgreSQL threads); one OK transaction, one notification set, coupon `redeemed`, audit with actor; refund after confirmation works and ends `refunded/REFUNDED`; delivery alone never pays; `verify_coupon_consistency` clean; segment/campaign facts include the order only after confirmation.
+
+### 15.4 Suggested increments (after approval)
+1. Canceled-order payment guard + verify-on-final/late-payment recording + order-row lock (bug-fix; independent of TTL). 2. Expiry setting + `expire_unpaid_orders` (default off). 3. COD confirmation workflow. Each with its tests, PostgreSQL race tests and a staging-DB migration check.
+
+### 15.5 Decisions requested
+⚑ P1 expiry = cancellation · TTL default/suggested value and real gateway session lifetime · grace length · late-payment policy L-A vs L-B · expiry customer messaging · COD permission/roles · COD notification policy · COD coupon capacity until confirmation vs auto-redeem at delivery · no-undo (refund-only) · whether COD buyers may become segment/campaign-eligible after confirmation · additive `Transaction` fields vs audit-log only.
