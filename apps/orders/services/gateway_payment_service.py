@@ -307,63 +307,21 @@ def process_callback_and_verify(
         attempt.verified_at = timezone.now()
         attempt.save(update_fields=["status", "gateway_ref_id", "verified_at", "updated_at"])
 
-        # Mark order as paid (conditional update for safety)
-        updated = Order.objects.filter(
-            pk=order.pk,
-            payment_status=Order.PaymentStatus.PENDING,
-        ).update(
-            payment_status=Order.PaymentStatus.PAID,
-            updated_at=timezone.now(),
-        )
+        # گذارِ «پرداخت‌شده» + همه‌ی اثرهای جانبی (مصرف کد، اعلان، hook کمپین، تراکنشِ سازگاری،
+        # PROCESSING، پیامک) یک‌جا در lifecycle؛ فقط از PENDING (UPDATE شرطی برایِ امنیتِ رقابت).
+        from apps.orders.services.lifecycle import apply_payment_success
 
-        if updated == 0:
+        tx = apply_payment_success(
+            order, store=store, ref_id=result.ref_id, from_statuses=(Order.PaymentStatus.PENDING,),
+            note="پرداخت آنلاین موفق — سفارش به پردازش منتقل شد",
+        )
+        if tx is None:
             # Order was already paid by a concurrent request
             logger.warning(
                 "Order already paid when attempt succeeded: order=%s attempt=%s",
                 order.code, attempt.public_id,
             )
             return attempt
-
-        # Refresh order for downstream
-        order.refresh_from_db()
-
-        from apps.notifications.services import business_events
-        from apps.orders.services.coupon_redemption_service import mark_redeemed
-        mark_redeemed(order)
-        business_events.payment_result(order, success=True)
-        from apps.engagement import hooks as engagement_hooks
-        engagement_hooks.on_payment_success(order)
-
-        # Create a Transaction record for backwards compatibility with existing dashboard
-        from apps.orders.services.payment_service import _generate_transaction_code
-        Transaction.objects.create(
-            code=_generate_transaction_code(),
-            order=order,
-            gateway=order.payment_gateway,
-            amount=order.grand_total,
-            status=Transaction.Status.OK,
-            ref_id=result.ref_id,
-        )
-
-        # Transition order to PROCESSING
-        from apps.orders.services.order_service import change_order_status
-        change_order_status(
-            order,
-            Order.Status.PROCESSING,
-            note="پرداخت آنلاین موفق — سفارش به پردازش منتقل شد",
-            store=store,
-        )
-
-        # SMS notification on commit
-        from apps.orders.services.order_service import _order_sms_context
-        from apps.sms.events import SmsEvent
-        from apps.sms.services.sms_service import send_event_sms
-
-        transaction.on_commit(
-            lambda: send_event_sms(
-                SmsEvent.PAYMENT_SUCCESS, order.customer.phone, _order_sms_context(order), store=store
-            )
-        )
 
     logger.info(
         "Payment verified and order paid: order=%s attempt=%s ref=%s",

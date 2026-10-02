@@ -8,10 +8,10 @@ import re
 
 from django.db import transaction
 
-from apps.engagement import hooks as engagement_hooks
 from apps.notifications.services import business_events
 from apps.orders.models import Order, Transaction
-from apps.orders.services.coupon_redemption_service import mark_redeemed, release_redemption
+from apps.orders.services.coupon_redemption_service import release_redemption
+from apps.orders.services.lifecycle import apply_payment_success
 from apps.orders.services.order_service import _order_sms_context, change_order_status
 from apps.sms.events import SmsEvent
 from apps.sms.services.sms_service import send_event_sms
@@ -76,38 +76,31 @@ def simulate_payment(order: Order, success: bool, *, gateway=None, store) -> Tra
 
     gateway = gateway or order.payment_gateway
 
+    if success:
+        # همه‌ی اثرهای جانبیِ «پرداخت موفق» یک‌جا (lifecycle) — مشترک با مسیرِ درگاهِ آنلاین.
+        tx = apply_payment_success(
+            order, store=store, ref_id=_generate_ref_id(), gateway=gateway,
+            note="پرداخت موفق — سفارش به پردازش منتقل شد",
+        )
+        if tx is None:  # رقابتِ همزمان: درخواستِ دیگری همین سفارش را پرداخت کرد
+            raise ValueError("این سفارش قبلاً پرداخت شده است")
+        return tx
+
     tx = Transaction.objects.create(
         code=_generate_transaction_code(),
         order=order,
         gateway=gateway,
         amount=order.grand_total,
-        status=Transaction.Status.OK if success else Transaction.Status.FAIL,
-        ref_id=_generate_ref_id() if success else "",
+        status=Transaction.Status.FAIL,
+        ref_id="",
     )
-
-    if success:
-        order.payment_status = Order.PaymentStatus.PAID
-        order.save(update_fields=["payment_status", "updated_at"])
-        mark_redeemed(order)
-        business_events.payment_result(order, success=True)
-        engagement_hooks.on_payment_success(order)
-        change_order_status(
-            order, Order.Status.PROCESSING, note="پرداخت موفق — سفارش به پردازش منتقل شد", store=store
+    order.payment_status = Order.PaymentStatus.FAILED
+    order.save(update_fields=["payment_status", "updated_at"])
+    release_redemption(order, reason="payment_failed")
+    business_events.payment_result(order, success=False)
+    transaction.on_commit(
+        lambda: send_event_sms(
+            SmsEvent.PAYMENT_FAILED, order.customer.phone, _order_sms_context(order), store=store
         )
-        transaction.on_commit(
-            lambda: send_event_sms(
-                SmsEvent.PAYMENT_SUCCESS, order.customer.phone, _order_sms_context(order), store=store
-            )
-        )
-    else:
-        order.payment_status = Order.PaymentStatus.FAILED
-        order.save(update_fields=["payment_status", "updated_at"])
-        release_redemption(order, reason="payment_failed")
-        business_events.payment_result(order, success=False)
-        transaction.on_commit(
-            lambda: send_event_sms(
-                SmsEvent.PAYMENT_FAILED, order.customer.phone, _order_sms_context(order), store=store
-            )
-        )
-
+    )
     return tx

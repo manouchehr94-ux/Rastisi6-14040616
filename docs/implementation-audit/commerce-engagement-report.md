@@ -370,3 +370,28 @@ Important interaction: **cash-on-delivery orders are never marked paid** (decisi
 
 ### 11.5 Tests
 `apps/dashboard/tests/test_segment_order_definitions.py` (16): frozen legacy semantics (golden), valid semantics, agreement of `valid` with the rules engine's facts, default/override/unknown setting, store isolation, shared base definitions (valid orders, custom statuses, single active-refund definition consistent between `refund_service` and the rules engine), read-only impact command. Results: dashboard segment suites + engagement + refund 112 OK on PostgreSQL; orders + engagement 445 OK (5 skipped) on SQLite.
+
+---
+
+## 12. L1 — minimal order-lifecycle facade (approved; Task #9)
+
+### 12.1 Review of the lifecycle flows
+| Flow | Orchestration location(s) | Duplicated? | Decision |
+|---|---|---|---|
+| Payment **success** (simulated) | `payment_service.simulate_payment` | **Yes — identical 7-step sequence** also in the gateway path | **Extracted** |
+| Payment **success** (online gateway) | `gateway_payment_service.process_callback_and_verify` | Yes (same) | **Extracted** |
+| Payment failure | `simulate_payment(False)` (simulation only). Gateway failure deliberately leaves the order `pending`, payable, coupon reserved (verified by test) | No (different, legitimate semantics) | Untouched |
+| Cancellation | `order_service.change_order_status(→canceled)` is the only path: restock → release coupon → audit → history → event → SMS | No | Untouched (regression-tested) |
+| Full/partial refund | `refund_service.execute_order_refund` is the only path (returns call it): refund rows, optional restock, `paid→refunded` + ledger `refunded` on exhaustion, audit, event | No | Untouched (regression-tested) |
+| COD | `cod.verify_payment` always returns failure; no code path marks COD paid | n/a | Preserved: never auto-paid |
+
+### 12.2 Change
+* New `apps/orders/services/lifecycle.py::apply_payment_success(order, *, store, ref_id, note, from_statuses=None, gateway=None)`: conditional `UPDATE` to `paid` (race-safe; returns `None` and runs **nothing** if the guard fails) → `mark_redeemed` → `payment.succeeded` event → campaign hook (on commit) → compatibility `Transaction` → `change_order_status(PROCESSING)` → `payment_success` SMS (on commit). Guards (what is payable, idempotency, ref-id generation, ValueError messages) stay with the two callers; both now call this single function (≈45 duplicated lines removed). No migration, no data change, public function signatures unchanged.
+* Behaviour preserved, including the deliberate edge: a payment on an already-canceled order raises `ValueError` and rolls everything back (test added).
+
+### 12.3 Tests (written first against the pre-change code — characterization — then re-run unchanged after the extraction)
+`apps/orders/tests/test_lifecycle.py` (17): simulated vs gateway success produce **identical** effects (payment status, order status, ledger, transaction count, history, notification outbox, SMS); exactly-once effects when repeated; duplicate gateway callback idempotent; second attempt after paid cancelled; no-coupon orders; campaign hook for both paths; canceled-order rollback; failed payment + retry (release/re-take capacity); gateway failure keeps order payable; **COD selection, verification and delivery never mark paid / create an OK transaction / consume the coupon**; cancel of unpaid and paid orders (restock, release, history, single event/SMS, finality); full and partial refunds (ledger `refunded`, capacity not returned, exact sums, events) ending with `verify_coupon_consistency` clean; facade contract (guard ⇒ no side effects, explicit gateway, in-memory order updated). PostgreSQL: 4 parallel payment attempts on one order → 1 success, 3 `ValueError`, 1 OK transaction, ledger redeemed, `used_count`=1, one PROCESSING history row.
+
+### 12.4 Corrections / findings
+* The C1 note “counted_on_failed_payment may occur on the gateway path” is **not a defect**: gateway verification failure leaves the order `pending` (retry possible) with the coupon *reserved* by design; the diagnostic only flags `payment_status=failed` (simulation path), which releases the code.
+* Pre-existing, not changed (needs a decision): an unpaid online order keeps its coupon capacity reserved until it is canceled — there is no expiry job for abandoned pending orders; a gateway payment that verifies after the order was canceled rolls back and leaves the money unmatched (error is raised to the caller). Both are documented risks, not regressions.

@@ -118,6 +118,26 @@ class ConcurrentRedemptionTests(TransactionTestCase):
         self.assertEqual(errors, [])
         self.assertEqual(Command.collect(self.store), [])
 
+    def test_parallel_payment_success_applies_effects_exactly_once(self):
+        from apps.orders.models import Transaction
+        from apps.orders.services.payment_service import simulate_payment
+
+        coupon = Coupon.objects.create(store=self.store, code="PAYRACE", type="percent", value=10, usage_limit=5)
+        customer, address = self._customer(500)
+        order = self._order_job(customer, address, coupon)()
+        results, errors = self._race([lambda: simulate_payment(Order.objects.get(pk=order.pk), True, store=self.store) for _ in range(4)])
+        self.assertEqual(len(results), 1)
+        self.assertEqual(len(errors), 3)
+        self.assertTrue(all(isinstance(e, ValueError) for e in errors))
+        order.refresh_from_db()
+        self.assertEqual(order.payment_status, Order.PaymentStatus.PAID)
+        self.assertEqual(order.status, Order.Status.PROCESSING)
+        self.assertEqual(Transaction.objects.filter(order=order, status="ok").count(), 1)
+        self.assertEqual(CouponRedemption.objects.get(order=order).status, CouponRedemption.Status.REDEEMED)
+        coupon.refresh_from_db()
+        self.assertEqual(coupon.used_count, 1)
+        self.assertEqual(order.status_history.filter(to_status="processing").count(), 1)
+
 
 @skipUnless(connection.vendor == "postgresql", "نیازمندِ PostgreSQL")
 class ConcurrentCampaignExecutionTests(TransactionTestCase):
