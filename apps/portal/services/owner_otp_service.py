@@ -91,10 +91,12 @@ def request_otp(*, phone: str, purpose: str, client_ip: str, message: str | None
     template = SmsTemplate.objects.filter(event_key=SmsEvent.PLATFORM_OWNER_OTP).first()
     reference_body = (template.body if template else "کد تأیید راستیسی: {otp_code}")
     try:
-        rendered_for_count = reference_body.format(
-            otp_code=code, expire_minutes=expire_minutes,
+        from apps.sms.services import template_renderer
+        rendered_for_count = template_renderer.render(
+            reference_body, {"otp_code": code, "expire_minutes": expire_minutes},
+            ("otp_code", "expire_minutes"),
         )
-    except (KeyError, ValueError):
+    except ValueError:
         rendered_for_count = ""
     record_platform_attempt(
         event_key=SmsEvent.PLATFORM_OWNER_OTP, recipient=phone,

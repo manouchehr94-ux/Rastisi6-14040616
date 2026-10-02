@@ -22,7 +22,7 @@
   {% for n in page %}
   <tr>
     <td>{{ n.created_at|jalali:"%Y/%m/%d %H:%M" }}</td>
-    <td><span dir="ltr">{{ n.event_key|default:"—" }}</span>{% if n.is_test %} <span class="badge b-amber">آزمایشی</span>{% endif %}{% if n.is_promotional %} <small>(تبلیغاتی)</small>{% endif %}</td>
+    <td><span dir="ltr">{{ n.event_key|default:"—" }}</span>{% if n.is_test %} <span class="badge b-amber">آزمایشی</span>{% endif %}{% if n.is_legacy_sms_mirror %} <span class="badge" title="ارسال از مسیرِ پیامکِ قدیمی؛ همین ردیف فقط تاریخچه است">پیامکِ قدیمی</span>{% endif %}{% if n.is_promotional %} <small>(تبلیغاتی)</small>{% endif %}</td>
     <td>{{ n.get_channel_display }}</td>
     <td dir="ltr">{{ n.recipient_phone|default:n.recipient_email }}</td>
     <td>{% if n.customer %}<a href="{% url 'dashboard:customer-detail' n.customer_id %}">{{ n.customer.full_name }}</a>{% endif %}{% if n.order %}<br><a dir="ltr" href="{% url 'dashboard:order-detail' n.order.code %}">{{ n.order.code }}</a>{% endif %}</td>
@@ -30,7 +30,7 @@
         {% if n.skip_reason %}<br><small>{{ n.skip_reason }}</small>{% endif %}{% if n.last_error %}<br><small style="color:var(--red)">{{ n.last_error }}</small>{% endif %}</td>
     <td dir="ltr">{{ n.provider|default:"—" }}</td>
     <td>{{ n.attempts }}/{{ n.max_attempts }}</td>
-    <td>{% if n.status == 'failed' or n.status == 'dead' %}
+    <td>{% if n.is_legacy_sms_mirror %}{% if n.status == 'dead' %}<a class="btn btn-sm" href="{% url 'dashboard:sms-log-list' %}">گزارشِ پیامک‌ها</a>{% endif %}{% elif n.status == 'failed' or n.status == 'dead' %}
       <form method="post" action="{% url 'dashboard:notification-retry' n.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn btn-sm">تلاش دوباره</button></form>{% endif %}</td>
   </tr>
   <tr><td colspan="9" style="padding-top:0;border-top:0"><details><summary style="cursor:pointer;color:var(--muted);font-size:12px">متن پیام</summary><div style="white-space:pre-wrap;font-size:12.5px;padding:6px">{% if n.subject %}<b>{{ n.subject }}</b>{% endif %}

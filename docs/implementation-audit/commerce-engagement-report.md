@@ -260,3 +260,40 @@ All S0/S1/S2/C1/G1/L1 proposals are additive or internal refactors with unchange
 1. Approve **S0 + S1 + S2** (recommended before or immediately after merge; S2 is a security hardening of pre-existing code).
 2. Approve **C1 + L1 + G1** as a post-merge hardening PR.
 3. Decide on **S3** (async legacy SMS) and on **#20** (COD "mark paid" transition) and **#21** (plan entitlements) — product decisions, not implemented.
+
+---
+
+## 9. Implementation of S0 + S1 + S2 (approved by the owner; legacy SMS stays synchronous)
+
+Scope respected: no C1/L1/G1/S3, no COD auto-paid, no plan restrictions, no second notification system, `SmsLog` and all historical data untouched, legacy delivery path/billing unchanged.
+
+### 9.1 S2 — strict legacy SMS renderer (`apps/sms/services/template_renderer.py`)
+* `sms_service._render` no longer uses `str.format`. Allowed constructs: `{name}` (simple identifier ∈ event allowlist) and `{{`/`}}` (literal braces — keeps valid legacy templates working). Rejected: attribute access, indexing, `!conv`, `:format-spec`, empty/numeric/spaced placeholders, stray braces, any expression. Values are inserted via `str()` and never re-interpreted.
+* `validate_template_body` (used by the store dashboard form, the platform-admin editor and the new unified editor) now runs the same tokenizer — closes the hole where `{customer_name.__class__.__name__}` passed validation. Unknown-variable message/behaviour unchanged.
+* `owner_otp_service` (platform OTP length bookkeeping) also moved off `str.format`.
+* **Compatibility/migration strategy**
+  * Audit command `manage.py audit_sms_templates` (read-only by default; classes `ok` / `unsafe_syntax` / `unknown_variable`; also counts now-orphaned `NotificationTemplate` SMS rows for legacy events; `--fail-on-issues` for CI).
+  * `--apply --backup FILE` resets only `unsafe_syntax` bodies to the event default after writing the originals to the JSON backup (refuses without `--backup`). `unknown_variable` templates (already non-sending before) are reported, never rewritten.
+  * Runtime safety net: a *stored* template with unsafe syntax (previously rendered by `str.format`) falls back to the event default text with an ERROR log instead of silently stopping that event's SMS; unknown variables keep the old behaviour (no send). Admin test-send raises instead of falling back.
+  * All 12 default templates verified to render byte-identical to `str.format`; `{{`/`}}` cases verified identical.
+
+### 9.2 S1 — unified template administration
+* `SmsTemplate` stays the single source of truth for real delivery of legacy events (global, shared by stores — unchanged and now stated in the UI). The notification-template editor for the 8 events with `legacy_sms_event` now **reads and writes that same row** through a validated, bijective alias map (`apps/notifications/legacy_sms.py`: `order_code↔order_number`, `amount↔order_total`, `shop_name↔store_name`, `tracking_code↔tracking_number`, others identical). A test asserts completeness/injectivity/target-validity for every legacy event and lossless round-trip of every default.
+* Variables without a legacy equivalent (e.g. `{order_url}`) are rejected with the allowed list; nothing is saved on error.
+* Enabled checkbox = `SmsTemplate.is_active` (real effect); reset restores the legacy default; saving deletes the stale, never-used `NotificationTemplate` SMS row so no hidden second copy exists; preview/test-send use the real text.
+* Legacy-event SMS editing requires `SMS_SETTINGS_MANAGE` (same as the old settings screen); without it the SMS block is read-only and POST is refused. (Today every role with `SETTINGS_MANAGE` also has it; tested by patching the permission.)
+* "Looks active but has no effect" cases removed/flagged: legacy-event SMS banner no longer misleading; a red banner appears on the list and editor when the store's global SMS switch (`ShopSettings.sms_enabled`) is off (applies to all SMS templates).
+* The old settings-screen editors keep working and edit the same row (legacy variable names).
+
+### 9.3 S0 — unified history (`apps/notifications/services/legacy_history.py`, migration `notifications.0003_sms_log_mirror`)
+* Additive migration: nullable `NotificationOutbox.sms_log` OneToOne → `sms.SmsLog` (SET_NULL). No data migration; `SmsLog` untouched.
+* After a legacy send (`send_event_sms`, admin `send_test_sms`, `retry_failed_log`) a **history-only mirror row** is created/synced: event mapped to the new key, status `sent` or `dead` (legacy has no auto-retry), attempts, provider, masked error, `created_at` = the SmsLog time, best-effort customer (by phone) and order (by `order_code` in the send context), `metadata.legacy_sms_log_id/billable_units/cost_toman`.
+* No duplicate processing: OneToOne + `dedupe_key=legacy_sms:<id>` + create-or-sync; the outbox worker (`_claim_batch`), `deliver_single` and `retry_notification` ignore mirror rows (guard also survives `SmsLog` deletion through the metadata key). Not mirrored: OTP, platform events, raw `notification` SMS (those already come from the outbox — mirroring would double them), store-less logs, pending logs.
+* Mirror failure can never break/alter an SMS send (try/except + log).
+* Historical data: `manage.py backfill_sms_history [--store slug] [--dry-run] [--batch-size N] [--limit N]` — idempotent, batched, no links guessed for old rows.
+* History UI: “پیامکِ قدیمی” badge; failed legacy rows link to the SMS-log page (credit-aware retry) instead of the outbox retry button.
+
+### 9.4 Tests & verification
+* New: `apps/sms/tests/test_strict_renderer.py` (17: injection/format-spec/stray-brace matrix, compatibility vs `str.format`, validator, fallback policy, audit command incl. backup), `apps/notifications/tests/test_legacy_sms_integration.py` (alias-map invariants, unified template service, mirror idempotency/no second delivery/dead handling/retry sync/exclusions/backfill, admin UI incl. permission and disabled-SMS banner, history badge).
+* PostgreSQL 16 staging DB: migration 0003 forward/backward/forward OK with 2001 populated `SmsLog` rows; backfill 1200 candidates → 1200 mirrors (otp/notification/store-less excluded), second run 0, no duplicate dedupe keys, `deliver_pending` processed 0, `SmsLog` count unchanged. Reversing 0003 drops only the mirror column (mirrors are rebuildable with the backfill command).
+* Regression results: see §9.5.

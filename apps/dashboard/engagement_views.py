@@ -287,7 +287,7 @@ from apps.notifications.models import NotificationOutbox  # noqa: E402
 from apps.notifications.services import template_service  # noqa: E402
 from apps.notifications.services.dispatcher import dispatch_event  # noqa: E402
 from apps.notifications.services.notification_service import RetryNotAllowed, deliver_single, retry_notification  # noqa: E402
-from apps.stores.authorization import SETTINGS_MANAGE  # noqa: E402
+from apps.stores.authorization import SETTINGS_MANAGE, SMS_SETTINGS_MANAGE, membership_has_permission  # noqa: E402
 
 TEST_SEND_LIMIT_PER_HOUR = 10
 
@@ -303,13 +303,29 @@ def notification_templates(request):
             "event": event, "category": notif_events.CATEGORY_LABELS[event.category],
             "sms": sms, "email": email, "legacy_sms": bool(event.legacy_sms_event),
         })
-    return render(request, "dashboard/notification_templates.html", {"rows": rows, "active_page": "notifications"})
+    return render(request, "dashboard/notification_templates.html", {
+        "rows": rows, "active_page": "notifications", "sms_globally_enabled": _sms_globally_enabled(request.store),
+    })
+
+
+def _sms_globally_enabled(store) -> bool:
+    """کلیدِ کلیِ پیامکِ فروشگاه؛ خاموش یعنی هیچ قالبِ پیامکی اثری ندارد."""
+    from apps.core.models import ShopSettings
+
+    try:
+        return bool(ShopSettings.load(store=store).sms_enabled)
+    except Exception:  # noqa: BLE001 — فروشگاهِ بدونِ ShopSettings: هشدار نشان داده می‌شود
+        return False
 
 
 def _event_or_404(key):
     if key not in notif_events.EVENTS:
         raise Http404
     return notif_events.EVENTS[key]
+
+
+def _variables_for_editor(event):
+    return sorted(event.variables.items())
 
 
 @staff_required
@@ -322,12 +338,21 @@ def notification_template_edit(request, event_key):
         action = request.POST.get("action", "save")
         if action == "reset":
             channel = request.POST.get("channel")
-            if channel in notif_events.CHANNELS:
+            if channel == "sms" and event.legacy_sms_event and not membership_has_permission(
+                    request.store_membership, SMS_SETTINGS_MANAGE):
+                messages.error(request, "برایِ بازگشتِ قالبِ پیامک دسترسیِ «تنظیماتِ پیامک» لازم است.")
+            elif channel in notif_events.CHANNELS:
                 template_service.reset_template(store, event_key, channel)
                 messages.info(request, "قالب به حالتِ پیش‌فرض بازگشت")
             return redirect("dashboard:notification-template-edit", event_key=event_key)
         saved = False
+        can_legacy = membership_has_permission(request.store_membership, SMS_SETTINGS_MANAGE)
         for channel in notif_events.CHANNELS:
+            if channel == "sms" and event.legacy_sms_event and not can_legacy:
+                if request.POST.get("sms_body") is not None and request.POST.get("sms_body") != \
+                        template_service.get_template(store, event_key, "sms")["body"]:
+                    errors["sms"] = "برایِ ویرایشِ قالبِ پیامک دسترسیِ «تنظیماتِ پیامک» لازم است."
+                continue
             try:
                 template_service.save_template(
                     store, event_key, channel, enabled=request.POST.get(f"{channel}_enabled") == "on",
@@ -353,8 +378,10 @@ def notification_template_edit(request, event_key):
         templates["email"]["subject"] = request.POST.get("email_subject", templates["email"]["subject"])
     return render(request, "dashboard/notification_template_form.html", {
         "event": event, "templates": templates, "errors": errors, "active_page": "notifications",
-        "variables": sorted(event.variables.items()), "category_label": notif_events.CATEGORY_LABELS[event.category],
+        "variables": _variables_for_editor(event), "category_label": notif_events.CATEGORY_LABELS[event.category],
         "extra_recipients": templates["email"].get("extra_recipients", "") or templates["sms"].get("extra_recipients", ""),
+        "sms_globally_enabled": _sms_globally_enabled(store),
+        "can_edit_legacy_sms": membership_has_permission(request.store_membership, SMS_SETTINGS_MANAGE),
     })
 
 

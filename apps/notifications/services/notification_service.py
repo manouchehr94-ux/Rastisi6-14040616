@@ -129,6 +129,8 @@ def _claim_batch(limit: int, now) -> list[NotificationOutbox]:
     with transaction.atomic():
         qs = (
             NotificationOutbox.objects.select_for_update(skip_locked=True)
+            .filter(sms_log__isnull=True)  # آینه‌های تاریخچه‌ی پیامکِ قدیمی هرگز ارسال نمی‌شوند
+            .exclude(metadata__has_key="legacy_sms_log_id")
             .filter(attempts__lt=F("max_attempts"))
             .filter(
                 Q(status=S.PENDING) | Q(status=S.FAILED) | Q(status=S.SENDING, claimed_at__lt=stale)
@@ -204,6 +206,8 @@ def deliver_single(notification: NotificationOutbox, *, now=None) -> Notificatio
     """ارسالِ فوریِ یک اعلانِ مشخص (ارسالِ آزمایشی/تلاشِ دستی) — فقط اگر هنوز
     ``PENDING``/``FAILED`` باشد؛ برداشتِ اتمیک مانعِ ارسالِ دوباره‌ی همزمان است."""
     now = now or timezone.now()
+    if notification.is_legacy_sms_mirror:
+        return notification
     claimed = NotificationOutbox.objects.filter(
         pk=notification.pk, status__in=(S.PENDING, S.FAILED), attempts__lt=F("max_attempts"),
     ).update(status=S.SENDING, claimed_at=now)
@@ -220,6 +224,8 @@ class RetryNotAllowed(Exception):
 def retry_notification(notification: NotificationOutbox) -> NotificationOutbox:
     """تلاشِ دستیِ مدیر: فقط ``FAILED``/``DEAD``. اعلانِ ``SKIPPED`` (نبودِ رضایت،
     گیرنده‌ی نامعتبر…) عمداً قابلِ تلاشِ دوباره نیست."""
+    if notification.is_legacy_sms_mirror:
+        raise RetryNotAllowed("این پیامک از مسیرِ قدیمیِ پیامک ارسال شده؛ تلاشِ دوباره از «گزارشِ پیامک‌ها» انجام می‌شود.")
     if notification.status not in (S.FAILED, S.DEAD):
         raise RetryNotAllowed("فقط اعلان‌هایِ ناموفق قابلِ تلاشِ دوباره‌اند.")
     notification.status = S.PENDING

@@ -66,6 +66,11 @@ class NotificationOutbox(TimeStampedModel):
     claimed_at = models.DateTimeField("زمانِ برداشتِ کارگر", null=True, blank=True)
     skip_reason = models.CharField("دلیلِ ارسال‌نشدن", max_length=120, blank=True, default="")
     is_test = models.BooleanField("ارسالِ آزمایشی", default=False)
+    sms_log = models.OneToOneField(
+        "sms.SmsLog", verbose_name="گزارشِ پیامکِ قدیمی", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="notification_mirror",
+        help_text="ردیف‌هایِ آینه‌ایِ پیامکِ قدیمی (apps.sms): فقط تاریخچه‌اند و هرگز توسطِ کارگرِ ارسال برداشته نمی‌شوند.",
+    )
 
     class Meta:
         verbose_name = "اعلان"
@@ -82,6 +87,11 @@ class NotificationOutbox(TimeStampedModel):
                 fields=["dedupe_key"], condition=~models.Q(dedupe_key=""), name="uniq_notification_dedupe_key",
             ),
         ]
+
+    @property
+    def is_legacy_sms_mirror(self) -> bool:
+        """آینه‌ی تاریخچه‌ی پیامکِ قدیمی (نه یک اعلانِ قابلِ ارسال)."""
+        return bool(self.sms_log_id or (self.metadata or {}).get("legacy_sms_log_id"))
 
     def __str__(self):
         return f"{self.get_channel_display()} → {self.recipient_user or self.recipient_phone or self.recipient_email}"

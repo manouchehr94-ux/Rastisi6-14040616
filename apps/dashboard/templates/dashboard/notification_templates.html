@@ -4,6 +4,7 @@
 {% block page_title %}اعلان‌های پیامکی و ایمیلی{% endblock %}
 {% block page_sub %}برایِ هر رویدادِ کسب‌وکار، قالبِ جداگانه‌ی پیامک و ایمیل را فعال و ویرایش کنید{% endblock %}
 {% block content %}
+{% if not sms_globally_enabled %}<div class="card" style="margin-bottom:12px"><div class="card-body"><span class="badge b-red" style="white-space:normal">ارسالِ پیامک در تنظیماتِ این فروشگاه غیرفعال است؛ تا فعال‌شدنِ آن هیچ قالبِ پیامکی اثری ندارد.</span></div></div>{% endif %}
 <div class="page-header">
   <div>
     <h2>✉️ قالب‌های اعلان</h2>
@@ -19,7 +20,7 @@
     <td><b>{{ row.event.label }}</b><br><small dir="ltr" style="color:var(--muted)">{{ row.event.key }}</small></td>
     <td>{{ row.category }}</td>
     <td>{% if row.event.audience == 'staff' %}کارکنان{% else %}مشتری{% endif %}</td>
-    <td>{% if row.legacy_sms %}<span class="badge b-amber" title="پیامکِ این رویداد از «قالب‌های پیامک» مدیریت می‌شود">قدیمی</span>{% elif row.sms.enabled %}<span class="badge b-green">فعال</span>{% else %}<span class="badge b-amber">غیرفعال</span>{% endif %}{% if row.sms.customized %} ✎{% endif %}</td>
+    <td>{% if row.legacy_sms %}{% if row.sms.enabled %}<span class="badge b-green" title="قالبِ مشترکِ «قالب‌هایِ پیامک» — همین متن ارسال می‌شود">فعال (مشترک)</span>{% else %}<span class="badge b-amber">غیرفعال</span>{% endif %}{% elif row.sms.enabled %}<span class="badge b-green">فعال</span>{% else %}<span class="badge b-amber">غیرفعال</span>{% endif %}{% if row.sms.customized %} ✎{% endif %}</td>
     <td>{% if row.email.enabled %}<span class="badge b-green">فعال</span>{% else %}<span class="badge b-amber">غیرفعال</span>{% endif %}{% if row.email.customized %} ✎{% endif %}</td>
     <td><a class="btn btn-sm" href="{% url 'dashboard:notification-template-edit' row.event.key %}">ویرایش</a></td>
   </tr>

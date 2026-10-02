@@ -288,3 +288,11 @@ def get_event(key: str) -> EventDef:
 
 def event_choices():
     return [(key, d.label) for key, d in EVENTS.items()]
+
+
+def event_for_legacy_sms(legacy_key: str):
+    """رویدادِ جدیدِ متناظر با یک رویدادِ پیامکِ قدیمی (یا ``None``)."""
+    for d in EVENTS.values():
+        if d.legacy_sms_event and d.legacy_sms_event == legacy_key:
+            return d
+    return None
