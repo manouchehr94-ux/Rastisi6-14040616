@@ -8,6 +8,10 @@ an empty-looking list. Nothing is copied until the merchant asks.
 {% endcomment %}
 {% media_default_state section config as dstate %}
 <div class="stack" id="mediaList" x-data="{ dragId: null }">
+  {% if adopt_notice %}
+  <div class="sfb-media-notice" role="status" data-r4-media-notice
+       style="border:1px solid #cfd3e3;background:#f4f6ff;border-radius:8px;padding:9px 12px;font-size:12.5px;line-height:1.7">{{ adopt_notice }}</div>
+  {% endif %}
   {% if dstate.in_effect %}
   <div class="sfb-media-defaults" role="note" data-r4-media-defaults
        style="border:1px dashed #c9ccd6;border-radius:10px;padding:12px;background:#fafafc">

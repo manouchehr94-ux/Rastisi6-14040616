@@ -224,11 +224,15 @@ def rs_family_label(family_key, fallback=""):
 def media_default_state(section, config):
     """R4 media manager — are this section's media currently coming from the
     store-wide DEFAULTS (the renderer's fallback) rather than from items the
-    manager can list? See ``services.media_defaults_service``. Read-only, and
-    safe for any section/config (returns an inert state, never raises)."""
+    manager can list? See ``services.media_defaults_service``. Read-only.
+
+    Only a missing/unusable ``config`` (a context that is not a media manager)
+    yields the inert "no defaults" state. Any real failure — a DB error, a bug —
+    is deliberately NOT swallowed: it must surface (500 + log) rather than make
+    the manager silently disagree with what the storefront renders."""
     from ..services import media_defaults_service
 
-    try:
-        return media_defaults_service.default_media_state(section, config["model"])
-    except Exception:  # a presentation hint must never break the manager
+    model = config.get("model") if hasattr(config, "get") else None
+    if model is None:
         return media_defaults_service.DefaultMediaState()
+    return media_defaults_service.default_media_state(section, model)

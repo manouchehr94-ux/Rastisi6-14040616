@@ -28,7 +28,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from apps.content.models import HeroSlide, PromotionalBanner, StoryRailItem
+from apps.content.models import DestinationType, HeroSlide, PromotionalBanner, StoryRailItem
 from apps.dashboard.decorators import permission_required, staff_required
 from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
 
@@ -225,7 +225,7 @@ def _media_changed_response(response):
     return response
 
 
-def _media_list_body(request, section, kind, config):
+def _media_list_body(request, section, kind, config, notice=None):
     """پارشیالِ فهرستِ آیتم‌ها — یک بار نوشته شده، هم توسطِ صفحه‌ی کامل و هم
     توسطِ هر endpointِ htmx (toggle/delete/reorder/move) برایِ reswap
     استفاده می‌شود؛ دقیقاً همان الگویِ ``storefront_section_list_partial``
@@ -240,7 +240,7 @@ def _media_list_body(request, section, kind, config):
     items = config["model"].objects.filter(section=section).order_by("display_order", "id")
     return render(request, "dashboard/storefront_builder/partials/section_media_list_body.html", {
         "section": section, "items": items, "kind": kind, "config": config,
-        "inline_media": _is_r4_inline(request),
+        "inline_media": _is_r4_inline(request), "adopt_notice": notice,
     })
 
 
@@ -316,8 +316,28 @@ _DESTINATION_FIELD_BY_TYPE = {
 _DESTINATION_ID_ATTRS = tuple(attr for _, attr in _DESTINATION_FIELD_BY_TYPE.values())
 
 
+_DESTINATION_TYPE_VALUES = frozenset(DestinationType.values)
+_INVALID_DESTINATION_MESSAGE = "مقدار انتخاب‌شده معتبر نیست"
+#: Largest id a bigint FK column can hold — anything above can never match a row
+#: (and would overflow the DB driver), so it is treated as invalid input.
+_MAX_DESTINATION_ID = 2**63 - 1
+
+
 def _apply_destination_fields(obj, request):
+    """Apply the posted destination to ``obj`` (type + only that type's own value).
+
+    Untrusted input never reaches the model or the re-rendered form unvalidated:
+    an unknown ``destination_type`` or a non-numeric / out-of-range id raises a
+    ``ValidationError`` keyed by the POST field (so the dialog flags the
+    destination tab) instead of a 500 — and ``obj`` is left in a SAFE state
+    (type ``none`` / id ``None``), so the error re-render can never echo a
+    tampered value into the page.
+    """
+    errors = {}
     dtype = request.POST.get("destination_type", "none")
+    if dtype not in _DESTINATION_TYPE_VALUES:
+        errors["destination_type"] = _INVALID_DESTINATION_MESSAGE
+        dtype = "none"
     obj.destination_type = dtype
     obj.open_in_new_tab = request.POST.get("open_in_new_tab") == "on"
     # Clear every destination value first, then set only the one the selected
@@ -329,8 +349,29 @@ def _apply_destination_fields(obj, request):
         obj.destination_external_url = request.POST.get("destination_external_url", "").strip()
     elif dtype in _DESTINATION_FIELD_BY_TYPE:
         post_field, attr = _DESTINATION_FIELD_BY_TYPE[dtype]
-        raw = request.POST.get(post_field) or None
-        setattr(obj, attr, int(raw) if raw else None)
+        raw = (request.POST.get(post_field) or "").strip()
+        if raw:
+            try:
+                value = int(raw)
+            except ValueError:
+                value = None
+            if value is None or not 0 < value <= _MAX_DESTINATION_ID:
+                errors[post_field] = _INVALID_DESTINATION_MESSAGE
+            else:
+                setattr(obj, attr, value)
+    if errors:
+        raise ValidationError(errors)
+
+
+def _flash_success(request, text):
+    """Queue a success flash — but never for an inline R4 request.
+
+    The R4 Studio shell renders no Django messages, so a flash queued by an
+    inline request would surface later as a stale toast on an unrelated
+    dashboard page. Legacy full-page / non-R4 requests keep the flash.
+    """
+    if not _is_r4_inline(request):
+        messages.success(request, text)
 
 
 def _sync_asset_references(obj, config, store, *, changed_fields: set[str]) -> None:
@@ -414,7 +455,11 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
         if not item:
             last = model.objects.filter(section=section).order_by("-display_order").first()
             obj.display_order = (last.display_order + 1) if last else 0
-        _apply_destination_fields(obj, request)
+        try:
+            _apply_destination_fields(obj, request)
+            destination_error = None
+        except ValidationError as exc:
+            destination_error = exc
 
         for f in file_fields:
             name = f["name"]
@@ -425,6 +470,8 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
                 setattr(obj, name, "")
 
         try:
+            if destination_error is not None:
+                raise destination_error  # surfaces through the normal error branch below
             obj.full_clean()
             obj.save()
             storage = getattr(model, file_fields[0]["name"]).field.storage
@@ -455,10 +502,24 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
 
             changed = set()
             legacy_files_to_cleanup = []
+            asset_field_for = config.get("asset_fields") or {}
             for f in file_fields:
                 name = f["name"]
                 new_name = getattr(obj, name).name if getattr(obj, name) else None
                 if old_names[name] != new_name:
+                    changed.add(name)
+                    continue
+                # Asset-backed rows (cloned from Published, or adopted defaults)
+                # have NO legacy file, so a removal leaves the legacy name unchanged
+                # (None -> None). The asset FK is what must be cleared; it is the
+                # only thing the renderer, publish clone and fingerprint look at.
+                remove_field = f.get("remove_field")
+                asset_field = asset_field_for.get(name)
+                if (
+                    remove_field and asset_field and name not in request.FILES
+                    and request.POST.get(remove_field) == "on"
+                    and getattr(obj, f"{asset_field}_id", None)
+                ):
                     changed.add(name)
             old_assets = _sync_asset_references(obj, config, store, changed_fields=changed) if changed else {}
             for f in file_fields:
@@ -473,7 +534,7 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
                     legacy_files_to_cleanup.append(old_names[name])
             for legacy_name in legacy_files_to_cleanup:
                 cleanup_reusable_media_file(legacy_name, storage)
-            messages.success(request, f"«{config['label']}» ذخیره شد")
+            _flash_success(request, f"«{config['label']}» ذخیره شد")
             # Media-publish-dirty final hardening — ``r4:media-changed`` must
             # mean a publication-semantic change actually happened, not
             # merely that ``.save()`` ran. ADD (``before_semantic is None``)
@@ -555,6 +616,18 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
     })
 
 
+def _adopt_notice(result) -> str:
+    """Merchant-facing outcome of an adoption attempt (created / skipped / nothing)."""
+    if result.created:
+        text = f"{result.created} تصویر پیش‌فرض قابل‌ویرایش شد."
+        if result.skipped:
+            text += f" {result.skipped} مورد بدون فایل تصویر کپی نشد."
+        return text
+    if result.skipped:
+        return f"هیچ موردی کپی نشد: {result.skipped} تصویر پیش‌فرض فایل تصویری ندارد."
+    return "موردی برای تبدیل نبود: تصویر پیش‌فرضی وجود ندارد یا این بخش از قبل مورد فعالِ اختصاصی دارد."
+
+
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
@@ -573,11 +646,13 @@ def storefront_section_media_adopt_defaults(request, pk, kind):
         section, model=config["model"], related_name=_RELATED_NAME_FOR_KIND[kind],
         asset_fields=config.get("asset_fields") or {},
     )
-    if result.created:
-        messages.success(request, f"{result.created} تصویر پیش‌فرض قابل‌ویرایش شد")
+    notice = _adopt_notice(result)
     if _is_r4_inline(request) or request.headers.get("HX-Request") == "true":
-        response = _media_list_body(request, section, kind, config)
+        # The notice is rendered inside the refreshed list (created / skipped /
+        # nothing to adopt) — never a flash the R4 shell would not display.
+        response = _media_list_body(request, section, kind, config, notice=notice)
     else:
+        (messages.success if result.created else messages.warning)(request, notice)
         response = redirect("dashboard:storefront-builder-section-media-list", pk=section.pk, kind=kind)
     return _media_changed_response(response) if result.created else response
 
@@ -636,7 +711,7 @@ def storefront_section_media_delete(request, pk, kind, item_pk):
         for legacy_name in legacy_cleanup_names:
             cleanup_reusable_media_file(legacy_name, storage)
 
-    messages.success(request, f"«{config['label']}» حذف شد")
+    _flash_success(request, f"«{config['label']}» حذف شد")
     return _media_changed_response(_media_list_body(request, section, kind, config))
 
 

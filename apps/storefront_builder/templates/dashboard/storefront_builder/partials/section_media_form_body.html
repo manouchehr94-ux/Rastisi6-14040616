@@ -45,7 +45,7 @@ its original linear layout.
         hx-target="#r4MediaModalSlot" hx-swap="innerHTML" hx-encoding="multipart/form-data"
         hx-headers='{"HX-R4-Inline": "1"}' hx-disabled-elt="#r4MediaSave"
         x-data="destinationPicker(
-          '{{ item.destination_type|default:"none" }}',
+          '{{ item.destination_type|default:"none"|escapejs }}',
           {% if item.destination_type == "category" %}{{ item.destination_category_id|default_if_none:"null" }}{% elif item.destination_type == "product" %}{{ item.destination_product_id|default_if_none:"null" }}{% elif item.destination_type == "brand" %}{{ item.destination_brand_id|default_if_none:"null" }}{% elif item.destination_type == "collection" %}{{ item.destination_collection_id|default_if_none:"null" }}{% else %}null{% endif %},
           '{% if item.destination_type == "product" %}{{ item.destination_product.name|default:""|escapejs }}{% endif %}')">
     {% csrf_token %}
@@ -72,7 +72,7 @@ its original linear layout.
   {% include "dashboard/storefront_builder/partials/media_form/_defaults_notice.html" %}
   <form method="post" enctype="multipart/form-data"
         x-data="destinationPicker(
-          '{{ item.destination_type|default:"none" }}',
+          '{{ item.destination_type|default:"none"|escapejs }}',
           {% if item.destination_type == "category" %}{{ item.destination_category_id|default_if_none:"null" }}{% elif item.destination_type == "product" %}{{ item.destination_product_id|default_if_none:"null" }}{% elif item.destination_type == "brand" %}{{ item.destination_brand_id|default_if_none:"null" }}{% elif item.destination_type == "collection" %}{{ item.destination_collection_id|default_if_none:"null" }}{% else %}null{% endif %},
           '{% if item.destination_type == "product" %}{{ item.destination_product.name|default:""|escapejs }}{% endif %}')">
     {% csrf_token %}

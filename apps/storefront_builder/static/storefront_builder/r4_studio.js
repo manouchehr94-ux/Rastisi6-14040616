@@ -1200,6 +1200,20 @@
   modalRoot.addEventListener('htmx:responseError', mediaRequestFailed);
   modalRoot.addEventListener('htmx:sendError', mediaRequestFailed);
   modalRoot.addEventListener('htmx:timeout', mediaRequestFailed);
+  // "Make defaults editable" lives in the manager (outside the dialog), so the
+  // dialog's own error listeners never see it. htmx drops a failed (4xx/5xx /
+  // network) response without swapping anything, which would look like "nothing
+  // happened" — tell the merchant instead. A 2xx outcome (created / skipped /
+  // nothing to adopt) is explained by the notice media_views renders in the list.
+  function adoptRequestFailed(evt) {
+    var elt = evt.detail && evt.detail.elt;
+    if (elt && elt.hasAttribute && elt.hasAttribute('data-r4-media-adopt')) {
+      notify('تبدیل تصاویر پیش‌فرض انجام نشد؛ دوباره تلاش کنید.');
+    }
+  }
+  ['htmx:responseError', 'htmx:sendError', 'htmx:timeout'].forEach(function (name) {
+    root.addEventListener(name, adoptRequestFailed);
+  });
   // Fired by media_views (HX-Trigger-After-Swap) after every successful modal save.
   root.addEventListener('r4:media-modal-saved', function () {
     if (!ui.modal || ui.modal.type !== 'media-editor' || !ui.media) return;
