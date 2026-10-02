@@ -105,3 +105,48 @@ class ConcurrentRedemptionTests(TransactionTestCase):
         self.assertEqual(len([o for o in results if o.coupon_discount > 0]), 3)
         coupon.refresh_from_db()
         self.assertEqual(coupon.used_count, 3)
+
+
+@skipUnless(connection.vendor == "postgresql", "نیازمندِ PostgreSQL")
+class ConcurrentCampaignExecutionTests(TransactionTestCase):
+    """دو job هم‌زمانِ یک کمپین (هم‌پوشانیِ cron) هرگز پاداش/اعلانِ تکراری نمی‌سازند."""
+
+    serialized_rollback = True
+
+    def test_overlapping_runs_issue_each_customer_once(self):
+        from apps.engagement.models import Campaign, CampaignIssuance
+        from apps.engagement.services import campaign_service as cs
+        from apps.notifications.models import NotificationOutbox
+
+        store = Store.objects.create(name="هم‌زمانیِ کمپین", slug="campaign-race", status=Store.Status.ACTIVE)
+        ShopSettings.provision_for(store)
+        for i in range(6):
+            user = User.objects.create_user(username=f"cr{i}", password="x12345678")
+            Customer.objects.create(user=user, full_name=f"c{i}", phone=f"0914000{i:04d}", email=f"c{i}@example.com")
+            from apps.customers.models import CustomerProfile
+
+            CustomerProfile.objects.create(store=store, customer=Customer.objects.get(user=user))
+        campaign = cs.save_campaign(Campaign(
+            store=store, name="race", rules={}, coupon_type="percent", coupon_value=Decimal("10"), code_valid_days=5, code_prefix="RC",
+        ))
+        cs.activate(campaign)
+
+        barrier = threading.Barrier(3)
+        errors = []
+
+        def run():
+            try:
+                barrier.wait()
+                cs.execute_campaign(Campaign.objects.get(pk=campaign.pk))
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+            finally:
+                close_old_connections()
+
+        threads = [threading.Thread(target=run) for _ in range(3)]
+        [t.start() for t in threads]
+        [t.join() for t in threads]
+        self.assertEqual(errors, [])
+        self.assertEqual(CampaignIssuance.objects.count(), 6)
+        self.assertEqual(Coupon.objects.filter(store=store, code__startswith="RC-").count(), 6)
+        self.assertEqual(NotificationOutbox.objects.filter(event_key="coupon.issued", channel="email").count(), 6)

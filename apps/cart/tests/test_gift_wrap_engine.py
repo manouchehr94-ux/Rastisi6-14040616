@@ -196,3 +196,29 @@ class GiftWrapRefundTests(GiftWrapBase):
         change_order_status(order, Order.Status.CANCELED, store=self.store)
         self.assertEqual(refundable_amount(order), order.grand_total)
         self.assertIn(order.gift_wrap_total, [Decimal("20000")])
+
+
+class GiftWrapRefundScopeTests(GiftWrapBase):
+    def _refund_all_one_by_one(self, order):
+        total_gw = Decimal("0")
+        for item in order.items.all():
+            for _ in range(item.quantity):
+                refund = execute_order_refund(
+                    order, store=self.store, actor=None,
+                    line_requests=[{"order_item_id": item.pk, "quantity": 1}],
+                )
+                total_gw += refund.items.get().gift_wrap_amount
+        return total_gw
+
+    def test_per_line_and_per_order_refunds_never_exceed_or_lose_gift_wrap(self):
+        coupon_kw = dict(value=10, applies_to_gift_wrap=True)
+        for scope, expected_gross in ((Scope.PER_LINE, Decimal("40000")), (Scope.PER_ORDER, Decimal("20000"))):
+            self._set_scope(scope)
+            order = self._order(self._wrapped_cart([(self.p1, 2), (self.p2, 3)]), self._coupon(f"S-{scope}", **coupon_kw))
+            self.assertEqual(order.gift_wrap_total, expected_gross)
+            simulate_payment(order, True, store=self.store)
+            order.refresh_from_db()
+            refunded_gw = self._refund_all_one_by_one(order)
+            self.assertEqual(refunded_gw, order.gift_wrap_total - order.gift_wrap_discount, scope)
+            order.refresh_from_db()
+            self.assertEqual(refundable_amount(order), order.shipping_cost + order.shipping_tax, scope)

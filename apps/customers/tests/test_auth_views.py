@@ -42,7 +42,7 @@ class SignupViewTests(TestCase):
         category = Category.objects.create(store=store, name="دیجیتال", slug="digital-sgc")
         product = Product.objects.create(
             store=store, vendor=vendor, category=category, name="کالای نمونه", slug="sample-sgc",
-            sku="SKU-SGC1", price=Decimal("100000"),
+            sku="SKU-SGC1", price=Decimal("100000"), stock=10,
         )
         self.client.post(reverse("cart:add", args=[product.slug]), {"quantity": 2})
         self.client.post(reverse("customers:signup"), {
@@ -96,7 +96,7 @@ class LoginViewTests(TestCase):
         category = Category.objects.create(store=store, name="دیجیتال", slug="digital-lgc")
         product = Product.objects.create(
             store=store, vendor=vendor, category=category, name="کالای نمونه", slug="sample-lgc",
-            sku="SKU-LGC1", price=Decimal("50000"),
+            sku="SKU-LGC1", price=Decimal("50000"), stock=10,
         )
         self.client.post(reverse("cart:add", args=[product.slug]), {"quantity": 3})
         self.client.post(reverse("customers:login"), {"identifier": "09121115566", "password": "StrongPass123"})
@@ -194,7 +194,7 @@ class OtpLoginViewTests(TestCase):
         category = Category.objects.create(store=store, name="دیجیتال", slug="digital-ogc")
         product = Product.objects.create(
             store=store, vendor=vendor, category=category, name="کالای نمونه", slug="sample-ogc",
-            sku="SKU-OGC1", price=Decimal("70000"),
+            sku="SKU-OGC1", price=Decimal("70000"), stock=10,
         )
         self.client.post(reverse("cart:add", args=[product.slug]), {"quantity": 1})
         self.client.post(reverse("customers:otp-request"), {"phone": "09121118899"})
