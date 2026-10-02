@@ -106,6 +106,18 @@ class ConcurrentRedemptionTests(TransactionTestCase):
         coupon.refresh_from_db()
         self.assertEqual(coupon.used_count, 3)
 
+    def test_ledger_and_counters_stay_consistent_after_races(self):
+        """بعد از رقابت‌هایِ همزمان، ابزارِ تشخیصی هیچ ناهماهنگی‌ای نمی‌بیند."""
+        from apps.cart.management.commands.verify_coupon_consistency import Command
+
+        coupon = Coupon.objects.create(store=self.store, code="CONS", type="percent", value=10, usage_limit=2, per_customer_limit=1)
+        jobs = [self._order_job(*self._customer(300 + i), coupon) for i in range(6)]
+        customer, address = self._customer(399)
+        jobs += [self._order_job(customer, address, coupon) for _ in range(3)]
+        _, errors = self._race(jobs)
+        self.assertEqual(errors, [])
+        self.assertEqual(Command.collect(self.store), [])
+
 
 @skipUnless(connection.vendor == "postgresql", "نیازمندِ PostgreSQL")
 class ConcurrentCampaignExecutionTests(TransactionTestCase):

@@ -6,7 +6,6 @@
 
 from decimal import ROUND_HALF_UP, Decimal
 
-from django.utils import timezone
 
 from apps.cart.models import Coupon
 from apps.cart.services import coupon_rules, gift_wrap_service
@@ -38,20 +37,13 @@ def _round(amount: Decimal) -> Decimal:
 
 
 def coupon_is_applicable(coupon: Coupon, items_total: Decimal) -> bool:
-    """آیا این کد تخفیف در حال حاضر قابل اعمال است (فعال، منقضی‌نشده، سقف استفاده و حداقل سفارش رعایت‌شده)."""
+    """سازگاریِ رو‌به‌عقب: آیا کد فعال/در بازه/دارایِ ظرفیت است و حداقل سفارش رعایت شده.
+    منطق فقط در ``coupon_rules`` است؛ ارزیابیِ کامل (مالکیت، محدودیت‌ها) ``evaluate_coupon``."""
     if coupon is None:
         return False
-    if not coupon.is_active:
+    if coupon_rules.validity_failure(coupon) or coupon_rules.capacity_failure(coupon):
         return False
-    if coupon.starts_at and coupon.starts_at > timezone.now():
-        return False
-    if coupon.expires_at and coupon.expires_at <= timezone.now():
-        return False
-    if coupon.usage_limit is not None and coupon.used_count >= coupon.usage_limit:
-        return False
-    if items_total < coupon.min_order:
-        return False
-    return True
+    return items_total >= coupon.min_order
 
 
 def _allocate_coupon_discount(items, *, items_total: Decimal, coupon_discount: Decimal, eligible_keys=None) -> list[Decimal]:

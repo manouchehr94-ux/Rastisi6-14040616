@@ -307,3 +307,19 @@ Scope respected: no C1/L1/G1/S3, no COD auto-paid, no plan restrictions, no seco
 | PostgreSQL 16: `apps.notifications`, `test_strict_renderer`, `test_sms_service` | 122 tests OK |
 
 Not re-run for this change (untouched code; previously verified): catalog/billing/blog/content groups; storefront_builder and stores demo-media keep their pre-existing identical failures on the base commit.
+
+---
+
+## 10. C1 — coupon validation consolidation (approved; Task #7)
+
+**Audit (all callers):** `evaluate_coupon` (authoritative; used by `cart_totals` → cart, checkout apply/refresh, `create_order_from_cart`), `pricing.coupon_is_applicable` (public function, used only by tests, partial copy: no ownership/restrictions/per-customer), `coupon_service.customer_coupons` (re-implemented active/expired/upcoming/used with different precedence and ignoring per-customer limits), `coupon_redemption_service` (capacity CAS — the write side of `used_count`, legitimate), campaign reminder/expiry queries (set-based DB filters — legitimate, not per-coupon evaluation), `coupon_service._validate_semantics` (admin input validation — legitimate, different concern).
+
+**Changes (no migration, no interface removed):**
+* `coupon_rules.py` now owns the non-cart rules as small pure helpers: `validity_failure` (active + window), `ownership_failure`, `capacity_failure`, `per_customer_used`, `availability_failure` (fixed order: validity → ownership → total capacity → per-customer) and `display_state`. `evaluate_coupon` calls `availability_failure` — behaviour and reason-code precedence unchanged.
+* `pricing.coupon_is_applicable` kept (same signature/semantics) as a thin wrapper over those helpers; `customer_coupons` uses `display_state`. Net duplicated rule copies: 3 → 1.
+* **Behaviour fix (customer-visible):** an owner's code whose per-customer limit is exhausted now shows “used” in My Coupons (it was shown “active” although checkout rejected it); a rolling window reopens it. Pure display consistency; no pricing/redemption change. State precedence now equals the evaluator's (differs from the old display only for invalid configs `starts_at > expires_at`, which validation already rejects).
+* **`manage.py verify_coupon_consistency [--store slug] [--limit N] [--fail-on-issues]`** — strictly read-only. Checks: `used_count` vs ledger (`used_count_drift`), `used_count_over_limit`, config problems (percent range, expiry before start, period without limit, max<min, invalid restrictions), ledger vs order state (`counted_on_canceled_order`, `counted_on_failed_payment`, `released_on_paid_order`, `redeemed_on_unpaid_order`), `order_without_redemption`, cross-store / customer mismatch / personal code used by another customer, `per_customer_limit_exceeded`.
+
+**Tests:** `apps/orders/tests/test_coupon_consistency.py` (10: all surfaces — evaluator, cart totals, `coupon_is_applicable`, My Coupons, order creation — agree for active/inactive/not-started/expired/capacity-full/per-customer/ownership; precedence; legacy signature; command clean after real pay/fail/cancel/reserve flows, detects 10 drift kinds, read-only, scoping, `--fail-on-issues`); PG-only `test_ledger_and_counters_stay_consistent_after_races` (6+3 concurrent orders, zero issues afterwards). Results: SQLite orders/customers/engagement/notifications/cart 585 OK (5 skipped); PostgreSQL concurrency + coupon engine + cart 192 OK (concurrency tests executed, not skipped).
+
+**Finding handed to L1:** `counted_on_failed_payment` is a real possibility on the gateway-failure path (only the simulated payment path releases the redemption on failure) — to be verified in L1.

@@ -102,24 +102,15 @@ def delete_coupon(coupon: Coupon, *, actor=None) -> None:
 
 def customer_coupons(store, customer):
     """کدهای اختصاصیِ یک مشتری در همین Store (برایِ «حسابِ من») با وضعیتِ
-    محاسبه‌شده. کدِ مشتریِ دیگر یا Storeِ دیگر هرگز برنمی‌گردد."""
+    محاسبه‌شده. کدِ مشتریِ دیگر یا Storeِ دیگر هرگز برنمی‌گردد. وضعیت از همان
+    ارزیابِ مرجعِ ``coupon_rules`` می‌آید (نه نسخه‌ی جداگانه)."""
     from django.utils import timezone
 
-    from apps.cart.services.pricing import coupon_is_applicable  # noqa: F401 — هم‌خانواده با منطقِ اعتبار
+    from apps.cart.services.coupon_rules import display_state
     from apps.notifications.services.context_builders import discount_amount_label
 
     now = timezone.now()
-    rows = []
-    for coupon in Coupon.objects.filter(store=store, customer=customer).order_by("-created_at"):
-        if not coupon.is_active:
-            state = "inactive"
-        elif coupon.expires_at and coupon.expires_at <= now:
-            state = "expired"
-        elif coupon.starts_at and coupon.starts_at > now:
-            state = "upcoming"
-        elif coupon.usage_limit is not None and coupon.used_count >= coupon.usage_limit:
-            state = "used"
-        else:
-            state = "active"
-        rows.append({"coupon": coupon, "state": state, "label": discount_amount_label(coupon)})
-    return rows
+    return [
+        {"coupon": coupon, "state": display_state(coupon, customer, now=now), "label": discount_amount_label(coupon)}
+        for coupon in Coupon.objects.filter(store=store, customer=customer).order_by("-created_at")
+    ]

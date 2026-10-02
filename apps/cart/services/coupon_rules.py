@@ -141,6 +141,79 @@ def _round(value: Decimal) -> Decimal:
     return value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
 
 
+def validity_failure(coupon: Coupon, *, now: dt.datetime | None = None) -> str:
+    """فعال‌بودن و بازه‌ی زمانیِ کد → کدِ دلیلِ رد یا ``""``. تنها پیاده‌سازیِ
+    این قواعد؛ همه‌ی مصرف‌کنندگان (سبد، چک‌اوت، سفارش، «کدهایِ من»،
+    ``coupon_is_applicable``، ابزارِ تشخیصی) از همین تابع می‌گذرند."""
+    now = now or timezone.now()
+    if not coupon.is_active:
+        return INACTIVE
+    if coupon.starts_at and coupon.starts_at > now:
+        return NOT_STARTED
+    if coupon.expires_at and coupon.expires_at <= now:
+        return EXPIRED
+    return ""
+
+
+def ownership_failure(coupon: Coupon, customer) -> str:
+    if coupon.customer_id is None:
+        return ""
+    if customer is None:
+        return LOGIN_REQUIRED
+    if customer.pk != coupon.customer_id:
+        return WRONG_CUSTOMER
+    return ""
+
+
+def capacity_failure(coupon: Coupon) -> str:
+    """سقفِ کلِ استفاده (روی ``used_count`` که با ledger همگام نگه داشته می‌شود)."""
+    if coupon.usage_limit is not None and coupon.used_count >= coupon.usage_limit:
+        return USAGE_LIMIT
+    return ""
+
+
+def per_customer_used(coupon: Coupon, customer, *, now: dt.datetime | None = None) -> int:
+    """تعدادِ استفاده‌ی شمارش‌شده‌ی مشتری از این کد (در پنجره‌ی ``per_customer_period_days`` اگر باشد)."""
+    from apps.orders.models import CouponRedemption
+
+    now = now or timezone.now()
+    qs = CouponRedemption.objects.filter(
+        coupon=coupon, customer=customer, status__in=CouponRedemption.COUNTED_STATUSES,
+    )
+    if coupon.per_customer_period_days:
+        qs = qs.filter(created_at__gt=now - dt.timedelta(days=coupon.per_customer_period_days))
+    return qs.count()
+
+
+def availability_failure(coupon: Coupon, *, customer=None, now: dt.datetime | None = None, check_usage: bool = True) -> str:
+    """همه‌ی بررسی‌هایِ مستقل از محتوایِ سبد، به‌ترتیبِ ثابت: اعتبار/زمان ← مالکیت ←
+    ظرفیتِ کل ← سقفِ هر مشتری. → کدِ دلیلِ رد یا ``""``."""
+    now = now or timezone.now()
+    for failure in (validity_failure(coupon, now=now), ownership_failure(coupon, customer)):
+        if failure:
+            return failure
+    if check_usage:
+        if capacity_failure(coupon):
+            return USAGE_LIMIT
+        if coupon.per_customer_limit is not None and customer is not None:
+            if per_customer_used(coupon, customer, now=now) >= coupon.per_customer_limit:
+                return PER_CUSTOMER_LIMIT
+    return ""
+
+
+#: نگاشتِ کدِ دلیل → وضعیتِ نمایشیِ «کدهایِ من»
+DISPLAY_STATE = {
+    INACTIVE: "inactive", NOT_STARTED: "upcoming", EXPIRED: "expired",
+    USAGE_LIMIT: "used", PER_CUSTOMER_LIMIT: "used",
+}
+
+
+def display_state(coupon: Coupon, customer=None, *, now: dt.datetime | None = None) -> str:
+    """وضعیتِ نمایشیِ یک کد برایِ صاحبش: ``active/inactive/upcoming/expired/used``."""
+    failure = availability_failure(coupon, customer=customer, now=now)
+    return DISPLAY_STATE.get(failure, "active") if failure not in (WRONG_CUSTOMER, LOGIN_REQUIRED) else "inactive"
+
+
 def line_is_eligible(coupon: Coupon, line: CouponLine) -> bool:
     r = coupon.restrictions or {}
     include_product = set(r.get("product_ids", ()))
@@ -178,33 +251,9 @@ def evaluate_coupon(
         return _fail(INACTIVE)
     now = now or timezone.now()
 
-    if not coupon.is_active:
-        return _fail(INACTIVE)
-    if coupon.starts_at and coupon.starts_at > now:
-        return _fail(NOT_STARTED)
-    if coupon.expires_at and coupon.expires_at <= now:
-        return _fail(EXPIRED)
-
-    if coupon.customer_id is not None:
-        if customer is None:
-            return _fail(LOGIN_REQUIRED)
-        if customer.pk != coupon.customer_id:
-            return _fail(WRONG_CUSTOMER)
-
-    if check_usage:
-        if coupon.usage_limit is not None and coupon.used_count >= coupon.usage_limit:
-            return _fail(USAGE_LIMIT)
-        if coupon.per_customer_limit is not None and customer is not None:
-            from apps.orders.models import CouponRedemption
-
-            qs = CouponRedemption.objects.filter(
-                coupon=coupon, customer=customer, status__in=CouponRedemption.COUNTED_STATUSES,
-            )
-            if coupon.per_customer_period_days:
-                qs = qs.filter(created_at__gt=now - dt.timedelta(days=coupon.per_customer_period_days))
-            used = qs.count()
-            if used >= coupon.per_customer_limit:
-                return _fail(PER_CUSTOMER_LIMIT)
+    failure = availability_failure(coupon, customer=customer, now=now, check_usage=check_usage)
+    if failure:
+        return _fail(failure)
 
     items_total = sum((line.total for line in lines), ZERO)
     items_count = sum(line.quantity for line in lines)
