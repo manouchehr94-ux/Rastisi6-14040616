@@ -47,38 +47,72 @@ Isolation/safety: tests use per-run SQLite DBs, SMS goes through `SmsLog`/backen
 ### 2.6 Baseline test results
 See section 5.
 
-## 3. Implementation checklist
+## 3. Implementation checklist (actual status)
 
-(Statuses: NOT STARTED / IN PROGRESS / IMPLEMENTED — NOT TESTED / COMPLETED AND TESTED / BLOCKED)
+Legend: **CT** = COMPLETED AND TESTED · **IN** = IMPLEMENTED — NOT TESTED · **NS** = NOT STARTED/NOT IMPLEMENTED (needs decision)
 
-| # | Task | Status |
+| # | Task | Status | Evidence |
+|---|---|---|---|
+| 0 | Git/env isolation, report | CT (worktree deviation, see §1) | — |
+| 1 | Baseline | CT | 664 tests; 3 pre-existing errors (guest-cart merge → store without ShopSettings) |
+| 2 | Jalali utilities (month ranges, Esfand-30 policy) | CT | `apps/core/tests/test_jalali_utils.py` (13) |
+| 3 | Order-item historical snapshot | CT | engagement scenario tests (snapshot vs changed catalogue, legacy fallback) |
+| 4 | Coupon extensions, redemption ledger, atomic limits | CT | `test_coupon_engine.py` (24); PostgreSQL concurrency `test_coupon_concurrency.py` (3, real threads) |
+| 5 | Rules engine (AND/OR/nested/NOT, scopes, validation, cross-store id checks) | CT | `test_campaign_scenario.py` |
+| 6 | Campaign services (preview, activate, run, idempotent issuance, capacity, expiry, event/scheduled triggers) | CT | `test_campaign_scenario.py`, `test_integration_scenarios.py` |
+| 7 | Mandatory Mehr–Aban 1405 scenario | CT | `MandatoryCampaignTests` (OR≠AND, >10M strict, Shiraz, whole-month boundaries in Asia/Tehran, cancelled/refunded excluded, same_order scope, personal 30%/4M-cap coupon, expiry, notifications, idempotency) |
+| 8 | Birth date + consent + checkout/account UI | CT | `test_checkout_birth_date.py` (13), `test_occasions.py::ProfileBirthDateTests` |
+| 9 | Occasion engine (birthday before/on/after, anniversaries, milestones, reactivation, holiday, custom) | CT | `test_occasions.py` (22) |
+| 10 | Gift wrap (per-product, scope, message, order total, invoice/admin/fulfilment, discount, refund) | CT | `test_gift_wrap_engine.py`, `test_gift_wrap_views.py`, integration scenarios C/D |
+| 11 | Notification registry/templates/dispatcher/outbox/retry/consent | CT | `test_dispatcher.py` (32) |
+| 12 | Notification admin UI (templates, preview, test send, history, retry) | CT | `test_engagement_views.py::NotificationAdminTests` |
+| 13 | Campaign / occasion admin UI + rule builder + coupon form | CT (server side). The JavaScript rule builder (`rule_builder.js`) has **no automated browser test**; it was not exercised in a browser. | `test_engagement_views.py` |
+| 14 | Integration: order/cancel/payment-failure/return/refund/events | CT | scenarios A–E |
+| 15 | Scheduler `run_engagement_jobs` | CT | `test_command.py` + `run_due_campaigns` idempotency tests |
+| 16 | Regression + security/perf review | see §5 | — |
+| 17 | Redemption limit within a period (`per_customer_period_days`) | CT | `PeriodLimitTests` |
+| 18 | Code validity from delivery (`validity_from_delivery`) | CT | `DeliveryValidityTests` |
+| 19 | Free product / gift-with-purchase rewards | NS — optional, needs a product decision (reward model is `coupon | none`) | — |
+| 20 | Latitude/longitude targeting | NS — no such data exists in the project | — |
+| 21 | Password-recovery / e-mail verification / support-ticket notifications | NS — those workflows do not exist in the project | — |
+| 22 | Customer-list birthday column / export | NS — optional (birthday is visible on customer detail) | — |
+
+## 4. Change log (commits on the branch)
+
+1. `226d5cf` Jalali utilities + report.
+2. `a62eedc` Coupon engine, ledger, gift wrap, order snapshot, notification core; refunds net of coupon share and gift wrap.
+3. `379c38f` engagement app (campaigns, rules, occasions), birth date/consent, my-coupons.
+4. `4614f6b` Admin UI (campaigns/occasions/notifications/coupon form), integration scenarios, order indexes.
+5. `82e1e1a` Architecture doc `docs/architecture/COMMERCE_ENGAGEMENT_SYSTEM.md`.
+6. `f0386e5` Redemption window, delivery-anchored validity, PostgreSQL `FOR UPDATE … of=("self",)` fixes, concurrency tests.
+7. `1238c21` Backward-compatible gift-wrap settings POST.
+
+Migrations added: cart 0008+period, catalog 0039, core 0017, customers 0004, notifications 0002, orders 0011–0015 (0013 backfills `Order.gift_wrap_total`), engagement 0001–0002.
+
+Defects found and fixed along the way (pre-existing): `OrderItem.discount_allocation` was never populated; refunds ignored the coupon discount (could exceed what was paid); order cancellation crashed on PostgreSQL (`restock_order` locked a nullable outer join); coupon `used_count` was a racy read-modify-write and never released.
+
+## 5. Test results (actual)
+
+SQLite (default dev/test DB), full suite split into 5 parallel groups on the final code:
+
+| Group | Tests | Result |
 |---|---|---|
-| 0 | Git/environment isolation, report | COMPLETED AND TESTED (see deviation) |
-| 1 | Baseline tests for cart/orders/notifications/sms/customers | IN PROGRESS |
-| 2 | Jalali utilities (month ranges, birthday cycle, Esfand 30 policy) | NOT STARTED |
-| 3 | Order item historical snapshot (brand/category/colour/size/attributes) | NOT STARTED |
-| 4 | Coupon extensions + redemption ledger + checkout enforcement | NOT STARTED |
-| 5 | Rules engine (AND/OR/nesting/scopes/leaf registry/validation) | NOT STARTED |
-| 6 | Campaign models/services (preview, activate, run, idempotent issuance) | NOT STARTED |
-| 7 | Mandatory Mehr–Aban 1405 scenario test | NOT STARTED |
-| 8 | Customer birth date + consent + checkout/account UI | NOT STARTED |
-| 9 | Occasion engine (birthday, anniversaries, milestones, custom) | NOT STARTED |
-| 10 | Gift wrapping: per-product, scope, message, order total, invoice, admin | NOT STARTED |
-| 11 | Notification event registry/templates/dispatcher/outbox hardening | NOT STARTED |
-| 12 | Notification admin UI (templates, preview, test, history, retry) | NOT STARTED |
-| 13 | Campaign / occasion admin UI | NOT STARTED |
-| 14 | Order/cancel/payment-failure/return integration | NOT STARTED |
-| 15 | Scheduler command (`run_engagement_jobs`) | NOT STARTED |
-| 16 | Regression run + security/perf review | NOT STARTED |
+| dashboard | 1479 | 2 failures (gift-wrap settings POST compatibility) — **fixed**, 119 settings/gift-wrap dashboard tests re-run green |
+| storefront_builder | 2617 | 30 failures + 2 errors — **identical set fails on an untouched export of base commit 185166a** (pre-existing, unrelated: template-recipe contract tests) |
+| catalog, billing, blog, content | 1394 | OK (1 skipped) |
+| core, customers, cart, sms, notifications, engagement, orders | 947 | 3 errors — the same 3 baseline guest-cart errors |
+| portal, stores, subscriptions, shop_core | 1284 | 1 failure + 1 error in `test_refresh_rasti_mode_demo_visuals_command` — also fails on base (§5.1) |
 
-## 4. Change log
-(see bottom; appended per milestone)
+PostgreSQL 16 (local, `DATABASE_URL`): orders + cart gift-wrap + engagement + notifications = **495 tests OK, none skipped**, including the 3 concurrent-redemption tests.
 
-## 5. Test log
-* Baseline (pre-change): pending.
+Not re-run after the final two small commits: the complete suite as one run (the dashboard group was re-run only for the settings/gift-wrap modules).
+
+### 5.1 Baseline comparison for the stores failures
+`test_refresh_rasti_mode_demo_visuals_command` (1 failure + 1 error) fails identically on the untouched base export (pre-existing; demo media files absent). Net result: **no regression attributable to this implementation** in any group; the only regression found (gift-wrap settings POST) was fixed.
 
 ## 6. Continuation instructions
-* Working directory: `/home/user/Rastisi6-14040616`, branch `feature/commerce-engagement-system`.
-* Run tests with `/usr/local/bin/python manage.py test apps.<app> --parallel 4`.
-* Read this file, run `git log --oneline -15`, `git status`, then pick the first non-completed item in the checklist.
+* Directory `/home/user/Rastisi6-14040616`, branch `feature/commerce-engagement-system`.
+* SQLite: `python manage.py test apps.<app>`; PostgreSQL: set `DATABASE_URL=postgres://user@host:port/db` (the concurrency tests only run there).
+* Use `/usr/local/bin/python` (the graphify venv python on PATH lacks Django). `--parallel` crashes on any failing test (traceback pickling) — run groups as separate processes instead.
+* Remaining optional decisions: items 19–22 above; browser-level test of the rule builder; dedicated test for the management command.
 * Never commit `graphify-out/` or `.graphify-venv/`.
