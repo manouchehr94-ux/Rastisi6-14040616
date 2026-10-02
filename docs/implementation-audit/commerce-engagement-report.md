@@ -297,3 +297,13 @@ Scope respected: no C1/L1/G1/S3, no COD auto-paid, no plan restrictions, no seco
 * New: `apps/sms/tests/test_strict_renderer.py` (17: injection/format-spec/stray-brace matrix, compatibility vs `str.format`, validator, fallback policy, audit command incl. backup), `apps/notifications/tests/test_legacy_sms_integration.py` (alias-map invariants, unified template service, mirror idempotency/no second delivery/dead handling/retry sync/exclusions/backfill, admin UI incl. permission and disabled-SMS banner, history badge).
 * PostgreSQL 16 staging DB: migration 0003 forward/backward/forward OK with 2001 populated `SmsLog` rows; backfill 1200 candidates → 1200 mirrors (otp/notification/store-less excluded), second run 0, no duplicate dedupe keys, `deliver_pending` processed 0, `SmsLog` count unchanged. Reversing 0003 drops only the mirror column (mirrors are rebuildable with the backfill command).
 * Regression results: see §9.5.
+
+### 9.5 Regression results (commit `554a7c4`, SQLite, separate processes)
+| Group | Result |
+|---|---|
+| `apps.dashboard` | 1479 tests OK |
+| `apps.sms apps.portal apps.notifications apps.engagement` | 713 tests OK (2 skipped) |
+| `apps.orders apps.customers apps.cart apps.core` | 725 tests OK (4 skipped) |
+| PostgreSQL 16: `apps.notifications`, `test_strict_renderer`, `test_sms_service` | 122 tests OK |
+
+Not re-run for this change (untouched code; previously verified): catalog/billing/blog/content groups; storefront_builder and stores demo-media keep their pre-existing identical failures on the base commit.
