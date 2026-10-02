@@ -503,3 +503,46 @@ def run_due_campaigns(now=None) -> dict:
         summary["errors"] += run.errors
     summary["reminders"] = send_expiry_reminders(now=timezone.now())
     return summary
+
+
+# ------------------------------------------------------------------ گزارش عملکرد
+
+
+def performance(campaign: Campaign) -> dict:
+    """شاخص‌هایِ عملکردِ یک کمپین: صدور، تحویل اعلان، استفاده (redemption)، نرخِ
+    استفاده، مجموعِ تخفیف و فروشِ ناشی از کدها. همه فقط از دادهٔ همین کمپین."""
+    from django.db.models import Count, Sum
+
+    from apps.notifications.models import NotificationOutbox
+    from apps.orders.models import CouponRedemption
+
+    coupon_ids = list(campaign.issuances.exclude(coupon__isnull=True).values_list("coupon_id", flat=True).distinct())
+    issued = campaign.issuances.count()
+    redemptions = CouponRedemption.objects.filter(coupon_id__in=coupon_ids)
+    by_status = dict(redemptions.values_list("status").annotate(n=Count("id")))
+    counted = redemptions.filter(status__in=CouponRedemption.COUNTED_STATUSES)
+    agg = counted.aggregate(discount=Sum("discount_amount"), revenue=Sum("order__grand_total"))
+    redeemed_customers = counted.values("customer").distinct().count()
+    notes = dict(
+        NotificationOutbox.objects.filter(metadata__campaign_id=campaign.pk).values_list("status").annotate(n=Count("id"))
+    )
+    now = timezone.now()
+    from apps.cart.models import Coupon
+
+    expired = Coupon.objects.filter(pk__in=coupon_ids, expires_at__lte=now).count()
+    return {
+        "issued": issued,
+        "coupons": len(coupon_ids),
+        "redeemed": by_status.get("redeemed", 0) + by_status.get("refunded", 0),
+        "reserved": by_status.get("reserved", 0),
+        "released": by_status.get("released", 0),
+        "redeemed_customers": redeemed_customers,
+        "redemption_rate": round(100 * redeemed_customers / issued, 1) if issued else 0,
+        "discount_total": agg["discount"] or 0,
+        "revenue": agg["revenue"] or 0,
+        "expired_coupons": expired,
+        "notifications": notes,
+        "notifications_sent": notes.get("sent", 0),
+        "notifications_failed": notes.get("failed", 0) + notes.get("dead", 0),
+        "notifications_skipped": notes.get("skipped", 0),
+    }

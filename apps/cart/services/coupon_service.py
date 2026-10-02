@@ -20,6 +20,28 @@ def list_coupons(store):
     return Coupon.objects.filter(store=store).order_by("-created_at")
 
 
+def _validate_semantics(coupon: Coupon) -> None:
+    """قواعدِ کسب‌وکارِ فراتر از ``full_clean`` (درصد، بازه‌ها، محدودیت‌ها)."""
+    from apps.cart.services.coupon_rules import CouponRestrictionError, validate_restrictions
+
+    if coupon.type == Coupon.Type.PERCENT and not (0 < coupon.value <= 100):
+        raise CouponError("درصدِ تخفیف باید بین ۱ تا ۱۰۰ باشد.")
+    if coupon.type == Coupon.Type.FIXED and coupon.value <= 0:
+        raise CouponError("مبلغِ تخفیف باید مثبت باشد.")
+    if coupon.max_discount is not None and coupon.max_discount <= 0:
+        raise CouponError("سقفِ تخفیف باید مثبت باشد.")
+    if coupon.starts_at and coupon.expires_at and coupon.expires_at <= coupon.starts_at:
+        raise CouponError("انقضا باید بعد از تاریخِ فعال‌سازی باشد.")
+    if coupon.max_order is not None and coupon.max_order < coupon.min_order:
+        raise CouponError("حداکثرِ مبلغِ سبد نباید کمتر از حداقل باشد.")
+    if coupon.min_items and coupon.max_items and coupon.max_items < coupon.min_items:
+        raise CouponError("حداکثرِ تعدادِ اقلام نباید کمتر از حداقل باشد.")
+    try:
+        coupon.restrictions = validate_restrictions(coupon.restrictions)
+    except CouponRestrictionError as exc:
+        raise CouponError(str(exc)) from exc
+
+
 @transaction.atomic
 def create_coupon(store, *, actor=None, **fields) -> Coupon:
     coupon = Coupon(store=store, **fields)
@@ -27,6 +49,7 @@ def create_coupon(store, *, actor=None, **fields) -> Coupon:
         coupon.full_clean()
     except ValidationError as exc:
         raise CouponError("؛ ".join(sum(exc.message_dict.values(), []))) from exc
+    _validate_semantics(coupon)
     coupon.save()
     record_audit_event(
         store=store, actor=actor, action_code="coupon.created",
@@ -45,6 +68,7 @@ def update_coupon(coupon: Coupon, *, actor=None, **fields) -> Coupon:
         coupon.full_clean()
     except ValidationError as exc:
         raise CouponError("؛ ".join(sum(exc.message_dict.values(), []))) from exc
+    _validate_semantics(coupon)
     coupon.save()
     record_audit_event(
         store=coupon.store, actor=actor, action_code="coupon.updated",

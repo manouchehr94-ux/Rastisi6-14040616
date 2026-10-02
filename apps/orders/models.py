@@ -440,6 +440,11 @@ class Order(TimeStampedModel):
                 name="uniq_order_idempotency_key_when_set",
             ),
         ]
+        indexes = [
+            # ارزیابیِ کمپین‌ها: سفارش‌هایِ یک Store در بازه‌ی زمانی / به‌ازایِ هر مشتری
+            models.Index(fields=["store", "created_at"], name="idx_order_store_created"),
+            models.Index(fields=["store", "customer", "created_at"], name="idx_order_store_cust_created"),
+        ]
 
     def __str__(self):
         return self.code

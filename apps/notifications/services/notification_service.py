@@ -142,36 +142,59 @@ def _claim_batch(limit: int, now) -> list[NotificationOutbox]:
     return rows
 
 
+def _process(notification: NotificationOutbox, now) -> bool:
+    """یک اعلانِ برداشته‌شده (SENDING) را می‌فرستد و وضعیتش را ذخیره می‌کند.
+    → ``True`` اگر ارسال موفق بود."""
+    notification.attempts += 1
+    ok = True
+    try:
+        _deliver_one(notification)
+    except Exception as exc:  # noqa: BLE001 — یک اعلانِ خراب نباید بقیه‌ی صف را متوقف کند
+        ok = False
+        notification.last_error = sanitize_error(exc)
+        if notification.attempts >= notification.max_attempts:
+            notification.status = S.DEAD
+            notification.next_attempt_at = None
+        else:
+            notification.status = S.FAILED
+            delay = BACKOFF_MINUTES[min(notification.attempts - 1, len(BACKOFF_MINUTES) - 1)]
+            notification.next_attempt_at = now + timedelta(minutes=delay)
+        logger.warning("notification %s failed (attempt %s): %s", notification.pk, notification.attempts, notification.last_error)
+    else:
+        notification.status = S.SENT
+        notification.sent_at = timezone.now()
+        notification.last_error = ""
+        notification.next_attempt_at = None
+    notification.claimed_at = None
+    notification.save(update_fields=[
+        "status", "attempts", "sent_at", "last_error", "next_attempt_at", "claimed_at",
+        "provider", "provider_ref", "updated_at",
+    ])
+    return ok
+
+
 def deliver_pending(*, limit: int = 200, now=None) -> dict:
     now = now or timezone.now()
     sent = failed = 0
     for notification in _claim_batch(limit, now):
-        notification.attempts += 1
-        try:
-            _deliver_one(notification)
-        except Exception as exc:  # noqa: BLE001 — یک اعلانِ خراب نباید بقیه‌ی صف را متوقف کند
-            notification.last_error = sanitize_error(exc)
-            if notification.attempts >= notification.max_attempts:
-                notification.status = S.DEAD
-                notification.next_attempt_at = None
-            else:
-                notification.status = S.FAILED
-                delay = BACKOFF_MINUTES[min(notification.attempts - 1, len(BACKOFF_MINUTES) - 1)]
-                notification.next_attempt_at = now + timedelta(minutes=delay)
-            failed += 1
-            logger.warning("notification %s failed (attempt %s): %s", notification.pk, notification.attempts, notification.last_error)
-        else:
-            notification.status = S.SENT
-            notification.sent_at = timezone.now()
-            notification.last_error = ""
-            notification.next_attempt_at = None
+        if _process(notification, now):
             sent += 1
-        notification.claimed_at = None
-        notification.save(update_fields=[
-            "status", "attempts", "sent_at", "last_error", "next_attempt_at", "claimed_at",
-            "provider", "provider_ref", "updated_at",
-        ])
+        else:
+            failed += 1
     return {"processed": sent + failed, "sent": sent, "failed": failed}
+
+
+def deliver_single(notification: NotificationOutbox, *, now=None) -> NotificationOutbox:
+    """ارسالِ فوریِ یک اعلانِ مشخص (ارسالِ آزمایشی/تلاشِ دستی) — فقط اگر هنوز
+    ``PENDING``/``FAILED`` باشد؛ برداشتِ اتمیک مانعِ ارسالِ دوباره‌ی همزمان است."""
+    now = now or timezone.now()
+    claimed = NotificationOutbox.objects.filter(
+        pk=notification.pk, status__in=(S.PENDING, S.FAILED), attempts__lt=F("max_attempts"),
+    ).update(status=S.SENDING, claimed_at=now)
+    notification.refresh_from_db()
+    if claimed:
+        _process(notification, now)
+    return notification
 
 
 class RetryNotAllowed(Exception):

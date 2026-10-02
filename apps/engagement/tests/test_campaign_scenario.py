@@ -86,7 +86,7 @@ class MandatoryCampaignTests(EngagementBase):
     # ---------------------------------------------------------------- معیارهای منفی
     def test_amount_must_exceed_ten_million_strictly(self):
         under = self.customer("کمتر")
-        self.order(under, [(self.olive_bag, 1), (self.shirt, 0 + 0 or 1)], when=self.mehr(3))  # 6M+5M = 11M → eligible!
+        self.order(under, [(self.olive_bag, 1), (self.shirt, 1)], when=self.mehr(3))  # 6M+5M = 11M → eligible
         exact = self.customer("دقیقاً ۱۰")
         p10 = self.product("کیف ۱۰", 10 * M, category=self.cat_bag, color=("زیتونی", "#808000"))
         self.order(exact, [(p10, 1)], when=self.mehr(3))

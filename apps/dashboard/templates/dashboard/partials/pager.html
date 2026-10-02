@@ -1,0 +1,8 @@
+{% load persian %}
+{% if page.has_other_pages %}
+<nav style="display:flex;gap:8px;margin-top:12px;align-items:center" aria-label="صفحه‌بندی">
+  {% if page.has_previous %}<a class="btn btn-sm" href="?{% if query %}{{ query }}&{% endif %}{% if tab %}tab={{ tab }}&{% endif %}page={{ page.previous_page_number }}">قبلی</a>{% endif %}
+  <span>صفحه {{ page.number|fa_number }} از {{ page.paginator.num_pages|fa_number }}</span>
+  {% if page.has_next %}<a class="btn btn-sm" href="?{% if query %}{{ query }}&{% endif %}{% if tab %}tab={{ tab }}&{% endif %}page={{ page.next_page_number }}">بعدی</a>{% endif %}
+</nav>
+{% endif %}

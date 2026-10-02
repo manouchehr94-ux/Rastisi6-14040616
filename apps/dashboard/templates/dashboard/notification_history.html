@@ -1,0 +1,43 @@
+{% extends "dashboard/base_admin.html" %}
+{% load persian %}
+{% block title %}تاریخچه‌ی اعلان‌ها | پنل مدیریت{% endblock %}
+{% block page_title %}تاریخچه‌ی اعلان‌ها{% endblock %}
+{% block page_sub %}همه‌ی پیامک‌ها و ایمیل‌هایِ صف‌شده و ارسال‌شده با وضعیت و خطا{% endblock %}
+{% block content %}
+<form method="get" class="card" style="display:flex;gap:10px;padding:12px 18px;margin-bottom:14px;flex-wrap:wrap;align-items:flex-end" role="search">
+  <label>مشتری/گیرنده<br><input class="inp" name="q" value="{{ filters.q }}" style="width:170px" placeholder="نام، موبایل، ایمیل"></label>
+  <label>سفارش<br><input class="inp" name="order" value="{{ filters.order }}" style="width:110px" dir="ltr"></label>
+  <label>رویداد<br><select class="inp" name="event" style="width:200px"><option value="">همه</option>{% for key, label in events %}<option value="{{ key }}" {% if filters.event == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  <label>کانال<br><select class="inp" name="channel" style="width:100px"><option value="">همه</option><option value="sms" {% if filters.channel == 'sms' %}selected{% endif %}>پیامک</option><option value="email" {% if filters.channel == 'email' %}selected{% endif %}>ایمیل</option></select></label>
+  <label>وضعیت<br><select class="inp" name="status" style="width:140px"><option value="">همه</option>{% for v, l in statuses %}<option value="{{ v }}" {% if filters.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+  <label>ارائه‌دهنده<br><input class="inp" name="provider" value="{{ filters.provider }}" style="width:110px" dir="ltr"></label>
+  <label>خطا<br><input class="inp" name="error" value="{{ filters.error }}" style="width:130px"></label>
+  <label>از تاریخ<br><input class="inp" name="date_from" value="{{ filters.date_from }}" style="width:110px" dir="ltr" placeholder="۱۴۰۵/۰۷/۰۱"></label>
+  <label>تا تاریخ<br><input class="inp" name="date_to" value="{{ filters.date_to }}" style="width:110px" dir="ltr" placeholder="۱۴۰۵/۰۸/۳۰"></label>
+  <button class="btn">فیلتر</button><a class="btn" href="{% url 'dashboard:notification-history' %}">پاک‌سازی</a>
+</form>
+<div class="card"><div class="table-wrap"><table>
+  <thead><tr><th>زمان</th><th>رویداد</th><th>کانال</th><th>گیرنده</th><th>مشتری/سفارش</th><th>وضعیت</th><th>ارائه‌دهنده</th><th>تلاش</th><th></th></tr></thead>
+  <tbody>
+  {% for n in page %}
+  <tr>
+    <td>{{ n.created_at|jalali:"%Y/%m/%d %H:%M" }}</td>
+    <td><span dir="ltr">{{ n.event_key|default:"—" }}</span>{% if n.is_test %} <span class="badge b-amber">آزمایشی</span>{% endif %}{% if n.is_promotional %} <small>(تبلیغاتی)</small>{% endif %}</td>
+    <td>{{ n.get_channel_display }}</td>
+    <td dir="ltr">{{ n.recipient_phone|default:n.recipient_email }}</td>
+    <td>{% if n.customer %}<a href="{% url 'dashboard:customer-detail' n.customer_id %}">{{ n.customer.full_name }}</a>{% endif %}{% if n.order %}<br><a dir="ltr" href="{% url 'dashboard:order-detail' n.order.code %}">{{ n.order.code }}</a>{% endif %}</td>
+    <td><span class="badge {% if n.status == 'sent' %}b-green{% elif n.status in 'pending sending skipped' %}b-amber{% else %}b-red{% endif %}">{{ n.get_status_display }}</span>
+        {% if n.skip_reason %}<br><small>{{ n.skip_reason }}</small>{% endif %}{% if n.last_error %}<br><small style="color:var(--red)">{{ n.last_error }}</small>{% endif %}</td>
+    <td dir="ltr">{{ n.provider|default:"—" }}</td>
+    <td>{{ n.attempts }}/{{ n.max_attempts }}</td>
+    <td>{% if n.status == 'failed' or n.status == 'dead' %}
+      <form method="post" action="{% url 'dashboard:notification-retry' n.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn btn-sm">تلاش دوباره</button></form>{% endif %}</td>
+  </tr>
+  <tr><td colspan="9" style="padding-top:0;border-top:0"><details><summary style="cursor:pointer;color:var(--muted);font-size:12px">متن پیام</summary><div style="white-space:pre-wrap;font-size:12.5px;padding:6px">{% if n.subject %}<b>{{ n.subject }}</b>{% endif %}
+{{ n.body }}</div></details></td></tr>
+  {% empty %}<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:30px">اعلانی یافت نشد</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div></div>
+{% include "dashboard/partials/pager.html" with page=page query=query %}
+{% endblock %}

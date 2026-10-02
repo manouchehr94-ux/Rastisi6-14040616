@@ -5973,9 +5973,15 @@ COUPON_FORM_FIELDS = ("code", "type", "value", "label", "min_order", "usage_limi
 @staff_required
 @permission_required(COUPON_VIEW, DISCOUNT_MANAGE)
 def coupon_list(request):
-    coupons = list_coupons(request.store)
+    scope = request.GET.get("scope", "public")
+    coupons = list_coupons(request.store).select_related("customer")
+    if scope == "personal":
+        # کدهای اختصاصیِ مشتریان (کمپین/مناسبت) ممکن است هزاران ردیف باشند ⇒ صفحه‌بندی
+        coupons = Paginator(coupons.filter(customer__isnull=False), 50).get_page(request.GET.get("page"))
+    else:
+        coupons = coupons.filter(customer__isnull=True)
     return render(request, "dashboard/coupon_list.html", {
-        "coupons": coupons, "active_page": "coupons",
+        "coupons": coupons, "scope": scope, "active_page": "coupons",
         "can_manage_coupons": membership_has_permission(request.store_membership, DISCOUNT_MANAGE),
     })
 
@@ -5997,6 +6003,27 @@ def _parse_coupon_form(request):
     fields["usage_limit"] = int(usage_limit) if usage_limit.isdigit() else None
     expires_at_raw = data.get("expires_at", "").strip()
     fields["expires_at"] = expires_at_raw or None
+    starts_at_raw = data.get("starts_at", "").strip()
+    fields["starts_at"] = starts_at_raw or None
+    for key in ("per_customer_limit", "min_items", "max_items"):
+        raw = data.get(key, "").strip()
+        fields[key] = int(raw) if raw.isdigit() else None
+    for key in ("max_discount", "max_order"):
+        raw = data.get(key, "").strip()
+        try:
+            fields[key] = Decimal(raw) if raw else None
+        except InvalidOperation:
+            fields[key] = None
+    fields["applies_to_gift_wrap"] = data.get("applies_to_gift_wrap") == "on"
+    fields["stacks_with_product_discount"] = data.get("stacks_with_product_discount") == "on"
+    restrictions = {}
+    for key, name in (("category_ids", "category_ids"), ("brand_ids", "brand_ids"),
+                      ("excluded_category_ids", "excluded_category_ids"), ("excluded_brand_ids", "excluded_brand_ids"),
+                      ("payment_gateway_ids", "payment_gateway_ids")):
+        ids = [int(v) for v in data.getlist(name) if v.isdigit()]
+        if ids:
+            restrictions[key] = ids
+    fields["restrictions"] = restrictions
     return fields
 
 
@@ -6019,9 +6046,15 @@ def coupon_form(request, pk=None):
         except CouponError as exc:
             messages.error(request, str(exc))
 
+    from apps.orders.models import PaymentGateway as _Gateway
+
     return render(request, "dashboard/coupon_form.html", {
         "coupon": coupon, "active_page": "coupons", "type_choices": Coupon.Type.choices,
         "field_errors": field_errors,
+        "categories": Category.objects.filter(store=request.store).order_by("name"),
+        "brands": Brand.objects.filter(store=request.store).order_by("name"),
+        "gateways": _Gateway.objects.filter(store=request.store).order_by("name"),
+        "restrictions": coupon.restrictions if coupon else {},
     })
 
 

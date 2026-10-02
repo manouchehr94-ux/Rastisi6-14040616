@@ -1,0 +1,125 @@
+{% extends "dashboard/base_admin.html" %}
+{% load persian %}
+{% block title %}{{ campaign.name }} | کمپین{% endblock %}
+{% block page_title %}{{ campaign.name }}{% endblock %}
+{% block page_sub %}{{ campaign.get_trigger_type_display }}{% if campaign.occasion_kind %} — {{ campaign.get_occasion_kind_display }}{% endif %}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <span class="badge {% if campaign.status == 'active' %}b-green{% elif campaign.status in 'draft paused' %}b-amber{% else %}b-red{% endif %}" style="font-size:13px">{{ campaign.get_status_display }}</span>
+    {% if campaign.description %}<p class="page-desc">{{ campaign.description }}</p>{% endif %}
+  </div>
+  {% if can_manage %}
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    {% if campaign.status == 'draft' or campaign.status == 'paused' %}
+      <form method="post" action="{% url 'dashboard:campaign-activate' campaign.pk %}" onsubmit="return confirm('کمپین فعال شود؟')">{% csrf_token %}<button class="btn btn-primary">فعال‌سازی</button></form>
+    {% endif %}
+    {% if campaign.status == 'active' %}
+      <form method="post" action="{% url 'dashboard:campaign-run' campaign.pk %}" onsubmit="return confirm('کمپین همین حالا اجرا شود؟ برای مشتریان مشمول کد صادر و اعلان ارسال می‌شود.')">{% csrf_token %}<button class="btn btn-primary">اجرای دستی</button></form>
+      <form method="post" action="{% url 'dashboard:campaign-pause' campaign.pk %}">{% csrf_token %}<button class="btn">توقف</button></form>
+    {% else %}
+      <a class="btn" href="{% url 'dashboard:campaign-edit' campaign.pk %}">ویرایش</a>
+    {% endif %}
+    {% if campaign.status == 'draft' and not perf.issued %}
+      <form method="post" action="{% url 'dashboard:campaign-delete' campaign.pk %}" onsubmit="return confirm('کمپین حذف شود؟')">{% csrf_token %}<button class="btn btn-danger">حذف</button></form>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% if validation_errors %}
+<div class="card" style="border:2px solid #f59e0b;margin-bottom:14px" role="alert"><div class="card-body">
+  <b>برایِ فعال‌سازی باید این موارد رفع شود:</b>
+  <ul>{% for e in validation_errors %}<li>{{ e }}</li>{% endfor %}</ul>
+</div></div>
+{% endif %}
+
+<div class="tabline" style="display:flex;gap:6px;margin-bottom:14px">
+  <a class="btn btn-sm {% if tab == 'overview' %}btn-primary{% endif %}" href="?tab=overview">نمای کلی</a>
+  <a class="btn btn-sm {% if tab == 'issued' %}btn-primary{% endif %}" href="?tab=issued">کدهای صادرشده</a>
+  <a class="btn btn-sm {% if tab == 'redemptions' %}btn-primary{% endif %}" href="?tab=redemptions">تاریخچه‌ی استفاده</a>
+</div>
+
+{% if tab == 'overview' %}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px">
+  <div class="card"><div class="card-body"><small>کدهای صادرشده</small><div style="font-size:24px;font-weight:700">{{ perf.issued|fa_number }}</div></div></div>
+  <div class="card"><div class="card-body"><small>مشتریانِ استفاده‌کننده</small><div style="font-size:24px;font-weight:700">{{ perf.redeemed_customers|fa_number }}</div><small>نرخِ استفاده: {{ perf.redemption_rate|fa_number }}٪</small></div></div>
+  <div class="card"><div class="card-body"><small>مجموعِ تخفیفِ داده‌شده</small><div style="font-size:20px;font-weight:700">{{ perf.discount_total|toman }}</div></div></div>
+  <div class="card"><div class="card-body"><small>فروشِ سفارش‌هایِ دارایِ کد</small><div style="font-size:20px;font-weight:700">{{ perf.revenue|toman }}</div></div></div>
+  <div class="card"><div class="card-body"><small>اعلان‌ها</small><div>ارسال‌شده {{ perf.notifications_sent|fa_number }} · ناموفق {{ perf.notifications_failed|fa_number }} · ردشده (رضایت/گیرنده) {{ perf.notifications_skipped|fa_number }}</div></div></div>
+  <div class="card"><div class="card-body"><small>کدهایِ منقضی</small><div style="font-size:24px;font-weight:700">{{ perf.expired_coupons|fa_number }}</div></div></div>
+</div>
+
+<div class="card" style="margin-bottom:14px">
+  <div class="card-head"><h3>پیش‌نمایشِ مشتریانِ مشمول</h3></div>
+  <div class="card-body">
+    <form hx-post="{% url 'dashboard:campaign-preview' campaign.pk %}" hx-target="#preview-box" hx-swap="innerHTML" hx-indicator="#preview-loading">
+      {% csrf_token %}
+      <button class="btn">محاسبه‌ی تعدادِ مشمولان</button>
+      <span id="preview-loading" class="htmx-indicator" style="margin-inline-start:8px">در حال محاسبه…</span>
+    </form>
+    <div id="preview-box"></div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:14px">
+  <div class="card-head"><h3>پیکربندی</h3></div>
+  <div class="card-body" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px 24px">
+    <div>دامنه‌ی ارزیابی: <b>{{ campaign.get_rule_scope_display }}</b></div>
+    <div>بازه‌ی خرید: <b>{% if campaign.period_mode == 'jalali_months' %}ماه {{ campaign.period_start_month|fa_number }} تا {{ campaign.period_end_month|fa_number }} سالِ {{ campaign.period_jalali_year|fa_number }}{% elif campaign.period_mode == 'dates' %}{{ campaign.period_start_date|jalali }} تا {{ campaign.period_end_date|jalali }}{% else %}کلِ تاریخچه{% endif %}</b></div>
+    <div>مبنای مبلغ: <b>{{ campaign.get_amount_basis_display }}</b></div>
+    <div>پاداش: <b>{% if campaign.reward_type == 'coupon' %}{% if campaign.coupon_type == 'percent' %}{{ campaign.coupon_value|floatformat:0|fa_number }}٪{% if campaign.coupon_max_discount %} (حداکثر {{ campaign.coupon_max_discount|toman }}){% endif %}{% elif campaign.coupon_type == 'fixed' %}{{ campaign.coupon_value|toman }}{% else %}ارسال رایگان{% endif %}{% else %}فقط اطلاع‌رسانی{% endif %}</b></div>
+    <div>کد: <b>{% if campaign.personalized %}اختصاصیِ هر مشتری{% else %}مشترک{% endif %}</b> · انقضا: <b>{% if campaign.code_expires_at %}{{ campaign.code_expires_at|jalali }}{% elif campaign.code_valid_days %}{{ campaign.code_valid_days|fa_number }} روز پس از صدور{% else %}—{% endif %}</b></div>
+    <div>سقفِ کلِ استفاده: <b>{{ campaign.total_redemption_limit|default_if_none:"نامحدود" }}</b> · هر مشتری: <b>{{ campaign.per_customer_limit|default_if_none:"نامحدود" }}</b></div>
+    <div>کانال‌ها: <b>{% if campaign.channels %}{{ campaign.channels|join:"، " }}{% else %}همه‌ی کانال‌هایِ فعال{% endif %}</b></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head"><h3>اجراهای اخیر</h3></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>زمان</th><th>محرک</th><th>مشمول</th><th>صادرشده</th><th>قبلاً صادر</th><th>خطا</th></tr></thead>
+    <tbody>
+    {% for run in runs %}<tr><td>{{ run.started_at|jalali:"%Y/%m/%d %H:%M" }}</td><td>{{ run.get_trigger_display }}</td><td>{{ run.eligible|fa_number }}</td><td>{{ run.issued|fa_number }}</td><td>{{ run.skipped_existing|fa_number }}</td><td>{{ run.errors|fa_number }}{% if run.error_text %} <small title="{{ run.error_text }}">⚠</small>{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">هنوز اجرایی ثبت نشده</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</div>
+
+{% elif tab == 'issued' %}
+<div class="card"><div class="table-wrap"><table>
+  <thead><tr><th>مشتری</th><th>کد</th><th>چرخه</th><th>وضعیتِ کد</th><th>اعلان‌ها</th><th>زمان</th></tr></thead>
+  <tbody>
+  {% for i in page %}
+  <tr>
+    <td><a href="{% url 'dashboard:customer-detail' i.customer_id %}">{{ i.customer.full_name }}</a></td>
+    <td dir="ltr"><b>{{ i.coupon.code|default:"—" }}</b></td>
+    <td dir="ltr">{{ i.cycle_key }}</td>
+    <td>{% if i.coupon %}{% if not i.coupon.is_active %}غیرفعال{% elif i.coupon.used_count %}استفاده‌شده{% else %}استفاده‌نشده{% endif %}{% endif %}</td>
+    <td>{% for n in i.notes %}<span class="badge {% if n.status == 'sent' %}b-green{% elif n.status == 'skipped' %}b-amber{% elif n.status == 'pending' %}b-amber{% else %}b-red{% endif %}" title="{{ n.skip_reason }}{{ n.last_error }}">{{ n.get_channel_display }}: {{ n.get_status_display }}</span> {% empty %}—{% endfor %}</td>
+    <td>{{ i.created_at|jalali }}</td>
+  </tr>
+  {% empty %}<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:30px">هنوز کدی صادر نشده</td></tr>{% endfor %}
+  </tbody>
+</table></div></div>
+{% include "dashboard/partials/pager.html" with page=page %}
+
+{% else %}
+<div class="card"><div class="table-wrap"><table>
+  <thead><tr><th>کد</th><th>سفارش</th><th>مشتری</th><th>تخفیف</th><th>وضعیت</th><th>زمان</th></tr></thead>
+  <tbody>
+  {% for r in page %}
+  <tr>
+    <td dir="ltr"><b>{{ r.coupon.code }}</b></td>
+    <td><a href="{% url 'dashboard:order-detail' r.order.code %}" dir="ltr">{{ r.order.code }}</a></td>
+    <td>{{ r.customer.full_name }}</td>
+    <td>{{ r.discount_amount|toman }}</td>
+    <td>{{ r.get_status_display }}{% if r.release_reason %} <small>({{ r.release_reason }})</small>{% endif %}</td>
+    <td>{{ r.created_at|jalali }}</td>
+  </tr>
+  {% empty %}<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:30px">هنوز استفاده‌ای ثبت نشده</td></tr>{% endfor %}
+  </tbody>
+</table></div></div>
+{% include "dashboard/partials/pager.html" with page=page %}
+{% endif %}
+{% endblock %}

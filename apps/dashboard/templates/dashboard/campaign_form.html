@@ -1,0 +1,112 @@
+{% extends "dashboard/base_admin.html" %}
+{% load static persian %}
+{% block title %}{% if campaign %}ویرایش کمپین{% else %}کمپین جدید{% endif %} | پنل مدیریت{% endblock %}
+{% block page_title %}{% if campaign %}ویرایش «{{ campaign.name }}»{% else %}{% if request.GET.kind == 'occasions' %}مناسبتِ جدید{% else %}کمپینِ جدید{% endif %}{% endif %}{% endblock %}
+{% block page_sub %}قواعد، پاداش، محدودیت‌ها و اطلاع‌رسانی را تعریف کنید — بدونِ کدنویسی{% endblock %}
+{% block content %}
+{% if not editable %}<div class="card" role="alert" style="border:2px solid #f59e0b"><div class="card-body">کمپینِ فعال قابلِ ویرایش نیست؛ ابتدا آن را متوقف کنید.</div></div>{% else %}
+<form method="post" class="form-card" novalidate x-data="{ trigger: '{{ form.trigger_type.value|default:'manual' }}', period: '{{ form.period_mode.value|default:'none' }}', reward: '{{ form.reward_type.value|default:'coupon' }}', occ: '{{ form.occasion_kind.value|default:'' }}' }">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="card" role="alert" style="border:2px solid var(--red,#dc2626);margin-bottom:12px"><div class="card-body">{% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}</div></div>{% endif %}
+
+  <fieldset class="card" style="margin-bottom:14px"><legend class="card-head" style="padding:10px 18px"><b>۱. مشخصات</b></legend><div class="card-body">
+    {% include "dashboard/partials/field.html" with f=form.name %}
+    {% include "dashboard/partials/field.html" with f=form.description %}
+    <div class="field-group"><label class="field-label" for="id_trigger_type">نوعِ اجرا</label>
+      <select name="trigger_type" id="id_trigger_type" class="inp" x-model="trigger">
+        {% for value, label in form.trigger_type.field.choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+      </select>
+      <small style="color:var(--muted)">دستی: با دکمه‌ی «اجرا» · زمان‌بندی‌شده: job دوره‌ای · رویداد: پس از هر پرداختِ موفق برایِ همان مشتری · مناسبت: تولد/سالگرد/…</small>
+    </div>
+  </div></fieldset>
+
+  <fieldset class="card" style="margin-bottom:14px" x-show="trigger === 'occasion'" x-cloak><legend class="card-head" style="padding:10px 18px"><b>مناسبت</b></legend><div class="card-body">
+    <div class="field-group"><label class="field-label" for="id_occasion_kind">نوعِ مناسبت</label>
+      <select name="occasion_kind" id="id_occasion_kind" class="inp" x-model="occ">
+        {% for value, label in form.occasion_kind.field.choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+      </select>{% for err in form.occasion_kind.errors %}<div class="coup-err">{{ err }}</div>{% endfor %}</div>
+    {% include "dashboard/partials/field.html" with f=form.occasion_name help="در پیام‌ها به‌صورتِ {occasion_name} نمایش داده می‌شود." %}
+    {% include "dashboard/partials/field.html" with f=form.occasion_offset_days help="منفی = پیش از مناسبت (مثلاً -3 = سه روز قبل)، ۰ = همان روز، مثبت = پس از آن." %}
+    <div x-show="occ === 'order_milestone'">{% include "dashboard/partials/field.html" with f=form.occ_n %}</div>
+    <div x-show="occ === 'spending_milestone'">{% include "dashboard/partials/field.html" with f=form.occ_amount %}</div>
+    <div x-show="occ === 'reactivation'">{% include "dashboard/partials/field.html" with f=form.occ_days %}</div>
+    <div x-show="occ === 'holiday'">{% include "dashboard/partials/field.html" with f=form.occ_month help="ماه شمسی ۱ تا ۱۲" %}{% include "dashboard/partials/field.html" with f=form.occ_day %}</div>
+    <div x-show="occ === 'custom_date'">{% include "dashboard/partials/field.html" with f=form.occ_date %}</div>
+    <small style="color:var(--muted)">سیاستِ تولدِ ۳۰ اسفند در سالِ غیرکبیسه: ۲۹ اسفند. پاداشِ هر مناسبتِ سالانه در هر سالِ شمسی فقط یک‌بار صادر می‌شود.</small>
+  </div></fieldset>
+
+  <fieldset class="card" style="margin-bottom:14px"><legend class="card-head" style="padding:10px 18px"><b>۲. بازه‌ی خرید و دامنه‌ی ارزیابی</b></legend><div class="card-body">
+    <div class="field-group"><label class="field-label" for="id_period_mode">بازه‌ی خرید</label>
+      <select name="period_mode" id="id_period_mode" class="inp" x-model="period">
+        {% for value, label in form.period_mode.field.choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+      </select></div>
+    <div x-show="period === 'jalali_months'" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+      {% include "dashboard/partials/field.html" with f=form.period_jalali_year %}
+      <div class="field-group"><label class="field-label" for="id_period_start_month">از ماه</label>
+        <select name="period_start_month" id="id_period_start_month" class="inp"><option value="">—</option>{% for n, name in months %}<option value="{{ n }}" {% if form.period_start_month.value|stringformat:"s" == n|stringformat:"s" %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></div>
+      <div class="field-group"><label class="field-label" for="id_period_end_month">تا ماه (کاملِ ماه شاملِ بازه است)</label>
+        <select name="period_end_month" id="id_period_end_month" class="inp"><option value="">—</option>{% for n, name in months %}<option value="{{ n }}" {% if form.period_end_month.value|stringformat:"s" == n|stringformat:"s" %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></div>
+    </div>
+    <div x-show="period === 'dates'" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
+      {% include "dashboard/partials/field.html" with f=form.period_start_date %}
+      {% include "dashboard/partials/field.html" with f=form.period_end_date %}
+    </div>
+    <small style="color:var(--muted)">بازه به‌وقتِ منطقه‌ی زمانیِ فروشگاه و شاملِ کلِ روزِ اول تا پایانِ روزِ آخر است.</small>
+    {% include "dashboard/partials/field.html" with f=form.rule_scope %}
+    {% include "dashboard/partials/field.html" with f=form.amount_basis %}
+    <div class="field-group"><label class="field-label">وضعیت‌هایِ پرداختِ «معتبر» برایِ محاسبه‌ی فاکتورها</label>{{ form.valid_payment_statuses }}<small style="color:var(--muted)">سفارش‌هایِ لغوشده همیشه حذف می‌شوند.</small></div>
+  </div></fieldset>
+
+  <fieldset class="card" style="margin-bottom:14px"><legend class="card-head" style="padding:10px 18px"><b>۳. قواعدِ شمول</b></legend><div class="card-body">
+    <p style="font-size:12.5px;color:var(--muted)">گروه‌ها را با «و/یا» و شرط‌هایِ مشتری، سفارش و کالا بسازید. خالی = همه‌ی مشتریانِ فروشگاه.</p>
+    <div id="rule-builder" aria-label="سازنده‌ی قواعد"></div>
+    <input type="hidden" name="rules_json" id="id_rules_json" value="{{ form.rules_json.value|default:'{}' }}">
+    {% for err in form.rules_json.errors %}<div class="coup-err">{{ err }}</div>{% endfor %}
+  </div></fieldset>
+
+  <fieldset class="card" style="margin-bottom:14px"><legend class="card-head" style="padding:10px 18px"><b>۴. پاداش</b></legend><div class="card-body">
+    <div class="field-group"><label class="field-label" for="id_reward_type">پاداش</label>
+      <select name="reward_type" id="id_reward_type" class="inp" x-model="reward">
+        {% for value, label in form.reward_type.field.choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+      </select></div>
+    <div x-show="reward === 'coupon'">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
+        {% include "dashboard/partials/field.html" with f=form.coupon_type %}
+        {% include "dashboard/partials/field.html" with f=form.coupon_value help="درصد (۱–۱۰۰) یا مبلغ به تومان" %}
+        {% include "dashboard/partials/field.html" with f=form.coupon_max_discount help="سقفِ مبلغِ تخفیف برایِ تخفیفِ درصدی (تومان)" %}
+        {% include "dashboard/partials/field.html" with f=form.coupon_min_order %}
+        {% include "dashboard/partials/field.html" with f=form.code_prefix %}
+        {% include "dashboard/partials/field.html" with f=form.code_starts_at help="تاریخِ فعال‌سازیِ کد (خالی = از لحظه‌ی صدور)" %}
+        {% include "dashboard/partials/field.html" with f=form.code_expires_at help="انقضایِ ثابت؛ یا مدتِ اعتبار پس از صدور:" %}
+        {% include "dashboard/partials/field.html" with f=form.code_valid_days %}
+        {% include "dashboard/partials/field.html" with f=form.total_redemption_limit help="سقفِ کلِ استفاده از هر کد" %}
+        {% include "dashboard/partials/field.html" with f=form.per_customer_limit %}
+        {% include "dashboard/partials/field.html" with f=form.max_issuances help="حداکثر تعدادِ کدِ قابلِ صدور؛ پس از آن کمپین «تکمیل‌شده» می‌شود." %}
+      </div>
+      <label style="display:block;margin:6px 0"><input type="checkbox" name="personalized" {% if form.personalized.value %}checked{% endif %}> کدِ اختصاصیِ هر مشتری (فقط خودِ او می‌تواند استفاده کند)</label>
+      <label style="display:block;margin:6px 0"><input type="checkbox" name="coupon_applies_to_gift_wrap" {% if form.coupon_applies_to_gift_wrap.value %}checked{% endif %}> تخفیف روی هزینه‌ی کادوپیچی هم اعمال شود</label>
+    </div>
+  </div></fieldset>
+
+  <fieldset class="card" style="margin-bottom:14px"><legend class="card-head" style="padding:10px 18px"><b>۵. اطلاع‌رسانی</b></legend><div class="card-body">
+    <div class="field-group"><label class="field-label">کانال‌ها</label>{{ form.channels }}<small style="color:var(--muted)">پیام‌هایِ تبلیغاتی فقط برایِ مشتریانِ موافق ارسال می‌شود. خالی = همه‌ی کانال‌هایِ فعالِ قالبِ رویداد.</small></div>
+    {% include "dashboard/partials/field.html" with f=form.custom_sms_body help="اختیاری؛ جایگزینِ قالبِ پیش‌فرض برایِ همین کمپین. متغیرها: {customer_name} {store_name} {discount_code} {discount_amount} {discount_expires_at} {campaign_name} {occasion_name}" %}
+    {% include "dashboard/partials/field.html" with f=form.custom_email_subject %}
+    {% include "dashboard/partials/field.html" with f=form.custom_email_body %}
+    {% include "dashboard/partials/field.html" with f=form.reminder_days_before_expiry help="چند روز مانده به انقضا یادآوری ارسال شود (اختیاری)" %}
+  </div></fieldset>
+
+  <fieldset class="card" style="margin-bottom:14px"><legend class="card-head" style="padding:10px 18px"><b>۶. زمانِ فعالیت</b></legend><div class="card-body" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
+    {% include "dashboard/partials/field.html" with f=form.active_from help="خالی = بلافاصله پس از فعال‌سازی" %}
+    {% include "dashboard/partials/field.html" with f=form.active_until help="پس از این تاریخ کمپین «منقضی» می‌شود" %}
+  </div></fieldset>
+
+  <div class="btn-row">
+    <button type="submit" class="btn btn-primary">ذخیره</button>
+    <a class="btn btn-secondary" href="{% if campaign %}{% url 'dashboard:campaign-detail' campaign.pk %}{% else %}{% url 'dashboard:campaign-list' %}{% endif %}">انصراف</a>
+  </div>
+</form>
+{{ schema_json|json_script:"rule-schema" }}
+{% endif %}
+{% endblock %}
+{% block extra_js %}<script src="{% static 'js/rule_builder.js' %}" defer></script>{% endblock %}

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
@@ -35,6 +36,7 @@ from apps.notifications.services import template_service
 
 logger = logging.getLogger(__name__)
 S = NotificationOutbox.Status
+_PHONE_LIKE = re.compile(r"^[\d+\-()\s۰-۹٠-٩]+$")
 
 
 def _full_dedupe(store, event_key, dedupe_key, channel, recipient) -> str:
@@ -62,6 +64,9 @@ def _clean_recipient(channel: str, value: str):
 
 def _staff_recipients(store, channel: str, extra: str) -> list[str]:
     values = [line.strip() for line in (extra or "").replace(",", "\n").splitlines() if line.strip()]
+    # هر خط فقط به کانالِ مربوطه می‌رود: شماره → پیامک، هر چیزِ دیگر → ایمیل
+    looks_phone = [bool(_PHONE_LIKE.match(v)) for v in values]
+    values = [v for v, is_phone in zip(values, looks_phone) if is_phone == (channel == ev.SMS)]
     if channel == ev.EMAIL:
         from apps.stores.models import StoreMembership
 
