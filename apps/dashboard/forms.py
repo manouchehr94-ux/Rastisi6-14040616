@@ -581,7 +581,7 @@ class GiftWrapSettingsForm(NumericCleanMixin, forms.Form):
         label="هزینه‌ی کادوپیچی (تومان؛ ۰ = رایگان)", widget=forms.TextInput(attrs={"class": "inp"})
     )
     gift_wrap_pricing_scope = forms.ChoiceField(
-        label="مبنای محاسبه‌ی هزینه", choices=ShopSettings.GiftWrapScope.choices,
+        label="مبنای محاسبه‌ی هزینه", choices=ShopSettings.GiftWrapScope.choices, required=False,
         initial=ShopSettings.GiftWrapScope.PER_UNIT, widget=forms.Select(attrs={"class": "inp"}),
     )
     gift_wrap_title = forms.CharField(

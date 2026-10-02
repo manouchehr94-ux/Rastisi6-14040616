@@ -4349,14 +4349,15 @@ def settings_gift_wrap(request):
         cd = form.cleaned_data
         shop.gift_wrap_available = cd["gift_wrap_available"]
         shop.gift_wrap_price = cd["gift_wrap_price"]
-        shop.gift_wrap_pricing_scope = cd["gift_wrap_pricing_scope"]
-        shop.gift_wrap_title = cd["gift_wrap_title"]
-        shop.gift_wrap_description = cd["gift_wrap_description"]
-        shop.gift_wrap_message_enabled = cd["gift_wrap_message_enabled"]
-        fields = [
-            "gift_wrap_available", "gift_wrap_price", "gift_wrap_pricing_scope", "gift_wrap_title",
-            "gift_wrap_description", "gift_wrap_message_enabled", "updated_at",
-        ]
+        fields = ["gift_wrap_available", "gift_wrap_price", "updated_at"]
+        # فیلدهایِ جدید فقط وقتی اعمال می‌شوند که فرمِ کامل ارسال شده باشد؛ یک POSTِ
+        # قدیمی (فقط فعال/قیمت) عنوان/مبنا/پیام را تغییر نمی‌دهد (سازگاریِ عقب‌رو).
+        if cd.get("gift_wrap_pricing_scope"):
+            shop.gift_wrap_pricing_scope = cd["gift_wrap_pricing_scope"]
+            shop.gift_wrap_title = cd["gift_wrap_title"]
+            shop.gift_wrap_description = cd["gift_wrap_description"]
+            shop.gift_wrap_message_enabled = cd["gift_wrap_message_enabled"]
+            fields += ["gift_wrap_pricing_scope", "gift_wrap_title", "gift_wrap_description", "gift_wrap_message_enabled"]
         if cd.get("gift_wrap_image"):
             shop.gift_wrap_image = cd["gift_wrap_image"]
             fields.append("gift_wrap_image")
