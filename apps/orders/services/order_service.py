@@ -19,7 +19,12 @@ from apps.catalog.services.reservation_service import (
 from apps.core.services.audit_service import record_audit_event
 from apps.core.utils import format_toman
 from apps.orders.models import Order, OrderItem, OrderStatusHistory
+from apps.notifications.services import business_events
 from apps.orders.services import shipping_service
+from apps.orders.services.coupon_redemption_service import (
+    CouponUnavailableError, lock_coupon, release_redemption, reserve_redemption,
+)
+from apps.orders.services.item_snapshot_service import build_item_snapshot
 from apps.sms.events import SmsEvent
 from apps.sms.services.sms_service import send_event_sms
 
@@ -206,6 +211,11 @@ def create_order_from_cart(
 
     locked_products, locked_variants = _lock_and_revalidate_items(items, store=store)
 
+    if coupon is not None:
+        # قفلِ ردیفِ کد تا دو سفارشِ همزمانِ یک کد سریال شوند (Postgres)؛ سقفِ کل
+        # علاوه بر این با compare-and-set اتمیک در reserve_redemption تضمین می‌شود.
+        coupon = lock_coupon(coupon.pk)
+
     province = address.province if address is not None else ""
     city = address.city if address is not None else ""
     postal_code = address.postal_code if address is not None else ""
@@ -224,7 +234,10 @@ def create_order_from_cart(
     totals = cart_totals(
         cart, store=store, coupon=coupon, shipping_method=shipping_method,
         province=province, city=city, postal_code=postal_code,
+        customer=customer, payment_gateway=payment_gateway,
     )
+    coupon_applied = totals["coupon_applied"]
+    gift_wrap_active = totals["gift_wrap_allocations"]
     tax_lines_by_item = {line["item_ref"]: line for line in totals["tax_lines"]}
     shipping_zone = totals["shipping_zone"]
     shipping_rate_rule = totals["shipping_rate_rule"]
@@ -240,7 +253,7 @@ def create_order_from_cart(
                 address=_snapshot_address(address),
                 shipping_method=shipping_method,
                 payment_gateway=payment_gateway,
-                coupon=coupon,
+                coupon=coupon if coupon_applied else None,
                 items_total=totals["items_total"],
                 product_discount=totals["product_discount"],
                 coupon_discount=totals["coupon_discount"],
@@ -265,6 +278,9 @@ def create_order_from_cart(
                 prices_include_tax=totals["prices_include_tax"],
                 tax_rounding_policy=totals["tax_rounding_policy"],
                 shipping_tax=totals["shipping_tax"],
+                gift_wrap_total=totals["gift_wrap_total"],
+                gift_wrap_discount=totals["gift_wrap_discount"],
+                gift_wrap_scope=totals["gift_wrap_scope"] if totals["gift_wrap_total"] else "",
             )
     except IntegrityError:
         if idempotency_key:
@@ -291,7 +307,7 @@ def create_order_from_cart(
             quantity=item.quantity,
             unit_price=unit_price,
             line_total=unit_price * item.quantity,
-            discount_allocation=tax_line.get("discount_allocation", 0) or 0,
+            discount_allocation=totals["coupon_allocations"].get(item.pk, 0) or 0,
             taxable_amount=tax_line.get("taxable_amount", 0) or 0,
             tax_class_code=tax_line.get("tax_class_code", ""),
             tax_class_name=tax_line.get("tax_class_name", ""),
@@ -302,8 +318,13 @@ def create_order_from_cart(
             # دوباره‌ی ShopSettings) تا اگر مدیر بین افزودن به سبد و ثبتِ
             # سفارش قیمتِ کادوپیچی را تغییر دهد، این ردیفِ تاریخی دست‌نخورده
             # بماند — دقیقاً همان استدلالِ unit_price بالا.
-            gift_wrap_selected=item.gift_wrap_selected,
-            gift_wrap_unit_price=item.gift_wrap_unit_price,
+            # فقط وقتی کادوپیچی «مؤثر» است (انتخاب‌شده و هنوز مجاز) ثبت می‌شود —
+            # همان تصمیمی که cart_totals برایِ مبلغِ سفارش گرفته.
+            gift_wrap_selected=item.pk in gift_wrap_active,
+            gift_wrap_unit_price=item.gift_wrap_unit_price if item.pk in gift_wrap_active else 0,
+            gift_wrap_option_code=item.gift_wrap_option_code if item.pk in gift_wrap_active else "",
+            gift_message=item.gift_message if item.pk in gift_wrap_active else "",
+            attributes_snapshot=build_item_snapshot(product, variant),
         )
         # با قفلِ قبلی (_lock_and_revalidate_items)، شکستِ رزرو/مصرف عملاً
         # نباید پیش بیاید — reserve_inventory همچنان دوباره (به‌صورت اتمیک،
@@ -332,15 +353,20 @@ def create_order_from_cart(
         order=order, from_status="", to_status=order.status, note="سفارش ثبت شد"
     )
 
-    if coupon is not None and totals["coupon_applied"]:
-        coupon.used_count += 1
-        coupon.save(update_fields=["used_count"])
+    if coupon is not None and coupon_applied:
+        try:
+            reserve_redemption(
+                coupon=coupon, order=order, customer=customer, discount_amount=totals["coupon_discount"],
+            )
+        except CouponUnavailableError as exc:
+            raise ValueError(str(exc)) from exc
 
     transaction.on_commit(
         lambda: send_event_sms(
             SmsEvent.ORDER_PLACED, order.customer.phone, _order_sms_context(order), store=store
         )
     )
+    business_events.order_created(order)
 
     return order
 
@@ -381,6 +407,7 @@ def change_order_status(
         # بدونِ گذارِ خروجی است، پس این مسیر برای هر سفارش حداکثر یک‌بار اجرا
         # می‌شود.
         restock_order(store=store, order=order, actor=by)
+        release_redemption(order, reason="order_canceled")
         record_audit_event(
             store=store, actor=by, action_code="order.cancelled",
             object_type="Order", object_id=order.pk, object_label=order.code,
@@ -390,6 +417,8 @@ def change_order_status(
     OrderStatusHistory.objects.create(
         order=order, from_status=from_status, to_status=to_status, changed_by=by, note=note
     )
+
+    business_events.order_status_changed(order, to_status)
 
     sms_event = STATUS_SMS_EVENTS.get(to_status)
     if sms_event:

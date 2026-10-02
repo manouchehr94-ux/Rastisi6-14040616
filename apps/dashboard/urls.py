@@ -4,7 +4,7 @@ from apps.storefront_builder import media_views as storefront_builder_media_view
 from apps.storefront_builder import r4_views as storefront_builder_r4_views
 from apps.storefront_builder import views as storefront_builder_views
 
-from . import views
+from . import engagement_views, views
 
 app_name = "dashboard"
 
@@ -180,6 +180,8 @@ urlpatterns = [
     path("settings/industry/update/history/", views.settings_industry_update_history, name="settings-industry-update-history"),
     path("settings/finance/", views.settings_finance, name="settings-finance"),
     path("settings/gift-wrap/", views.settings_gift_wrap, name="settings-gift-wrap"),
+    path("settings/gift-wrap/products/", engagement_views.gift_wrap_products, name="gift-wrap-products"),
+    path("settings/gift-wrap/products/<int:pk>/", engagement_views.gift_wrap_product_update, name="gift-wrap-product-update"),
     path("settings/appearance/", views.settings_appearance, name="settings-appearance"),
     path("settings/gateways/<int:pk>/toggle/", views.settings_gateway_toggle, name="settings-gateway-toggle"),
     path("settings/shipping/<int:pk>/toggle/", views.settings_shipping_toggle, name="settings-shipping-toggle"),

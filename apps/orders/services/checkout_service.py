@@ -13,7 +13,7 @@ from decimal import Decimal
 from django.db import transaction
 
 from apps.cart.models import Coupon
-from apps.cart.services.pricing import cart_totals, coupon_is_applicable
+from apps.cart.services.pricing import cart_totals
 from apps.catalog.services.pricing_service import resolve_regular_price
 from apps.customers.models import Address
 from apps.orders.models import Order, PaymentGateway
@@ -41,9 +41,28 @@ EMPTY_TOTALS = {
     "tax_lines": [],
     "prices_include_tax": False,
     "tax_rounding_policy": "",
+    "gift_wrap_total": Decimal("0"),
+    "gift_wrap_discount": Decimal("0"),
     "grand_total": Decimal("0"),
     "coupon_applied": False,
+    "coupon_error_code": "",
+    "coupon_error_message": "",
 }
+
+
+def _request_customer(request):
+    """مشتریِ واردشده (یا ``None`` برایِ مهمان) — برایِ بررسیِ مالکیتِ کدهایِ اختصاصی."""
+    user = getattr(request, "user", None)
+    if user is None or not user.is_authenticated:
+        return None
+    return getattr(user, "customer_profile", None)
+
+
+#: دلیل‌هایی که پیامِ عمومیِ «نامعتبر/منقضی» نشان می‌دهند — برایِ کدِ اختصاصیِ
+#: مشتریِ دیگر هم همین پیام می‌آید تا وجودِ کد لو نرود.
+_GENERIC_COUPON_REASONS = frozenset({
+    "inactive", "not_started", "expired", "wrong_customer",
+})
 
 
 def _state(request) -> dict:
@@ -148,8 +167,12 @@ def get_applied_coupon(request, cart):
         return None
     store = resolve_store_for_service(request)
     coupon = Coupon.objects.filter(code=code, store=store).first()
-    totals = cart_totals(cart, store=store)
-    if coupon is None or not coupon_is_applicable(coupon, totals["items_total"]):
+    if coupon is not None:
+        totals = cart_totals(
+            cart, store=store, coupon=coupon, customer=_request_customer(request),
+            payment_gateway=get_selected_payment_gateway(request),
+        )
+    if coupon is None or not totals["coupon_applied"]:
         _state(request).pop("coupon_code", None)
         request.session.modified = True
         return None
@@ -162,9 +185,16 @@ def apply_coupon(request, cart, code: str) -> tuple[bool, str]:
         return False, "لطفاً کد تخفیف را وارد کنید"
     store = resolve_store_for_service(request)
     coupon = Coupon.objects.filter(code=code, store=store).first()
-    totals = cart_totals(cart, store=store)
-    if coupon is None or not coupon_is_applicable(coupon, totals["items_total"]):
+    if coupon is None:
         return False, "کد تخفیف نامعتبر است یا منقضی شده"
+    totals = cart_totals(
+        cart, store=store, coupon=coupon, customer=_request_customer(request),
+        payment_gateway=get_selected_payment_gateway(request),
+    )
+    if not totals["coupon_applied"]:
+        if totals["coupon_error_code"] in _GENERIC_COUPON_REASONS:
+            return False, "کد تخفیف نامعتبر است یا منقضی شده"
+        return False, totals["coupon_error_message"]
     _state(request)["coupon_code"] = coupon.code
     request.session.modified = True
     label = coupon.label or coupon.get_type_display()
@@ -275,6 +305,7 @@ def build_context(request, cart) -> dict:
         totals = cart_totals(
             cart, store=resolve_store_for_service(request), coupon=coupon, shipping_method=selected_shipping,
             province=address.get("province", ""), city=address.get("city", ""), postal_code=address.get("postal_code", ""),
+            customer=_request_customer(request), payment_gateway=selected_payment,
         )
         cart_items = list(cart.items.select_related("product", "variant").all())
         for item in cart_items:

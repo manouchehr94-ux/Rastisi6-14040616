@@ -52,6 +52,21 @@
   </div>
 </div>
 
+{% if order.gift_wrap_total or gift_wrap_items %}
+<div class="card" style="margin-bottom:16px;border:2px solid #f59e0b" role="note" aria-label="دستورالعمل کادوپیچی">
+  <div class="card-head"><h3>🎁 دستورالعمل کادوپیچی (برای انبار/بسته‌بندی)</h3></div>
+  <div class="card-body">
+    <ul style="margin:0;padding-inline-start:18px;display:grid;gap:6px">
+      {% for item in items %}{% if item.gift_wrap_selected %}
+      <li><b>{{ item.product_name }}</b>{% if item.variant_label %} — {{ item.variant_label }}{% endif %} × {{ item.quantity|fa_number }}
+        {% if item.gift_message %}<div style="margin-top:2px;padding:6px 10px;background:#fffbeb;border-radius:8px">✉️ پیام کارت: «{{ item.gift_message }}»</div>{% endif %}</li>
+      {% endif %}{% endfor %}
+    </ul>
+    <small style="color:var(--muted)">هزینه‌ی کادوپیچی: {{ order.gift_wrap_total|toman }}{% if order.gift_wrap_scope %} · مبنا: {{ order.gift_wrap_scope }}{% endif %}</small>
+  </div>
+</div>
+{% endif %}
+
 <div class="card" style="margin-bottom:16px">
   <div class="card-head"><h3>اقلام سفارش</h3></div>
   <div class="table-wrap"><table>
@@ -65,6 +80,7 @@
             <div>
               <b>{{ item.product_name }}</b>
               {% if item.variant_label %}<div style="font-size:11.5px;color:var(--muted)">{{ item.variant_label }}</div>{% endif %}
+              {% if item.gift_wrap_selected %}<div style="font-size:11.5px;color:#b45309">🎁 کادوپیچی{% if item.gift_message %} — «{{ item.gift_message }}»{% endif %}</div>{% endif %}
             </div>
           </div>
         </td>
@@ -80,6 +96,8 @@
       <div class="tot-row"><span>جمع کالاها:</span><span>{{ order.items_total|toman }}</span></div>
       {% if order.product_discount %}<div class="tot-row"><span>تخفیف کالاها:</span><span style="color:var(--red)">−{{ order.product_discount|toman }}</span></div>{% endif %}
       {% if order.coupon_discount %}<div class="tot-row"><span>تخفیف کد تخفیف:</span><span style="color:var(--red)">−{{ order.coupon_discount|toman }}</span></div>{% endif %}
+      {% if order.gift_wrap_total %}<div class="tot-row"><span>🎁 کادوپیچی:</span><span>{{ order.gift_wrap_total|toman }}</span></div>{% endif %}
+      {% if order.gift_wrap_discount %}<div class="tot-row"><span>(از تخفیف بالا، روی کادوپیچی):</span><span style="color:var(--red)">−{{ order.gift_wrap_discount|toman }}</span></div>{% endif %}
       <div class="tot-row"><span>هزینه‌ی ارسال:</span><span>{% if order.shipping_cost %}{{ order.shipping_cost|toman }}{% else %}رایگان{% endif %}</span></div>
       <div class="tot-row"><span>مالیات:</span><span>{{ order.tax|toman }}</span></div>
       <div class="tot-row grand"><span>مبلغ نهایی:</span><span style="color:var(--primary)">{{ order.grand_total|toman }}</span></div>

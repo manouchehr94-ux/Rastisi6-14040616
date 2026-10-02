@@ -20,6 +20,7 @@ from django.utils.crypto import get_random_string
 from apps.cart.models import Cart
 from apps.core.phone import InvalidPhoneError, normalize_iranian_phone
 from apps.customers.models import Customer
+from apps.notifications.services import business_events
 from apps.sms.events import SmsEvent
 from apps.sms.services.sms_service import send_event_sms
 
@@ -51,6 +52,7 @@ def signup(*, full_name: str, phone: str, password: str, store) -> Customer:
     transaction.on_commit(
         lambda: send_event_sms(SmsEvent.WELCOME, phone, {"customer_name": full_name}, store=store)
     )
+    business_events.account_registered(customer, store)
     return customer
 
 
@@ -69,6 +71,7 @@ def create_account_for_guest(*, full_name: str, phone: str, store) -> Customer:
     transaction.on_commit(
         lambda: send_event_sms(SmsEvent.WELCOME, phone, {"customer_name": full_name}, store=store)
     )
+    business_events.account_registered(customer, store)
     return customer
 
 

@@ -5,7 +5,9 @@
 from django.db import transaction
 
 from apps.cart.models import Cart, CartItem
-from apps.cart.services.gift_wrap_service import resolve_gift_wrap_selection
+from apps.cart.services.gift_wrap_service import (
+    DEFAULT_OPTION_CODE, clean_gift_message, resolve_gift_wrap_selection,
+)
 from apps.catalog.models import Product, ProductVariant
 from apps.catalog.services.pricing_service import resolve_effective_price
 
@@ -60,7 +62,7 @@ def get_cart(request, create=False):
     return Cart.objects.filter(session_key=session_key, customer=None).first()
 
 
-def add_item_to_cart(cart, product, variant, quantity, *, gift_wrap_requested=False):
+def add_item_to_cart(cart, product, variant, quantity, *, gift_wrap_requested=False, gift_message=""):
     """محصول (و در صورت وجود، تنوع) را به سبد اضافه می‌کند یا تعداد را افزایش می‌دهد.
 
     قیمتِ واحد همیشه از ``pricing_service.resolve_effective_price`` محاسبه
@@ -118,8 +120,9 @@ def add_item_to_cart(cart, product, variant, quantity, *, gift_wrap_requested=Fa
 
         unit_price = resolve_effective_price(product, variant)
         gift_wrap_selected, gift_wrap_unit_price = resolve_gift_wrap_selection(
-            product.store, requested=gift_wrap_requested,
+            product.store, requested=gift_wrap_requested, product=product,
         )
+        gift_message = clean_gift_message(gift_message, store=product.store) if gift_wrap_selected else ""
         if item:
             item.quantity = requested_total
             item.unit_price = unit_price
@@ -131,8 +134,11 @@ def add_item_to_cart(cart, product, variant, quantity, *, gift_wrap_requested=Fa
             if gift_wrap_requested:
                 item.gift_wrap_selected = gift_wrap_selected
                 item.gift_wrap_unit_price = gift_wrap_unit_price
+                item.gift_wrap_option_code = DEFAULT_OPTION_CODE if gift_wrap_selected else ""
+                item.gift_message = gift_message
                 item.save(update_fields=[
-                    "quantity", "unit_price", "gift_wrap_selected", "gift_wrap_unit_price", "updated_at",
+                    "quantity", "unit_price", "gift_wrap_selected", "gift_wrap_unit_price",
+                    "gift_wrap_option_code", "gift_message", "updated_at",
                 ])
             else:
                 item.save(update_fields=["quantity", "unit_price", "updated_at"])
@@ -140,5 +146,22 @@ def add_item_to_cart(cart, product, variant, quantity, *, gift_wrap_requested=Fa
             item = CartItem.objects.create(
                 cart=cart, product=product, variant=variant, quantity=quantity, unit_price=unit_price,
                 gift_wrap_selected=gift_wrap_selected, gift_wrap_unit_price=gift_wrap_unit_price,
+                gift_wrap_option_code=DEFAULT_OPTION_CODE if gift_wrap_selected else "",
+                gift_message=gift_message,
             )
         return item
+
+
+def set_item_gift_wrap(item, *, selected: bool, message: str = "") -> bool:
+    """انتخاب/لغوِ کادوپیچی (و پیامِ کارت) برایِ یک قلمِ موجود در سبد — همیشه با
+    پیکربندیِ واقعیِ Store/کالا تطبیق داده می‌شود (قیمت از سرور). نتیجه:
+    ``True`` اگر کادوپیچی در پایان روشن است."""
+    sel, price = resolve_gift_wrap_selection(item.product.store, requested=selected, product=item.product)
+    item.gift_wrap_selected = sel
+    item.gift_wrap_unit_price = price
+    item.gift_wrap_option_code = DEFAULT_OPTION_CODE if sel else ""
+    item.gift_message = clean_gift_message(message, store=item.product.store) if sel else ""
+    item.save(update_fields=[
+        "gift_wrap_selected", "gift_wrap_unit_price", "gift_wrap_option_code", "gift_message", "updated_at",
+    ])
+    return sel

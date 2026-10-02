@@ -418,6 +418,14 @@ class Order(TimeStampedModel):
     tax_rounding_policy = models.CharField("سیاستِ گردکردنِ مالیات (اسنپ‌شات)", max_length=20, blank=True, default="")
     shipping_tax = models.DecimalField("مالیاتِ ارسال", max_digits=12, decimal_places=0, default=0)
 
+    # --- کادوپیچی (اسنپ‌شاتِ سطحِ سفارش) — جدا از items_total نگه‌داری می‌شود.
+    # ``gift_wrap_total`` مبلغِ ناخالصِ هزینه‌ی کادوپیچی؛ ``gift_wrap_discount``
+    # سهمی از ``coupon_discount`` که روی کادوپیچی اعمال شده (فقط وقتی کد
+    # ``applies_to_gift_wrap`` داشته باشد).
+    gift_wrap_total = models.DecimalField("هزینه‌ی کادوپیچی", max_digits=12, decimal_places=0, default=0)
+    gift_wrap_discount = models.DecimalField("تخفیفِ اعمال‌شده روی کادوپیچی", max_digits=12, decimal_places=0, default=0)
+    gift_wrap_scope = models.CharField("مبنای محاسبه‌ی کادوپیچی (اسنپ‌شات)", max_length=10, blank=True, default="")
+
     note = models.TextField("توضیحات سفارش", blank=True)
     tracking_code = models.CharField("کد رهگیری مرسوله", max_length=60, blank=True)
 
@@ -501,6 +509,12 @@ class OrderItem(TimeStampedModel):
     gift_wrap_unit_price = models.DecimalField(
         "هزینه‌ی کادوپیچی (اسنپ‌شات)", max_digits=12, decimal_places=0, default=0,
     )
+
+    # اسنپ‌شاتِ تاریخیِ برند/دسته/رنگ/سایز/ویژگی‌ها در لحظه‌ی خرید — منبعِ
+    # حقیقتِ موتورِ قواعدِ کمپین؛ نگاه کنید به ``item_snapshot_service``.
+    attributes_snapshot = models.JSONField("اسنپ‌شاتِ ویژگی‌های کالا", default=dict, blank=True)
+    gift_wrap_option_code = models.CharField("گزینه‌ی کادوپیچی (اسنپ‌شات)", max_length=30, blank=True, default="")
+    gift_message = models.CharField("پیامِ کارت‌هدیه", max_length=200, blank=True, default="")
 
     class Meta:
         verbose_name = "قلم سفارش"
@@ -1000,6 +1014,8 @@ class RefundItem(TimeStampedModel):
     quantity = models.PositiveIntegerField("تعداد")
     amount = models.DecimalField("مبلغ", max_digits=14, decimal_places=0)
     tax_amount = models.DecimalField("مبلغِ مالیاتِ استردادشده", max_digits=14, decimal_places=0, default=0)
+    # سهمِ کادوپیچیِ این قلم (خالص از تخفیفِ کد) که در این استرداد برمی‌گردد.
+    gift_wrap_amount = models.DecimalField("مبلغِ کادوپیچیِ استردادشده", max_digits=14, decimal_places=0, default=0)
 
     class Meta:
         verbose_name = "قلمِ استرداد"
@@ -1167,3 +1183,48 @@ class ReturnItem(TimeStampedModel):
 
     def __str__(self):
         return f"{self.order_item.product_name} × {self.quantity_requested}"
+
+
+class CouponRedemption(TimeStampedModel):
+    """دفترِ استفاده از کدِ تخفیف — هر سفارش حداکثر یک ردیف دارد.
+
+    چرخه‌ی عمر: ``RESERVED`` (در لحظه‌ی ثبتِ سفارش) → ``REDEEMED`` (پرداختِ
+    موفق) → یا ``RELEASED`` (لغوِ سفارش / پرداختِ ناموفق؛ سهمیه به کد
+    برمی‌گردد). ``REFUNDED``: استردادِ کاملِ سفارشِ پرداخت‌شده؛ سهمیه
+    **برنمی‌گردد** (سیاستِ صریح: کدِ یک خریدِ تکمیل‌شده دوباره قابل‌استفاده
+    نیست). ردیف‌هایِ ``RESERVED``/``REDEEMED``/``REFUNDED`` در سقفِ کل و سقفِ
+    هر مشتری شمرده می‌شوند."""
+
+    class Status(models.TextChoices):
+        RESERVED = "reserved", "رزروشده"
+        REDEEMED = "redeemed", "مصرف‌شده"
+        RELEASED = "released", "آزادشده"
+        REFUNDED = "refunded", "مستردشده"
+
+    COUNTED_STATUSES = (Status.RESERVED, Status.REDEEMED, Status.REFUNDED)
+
+    coupon = models.ForeignKey(
+        "cart.Coupon", verbose_name="کد تخفیف", on_delete=models.PROTECT, related_name="redemptions",
+    )
+    order = models.OneToOneField(
+        Order, verbose_name="سفارش", on_delete=models.CASCADE, related_name="coupon_redemption",
+    )
+    customer = models.ForeignKey(
+        "customers.Customer", verbose_name="مشتری", on_delete=models.PROTECT, related_name="coupon_redemptions",
+    )
+    status = models.CharField("وضعیت", max_length=10, choices=Status.choices, default=Status.RESERVED, db_index=True)
+    discount_amount = models.DecimalField("مبلغِ تخفیف", max_digits=12, decimal_places=0, default=0)
+    redeemed_at = models.DateTimeField("زمانِ مصرف", null=True, blank=True)
+    released_at = models.DateTimeField("زمانِ آزادسازی", null=True, blank=True)
+    release_reason = models.CharField("دلیلِ آزادسازی", max_length=40, blank=True, default="")
+
+    class Meta:
+        verbose_name = "استفاده از کد تخفیف"
+        verbose_name_plural = "استفاده‌های کد تخفیف"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["coupon", "customer", "status"], name="idx_redemption_coupon_cust"),
+        ]
+
+    def __str__(self):
+        return f"{self.coupon.code} → {self.order.code} ({self.status})"

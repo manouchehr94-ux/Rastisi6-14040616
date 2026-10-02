@@ -327,6 +327,11 @@ def process_callback_and_verify(
         # Refresh order for downstream
         order.refresh_from_db()
 
+        from apps.notifications.services import business_events
+        from apps.orders.services.coupon_redemption_service import mark_redeemed
+        mark_redeemed(order)
+        business_events.payment_result(order, success=True)
+
         # Create a Transaction record for backwards compatibility with existing dashboard
         from apps.orders.services.payment_service import _generate_transaction_code
         Transaction.objects.create(

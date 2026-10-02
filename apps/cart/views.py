@@ -10,7 +10,8 @@ from apps.catalog.services.product_publish_service import storefront_visible_pro
 from apps.stores.resolution import resolve_store_for_service
 
 from .models import CartItem
-from .services.cart_service import UnavailableStockError, add_item_to_cart, get_cart
+from .services import gift_wrap_service
+from .services.cart_service import UnavailableStockError, add_item_to_cart, get_cart, set_item_gift_wrap
 from .services.pricing import cart_totals
 
 
@@ -22,6 +23,7 @@ def _cart_context(request, cart):
         }
         item_count = 0
         items = []
+        gift_wrap = {"available": False}
     else:
         store = resolve_store_for_service(request)
         totals = cart_totals(cart, store=store)
@@ -31,7 +33,11 @@ def _cart_context(request, cart):
             # همان قیمتِ نهایی (اسنپ‌شات) است، نه product.final_price ساده.
             item.regular_price = resolve_regular_price(item.product, item.variant)
         item_count = sum(item.quantity for item in items)
-    return {"cart": cart, "cart_items": items, "totals": totals, "item_count": item_count}
+        gift_wrap = gift_wrap_service.annotate_cart_items(items, store)
+    return {
+        "cart": cart, "cart_items": items, "totals": totals, "item_count": item_count,
+        "gift_wrap": gift_wrap if cart is not None else {"available": False},
+    }
 
 
 def _render_cart_container(request, cart):
@@ -141,7 +147,10 @@ def cart_add(request, slug):
     gift_wrap_requested = request.POST.get("gift_wrap") in ("1", "true", "on", "yes")
 
     try:
-        add_item_to_cart(cart, product, variant, quantity, gift_wrap_requested=gift_wrap_requested)
+        add_item_to_cart(
+            cart, product, variant, quantity, gift_wrap_requested=gift_wrap_requested,
+            gift_message=request.POST.get("gift_message", ""),
+        )
     except UnavailableStockError as exc:
         # موجودیِ ناکافی/کالایِ ناموجود — چیزی به سبد اضافه نمی‌شود (نه حتی
         # با کِلَمپ‌کردنِ تعداد)؛ کاربر با پیامِ صریح آگاه می‌شود.
@@ -192,6 +201,22 @@ def cart_item_update(request, item_id):
     item.save(update_fields=["quantity", "updated_at"])
 
     return _render_cart_container(request, cart)
+
+
+@require_POST
+def cart_item_gift_wrap(request, item_id):
+    """انتخاب/لغوِ کادوپیچی و ویرایشِ پیامِ کارت برایِ یک قلمِ سبد (htmx).
+    فقط یک *درخواست* است؛ اهلیت/قیمت همیشه سمتِ سرور تعیین می‌شود."""
+    cart = get_cart(request, create=True)
+    item = get_object_or_404(CartItem.objects.select_related("product"), pk=item_id, cart=cart)
+    requested = request.POST.get("gift_wrap") in ("1", "true", "on", "yes")
+    selected = set_item_gift_wrap(item, selected=requested, message=request.POST.get("gift_message", ""))
+    response = _render_cart_container(request, cart)
+    if requested and not selected:
+        response["HX-Trigger"] = json.dumps(
+            {"toast": {"message": "کادوپیچی برای این کالا در دسترس نیست", "type": "err"}}
+        )
+    return response
 
 
 @require_POST

@@ -119,8 +119,24 @@ class ShopSettings(TimeStampedModel):
     # قیمتِ ارسال‌شده‌ی کلاینت برای این افزونه اعتماد نمی‌کند.
     gift_wrap_available = models.BooleanField("کادوپیچی در دسترس است", default=False)
     gift_wrap_price = models.DecimalField(
-        "هزینه‌ی کادوپیچی (تومان، هر قلم)", max_digits=12, decimal_places=0, default=0,
+        "هزینه‌ی کادوپیچی (تومان؛ ۰ = رایگان)", max_digits=12, decimal_places=0, default=0,
     )
+
+    class GiftWrapScope(models.TextChoices):
+        PER_UNIT = "per_unit", "به‌ازای هر عددِ کالا"
+        PER_LINE = "per_line", "به‌ازای هر ردیفِ سبد"
+        PER_ORDER = "per_order", "یک‌بار برای کلِ سفارش"
+
+    # سیاستِ صریحِ محاسبه‌ی هزینه‌ی کادوپیچی — پیش‌فرض ``per_unit`` تا رفتارِ
+    # قبلی (تعداد × قیمت) حفظ شود. نگاه کنید به ``gift_wrap_service.gift_wrap_charge``.
+    gift_wrap_pricing_scope = models.CharField(
+        "مبنای محاسبه‌ی هزینه‌ی کادوپیچی", max_length=10, choices=GiftWrapScope.choices,
+        default=GiftWrapScope.PER_UNIT,
+    )
+    gift_wrap_title = models.CharField("عنوان سرویسِ کادوپیچی", max_length=80, default="کادوپیچی")
+    gift_wrap_description = models.CharField("توضیحِ سرویسِ کادوپیچی", max_length=300, blank=True, default="")
+    gift_wrap_image = models.ImageField("تصویرِ نمونه‌ی کادوپیچی", upload_to="shop/gift_wrap/", blank=True)
+    gift_wrap_message_enabled = models.BooleanField("امکانِ نوشتنِ پیامِ کارت‌هدیه", default=True)
 
     class SmsBackend(models.TextChoices):
         CONSOLE = "console", "کنسول (فقط لاگ، برای توسعه)"

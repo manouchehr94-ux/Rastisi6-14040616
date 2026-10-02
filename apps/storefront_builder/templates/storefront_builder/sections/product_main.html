@@ -143,6 +143,22 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
           <div class="sku-line" x-show="current && current.sku">کد کالا: <span dir="ltr" x-text="current ? current.sku : ''"></span></div>
         </div>
 
+        {% if gift_wrap and gift_wrap.eligible %}
+        <div class="gift-wrap-option" style="margin:12px 0;padding:10px 12px;border:1px dashed var(--line,#d9dce3);border-radius:12px;display:grid;gap:6px">
+          <label style="display:flex;gap:8px;align-items:center;cursor:pointer">
+            <input type="checkbox" name="gift_wrap" value="1" x-model="giftWrapSelected" aria-describedby="gw-desc-pdp">
+            <span>🎁 {{ gift_wrap.title }}
+              <b>{% if gift_wrap.price %}(+{{ gift_wrap.price|toman }} {{ gift_wrap.scope_hint }}){% else %}(رایگان){% endif %}</b></span>
+          </label>
+          {% if gift_wrap.description %}<small id="gw-desc-pdp" style="color:var(--muted,#6b7280)">{{ gift_wrap.description }}</small>{% endif %}
+          {% if gift_wrap.image_url %}<img src="{{ gift_wrap.image_url }}" alt="نمونه‌ی {{ gift_wrap.title }}" width="72" height="72" loading="lazy" style="border-radius:8px;object-fit:cover">{% endif %}
+          {% if gift_wrap.message_enabled %}
+          <input type="text" name="gift_message" maxlength="200" x-show="giftWrapSelected" x-cloak placeholder="پیام کارت هدیه (اختیاری)" aria-label="پیام کارت هدیه"
+                 style="width:100%;padding:8px;border:1px solid var(--line,#d9dce3);border-radius:8px">
+          {% endif %}
+        </div>
+        {% endif %}
+
         <div class="qty" x-data="{ qty: 1 }">
           <span class="lbl">تعداد:</span>
           <div class="stepper">

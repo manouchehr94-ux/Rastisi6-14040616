@@ -18,6 +18,22 @@ class Customer(TimeStampedModel):
     orders_count = models.PositiveIntegerField("تعداد سفارش‌ها", default=0)
     total_spent = models.DecimalField("مجموع خرید (تومان)", max_digits=14, decimal_places=0, default=0)
 
+    # تاریخ تولد — میلادی ذخیره می‌شود (قراردادِ تاریخ‌هایِ پروژه)؛ ورودی/نمایشِ
+    # جلالی در لایه‌ی فرم است (``apps.core.jalali_utils``). اختیاری؛ یک مقدارِ
+    # خالی هرگز تولدِ ذخیره‌شده را پاک نمی‌کند (نگاه کنید به
+    # ``customer_profile_service.update_birth_date``).
+    birth_date = models.DateField("تاریخ تولد", null=True, blank=True)
+    # کلیدِ قابل‌ایندکسِ «ماه*۱۰۰+روزِ جلالی» برایِ جست‌وجوی سریعِ تولدهایِ یک
+    # روز بدونِ پیمایشِ همه‌ی مشتریان — همیشه در ``save`` از ``birth_date`` بازسازی می‌شود.
+    birth_month_day = models.PositiveSmallIntegerField(
+        "ماه/روزِ تولد (جلالی)", null=True, blank=True, db_index=True, editable=False,
+    )
+
+    # ترجیحاتِ ارتباطی — پیام‌هایِ تبلیغاتی (کمپین/تولد/مناسبت) فقط در صورتِ
+    # رضایت ارسال می‌شود؛ پیام‌هایِ تراکنشی/امنیتی (سفارش، OTP…) مستقل‌اند.
+    accepts_promotional_sms = models.BooleanField("دریافتِ پیامکِ تبلیغاتی", default=True)
+    accepts_promotional_email = models.BooleanField("دریافتِ ایمیلِ تبلیغاتی", default=True)
+
     class Meta:
         verbose_name = "مشتری"
         verbose_name_plural = "مشتریان"
@@ -25,6 +41,15 @@ class Customer(TimeStampedModel):
 
     def __str__(self):
         return self.full_name
+
+    def save(self, *args, **kwargs):
+        from apps.core.jalali_utils import birthday_month_day_key
+
+        self.birth_month_day = birthday_month_day_key(self.birth_date)
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and "birth_date" in update_fields:
+            kwargs["update_fields"] = list(set(update_fields) | {"birth_month_day"})
+        super().save(*args, **kwargs)
 
     @property
     def joined_at(self):

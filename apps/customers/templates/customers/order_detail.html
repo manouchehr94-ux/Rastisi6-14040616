@@ -96,6 +96,7 @@
             <div class="ln"><span>جمع کالاها</span><b>{{ order.items_total|toman }}</b></div>
             {% if order.product_discount > 0 %}<div class="ln disc"><span>تخفیف کالاها</span><b>− {{ order.product_discount|toman }}</b></div>{% endif %}
             {% if order.coupon_discount > 0 %}<div class="ln disc"><span>کد تخفیف</span><b>− {{ order.coupon_discount|toman }}</b></div>{% endif %}
+            {% if order.gift_wrap_total > 0 %}<div class="ln"><span>🎁 کادوپیچی</span><b>{{ order.gift_wrap_total|toman }}</b></div>{% endif %}
             <div class="ln"><span>هزینه ارسال ({{ order.shipping_method.name }})</span><b>{{ order.shipping_cost|toman }}</b></div>
             <div class="ln"><span>مالیات</span><b>{{ order.tax|toman }}</b></div>
             <div class="ln grand"><span>مبلغ نهایی</span><span class="v">{{ order.grand_total|toman }}</span></div>

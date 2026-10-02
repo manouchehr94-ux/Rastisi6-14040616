@@ -17,7 +17,9 @@ from apps.stores.resolution import resolve_store_for_storefront
 
 from .models import Brand, Category, Product, Review
 from .services import collection_service
-from apps.cart.services.gift_wrap_service import is_gift_wrap_available, resolve_gift_wrap_price
+from apps.cart.services.gift_wrap_service import (
+    is_product_gift_wrap_eligible, resolve_gift_wrap_price, storefront_context as storefront_gift_wrap_context,
+)
 
 from .services.product_publish_service import storefront_listing_products, storefront_visible_products
 from .services.product_video_service import ProductVideoError
@@ -466,8 +468,10 @@ def build_product_detail_context(request, product):
     )
 
     savings = product.price - product.final_price
-    gift_wrap_available = is_gift_wrap_available(store)
-    gift_wrap_price = resolve_gift_wrap_price(store) if gift_wrap_available else 0
+    gift_wrap_ctx = storefront_gift_wrap_context(store)
+    gift_wrap_available = bool(is_product_gift_wrap_eligible(product))
+    gift_wrap_price = resolve_gift_wrap_price(store, product) if gift_wrap_available else 0
+    gift_wrap_ctx.update({"eligible": gift_wrap_available, "price": gift_wrap_price})
     context = {
         "product": product,
         "variant_groups": variant_groups,
@@ -475,6 +479,7 @@ def build_product_detail_context(request, product):
         "variant_selector": build_variant_selector_context(product),
         "gift_wrap_available": gift_wrap_available,
         "gift_wrap_price": gift_wrap_price,
+        "gift_wrap": gift_wrap_ctx,
         "product_price_json": {
             "price": int(product.final_price), "regular": int(product.price),
             "savings": int(savings), "stock": product.stock, "sku": product.sku,
@@ -555,9 +560,11 @@ def product_review_create(request, slug):
         context.update({"errors": errors, "posted_rating": posted_rating, "posted_text": text})
         return render(request, "catalog/partials/review_form.html", context)
 
-    Review.objects.create(
+    review = Review.objects.create(
         product=product, customer=request.user.customer_profile, rating=rating, text=text, is_approved=False
     )
+    from apps.notifications.services import business_events
+    business_events.review_created(review, store)
     context["submitted"] = True
     response = render(request, "catalog/partials/review_form.html", context)
     response["HX-Trigger"] = json.dumps(

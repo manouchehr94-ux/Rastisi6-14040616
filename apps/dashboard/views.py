@@ -3579,9 +3579,11 @@ def order_detail(request, code):
 
 
 def _order_detail_context(order):
+    items = list(order.items.select_related("product", "variant"))
     return {
         "order": order,
-        "items": order.items.select_related("product", "variant"),
+        "items": items,
+        "gift_wrap_items": [item for item in items if item.gift_wrap_selected],
         "status_history": order.status_history.select_related("changed_by"),
         "next_status_options": next_status_options(order),
         "is_final": order_is_final(order),
@@ -4124,6 +4126,9 @@ def _settings_context(
         }),
         "gift_wrap_form": gift_wrap_form or GiftWrapSettingsForm(initial={
             "gift_wrap_available": shop.gift_wrap_available, "gift_wrap_price": shop.gift_wrap_price,
+            "gift_wrap_pricing_scope": shop.gift_wrap_pricing_scope, "gift_wrap_title": shop.gift_wrap_title,
+            "gift_wrap_description": shop.gift_wrap_description,
+            "gift_wrap_message_enabled": shop.gift_wrap_message_enabled,
         }),
         "sms_form": sms_form or SmsConnectionForm(initial={
             "sms_enabled": shop.sms_enabled, "sms_backend": shop.sms_backend,
@@ -4338,12 +4343,33 @@ def settings_finance(request):
 def settings_gift_wrap(request):
     """کادوپیچی (toranj_gifting: optional_addon_checkbox_updates_total) —
     فعال‌سازی/قیمت‌گذاری در دسترسِ مدیرِ فروشگاه، مستقل از خانواده‌ی بصری."""
-    form = GiftWrapSettingsForm(request.POST)
+    form = GiftWrapSettingsForm(request.POST, request.FILES)
     if form.is_valid():
         shop = ShopSettings.load(store=request.store)
-        shop.gift_wrap_available = form.cleaned_data["gift_wrap_available"]
-        shop.gift_wrap_price = form.cleaned_data["gift_wrap_price"]
-        shop.save(update_fields=["gift_wrap_available", "gift_wrap_price", "updated_at"])
+        cd = form.cleaned_data
+        shop.gift_wrap_available = cd["gift_wrap_available"]
+        shop.gift_wrap_price = cd["gift_wrap_price"]
+        shop.gift_wrap_pricing_scope = cd["gift_wrap_pricing_scope"]
+        shop.gift_wrap_title = cd["gift_wrap_title"]
+        shop.gift_wrap_description = cd["gift_wrap_description"]
+        shop.gift_wrap_message_enabled = cd["gift_wrap_message_enabled"]
+        fields = [
+            "gift_wrap_available", "gift_wrap_price", "gift_wrap_pricing_scope", "gift_wrap_title",
+            "gift_wrap_description", "gift_wrap_message_enabled", "updated_at",
+        ]
+        if cd.get("gift_wrap_image"):
+            shop.gift_wrap_image = cd["gift_wrap_image"]
+            fields.append("gift_wrap_image")
+        elif cd.get("remove_gift_wrap_image"):
+            shop.gift_wrap_image = ""
+            fields.append("gift_wrap_image")
+        shop.save(update_fields=fields)
+        record_audit_event(
+            store=request.store, actor=request.user, action_code="settings.gift_wrap_updated",
+            object_type="ShopSettings", object_id=shop.pk, object_label="کادوپیچی",
+            after={"available": shop.gift_wrap_available, "price": str(shop.gift_wrap_price),
+                   "scope": shop.gift_wrap_pricing_scope},
+        )
         messages.success(request, "تنظیمات کادوپیچی ذخیره شد")
         return redirect("/admin-portal/settings/?section=finance")
     context = _settings_context(request, gift_wrap_form=form)

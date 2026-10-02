@@ -27,8 +27,21 @@ Phase 5 — قلم‌های سبدِ خرید؛ اگر سبد خالی باشد�
             <span>{% if item.variant.value_hex %}<span class="sw" style="background:{{ item.variant.value_hex }}"></span>{% endif %}{{ item.variant.attribute }}: {{ item.variant.value }}</span>
           </div>
           {% endif %}
-          {% if item.gift_wrap_selected %}
-          <div class="meta"><span>🎁 کادوپیچی شده (+{{ item.gift_wrap_unit_price|toman }} به‌ازای هر عدد)</span></div>
+          {% if gift_wrap.available and item.gift_wrap_eligible %}
+          <form class="gift-wrap-box" hx-post="{% url 'cart:item-gift-wrap' item.id %}" hx-target="#cart-container" hx-swap="innerHTML" hx-trigger="change"
+                style="margin-top:8px;padding:8px 10px;border:1px dashed var(--line,#d9dce3);border-radius:10px;display:grid;gap:6px">
+            <label style="display:flex;gap:8px;align-items:center;cursor:pointer">
+              <input type="checkbox" name="gift_wrap" value="1" {% if item.gift_wrap_selected %}checked{% endif %} aria-describedby="gw-desc-{{ item.id }}">
+              <span>🎁 {{ gift_wrap.title }}
+                <b>{% if item.gift_wrap_price_now %}(+{{ item.gift_wrap_price_now|toman }} {{ gift_wrap.scope_hint }}){% else %}(رایگان){% endif %}</b></span>
+            </label>
+            {% if gift_wrap.description %}<small id="gw-desc-{{ item.id }}" style="color:var(--muted,#6b7280)">{{ gift_wrap.description }}</small>{% endif %}
+            {% if gift_wrap.image_url %}<img src="{{ gift_wrap.image_url }}" alt="نمونه‌ی {{ gift_wrap.title }}" width="64" height="64" loading="lazy" style="border-radius:8px;object-fit:cover">{% endif %}
+            {% if item.gift_wrap_selected and gift_wrap.message_enabled %}
+            <input type="text" name="gift_message" maxlength="200" value="{{ item.gift_message }}" placeholder="پیام کارت هدیه (اختیاری)" aria-label="پیام کارت هدیه برای {{ item.product.name }}"
+                   style="width:100%;padding:8px;border:1px solid var(--line,#d9dce3);border-radius:8px">
+            {% endif %}
+          </form>
           {% endif %}
         </div>
         <div class="right">
