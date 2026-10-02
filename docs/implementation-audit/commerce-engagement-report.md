@@ -417,3 +417,30 @@ Not re-run (untouched code): `storefront_builder` and `stores`/`shop_core` — t
 5. Legacy SMS still synchronous (S3 not implemented, by decision); `SmsTemplate` is global across stores (shared by design, now shown in the UI).
 6. Dead fields `Customer.orders_count/total_spent` and the `CustomerProfile.total_spent` cache remain (removal needs migrations).
 7. Not verified: real SMS/e-mail providers, production dataset migration, >100k-customer campaign performance, non-Chromium/mobile/accessibility of the rule builder.
+
+---
+
+## 14. Follow-up: segment-rule operator column fix (approved) and standing decisions
+
+### 14.1 Fix
+* `CustomerSegmentRule.operator` widened from `max_length=20` to `40` — migration `customers.0005_widen_segment_rule_operator` (single `AlterField`, no data change, no downtime-relevant rewrite; widening a varchar is metadata-only on PostgreSQL).
+* Verified on the populated PostgreSQL staging DB (5 segments/rules, 1,500 customers, 2,792 orders): before the migration saving a `greater_than_or_equal` rule raised `DataError: value too long for type character varying(20)`; after it the rule saved, existing rules unchanged, segment refresh results unchanged (416 / 1,274 members as before), `makemigrations --check` clean.
+* **Reverse migration** works only while no operator longer than 20 characters is stored (PostgreSQL refuses to narrow otherwise — verified); remove/rename such rules first. Forward/backward/forward cycle verified after removing the test rule.
+* Tests (`OperatorColumnLengthTests`, run on SQLite **and** PostgreSQL): every allowed field/operator fits its column; every allowed (field, operator) pair persists and round-trips; a `greater_than_or_equal` segment evaluates. 105 tests OK on PostgreSQL (segment suites + customers), 30 OK on SQLite.
+
+### 14.2 Unchanged by decision
+* `SEGMENT_ORDER_DEFINITION` is not set anywhere → `legacy`; no segment membership or campaign audience changed.
+* Cash-on-delivery behaviour unchanged (never auto-paid).
+* **No automatic coupon-reservation timeout** was added.
+
+### 14.3 Open decisions and their consequences
+| # | Decision needed | If decided “yes” | If left as is |
+|---|---|---|---|
+| 1 | Switch segments to the shared valid-order definition (`SEGMENT_ORDER_DEFINITION="valid"`) | One setting + `refresh_customer_segments`; ~8–19 % of members of typical segments move (§11.3); run `analyze_segment_definitions` on production first | Segments keep counting canceled/unpaid/failed orders; segment and campaign audiences keep disagreeing for the same customer |
+| 2 | COD payment-collection workflow (“mark paid” on confirmed cash receipt) | Unlocks correct spend/count statistics, campaign eligibility and coupon `redeemed` state for COD buyers | COD buyers are invisible to `valid`/campaign-`paid` stats; their coupon stays `reserved` forever |
+| 3 | Coupon-reservation expiry policy (needs: TTL per gateway type, what happens to a late gateway success, COD handling, who cancels) | Abandoned pending online orders release capacity automatically | Abandoned unpaid orders keep consuming `usage_limit`/per-customer capacity until an admin cancels them; late gateway success on a canceled order rolls back unmatched. **Prerequisite:** define gateway behaviour first (webhook vs callback, retry window) |
+| 4 | Remove dead `Customer.orders_count/total_spent` and the `CustomerProfile.total_spent` cache | Migrations; one source of customer stats | Four partially different sources remain (documented) |
+| 5 | Async legacy SMS (S3) | Faster checkout, delivery retries for legacy events | Legacy SMS stays synchronous (current behaviour) |
+| 6 | Plan entitlements for the new features | New gating logic | Features are available to every plan |
+| 7 | Optional features: free-product rewards, lat/long targeting, birthday column in customer list | Separate implementation | Not implemented |
+| 8 | Promotional consent default (currently opted-in for existing customers) | Migration to flip default / re-consent campaign | Existing customers can receive promotional messages |

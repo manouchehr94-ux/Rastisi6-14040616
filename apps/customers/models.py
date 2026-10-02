@@ -234,7 +234,7 @@ class CustomerSegment(TimeStampedModel):
 class CustomerSegmentRule(TimeStampedModel):
     segment = models.ForeignKey(CustomerSegment, verbose_name="سگمنت", on_delete=models.CASCADE, related_name="rules")
     field = models.CharField("فیلد", max_length=40)
-    operator = models.CharField("عملگر", max_length=20)
+    operator = models.CharField("عملگر", max_length=40)
     value = models.CharField("مقدار", max_length=200, blank=True, default="")
     value2 = models.CharField("مقدارِ دوم (برایِ between)", max_length=200, blank=True, default="")
     position = models.PositiveIntegerField("ترتیب", default=0)

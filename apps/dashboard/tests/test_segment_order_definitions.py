@@ -188,3 +188,31 @@ class AnalyzeCommandTests(Dataset):
         self.assertEqual(before, (list(CustomerSegmentMembership.objects.order_by("pk").values_list("pk", "customer_id")), Order.objects.count()))
         seg.refresh_from_db()
         self.assertEqual(CustomerSegmentMembership.objects.filter(segment=seg).count(), 7)
+
+
+class OperatorColumnLengthTests(SegmentServiceTestCase):
+    """رگرسیون: هر عملگرِ مجاز باید در ستون جا شود (PostgreSQL طولِ varchar را اعمال می‌کند؛ SQLite نه)."""
+
+    def test_every_allowed_operator_and_field_fits_the_columns(self):
+        max_op = CustomerSegmentRule._meta.get_field("operator").max_length
+        max_field = CustomerSegmentRule._meta.get_field("field").max_length
+        for field, meta in ss.ALLOWED_FIELDS.items():
+            self.assertLessEqual(len(field), max_field, field)
+            for operator in meta["operators"]:
+                self.assertLessEqual(len(operator), max_op, operator)
+        self.assertGreaterEqual(max_op, len("greater_than_or_equal"))
+
+    def test_every_allowed_rule_can_be_persisted_and_evaluated(self):
+        seg = self._dynamic_segment()
+        for field, meta in ss.ALLOWED_FIELDS.items():
+            for operator in meta["operators"]:
+                value = "2025-01-01" if meta["value_type"] == "date" else "1"
+                value2 = "2030-01-01" if operator == "between" else ""
+                rule = CustomerSegmentRule.objects.create(segment=seg, field=field, operator=operator, value=value, value2=value2)
+                rule.refresh_from_db()
+                self.assertEqual(rule.operator, operator)
+                ss.validate_rule(rule.field, rule.operator)
+        # و عملگرِ ≥ واقعاً کار می‌کند
+        CustomerSegmentRule.objects.filter(segment=seg).delete()
+        CustomerSegmentRule.objects.create(segment=seg, field="order_count", operator="greater_than_or_equal", value="1")
+        self.assertEqual(ss.refresh_segment_membership(seg), 2)  # دو مشتریِ پایه‌ی SegmentServiceTestCase
