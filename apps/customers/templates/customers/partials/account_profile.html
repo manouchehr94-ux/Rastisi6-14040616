@@ -21,6 +21,20 @@
     <input class="inp" type="email" name="email" value="{{ profile_form.email.value|default_if_none:'' }}" dir="ltr">
     {% for err in profile_form.email.errors %}<div class="coup-err">{{ err }}</div>{% endfor %}
   </div>
+  <div class="fg">
+    <label for="acc_birth_date">تاریخ تولد (شمسی، اختیاری)</label>
+    <input class="inp" id="acc_birth_date" name="birth_date" dir="ltr" inputmode="numeric" autocomplete="bday"
+           value="{{ profile_form.birth_date.value|jalali_input }}" placeholder="۱۳۷۰/۰۵/۲۳" aria-describedby="acc_bd_help">
+    <small id="acc_bd_help" style="color:var(--muted,#6b7280)">برای دریافت هدیه‌ی تولد. خالی‌گذاشتن، تاریخِ ذخیره‌شده را پاک نمی‌کند.</small>
+    {% for err in profile_form.birth_date.errors %}<div class="coup-err">{{ err }}</div>{% endfor %}
+  </div>
+  <input type="hidden" name="prefs_submitted" value="1">
+  <fieldset class="fg" style="border:0;padding:0;margin:0 0 12px">
+    <legend style="font-size:13px;margin-bottom:6px">پیام‌های تبلیغاتی (تخفیف، تولد، مناسبت‌ها)</legend>
+    <label style="display:block"><input type="checkbox" name="accepts_promotional_sms" {% if profile_form.accepts_promotional_sms.value %}checked{% endif %}> دریافت پیامک تبلیغاتی</label>
+    <label style="display:block"><input type="checkbox" name="accepts_promotional_email" {% if profile_form.accepts_promotional_email.value %}checked{% endif %}> دریافت ایمیل تبلیغاتی</label>
+    <small style="color:var(--muted,#6b7280)">پیام‌های مربوط به سفارش و امنیت حساب همیشه ارسال می‌شوند.</small>
+  </fieldset>
   <button type="submit" class="btn btn-primary">ذخیره‌ی تغییرات</button>
 </form>
 

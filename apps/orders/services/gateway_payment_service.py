@@ -331,6 +331,8 @@ def process_callback_and_verify(
         from apps.orders.services.coupon_redemption_service import mark_redeemed
         mark_redeemed(order)
         business_events.payment_result(order, success=True)
+        from apps.engagement import hooks as engagement_hooks
+        engagement_hooks.on_payment_success(order)
 
         # Create a Transaction record for backwards compatibility with existing dashboard
         from apps.orders.services.payment_service import _generate_transaction_code

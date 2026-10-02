@@ -47,6 +47,13 @@
           <textarea class="inp" name="full_address" rows="2">{{ address_form.full_address.value|default_if_none:'' }}</textarea>
           {% for err in address_form.full_address.errors %}<div class="coup-err">{{ err }}</div>{% endfor %}
         </div>
+        <div class="fg">
+          <label for="id_birth_date">تاریخ تولد (اختیاری)</label>
+          <input class="inp" id="id_birth_date" name="birth_date" dir="ltr" inputmode="numeric" autocomplete="bday"
+                 value="{{ address_form.birth_date.value|jalali_input }}" placeholder="۱۳۷۰/۰۵/۲۳" aria-describedby="bd-help">
+          <small id="bd-help" style="color:var(--muted,#6b7280)">تاریخ شمسی؛ برای دریافت هدیه‌ی تولد. در صورت خالی‌گذاشتن، تاریخ ذخیره‌شده‌ی شما تغییری نمی‌کند.</small>
+          {% for err in address_form.birth_date.errors %}<div class="coup-err">{{ err }}</div>{% endfor %}
+        </div>
         <div class="fg" style="margin-bottom:0">
           <label>توضیحات سفارش (اختیاری)</label>
           <input class="inp" name="note" value="{{ address_form.note.value|default_if_none:'' }}" placeholder="مثلاً: لطفاً قبل از ارسال هماهنگ کنید">

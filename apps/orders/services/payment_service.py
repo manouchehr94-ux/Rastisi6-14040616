@@ -8,6 +8,7 @@ import re
 
 from django.db import transaction
 
+from apps.engagement import hooks as engagement_hooks
 from apps.notifications.services import business_events
 from apps.orders.models import Order, Transaction
 from apps.orders.services.coupon_redemption_service import mark_redeemed, release_redemption
@@ -89,6 +90,7 @@ def simulate_payment(order: Order, success: bool, *, gateway=None, store) -> Tra
         order.save(update_fields=["payment_status", "updated_at"])
         mark_redeemed(order)
         business_events.payment_result(order, success=True)
+        engagement_hooks.on_payment_success(order)
         change_order_status(
             order, Order.Status.PROCESSING, note="پرداخت موفق — سفارش به پردازش منتقل شد", store=store
         )

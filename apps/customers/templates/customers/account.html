@@ -47,6 +47,7 @@
       <button type="button" class="t" :class="{ active: tab === 'profile' }" @click="tab = 'profile'">پروفایل</button>
       <button type="button" class="t" :class="{ active: tab === 'orders' }" @click="tab = 'orders'">سفارش‌های من</button>
       <button type="button" class="t" :class="{ active: tab === 'addresses' }" @click="tab = 'addresses'">آدرس‌ها</button>
+      <button type="button" class="t" :class="{ active: tab === 'coupons' }" @click="tab = 'coupons'">کدهای تخفیف من{% if my_coupons %} ({{ my_coupons|length|fa_number }}){% endif %}</button>
       <a class="t" href="{% url 'customers:wishlist' %}">علاقه‌مندی‌ها</a>
     </div>
 
@@ -73,6 +74,30 @@
       </div>
       {% else %}
       <p style="color:var(--muted);font-size:13px">هنوز سفارشی ثبت نکرده‌اید.</p>
+      {% endif %}
+    </div>
+
+    <div class="tabpane" :class="{ active: tab === 'coupons' }" id="account-coupons">
+      {% if my_coupons %}
+      <div class="ord-table">
+        <div class="ord-row ord-head"><span>کد</span><span>تخفیف</span><span>حداقل سفارش</span><span>اعتبار تا</span><span>وضعیت</span></div>
+        {% for row in my_coupons %}
+        <div class="ord-row">
+          <span dir="ltr"><b>{{ row.coupon.code }}</b></span>
+          <span>{{ row.label }}</span>
+          <span>{% if row.coupon.min_order %}{{ row.coupon.min_order|toman }}{% else %}—{% endif %}</span>
+          <span>{% if row.coupon.expires_at %}{{ row.coupon.expires_at|jalali }}{% else %}بدون انقضا{% endif %}</span>
+          <span>{% if row.state == "active" %}<span class="badge badge-pay-paid">قابل استفاده</span>
+                {% elif row.state == "used" %}<span class="badge badge-delivered">استفاده‌شده</span>
+                {% elif row.state == "expired" %}<span class="badge badge-canceled">منقضی‌شده</span>
+                {% elif row.state == "upcoming" %}<span class="badge badge-pending">هنوز فعال نشده</span>
+                {% else %}<span class="badge badge-canceled">غیرفعال</span>{% endif %}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <p style="color:var(--muted);font-size:12px;margin-top:8px">این کدها اختصاصیِ شماست و در مرحله‌ی پرداخت وارد می‌شوند.</p>
+      {% else %}
+      <p style="color:var(--muted);font-size:13px">هنوز کد تخفیف اختصاصی‌ای برای شما صادر نشده است.</p>
       {% endif %}
     </div>
 

@@ -22,6 +22,8 @@
       </div>
       {% if customer.email %}ایمیل: <span dir="ltr">{{ customer.email }}</span><br>{% endif %}
       شهر: {{ customer.city|default:"—" }}<br>
+      تاریخ تولد: {% if customer.birth_date %}{{ customer.birth_date|jalali }}{% else %}ثبت نشده{% endif %}<br>
+      پیامک تبلیغاتی: {% if customer.accepts_promotional_sms %}موافق{% else %}مخالف{% endif %} · ایمیل تبلیغاتی: {% if customer.accepts_promotional_email %}موافق{% else %}مخالف{% endif %}<br>
       تاریخ عضویت: {{ customer.created_at|jalali }}
     </div>
   </div>

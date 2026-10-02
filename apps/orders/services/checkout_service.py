@@ -76,7 +76,27 @@ def get_address(request) -> dict:
 def save_address(request, cleaned_data) -> None:
     state = _state(request)
     state["address"] = {field: cleaned_data.get(field, "") for field in ADDRESS_FIELDS}
+    # تاریخ تولد (اختیاری): فقط مقدارِ معتبرِ غیرخالی ذخیره می‌شود؛ ارسالِ خالی
+    # هرگز مقدارِ قبلی (نشست یا پروفایل) را پاک نمی‌کند. به‌عنوانِ ISO میلادی
+    # (قابلِ سریال‌سازی در نشست) نگه داشته و پس از ثبتِ موفقِ سفارش روی
+    # مشتریِ *احرازشده* اعمال می‌شود (نه پیش از تأییدِ OTP).
+    birth = cleaned_data.get("birth_date")
+    if birth:
+        state["birth_date"] = birth.isoformat()
     request.session.modified = True
+
+
+def address_initial(request) -> dict:
+    """مقدارِ اولیه‌ی فرمِ آدرس: آدرسِ نشست + تاریخ تولد (نشست، وگرنه ذخیره‌شده در پروفایل)."""
+    initial = dict(get_address(request))
+    birth = _state(request).get("birth_date")
+    if birth:
+        initial["birth_date"] = birth
+    else:
+        customer = _request_customer(request)
+        if customer is not None and customer.birth_date:
+            initial["birth_date"] = customer.birth_date
+    return initial
 
 
 def active_shipping_methods(*, store, address: dict | None = None):
@@ -156,7 +176,7 @@ def get_or_create_checkout_token(cart) -> str:
     return cart.checkout_token
 
 
-def get_applied_coupon(request, cart):
+def get_applied_coupon(request, cart, customer=None):
     """کد تخفیف فعلی نشست را برمی‌گرداند؛ اگر دیگر معتبر نباشد از نشست پاک می‌شود.
 
     جست‌وجو همیشه با ``store`` فعلی فیلتر می‌شود (ADR-32) — یک کدِ ذخیره‌شده
@@ -169,7 +189,7 @@ def get_applied_coupon(request, cart):
     coupon = Coupon.objects.filter(code=code, store=store).first()
     if coupon is not None:
         totals = cart_totals(
-            cart, store=store, coupon=coupon, customer=_request_customer(request),
+            cart, store=store, coupon=coupon, customer=customer or _request_customer(request),
             payment_gateway=get_selected_payment_gateway(request),
         )
     if coupon is None or not totals["coupon_applied"]:
@@ -264,8 +284,9 @@ def finalize_order(request, cart, customer):
     if payment_gateway is None:
         raise CheckoutError("هیچ درگاه پرداخت فعالی موجود نیست")
 
-    coupon = get_applied_coupon(request, cart)
+    coupon = get_applied_coupon(request, cart, customer)
     store = resolve_store_for_service(request)
+    birth_date_raw = _state(request).get("birth_date", "")
 
     try:
         with transaction.atomic():
@@ -279,6 +300,14 @@ def finalize_order(request, cart, customer):
             cart.items.all().delete()
     except ValueError as exc:
         raise CheckoutError(str(exc)) from exc
+
+    if birth_date_raw:
+        from apps.customers.services.profile_service import BirthDateError, update_birth_date
+
+        try:
+            update_birth_date(customer, birth_date_raw)
+        except BirthDateError:  # نباید رخ دهد (پیش‌تر اعتبارسنجی شده)؛ سفارش هرگز بخاطرِ تولد شکست نمی‌خورد
+            logger.warning("invalid stored birth date for customer %s", customer.pk)
 
     # Session clearing happens AFTER successful database commit
     request.session.pop(SESSION_KEY, None)

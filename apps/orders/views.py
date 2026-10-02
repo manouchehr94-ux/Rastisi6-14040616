@@ -37,7 +37,7 @@ def _get_own_order(request, code, queryset=None):
 
 def _render_body(request, cart, *, address_form=None, coupon_input="", coupon_error=""):
     context = checkout_service.build_context(request, cart)
-    context["address_form"] = address_form or CheckoutAddressForm(initial=context["address"])
+    context["address_form"] = address_form or CheckoutAddressForm(initial=checkout_service.address_initial(request))
     context["coupon_input"] = coupon_input
     context["coupon_error"] = coupon_error
     return render(request, "orders/partials/checkout_body.html", context)
@@ -53,7 +53,7 @@ def _dynamic_response(request, cart, *, toast_message=None, toast_type="ok", **e
 def checkout_step1(request):
     cart = get_cart(request, create=True)
     context = checkout_service.build_context(request, cart)
-    context["address_form"] = CheckoutAddressForm(initial=context["address"])
+    context["address_form"] = CheckoutAddressForm(initial=checkout_service.address_initial(request))
     context["coupon_input"] = ""
     return render(request, "orders/checkout_step1.html", context)
 
@@ -64,7 +64,7 @@ def _finalize_and_redirect(request, cart, customer):
     except checkout_service.CheckoutError as exc:
         return _dynamic_response(
             request, cart, toast_message=str(exc), toast_type="err",
-            address_form=CheckoutAddressForm(initial=checkout_service.get_address(request)),
+            address_form=CheckoutAddressForm(initial=checkout_service.address_initial(request)),
         )
     except Exception:
         logger.exception("Unexpected error during checkout finalization")
@@ -72,7 +72,7 @@ def _finalize_and_redirect(request, cart, customer):
             request, cart,
             toast_message="در ثبت سفارش مشکلی رخ داد. اطلاعات و سبد خرید شما حفظ شده است. لطفاً دوباره تلاش کنید.",
             toast_type="err",
-            address_form=CheckoutAddressForm(initial=checkout_service.get_address(request)),
+            address_form=CheckoutAddressForm(initial=checkout_service.address_initial(request)),
         )
     response = HttpResponse(status=200)
     response["HX-Redirect"] = reverse("orders:payment-start", args=[order.code])

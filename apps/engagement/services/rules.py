@@ -312,7 +312,7 @@ def _line_matches(line, p) -> bool:
 
 def _line_eval(p, ctx):
     quantity = sum(line.quantity for line in _all_lines(ctx) if _line_matches(line, p))
-    return quantity >= p["min_quantity"]
+    return quantity >= p.get("min_quantity", 1)
 
 
 leaf("line_match", "خرید کالایِ مشخص (ردیفِ سفارش)", "line", category="کالا",
