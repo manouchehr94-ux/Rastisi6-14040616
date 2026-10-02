@@ -81,9 +81,11 @@
         {% include "dashboard/partials/field.html" with f=form.code_valid_days %}
         {% include "dashboard/partials/field.html" with f=form.total_redemption_limit help="سقفِ کلِ استفاده از هر کد" %}
         {% include "dashboard/partials/field.html" with f=form.per_customer_limit %}
+        {% include "dashboard/partials/field.html" with f=form.per_customer_period_days help="مثلاً سقفِ ۱ بار در هر ۳۰ روز؛ خالی = در کلِ عمرِ کد" %}
         {% include "dashboard/partials/field.html" with f=form.max_issuances help="حداکثر تعدادِ کدِ قابلِ صدور؛ پس از آن کمپین «تکمیل‌شده» می‌شود." %}
       </div>
       <label style="display:block;margin:6px 0"><input type="checkbox" name="personalized" {% if form.personalized.value %}checked{% endif %}> کدِ اختصاصیِ هر مشتری (فقط خودِ او می‌تواند استفاده کند)</label>
+      <label style="display:block;margin:6px 0"><input type="checkbox" name="validity_from_delivery" {% if form.validity_from_delivery.value %}checked{% endif %}> اعتبارِ کد (مدتِ روز) از لحظه‌ی تحویلِ موفقِ اعلان حساب شود، نه از صدور</label>
       <label style="display:block;margin:6px 0"><input type="checkbox" name="coupon_applies_to_gift_wrap" {% if form.coupon_applies_to_gift_wrap.value %}checked{% endif %}> تخفیف روی هزینه‌ی کادوپیچی هم اعمال شود</label>
     </div>
   </div></fieldset>

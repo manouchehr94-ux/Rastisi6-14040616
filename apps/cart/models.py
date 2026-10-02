@@ -111,6 +111,12 @@ class Coupon(TimeStampedModel):
         "حداکثر مبلغِ سبد", max_digits=12, decimal_places=0, null=True, blank=True,
     )
     per_customer_limit = models.PositiveIntegerField("سقفِ استفاده برای هر مشتری", null=True, blank=True)
+    # اگر پر باشد، سقفِ هر مشتری فقط در پنجره‌ی N روزِ اخیر شمرده می‌شود
+    # (مثلاً «حداکثر ۱ بار در هر ۳۰ روز»)؛ خالی = در کلِ عمرِ کد.
+    per_customer_period_days = models.PositiveIntegerField("پنجره‌ی سقفِ هر مشتری (روز)", null=True, blank=True)
+    # زمانِ اولین تحویلِ موفقِ اعلانِ این کد؛ برایِ کدهایی که اعتبارشان از لحظه‌ی
+    # «تحویل» (نه صدور) حساب می‌شود (``Campaign.validity_from_delivery``).
+    delivery_anchored_at = models.DateTimeField("زمانِ تحویلِ اعلان (مبدأ اعتبار)", null=True, blank=True)
     min_items = models.PositiveIntegerField("حداقل تعدادِ اقلام", null=True, blank=True)
     max_items = models.PositiveIntegerField("حداکثر تعدادِ اقلام", null=True, blank=True)
     applies_to_gift_wrap = models.BooleanField(

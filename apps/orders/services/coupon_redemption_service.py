@@ -59,7 +59,7 @@ def reserve_redemption(*, coupon: Coupon, order, customer, discount_amount) -> C
 
 
 def _get(order) -> CouponRedemption | None:
-    return CouponRedemption.objects.select_for_update().filter(order=order).select_related("coupon").first()
+    return CouponRedemption.objects.select_for_update(of=("self",)).filter(order=order).select_related("coupon").first()
 
 
 @transaction.atomic

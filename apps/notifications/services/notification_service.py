@@ -142,6 +142,21 @@ def _claim_batch(limit: int, now) -> list[NotificationOutbox]:
     return rows
 
 
+def _anchor_delivery_validity(notification: NotificationOutbox) -> None:
+    """کدهایِ دارایِ «اعتبار از تحویل»: با اولین ارسالِ موفقِ اعلان، انقضا از همان لحظه
+    محاسبه می‌شود (یک‌بار؛ ارسال‌هایِ بعدیِ کانالِ دیگر تغییری نمی‌دهند)."""
+    meta = notification.metadata or {}
+    days, coupon_id = meta.get("valid_days_from_delivery"), meta.get("coupon_id")
+    if not days or not coupon_id:
+        return
+    from apps.cart.models import Coupon
+
+    now = notification.sent_at or timezone.now()
+    Coupon.objects.filter(pk=coupon_id, delivery_anchored_at__isnull=True).update(
+        delivery_anchored_at=now, expires_at=now + timedelta(days=days),
+    )
+
+
 def _process(notification: NotificationOutbox, now) -> bool:
     """یک اعلانِ برداشته‌شده (SENDING) را می‌فرستد و وضعیتش را ذخیره می‌کند.
     → ``True`` اگر ارسال موفق بود."""
@@ -165,6 +180,7 @@ def _process(notification: NotificationOutbox, now) -> bool:
         notification.sent_at = timezone.now()
         notification.last_error = ""
         notification.next_attempt_at = None
+        _anchor_delivery_validity(notification)
     notification.claimed_at = None
     notification.save(update_fields=[
         "status", "attempts", "sent_at", "last_error", "next_attempt_at", "claimed_at",

@@ -85,6 +85,10 @@ class Campaign(TimeStampedModel):
     code_valid_days = models.PositiveIntegerField("اعتبارِ کد پس از صدور (روز)", null=True, blank=True)
     total_redemption_limit = models.PositiveIntegerField("سقفِ کلِ استفاده از هر کد", null=True, blank=True)
     per_customer_limit = models.PositiveIntegerField("سقفِ استفاده برایِ هر مشتری", null=True, blank=True, default=1)
+    per_customer_period_days = models.PositiveIntegerField("پنجره‌ی سقفِ هر مشتری (روز)", null=True, blank=True)
+    validity_from_delivery = models.BooleanField(
+        "اعتبارِ کد از لحظه‌ی تحویلِ اعلان حساب شود (نه صدور)", default=False,
+    )
     max_issuances = models.PositiveIntegerField("سقفِ تعدادِ کدهایِ صادرشده (ظرفیتِ کمپین)", null=True, blank=True)
     shared_coupon = models.ForeignKey(
         "cart.Coupon", verbose_name="کدِ مشترک (کمپینِ غیراختصاصی)", on_delete=models.SET_NULL,

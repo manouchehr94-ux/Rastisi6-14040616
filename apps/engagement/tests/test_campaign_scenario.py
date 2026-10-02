@@ -33,7 +33,7 @@ def mandatory_rules(olive_bag_category, shoe_category, nike):
     }
 
 
-class MandatoryCampaignTests(EngagementBase):
+class MandatoryBase(EngagementBase):
     def setUp(self):
         super().setUp()
         self.olive_bag = self.product("کیف زیتونی", 6 * M, category=self.cat_bag, color=("زیتونی", "#808000"))
@@ -61,6 +61,14 @@ class MandatoryCampaignTests(EngagementBase):
     def eligible(self, campaign):
         return set(cs.compute_eligible(campaign))
 
+    def activated(self, **kw):
+        c = self.campaign(**kw)
+        cs.activate(c)
+        c.refresh_from_db()
+        return c
+
+
+class MandatoryCampaignTests(MandatoryBase):
     # ---------------------------------------------------------------- معیارهای مثبت
     def test_olive_bag_in_two_orders_aggregate_is_eligible(self):
         c = self.customer("الف")
@@ -225,12 +233,6 @@ class MandatoryCampaignTests(EngagementBase):
             rules.validate_tree(deep, self.store)
 
     # ---------------------------------------------------------------- صدور
-    def activated(self, **kw):
-        c = self.campaign(**kw)
-        cs.activate(c)
-        c.refresh_from_db()
-        return c
-
     def test_validation_blocks_activation_of_incomplete_campaign(self):
         c = self.campaign(coupon_value=Decimal("0"), code_expires_at=None, code_valid_days=None)
         errors = cs.validate_campaign(c)
@@ -397,3 +399,30 @@ class MandatoryCampaignTests(EngagementBase):
         self.assertGreater(cs.send_expiry_reminders(), 0)
         self.assertEqual(cs.send_expiry_reminders(), 0)  # dedupe
         self.assertTrue(NotificationOutbox.objects.filter(event_key="coupon.expiring").exists())
+
+
+class DeliveryValidityTests(MandatoryBase):
+    """اعتبارِ کد از لحظه‌ی تحویل (نه صدور)."""
+
+    def test_validity_anchored_to_first_successful_delivery(self):
+        c = self.customer("تحویل", email="d@example.com")
+        self.order(c, [(self.nike_shoe, 1)], when=self.mehr(3))
+        campaign = self.activated(code_expires_at=None, code_valid_days=10, validity_from_delivery=True)
+        cs.execute_campaign(campaign)
+        coupon = CampaignIssuance.objects.get().coupon
+        provisional = coupon.expires_at
+        self.assertGreater(provisional, timezone.now() + dt.timedelta(days=16))   # 10 + ۷ روز مهلت
+        self.assertIsNone(coupon.delivery_anchored_at)
+        deliver_pending()                                      # ایمیل ارسال می‌شود (پیامک: اعتبار ندارد)
+        coupon.refresh_from_db()
+        self.assertIsNotNone(coupon.delivery_anchored_at)
+        self.assertAlmostEqual((coupon.expires_at - coupon.delivery_anchored_at).total_seconds(), 10 * 86400, delta=1)
+        anchored = coupon.delivery_anchored_at
+        NotificationOutbox.objects.filter(event_key="coupon.issued", channel="sms").update(status="pending", attempts=0)
+        deliver_pending()
+        coupon.refresh_from_db()
+        self.assertEqual(coupon.delivery_anchored_at, anchored)  # فقط اولین تحویل
+
+    def test_validation_requires_days(self):
+        c = self.campaign(code_expires_at=None, code_valid_days=None, validity_from_delivery=True)
+        self.assertTrue(any("تحویل" in e for e in cs.validate_campaign(c)))

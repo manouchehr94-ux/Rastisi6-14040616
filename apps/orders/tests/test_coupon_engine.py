@@ -248,3 +248,25 @@ class RedemptionLifecycleTests(EngineBase):
         self.assertEqual(r2.items.first().amount, Decimal("1800000"))
         order.refresh_from_db()
         self.assertEqual(refundable_amount(order), Decimal("0"))
+
+
+class PeriodLimitTests(EngineBase):
+    def test_per_customer_limit_within_period_resets_after_window(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        p = self._product("per", "1000000")
+        coupon = self._coupon("PERIOD", per_customer_limit=1, per_customer_period_days=30)
+        first = self._order(self._cart(lines=[(p, 1)]), coupon)
+        self.assertGreater(first.coupon_discount, 0)
+        cart = self._cart(lines=[(p, 1)])
+        self.assertEqual(self._totals(cart, coupon)["coupon_error_code"], coupon_rules.PER_CUSTOMER_LIMIT)
+        CouponRedemption.objects.filter(order=first).update(created_at=timezone.now() - timedelta(days=31))
+        self.assertTrue(self._totals(cart, coupon)["coupon_applied"])
+
+    def test_period_requires_limit_in_service_validation(self):
+        from apps.cart.services.coupon_service import CouponError, create_coupon
+
+        with self.assertRaises(CouponError):
+            create_coupon(self.store, code="NOLIM", type="percent", value=10, per_customer_period_days=7)

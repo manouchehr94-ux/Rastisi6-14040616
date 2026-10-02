@@ -90,6 +90,8 @@ class CampaignForm(forms.Form):
     total_redemption_limit = OptionalIntField(label="سقفِ کلِ استفاده", min_value=1)
     per_customer_limit = OptionalIntField(label="سقف برایِ هر مشتری", min_value=1)
     max_issuances = OptionalIntField(label="ظرفیتِ کمپین", min_value=1)
+    per_customer_period_days = OptionalIntField(label="پنجره‌ی سقفِ هر مشتری (روز)", min_value=1, max_value=3650)
+    validity_from_delivery = forms.BooleanField(label="اعتبار از لحظه‌ی تحویلِ اعلان", required=False)
 
     channels = forms.MultipleChoiceField(label="کانال‌ها", required=False, choices=[("sms", "پیامک"), ("email", "ایمیل")])
     custom_sms_body = forms.CharField(label="متنِ پیامکِ اختصاصی", required=False, widget=forms.Textarea)
@@ -178,6 +180,8 @@ class CampaignForm(forms.Form):
         campaign.total_redemption_limit = cd["total_redemption_limit"]
         campaign.per_customer_limit = cd["per_customer_limit"]
         campaign.max_issuances = cd["max_issuances"]
+        campaign.per_customer_period_days = cd["per_customer_period_days"]
+        campaign.validity_from_delivery = cd["validity_from_delivery"]
         campaign.channels = cd["channels"]
         campaign.custom_sms_body = cd["custom_sms_body"].strip()
         campaign.custom_email_subject = cd["custom_email_subject"].strip()
@@ -226,6 +230,8 @@ class CampaignForm(forms.Form):
             "code_starts_at": jd(campaign.code_starts_at), "code_expires_at": jd(campaign.code_expires_at),
             "code_valid_days": campaign.code_valid_days or "", "total_redemption_limit": campaign.total_redemption_limit or "",
             "per_customer_limit": campaign.per_customer_limit or "", "max_issuances": campaign.max_issuances or "",
+            "per_customer_period_days": campaign.per_customer_period_days or "",
+            "validity_from_delivery": campaign.validity_from_delivery,
             "channels": campaign.channels or [], "custom_sms_body": campaign.custom_sms_body,
             "custom_email_subject": campaign.custom_email_subject, "custom_email_body": campaign.custom_email_body,
             "reminder_days_before_expiry": campaign.reminder_days_before_expiry or "",

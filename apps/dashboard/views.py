@@ -6005,7 +6005,7 @@ def _parse_coupon_form(request):
     fields["expires_at"] = expires_at_raw or None
     starts_at_raw = data.get("starts_at", "").strip()
     fields["starts_at"] = starts_at_raw or None
-    for key in ("per_customer_limit", "min_items", "max_items"):
+    for key in ("per_customer_limit", "per_customer_period_days", "min_items", "max_items"):
         raw = data.get(key, "").strip()
         fields[key] = int(raw) if raw.isdigit() else None
     for key in ("max_discount", "max_order"):

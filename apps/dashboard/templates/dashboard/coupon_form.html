@@ -48,6 +48,8 @@
           <input type="number" name="max_discount" id="id_max_discount" value="{{ coupon.max_discount|default_if_none:'' }}" min="1" class="form-input"></div>
         <div class="field-group"><label class="field-label" for="id_per_customer_limit">سقف استفاده برای هر مشتری</label>
           <input type="number" name="per_customer_limit" id="id_per_customer_limit" value="{{ coupon.per_customer_limit|default_if_none:'' }}" min="1" class="form-input"></div>
+        <div class="field-group"><label class="field-label" for="id_per_customer_period_days">پنجره‌ی سقفِ هر مشتری (روز؛ خالی = کلِ عمرِ کد)</label>
+          <input type="number" name="per_customer_period_days" id="id_per_customer_period_days" value="{{ coupon.per_customer_period_days|default_if_none:'' }}" min="1" class="form-input"></div>
         <div class="field-group"><label class="field-label" for="id_max_order">حداکثر مبلغ سبد</label>
           <input type="number" name="max_order" id="id_max_order" value="{{ coupon.max_order|default_if_none:'' }}" min="0" class="form-input"></div>
         <div class="field-group"><label class="field-label" for="id_min_items">حداقل تعداد اقلام</label>

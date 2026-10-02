@@ -101,6 +101,12 @@ def validate_campaign(campaign: Campaign) -> list[str]:
             errors.append("انقضایِ کد باید بعد از فعال‌سازیِ آن باشد.")
         if not (campaign.code_expires_at or campaign.code_valid_days):
             errors.append("برایِ کد یک تاریخِ انقضا یا مدتِ اعتبار (روز) تعیین کنید.")
+        if campaign.per_customer_period_days is not None and campaign.per_customer_period_days < 1:
+            errors.append("پنجره‌ی سقفِ هر مشتری باید حداقل ۱ روز باشد.")
+        if campaign.per_customer_period_days and not campaign.per_customer_limit:
+            errors.append("برایِ پنجره‌ی زمانی، سقفِ استفاده برایِ هر مشتری را هم تعیین کنید.")
+        if campaign.validity_from_delivery and not campaign.code_valid_days:
+            errors.append("اعتبار از لحظه‌ی تحویل فقط با «مدتِ اعتبار (روز)» معنا دارد.")
         for field, label in (("total_redemption_limit", "سقفِ کلِ استفاده"), ("per_customer_limit", "سقفِ استفاده برایِ هر مشتری")):
             value = getattr(campaign, field)
             if value is not None and value < 1:
@@ -206,7 +212,9 @@ def _coupon_expiry(campaign: Campaign, now):
     if campaign.code_expires_at:
         return campaign.code_expires_at
     if campaign.code_valid_days:
-        return now + timedelta(days=campaign.code_valid_days)
+        # با «اعتبار از تحویل» این تاریخ موقت است (با ۷ روز مهلت)؛ با اولین تحویلِ موفق بازتنظیم می‌شود.
+        grace = 7 if campaign.validity_from_delivery else 0
+        return now + timedelta(days=campaign.code_valid_days + grace)
     return None
 
 
@@ -219,6 +227,7 @@ def _create_coupon(campaign: Campaign, customer, now) -> Coupon:
                     value=campaign.coupon_value if campaign.coupon_type != Coupon.Type.FREE_SHIP else 0,
                     label=campaign.name[:150], min_order=campaign.coupon_min_order,
                     usage_limit=campaign.total_redemption_limit, per_customer_limit=campaign.per_customer_limit,
+                    per_customer_period_days=campaign.per_customer_period_days,
                     starts_at=campaign.code_starts_at, expires_at=_coupon_expiry(campaign, now),
                     customer=customer, max_discount=campaign.coupon_max_discount,
                     applies_to_gift_wrap=campaign.coupon_applies_to_gift_wrap, is_active=True,
@@ -262,7 +271,14 @@ def _notify(campaign: Campaign, customer, issuance: CampaignIssuance, coupon: Co
     rows = dispatch_event(
         event_key, store=campaign.store, customer=customer, context=ctx, dedupe_key=f"issuance:{issuance.pk}",
         channels=campaign.channels or None, overrides=overrides or None,
-        metadata={"campaign_id": campaign.pk, "issuance_id": issuance.pk, "coupon_id": coupon.pk if coupon else None},
+        metadata={
+            "campaign_id": campaign.pk, "issuance_id": issuance.pk, "coupon_id": coupon.pk if coupon else None,
+            # اعتبار از لحظه‌ی تحویل: پس از اولین ارسالِ موفق، انقضا مجدداً از همان لحظه محاسبه می‌شود
+            "valid_days_from_delivery": (
+                campaign.code_valid_days if campaign.validity_from_delivery and coupon and campaign.code_valid_days
+                and not campaign.code_expires_at else None
+            ),
+        },
     )
     if rows:
         issuance.notified_at = timezone.now()
@@ -273,7 +289,7 @@ def issue_reward(campaign: Campaign, customer, cycle_key: str, *, now=None) -> s
     """→ ``"issued"`` | ``"exists"`` | ``"capacity"``."""
     now = now or timezone.now()
     with transaction.atomic():
-        locked = Campaign.objects.select_for_update().select_related("store").get(pk=campaign.pk)
+        locked = Campaign.objects.select_for_update(of=("self",)).select_related("store").get(pk=campaign.pk)
         if locked.max_issuances is not None and locked.issuances.count() >= locked.max_issuances:
             return "capacity"
         try:

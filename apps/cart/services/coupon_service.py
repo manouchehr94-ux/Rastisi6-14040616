@@ -32,6 +32,8 @@ def _validate_semantics(coupon: Coupon) -> None:
         raise CouponError("سقفِ تخفیف باید مثبت باشد.")
     if coupon.starts_at and coupon.expires_at and coupon.expires_at <= coupon.starts_at:
         raise CouponError("انقضا باید بعد از تاریخِ فعال‌سازی باشد.")
+    if coupon.per_customer_period_days and not coupon.per_customer_limit:
+        raise CouponError("برایِ پنجره‌ی زمانی، سقفِ استفاده برایِ هر مشتری را هم تعیین کنید.")
     if coupon.max_order is not None and coupon.max_order < coupon.min_order:
         raise CouponError("حداکثرِ مبلغِ سبد نباید کمتر از حداقل باشد.")
     if coupon.min_items and coupon.max_items and coupon.max_items < coupon.min_items:

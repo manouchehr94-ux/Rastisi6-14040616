@@ -197,9 +197,12 @@ def evaluate_coupon(
         if coupon.per_customer_limit is not None and customer is not None:
             from apps.orders.models import CouponRedemption
 
-            used = CouponRedemption.objects.filter(
+            qs = CouponRedemption.objects.filter(
                 coupon=coupon, customer=customer, status__in=CouponRedemption.COUNTED_STATUSES,
-            ).count()
+            )
+            if coupon.per_customer_period_days:
+                qs = qs.filter(created_at__gt=now - dt.timedelta(days=coupon.per_customer_period_days))
+            used = qs.count()
             if used >= coupon.per_customer_limit:
                 return _fail(PER_CUSTOMER_LIMIT)
 

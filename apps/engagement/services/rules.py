@@ -171,6 +171,10 @@ def _date_cond(p, *, with_within=False):
 def _date_matches(value: dt.datetime | None, p, now) -> bool:
     if value is None:
         return False
+    if value.tzinfo is not None:
+        from apps.core.jalali_utils import store_timezone
+
+        value = value.astimezone(store_timezone())
     day = value.date()
     mode = p["mode"]
     if mode == "before":
