@@ -66,6 +66,7 @@ Permanent technical documentation for the four integrated systems added on
   transactional SMS (welcome, order placed, payment, status, OTP) is **still synchronous** through `apps.sms`
   (history is mirrored into `NotificationOutbox` rows that the worker never sends); the new system adds e-mail for them and
   everything for new events. SMS templates: one global `SmsTemplate` set with a strict allow-listed renderer.
+* **SMS delivery method (one per store)**: *Phone* (SmsRasti Android gateway, token-paired, poll/ack queue `SmsOutboxItem`, no platform credit) or *Platform* (central provider from `PlatformConfiguration`, platform credit). Every eligible event follows the store's method automatically via `sms_service.get_backend`; no per-event provider choice, no per-store provider credentials, no silent switch between methods; OTP/security and platform-owner authentication always use the central gateway; customer-facing text carries the store's name, never platform branding. Device protocol: pairing token, last-seen stamp, bounded re-claim (5), idempotent ack, `SmsLog` synced with the device outcome. Admin/ops status: `apps/sms/services/delivery_status_service.py` (dashboard + `verify_delivery_channels`).
 * **Payments**: every "payment confirmed" goes through `lifecycle.apply_payment_success` (online callback, simulated
   payment, COD confirmation). Lock order everywhere: **order row first, then attempt**. A callback is always verified with the
   gateway (also for failed/canceled/expired attempts — money may have been taken late). Verified money that cannot be applied
@@ -128,4 +129,5 @@ All referenced ids are verified against the campaign's store.
 * Zibal session lifetime / callback retry behaviour are unverified; expiry stays disabled until they are.
 * Campaign engine scaling: see the benchmark section of the progress report (`tools/bench/campaign_benchmark.py`); candidate ids are
   still materialised in memory (ints only) while evaluation is chunked (500).
-* Browser coverage: Chromium only in the current environment; Firefox/WebKit runs are pending (`tools/engagement_e2e/`).
+* Browser coverage: Chromium only in the current environment (Firefox/WebKit cannot be installed here); runs pending where available (`tools/engagement_e2e/`).
+* Phone-method delivery means "queued for the device"; real delivery depends on the owner's phone being online and is confirmed only by the device acknowledgement. Real-provider/real-device verification is an operator step (PRODUCTION_CONFIGURATION §12.3).

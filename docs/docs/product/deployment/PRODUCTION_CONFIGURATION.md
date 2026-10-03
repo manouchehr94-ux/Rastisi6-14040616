@@ -443,20 +443,47 @@ account access must confirm before any order-expiry TTL is enabled:
 Until those answers are documented **keep `unpaid_online_order_ttl_minutes = 0`** for every store. The safe lower bound for a TTL
 is *longer than the confirmed session lifetime + the grace period*; do not enable a speculative 60 minutes.
 
-### 12.3 SMS / e-mail delivery verification
+### 12.3 SMS / e-mail delivery
 
-`python manage.py verify_delivery_channels` (read-only) audits: e-mail backend is real (console/locmem/dummy are reported **NOT REAL**), SMTP
-settings present, sender domain (SPF/DKIM/DMARC must be checked at the DNS provider), per-store SMS backend + credentials present
-(secrets never printed), sender number, credit balance, platform OTP backend. Exit code 1 if anything is not production-ready.
+**Architecture (one system).** A store owner picks exactly ONE SMS delivery method in Settings → SMS: **Phone** (the owner's Android phone through the
+SmsRasti app/gateway, `ShopSettings.sms_backend = smsrasti`) or **Platform** (RastiSi's central provider and credentials, configured only by the platform
+administrator in `PlatformConfiguration`). Every eligible event — transactional (`send_event_sms`) and new-system/campaign (`NotificationOutbox` →
+`send_raw_sms`) — is routed by `sms_service.get_backend` through the store's method automatically; there are no per-event providers and no per-store
+provider credentials (the legacy `console/melipayamak/kavenegar` store values all mean "platform"). Rules enforced by tests
+(`apps/sms/tests/test_delivery_routing.py`): no silent switch between methods (a store on Phone never falls back to paid platform delivery, a store on
+Platform never uses the phone); changing the method affects only later messages (queued ones are never re-sent); **platform credit is consumed only by
+platform delivery** and by OTP; Phone delivery consumes none; OTP/security SMS and platform-owner authentication always use the central gateway; legacy
+transactional SMS stays synchronous and its events have no outbox SMS (no duplicate sends); an unconfigured platform "console" gateway fails loudly
+(`درگاه پیامکِ مرکزی پیکربندی نشده`) instead of recording SENT + charging.
+Customer-facing text speaks for the store (`{shop_name}`); only platform-owner OTP/test messages mention RastiSi (guarded by a test).
 
-Real-provider test (operator, with a **dedicated test recipient you control**):
-```
-python manage.py verify_delivery_channels --send-test-email qa@your-domain --confirm-test-recipient
-python manage.py verify_delivery_channels --send-test-sms 09XXXXXXXXX --store <slug> --confirm-test-recipient
-```
-"Accepted by provider" (what the system records as `SENT`) is **not** "delivered": no delivery receipts are consumed. Confirm on the handset/inbox.
-Note the SMS `console` backend and Django's console e-mail backend mark messages as sent without delivering anything — never run
-production on them. Legacy transactional SMS remains synchronous by design (S3 not implemented). *Real-provider delivery: not verified here.*
+**SmsRasti device protocol** (`apps/sms/gateway_views.py`): pairing = per-store secret token; `poll` stamps `smsrasti_last_seen_at` (device "online" = polled within
+5 min), hands out the oldest pending message once (`SENDING`, row lock + `skip_locked`), re-offers an unacknowledged message after 120 s at most 5 times and
+then marks it `FAILED` (bounded, no endless duplicate sends); `ack` is idempotent (a SENT message is final), a failed ack marks the item and its `SmsLog`
+FAILED, a later retry (dashboard → resets the claim counter) re-queues it and the history follows the real outcome. Offline device = messages stay queued in order.
+`success` for Phone means "queued", not "delivered" — delivery is the device's acknowledgement.
+
+**Status for the store admin** (Settings → SMS, `delivery_status_service`): selected method, health (ok/warning/error), credit (platform only), device
+paired/online/last seen (phone only), queue (pending/sending/failed), failures in 24 h, and actionable errors (SMS disabled, device not paired/never connected/offline with N queued,
+no credit, platform gateway problems — which only the platform admin can fix).
+
+**Operator audit:** `python manage.py verify_delivery_channels [--store slug]` reports the same truth per store (method, device/credit state) and the platform gateway once
+(provider real/NOT REAL, missing platform credentials — never printed), plus the e-mail backend (console/locmem/dummy = NOT REAL), SMTP settings, sender domain (SPF/DKIM/DMARC
+must be checked at the DNS provider). Exit code 1 if anything is not production-ready.
+
+**What is verified, and how.** Automated, mocked-HTTP/local-sink only: routing matrix, credit rules, provider failure/refund, device poll/ack/duplicate/timeout/retry,
+parallel polling on PostgreSQL, e-mail through the real Django SMTP transport against a local in-process SMTP sink (envelope, multipart, backoff, single re-send,
+invalid recipient, consent). **Not verified against any real service** (no credentials, no Android device, no mail account in the build environment).
+
+**Operator verification steps (needs real access):**
+1. Platform admin: configure the central provider (Platform Admin → SMS) and run `verify_delivery_channels` → must print `provider=… REAL`, no PLATFORM PROBLEM.
+2. Platform method: with a store on Platform and credit > 0 run
+   `python manage.py verify_delivery_channels --send-test-sms 09XXXXXXXXX --store <slug> --confirm-test-recipient` (a number you control) and confirm the handset received it.
+   "SENT" only means the provider accepted the request.
+3. Phone method: pair a real phone (generate the token in Settings → SMS, enter it in the SmsRasti app), confirm the dashboard shows "device connected", send the same test
+   command, watch the queue item go pending → sending → sent on the phone's acknowledgement; switch the phone to airplane mode and confirm the device shows offline and messages stay queued.
+4. E-mail: `verify_delivery_channels --send-test-email you@your-domain --confirm-test-recipient`; check inbox/spam, SPF/DKIM/DMARC headers.
+Do not send tests to customers.
 
 ### 12.4 Promotional consent
 
@@ -496,14 +523,14 @@ Schema vs. data reversibility: reverse migrations exist and ran on the populated
 characters (e.g. `greater_than_or_equal`) is stored (`value too long for type character varying(20)`), and reversing `customers.0007` restores the old unverifiable
 `True` consent. Treat the deploy as **roll-forward**: take a backup first, and recover by restoring the backup (or fixing forward), not by reversing.
 
-Procedure (operator, **do not run against production without explicit authorization**): `pg_dump -Fc` backup → restore into a staging DB and rehearse
+Backup/restore drill executed on the staging copy: `pg_dump -Fc` (16 MB) → `pg_restore` into a fresh database → the 12 count/sum checks identical to the source → `check` clean → `promotional_consent report` identical → applying the one newer migration (`core.0019`, 0.07 s) left every count/sum unchanged. Procedure (operator, **do not run against production without explicit authorization**): `pg_dump -Fc` backup → restore into a staging DB and rehearse
 `migrate` + `check` + `makemigrations --check` + `verify_coupon_consistency` + `promotional_consent report` → compare counts/sums → schedule window → `migrate` →
 post-checks (same commands) → keep the backup until the first full business day passes.
 
 ### 12.7 What remains unverified (external access required)
 
-Real Zibal session/callback behaviour; real SMS/e-mail delivery; a real cron scheduler (the crontab above is a template, not a deployed fact); a sanitized
-production database copy for migration rehearsal; Firefox and WebKit runs of the browser suite (only Chromium runtimes are installed here).
+Real Zibal session/callback behaviour (official docs and sandbox unreachable — re-checked in the follow-up phase, still unverifiable); real SMS (platform provider and the SmsRasti Android device) and e-mail delivery; a real cron scheduler (the crontab above is a template, not a deployed fact); a sanitized
+production database copy for migration rehearsal; Firefox and WebKit runs of the browser suite (Playwright browser hosts, Mozilla and PPA hosts are blocked by the environment's egress proxy; Ubuntu's `firefox` package is a snap stub — cannot be installed here).
 
 ## What this PR does **not** do
 
