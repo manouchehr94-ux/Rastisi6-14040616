@@ -1,0 +1,23 @@
+# RastiSi background jobs — install with:  crontab -u <app-user> deploy/cron/rastisi.crontab   (review paths first)
+# Existing cron architecture (ADR-49). No Celery/Redis/other scheduler. Not installed by the repository; not verified on any real server.
+CRON_TZ=Asia/Tehran
+MAILTO=ops@example.com
+RASTISI_APP_DIR=/srv/rastisi
+RASTISI_ENV_FILE=/etc/rastisi/env
+RASTISI_VENV=/srv/rastisi/venv
+RASTISI_LOG_DIR=/var/log/rastisi
+RASTISI_ALERT_CMD="mail -s"
+JOB=/srv/rastisi/deploy/cron/run_job.sh
+
+# notifications: deliver queued e-mail/SMS (store method routing happens inside) — every 5 minutes
+*/5  * * * *  $JOB outbox        process_notification_outbox --limit 200
+# campaigns + occasions (birthday etc.) → queue only; delivery is the outbox job above — hourly
+15   * * * *  $JOB engagement    run_engagement_jobs --no-deliver
+# inventory reservations — every 10 minutes
+*/10 * * * *  $JOB reservations  expire_inventory_reservations
+# unpaid ONLINE orders — no-op while every store's unpaid_online_order_ttl_minutes = 0 (keep 0 until Zibal facts are verified)
+*/10 * * * *  $JOB expiry        expire_unpaid_orders
+# customer segments — nightly
+30   3 * * *  $JOB segments      refresh_customer_segments
+# health (exit 1 WARNING / 2 CRITICAL → alert) — every 15 minutes
+*/15 * * * *  $JOB health        check_background_jobs

@@ -402,16 +402,20 @@ Status labels used below: *verified locally* (automated tests / staging PostgreS
 All commands that can overlap use a PostgreSQL advisory lock (`apps/core/job_lock.py`); a second concurrent run prints
 `skipped: another … is still running` and exits 0. On SQLite (dev/tests) the lock is a no-op.
 
-Example crontab (deployment-specific paths/users must be adapted; **not installed by this repository**):
-```
-CRON_TZ=Asia/Tehran
-*/5  * * * * cd /srv/rastisi && python manage.py process_notification_outbox --limit 200 >> /var/log/rastisi/outbox.log 2>&1
-15   * * * * cd /srv/rastisi && python manage.py run_engagement_jobs --no-deliver     >> /var/log/rastisi/engagement.log 2>&1
-*/10 * * * * cd /srv/rastisi && python manage.py expire_inventory_reservations        >> /var/log/rastisi/reservations.log 2>&1
-*/10 * * * * cd /srv/rastisi && python manage.py expire_unpaid_orders                 >> /var/log/rastisi/expiry.log 2>&1
-30   3 * * * cd /srv/rastisi && python manage.py refresh_customer_segments            >> /var/log/rastisi/segments.log 2>&1
-*/15 * * * * cd /srv/rastisi && python manage.py check_background_jobs                >> /var/log/rastisi/health.log 2>&1
-```
+**Ready-to-apply configuration:** `deploy/cron/rastisi.crontab` (all six jobs, `CRON_TZ=Asia/Tehran`, `MAILTO`), `deploy/cron/run_job.sh` (per-job wrapper:
+loads the environment file with `DATABASE_URL`/`DJANGO_SECRET_KEY`/`DJANGO_EMAIL_*`/provider settings from `/etc/rastisi/env`, activates the virtualenv, `cd`s to the app,
+appends timestamped output to `/var/log/rastisi/<job>.log`, preserves the exit code, and runs `$RASTISI_ALERT_CMD "<subject>"` with the log tail on stdin when a job fails),
+and `deploy/cron/validate_jobs.sh` (staging validation: DB/config check, delivery audit, expiry dry-run, reservations, segments, engagement queue-only twice, health).
+Adapt `RASTISI_APP_DIR`, `RASTISI_VENV`, `RASTISI_ENV_FILE`, `RASTISI_LOG_DIR`, `MAILTO`, `RASTISI_ALERT_CMD` (e.g. `mail -s`), add log rotation (`logrotate` for `/var/log/rastisi/*.log`),
+and route `check_background_jobs` exit codes 1/2 to your monitoring (the wrapper's alert already covers any non-zero exit).
+Locally verified (against the staging PostgreSQL copy, **not** a real scheduler): the wrapper loads/activates/logs, preserves exit codes, fires the alert command on failure (this test found and fixed a bug where
+the alert never ran), and `validate_jobs.sh` passes (the delivery audit exits 1 there because the staging platform gateway is console — expected and reported, not a hard failure).
+
+**Validation on a real server (operator):** install the crontab for the app user (`crontab -u app deploy/cron/rastisi.crontab`), run `bash deploy/cron/validate_jobs.sh`, then check that
+(a) `crontab -l` lists the entries; (b) within 5 minutes `/var/log/rastisi/outbox.log` shows a new `=== … end outbox rc=0`; (c) briefly stop the database on **staging** and confirm the alert fires and the
+job exits non-zero; (d) start two copies of one job and confirm one prints `skipped: another … is still running`; (e) after the next hour `engagement.log` shows `end engagement rc=0`, and with an
+active birthday/scheduled campaign the customer's reward appears in their account and the outbox rows become `sent` (or `skipped/no_promotional_consent`).
+
 Time zone: the application uses `TIME_ZONE = "Asia/Tehran"` for Jalali periods/occasions and birthday cycles; the jobs themselves
 are time-zone independent (they compare UTC timestamps). Set `CRON_TZ` (or the server TZ) consistently so "hourly/daily" means what
 the owner expects. Missing configuration is never destructive: with every TTL at 0 the expiry job does nothing, and a store with
@@ -530,7 +534,7 @@ post-checks (same commands) → keep the backup until the first full business da
 ### 12.7 What remains unverified (external access required)
 
 Real Zibal session/callback behaviour (official docs and sandbox unreachable — re-checked in the follow-up phase, still unverifiable); real SMS (platform provider and the SmsRasti Android device) and e-mail delivery; a real cron scheduler (the crontab above is a template, not a deployed fact); a sanitized
-production database copy for migration rehearsal; Firefox and WebKit runs of the browser suite (Playwright browser hosts, Mozilla and PPA hosts are blocked by the environment's egress proxy; Ubuntu's `firefox` package is a snap stub — cannot be installed here).
+production database copy for migration rehearsal; Firefox and WebKit runs of the browser suite — to run them elsewhere: `pip install playwright && playwright install firefox webkit`, `cd tools/engagement_e2e && npm i axe-core`, `E2E_PG_BASE=postgres://user:pw@host:5432 bash tools/engagement_e2e/reset.sh`, then `python tools/engagement_e2e/accessibility_e2e.py` (it launches Chromium, Firefox and WebKit in turn and prints `NOT RUN` for any missing runtime); (in this environment Playwright browser hosts, Mozilla and PPA hosts are blocked by the environment's egress proxy; Ubuntu's `firefox` package is a snap stub — cannot be installed here).
 
 ## What this PR does **not** do
 
