@@ -554,3 +554,24 @@ Not re-run (untouched code): `storefront_builder` and `stores`/`shop_core` — t
 **Tests:** `test_cod_confirmation.py` (16: status preserved at every stage with exactly-one transaction/receipt/no SMS/no history row, e-mail-only receipt, coupon reserved-until-confirmation, audit, no backfill, statistics only after confirmation, consistency clean, duplicate rejection incl. different token, invalid amount/method/reference/canceled/non-COD/other-store changes nothing, separators, delivery never pays, refund correction + audit trail intact, dashboard permission matrix for 6 roles, form visibility/flow/idempotent repeat, wrong amount & online order rejected, other-store 404 and GET 405) and PostgreSQL `test_payment_concurrency.py` additions (5 parallel confirmations → 1 ok/4 `AlreadyConfirmed`, 1 transaction, 1 e-mail, ledger redeemed once; confirmation vs cancellation ×6 serialised with no half-states). Migration `orders.0018` forward/backward/forward on the staging PostgreSQL DB.
 
 **Operational requirements:** grant the permission by role only (no per-user override exists); staff must confirm only after real collection (amount, method and receipt are audited); the receipt e-mail needs the customer's e-mail address and an enabled `payment.succeeded` e-mail template.
+
+### 16.4 Final regression after M1–M3 (commit `271be59`)
+| Suite | Database | Result |
+|---|---|---|
+| `apps.dashboard` | SQLite | 1496 OK |
+| sms, portal, notifications, engagement, core, customers, cart, orders | SQLite | 1520 OK (15 skipped = PostgreSQL-only) |
+| catalog, billing, blog, content, subscriptions | SQLite | 1526 OK (1 skipped) |
+| `apps.stores` (includes the new permission matrix) | SQLite | 660 run: only the known pre-existing demo-media pair fails (`test_refresh_rasti_mode_demo_visuals_command`: 1 failure + 1 error, identical on the base commit); the extra `shop_core` “error” is a wrong module label in my command line, not a test |
+| orders, cart, engagement, notifications, sms, customers, segment/order/settings view suites (incl. all concurrency tests) | PostgreSQL 16 | 1,096 run: 1 error — `AppearanceRenderingRegressionTests.test_appearance_page_renders_when_legacy_blank_tokens_present` (`DataError: value too long for varchar(7)`), **identical on the untouched base commit** (a SQLite-only fixture writing an over-long colour value); everything else OK |
+Not re-run (untouched code): `storefront_builder` (its pre-existing failures, §7.1).
+
+### 16.5 Operational requirements and remaining risks after M1–M3
+**Operate:** (1) schedule `manage.py expire_unpaid_orders` (every 5–10 min) — only needed once a TTL is set; **leave the TTL at 0 until Zibal's session lifetime and callback retry behaviour are confirmed (NOT VERIFIED here: docs unreachable)**; (2) staff should watch Finance → تطبیق پرداخت‌ها and make sure store owners have an e-mail address (that is the `staff.late_payment` recipient); (3) grant COD confirmation only through roles (Owner/Administrator/Order Manager); (4) apply migrations `orders.0017`, `orders.0018`, `core.0018` (all additive; verified on the populated staging DB).
+**Risks / decisions still open:**
+1. A gateway **amount mismatch** on a late/duplicate callback is still treated as a verification failure (attempt `failed`, no reconciliation record) although money may have moved — worth a follow-up so mismatches also raise a reconciliation item.
+2. Late-payment resolution is manual; gateway refunds are still not implemented.
+3. Expiry relies on “definitely online” evidence (gateway slug match or an online attempt); orders from unrecognised legacy gateway names without attempts are deliberately never expired.
+4. COD confirmation does not advance the order to *processing* by design (admin controls the fulfilment flow); confirmation cannot be undone except by refund.
+5. Newly paid COD orders enter statistics, segments (legacy definition — unchanged) and campaigns from confirmation onwards; no backfill.
+6. Staff e-mail for late payments only goes to owners with an e-mail address / configured extra recipients; otherwise the dashboard list is the only channel.
+7. Pre-existing and unrelated: SQLite-only appearance fixture (above), storefront_builder/stores demo-media failures.
