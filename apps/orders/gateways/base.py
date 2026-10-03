@@ -84,6 +84,14 @@ class GatewayVerificationError(GatewayError):
     """Verification failed — payment should NOT be marked successful."""
 
 
+class GatewayAmountMismatchError(GatewayVerificationError):
+    """The gateway CONFIRMED a payment, but for a different amount than the order expects.
+
+    Money has moved (the gateway said so), so this is not an ordinary verification failure: the
+    caller must preserve ``details["evidence"]`` (reported/expected Rial, ref id, masked card) in a
+    ``PaymentReconciliation`` and must NOT mark the order paid."""
+
+
 class GatewayCredentialError(GatewayError):
     """Credentials are invalid, expired, or missing."""
 

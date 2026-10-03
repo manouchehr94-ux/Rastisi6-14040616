@@ -99,14 +99,20 @@ def review_created(review, store) -> None:
     )
 
 
-def late_payment(record) -> None:
-    """پرداختِ تأییدشده‌ای که اعمال نشد (``PaymentReconciliation``) → ایمیل به کارکنان؛ یک‌بار به‌ازای هر رکورد."""
+def late_payment(record, *, upgraded: bool = False) -> None:
+    """مغایرت/پرداختِ اعمال‌نشده (``PaymentReconciliation``) → ایمیل به کارکنانِ مالی؛ یک‌بار به‌ازای هر رکورد
+    (و یک‌بار دیگر اگر مورد «مشکوک» به «تأییدشده» ارتقا یابد)."""
     from apps.core.utils import format_toman
+    from apps.orders.models import PaymentReconciliation as PR
 
     order = record.order
+    reason = f"{record.get_evidence_level_display()} — {record.get_kind_display()}"
+    if record.reported_amount is not None and record.kind == PR.Kind.AMOUNT_MISMATCH:
+        reason += f" (مبلغِ گزارش‌شده‌ی درگاه: {format_toman(record.reported_amount, with_unit=False)} تومان)"
     ctx = {
         **cb.order_context(record.store, order),
         "order_total": format_toman(record.amount, with_unit=False),
-        "reconciliation_reason": record.get_kind_display(),
+        "reconciliation_reason": reason,
     }
-    safe_dispatch("staff.late_payment", store=record.store, order=order, context=ctx, dedupe_key=f"reconcile:{record.pk}")
+    key = f"reconcile:{record.pk}" + (":confirmed" if upgraded else "")
+    safe_dispatch("staff.late_payment", store=record.store, order=order, context=ctx, dedupe_key=key)

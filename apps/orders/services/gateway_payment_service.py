@@ -26,13 +26,19 @@ State ownership:
 from __future__ import annotations
 
 import logging
+from decimal import Decimal
 
 from django.db import transaction
 from django.utils import timezone
 
 from apps.orders.encryption import CredentialEncryptionError
 from apps.orders.gateways import get_adapter
-from apps.orders.gateways.base import GatewayError
+from apps.orders.gateways.base import (
+    GatewayAmountMismatchError,
+    GatewayConnectionError,
+    GatewayError,
+    GatewayResponseError,
+)
 from apps.orders.models import Order, PaymentAttempt, PaymentGatewayConfig, PaymentReconciliation, Transaction
 
 logger = logging.getLogger("payment")
@@ -64,6 +70,10 @@ class PaymentInitiationError(PaymentServiceError):
 
 class PaymentVerificationFailed(PaymentServiceError):
     """Verification failed — order not marked paid."""
+
+
+class PaymentAmountMismatch(PaymentVerificationFailed):
+    """Gateway confirmed a payment for a different amount: evidence kept, order NOT marked paid."""
 
 
 # ---------------------------------------------------------------------------
@@ -214,15 +224,31 @@ def _sanitized_evidence(result) -> dict:
     }
 
 
-def _open_reconciliation(*, attempt, order, kind, evidence, error="") -> PaymentReconciliation:
-    """رکوردِ تطبیق (یکتا به‌ازای هر تلاش) + اعلانِ کارکنان. idempotent."""
+def _toman_from_rial(rial) -> Decimal | None:
+    try:
+        return (Decimal(int(rial)) / Decimal(10)).quantize(Decimal("0.1"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _open_reconciliation(
+    *, attempt, order, kind, evidence, error="", level=None, reported_amount=None,
+) -> PaymentReconciliation:
+    """رکوردِ تطبیق (یکتا به‌ازای هر تلاش) + اعلانِ کارکنان. idempotent.
+
+    اگر برایِ این تلاش قبلاً یک مورد «مشکوک» (تأییدنشده) باز شده و حالا درگاه پرداخت را تأیید کرده،
+    همان رکورد به «تأییدشده» ارتقا می‌یابد (و اعلانِ تازه‌ای می‌رود) — رکوردِ دوم ساخته نمی‌شود."""
+    from apps.notifications.services import business_events
     from apps.notifications.services.notification_service import sanitize_error
 
+    L = PaymentReconciliation.EvidenceLevel
+    level = level or L.CONFIRMED
     error = sanitize_error(error)
     record, created = PaymentReconciliation.objects.get_or_create(
         attempt=attempt,
         defaults=dict(
-            store=attempt.store, order=order, kind=kind, amount=attempt.amount,
+            store=attempt.store, order=order, kind=kind, evidence_level=level, amount=attempt.amount,
+            reported_amount=reported_amount,
             gateway_track_id=attempt.gateway_track_id, gateway_ref_id=attempt.gateway_ref_id,
             order_status_at_detection=order.status, payment_status_at_detection=order.payment_status,
             evidence=evidence, error_message=(error or "")[:300],
@@ -230,13 +256,59 @@ def _open_reconciliation(*, attempt, order, kind, evidence, error="") -> Payment
     )
     if created:
         logger.error(
-            "Confirmed gateway payment NOT applied (%s): order=%s attempt=%s ref=%s amount=%s",
-            kind, order.code, attempt.public_id, attempt.gateway_ref_id, attempt.amount,
+            "Gateway payment NOT applied (%s/%s): order=%s attempt=%s ref=%s expected=%s reported=%s",
+            kind, level, order.code, attempt.public_id, attempt.gateway_ref_id, attempt.amount, reported_amount,
         )
-        from apps.notifications.services import business_events
-
         business_events.late_payment(record)
+    elif (
+        record.status == PaymentReconciliation.Status.OPEN
+        and record.evidence_level == L.SUSPECTED and level == L.CONFIRMED
+    ):
+        record.kind, record.evidence_level, record.evidence = kind, level, evidence
+        record.reported_amount, record.gateway_ref_id = reported_amount, attempt.gateway_ref_id
+        record.order_status_at_detection, record.payment_status_at_detection = order.status, order.payment_status
+        record.save()
+        business_events.late_payment(record, upgraded=True)
     return record
+
+
+def _close_suspected_record(attempt, note: str) -> None:
+    """درگاه بعداً پرداخت را تأیید کرد و عادی اعمال شد ⇒ موردِ «مشکوکِ» باز بسته می‌شود (سیستمی، قابلِ ردیابی)."""
+    PaymentReconciliation.objects.filter(
+        attempt=attempt, status=PaymentReconciliation.Status.OPEN,
+        evidence_level=PaymentReconciliation.EvidenceLevel.SUSPECTED,
+    ).update(
+        status=PaymentReconciliation.Status.RESOLVED, resolution=PaymentReconciliation.Resolution.AUTO_VERIFIED,
+        resolution_note=note[:500], resolved_at=timezone.now(),
+    )
+
+
+def _record_discrepancy(attempt_pk: int, *, confirmed: bool, kind, evidence: dict, reported_amount, error: str) -> PaymentAttempt:
+    """مغایرتِ مبلغ (تأییدشده) یا نتیجه‌ی نامشخصِ تأیید (مشکوک) را پایدار ثبت می‌کند — هرگز سفارش را پرداخت‌شده نمی‌کند.
+
+    قفل: همان ترتیبِ ``_apply_verified_payment`` (ابتدا سفارش، بعد تلاش). تأییدشده ⇒ تلاش SUCCEEDED
+    (پولِ درگاه واقعاً جابه‌جا شده؛ job انقضا هم از روی همین، سفارش را رها می‌کند) اما **Transaction** ساخته
+    نمی‌شود و سفارش/کوپن/موجودی دست نمی‌خورد. مشکوک ⇒ وضعیتِ تلاش تغییر نمی‌کند."""
+    L = PaymentReconciliation.EvidenceLevel
+    with transaction.atomic():
+        pending = PaymentAttempt.objects.get(pk=attempt_pk)
+        order = Order.objects.select_for_update().get(pk=pending.order_id)
+        attempt = PaymentAttempt.objects.select_for_update().select_related("store").get(pk=attempt_pk)
+        if confirmed:
+            attempt.status = PaymentAttempt.Status.SUCCEEDED
+            attempt.gateway_ref_id = (evidence.get("ref_id") or attempt.gateway_ref_id or "")[:100]
+            attempt.verified_at = timezone.now()
+            attempt.failure_code = "amount_mismatch"
+            attempt.failure_message = "مبلغِ تأییدشده با سفارش مغایرت دارد"
+            attempt.save(update_fields=[
+                "status", "gateway_ref_id", "verified_at", "failure_code", "failure_message", "updated_at",
+            ])
+        return_attempt = attempt
+        _open_reconciliation(
+            attempt=attempt, order=order, kind=kind, evidence=evidence, error=error,
+            level=L.CONFIRMED if confirmed else L.SUSPECTED, reported_amount=reported_amount,
+        )
+    return return_attempt
 
 
 def _apply_verified_payment(attempt_pk: int, result, store) -> PaymentAttempt:
@@ -289,8 +361,15 @@ def _apply_verified_payment(attempt_pk: int, result, store) -> PaymentAttempt:
         if tx is None:
             _open_reconciliation(attempt=attempt, order=order, kind=K.ALREADY_PAID, evidence=evidence)
             return attempt
+        _close_suspected_record(attempt, "تأیید بعدیِ درگاه و اعمالِ عادیِ پرداخت")
     logger.info("Payment verified and order paid: order=%s attempt=%s ref=%s", order.code, attempt.public_id, result.ref_id)
     return attempt
+
+
+def _callback_claims_success(callback_data: dict) -> bool:
+    """آیا پارامترهایِ بازگشت از درگاه ادعای پرداخت می‌کند؟ (فقط برای «مشکوک» ثبت‌کردن؛ هرگز مدرکِ پرداخت نیست)."""
+    cd = callback_data or {}
+    return str(cd.get("success", "")).strip() == "1" or str(cd.get("status", "")).strip() in ("1", "2")
 
 
 def process_callback_and_verify(
@@ -362,8 +441,28 @@ def process_callback_and_verify(
             callback_data=callback_data,
             sandbox=gateway_config.is_sandbox,
         )
+    except GatewayAmountMismatchError as exc:
+        # درگاه پرداخت را تأیید کرده اما با مبلغِ دیگر: شواهد ذخیره، سفارش پرداخت‌شده نمی‌شود.
+        ev = dict((exc.details or {}).get("evidence") or {})
+        _record_discrepancy(
+            attempt.pk, confirmed=True, kind=PaymentReconciliation.Kind.AMOUNT_MISMATCH, evidence=ev,
+            reported_amount=_toman_from_rial(ev.get("returned_rial")), error=str(exc),
+        )
+        raise PaymentAmountMismatch(
+            "مبلغ تراکنش با مبلغ سفارش مطابقت ندارد. اگر مبلغی از حساب شما کسر شده، پشتیبانی آن را بررسی می‌کند."
+        ) from exc
     except GatewayError as exc:
         logger.warning("Verification failed: attempt=%s error=%s", attempt.public_id, exc)
+        # نتیجه‌ی نامشخص (قطع/تایم‌اوت/پاسخِ نامعتبر/مبلغِ اعلام‌نشده) در حالی که مشتری با ادعای موفقیت از
+        # درگاه برگشته ⇒ مورد «مشکوک» برایِ بررسی؛ هیچ ادعایی دربارهٔ موفقیتِ پرداخت نمی‌شود.
+        if isinstance(exc, (GatewayConnectionError, GatewayResponseError)) and _callback_claims_success(callback_data):
+            ev = dict((exc.details or {}).get("evidence") or {})
+            ev["error_code"] = getattr(exc, "code", "")
+            ev["callback_claims_success"] = True
+            _record_discrepancy(
+                attempt.pk, confirmed=False, kind=PaymentReconciliation.Kind.VERIFY_AMBIGUOUS, evidence=ev,
+                reported_amount=_toman_from_rial(ev.get("returned_rial")), error=str(exc),
+            )
         fail(getattr(exc, "code", "verify_error"), str(exc), str(exc))
 
     if not result.success:

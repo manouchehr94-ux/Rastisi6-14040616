@@ -61,6 +61,8 @@ def _skip_reason(order: Order, shop, now, online_codes) -> str:
         return "confirmed_payment"
     if any(a.status in OPEN_ATTEMPT_STATUSES and a.updated_at > now - grace for a in attempts):
         return "payment_in_flight"
+    if order.payment_reconciliations.filter(status="open").exists():
+        return "open_reconciliation"  # پولِ احتمالی/تأییدشده‌ی بررسی‌نشده — خودکار لغو نمی‌شود
     return ""
 
 

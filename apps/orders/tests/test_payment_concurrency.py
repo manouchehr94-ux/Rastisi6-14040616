@@ -160,6 +160,56 @@ class PaymentRaceTests(TransactionTestCase):
         self.assertEqual(PaymentReconciliation.objects.get().kind, PaymentReconciliation.Kind.ALREADY_PAID)
         self.assertEqual(Coupon.objects.get(pk=self.coupon.pk).used_count, 1)
 
+    # ---- H1: مغایرتِ مبلغ ----
+    def mismatch_response(self, order, ref="REF-MM"):
+        r = MagicMock()
+        r.json.return_value = {"result": 100, "amount": 10, "status": 1, "refNumber": ref, "cardNumber": ""}
+        return r
+
+    def test_parallel_duplicate_mismatch_callbacks_record_once(self):
+        from django.utils import timezone
+
+        from apps.notifications.models import NotificationOutbox
+        from apps.stores.models import StoreMembership
+
+        owner = User.objects.create_user(username="pr-owner", password="x12345678", email="owner-pr@example.com")
+        StoreMembership.objects.create(
+            store=self.store, user=owner, role=StoreMembership.Role.OWNER,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
+        )
+        order = self.order()
+        attempt = self.attempt(order)
+        with patch("apps.orders.gateways.zibal.requests.post", return_value=self.mismatch_response(order)):
+            errors = self.race([
+                lambda: process_callback_and_verify(attempt_public_id=attempt.public_id, callback_data={}, store=self.store)
+                for _ in range(5)
+            ])
+        self.assertEqual(errors, [])
+        order.refresh_from_db()
+        self.assertEqual((order.payment_status, Transaction.objects.filter(order=order).count()), ("pending", 0))
+        self.assertEqual(PaymentReconciliation.objects.filter(attempt=attempt).count(), 1)
+        self.assertEqual(NotificationOutbox.objects.filter(event_key="staff.late_payment").count(), 1)
+        record = PaymentReconciliation.objects.get(attempt=attempt)
+        self.assertEqual((record.kind, record.evidence_level), ("amount_mismatch", "confirmed"))
+
+    def test_mismatch_callback_vs_cancellation_keeps_evidence_and_restocks_once(self):
+        for _ in range(6):
+            order = self.order()
+            attempt = self.attempt(order)
+            stock_after_order = Product.objects.get(pk=self.product.pk).stock
+            with patch("apps.orders.gateways.zibal.requests.post", return_value=self.mismatch_response(order)):
+                errors = self.race([
+                    lambda: process_callback_and_verify(attempt_public_id=attempt.public_id, callback_data={}, store=self.store),
+                    lambda: change_order_status(Order.objects.get(pk=order.pk), Order.Status.CANCELED, store=self.store),
+                ])
+            self.assertEqual(errors, [])
+            order.refresh_from_db()
+            self.assertEqual((order.status, order.payment_status), ("canceled", "pending"))
+            self.assertEqual(PaymentReconciliation.objects.filter(attempt=attempt, evidence_level="confirmed").count(), 1)
+            self.assertEqual(Transaction.objects.filter(order=order, status="ok").count(), 0)
+            self.assertEqual(Product.objects.get(pk=self.product.pk).stock, stock_after_order + 1)
+            self.assertEqual(CouponRedemption.objects.get(order=order).status, CouponRedemption.Status.RELEASED)
+
     # ---- انقضایِ سفارش (M2) در برابرِ callback و job موازی ----
     def _enable_expiry(self):
         shop = ShopSettings.load(store=self.store)

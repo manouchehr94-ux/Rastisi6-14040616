@@ -277,13 +277,13 @@ _register(
         sms_enabled_default=False, email_enabled_default=False,
     ),
     EventDef(
-        "staff.late_payment", "پرداختِ تأییدشده‌ی نیازمندِ رسیدگی (اعلان به کارکنان)", TRANSACTIONAL,
-        {"order_number": "شماره سفارش", "order_total": "مبلغِ تأییدشده (تومان)", "customer_name": "نام مشتری",
+        "staff.late_payment", "پرداخت/مغایرتِ نیازمندِ رسیدگی (اعلان به کارکنان)", TRANSACTIONAL,
+        {"order_number": "شماره سفارش", "order_total": "مبلغِ سفارش (تومان)", "customer_name": "نام مشتری",
          "store_name": "نام فروشگاه", "reconciliation_reason": "دلیل"},
         audience=AUDIENCE_STAFF,
-        default_sms="پرداختِ {order_total} تومانیِ سفارش {order_number} توسط درگاه تأیید شد اما اعمال نشد ({reconciliation_reason}). به بخش تطبیق پرداخت‌ها مراجعه کنید.",
-        default_email_subject="پرداختِ تأییدشده‌ی نیازمندِ رسیدگی — سفارش {order_number}",
-        default_email_body="درگاه پرداختِ {order_total} تومانیِ سفارش {order_number} ({customer_name}) را تأیید کرده اما سفارش آن را نپذیرفته است.\nدلیل: {reconciliation_reason}\nسفارش به‌طور خودکار بازگشایی یا پرداخت‌شده نشد. لطفاً از بخش «تطبیق پرداخت‌ها» در پنل مدیریت رسیدگی کنید (استردادِ دستی یا بازگشاییِ دستی).",
+        default_sms="سفارش {order_number} ({order_total} تومان): {reconciliation_reason}. به بخش تطبیق پرداخت‌ها مراجعه کنید.",
+        default_email_subject="پرداختِ نیازمندِ رسیدگی — سفارش {order_number}",
+        default_email_body="پرداختی مرتبط با سفارش {order_number} ({customer_name}، مبلغِ سفارش {order_total} تومان) اعمال نشد.\nدلیل: {reconciliation_reason}\nسفارش به‌طور خودکار بازگشایی یا پرداخت‌شده نشد؛ مورد «مشکوک» یعنی درگاه نتیجه را قطعی نکرده و پرداخت موفق فرض نشده است. لطفاً از بخش «تطبیق پرداخت‌ها» در پنل مدیریت رسیدگی کنید (استردادِ دستی یا بازگشاییِ دستی).",
         sms_enabled_default=False, email_enabled_default=True,
     ),
 )

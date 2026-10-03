@@ -939,6 +939,14 @@ class PaymentReconciliation(TimeStampedModel):
         ALREADY_PAID = "already_paid", "سفارش قبلاً پرداخت شده بود (پرداخت تکراری)"
         NOT_PAYABLE = "not_payable", "سفارش در وضعیتِ قابلِ پرداخت نبود"
         PROCESSING_ERROR = "processing_error", "خطا در پردازشِ پرداختِ تأییدشده"
+        AMOUNT_MISMATCH = "amount_mismatch", "مبلغِ تأییدشده با سفارش مغایرت دارد"
+        VERIFY_AMBIGUOUS = "verify_ambiguous", "نتیجه‌ی تأییدِ درگاه نامشخص (نیازمند بررسی)"
+
+    class EvidenceLevel(models.TextChoices):
+        #: خودِ درگاه پرداختِ موفق را تأیید کرده (پول جابه‌جا شده).
+        CONFIRMED = "confirmed", "تأییدشده توسط درگاه"
+        #: مشتری از درگاه با ادعای موفقیت برگشته ولی درگاه تأیید/رد نکرد — پول «جمع‌آوری‌شده» نیست.
+        SUSPECTED = "suspected", "مشکوک (تأیید نشده)"
 
     class Status(models.TextChoices):
         OPEN = "open", "باز"
@@ -948,6 +956,8 @@ class PaymentReconciliation(TimeStampedModel):
         REFUNDED_OUTSIDE = "refunded_outside", "استردادِ خارج از سیستم انجام شد"
         ORDER_REINSTATED = "order_reinstated", "سفارش دستی بازگشایی/جایگزین شد"
         NO_ACTION = "no_action", "نیازی به اقدام نبود"
+        NOT_PAID = "not_paid", "پس از بررسیِ پنلِ درگاه، پرداختی انجام نشده بود"
+        AUTO_VERIFIED = "auto_verified", "بعداً توسط درگاه تأیید و به‌طور عادی اعمال شد (سیستمی)"
 
     store = models.ForeignKey("stores.Store", verbose_name="فروشگاه", on_delete=models.PROTECT, related_name="payment_reconciliations")
     order = models.ForeignKey(Order, verbose_name="سفارش", on_delete=models.PROTECT, related_name="payment_reconciliations")
@@ -955,8 +965,13 @@ class PaymentReconciliation(TimeStampedModel):
         PaymentAttempt, verbose_name="تلاش پرداخت", on_delete=models.PROTECT, related_name="reconciliation",
     )
     kind = models.CharField("نوع", max_length=20, choices=Kind.choices)
+    evidence_level = models.CharField(
+        "سطحِ شواهد", max_length=10, choices=EvidenceLevel.choices, default=EvidenceLevel.CONFIRMED,
+    )
     status = models.CharField("وضعیت", max_length=10, choices=Status.choices, default=Status.OPEN, db_index=True)
-    amount = models.DecimalField("مبلغِ تأییدشده", max_digits=14, decimal_places=0)
+    amount = models.DecimalField("مبلغِ مورد انتظار (سفارش/تلاش)", max_digits=14, decimal_places=0)
+    #: مبلغی که خودِ درگاه گزارش کرد (تومان؛ از ریال تبدیل شده). تهی = درگاه مبلغ را اعلام نکرد.
+    reported_amount = models.DecimalField("مبلغِ گزارش‌شده توسط درگاه (تومان)", max_digits=16, decimal_places=1, null=True, blank=True)
     gateway_track_id = models.CharField("شناسه‌ی پیگیری درگاه", max_length=100, blank=True, default="")
     gateway_ref_id = models.CharField("شماره‌ی ارجاع بانکی", max_length=100, blank=True, default="")
     order_status_at_detection = models.CharField("وضعیتِ سفارش در لحظه‌ی کشف", max_length=15, blank=True, default="")

@@ -2,7 +2,7 @@
 {% load persian %}
 {% block title %}تطبیق پرداخت‌ها | پنل مدیریت{% endblock %}
 {% block page_title %}تطبیق پرداخت‌ها{% endblock %}
-{% block page_sub %}پرداخت‌هایی که درگاه تأیید کرده اما سفارش آن‌ها را نپذیرفته است — هرگز خودکار بازگشایی یا پرداخت‌شده نمی‌شوند{% endblock %}
+{% block page_sub %}پرداخت‌هایی که درگاه تأیید کرده اما سفارش نپذیرفته، مبلغشان مغایرت دارد، یا نتیجه‌ی تأییدشان نامشخص است — هرگز خودکار بازگشایی یا پرداخت‌شده نمی‌شوند{% endblock %}
 {% block content %}
 <div class="card" style="padding:12px 18px;margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
   <a class="btn {% if status == 'open' %}btn-primary{% endif %}" href="?status=open">باز ({{ open_count }})</a>
@@ -10,14 +10,15 @@
   <a class="btn {% if status == 'all' %}btn-primary{% endif %}" href="?status=all">همه</a>
 </div>
 <div class="card"><div class="table-wrap"><table>
-  <thead><tr><th>زمان</th><th>سفارش</th><th>نوع</th><th>مبلغ</th><th>شماره ارجاع بانکی</th><th>وضعیتِ سفارش</th><th>وضعیت</th><th></th></tr></thead>
+  <thead><tr><th>زمان</th><th>سفارش</th><th>نوع</th><th>مبلغِ سفارش</th><th>مبلغِ گزارش‌شده‌ی درگاه</th><th>شماره ارجاع بانکی</th><th>وضعیتِ سفارش</th><th>وضعیت</th><th></th></tr></thead>
   <tbody>
   {% for r in page %}
   <tr>
     <td>{{ r.created_at|jalali:"%Y/%m/%d %H:%M" }}</td>
     <td><a dir="ltr" href="{% url 'dashboard:order-detail' r.order.code %}">{{ r.order.code }}</a></td>
-    <td>{{ r.get_kind_display }}{% if r.error_message %}<br><small style="color:var(--red)">{{ r.error_message }}</small>{% endif %}</td>
+    <td><span class="badge {% if r.evidence_level == 'confirmed' %}b-red{% else %}b-amber{% endif %}">{{ r.get_evidence_level_display }}</span> {{ r.get_kind_display }}{% if r.error_message %}<br><small style="color:var(--red)">{{ r.error_message }}</small>{% endif %}</td>
     <td>{{ r.amount|floatformat:0 }}</td>
+    <td>{% if r.reported_amount is not None %}{{ r.reported_amount|floatformat:"-1" }}{% else %}—{% endif %}</td>
     <td dir="ltr">{{ r.gateway_ref_id|default:"—" }}</td>
     <td>{{ r.order_status_at_detection }} / {{ r.payment_status_at_detection }}</td>
     <td>{% if r.status == 'open' %}<span class="badge b-red">باز</span>{% else %}<span class="badge b-green">{{ r.get_resolution_display }}</span><br><small>{{ r.resolved_by|default:"" }}{% if r.resolution_note %} — {{ r.resolution_note }}{% endif %}</small>{% endif %}</td>
@@ -29,7 +30,7 @@
         <button class="btn btn-sm">ثبتِ رسیدگی</button>
       </form>{% endif %}</td>
   </tr>
-  {% empty %}<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:30px">موردی یافت نشد</td></tr>
+  {% empty %}<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:30px">موردی یافت نشد</td></tr>
   {% endfor %}
   </tbody>
 </table></div></div>

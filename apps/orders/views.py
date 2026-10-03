@@ -479,6 +479,7 @@ def gateway_callback(request, attempt_id):
 
     from apps.orders.models import PaymentAttempt
     from apps.orders.services.gateway_payment_service import (
+        PaymentAmountMismatch,
         PaymentVerificationFailed,
         process_callback_and_verify,
     )
@@ -507,6 +508,8 @@ def gateway_callback(request, attempt_id):
         )
     except PaymentVerificationFailed as exc:
         logger.info("Payment verification failed for attempt %s: %s", attempt_id, exc)
+        if isinstance(exc, PaymentAmountMismatch):  # پولِ احتمالی جابه‌جا شده؛ مشتری باید بداند
+            messages.warning(request, str(exc))
         # Don't expose error details to the customer — redirect to result
     except Exception:  # noqa: BLE001 — a gateway callback must never end in an uncontrolled 500
         logger.exception("Unexpected error while processing payment callback for attempt %s", attempt_id)
@@ -519,6 +522,8 @@ def gateway_callback(request, attempt_id):
         if reconciliation is not None:
             messages.warning(
                 request,
+                "مبلغ پرداختی با مبلغ سفارش مطابقت نداشت. پرداخت شما ثبت شد و توسط پشتیبانی بررسی می‌شود."
+                if reconciliation.kind == "amount_mismatch" else
                 "پرداخت شما دریافت شد اما سفارش قابل تکمیل نبود. مبلغ توسط پشتیبانی بررسی و در صورت نیاز بازگردانده می‌شود.",
             )
 
