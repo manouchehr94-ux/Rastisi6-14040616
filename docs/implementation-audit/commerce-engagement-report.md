@@ -677,3 +677,32 @@ Note: a first `--parallel 4` run aborted (`cannot pickle 'traceback' object`) an
 ### 17.12 Remaining external access and decisions
 
 Zibal documentation/sandbox access (item 3, blocks enabling any TTL); real SMS/e-mail provider credentials and a dedicated test recipient (item 4); a real scheduler/staging server for cron (item 5); a sanitized production DB copy for migration rehearsal and a backup/restore drill (item 6); Firefox + WebKit runtimes (item 9); owner decisions: consent legal basis/wording and per-store vs per-account scope, whether to allow gateway-refund automation, switching segments to the `valid` definition (§11.3), issuance-throughput target for very large campaigns.
+
+## 18. SMS delivery integration, consent audit and remaining verifications (follow-up to §17, base `f9a55d4`)
+
+### 18.1 Correction of §17.4
+§17.4 audited per-store provider credentials; that was **wrong for the runtime**. The real model (and now the documented, tested one): each store uses exactly ONE method — **Phone** (SmsRasti Android gateway) or **Platform** (central provider, credentials only in `PlatformConfiguration`); legacy store values `console/melipayamak/kavenegar` all mean Platform. `verify_delivery_channels` was rewritten to report that truth (method, device/credit state per store; platform gateway once; no secrets).
+
+### 18.2 Changes (fixed and automatically tested)
+* **Routing/billing.** Platform credit is consumed only by Platform delivery and OTP; Phone sends are free of platform credit; no silent fallback in either direction; changing the method affects only later messages (queued ones are never re-sent); OTP/security and platform-owner authentication stay on the central gateway; legacy transactional SMS stays synchronous with no outbox SMS (no duplicates); campaign/transactional new-system events follow the same route via `send_raw_sms`.
+* **Fake-success removed.** An unconfigured platform "console" gateway now fails loudly (credit refunded) unless explicitly allowed (tests/dev flag) — previously it recorded SENT and charged credit for a message that never left.
+* **SmsRasti protocol** (`gateway_views.py`, migration `core.0019` additive): last-seen stamp, bounded re-claims (5) then FAILED, idempotent ack (SENT is final), failed ack → `SmsLog` FAILED, retry resets the counter and history follows the real outcome.
+* **Admin status** (`delivery_status_service`, Settings → SMS, lazy so other settings sections keep their query ceiling): method, health, platform credit, device paired/online/last seen, queue, 24 h failures, actionable errors.
+* **Branding.** Test guards that no store-customer SMS/e-mail default mentions RastiSi (only platform-owner OTP/test do).
+* **Email workflow** verified through the real Django SMTP transport against a local sink: envelope, multipart, backoff, single re-send after recovery, invalid recipient, consent (not a real provider).
+* **Files:** `apps/core/models.py`, `apps/sms/{gateway_views.py,services/sms_service.py,services/delivery_status_service.py}`, `apps/portal/services/owner_sms_service.py`, `apps/notifications/management/commands/verify_delivery_channels.py`, `apps/dashboard/{views.py,templates/.../settings_sms.html}`; tests `test_delivery_routing.py` (25), `test_gateway_concurrency.py` (PostgreSQL), `test_email_transport.py` (4), `test_verify_delivery_channels.py` (8). No new queue, dispatcher, provider stack, ledger or consent system.
+
+### 18.3 Promotional messages — audit and single finding
+Promotional events: `coupon.issued`, `coupon.expiring`, `reward.issued`, `occasion.*` (all others transactional/security/staff, unaffected). After `customers.0007` no pre-existing customer has recorded consent, so automated birthday/coupon/campaign **notifications** reach only customers who opted in since (the coupon is still issued and visible in the account). No code change; no new consent system. **Finding (the only open policy item):** the codebase has no provider-level suppression/unsubscribe mechanism — confirm with the SMS provider/regulator whether promotional SMS needs an opt-out line or a dedicated promotional line, and decide how existing customers' consent is re-established.
+
+### 18.4 Verification status
+| Item | Status |
+|---|---|
+| Phone/platform routing, credit, failures, method switching, transactional + campaign events, device poll/ack/duplicate/timeout/retry, e-mail via SMTP sink, background jobs, financial/notification regression | **Fixed and automatically tested** (below) |
+| Backup/restore drill on the representative staging PostgreSQL copy: dump 16 MB → restore → 12 count/sum checks identical → `check` clean → newest migration applied with unchanged data | **Verified on staging data** (synthetic; not production) |
+| Zibal session lifetime/callbacks | **Requires external access** — official docs/sandbox unreachable (re-attempted: only third-party SDK pages, nothing on lifetime); TTL stays 0 |
+| Firefox/WebKit | **Requires external access** — Playwright CDN, Mozilla and PPA hosts blocked; Ubuntu `firefox` is a snap stub; cannot be installed here |
+| Real SMS provider, real SmsRasti Android device, real mail account/domain, real scheduler, sanitized production DB | **Requires external access** — operator steps in PRODUCTION_CONFIGURATION §12.3 / §12.6 |
+
+### 18.5 Test results (this phase)
+SQLite: sms, notifications, portal, core, customers, engagement + dashboard settings views — **1097 run, OK (6 skipped)**. PostgreSQL 16: orders, cart, sms, notifications, engagement, customers, core + segment/order/settings dashboard views + all concurrency tests — **1331 run, 1 error**: `AppearanceRenderingRegressionTests` (varchar(7) fixture), identical on base `185166a`. One regression I introduced and fixed in-phase: the status block added 10 queries to every settings page (`SettingsPageQueryPerformanceTests` caught it) — now lazy. The stores/storefront_builder pre-existing failures (§17.11) are untouched by this phase.
