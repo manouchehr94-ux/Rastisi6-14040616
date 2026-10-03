@@ -62,7 +62,7 @@ def _clean_recipient(channel: str, value: str):
     return value, ""
 
 
-def _staff_recipients(store, channel: str, extra: str) -> list[str]:
+def _staff_recipients(store, channel: str, extra: str, permission: str = "") -> list[str]:
     values = [line.strip() for line in (extra or "").replace(",", "\n").splitlines() if line.strip()]
     # هر خط فقط به کانالِ مربوطه می‌رود: شماره → پیامک، هر چیزِ دیگر → ایمیل
     looks_phone = [bool(_PHONE_LIKE.match(v)) for v in values]
@@ -74,6 +74,13 @@ def _staff_recipients(store, channel: str, extra: str) -> list[str]:
             store=store, role=StoreMembership.Role.OWNER, status=StoreMembership.MembershipStatus.ACTIVE,
         ).select_related("user")
         values += [m.user.email for m in owners if m.user.email]
+        if permission:  # کارکنانِ دارایِ مجوز (مثلاً Order Manager/Administrator برایِ امورِ مالی)
+            from apps.stores.authorization import membership_has_permission
+
+            members = StoreMembership.objects.filter(
+                store=store, status=StoreMembership.MembershipStatus.ACTIVE,
+            ).select_related("user")
+            values += [m.user.email for m in members if m.user.email and membership_has_permission(m, permission)]
     seen, unique = set(), []
     for v in values:
         if v.lower() not in seen:
@@ -144,7 +151,7 @@ def dispatch_event(
         if is_test:
             recipients = [test_recipient] if test_recipient else []
         elif event.audience == ev.AUDIENCE_STAFF:
-            recipients = _staff_recipients(store, channel, tpl["extra_recipients"])
+            recipients = _staff_recipients(store, channel, tpl["extra_recipients"], event.staff_permission)
         else:
             recipients = [_customer_recipient(customer, channel)]
 

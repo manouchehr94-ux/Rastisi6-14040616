@@ -138,6 +138,24 @@ class AmountMismatchFlowTests(SafetyBase):
                 self.assertEqual(after["payment_status"], "pending")
                 self.assertEqual(NotificationOutbox.objects.filter(event_key="staff.late_payment", order=order).count(), 1)
 
+    def test_financial_staff_with_refund_manage_are_notified_others_are_not(self):
+        from django.contrib.auth import get_user_model
+
+        def member(role, tag):
+            user = get_user_model().objects.create_user(username=f"0912779{tag}", password="x12345678", email=f"{tag}@example.com")
+            StoreMembership.objects.create(
+                store=self.store, user=user, role=role, status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
+            )
+
+        member(StoreMembership.Role.ORDER_MANAGER, "1001")
+        member(StoreMembership.Role.ADMINISTRATOR, "1002")
+        member(StoreMembership.Role.ANALYST, "1003")
+        member(StoreMembership.Role.CATALOG_MANAGER, "1004")
+        order = self.new_order()
+        self.run_callback(self.attempt(order), response_with(order, amount=1))
+        recipients = set(NotificationOutbox.objects.filter(event_key="staff.late_payment").values_list("recipient_email", flat=True))
+        self.assertEqual(recipients, {"owner@example.com", "1001@example.com", "1002@example.com"})
+
     def test_duplicate_mismatch_callbacks_create_one_record_one_notification(self):
         order = self.new_order()
         attempt = self.attempt(order)

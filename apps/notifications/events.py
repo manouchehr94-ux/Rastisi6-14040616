@@ -79,6 +79,8 @@ class EventDef:
     #: اگر مقدار داشته باشد، پیامکِ این رویداد از مسیرِ قدیمیِ apps.sms ارسال می‌شود.
     legacy_sms_event: str = ""
     sample: dict = field(default_factory=dict)
+    #: رویدادِ کارکنان: علاوه بر مالک، همه‌ی اعضایِ فعالِ دارایِ این مجوز هم گیرنده‌اند (مثلاً کارکنانِ مالی).
+    staff_permission: str = ""
 
 
 _SAMPLE = {
@@ -285,6 +287,7 @@ _register(
         default_email_subject="پرداختِ نیازمندِ رسیدگی — سفارش {order_number}",
         default_email_body="پرداختی مرتبط با سفارش {order_number} ({customer_name}، مبلغِ سفارش {order_total} تومان) اعمال نشد.\nدلیل: {reconciliation_reason}\nسفارش به‌طور خودکار بازگشایی یا پرداخت‌شده نشد؛ مورد «مشکوک» یعنی درگاه نتیجه را قطعی نکرده و پرداخت موفق فرض نشده است. لطفاً از بخش «تطبیق پرداخت‌ها» در پنل مدیریت رسیدگی کنید (استردادِ دستی یا بازگشاییِ دستی).",
         sms_enabled_default=False, email_enabled_default=True,
+        staff_permission="refund.manage",  # REFUND_MANAGE — همان مجوزِ رسیدگی در «تطبیق پرداخت‌ها»
     ),
 )
 
