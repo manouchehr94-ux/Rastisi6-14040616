@@ -238,6 +238,35 @@ class CheckoutError(Exception):
     """خطای قابل‌نمایش به کاربر هنگام نهایی‌سازی سفارش."""
 
 
+class PriceChanged(CheckoutError):
+    """مبلغ از زمانِ نمایش به مشتری تغییر کرده؛ باید مبلغِ جدید را ببیند و دوباره تأیید کند."""
+
+    def __init__(self, new_total):
+        from apps.core.utils import format_toman
+
+        super().__init__(
+            f"قیمت یا هزینه‌ی سفارش از زمانِ نمایش تغییر کرده است. مبلغِ جدید: {format_toman(new_total)}. "
+            "لطفاً مبلغ را بررسی کنید و برایِ تأیید دوباره «ادامه و پرداخت» را بزنید."
+        )
+        self.new_total = new_total
+
+
+def save_expected_total(request, raw) -> None:
+    """مبلغی که مشتری در همین صفحه دید و با فشردنِ «پرداخت» تأیید کرد (فقط برایِ **مقایسه**؛ هرگز مبنای
+    دریافت نیست). نامعتبر/خالی ⇒ بدونِ مقایسه (مثلاً فراخوانیِ مستقیم)."""
+    from decimal import Decimal, InvalidOperation
+
+    state = _state(request)
+    try:
+        value = Decimal(str(raw).strip())
+        if value < 0:
+            raise InvalidOperation
+        state["expected_total"] = str(value)
+    except (InvalidOperation, ValueError, TypeError):
+        state.pop("expected_total", None)
+    request.session.modified = True
+
+
 def _resolve_or_create_address(customer, address_data: dict) -> Address:
     is_first = not customer.addresses.exists()
     return Address.objects.create(
@@ -267,7 +296,7 @@ def finalize_order(request, cart, customer):
     می‌شد، این حالت به‌اشتباه خطا نشان می‌داد به‌جای بازگرداندن سفارشِ همان
     درخواست اول.
     """
-    from apps.orders.services.order_service import create_order_from_cart
+    from apps.orders.services.order_service import PriceChangedError, create_order_from_cart
 
     if cart is None:
         raise CheckoutError("سبد خرید شما خالی است")
@@ -295,6 +324,7 @@ def finalize_order(request, cart, customer):
     coupon = get_applied_coupon(request, cart, customer)
     store = resolve_store_for_service(request)
     birth_date_raw = _state(request).get("birth_date", "")
+    expected_total = _state(request).get("expected_total")
     promo_consent = dict(_state(request).get("promo_consent") or {})
 
     try:
@@ -304,9 +334,13 @@ def finalize_order(request, cart, customer):
                 cart, customer=customer, vendor=vendor, address=address,
                 shipping_method=shipping_method, payment_gateway=payment_gateway,
                 coupon=coupon, note=address_data.get("note", ""), store=store,
-                idempotency_key=token,
+                idempotency_key=token, expected_total=expected_total,
             )
             cart.items.all().delete()
+    except PriceChangedError as exc:
+        _state(request).pop("expected_total", None)  # مبلغِ جدید باید دوباره نمایش داده و تأیید شود
+        request.session.modified = True
+        raise PriceChanged(exc.actual) from exc
     except ValueError as exc:
         raise CheckoutError(str(exc)) from exc
 
@@ -352,6 +386,10 @@ def build_context(request, cart) -> dict:
         item_count = 0
         cart_items = []
     else:
+        from apps.cart.services.pricing import sync_cart_prices
+
+        # نمایش همیشه با قیمتِ معتبرِ فعلی است (نه اسنپ‌شاتِ کهنه‌ی سبد)؛ همین مبلغ به‌عنوانِ «مبلغِ دیده‌شده» پست می‌شود.
+        sync_cart_prices(list(cart.items.select_related("product", "variant")), store=store)
         totals = cart_totals(
             cart, store=resolve_store_for_service(request), coupon=coupon, shipping_method=selected_shipping,
             province=address.get("province", ""), city=address.get("city", ""), postal_code=address.get("postal_code", ""),

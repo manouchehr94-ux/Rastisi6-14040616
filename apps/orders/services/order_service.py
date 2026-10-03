@@ -4,6 +4,7 @@
 """
 
 import random
+from decimal import Decimal
 
 from django.db import IntegrityError, transaction
 
@@ -153,10 +154,19 @@ def _lock_and_revalidate_items(items, *, store):
     return locked_products, locked_variants
 
 
+class PriceChangedError(ValueError):
+    """مبلغِ نهاییِ معتبر با مبلغی که مشتری دید/تأیید کرد فرق دارد — سفارش ساخته نمی‌شود؛ مشتری باید مبلغِ
+    جدید را ببیند و دوباره تأیید کند (هرگز مبلغِ متفاوت بی‌صدا دریافت نمی‌شود)."""
+
+    def __init__(self, *, expected, actual):
+        super().__init__("قیمت یا هزینه‌ی سفارش تغییر کرد")
+        self.expected, self.actual = expected, actual
+
+
 @transaction.atomic
 def create_order_from_cart(
     cart, *, customer, vendor, address, shipping_method, payment_gateway,
-    coupon=None, note="", store, idempotency_key="",
+    coupon=None, note="", store, idempotency_key="", expected_total=None,
 ):
     """سفارش را از روی سبد خرید می‌سازد و همه‌ی مبالغ را اسنپ‌شات می‌کند.
 
@@ -210,6 +220,10 @@ def create_order_from_cart(
         raise ValueError("سبد خرید خالی است")
 
     locked_products, locked_variants = _lock_and_revalidate_items(items, store=store)
+    # قیمتِ معتبرِ فعلی زیرِ قفلِ کالا/تنوع (نه اسنپ‌شاتِ کهنه‌ی سبد) — مبنای تنها محاسبه‌ی مبلغ.
+    from apps.cart.services.pricing import sync_cart_prices
+
+    sync_cart_prices(items, store=store, products=locked_products, variants=locked_variants)
 
     if coupon is not None:
         # قفلِ ردیفِ کد تا دو سفارشِ همزمانِ یک کد سریال شوند (Postgres)؛ سقفِ کل
@@ -236,6 +250,8 @@ def create_order_from_cart(
         province=province, city=city, postal_code=postal_code,
         customer=customer, payment_gateway=payment_gateway,
     )
+    if expected_total is not None and Decimal(expected_total) != totals["grand_total"]:
+        raise PriceChangedError(expected=Decimal(expected_total), actual=totals["grand_total"])
     coupon_applied = totals["coupon_applied"]
     gift_wrap_active = totals["gift_wrap_allocations"]
     tax_lines_by_item = {line["item_ref"]: line for line in totals["tax_lines"]}

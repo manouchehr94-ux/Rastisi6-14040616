@@ -101,6 +101,7 @@ def checkout_pay(request):
         )
 
     checkout_service.save_address(request, form.cleaned_data)
+    checkout_service.save_expected_total(request, request.POST.get("expected_total"))
 
     if request.user.is_authenticated and hasattr(request.user, "customer_profile"):
         request.session.pop(CHECKOUT_OTP_SESSION_KEY, None)

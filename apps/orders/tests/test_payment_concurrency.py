@@ -160,6 +160,29 @@ class PaymentRaceTests(TransactionTestCase):
         self.assertEqual(PaymentReconciliation.objects.get().kind, PaymentReconciliation.Kind.ALREADY_PAID)
         self.assertEqual(Coupon.objects.get(pk=self.coupon.pk).used_count, 1)
 
+    # ---- H7: ثبتِ همزمانِ سفارش با کلیدِ یکسان و مبلغِ تأییدشده ----
+    def test_parallel_checkouts_with_same_token_create_one_order_with_confirmed_amount(self):
+        cart = Cart.objects.create(customer=self.customer)
+        CartItem.objects.create(cart=cart, product=self.product, quantity=1, unit_price=self.product.final_price)
+        expected = Decimal("1000000")
+        results, lock = [], threading.Lock()
+
+        def job():
+            order = create_order_from_cart(
+                Cart.objects.get(pk=cart.pk), customer=self.customer, vendor=self.vendor, address=self.address,
+                shipping_method=self.shipping, payment_gateway=self.gateway, store=self.store,
+                idempotency_key="h7-token", expected_total=expected,
+            )
+            with lock:
+                results.append(order.pk)
+
+        errors = self.race([job for _ in range(4)])
+        self.assertEqual(errors, [])
+        self.assertEqual(len(set(results)), 1)
+        self.assertEqual(Order.objects.filter(idempotency_key="h7-token").count(), 1)
+        self.assertEqual(Order.objects.get(idempotency_key="h7-token").grand_total, expected)
+        self.assertEqual(Product.objects.get(pk=self.product.pk).stock, 999)  # موجودی فقط یک‌بار کم شد
+
     # ---- H1: مغایرتِ مبلغ ----
     def mismatch_response(self, order, ref="REF-MM"):
         r = MagicMock()

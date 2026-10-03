@@ -98,6 +98,36 @@ def build_coupon_lines(items, coupon: Coupon | None) -> list[coupon_rules.Coupon
     ]
 
 
+def sync_cart_prices(items, *, store, products=None, variants=None) -> list[dict]:
+    """اسنپ‌شاتِ قیمتِ اقلامِ سبد را با قیمتِ **معتبرِ فعلی** (کالا/تنوع/کادوپیچی) هم‌گام می‌کند.
+
+    ``CartItem.unit_price`` فقط یک اسنپ‌شاتِ زمانِ افزودن است و هرگز مبنای مبلغِ پرداخت نیست مگر پس از این
+    همگام‌سازی؛ تنها منبعِ قیمت ``resolve_effective_price`` (و ``resolve_gift_wrap_selection``) است.
+    ``products``/``variants``: نسخه‌هایِ قفل‌شده (در ساختِ سفارش) تا همان مقدارِ زیرِ قفل خوانده شود.
+    → فهرستِ تغییرها ``[{"item", "field", "old", "new"}]`` (خالی = بدونِ تغییر)."""
+    from apps.catalog.services.pricing_service import resolve_effective_price
+
+    changes = []
+    for item in items:
+        product = (products or {}).get(item.product_id, item.product)
+        variant = (variants or {}).get(item.variant_id, item.variant) if item.variant_id else None
+        fields = []
+        live = resolve_effective_price(product, variant)
+        if live != item.unit_price:
+            changes.append({"item": item.pk, "field": "unit_price", "old": item.unit_price, "new": live})
+            item.unit_price = live
+            fields.append("unit_price")
+        if item.gift_wrap_selected:
+            allowed, wrap_price = gift_wrap_service.resolve_gift_wrap_selection(store, requested=True, product=product)
+            if allowed and wrap_price != item.gift_wrap_unit_price:
+                changes.append({"item": item.pk, "field": "gift_wrap_unit_price", "old": item.gift_wrap_unit_price, "new": wrap_price})
+                item.gift_wrap_unit_price = wrap_price
+                fields.append("gift_wrap_unit_price")
+        if fields:
+            item.save(update_fields=fields + ["updated_at"])
+    return changes
+
+
 def cart_totals(
     cart, *, store, coupon: Coupon | None = None, shipping_method=None,
     province: str = "", city: str = "", postal_code: str = "",

@@ -186,7 +186,7 @@
         <div class="save-note">🎁 شما در این خرید {{ savings|toman }} صرفه‌جویی کردید!</div>
         {% endif %}
         <button type="button" class="btn btn-primary btn-block" style="margin-top:14px;height:52px;font-size:15px"
-                hx-post="{% url 'orders:checkout-pay' %}" hx-include="#address-fields" hx-target="#checkout-container" hx-swap="innerHTML">
+                hx-post="{% url 'orders:checkout-pay' %}" hx-include="#address-fields" hx-vals='{"expected_total": "{{ totals.grand_total|floatformat:"0u" }}"}' hx-target="#checkout-container" hx-swap="innerHTML">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
           ادامه و پرداخت امن
         </button>
