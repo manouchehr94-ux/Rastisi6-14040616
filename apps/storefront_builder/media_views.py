@@ -28,10 +28,12 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from apps.content.models import HeroSlide, PromotionalBanner, StoryRailItem
+from apps.content.models import DestinationType, HeroSlide, PromotionalBanner, StoryRailItem
 from apps.dashboard.decorators import permission_required, staff_required
 from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
 
+from .section_media_contract import placement_semantic_payload
+from .services import media_defaults_service
 from .views import _get_scoped_section, _resolve_store
 
 #: پیکربندیِ عمومیِ هر دو نوعِ رسانه — کلیدِ URL (``kind``) → مدل + برچسبِ
@@ -62,8 +64,8 @@ _MEDIA_KINDS = {
         # فقط با اشاره‌گر به همان فایلِ تازه‌آپلودشده.
         "asset_fields": {"desktop_image": "desktop_asset", "mobile_image": "mobile_asset"},
         "file_fields": (
-            {"name": "desktop_image", "label": "تصویر دسکتاپ", "required": True},
-            {"name": "mobile_image", "label": "تصویر موبایل (اختیاری)", "required": False,
+            {"name": "desktop_image", "label": "تصویر دسکتاپ", "required": True, "thumb": "desktop_image_url"},
+            {"name": "mobile_image", "label": "تصویر موبایل (اختیاری)", "required": False, "thumb": "mobile_image_url",
              "remove_field": "remove_mobile", "remove_label": "حذف تصویر موبایلِ فعلی"},
         ),
         # Phase 4 (Task 6) — the model attribute the media LIST partial shows
@@ -80,8 +82,8 @@ _MEDIA_KINDS = {
         "section_keys": {"single_banner", "multi_banner"},
         "asset_fields": {"desktop_image": "desktop_asset", "mobile_image": "mobile_asset"},
         "file_fields": (
-            {"name": "desktop_image", "label": "تصویر دسکتاپ", "required": True},
-            {"name": "mobile_image", "label": "تصویر موبایل (اختیاری)", "required": False,
+            {"name": "desktop_image", "label": "تصویر دسکتاپ", "required": True, "thumb": "desktop_image_url"},
+            {"name": "mobile_image", "label": "تصویر موبایل (اختیاری)", "required": False, "thumb": "mobile_image_url",
              "remove_field": "remove_mobile", "remove_label": "حذف تصویر موبایلِ فعلی"},
         ),
         "thumb_field": "desktop_image_url",
@@ -99,12 +101,26 @@ _MEDIA_KINDS = {
         # pair exists.
         "asset_fields": {"image": "image_asset"},
         "file_fields": (
-            {"name": "image", "label": "تصویر", "required": True},
+            {"name": "image", "label": "تصویر", "required": True, "thumb": "image_url"},
         ),
         # ``StoryRailItem`` has no ``desktop_image_url``; its own resolved
         # thumbnail property is ``image_url`` (``apps.content.models.StoryRailItem``).
         "thumb_field": "image_url",
     },
+}
+
+
+#: Media-publish-dirty final hardening — ``_MEDIA_KINDS``' own URL-facing
+#: ``kind`` keys are hyphenated (this module's own vocabulary, predating
+#: this repair); ``section_media_contract``/``layout_service`` key
+#: everything by the underscored Django ``related_name`` on
+#: ``StorefrontSection`` instead (``hero_slides``/``banners``/
+#: ``story_items``). This is the one explicit translation between the two
+#: vocabularies — never inferred, never duplicated ad hoc at each call site.
+_RELATED_NAME_FOR_KIND = {
+    "hero-slides": "hero_slides",
+    "banners": "banners",
+    "story-items": "story_items",
 }
 
 
@@ -170,7 +186,46 @@ def _is_r4_inline(request) -> bool:
     return request.headers.get(_R4_INLINE_HEADER) == "1"
 
 
-def _media_list_body(request, section, kind, config):
+#: Media-publish-dirty repair — the ONE event name every successful,
+#: persistent, publication-visible media write fires so the R4 Studio shell
+#: (``r4_studio.js``) can refresh its "منتشرنشده"/Publish-enabled state the
+#: same way it already does after an ``R4.sendMutation``/Design-Lab-apply
+#: write (``r4:savestate``/``r4:lab-applied`` — see that file's
+#: ``scheduleStatusRefresh``). Media CRUD is a genuinely separate endpoint
+#: family from the R4 mutation queue (own canonical ownership boundary — see
+#: this module's docstring), so it needs its own signal; this is that
+#: signal, and the ONLY one — every write endpoint below funnels its
+#: successful-response through ``_media_changed_response`` instead of each
+#: hand-rolling its own header.
+_R4_MEDIA_CHANGED_EVENT = "r4:media-changed"
+
+#: R4 heavy-editor modal — fired (HX-Trigger-After-Swap) after a successful
+#: modal save so r4_studio.js closes the media-editor dialog without a
+#: discard prompt. Separate from ``r4:media-changed`` on purpose: that one
+#: means "the publication-visible draft changed" and is suppressed for a
+#: no-op edit, whereas the dialog must close after EVERY successful save.
+_R4_MEDIA_MODAL_SAVED_EVENT = "r4:media-modal-saved"
+
+
+def _media_changed_response(response):
+    """Mark ``response`` as following a real, persisted, publication-visible
+    media change — set as an htmx ``HX-Trigger`` response header, which
+    htmx dispatches as a bubbling DOM event on the element that issued the
+    request; the R4 shell listens for it on ``[data-r4-shell]`` (an
+    ancestor of the embedded media manager), the same place it already
+    listens for ``r4:savestate``/``r4:lab-applied``.
+
+    Callers pass this ONLY the response for a write that actually happened
+    (a successful form save, an executed delete/toggle/move/reorder) —
+    never a GET, never a validation-failure re-render, never a no-op
+    (duplicate reorder ids, a move at a list boundary). Getting that call
+    site right is what keeps an invalid submission or a read from ever
+    flipping the Draft to "منتشرنشده" on its own."""
+    response.headers["HX-Trigger"] = _R4_MEDIA_CHANGED_EVENT
+    return response
+
+
+def _media_list_body(request, section, kind, config, notice=None):
     """پارشیالِ فهرستِ آیتم‌ها — یک بار نوشته شده، هم توسطِ صفحه‌ی کامل و هم
     توسطِ هر endpointِ htmx (toggle/delete/reorder/move) برایِ reswap
     استفاده می‌شود؛ دقیقاً همان الگویِ ``storefront_section_list_partial``
@@ -185,7 +240,7 @@ def _media_list_body(request, section, kind, config):
     items = config["model"].objects.filter(section=section).order_by("display_order", "id")
     return render(request, "dashboard/storefront_builder/partials/section_media_list_body.html", {
         "section": section, "items": items, "kind": kind, "config": config,
-        "inline_media": _is_r4_inline(request),
+        "inline_media": _is_r4_inline(request), "adopt_notice": notice,
     })
 
 
@@ -212,18 +267,111 @@ def storefront_section_media_list(request, pk, kind):
     })
 
 
+#: R4 heavy-editor modal — which presentation tab owns a validation error's
+#: field. Tabs are navigation only; this just lets the re-rendered dialog open
+#: on (and flag) the tab that holds the first invalid field. Non-field
+#: (``__all__``) errors from the models' ``clean()`` are destination-coherence
+#: errors, so they belong to the destination tab.
+#: Browsers never restore a selected <input type="file"> after the server
+#: re-renders the form, so a failed save loses the chosen image. This is the
+#: one-line summary (shown at the top of the dialog, whatever tab is active);
+#: the per-field note lives in media_form/_files.html.
+_RESELECT_FILE_SUMMARY = "فایل تصویرِ انتخاب‌شده ذخیره نشد؛ پس از رفع خطا، آن را در تب «تصاویر» دوباره انتخاب کنید."
+
+
+def _media_form_tab_for_field(field_name: str) -> str:
+    if field_name in ("is_active", "display_order"):
+        return "status"
+    if field_name.startswith("destination") or field_name in ("open_in_new_tab", "__all__"):
+        return "destination"
+    if field_name.endswith(("_image", "_asset")) or field_name in ("image", "remove_mobile"):
+        return "media"
+    return "content"
+
+
+def _media_form_errors(exc):
+    """→ (messages, tabs_with_errors, first_error_tab) for a save failure."""
+    if hasattr(exc, "message_dict"):
+        messages_out, tabs = [], []
+        for field_name, field_messages in exc.message_dict.items():
+            messages_out.extend(str(m) for m in field_messages)
+            tab = _media_form_tab_for_field(field_name)
+            if tab not in tabs:
+                tabs.append(tab)
+        first = tabs[0] if tabs else "content"
+        return messages_out, tabs, first
+    return [str(exc)], ["content"], "content"
+
+
+#: destination_type → the ONE POST field (and model attr) that type owns. The
+#: form keeps every sibling control in the DOM (``x-show`` hides, never
+#: disables), so a browser submits stale values for the non-selected types;
+#: only the selected type's own value may be read.
+_DESTINATION_FIELD_BY_TYPE = {
+    "category": ("destination_category", "destination_category_id"),
+    "product": ("destination_product", "destination_product_id"),
+    "brand": ("destination_brand", "destination_brand_id"),
+    "collection": ("destination_collection", "destination_collection_id"),
+}
+_DESTINATION_ID_ATTRS = tuple(attr for _, attr in _DESTINATION_FIELD_BY_TYPE.values())
+
+
+_DESTINATION_TYPE_VALUES = frozenset(DestinationType.values)
+_INVALID_DESTINATION_MESSAGE = "مقدار انتخاب‌شده معتبر نیست"
+#: Largest id a bigint FK column can hold — anything above can never match a row
+#: (and would overflow the DB driver), so it is treated as invalid input.
+_MAX_DESTINATION_ID = 2**63 - 1
+
+
 def _apply_destination_fields(obj, request):
-    obj.destination_type = request.POST.get("destination_type", "none")
-    obj.destination_external_url = request.POST.get("destination_external_url", "").strip()
+    """Apply the posted destination to ``obj`` (type + only that type's own value).
+
+    Untrusted input never reaches the model or the re-rendered form unvalidated:
+    an unknown ``destination_type`` or a non-numeric / out-of-range id raises a
+    ``ValidationError`` keyed by the POST field (so the dialog flags the
+    destination tab) instead of a 500 — and ``obj`` is left in a SAFE state
+    (type ``none`` / id ``None``), so the error re-render can never echo a
+    tampered value into the page.
+    """
+    errors = {}
+    dtype = request.POST.get("destination_type", "none")
+    if dtype not in _DESTINATION_TYPE_VALUES:
+        errors["destination_type"] = _INVALID_DESTINATION_MESSAGE
+        dtype = "none"
+    obj.destination_type = dtype
     obj.open_in_new_tab = request.POST.get("open_in_new_tab") == "on"
-    cat_id = request.POST.get("destination_category") or None
-    prod_id = request.POST.get("destination_product") or None
-    brand_id = request.POST.get("destination_brand") or None
-    collection_id = request.POST.get("destination_collection") or None
-    obj.destination_category_id = int(cat_id) if cat_id else None
-    obj.destination_product_id = int(prod_id) if prod_id else None
-    obj.destination_brand_id = int(brand_id) if brand_id else None
-    obj.destination_collection_id = int(collection_id) if collection_id else None
+    # Clear every destination value first, then set only the one the selected
+    # type owns (none/search/cart own nothing).
+    for attr in _DESTINATION_ID_ATTRS:
+        setattr(obj, attr, None)
+    obj.destination_external_url = ""
+    if dtype == "external":
+        obj.destination_external_url = request.POST.get("destination_external_url", "").strip()
+    elif dtype in _DESTINATION_FIELD_BY_TYPE:
+        post_field, attr = _DESTINATION_FIELD_BY_TYPE[dtype]
+        raw = (request.POST.get(post_field) or "").strip()
+        if raw:
+            try:
+                value = int(raw)
+            except ValueError:
+                value = None
+            if value is None or not 0 < value <= _MAX_DESTINATION_ID:
+                errors[post_field] = _INVALID_DESTINATION_MESSAGE
+            else:
+                setattr(obj, attr, value)
+    if errors:
+        raise ValidationError(errors)
+
+
+def _flash_success(request, text):
+    """Queue a success flash — but never for an inline R4 request.
+
+    The R4 Studio shell renders no Django messages, so a flash queued by an
+    inline request would surface later as a stale toast on an unrelated
+    dashboard page. Legacy full-page / non-R4 requests keep the flash.
+    """
+    if not _is_r4_inline(request):
+        messages.success(request, text)
 
 
 def _sync_asset_references(obj, config, store, *, changed_fields: set[str]) -> None:
@@ -279,6 +427,7 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
     item = get_object_or_404(model, pk=item_pk, section=section) if item_pk else None
 
     file_fields = config["file_fields"]
+    form_errors, error_tabs, error_tab, reselect_fields = [], [], "content", []
 
     if request.method == "POST":
         obj = item or model(store=store, section=section)
@@ -286,16 +435,31 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
             f["name"]: (getattr(obj, f["name"]).name if obj.pk and getattr(obj, f["name"]) else None)
             for f in file_fields
         }
+        # Media-publish-dirty final hardening — captured BEFORE any field on
+        # ``obj`` is mutated below, so this is genuinely "what the Placement
+        # meant, before this request". ``None`` for a brand-new row (ADD is
+        # unconditionally a real semantic change — nothing to compare
+        # against).
+        before_semantic = (
+            placement_semantic_payload(item, _RELATED_NAME_FOR_KIND[kind]) if item else None
+        )
 
         obj.title = request.POST.get("title", "").strip()
         setattr(obj, config["text_field"], request.POST.get(config["text_field"], "").strip())
         obj.button_label = request.POST.get("button_label", "").strip()
         obj.show_button = request.POST.get("show_button") == "on"
-        obj.is_active = request.POST.get("is_active", "on") == "on"
+        # Standard HTML checkbox semantics: an unchecked box OMITS the key, so an
+        # absent key means False (the old ``get("is_active", "on")`` default made
+        # every unchecked Save silently keep/restore is_active=True).
+        obj.is_active = request.POST.get("is_active") == "on"
         if not item:
             last = model.objects.filter(section=section).order_by("-display_order").first()
             obj.display_order = (last.display_order + 1) if last else 0
-        _apply_destination_fields(obj, request)
+        try:
+            _apply_destination_fields(obj, request)
+            destination_error = None
+        except ValidationError as exc:
+            destination_error = exc
 
         for f in file_fields:
             name = f["name"]
@@ -306,6 +470,8 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
                 setattr(obj, name, "")
 
         try:
+            if destination_error is not None:
+                raise destination_error  # surfaces through the normal error branch below
             obj.full_clean()
             obj.save()
             storage = getattr(model, file_fields[0]["name"]).field.storage
@@ -336,10 +502,24 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
 
             changed = set()
             legacy_files_to_cleanup = []
+            asset_field_for = config.get("asset_fields") or {}
             for f in file_fields:
                 name = f["name"]
                 new_name = getattr(obj, name).name if getattr(obj, name) else None
                 if old_names[name] != new_name:
+                    changed.add(name)
+                    continue
+                # Asset-backed rows (cloned from Published, or adopted defaults)
+                # have NO legacy file, so a removal leaves the legacy name unchanged
+                # (None -> None). The asset FK is what must be cleared; it is the
+                # only thing the renderer, publish clone and fingerprint look at.
+                remove_field = f.get("remove_field")
+                asset_field = asset_field_for.get(name)
+                if (
+                    remove_field and asset_field and name not in request.FILES
+                    and request.POST.get(remove_field) == "on"
+                    and getattr(obj, f"{asset_field}_id", None)
+                ):
                     changed.add(name)
             old_assets = _sync_asset_references(obj, config, store, changed_fields=changed) if changed else {}
             for f in file_fields:
@@ -354,7 +534,17 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
                     legacy_files_to_cleanup.append(old_names[name])
             for legacy_name in legacy_files_to_cleanup:
                 cleanup_reusable_media_file(legacy_name, storage)
-            messages.success(request, f"«{config['label']}» ذخیره شد")
+            _flash_success(request, f"«{config['label']}» ذخیره شد")
+            # Media-publish-dirty final hardening — ``r4:media-changed`` must
+            # mean a publication-semantic change actually happened, not
+            # merely that ``.save()`` ran. ADD (``before_semantic is None``)
+            # is unconditionally real; an EDIT that re-saves the exact same
+            # render-visible values (only e.g. touching ``updated_at``, which
+            # is never part of this payload) must NOT flip the Draft to
+            # "منتشرنشده". Same shared helper ``compute_fingerprint`` uses —
+            # "the same Placement, unchanged" is defined exactly once.
+            after_semantic = placement_semantic_payload(obj, _RELATED_NAME_FOR_KIND[kind])
+            semantic_changed = before_semantic is None or before_semantic != after_semantic
             # Phase 5 Task 4 (final review fix) — when the save came from the R4
             # inline manager (explicit marker), return the refreshed manager
             # body so the merchant stays inside R4; a redirect would be
@@ -363,15 +553,40 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
             # exactly as before. Same canonical list body either way.
             if _is_r4_inline(request):
                 items = model.objects.filter(section=section).order_by("display_order", "id")
-                return render(
+                response = render(
                     request,
                     "dashboard/storefront_builder/partials/section_media_manager_body.html",
                     {"section": section, "items": items, "kind": kind, "config": config},
                 )
-            return redirect("dashboard:storefront-builder-section-media-list", pk=section.pk, kind=kind)
+                # R4 heavy-editor modal — the form lives in the Studio's
+                # media-editor dialog (its own htmx target), so the refreshed
+                # list is retargeted into the Inspector's manager and the
+                # dialog is told (after the swap) that the save finished. A
+                # validation failure never reaches here: it re-renders the
+                # form into the dialog's own target with no retarget.
+                response.headers["HX-Retarget"] = "[data-r4-media-manager]"
+                response.headers["HX-Reswap"] = "innerHTML"
+                response.headers["HX-Trigger-After-Swap"] = _R4_MEDIA_MODAL_SAVED_EVENT
+                return _media_changed_response(response) if semantic_changed else response
+            response = redirect("dashboard:storefront-builder-section-media-list", pk=section.pk, kind=kind)
+            return _media_changed_response(response) if semantic_changed else response
         except (ValidationError, IntegrityError) as exc:
             error_message = str(exc.message_dict if hasattr(exc, "message_dict") else exc)
-            messages.error(request, error_message)
+            form_errors, error_tabs, error_tab = _media_form_errors(exc)
+            if not _is_r4_inline(request):
+                # The R4 dialog shows the errors in-form; queuing a Django
+                # message there would leak it onto the next unrelated page.
+                messages.error(request, error_message)
+            # The failed save persisted NO file, but ``obj`` holds the in-memory
+            # upload, which would make the re-rendered form claim a "current
+            # image" that was never stored. Show the persisted truth, and name
+            # every field whose just-selected file was lost: a browser cannot
+            # re-populate a file input, so the merchant must pick it again.
+            reselect_fields = [f["name"] for f in file_fields if f["name"] in request.FILES]
+            for f in file_fields:
+                setattr(obj, f["name"], old_names[f["name"]] or "")
+            if reselect_fields:
+                form_errors = form_errors + [_RESELECT_FILE_SUMMARY]
             item = obj
 
     from apps.catalog.models import Brand, Category, MerchantCollection
@@ -396,7 +611,50 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
         "section": section, "item": item, "kind": kind, "config": config,
         "categories": categories, "brands": brands, "collections": collections,
         "inline_media": is_r4_inline,
+        "form_errors": form_errors, "error_tabs": error_tabs, "error_tab": error_tab,
+        "reselect_fields": reselect_fields,
     })
+
+
+def _adopt_notice(result) -> str:
+    """Merchant-facing outcome of an adoption attempt (created / skipped / nothing)."""
+    if result.created:
+        text = f"{result.created} تصویر پیش‌فرض قابل‌ویرایش شد."
+        if result.skipped:
+            text += f" {result.skipped} مورد بدون فایل تصویر کپی نشد."
+        return text
+    if result.skipped:
+        return f"هیچ موردی کپی نشد: {result.skipped} تصویر پیش‌فرض فایل تصویری ندارد."
+    return "موردی برای تبدیل نبود: تصویر پیش‌فرضی وجود ندارد یا این بخش از قبل مورد فعالِ اختصاصی دارد."
+
+
+@require_POST
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
+def storefront_section_media_adopt_defaults(request, pk, kind):
+    """Make the store-wide DEFAULT media a section is currently showing editable.
+
+    An explicit, merchant-triggered, non-destructive copy (see
+    ``services.media_defaults_service``): the originals are never touched, so
+    nothing the Published storefront shows changes until the Draft is published.
+    A no-op (no copies, no draft-changed signal) when the fallback is not in
+    effect — which also makes a double submit harmless.
+    """
+    section = _get_scoped_section(request, pk)
+    config = _media_config(kind, section)
+    result = media_defaults_service.adopt_store_defaults(
+        section, model=config["model"], related_name=_RELATED_NAME_FOR_KIND[kind],
+        asset_fields=config.get("asset_fields") or {},
+    )
+    notice = _adopt_notice(result)
+    if _is_r4_inline(request) or request.headers.get("HX-Request") == "true":
+        # The notice is rendered inside the refreshed list (created / skipped /
+        # nothing to adopt) — never a flash the R4 shell would not display.
+        response = _media_list_body(request, section, kind, config, notice=notice)
+    else:
+        (messages.success if result.created else messages.warning)(request, notice)
+        response = redirect("dashboard:storefront-builder-section-media-list", pk=section.pk, kind=kind)
+    return _media_changed_response(response) if result.created else response
 
 
 @require_POST
@@ -453,8 +711,8 @@ def storefront_section_media_delete(request, pk, kind, item_pk):
         for legacy_name in legacy_cleanup_names:
             cleanup_reusable_media_file(legacy_name, storage)
 
-    messages.success(request, f"«{config['label']}» حذف شد")
-    return _media_list_body(request, section, kind, config)
+    _flash_success(request, f"«{config['label']}» حذف شد")
+    return _media_changed_response(_media_list_body(request, section, kind, config))
 
 
 @require_POST
@@ -466,7 +724,7 @@ def storefront_section_media_toggle(request, pk, kind, item_pk):
     item = get_object_or_404(config["model"], pk=item_pk, section=section)
     item.is_active = not item.is_active
     item.save(update_fields=["is_active", "updated_at"])
-    return _media_list_body(request, section, kind, config)
+    return _media_changed_response(_media_list_body(request, section, kind, config))
 
 
 @require_POST
@@ -478,17 +736,48 @@ def storefront_section_media_move(request, pk, kind, item_pk):
     section = _get_scoped_section(request, pk)
     config = _media_config(kind, section)
     model = config["model"]
+    related_name = _RELATED_NAME_FOR_KIND[kind]
     direction = request.POST.get("direction")
     item = get_object_or_404(model, pk=item_pk, section=section)
     siblings = list(model.objects.filter(section=section).order_by("display_order", "id"))
     index = next((i for i, s in enumerate(siblings) if s.pk == item.pk), None)
+    moved = False
     if index is not None:
         swap_index = index - 1 if direction == "up" else index + 1
         if 0 <= swap_index < len(siblings):
-            other = siblings[swap_index]
-            item.display_order, other.display_order = other.display_order, item.display_order
-            model.objects.bulk_update([item, other], ["display_order"])
-    return _media_list_body(request, section, kind, config)
+            # Media-publish-dirty final hardening (MOVE semantic-event gap)
+            # — an in-range positional swap alone is NOT proof anything
+            # publication-visible changed: two adjacent rows can already
+            # share the same ``display_order`` (no DB constraint prevents
+            # that — see ``HeroSlide``/``PromotionalBanner``/
+            # ``StoryRailItem`` Meta, ordering-only) or can otherwise be
+            # publication-semantically identical, in which case swapping
+            # them produces the exact same rendered sequence. Compare the
+            # CANONICAL ORDERED SEQUENCE of semantic payloads — via the
+            # SAME shared ``placement_semantic_payload`` helper
+            # ``compute_fingerprint`` and the EDIT before/after check both
+            # already use, never a second definition of "did the rendered
+            # order actually change" — before vs. after the swap, and only
+            # persist/emit when that sequence genuinely differs.
+            before_sequence = [placement_semantic_payload(s, related_name) for s in siblings]
+            siblings[index].display_order, siblings[swap_index].display_order = (
+                siblings[swap_index].display_order, siblings[index].display_order,
+            )
+            after_sequence = [
+                placement_semantic_payload(s, related_name)
+                for s in sorted(siblings, key=lambda s: (s.display_order, s.id))
+            ]
+            if after_sequence != before_sequence:
+                model.objects.bulk_update(
+                    [siblings[index], siblings[swap_index]], ["display_order"],
+                )
+                moved = True
+    response = _media_list_body(request, section, kind, config)
+    # An out-of-range move (already first/last item) is a legitimate no-op,
+    # and so is an in-range swap that changes nothing publication-semantic
+    # (equal display_order, or semantically-identical placements) — never
+    # mark the Draft dirty for a request that changed nothing real.
+    return _media_changed_response(response) if moved else response
 
 
 @require_POST
@@ -507,8 +796,23 @@ def storefront_section_media_reorder(request, pk, kind):
         messages.error(request, "فهرست مرتب‌سازی شامل شناسه‌ی تکراری است — ترتیب تغییر نکرد")
         return _media_list_body(request, section, kind, config)
 
+    if not ordered_ids:
+        # Nothing valid to reorder — a no-op, not a persisted change.
+        return _media_list_body(request, section, kind, config)
+
+    # Media-publish-dirty final hardening — if the requested valid order
+    # already equals the CURRENT effective order (every item's existing
+    # ``display_order`` already matches its requested index), this request
+    # changes nothing: skip the write entirely (no unnecessary DB churn)
+    # and never fire ``r4:media-changed`` for it.
+    existing_orders = dict(
+        model.objects.filter(section=section, pk__in=ordered_ids).values_list("pk", "display_order")
+    )
+    if all(existing_orders.get(item_id) == index for index, item_id in enumerate(ordered_ids)):
+        return _media_list_body(request, section, kind, config)
+
     with transaction.atomic():
         for index, item_id in enumerate(ordered_ids):
             model.objects.filter(pk=item_id, section=section).update(display_order=index)
 
-    return _media_list_body(request, section, kind, config)
+    return _media_changed_response(_media_list_body(request, section, kind, config))

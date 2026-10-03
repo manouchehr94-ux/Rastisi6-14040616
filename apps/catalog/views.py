@@ -110,10 +110,10 @@ def home(request):
         "max_discount": stats["max_discount"] or 0,
         "blog_posts": BlogPost.objects.order_by("-published_at")[:5],
         "special_offer_deadline": (timezone.now() + timedelta(hours=8)).isoformat(),
-        "hero_slides": HeroSlide.objects.filter(is_active=True, store=store).select_related(
+        "hero_slides": HeroSlide.objects.filter(is_active=True, store=store, section__isnull=True).select_related(
             "destination_category", "destination_product", "destination_brand"
         ),
-        "promo_banners": PromotionalBanner.objects.filter(is_active=True, store=store).select_related(
+        "promo_banners": PromotionalBanner.objects.filter(is_active=True, store=store, section__isnull=True).select_related(
             "destination_category", "destination_product", "destination_brand"
         ),
     }

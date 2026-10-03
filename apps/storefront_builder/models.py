@@ -30,6 +30,8 @@ from django.db import models
 
 from apps.core.models import TimeStampedModel
 
+from .section_media_contract import SCOPED_MEDIA_MODELS, placement_semantic_payload
+
 #: کلیدهای toggle هدر/فوتر و مقادیر پیش‌فرض‌شان — تک‌منبع حقیقت، هم برای
 #: فرم‌های ویرایشگر (views.py) و هم برای رندر (preview/صفحه عمومی). اینجا
 #: تعریف شده‌اند (نه فقط در views.py) دقیقاً برای اینکه
@@ -438,14 +440,55 @@ class StorefrontLayoutVersion(TimeStampedModel):
         همان Cell، از رویِ FKِ جدیدِ ``StorefrontSection.cell``/``cell_order``)
         — چیدمانِ چند-بلاکی و ترتیبِ آن‌ها خروجیِ عمومی/منتشرشده را واقعاً
         تغییر می‌دهند، پس باید بخشی از drift-detection باشند، دقیقاً همان
-        استدلالِ row_key/row_span بالا."""
+        استدلالِ row_key/row_span بالا.
+
+        Media-publish-dirty repair — section-scoped media (``HeroSlide``/
+        ``PromotionalBanner``/``StoryRailItem``) is real, published-visible
+        content that was previously invisible to this fingerprint entirely:
+        a merchant could add/edit/delete/toggle/reorder a Hero Slide (via
+        the existing canonical inline media manager — ``media_views.py``)
+        and the Draft would keep reporting "همگام با سایت" (in sync)
+        forever, because nothing here ever looked at these rows. Each
+        placement is fingerprinted by its OWN render-visible fields (the
+        exact same field lists ``layout_service._clone_section_scoped_media``
+        already established as "content that survives a clone verbatim") —
+        never by ``HeroSlide.pk``/``PromotionalBanner.pk``/
+        ``StoryRailItem.pk``/``StorefrontSection.pk``, all of which differ
+        between Published and a cloned Draft by construction (a clone
+        always creates NEW rows — see ``_clone_version_content``). Using
+        those PKs here would make an untouched clone fingerprint as
+        "different" from its own source, which is exactly the false-dirty
+        bug this repair fixes for media, not the one it introduces.
+        ``MediaAsset``/``Category``/``Product``/``Brand``/``MerchantCollection``
+        ids, by contrast, ARE safe to use directly: none of those rows are
+        version-scoped or cloned — a clone copies the same FK value onto
+        the new Placement row (``ASSET_FK_FIELDS``), so the id remains
+        identical on both sides of an unchanged clone.
+
+        N+1 note: each related manager below is read via ``.all()``, never
+        ``.order_by(...)`` — any queryset-modifying call on a
+        ``prefetch_related``'d manager (including ``.order_by()``, even
+        with arguments that would reproduce the same order) bypasses the
+        prefetch cache and re-queries per row. ``.all()`` reuses the
+        cache; the required ``display_order``/``id`` ordering still holds
+        because ``Meta.ordering`` on ``HeroSlide``/``PromotionalBanner``/
+        ``StoryRailItem`` is already ``["display_order", "id"]``."""
         sections = [
             {
                 "page_type": s.page.page_type, "section_key": s.section_key,
                 "order": s.order, "is_active": s.is_active, "settings": s.settings,
                 "row_key": s.row_key, "row_span": s.row_span,
+                "media": {
+                    related_name: [
+                        placement_semantic_payload(row, related_name)
+                        for row in getattr(s, related_name).all()
+                    ]
+                    for related_name in SCOPED_MEDIA_MODELS
+                },
             }
-            for s in self.sections.select_related("page").order_by("page__page_type", "order", "id")
+            for s in self.sections.select_related("page")
+            .prefetch_related("hero_slides", "banners", "story_items")
+            .order_by("page__page_type", "order", "id")
         ]
         containers = []
         for container in StorefrontContainer.objects.filter(page__version=self).select_related(

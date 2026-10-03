@@ -1,0 +1,7 @@
+{# Media form field group — item state. Shared by the legacy linear form and the R4 modal's "وضعیت" tab. #}
+<div class="form-group">
+  <label style="display:flex;align-items:center;gap:6px;font-weight:normal">
+    <input type="checkbox" name="is_active" {% if not item or item.is_active %}checked{% endif %}>
+    فعال (نمایش در فروشگاه)
+  </label>
+</div>

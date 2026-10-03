@@ -334,6 +334,7 @@ urlpatterns = [
     path("storefront-builder/sections/<int:pk>/media/<str:kind>/add/", storefront_builder_media_views.storefront_section_media_form, name="storefront-builder-section-media-add"),
     path("storefront-builder/sections/<int:pk>/media/<str:kind>/<int:item_pk>/edit/", storefront_builder_media_views.storefront_section_media_form, name="storefront-builder-section-media-edit"),
     path("storefront-builder/sections/<int:pk>/media/<str:kind>/<int:item_pk>/delete/", storefront_builder_media_views.storefront_section_media_delete, name="storefront-builder-section-media-delete"),
+    path("storefront-builder/sections/<int:pk>/media/<str:kind>/adopt-defaults/", storefront_builder_media_views.storefront_section_media_adopt_defaults, name="storefront-builder-section-media-adopt-defaults"),
     path("storefront-builder/sections/<int:pk>/media/<str:kind>/<int:item_pk>/toggle/", storefront_builder_media_views.storefront_section_media_toggle, name="storefront-builder-section-media-toggle"),
     path("storefront-builder/sections/<int:pk>/media/<str:kind>/<int:item_pk>/move/", storefront_builder_media_views.storefront_section_media_move, name="storefront-builder-section-media-move"),
     path("storefront-builder/sections/<int:pk>/media/<str:kind>/reorder/", storefront_builder_media_views.storefront_section_media_reorder, name="storefront-builder-section-media-reorder"),

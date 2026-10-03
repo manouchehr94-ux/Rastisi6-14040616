@@ -4814,7 +4814,9 @@ def _uses_visual_storefront_layout(store) -> bool:
 @permission_required(CONTENT_MANAGE)
 def hero_list(request):
     store = _resolve_dashboard_store(request)
-    slides = HeroSlide.objects.filter(store=store).order_by("display_order", "id")
+    # Legacy screen: store-wide slides only. Section-scoped rows belong to a
+    # Draft/Published layout version and are managed through the R4 media manager.
+    slides = HeroSlide.objects.filter(store=store, section__isnull=True).order_by("display_order", "id")
     return render(request, "dashboard/hero_list.html", {
         "slides": slides, "active_page": "homepage",
         "storefront_builder_active": _uses_visual_storefront_layout(store),
@@ -4826,7 +4828,7 @@ def hero_list(request):
 def hero_form(request, pk=None):
     from apps.catalog.models import Brand, Category
     store = _resolve_dashboard_store(request)
-    slide = get_object_or_404(HeroSlide, pk=pk, store=store) if pk else None
+    slide = get_object_or_404(HeroSlide, pk=pk, store=store, section__isnull=True) if pk else None
 
     if request.method == "POST":
         obj = slide or HeroSlide(store=store)
@@ -4909,7 +4911,7 @@ def hero_form(request, pk=None):
 @permission_required(CONTENT_MANAGE)
 def hero_delete(request, pk):
     store = _resolve_dashboard_store(request)
-    slide = get_object_or_404(HeroSlide, pk=pk, store=store)
+    slide = get_object_or_404(HeroSlide, pk=pk, store=store, section__isnull=True)
     desktop_name = slide.desktop_image.name if slide.desktop_image else None
     mobile_name = slide.mobile_image.name if slide.mobile_image else None
     storage = slide.desktop_image.storage
@@ -4934,7 +4936,7 @@ def hero_delete(request, pk):
 @permission_required(CONTENT_MANAGE)
 def hero_toggle(request, pk):
     store = _resolve_dashboard_store(request)
-    slide = get_object_or_404(HeroSlide, pk=pk, store=store)
+    slide = get_object_or_404(HeroSlide, pk=pk, store=store, section__isnull=True)
     slide.is_active = not slide.is_active
     slide.save(update_fields=["is_active", "updated_at"])
     state = "فعال" if slide.is_active else "غیرفعال"
@@ -4946,7 +4948,8 @@ def hero_toggle(request, pk):
 @permission_required(CONTENT_MANAGE)
 def banner_list(request):
     store = _resolve_dashboard_store(request)
-    banners = PromotionalBanner.objects.filter(store=store).order_by("display_order", "id")
+    # Legacy screen: store-wide banners only (section-scoped rows are R4-managed).
+    banners = PromotionalBanner.objects.filter(store=store, section__isnull=True).order_by("display_order", "id")
     return render(request, "dashboard/banner_list.html", {
         "banners": banners, "active_page": "homepage",
         "storefront_builder_active": _uses_visual_storefront_layout(store),
@@ -4958,7 +4961,7 @@ def banner_list(request):
 def banner_form(request, pk=None):
     from apps.catalog.models import Brand, Category
     store = _resolve_dashboard_store(request)
-    banner = get_object_or_404(PromotionalBanner, pk=pk, store=store) if pk else None
+    banner = get_object_or_404(PromotionalBanner, pk=pk, store=store, section__isnull=True) if pk else None
 
     if request.method == "POST":
         obj = banner or PromotionalBanner(store=store)
@@ -5033,7 +5036,7 @@ def banner_form(request, pk=None):
 @permission_required(CONTENT_MANAGE)
 def banner_delete(request, pk):
     store = _resolve_dashboard_store(request)
-    banner = get_object_or_404(PromotionalBanner, pk=pk, store=store)
+    banner = get_object_or_404(PromotionalBanner, pk=pk, store=store, section__isnull=True)
     desktop_name = banner.desktop_image.name if banner.desktop_image else None
     mobile_name = banner.mobile_image.name if banner.mobile_image else None
     storage = banner.desktop_image.storage
@@ -5055,7 +5058,7 @@ def banner_delete(request, pk):
 @permission_required(CONTENT_MANAGE)
 def banner_toggle(request, pk):
     store = _resolve_dashboard_store(request)
-    banner = get_object_or_404(PromotionalBanner, pk=pk, store=store)
+    banner = get_object_or_404(PromotionalBanner, pk=pk, store=store, section__isnull=True)
     banner.is_active = not banner.is_active
     banner.save(update_fields=["is_active", "updated_at"])
     state = "فعال" if banner.is_active else "غیرفعال"

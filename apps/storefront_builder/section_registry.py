@@ -2450,6 +2450,16 @@ PROMO_CARDS_SCHEMA = SettingsSchema(fields=(
 #: empty string exactly like an absent key, so this is byte-identical to
 #: today's un-set behaviour, never a new "promo-4" default).
 MULTI_BANNER_KNOWN_LAYOUT_VARIANTS = ("promo-4", "wide-single", "mini-4", "strip", "atelier-duo", "atelier-wide")
+#: Merchant-facing names for the closed enum above (display only; the stored
+#: value stays the enum key).
+MULTI_BANNER_LAYOUT_VARIANT_LABELS_FA = {
+    "promo-4": "چهار بنر تبلیغاتی",
+    "wide-single": "یک بنر عریض",
+    "mini-4": "چهار بنر کوچک",
+    "strip": "نوار باریک",
+    "atelier-duo": "دو قاب آتلیه",
+    "atelier-wide": "قاب عریض آتلیه",
+}
 
 
 class MultiBannerSettingsError(ValueError):
@@ -2506,7 +2516,9 @@ MULTI_BANNER_SCHEMA = SettingsSchema(fields=(
     SettingsField(
         "layout_variant", "قالبِ نمایش", "choice", "basic",
         default="",
-        choices=(("", "پیش‌فرض (بدون قالبِ خاص)"),) + tuple((x, x) for x in MULTI_BANNER_KNOWN_LAYOUT_VARIANTS),
+        choices=(("", "پیش‌فرض (بدون قالبِ خاص)"),) + tuple(
+            (x, MULTI_BANNER_LAYOUT_VARIANT_LABELS_FA[x]) for x in MULTI_BANNER_KNOWN_LAYOUT_VARIANTS
+        ),
     ),
     SettingsField(
         "item_limit", "حداکثر تعداد بنر", "integer", "advanced",

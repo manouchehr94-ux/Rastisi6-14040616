@@ -1131,3 +1131,123 @@ class Task4R2GlobalGroupScopeLabelTests(R4MutationApiTestCase):
         group_scope_count = content.count('data-r4-scope="global-group"')
         self.assertEqual(group_scope_count, group_count)
         self.assertLess(group_scope_count, control_count)
+
+
+# ------------------------------------------------------------------------
+# Final-QA Defect 2 — Hero "Add Slide" R4-inline submission must never 500.
+#
+# Root cause: ``section_media_form_body.html`` chose the hx-post URL with
+# ``{% if item %}`` — Python truthiness of a model INSTANCE, which is
+# always true, even for a fresh, still-unsaved ``HeroSlide()`` the view
+# re-renders with after a failed ``full_clean()`` on the ADD flow (the
+# error-redisplay branch sets ``item = obj`` unconditionally). That made the
+# error-redisplay of an ADD attempt pick the EDIT url pattern with
+# ``item_pk=item.pk`` where ``item.pk`` is ``None`` -> ``NoReverseMatch`` ->
+# HTTP 500, and — because htmx does not swap DOM on a non-2xx response —
+# with zero merchant-visible feedback. The canonical view/persistence path
+# itself was already correct; only the template's edit-vs-add branch
+# needed ``item.pk`` (a real primary key) instead of bare ``item``.
+# ------------------------------------------------------------------------
+class HeroAddSlideR4InlineSubmissionTests(R4MutationApiTestCase):
+    def _img(self, name="slide.png"):
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        buf = BytesIO()
+        Image.new("RGB", (800, 400), (10, 20, 30)).save(buf, "PNG")
+        return SimpleUploadedFile(name, buf.getvalue(), content_type="image/png")
+
+    def _add_url(self):
+        return reverse(
+            "dashboard:storefront-builder-section-media-add",
+            kwargs={"pk": self.section.pk, "kind": "hero-slides"},
+        )
+
+    def _post_inline(self, data):
+        return self.client.post(
+            self._add_url(), data, HTTP_HX_REQUEST="true", HTTP_HX_R4_INLINE="1",
+        )
+
+    # 1. Hero Add Slide GET/render does not raise.
+    def test_get_render_does_not_raise(self):
+        response = self.client.get(
+            self._add_url(), HTTP_HX_REQUEST="true", HTTP_HX_R4_INLINE="1",
+        )
+        self.assertEqual(response.status_code, 200)
+
+    # 2. Invalid empty submission does not 500; the merchant sees a usable
+    #    re-rendered form (the canonical HTMX validation-response contract).
+    def test_invalid_empty_submission_does_not_500(self):
+        response = self._post_inline({"title": "بدون تصویر", "is_active": "on"})
+        self.assertEqual(response.status_code, 200, response.content)
+
+    # 3. Invalid submission produces zero write.
+    def test_invalid_submission_writes_nothing(self):
+        from apps.content.models import HeroSlide
+
+        before = HeroSlide.objects.filter(section=self.section).count()
+        self._post_inline({"title": "بدون تصویر", "is_active": "on"})
+        self.assertEqual(HeroSlide.objects.filter(section=self.section).count(), before)
+
+    # 4. Valid image submission succeeds, through the existing canonical
+    #    media path (no second upload/storage path).
+    def test_valid_image_submission_succeeds(self):
+        from apps.content.models import HeroSlide
+
+        response = self._post_inline({
+            "title": "اسلاید معتبر", "subtitle": "زیرعنوان",
+            "desktop_image": self._img(), "is_active": "on",
+        })
+        self.assertEqual(response.status_code, 200, response.content)
+        slide = HeroSlide.objects.get(section=self.section, title="اسلاید معتبر")
+        self.assertTrue(slide.desktop_image)
+
+    # 5 + 6. Valid submission persists after reload, and the existing
+    #    canonical MediaAsset authority (never a second one) recorded it.
+    def test_valid_submission_persists_and_uses_canonical_media_asset(self):
+        from apps.content.models import HeroSlide, MediaAsset
+
+        self._post_inline({
+            "title": "اسلاید ماندگار", "desktop_image": self._img(), "is_active": "on",
+        })
+        slide = HeroSlide.objects.get(section=self.section, title="اسلاید ماندگار")
+        self.assertIsNotNone(slide.desktop_asset_id)
+        self.assertTrue(MediaAsset.objects.filter(pk=slide.desktop_asset_id).exists())
+
+        list_response = self.client.get(
+            reverse(
+                "dashboard:storefront-builder-section-media-list",
+                kwargs={"pk": self.section.pk, "kind": "hero-slides"},
+            ),
+            HTTP_HX_REQUEST="true", HTTP_HX_R4_INLINE="1",
+        )
+        self.assertEqual(list_response.status_code, 200)
+        self.assertIn("اسلاید ماندگار", list_response.content.decode())
+
+    # An edit-flow error-redisplay must still pick the EDIT url (a real,
+    # already-persisted item_pk) — proving the fix is scoped to the ADD
+    # flow's unsaved-object case, never breaking the existing edit path.
+    def test_edit_flow_error_redisplay_keeps_the_edit_url(self):
+        from apps.content.models import HeroSlide
+
+        slide = HeroSlide.objects.create(
+            store=self.store, section=self.section, title="اسلاید موجود",
+            desktop_image=self._img(), is_active=True,
+        )
+        edit_url = reverse(
+            "dashboard:storefront-builder-section-media-edit",
+            kwargs={"pk": self.section.pk, "kind": "hero-slides", "item_pk": slide.pk},
+        )
+        # An invalid edit submission (blanking the required image while
+        # leaving no existing file behind is not directly expressible here,
+        # so this uses a show_button/no-destination validation failure from
+        # HeroSlide.clean() instead) must re-render, not 500, and must keep
+        # pointing at THIS item's edit url.
+        response = self.client.post(
+            edit_url, {"title": "اسلاید موجود", "is_active": "on", "show_button": "on"},
+            HTTP_HX_REQUEST="true", HTTP_HX_R4_INLINE="1",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertIn(edit_url, response.content.decode())

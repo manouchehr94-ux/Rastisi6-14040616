@@ -424,6 +424,150 @@ def remove_theme(candidate: DesignLabCandidate) -> DesignLabCandidate:
     )
 
 
+def _with_candidate_state(
+    candidate: DesignLabCandidate,
+    *,
+    candidate_selections: Mapping[str, str],
+    candidate_settings: Mapping,
+    locked_families: frozenset[str] | None = None,
+) -> DesignLabCandidate:
+    """A copy of ``candidate`` whose WORKING state is replaced; the fixed Base,
+    seed and Draft/revision binding are always carried over unchanged."""
+    return DesignLabCandidate(
+        base_selections=candidate.base_selections,
+        base_settings=candidate.base_settings,
+        candidate_selections=candidate_selections,
+        candidate_settings=candidate_settings,
+        locked_families=(
+            candidate.locked_families if locked_families is None else locked_families
+        ),
+        seed=candidate.seed,
+        base_revision=candidate.base_revision,
+        draft_id=candidate.draft_id,
+    )
+
+
+def reset_experiment_to_base(candidate: DesignLabCandidate) -> DesignLabCandidate:
+    """«برگشت به شروع» (Studio) — return the transient Candidate to the FIXED
+    Base the experiment captured when it started, clearing every transient
+    family lock and restoring the experiment Base Theme.
+
+    Unlike :func:`reset_candidate` it never re-reads the committed Draft: the
+    same Base, ``draft_id`` and ``base_revision`` binding survive, so an
+    experiment that went stale (the Draft moved elsewhere) stays stale and is
+    never silently rebased onto newer work. Pure: no Draft/history/revision
+    write.
+    """
+    return _with_candidate_state(
+        candidate,
+        candidate_selections=dict(candidate.base_selections),
+        candidate_settings=_deep_freeze_settings(candidate.base_settings),
+        locked_families=frozenset(),
+    )
+
+
+class TemplateDnaUnavailable(Exception):
+    """The Draft's exact current Ready Template version, or its canonical Store
+    Appearance DNA, cannot be resolved. Callers fail closed — never guess
+    another version."""
+
+
+def _exact_template_dna(draft) -> tuple[dict[str, str], dict]:
+    """The canonical Store Appearance DNA declared by the EXACT Ready Template
+    key + version recorded in the Draft's provenance, resolved through the
+    existing immutable version registry and validated by the canonical manifest
+    contract. Raises :class:`TemplateDnaUnavailable` on any gap."""
+    from .. import layout_preset_registry
+    from ..storefront_appearance.contracts import InvalidStoreAppearanceContract
+    from ..storefront_appearance.validation import validate_store_appearance_manifest
+
+    provenance = getattr(draft, "template_provenance", None)
+    template = provenance.get("template") if isinstance(provenance, Mapping) else None
+    key = template.get("key") if isinstance(template, Mapping) else None
+    version = template.get("version") if isinstance(template, Mapping) else None
+    if not isinstance(key, str) or not key or not isinstance(version, str) or not version:
+        raise TemplateDnaUnavailable("draft has no exact template provenance")
+    preset = layout_preset_registry.get_layout_preset_version(key, version)
+    if preset is None or not isinstance(preset.store_appearance, Mapping):
+        raise TemplateDnaUnavailable(
+            f"template {key!r} version {version!r} has no Store Appearance DNA"
+        )
+    try:
+        validated = validate_store_appearance_manifest(
+            preset.store_appearance, require_complete=True
+        )
+    except InvalidStoreAppearanceContract as exc:
+        raise TemplateDnaUnavailable(str(exc)) from exc
+    primitive = manifest_to_primitive(validated.manifest)
+    return dict(primitive["selections"]), dict(primitive.get("settings", {}))
+
+
+def return_to_template_dna(draft, candidate: DesignLabCandidate) -> DesignLabCandidate:
+    """«بازگشت به سبک اولیه» (Studio) — restore the Candidate's seven design
+    families to the canonical DNA of the Draft's CURRENT exact Ready Template
+    version.
+
+    Independent of locks (locked families are restored too; the lock set itself
+    is kept), preserves the Candidate's current Theme, never touches page
+    composition (``layout``) or any non-design family, and keeps the original
+    Base + ``draft_id`` + ``base_revision`` binding. Pure: no Draft/history/
+    revision write. Raises :class:`TemplateDnaUnavailable` (fail closed).
+    """
+    dna_selections, dna_settings = _exact_template_dna(draft)
+    new_selections = dict(candidate.candidate_selections)
+    new_settings = _deep_freeze_settings(candidate.candidate_settings or {})
+    for family in DESIGN_LAB_RANDOMIZABLE_FAMILIES:
+        if family not in dna_selections:
+            continue
+        new_selections[family] = dna_selections[family]
+        if family in dna_settings:
+            new_settings[family] = dna_settings[family]
+        else:
+            new_settings.pop(family, None)
+    return _with_candidate_state(
+        candidate, candidate_selections=new_selections, candidate_settings=new_settings
+    )
+
+
+def set_candidate_theme(
+    candidate: DesignLabCandidate, *, theme_component_key: str, intensity: str
+) -> DesignLabCandidate:
+    """Transient occasion Theme inside the experiment (Studio «مناسبت»).
+
+    Validates the component through the canonical component registry (it must
+    exist AND belong to the ``theme`` family) and the intensity through the
+    canonical W2 theme contract. The no-op theme delegates to
+    :func:`remove_theme` (a no-op occasion never carries an intensity — the
+    same rule the persisted ``apply_theme`` owner follows). Only the Candidate's
+    theme selection/settings change; Base, every other family, locks, seed and
+    the Draft/revision binding are preserved. Pure: no write of any kind — the
+    ONLY persistence boundary stays ``design_lab.apply_candidate``.
+
+    Raises ``ValueError`` for an invalid component or intensity (fail closed —
+    never falls back to another Theme).
+    """
+    from .. import theme_catalog
+
+    if not isinstance(theme_component_key, str) or not theme_component_key:
+        raise ValueError("invalid_theme_component")
+    component = get_component(theme_component_key)
+    if component is None or component.family_key != "theme":
+        raise ValueError("invalid_theme_component")
+    if theme_component_key == THEME_NONE_COMPONENT_KEY:
+        return remove_theme(candidate)
+    if not isinstance(intensity, str) or not theme_catalog.is_valid_intensity(intensity):
+        raise ValueError("invalid_theme_intensity")
+    new_selections = dict(candidate.candidate_selections)
+    new_selections["theme"] = theme_component_key
+    new_settings = _deep_freeze_settings(candidate.candidate_settings or {})
+    theme_settings = dict(new_settings.get("theme") or {})
+    theme_settings["intensity"] = intensity
+    new_settings["theme"] = theme_settings
+    return _with_candidate_state(
+        candidate, candidate_selections=new_selections, candidate_settings=new_settings
+    )
+
+
 # ---------------------------------------------------------------------------
 # Stale / tenant binding (§14, §15) — real-flow preflight
 # ---------------------------------------------------------------------------
