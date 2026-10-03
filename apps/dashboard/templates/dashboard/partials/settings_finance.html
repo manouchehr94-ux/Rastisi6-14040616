@@ -73,3 +73,19 @@
     </form>
   </div>
 </div>
+
+<div class="card" style="margin-top:16px">
+  <div class="card-head"><h3>⏱ انقضای سفارش‌های پرداخت‌نشده (آنلاین)</h3><span class="hint">پیش‌فرض غیرفعال — پرداخت در محل هرگز منقضی نمی‌شود</span></div>
+  <div class="card-body">
+    <form method="post" action="{% url 'dashboard:settings-order-expiry' %}">
+      {% csrf_token %}
+      <div class="form-row">
+        <div class="form-group"><label>{{ order_expiry_form.unpaid_online_order_ttl_minutes.label }}</label>{{ order_expiry_form.unpaid_online_order_ttl_minutes }}</div>
+        <div class="form-group"><label>{{ order_expiry_form.unpaid_online_order_grace_minutes.label }}</label>{{ order_expiry_form.unpaid_online_order_grace_minutes }}</div>
+      </div>
+      <div class="form-group"><label><input type="checkbox" name="unpaid_expiry_notify_sms" {% if order_expiry_form.unpaid_expiry_notify_sms.value %}checked{% endif %}> ارسالِ پیامکِ لغو (پیش‌فرض خاموش؛ ایمیلِ لغو همیشه ارسال می‌شود)</label></div>
+      <p style="font-size:11.5px;color:var(--muted);margin-bottom:14px">سفارشِ آنلاینِ در انتظارِ پرداخت پس از مهلت لغو می‌شود: موجودی و ظرفیتِ کدِ تخفیف برمی‌گردد. سفارشی که پرداختِ تأییدشده یا پرداختِ در حال انجام (در مهلتِ تکمیلی) دارد لغو نمی‌شود؛ پرداختِ دیرهنگام پس از لغو در «تطبیق پرداخت‌ها» ثبت می‌شود. <b>پیش از فعال‌سازی</b> مدتِ اعتبارِ نشستِ درگاه (زیبال) را تأیید کنید: مهلت باید از آن بیشتر باشد (پیشنهاد: ۶۰ دقیقه). اجرای دوره‌ای دستورِ <code dir="ltr">manage.py expire_unpaid_orders</code> (cron) لازم است.</p>
+      <button type="submit" class="btn btn-primary">ذخیره</button>
+    </form>
+  </div>
+</div>

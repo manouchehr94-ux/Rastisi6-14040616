@@ -50,7 +50,7 @@ class PaymentRaceTests(TransactionTestCase):
         self.config.save()
         self.coupon = Coupon.objects.create(store=self.store, code="PRC", type="percent", value=10, usage_limit=50)
         user = User.objects.create_user(username="pr-cust", password="x12345678")
-        self.customer = Customer.objects.create(user=user, full_name="c", phone="09135550001")
+        self.customer = Customer.objects.create(user=user, full_name="c", phone="09135550001", email="pr@example.com")
         self.address = Address.objects.create(
             customer=self.customer, receiver_name="x", phone=self.customer.phone, province="فارس", city="شیراز",
             postal_code="1111111111", full_address="x",
@@ -159,3 +159,66 @@ class PaymentRaceTests(TransactionTestCase):
         self.assertEqual((paid, reconciled), (True, 1))
         self.assertEqual(PaymentReconciliation.objects.get().kind, PaymentReconciliation.Kind.ALREADY_PAID)
         self.assertEqual(Coupon.objects.get(pk=self.coupon.pk).used_count, 1)
+
+    # ---- انقضایِ سفارش (M2) در برابرِ callback و job موازی ----
+    def _enable_expiry(self):
+        shop = ShopSettings.load(store=self.store)
+        shop.unpaid_online_order_ttl_minutes, shop.unpaid_online_order_grace_minutes = 60, 30
+        shop.save()
+        PaymentGateway.objects.filter(store=self.store, slug="zibal").first() or PaymentGateway.objects.create(store=self.store, name="z", slug="zibal")
+
+    def _old_order_with_old_attempt(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        order = self.order()
+        gw = PaymentGateway.objects.get(store=self.store, slug="zibal")
+        Order.objects.filter(pk=order.pk).update(created_at=timezone.now() - timedelta(hours=3), payment_gateway=gw)
+        attempt = self.attempt(order)
+        PaymentAttempt.objects.filter(pk=attempt.pk).update(updated_at=timezone.now() - timedelta(hours=2))
+        return Order.objects.get(pk=order.pk), attempt
+
+    def test_expiry_job_vs_callback_never_loses_money(self):
+        from apps.orders.services.order_expiry_service import expire_unpaid_orders
+
+        self._enable_expiry()
+        outcomes = set()
+        for _ in range(8):
+            order, attempt = self._old_order_with_old_attempt()
+            stock_after_order = Product.objects.get(pk=self.product.pk).stock
+            with patch("apps.orders.gateways.zibal.requests.post", return_value=self.response(order)):
+                errors = self.race([
+                    lambda: process_callback_and_verify(attempt_public_id=attempt.public_id, callback_data={}, store=self.store),
+                    lambda: expire_unpaid_orders(store=self.store),
+                ])
+            self.assertEqual(errors, [])
+            paid, reconciled = self.assert_money_accounted(order, [attempt])
+            order.refresh_from_db()
+            if paid:  # callback برنده: job باید رد می‌کرد، سفارش لغو نمی‌شود
+                self.assertEqual(order.status, Order.Status.PROCESSING)
+                self.assertEqual(Product.objects.get(pk=self.product.pk).stock, stock_after_order)
+                self.assertEqual(CouponRedemption.objects.get(order=order).status, CouponRedemption.Status.REDEEMED)
+            else:  # job برنده: لغو + تطبیق، موجودی دقیقاً یک‌بار برگشته
+                self.assertEqual((order.status, reconciled), (Order.Status.CANCELED, 1))
+                self.assertEqual(Product.objects.get(pk=self.product.pk).stock, stock_after_order + 1)
+                self.assertEqual(CouponRedemption.objects.get(order=order).status, CouponRedemption.Status.RELEASED)
+            outcomes.add(paid)
+        self.assertTrue(outcomes)
+
+    def test_parallel_expiry_jobs_cancel_once(self):
+        from apps.notifications.models import NotificationOutbox
+        from apps.orders.services.order_expiry_service import expire_unpaid_orders
+
+        self._enable_expiry()
+        order, attempt = self._old_order_with_old_attempt()
+        stock_after_order = Product.objects.get(pk=self.product.pk).stock
+        used_after_order = Coupon.objects.get(pk=self.coupon.pk).used_count
+        errors = self.race([lambda: expire_unpaid_orders(store=self.store) for _ in range(4)])
+        self.assertEqual(errors, [])
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.CANCELED)
+        self.assertEqual(Product.objects.get(pk=self.product.pk).stock, stock_after_order + 1)
+        self.assertEqual(Coupon.objects.get(pk=self.coupon.pk).used_count, used_after_order - 1)
+        self.assertEqual(order.status_history.filter(to_status="canceled").count(), 1)
+        self.assertEqual(NotificationOutbox.objects.filter(order=order, event_key="order.canceled").count(), 1)

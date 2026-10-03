@@ -138,6 +138,18 @@ class ShopSettings(TimeStampedModel):
     gift_wrap_image = models.ImageField("تصویرِ نمونه‌ی کادوپیچی", upload_to="shop/gift_wrap/", blank=True)
     gift_wrap_message_enabled = models.BooleanField("امکانِ نوشتنِ پیامِ کارت‌هدیه", default=True)
 
+    # --- انقضایِ سفارش‌هایِ پرداخت‌نشده‌ی آنلاین (پیش‌فرض: غیرفعال) ---
+    unpaid_online_order_ttl_minutes = models.PositiveIntegerField(
+        "مهلتِ پرداختِ سفارشِ آنلاین (دقیقه؛ ۰ = غیرفعال)", default=0,
+        help_text="سفارشِ در انتظارِ پرداختِ آنلاین پس از این مدت لغو می‌شود (موجودی و ظرفیتِ کدِ تخفیف برمی‌گردد). "
+                  "۰ یعنی هرگز. مقدارِ پیشنهادی ۶۰ — باید از طولِ عمرِ نشستِ درگاه بیشتر باشد.",
+    )
+    unpaid_online_order_grace_minutes = models.PositiveIntegerField(
+        "مهلتِ تکمیلی برایِ پرداختِ در حال انجام (دقیقه)", default=30,
+        help_text="سفارشی که تلاشِ پرداختِ بازی با فعالیتِ کمتر از این مدت دارد منقضی نمی‌شود.",
+    )
+    unpaid_expiry_notify_sms = models.BooleanField("ارسالِ پیامکِ لغو هنگامِ انقضا", default=False)
+
     class SmsBackend(models.TextChoices):
         CONSOLE = "console", "کنسول (فقط لاگ، برای توسعه)"
         MELIPAYAMAK = "melipayamak", "ملی‌پیامک"

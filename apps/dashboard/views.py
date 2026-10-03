@@ -325,6 +325,7 @@ from .forms import (
     CollectionForm,
     FinanceSettingsForm,
     GiftWrapSettingsForm,
+    OrderExpirySettingsForm,
     MainCategoryForm,
     ProductForm,
     ProductImageAltForm,
@@ -4124,6 +4125,11 @@ def _settings_context(
         "finance_form": finance_form or FinanceSettingsForm(initial={
             "tax_percent": shop.tax_percent, "free_shipping_threshold": shop.free_shipping_threshold,
         }),
+        "order_expiry_form": OrderExpirySettingsForm(initial={
+            "unpaid_online_order_ttl_minutes": shop.unpaid_online_order_ttl_minutes,
+            "unpaid_online_order_grace_minutes": shop.unpaid_online_order_grace_minutes,
+            "unpaid_expiry_notify_sms": shop.unpaid_expiry_notify_sms,
+        }),
         "gift_wrap_form": gift_wrap_form or GiftWrapSettingsForm(initial={
             "gift_wrap_available": shop.gift_wrap_available, "gift_wrap_price": shop.gift_wrap_price,
             "gift_wrap_pricing_scope": shop.gift_wrap_pricing_scope, "gift_wrap_title": shop.gift_wrap_title,
@@ -4335,6 +4341,32 @@ def settings_finance(request):
     context["sections"] = SETTINGS_SECTIONS
     context["active_section"] = "finance"
     return render(request, "dashboard/settings.html", context)
+
+
+@require_POST
+@staff_required
+@permission_required(SETTINGS_MANAGE)
+def settings_order_expiry(request):
+    """مهلتِ پرداختِ سفارش‌هایِ آنلاین — پیش‌فرض ۰ (غیرفعال)؛ فقط سفارش‌هایِ آنلاینِ پرداخت‌نشده، هرگز COD."""
+    form = OrderExpirySettingsForm(request.POST)
+    if form.is_valid():
+        shop = ShopSettings.load(store=request.store)
+        before = shop.unpaid_online_order_ttl_minutes
+        cd = form.cleaned_data
+        shop.unpaid_online_order_ttl_minutes = cd["unpaid_online_order_ttl_minutes"]
+        shop.unpaid_online_order_grace_minutes = cd["unpaid_online_order_grace_minutes"]
+        shop.unpaid_expiry_notify_sms = cd["unpaid_expiry_notify_sms"]
+        shop.save(update_fields=["unpaid_online_order_ttl_minutes", "unpaid_online_order_grace_minutes", "unpaid_expiry_notify_sms", "updated_at"])
+        record_audit_event(
+            store=request.store, actor=request.user, action_code="settings.order_expiry_updated",
+            object_type="ShopSettings", object_id=shop.pk, object_label="انقضای سفارش پرداخت‌نشده",
+            before={"ttl_minutes": before}, after={"ttl_minutes": shop.unpaid_online_order_ttl_minutes,
+                                                   "grace_minutes": shop.unpaid_online_order_grace_minutes},
+        )
+        messages.success(request, "تنظیمات انقضای سفارش ذخیره شد")
+    else:
+        messages.error(request, "؛ ".join(sum((list(v) for v in form.errors.values()), [])) or "مقدار نامعتبر است")
+    return redirect("/admin-portal/settings/?section=finance")
 
 
 @require_POST

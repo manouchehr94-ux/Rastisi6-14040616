@@ -180,6 +180,7 @@ urlpatterns = [
     path("settings/industry/update/history/", views.settings_industry_update_history, name="settings-industry-update-history"),
     path("settings/finance/", views.settings_finance, name="settings-finance"),
     path("settings/gift-wrap/", views.settings_gift_wrap, name="settings-gift-wrap"),
+    path("settings/order-expiry/", views.settings_order_expiry, name="settings-order-expiry"),
     path("settings/gift-wrap/products/", engagement_views.gift_wrap_products, name="gift-wrap-products"),
     # ---- کمپین‌ها و مناسبت‌ها
     path("campaigns/", engagement_views.campaign_list, name="campaign-list"),

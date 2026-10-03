@@ -814,3 +814,22 @@ class VisualIdentityForm(forms.Form):
         if failures:
             raise forms.ValidationError(failures)
         return cleaned
+
+
+class OrderExpirySettingsForm(forms.Form):
+    """مهلتِ پرداختِ سفارش‌هایِ آنلاین (۰ = غیرفعال). COD هرگز منقضی نمی‌شود."""
+
+    unpaid_online_order_ttl_minutes = forms.IntegerField(
+        label="مهلتِ پرداخت (دقیقه؛ ۰ = غیرفعال)", min_value=0, max_value=10080, widget=forms.NumberInput(attrs={"class": "inp", "dir": "ltr"}),
+    )
+    unpaid_online_order_grace_minutes = forms.IntegerField(
+        label="مهلتِ تکمیلی (دقیقه)", min_value=0, max_value=1440, widget=forms.NumberInput(attrs={"class": "inp", "dir": "ltr"}),
+    )
+    unpaid_expiry_notify_sms = forms.BooleanField(label="ارسالِ پیامکِ لغو", required=False)
+
+    def clean(self):
+        cleaned = super().clean()
+        ttl = cleaned.get("unpaid_online_order_ttl_minutes")
+        if ttl and ttl < 15:
+            self.add_error("unpaid_online_order_ttl_minutes", "مهلت باید ۰ (غیرفعال) یا حداقل ۱۵ دقیقه باشد.")
+        return cleaned

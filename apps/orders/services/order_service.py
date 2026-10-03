@@ -373,7 +373,8 @@ def create_order_from_cart(
 
 @transaction.atomic
 def change_order_status(
-    order: Order, to_status: str, *, by=None, note: str = "", tracking_code: str = "", store
+    order: Order, to_status: str, *, by=None, note: str = "", tracking_code: str = "", store,
+    suppress_sms: bool = False,
 ) -> Order:
     """وضعیت سفارش را تغییر می‌دهد و حتماً یک رکورد OrderStatusHistory می‌سازد.
 
@@ -425,7 +426,7 @@ def change_order_status(
     business_events.order_status_changed(order, to_status)
 
     sms_event = STATUS_SMS_EVENTS.get(to_status)
-    if sms_event:
+    if sms_event and not suppress_sms:
         transaction.on_commit(
             lambda: send_event_sms(
                 sms_event, order.customer.phone, _order_sms_context(order), store=store
