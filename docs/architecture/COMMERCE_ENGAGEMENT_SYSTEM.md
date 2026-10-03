@@ -116,6 +116,10 @@ All referenced ids are verified against the campaign's store.
 
 ## 5. Known limitations / not implemented
 
+* Optional extensions not implemented: free-product / gift-with-purchase rewards (needs a product decision), coordinate-based geo targeting (no coordinate data), birthday column in customer lists, password-recovery/e-mail-verification/support-ticket events (workflows do not exist). Acceptance matrix: report §19.3.
+* Promotional SMS: consent-gated; no provider-level suppression/unsubscribe exists — the provider's promotional-message policy is the one external dependency (report §19.1).
+* Cron: ready-to-apply `deploy/cron/*` (wrapper, crontab, validation script); not verified on a real scheduler.
+
 * No latitude/longitude data → "geographic location" is province/city only.
 * "Free product / gift with purchase" reward types are not implemented (reward model is `coupon | none`; free shipping is a
   coupon type).
