@@ -13,3 +13,14 @@ python tools/engagement_e2e/rule_builder_e2e.py   # 22 checks: nested AND/OR bui
 python tools/engagement_e2e/workflow_e2e.py       # 27 checks: PDP→cart→checkout→account, admin order/invoice, templates, birthday
 ```
 Re-run `reset.sh` between runs (the workflow suite creates a customer).
+
+## Cross-viewport / accessibility suite (H9)
+
+```
+cd tools/engagement_e2e && npm i axe-core && cd ../..        # node_modules is git-ignored
+E2E_PG_BASE=postgres://user:pw@localhost:5432 bash tools/engagement_e2e/reset.sh   # E2E_PG_BASE overrides the default server
+python tools/engagement_e2e/accessibility_e2e.py              # 67 checks: 3 viewports x (keyboard-only, names/roles, tab order, RTL/Persian, touch, axe WCAG 2.1 A/AA)
+```
+Engines: Chromium always. Firefox/WebKit run automatically when installed (`PLAYWRIGHT_BROWSERS_PATH`) and are reported as
+`NOT RUN` otherwise — they are **not** claimed as passed. Report: `/tmp/e2e/a11y_report.json`.
+Templates are cached by `runserver --noreload`: re-run `reset.sh` after editing a template.

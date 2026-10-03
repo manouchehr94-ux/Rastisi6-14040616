@@ -24,6 +24,10 @@
     (children || []).forEach(function (c) { if (c) n.appendChild(typeof c === "string" ? document.createTextNode(c) : c); });
     return n;
   }
+  // مدیریتِ فوکوس: رندرِ دوباره DOM را می‌سازد؛ بدونِ بازگرداندنِ فوکوس، کاربرِ صفحه‌کلید/صفحه‌خوان به <body> پرت می‌شود.
+  var ids = new WeakMap(), seq = 0, nextFocus = null;
+  function idOf(n) { if (!ids.has(n)) ids.set(n, ++seq); return ids.get(n); }
+  function request(key) { nextFocus = key; }
   function sync() { input.value = JSON.stringify(root.children.length ? root : {}); }
   function splitList(s) { return String(s || "").split(/[,،\n]/).map(function (x) { return x.trim(); }).filter(Boolean); }
   function visible(field, node) {
@@ -36,6 +40,7 @@
 
   function fieldControl(field, node, rerender) {
     var name = field.name, t = field.type, ctl;
+    var fk = idOf(node) + ":f:" + name;
     function set(v) { if (v === "" || v === null || (Array.isArray(v) && !v.length)) delete node[name]; else node[name] = v; sync(); }
     if (node[name] === undefined && field.default !== undefined) { node[name] = field.default; }
     if (t === "select") {
@@ -69,38 +74,46 @@
       var have = (node[name] || []).map(String);
       Array.prototype.forEach.call(ctl.options, function (o) { o.selected = have.indexOf(o.value) >= 0; });
     } else { ctl = h("span", { text: "؟" }); }
+    ctl.setAttribute("data-fk", fk);
     return h("label", { class: "rb-field", style: "display:inline-flex;flex-direction:column;gap:2px;font-size:12px" }, [field.label, ctl]);
   }
 
   function renderLeaf(node, parent, rerender) {
     var spec = leafByKey[node.type] || { label: node.type, fields: [] };
-    var box = h("div", { class: "rb-leaf", style: "border:1px solid var(--line,#d9dce3);border-radius:10px;padding:10px;margin:6px 0;background:var(--card,#fff)" });
+    var pos = parent.children.indexOf(node) + 1;
+    var leafName = "شرط «" + spec.label + "» (شماره " + pos + ")";
+    var box = h("div", { class: "rb-leaf", role: "group", "aria-label": leafName, style: "border:1px solid var(--line,#d9dce3);border-radius:10px;padding:10px;margin:6px 0;background:var(--card,#fff)" });
     var head = h("div", { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:6px" }, [
       h("b", { text: spec.label }),
-      h("button", { type: "button", class: "btn btn-sm btn-danger", "aria-label": "حذف شرط", text: "حذف", onclick: function () { parent.children.splice(parent.children.indexOf(node), 1); sync(); rerender(); } }),
+      h("button", { type: "button", class: "btn btn-sm btn-danger", "aria-label": "حذف " + leafName, "data-fk": idOf(node) + ":del", text: "حذف", onclick: function () { parent.children.splice(parent.children.indexOf(node), 1); sync(); request(idOf(parent) + ":picker"); rerender(); } }),
     ]);
     box.appendChild(head);
     if (spec.help) box.appendChild(h("small", { text: spec.help, style: "color:var(--muted,#6b7280);display:block;margin-bottom:6px" }));
     var row = h("div", { style: "display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end" });
     (spec.fields || []).forEach(function (f) { if (visible(f, node)) row.appendChild(fieldControl(f, node, rerender)); });
+    var firstCtl = row.querySelector("[data-fk]");
+    if (firstCtl) firstCtl.setAttribute("data-first", idOf(node));
+    else head.querySelector("button").setAttribute("data-first", idOf(node));
     box.appendChild(row);
     return box;
   }
 
   function renderGroup(node, parent, rerender, depth) {
-    var box = h("div", { class: "rb-group", style: "border:2px solid " + (node.op === "or" ? "#f59e0b" : "#6366f1") + ";border-radius:12px;padding:10px;margin:8px 0;background:rgba(99,102,241,.04)" });
-    var opSel = h("select", { class: "inp", style: "width:auto", "aria-label": "عملگر گروه", onchange: function (e) { node.op = e.target.value; sync(); rerender(); } }, [
+    var gid = idOf(node);
+    var gname = depth === 1 ? "گروهِ اصلیِ شرط‌ها" : "گروهِ تودرتو (سطح " + depth + ")";
+    var box = h("div", { class: "rb-group", role: "group", "aria-label": gname, style: "border:2px solid " + (node.op === "or" ? "#f59e0b" : "#6366f1") + ";border-radius:12px;padding:10px;margin:8px 0;background:rgba(99,102,241,.04)" });
+    var opSel = h("select", { class: "inp", style: "width:auto", "aria-label": "عملگر " + gname, "data-fk": gid + ":op", onchange: function (e) { node.op = e.target.value; sync(); rerender(); } }, [
       h("option", { value: "and", text: "همه‌ی شرط‌ها (و — AND)" }), h("option", { value: "or", text: "یکی از شرط‌ها (یا — OR)" })]);
     opSel.value = node.op;
-    var neg = h("label", { style: "font-size:12px" }, [h("input", { type: "checkbox", onchange: function (e) { node.negate = e.target.checked; sync(); } }), " برعکس (NOT)"]);
+    var neg = h("label", { style: "font-size:12px" }, [h("input", { type: "checkbox", "aria-label": "برعکس (NOT) — " + gname, "data-fk": gid + ":neg", onchange: function (e) { node.negate = e.target.checked; sync(); } }), " برعکس (NOT)"]);
     neg.firstChild.checked = !!node.negate;
     var head = h("div", { style: "display:flex;gap:10px;align-items:center;flex-wrap:wrap" }, [opSel, neg]);
-    if (parent) head.appendChild(h("button", { type: "button", class: "btn btn-sm btn-danger", text: "حذف گروه", onclick: function () { parent.children.splice(parent.children.indexOf(node), 1); sync(); rerender(); } }));
+    if (parent) head.appendChild(h("button", { type: "button", class: "btn btn-sm btn-danger", text: "حذف گروه", "aria-label": "حذف " + gname, onclick: function () { parent.children.splice(parent.children.indexOf(node), 1); sync(); request(idOf(parent) + ":picker"); rerender(); } }));
     box.appendChild(head);
     node.children.forEach(function (child) {
       box.appendChild(child.type === "group" ? renderGroup(child, node, rerender, depth + 1) : renderLeaf(child, node, rerender));
     });
-    var picker = h("select", { class: "inp", style: "width:auto;max-width:260px", "aria-label": "افزودن شرط" }, [h("option", { value: "", text: "＋ افزودن شرط…" })]);
+    var picker = h("select", { class: "inp", style: "width:auto;max-width:260px", "aria-label": "افزودن شرط به " + gname, "data-fk": gid + ":picker" }, [h("option", { value: "", text: "＋ افزودن شرط…" })]);
     var cats = {};
     schema.leaves.forEach(function (l) { (cats[l.category || "سایر"] = cats[l.category || "سایر"] || []).push(l); });
     Object.keys(cats).forEach(function (c) {
@@ -110,14 +123,28 @@
     });
     picker.addEventListener("change", function () {
       if (!picker.value) return;
-      node.children.push({ type: picker.value }); sync(); rerender();
+      var child = { type: picker.value };
+      node.children.push(child); sync(); request("first:" + idOf(child)); rerender();
     });
     var actions = h("div", { style: "display:flex;gap:8px;margin-top:8px;flex-wrap:wrap" }, [picker]);
-    if (depth < 5) actions.appendChild(h("button", { type: "button", class: "btn btn-sm", text: "＋ گروهِ تودرتو", onclick: function () { node.children.push({ type: "group", op: "or", negate: false, children: [] }); sync(); rerender(); } }));
+    if (depth < 5) actions.appendChild(h("button", { type: "button", class: "btn btn-sm", text: "＋ گروهِ تودرتو", "aria-label": "افزودن گروهِ تودرتو به " + gname, "data-fk": gid + ":nested", onclick: function () { var g = { type: "group", op: "or", negate: false, children: [] }; node.children.push(g); sync(); request(idOf(g) + ":op"); rerender(); } }));
     box.appendChild(actions);
     return box;
   }
 
-  function rerender() { el.innerHTML = ""; el.appendChild(renderGroup(root, null, rerender, 1)); sync(); }
+  function rerender() {
+    var active = document.activeElement;
+    var key = nextFocus || (active && el.contains(active) && active.getAttribute ? active.getAttribute("data-fk") : null);
+    nextFocus = null;
+    el.innerHTML = "";
+    el.appendChild(renderGroup(root, null, rerender, 1));
+    sync();
+    if (key) {
+      var target = key.indexOf("first:") === 0 ? el.querySelector('[data-first="' + key.slice(6) + '"]') : el.querySelector('[data-fk="' + key + '"]');
+      if (target) target.focus();
+    }
+  }
+  el.setAttribute("role", "region");
+  el.setAttribute("aria-label", "سازنده‌ی قواعد کمپین");
   rerender();
 })();
