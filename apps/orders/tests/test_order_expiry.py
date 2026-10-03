@@ -255,3 +255,37 @@ class ExpirySettingsViewTests(ExpiryBase):
         client = Client(HTTP_HOST=self.host)
         client.force_login(user)
         return client
+
+
+class JobReliabilityTests(ExpiryBase):
+    def test_one_failing_order_does_not_stop_the_batch_and_is_counted(self):
+        from unittest.mock import patch
+
+        from apps.orders.services import order_expiry_service as svc
+
+        self.enable()
+        bad, good = self.old_order(), self.old_order()
+        real = svc._expire_one
+
+        def flaky(order_id, *a, **k):
+            if order_id == bad.pk:
+                raise RuntimeError("boom")
+            return real(order_id, *a, **k)
+
+        with patch.object(svc, "_expire_one", side_effect=flaky):
+            stats = self.run_job()
+        self.assertEqual((stats["expired"], stats["errors"]), (1, 1))
+        self.assertEqual((self.status(good), self.status(bad)), (Order.Status.CANCELED, Order.Status.PENDING))
+        self.assertEqual(self.run_job()["expired"], 1)  # بازاجرا امن است و سفارشِ خراب را دوباره امتحان می‌کند
+
+    def test_health_check_flags_overdue_order_when_expiry_enabled(self):
+        import json
+
+        self.enable(ttl=60, grace=30)
+        self.old_order(age=timedelta(hours=5))
+        out = StringIO()
+        with self.assertRaises(SystemExit) as ctx:
+            call_command("check_background_jobs", "--json", stdout=out)
+        self.assertEqual(ctx.exception.code, 1)
+        detail = next(c for c in json.loads(out.getvalue())["checks"] if c["check"].startswith("order_expiry:"))
+        self.assertEqual(detail["level"], "WARNING")

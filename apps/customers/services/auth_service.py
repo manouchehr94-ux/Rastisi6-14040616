@@ -38,7 +38,8 @@ class AuthError(Exception):
 
 
 @transaction.atomic
-def signup(*, full_name: str, phone: str, password: str, store) -> Customer:
+def signup(*, full_name: str, phone: str, password: str, store,
+           accepts_promotional_sms: bool = False, accepts_promotional_email: bool = False) -> Customer:
     """``store`` الزامی است — همان Store که برای پیامک خوش‌آمدگویی استفاده می‌شود."""
     if Customer.objects.filter(phone=phone).exists() or User.objects.filter(username=phone).exists():
         raise AuthError("این شماره موبایل قبلاً ثبت‌نام کرده است")
@@ -49,6 +50,12 @@ def signup(*, full_name: str, phone: str, password: str, store) -> Customer:
 
     user = User.objects.create_user(username=phone, password=password)
     customer = Customer.objects.create(user=user, full_name=full_name, phone=phone)
+    from apps.customers.services import consent_service
+
+    consent_service.grant_at_opt_in(
+        customer, source=Customer.ConsentSource.REGISTRATION,
+        sms=accepts_promotional_sms, email=accepts_promotional_email, store=store,
+    )
     transaction.on_commit(
         lambda: send_event_sms(SmsEvent.WELCOME, phone, {"customer_name": full_name}, store=store)
     )

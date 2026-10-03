@@ -20,6 +20,9 @@ class CheckoutAddressForm(forms.Form):
     note = forms.CharField(label="توضیحات سفارش", max_length=300, required=False)
     # اختیاری — خالی بودن هرگز تولدِ ذخیره‌شده‌ی مشتری را پاک نمی‌کند.
     birth_date = forms.CharField(label="تاریخ تولد (اختیاری)", max_length=12, required=False)
+    # رضایتِ تبلیغاتی: اختیاری، هرگز از پیش‌تیک‌خورده؛ نزدنِ تیک رضایتِ قبلی را پس نمی‌گیرد (فقط تنظیماتِ حساب).
+    accepts_promotional_sms = forms.BooleanField(label="دریافت پیامک‌های تبلیغاتی", required=False)
+    accepts_promotional_email = forms.BooleanField(label="دریافت ایمیل‌های تبلیغاتی", required=False)
 
     def clean_birth_date(self):
         from apps.customers.services.profile_service import BirthDateError, parse_birth_date

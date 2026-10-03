@@ -23,7 +23,7 @@
       {% if customer.email %}ایمیل: <span dir="ltr">{{ customer.email }}</span><br>{% endif %}
       شهر: {{ customer.city|default:"—" }}<br>
       تاریخ تولد: {% if customer.birth_date %}{{ customer.birth_date|jalali }}{% else %}ثبت نشده{% endif %}<br>
-      پیامک تبلیغاتی: {% if customer.accepts_promotional_sms %}موافق{% else %}مخالف{% endif %} · ایمیل تبلیغاتی: {% if customer.accepts_promotional_email %}موافق{% else %}مخالف{% endif %}<br>
+      پیامک تبلیغاتی: {% if customer.accepts_promotional_sms %}رضایتِ ثبت‌شده{% else %}بدونِ رضایت{% endif %}{% if customer.promo_sms_consent_source %} ({{ customer.get_promo_sms_consent_source_display }}){% endif %} · ایمیل تبلیغاتی: {% if customer.accepts_promotional_email %}رضایتِ ثبت‌شده{% else %}بدونِ رضایت{% endif %}{% if customer.promo_email_consent_source %} ({{ customer.get_promo_email_consent_source_display }}){% endif %}<br>
       تاریخ عضویت: {{ customer.created_at|jalali }}
     </div>
   </div>

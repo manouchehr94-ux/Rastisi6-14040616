@@ -115,6 +115,8 @@ def signup_view(request):
                 phone=form.cleaned_data["phone"],
                 password=form.cleaned_data["password"],
                 store=resolve_store_for_service(request),
+                accepts_promotional_sms=form.cleaned_data["accepts_promotional_sms"],
+                accepts_promotional_email=form.cleaned_data["accepts_promotional_email"],
             )
         except auth_service.AuthError as exc:
             form.add_error(None, str(exc))
@@ -263,10 +265,10 @@ def account_profile_update(request):
             profile_service.update_communication_preferences(
                 customer, sms=form.cleaned_data["accepts_promotional_sms"],
                 email=form.cleaned_data["accepts_promotional_email"],
+                source="account", store=resolve_store_for_service(request),
             )
         if previous_email != customer.email:
             from apps.notifications.services import business_events
-            from apps.stores.resolution import resolve_store_for_service
 
             business_events.account_sensitive_changed(customer, resolve_store_for_service(request), "ایمیل")
         customer.refresh_from_db()

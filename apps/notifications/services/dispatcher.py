@@ -89,9 +89,9 @@ def _customer_recipient(customer, channel: str) -> str:
 
 
 def _consented(customer, channel: str) -> bool:
-    if customer is None:
-        return False
-    return customer.accepts_promotional_sms if channel == ev.SMS else customer.accepts_promotional_email
+    from apps.customers.services.consent_service import has_promotional_consent
+
+    return has_promotional_consent(customer, channel)
 
 
 def _create(*, store, event, channel, recipient, subject, body, customer, order, dedupe, is_promotional,

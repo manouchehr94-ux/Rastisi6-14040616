@@ -116,6 +116,7 @@ class AccountProfileTests(TestCase):
         user = User.objects.create_user(username="09125550001", password="pass12345")
         self.customer = Customer.objects.create(
             user=user, full_name="مشتری", phone="09125550001", birth_date=dt.date(1991, 8, 14),
+            accepts_promotional_sms=True,  # رضایتِ ثبت‌شده؛ پیش‌فرضِ جدید «بدونِ رضایت» است
         )
         self.client.login(username="09125550001", password="pass12345")
 

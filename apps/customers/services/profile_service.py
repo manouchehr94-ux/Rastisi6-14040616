@@ -62,14 +62,9 @@ def update_birth_date(customer, raw) -> bool:
     return True
 
 
-def update_communication_preferences(customer, *, sms: bool | None = None, email: bool | None = None) -> bool:
-    fields = []
-    if sms is not None and customer.accepts_promotional_sms != sms:
-        customer.accepts_promotional_sms = sms
-        fields.append("accepts_promotional_sms")
-    if email is not None and customer.accepts_promotional_email != email:
-        customer.accepts_promotional_email = email
-        fields.append("accepts_promotional_email")
-    if fields:
-        customer.save(update_fields=fields + ["updated_at"])
-    return bool(fields)
+def update_communication_preferences(customer, *, sms: bool | None = None, email: bool | None = None,
+                                     source: str = "account", store=None) -> bool:
+    """تنظیماتِ حسابِ مشتری (اعطا و پس‌گرفتن) — به سیاستِ واحدِ ``consent_service`` واگذار شده."""
+    from apps.customers.services import consent_service
+
+    return consent_service.set_promotional_consent(customer, source=source, sms=sms, email=email, store=store)

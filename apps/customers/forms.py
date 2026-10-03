@@ -60,6 +60,9 @@ class SignupForm(PhoneCleanMixin, forms.Form):
     full_name = forms.CharField(label="نام و نام خانوادگی", max_length=150)
     phone = forms.CharField(label="شماره موبایل", max_length=15)
     password = forms.CharField(label="رمز عبور", widget=forms.PasswordInput)
+    # اختیاری و هرگز از پیش‌انتخاب‌شده — رضایت فقط با تیکِ صریحِ مشتری ثبت می‌شود.
+    accepts_promotional_sms = forms.BooleanField(label="دریافت پیامک‌های تبلیغاتی", required=False)
+    accepts_promotional_email = forms.BooleanField(label="دریافت ایمیل‌های تبلیغاتی", required=False)
 
 
 class BirthDateFieldMixin:

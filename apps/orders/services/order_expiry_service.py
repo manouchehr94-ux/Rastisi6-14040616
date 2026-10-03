@@ -69,7 +69,7 @@ def _skip_reason(order: Order, shop, now, online_codes) -> str:
 def expire_unpaid_orders(*, store=None, now=None, dry_run: bool = False, batch_size: int = 200) -> dict:
     """→ ``{"candidates", "expired", "skipped": {reason: n}}``."""
     now = now or timezone.now()
-    stats = {"candidates": 0, "expired": 0, "skipped": {}}
+    stats = {"candidates": 0, "expired": 0, "errors": 0, "skipped": {}}
     shops = ShopSettings.objects.filter(unpaid_online_order_ttl_minutes__gt=0).select_related("store")
     if store is not None:
         shops = shops.filter(store=store)
@@ -87,7 +87,12 @@ def expire_unpaid_orders(*, store=None, now=None, dry_run: bool = False, batch_s
             last_pk = ids[-1]
             for order_id in ids:
                 stats["candidates"] += 1
-                reason = _expire_one(order_id, shop, now, online_codes, dry_run)
+                try:
+                    reason = _expire_one(order_id, shop, now, online_codes, dry_run)
+                except Exception:  # noqa: BLE001 — یک سفارشِ خراب بقیه را متوقف نمی‌کند؛ تراکنشِ همان سفارش برگشت خورده
+                    logger.exception("expiring order %s failed", order_id)
+                    stats["errors"] += 1
+                    continue
                 if reason:
                     stats["skipped"][reason] = stats["skipped"].get(reason, 0) + 1
                 else:

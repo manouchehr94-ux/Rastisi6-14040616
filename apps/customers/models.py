@@ -29,10 +29,29 @@ class Customer(TimeStampedModel):
         "ماه/روزِ تولد (جلالی)", null=True, blank=True, db_index=True, editable=False,
     )
 
-    # ترجیحاتِ ارتباطی — پیام‌هایِ تبلیغاتی (کمپین/تولد/مناسبت) فقط در صورتِ
-    # رضایت ارسال می‌شود؛ پیام‌هایِ تراکنشی/امنیتی (سفارش، OTP…) مستقل‌اند.
-    accepts_promotional_sms = models.BooleanField("دریافتِ پیامکِ تبلیغاتی", default=True)
-    accepts_promotional_email = models.BooleanField("دریافتِ ایمیلِ تبلیغاتی", default=True)
+    # ترجیحاتِ ارتباطی — پیام‌هایِ تبلیغاتی (کمپین/تولد/مناسبت) فقط در صورتِ **رضایتِ ثبت‌شده**
+    # ارسال می‌شود؛ پیام‌هایِ تراکنشی/امنیتی (سفارش، پرداخت، OTP…) کاملاً مستقل‌اند.
+    # سیاستِ واحد: ``apps.customers.services.consent_service`` (تنها نقطه‌ی تغییر/ارزیابی).
+    # پیش‌فرض «عدمِ رضایت» است؛ رضایتِ نامعلوم هرگز رضایت حساب نمی‌شود. کانال‌ها مستقل‌اند.
+    class ConsentSource(models.TextChoices):
+        REGISTRATION = "registration", "ثبت‌نام"
+        CHECKOUT = "checkout", "تسویه‌حساب"
+        ACCOUNT = "account", "تنظیماتِ حسابِ مشتری"
+        ADMIN = "admin", "ثبتِ دستیِ مدیر"
+        IMPORT = "import", "ورودِ دسته‌ایِ دارایِ مدرک"
+        LEGACY_UNVERIFIED = "legacy_unverified", "قدیمی — بدونِ مدرکِ رضایت (بی‌اثر شد)"
+        LEGACY_OPT_OUT = "legacy_opt_out", "قدیمی — انصرافِ صریح"
+
+    accepts_promotional_sms = models.BooleanField("دریافتِ پیامکِ تبلیغاتی", default=False)
+    accepts_promotional_email = models.BooleanField("دریافتِ ایمیلِ تبلیغاتی", default=False)
+    promo_sms_consent_source = models.CharField(
+        "منبعِ آخرین تغییرِ رضایتِ پیامکی", max_length=20, choices=ConsentSource.choices, blank=True, default="",
+    )
+    promo_email_consent_source = models.CharField(
+        "منبعِ آخرین تغییرِ رضایتِ ایمیلی", max_length=20, choices=ConsentSource.choices, blank=True, default="",
+    )
+    promo_sms_consent_changed_at = models.DateTimeField("زمانِ آخرین تغییرِ رضایتِ پیامکی", null=True, blank=True)
+    promo_email_consent_changed_at = models.DateTimeField("زمانِ آخرین تغییرِ رضایتِ ایمیلی", null=True, blank=True)
 
     class Meta:
         verbose_name = "مشتری"

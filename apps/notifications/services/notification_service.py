@@ -159,9 +159,26 @@ def _anchor_delivery_validity(notification: NotificationOutbox) -> None:
     )
 
 
-def _process(notification: NotificationOutbox, now) -> bool:
+def _consent_withdrawn(notification: NotificationOutbox) -> bool:
+    """پیامِ تبلیغاتیِ صف‌شده برایِ مشتری: اگر رضایتِ کانال تا لحظه‌ی ارسال پس گرفته شده (یا هرگز ثبت نبوده)
+    ارسال نمی‌شود. پیام‌هایِ تراکنشی/امنیتی/کارکنان و ارسال‌هایِ آزمایشی تأثیری نمی‌پذیرند."""
+    if not (notification.is_promotional and notification.customer_id) or notification.is_test:
+        return False
+    from apps.customers.services.consent_service import fresh_promotional_consent
+
+    return not fresh_promotional_consent(notification.customer_id, notification.channel)
+
+
+def _process(notification: NotificationOutbox, now) -> bool | None:
     """یک اعلانِ برداشته‌شده (SENDING) را می‌فرستد و وضعیتش را ذخیره می‌کند.
-    → ``True`` اگر ارسال موفق بود."""
+    → ``True`` اگر ارسال موفق بود، ``False`` اگر شکست خورد، ``None`` اگر به‌دلیلِ نبودِ رضایت ارسال نشد."""
+    if _consent_withdrawn(notification):
+        notification.status = S.SKIPPED
+        notification.skip_reason = "consent_withdrawn"
+        notification.claimed_at = None
+        notification.next_attempt_at = None
+        notification.save(update_fields=["status", "skip_reason", "claimed_at", "next_attempt_at", "updated_at"])
+        return None
     notification.attempts += 1
     ok = True
     try:
@@ -193,13 +210,16 @@ def _process(notification: NotificationOutbox, now) -> bool:
 
 def deliver_pending(*, limit: int = 200, now=None) -> dict:
     now = now or timezone.now()
-    sent = failed = 0
+    sent = failed = skipped = 0
     for notification in _claim_batch(limit, now):
-        if _process(notification, now):
+        outcome = _process(notification, now)
+        if outcome is None:
+            skipped += 1
+        elif outcome:
             sent += 1
         else:
             failed += 1
-    return {"processed": sent + failed, "sent": sent, "failed": failed}
+    return {"processed": sent + failed + skipped, "sent": sent, "failed": failed, "skipped": skipped}
 
 
 def deliver_single(notification: NotificationOutbox, *, now=None) -> NotificationOutbox:

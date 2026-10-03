@@ -29,6 +29,7 @@ class Base(TestCase):
         user = User.objects.create_user(username="09120001111", password="x12345678")
         self.customer = Customer.objects.create(
             user=user, full_name="سارا", phone="09120001111", email="sara@example.com",
+            accepts_promotional_sms=True, accepts_promotional_email=True,  # رضایتِ ثبت‌شده (پیش‌فرضِ جدید: بدونِ رضایت)
         )
         self.ctx = {"discount_code": "GIFT-1", "discount_amount": "۳۰٪", "discount_max": "", "discount_expires_at": "۱۴۰۵/۱/۱",
                     "campaign_name": "کمپین", "occasion_name": "مناسبت", "customer_name": "سارا"}

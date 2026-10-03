@@ -83,6 +83,11 @@ def save_address(request, cleaned_data) -> None:
     birth = cleaned_data.get("birth_date")
     if birth:
         state["birth_date"] = birth.isoformat()
+    # رضایتِ تبلیغاتی: همیشه با مقدارِ همین ارسالِ فرم جایگزین می‌شود (تیک‌برداشتن پیش از ثبتِ سفارش یعنی «نه»).
+    state["promo_consent"] = {
+        "sms": bool(cleaned_data.get("accepts_promotional_sms")),
+        "email": bool(cleaned_data.get("accepts_promotional_email")),
+    }
     request.session.modified = True
 
 
@@ -90,6 +95,9 @@ def address_initial(request) -> dict:
     """مقدارِ اولیه‌ی فرمِ آدرس: آدرسِ نشست + تاریخ تولد (نشست، وگرنه ذخیره‌شده در پروفایل)."""
     initial = dict(get_address(request))
     birth = _state(request).get("birth_date")
+    consent = _state(request).get("promo_consent") or {}
+    initial["accepts_promotional_sms"] = bool(consent.get("sms"))
+    initial["accepts_promotional_email"] = bool(consent.get("email"))
     if birth:
         initial["birth_date"] = birth
     else:
@@ -287,6 +295,7 @@ def finalize_order(request, cart, customer):
     coupon = get_applied_coupon(request, cart, customer)
     store = resolve_store_for_service(request)
     birth_date_raw = _state(request).get("birth_date", "")
+    promo_consent = dict(_state(request).get("promo_consent") or {})
 
     try:
         with transaction.atomic():
@@ -308,6 +317,18 @@ def finalize_order(request, cart, customer):
             update_birth_date(customer, birth_date_raw)
         except BirthDateError:  # نباید رخ دهد (پیش‌تر اعتبارسنجی شده)؛ سفارش هرگز بخاطرِ تولد شکست نمی‌خورد
             logger.warning("invalid stored birth date for customer %s", customer.pk)
+
+    if promo_consent.get("sms") or promo_consent.get("email"):
+        from apps.customers.models import Customer as _Customer
+        from apps.customers.services import consent_service
+
+        try:  # رضایت هرگز سفارش را متوقف نمی‌کند
+            consent_service.grant_at_opt_in(
+                customer, source=_Customer.ConsentSource.CHECKOUT,
+                sms=bool(promo_consent.get("sms")), email=bool(promo_consent.get("email")), store=store,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("recording checkout consent failed for customer %s", customer.pk)
 
     # Session clearing happens AFTER successful database commit
     request.session.pop(SESSION_KEY, None)

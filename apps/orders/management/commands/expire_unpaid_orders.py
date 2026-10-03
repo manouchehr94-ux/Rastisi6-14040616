@@ -25,7 +25,17 @@ class Command(BaseCommand):
                 store = Store.objects.get(slug=opts["store"])
             except Store.DoesNotExist as exc:
                 raise CommandError(f"unknown store {opts['store']}") from exc
-        stats = expire_unpaid_orders(store=store, dry_run=opts["dry_run"], batch_size=opts["batch_size"])
+        from apps.core.job_lock import single_instance
+
+        with single_instance("expire_unpaid_orders") as acquired:
+            if not acquired:
+                self.stdout.write("skipped: another expire_unpaid_orders is still running")
+                return
+            stats = expire_unpaid_orders(store=store, dry_run=opts["dry_run"], batch_size=opts["batch_size"])
         skipped = " ".join(f"{k}={v}" for k, v in sorted(stats["skipped"].items()))
         verb = "would_expire" if opts["dry_run"] else "expired"
-        self.stdout.write(f"candidates={stats['candidates']} {verb}={stats['expired']} skipped: {skipped or '-'}")
+        self.stdout.write(
+            f"candidates={stats['candidates']} {verb}={stats['expired']} errors={stats['errors']} skipped: {skipped or '-'}"
+        )
+        if stats["errors"]:  # بقیه‌ی سفارش‌ها پردازش شدند؛ فقط خروج برایِ پایش غیرصفر است
+            raise CommandError(f"{stats['errors']} order(s) failed to expire; see logs")

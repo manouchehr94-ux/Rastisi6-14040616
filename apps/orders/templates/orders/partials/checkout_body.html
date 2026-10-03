@@ -54,6 +54,12 @@
           <small id="bd-help" style="color:var(--muted,#6b7280)">تاریخ شمسی؛ برای دریافت هدیه‌ی تولد. در صورت خالی‌گذاشتن، تاریخ ذخیره‌شده‌ی شما تغییری نمی‌کند.</small>
           {% for err in address_form.birth_date.errors %}<div class="coup-err">{{ err }}</div>{% endfor %}
         </div>
+        <fieldset class="fg" style="border:0;padding:0;margin:0 0 12px">
+          <legend style="font-size:13px;margin-bottom:6px">پیام‌های تبلیغاتی (اختیاری)</legend>
+          <label style="display:block"><input type="checkbox" name="accepts_promotional_sms" value="on" {% if address_form.accepts_promotional_sms.value %}checked{% endif %}> دریافت پیامک تبلیغاتی (تخفیف و مناسبت‌ها)</label>
+          <label style="display:block"><input type="checkbox" name="accepts_promotional_email" value="on" {% if address_form.accepts_promotional_email.value %}checked{% endif %}> دریافت ایمیل تبلیغاتی</label>
+          <small style="color:var(--muted,#6b7280)">پیام‌های مربوط به سفارش و پرداخت همیشه ارسال می‌شوند. هر زمان از «حساب من» قابل لغو است.</small>
+        </fieldset>
         <div class="fg" style="margin-bottom:0">
           <label>توضیحات سفارش (اختیاری)</label>
           <input class="inp" name="note" value="{{ address_form.note.value|default_if_none:'' }}" placeholder="مثلاً: لطفاً قبل از ارسال هماهنگ کنید">
