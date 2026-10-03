@@ -760,8 +760,19 @@ def store_end_trial_now(request, store_public_id):
 @require_POST
 @user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
 def store_change_plan(request, store_public_id):
+    """SUB-001 (بازبینیِ مستقلِ معماری، Repair 2): این یک overrideِ اپراتوریِ
+    صریحِ مدیرِ پلتفرم است — نه یک مسیرِ جایگزینِ خریدِ مرچنت — پس بدونِ
+    round-tripِ preview_token (که ذاتاً برایِ محافظتِ خریدِ مرچنتِ 5A طراحی
+    شده بود و قبلاً هم به‌اشتباه به کلیدِ نادرستِ ``preview["preview_token"]``
+    دسترسی پیدا می‌کرد، در حالی‌که ``preview_plan_change`` کلیدِ ``token`` را
+    برمی‌گرداند) مستقیماً از ``execute_platform_admin_plan_override`` عبور
+    می‌کند."""
     from apps.subscriptions.models import PlanVersion
-    from apps.subscriptions.services.plan_change_service import execute_plan_change, preview_plan_change
+    from apps.subscriptions.services.plan_change_service import (
+        PlanChangeError,
+        execute_platform_admin_plan_override,
+    )
+    from apps.subscriptions.services.subscription_service import SubscriptionError
 
     store = get_object_or_404(Store, public_id=store_public_id)
     target_version_id = (request.POST.get("plan_version_id") or "").strip()
@@ -770,14 +781,13 @@ def store_change_plan(request, store_public_id):
         messages.error(request, "نسخه‌ی پلنِ انتخاب‌شده معتبر نیست.")
         return redirect("portal_platform_admin:store-detail", store_public_id)
 
-    preview = preview_plan_change(store, target_version)
     try:
-        execute_plan_change(
-            store, target_version, preview_token=preview["preview_token"], actor=request.user,
+        execute_platform_admin_plan_override(
+            store, target_version, actor=request.user,
             reason=(request.POST.get("reason") or "").strip(),
         )
         messages.success(request, f"پلنِ «{store.name}» به «{target_version.plan.name}» تغییر کرد.")
-    except Exception as exc:  # noqa: BLE001 — نمایشِ خطایِ سرویس به مدیرِ پلتفرم، نه شکستِ بی‌صدا
+    except (PlanChangeError, SubscriptionError) as exc:
         messages.error(request, str(exc))
     return redirect("portal_platform_admin:store-detail", store_public_id)
 

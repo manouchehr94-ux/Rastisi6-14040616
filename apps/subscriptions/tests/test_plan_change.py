@@ -16,7 +16,6 @@ from apps.subscriptions.models import (
     Plan,
     PlanEntitlement,
     PlanVersion,
-    SubscriptionEvent,
 )
 from apps.subscriptions.services import entitlement_service as ent
 from apps.subscriptions.services import plan_change_service as pcs
@@ -75,37 +74,14 @@ class PlanChangePreviewTests(TestCase):
         self.assertEqual(warned[ekeys.CATALOG_PRODUCTS]["current"], 10)
         self.assertEqual(warned[ekeys.CATALOG_PRODUCTS]["target_limit"], 5)
 
-
-class PlanChangeExecuteTests(TestCase):
-    def setUp(self):
-        ent.clear_entitlement_cache()
-        self.store = Store.objects.create(name="ف", slug="pcx-store", admin_subdomain="pcx-store")
-        self.small = _published_version("pcx-small", limits={ekeys.CATALOG_PRODUCTS: 5})
-        self.big = _published_version("pcx-big", limits={ekeys.CATALOG_PRODUCTS: 100})
-        sub = svc.create_subscription(self.store, self.small)
-        svc.activate_subscription(sub)
-        ent.clear_entitlement_cache()
-
-    def test_execute_with_valid_token_changes_plan(self):
-        preview = pcs.preview_plan_change(self.store, self.big)
-        pcs.execute_plan_change(self.store, self.big, preview_token=preview["token"])
-        current = ent.get_current_subscription(self.store)
-        self.assertEqual(current.plan_version_id, self.big.pk)
-        # A plan_changed event was recorded (immutable history).
-        self.assertTrue(
-            SubscriptionEvent.objects.filter(
-                store=self.store, event_type=SubscriptionEvent.EventType.PLAN_CHANGED,
-            ).exists()
-        )
-
-    def test_stale_token_is_rejected(self):
-        preview = pcs.preview_plan_change(self.store, self.big)
-        # Mutate the subscription after the preview → token no longer matches.
-        svc.change_plan_version(ent.get_current_subscription(self.store), self.big)
-        ent.clear_entitlement_cache()
-        with self.assertRaises(pcs.StalePreviewError):
-            pcs.execute_plan_change(self.store, self.small, preview_token=preview["token"])
-
-    def test_empty_token_is_rejected(self):
-        with self.assertRaises(pcs.StalePreviewError):
-            pcs.execute_plan_change(self.store, self.big, preview_token="")
+    # SUB-001 Repair 3: the old ``PlanChangeExecuteTests`` class (which
+    # exercised ``pcs.execute_plan_change`` — preview-token check followed by
+    # an immediate, unbilled ``plan_version`` switch) has been removed along
+    # with the function itself. That entry point is gone from production;
+    # billed plan changes now flow exclusively through
+    # ``apps.billing.services.plan_change_billing_service.start_plan_change``
+    # (see ``apps/billing/tests/test_plan_change_billing.py``), and the
+    # platform-admin-only unbilled override lives at
+    # ``pcs.execute_platform_admin_plan_override`` (see
+    # ``apps/portal/tests/test_platform_admin_plan_override.py``). No
+    # replacement unbilled mutation API was added to this module.

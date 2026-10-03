@@ -52,6 +52,11 @@ _MAX_NODES = 256
 ALLOWED_SETTINGS_BY_FAMILY = {
     family_key: frozenset() for family_key in COMPONENT_FAMILIES
 }
+# P5-W2 — the ONLY reviewed typed per-family setting: the Theme family's
+# bounded ``intensity`` enum. No free-form theme settings, no arbitrary
+# numeric intensity, no merchant-provided raw CSS.
+if "theme" in ALLOWED_SETTINGS_BY_FAMILY:
+    ALLOWED_SETTINGS_BY_FAMILY["theme"] = frozenset({"intensity"})
 
 
 @dataclasses.dataclass(frozen=True)
@@ -118,6 +123,16 @@ def _validate_typed_settings(settings: Mapping) -> None:
             raise InvalidStoreAppearanceContract(
                 f"unknown settings for {family_key}: {sorted(unknown)}"
             )
+        # P5-W2 — typed value validation for the Theme intensity enum. Only the
+        # bounded {subtle, balanced, strong} vocabulary is accepted; anything
+        # else (arbitrary string, number, etc.) is rejected.
+        if family_key == "theme" and "intensity" in family_settings:
+            from ..theme_catalog import THEME_INTENSITY_CHOICES
+
+            if family_settings["intensity"] not in THEME_INTENSITY_CHOICES:
+                raise InvalidStoreAppearanceContract(
+                    f"invalid theme intensity: {family_settings['intensity']!r}"
+                )
 
 
 def _plain(value):

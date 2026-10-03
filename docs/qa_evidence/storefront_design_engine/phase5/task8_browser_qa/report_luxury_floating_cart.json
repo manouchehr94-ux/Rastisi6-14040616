@@ -1,0 +1,363 @@
+{
+  "host": "rastisi-fashion-test.rastisi.localhost",
+  "base": "http://rastisi-fashion-test.rastisi.localhost:8817",
+  "pdp": "/products/accessory-scarf-%D8%A8%D8%B1%D8%AF%DB%8C%D8%A7-4/",
+  "nav_identity_expected": "luxury_floating_cart",
+  "started_at": "2026-09-15T05:00:53.612Z",
+  "checks": [
+    {
+      "name": "pdp:status:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "satc:hidden-on-desktop",
+      "status": "PASS",
+      "detail": {
+        "present": 1,
+        "visible": false
+      }
+    },
+    {
+      "name": "cta:visible-on-desktop",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "pdp:status:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "pdp:rtl:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "pdp:no-overflow:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl",
+        "scrollWidth": 390,
+        "clientWidth": 390
+      }
+    },
+    {
+      "name": "satc:visible-on-mobile:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "visible": true
+      }
+    },
+    {
+      "name": "cta:inflow-present:mobile-390",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "satc:inside-canonical-form:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "insideCartForm": true,
+        "hasFormAttr": false,
+        "cartAddFormCount": 1,
+        "quantityOwnerCount": 1,
+        "btnType": "submit"
+      }
+    },
+    {
+      "name": "satc:one-cart-add-form:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "count": 1
+      }
+    },
+    {
+      "name": "satc:one-quantity-owner:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "count": 1
+      }
+    },
+    {
+      "name": "satc:no-bottom-nav-overlap:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "satcBottom": 730,
+        "navTop": 737,
+        "navIdentity": "luxury_floating_cart"
+      }
+    },
+    {
+      "name": "satc:z-below-overlays:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "z": "90"
+      }
+    },
+    {
+      "name": "satc:label-agrees-with-cta:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "cta": "افزودن به سبد خرید",
+        "satc": "افزودن به سبد خرید"
+      }
+    },
+    {
+      "name": "satc:disabled-agrees-with-cta:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "ctaDisabled": false,
+        "satcDisabled": false
+      }
+    },
+    {
+      "name": "satc:shares-single-quantity=3:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "quantity": "3"
+      }
+    },
+    {
+      "name": "content:final-visible-above-satc:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "finalElement": {
+          "tag": "article",
+          "cls": "pcard style-standard badge-treatment-none",
+          "absBottom": 2182
+        },
+        "finalContent": {
+          "top": 320,
+          "bottom": 637
+        },
+        "satcTop": 661,
+        "innerHeight": 844
+      }
+    },
+    {
+      "name": "overlay:drawer-covers-satc:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "drawerZ": 120,
+        "backdropZ": 110,
+        "satcZ": 90
+      }
+    },
+    {
+      "name": "pdp:status:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "pdp:rtl:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl"
+      }
+    },
+    {
+      "name": "pdp:no-overflow:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl",
+        "scrollWidth": 360,
+        "clientWidth": 360
+      }
+    },
+    {
+      "name": "satc:visible-on-mobile:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "visible": true
+      }
+    },
+    {
+      "name": "cta:inflow-present:mobile-360",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "satc:inside-canonical-form:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "insideCartForm": true,
+        "hasFormAttr": false,
+        "cartAddFormCount": 1,
+        "quantityOwnerCount": 1,
+        "btnType": "submit"
+      }
+    },
+    {
+      "name": "satc:one-cart-add-form:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "count": 1
+      }
+    },
+    {
+      "name": "satc:one-quantity-owner:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "count": 1
+      }
+    },
+    {
+      "name": "satc:no-bottom-nav-overlap:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "satcBottom": 686,
+        "navTop": 693,
+        "navIdentity": "luxury_floating_cart"
+      }
+    },
+    {
+      "name": "satc:z-below-overlays:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "z": "90"
+      }
+    },
+    {
+      "name": "satc:label-agrees-with-cta:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "cta": "افزودن به سبد خرید",
+        "satc": "افزودن به سبد خرید"
+      }
+    },
+    {
+      "name": "satc:disabled-agrees-with-cta:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "ctaDisabled": false,
+        "satcDisabled": false
+      }
+    },
+    {
+      "name": "satc:shares-single-quantity=3:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "quantity": "3"
+      }
+    },
+    {
+      "name": "content:final-visible-above-satc:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "finalElement": {
+          "tag": "article",
+          "cls": "pcard style-standard badge-treatment-none",
+          "absBottom": 2173
+        },
+        "finalContent": {
+          "top": 290,
+          "bottom": 593
+        },
+        "satcTop": 617,
+        "innerHeight": 800
+      }
+    },
+    {
+      "name": "overlay:drawer-covers-satc:mobile-360",
+      "status": "PASS",
+      "detail": {
+        "drawerZ": 120,
+        "backdropZ": 110,
+        "satcZ": 90
+      }
+    }
+  ],
+  "geometry": [
+    {
+      "viewport": "mobile-390",
+      "satc": {
+        "top": 661,
+        "bottom": 730,
+        "height": 69
+      },
+      "nav": {
+        "top": 737,
+        "bottom": 836,
+        "height": 99
+      },
+      "navOrbTop": 738,
+      "navIdentity": "luxury_floating_cart",
+      "innerHeight": 844,
+      "satcZ": "90",
+      "clearance": "calc(114px + 0px)"
+    },
+    {
+      "viewport": "mobile-390",
+      "obscuration": {
+        "satcTop": 661,
+        "innerHeight": 844,
+        "finalContent": {
+          "top": 320,
+          "bottom": 637
+        },
+        "finalTag": "article",
+        "scrollY": 1545,
+        "pageScrollHeight": 3563,
+        "finalElement": {
+          "tag": "article",
+          "cls": "pcard style-standard badge-treatment-none",
+          "absBottom": 2182
+        }
+      }
+    },
+    {
+      "viewport": "mobile-360",
+      "satc": {
+        "top": 617,
+        "bottom": 686,
+        "height": 69
+      },
+      "nav": {
+        "top": 693,
+        "bottom": 792,
+        "height": 99
+      },
+      "navOrbTop": 694,
+      "navIdentity": "luxury_floating_cart",
+      "innerHeight": 800,
+      "satcZ": "90",
+      "clearance": "calc(114px + 0px)"
+    },
+    {
+      "viewport": "mobile-360",
+      "obscuration": {
+        "satcTop": 617,
+        "innerHeight": 800,
+        "finalContent": {
+          "top": 290,
+          "bottom": 593
+        },
+        "finalTag": "article",
+        "scrollY": 1580,
+        "pageScrollHeight": 3553,
+        "finalElement": {
+          "tag": "article",
+          "cls": "pcard style-standard badge-treatment-none",
+          "absBottom": 2173
+        }
+      }
+    }
+  ],
+  "console_errors": [],
+  "finished_at": "2026-09-15T05:00:58.657Z",
+  "summary": {
+    "pass": 33,
+    "fail": 0,
+    "warn": 0,
+    "total": 33
+  }
+}

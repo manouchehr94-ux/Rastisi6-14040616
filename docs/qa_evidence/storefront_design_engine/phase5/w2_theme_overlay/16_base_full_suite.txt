@@ -1,0 +1,7 @@
+=== CERTIFIED-BASE clean clone (b7d8ac28) full suite (Python 3.12.13) tail ===
+Ran 3102 tests in 1368.876s
+
+FAILED (failures=30, errors=2, skipped=4)
+Destroying test database for alias 'default'...
+Found 3102 test(s).
+System check identified no issues (0 silenced).

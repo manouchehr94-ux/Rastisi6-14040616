@@ -1,0 +1,2104 @@
+{
+  "_meta": {
+    "schema_version": "w4c-matrix-v1",
+    "certified_base_sha": "3a4fe9070584655548bae5a9bb574f3415bbf580",
+    "total_cells_expected": 704,
+    "duplicate_cells": [],
+    "recovered_state_events": [
+      {
+        "at": "2026-09-18T00:05:51.762057",
+        "event": "published Template drift repaired for dense_marketplace v3"
+      },
+      {
+        "at": "2026-09-18T00:07:15.158686",
+        "event": "published Template drift repaired for premium_leather v3"
+      },
+      {
+        "at": "2026-09-18T00:08:32.616458",
+        "event": "published Template drift repaired for warm_boutique v3"
+      },
+      {
+        "at": "2026-09-18T00:09:51.375168",
+        "event": "published Template drift repaired for editorial_jewelry v3"
+      },
+      {
+        "at": "2026-09-18T00:11:10.021956",
+        "event": "published Template drift repaired for dense_marketplace v3"
+      },
+      {
+        "at": "2026-09-18T00:11:12.746223",
+        "event": "published Template drift repaired for premium_leather v3"
+      },
+      {
+        "at": "2026-09-18T00:11:15.020552",
+        "event": "published Template drift repaired for warm_boutique v3"
+      },
+      {
+        "at": "2026-09-18T00:11:17.661650",
+        "event": "published Template drift repaired for editorial_jewelry v3"
+      },
+      {
+        "at": "2026-09-18T00:14:14.741625",
+        "event": "published Template drift repaired for warm_boutique v3"
+      }
+    ],
+    "w4c_branch_head_sha": "5807847b3606ed36836e9f06ba2530c7c513b1a5",
+    "run_started_at": "2026-09-18T00:05:51.285066",
+    "run_finished_at": null
+  },
+  "templates": {
+    "dense_marketplace": {
+      "key": "dense_marketplace",
+      "version": "3",
+      "page_classes": {
+        "home": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 7,
+            "expected_rsec_count": 7,
+            "product_cards_present": true,
+            "hero_expected": true,
+            "hero_result": "PASS",
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "mobile_nav_opener": "n/a"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/home/dense_marketplace_home_desktop.jpg",
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 7,
+            "expected_rsec_count": 7,
+            "product_cards_present": true,
+            "hero_expected": true,
+            "hero_result": "PASS",
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "mobile_nav_opener": "n/a"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 7,
+            "expected_rsec_count": 7,
+            "product_cards_present": true,
+            "hero_expected": true,
+            "hero_result": "PASS",
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "mobile_nav_opener": "n/a"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/home/dense_marketplace_home_mobile.jpg",
+            "result": "PASS"
+          }
+        },
+        "listing": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": true,
+            "dead_href_count": 0,
+            "listing_controls": {
+              "sort": {
+                "present": true,
+                "interacted": true,
+                "urlHasSort": true
+              },
+              "filter": {
+                "present": true
+              },
+              "pagination": {
+                "present": true,
+                "labelledNav": true,
+                "numericLinks": 1
+              }
+            },
+            "accessibility_checks": {
+              "search_input": "PASS",
+              "sort_control": "PASS",
+              "category_filter": "PASS",
+              "product_card": "PASS",
+              "quick_view": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/representative/dense_marketplace_listing_desktop.jpg",
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": true,
+            "dead_href_count": 0,
+            "listing_controls": {
+              "sort": {
+                "present": true,
+                "interacted": true,
+                "urlHasSort": false
+              },
+              "filter": {
+                "present": true
+              },
+              "pagination": {
+                "present": true,
+                "labelledNav": true,
+                "numericLinks": 1
+              }
+            },
+            "accessibility_checks": {
+              "search_input": "PASS",
+              "sort_control": "PASS",
+              "category_filter": "PASS",
+              "product_card": "PASS",
+              "quick_view": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": true,
+            "dead_href_count": 0,
+            "listing_controls": {
+              "sort": {
+                "present": true,
+                "interacted": true,
+                "urlHasSort": false
+              },
+              "filter": {
+                "present": true
+              },
+              "pagination": {
+                "present": true,
+                "labelledNav": true,
+                "numericLinks": 1
+              }
+            },
+            "accessibility_checks": {
+              "search_input": "PASS",
+              "sort_control": "PASS",
+              "category_filter": "PASS",
+              "product_card": "PASS",
+              "quick_view": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          }
+        },
+        "pdp": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "gallery_image_count": 3,
+            "variant_transition": {
+              "attempted": true,
+              "changed": true,
+              "controlCount": 6,
+              "before": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-39",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  1
+                ]
+              },
+              "after": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-40",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  2
+                ]
+              }
+            },
+            "real_add_to_cart": {
+              "present": true,
+              "before": "۰",
+              "after": "۲",
+              "changed": true
+            },
+            "real_navigation": {
+              "attempted": true,
+              "href": "/",
+              "resolved": true
+            },
+            "accessibility_checks": {
+              "variant_control": "PASS",
+              "quantity_control": "PASS",
+              "add_to_cart": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/representative/dense_marketplace_pdp_desktop.jpg",
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "gallery_image_count": 3,
+            "variant_transition": {
+              "attempted": true,
+              "changed": true,
+              "controlCount": 6,
+              "before": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-39",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  1
+                ]
+              },
+              "after": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-40",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  2
+                ]
+              }
+            },
+            "real_add_to_cart": {
+              "present": true,
+              "before": "۰",
+              "after": "۲",
+              "changed": true
+            },
+            "real_navigation": {
+              "attempted": true,
+              "href": "/",
+              "resolved": true
+            },
+            "accessibility_checks": {
+              "variant_control": "PASS",
+              "quantity_control": "PASS",
+              "add_to_cart": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "gallery_image_count": 3,
+            "variant_transition": {
+              "attempted": true,
+              "changed": true,
+              "controlCount": 6,
+              "before": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-39",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  1
+                ]
+              },
+              "after": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-40",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  2
+                ]
+              }
+            },
+            "real_add_to_cart": {
+              "present": true,
+              "before": "۰",
+              "after": "۲",
+              "changed": true
+            },
+            "real_navigation": {
+              "attempted": true,
+              "href": "/",
+              "resolved": true
+            },
+            "accessibility_checks": {
+              "variant_control": "PASS",
+              "quantity_control": "PASS",
+              "add_to_cart": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          }
+        },
+        "cart": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "real_remove": {
+              "attempted": true,
+              "before": 1,
+              "after": 0,
+              "removed": true
+            },
+            "free_shipping_goal": "PASS",
+            "accessibility_checks": {
+              "quantity_control": "PASS",
+              "remove_control": "PASS",
+              "checkout": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/representative/dense_marketplace_cart_desktop.jpg",
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "real_remove": {
+              "attempted": true,
+              "before": 1,
+              "after": 0,
+              "removed": true
+            },
+            "free_shipping_goal": "PASS",
+            "accessibility_checks": {
+              "quantity_control": "PASS",
+              "remove_control": "PASS",
+              "checkout": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "real_remove": {
+              "attempted": true,
+              "before": 1,
+              "after": 0,
+              "removed": true
+            },
+            "free_shipping_goal": "PASS",
+            "accessibility_checks": {
+              "quantity_control": "PASS",
+              "remove_control": "PASS",
+              "checkout": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          }
+        }
+      },
+      "theme": {
+        "tier1_cell": {
+          "occasion": "ramadan",
+          "intensity": "balanced",
+          "viewport": "desktop",
+          "run_token": "c2ae52b6ee0077c212bd1da632d8f67f",
+          "key": "dense_marketplace",
+          "tier": "tier1",
+          "http_status": 200,
+          "rtl": true,
+          "overflow": false,
+          "rendered_theme": {
+            "theme": "ramadan",
+            "tone": "neutral",
+            "intensity": "balanced",
+            "motif": "crescent_lantern",
+            "accent": "#2C6E7F"
+          },
+          "console_errors": [],
+          "page_errors": [],
+          "failed_requests": [],
+          "screenshot": null,
+          "result": "PASS",
+          "cleanup_verified": true
+        },
+        "tier2_cells": {}
+      }
+    },
+    "premium_leather": {
+      "key": "premium_leather",
+      "version": "3",
+      "page_classes": {
+        "home": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 3,
+            "expected_rsec_count": 4,
+            "product_cards_present": true,
+            "hero_expected": false,
+            "hero_result": "N/A",
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "mobile_nav_opener": "n/a"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/home/premium_leather_home_desktop.jpg",
+            "result": "FAIL",
+            "reason": "see rsec/hero/cards/bottom-nav/error sub-checks; accessibility_ok=true"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 3,
+            "expected_rsec_count": 4,
+            "product_cards_present": true,
+            "hero_expected": false,
+            "hero_result": "N/A",
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "mobile_nav_opener": "n/a"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "FAIL",
+            "reason": "see rsec/hero/cards/bottom-nav/error sub-checks; accessibility_ok=true"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 3,
+            "expected_rsec_count": 4,
+            "product_cards_present": true,
+            "hero_expected": false,
+            "hero_result": "N/A",
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "mobile_nav_opener": "n/a"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/home/premium_leather_home_mobile.jpg",
+            "result": "FAIL",
+            "reason": "see rsec/hero/cards/bottom-nav/error sub-checks; accessibility_ok=true"
+          }
+        },
+        "listing": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": true,
+            "dead_href_count": 0,
+            "listing_controls": {
+              "sort": {
+                "present": true,
+                "interacted": true,
+                "urlHasSort": true
+              },
+              "filter": {
+                "present": true
+              },
+              "pagination": {
+                "present": true,
+                "labelledNav": true,
+                "numericLinks": 1
+              }
+            },
+            "accessibility_checks": {
+              "search_input": "PASS",
+              "sort_control": "PASS",
+              "category_filter": "PASS",
+              "product_card": "PASS",
+              "quick_view": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/representative/premium_leather_listing_desktop.jpg",
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": true,
+            "dead_href_count": 0,
+            "listing_controls": {
+              "sort": {
+                "present": true,
+                "interacted": true,
+                "urlHasSort": false
+              },
+              "filter": {
+                "present": true
+              },
+              "pagination": {
+                "present": true,
+                "labelledNav": true,
+                "numericLinks": 1
+              }
+            },
+            "accessibility_checks": {
+              "search_input": "PASS",
+              "sort_control": "PASS",
+              "category_filter": "PASS",
+              "product_card": "PASS",
+              "quick_view": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": true,
+            "dead_href_count": 0,
+            "listing_controls": {
+              "sort": {
+                "present": true,
+                "interacted": true,
+                "urlHasSort": false
+              },
+              "filter": {
+                "present": true
+              },
+              "pagination": {
+                "present": true,
+                "labelledNav": true,
+                "numericLinks": 1
+              }
+            },
+            "accessibility_checks": {
+              "search_input": "PASS",
+              "sort_control": "PASS",
+              "category_filter": "PASS",
+              "product_card": "PASS",
+              "quick_view": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          }
+        },
+        "pdp": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "gallery_image_count": 3,
+            "variant_transition": {
+              "attempted": true,
+              "changed": true,
+              "controlCount": 6,
+              "before": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-39",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  1
+                ]
+              },
+              "after": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-40",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  2
+                ]
+              }
+            },
+            "real_add_to_cart": {
+              "present": true,
+              "before": "۰",
+              "after": "۲",
+              "changed": true
+            },
+            "real_navigation": {
+              "attempted": true,
+              "href": "/",
+              "resolved": true
+            },
+            "accessibility_checks": {
+              "variant_control": "PASS",
+              "quantity_control": "PASS",
+              "add_to_cart": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/representative/premium_leather_pdp_desktop.jpg",
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "gallery_image_count": 3,
+            "variant_transition": {
+              "attempted": true,
+              "changed": true,
+              "controlCount": 6,
+              "before": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-39",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  1
+                ]
+              },
+              "after": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-40",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  2
+                ]
+              }
+            },
+            "real_add_to_cart": {
+              "present": true,
+              "before": "۰",
+              "after": "۲",
+              "changed": true
+            },
+            "real_navigation": {
+              "attempted": true,
+              "href": "/",
+              "resolved": true
+            },
+            "accessibility_checks": {
+              "variant_control": "PASS",
+              "quantity_control": "PASS",
+              "add_to_cart": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "gallery_image_count": 3,
+            "variant_transition": {
+              "attempted": true,
+              "changed": true,
+              "controlCount": 6,
+              "before": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-39",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  1
+                ]
+              },
+              "after": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-40",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  2
+                ]
+              }
+            },
+            "real_add_to_cart": {
+              "present": true,
+              "before": "۰",
+              "after": "۲",
+              "changed": true
+            },
+            "real_navigation": {
+              "attempted": true,
+              "href": "/",
+              "resolved": true
+            },
+            "accessibility_checks": {
+              "variant_control": "PASS",
+              "quantity_control": "PASS",
+              "add_to_cart": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          }
+        },
+        "cart": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "real_remove": {
+              "attempted": true,
+              "before": 1,
+              "after": 0,
+              "removed": true
+            },
+            "free_shipping_goal": "PASS",
+            "accessibility_checks": {
+              "quantity_control": "PASS",
+              "remove_control": "PASS",
+              "checkout": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/representative/premium_leather_cart_desktop.jpg",
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "real_remove": {
+              "attempted": true,
+              "before": 1,
+              "after": 0,
+              "removed": true
+            },
+            "free_shipping_goal": "PASS",
+            "accessibility_checks": {
+              "quantity_control": "PASS",
+              "remove_control": "PASS",
+              "checkout": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "real_remove": {
+              "attempted": true,
+              "before": 1,
+              "after": 0,
+              "removed": true
+            },
+            "free_shipping_goal": "PASS",
+            "accessibility_checks": {
+              "quantity_control": "PASS",
+              "remove_control": "PASS",
+              "checkout": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          }
+        }
+      },
+      "theme": {
+        "tier1_cell": {
+          "occasion": "nowruz",
+          "intensity": "balanced",
+          "viewport": "desktop",
+          "run_token": "48fa2913815630f57276dbf3e045f525",
+          "key": "premium_leather",
+          "tier": "tier1",
+          "http_status": 200,
+          "rtl": true,
+          "overflow": false,
+          "rendered_theme": {
+            "theme": "nowruz",
+            "tone": "festive",
+            "intensity": "balanced",
+            "motif": "spring_blossom",
+            "accent": "#1FA67A"
+          },
+          "console_errors": [],
+          "page_errors": [],
+          "failed_requests": [],
+          "screenshot": null,
+          "result": "PASS",
+          "cleanup_verified": true
+        },
+        "tier2_cells": {}
+      }
+    },
+    "warm_boutique": {
+      "key": "warm_boutique",
+      "version": "3",
+      "page_classes": {
+        "home": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 5,
+            "expected_rsec_count": 5,
+            "product_cards_present": true,
+            "hero_expected": true,
+            "hero_result": "PASS",
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "mobile_nav_opener": "n/a"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/home/warm_boutique_home_desktop.jpg",
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 5,
+            "expected_rsec_count": 5,
+            "product_cards_present": true,
+            "hero_expected": true,
+            "hero_result": "PASS",
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "mobile_nav_opener": "n/a"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 5,
+            "expected_rsec_count": 5,
+            "product_cards_present": true,
+            "hero_expected": true,
+            "hero_result": "PASS",
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "mobile_nav_opener": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/home/warm_boutique_home_mobile.jpg",
+            "result": "PASS"
+          }
+        },
+        "listing": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": true,
+            "dead_href_count": 0,
+            "listing_controls": {
+              "sort": {
+                "present": true,
+                "interacted": true,
+                "urlHasSort": true
+              },
+              "filter": {
+                "present": true
+              },
+              "pagination": {
+                "present": true,
+                "labelledNav": true,
+                "numericLinks": 1
+              }
+            },
+            "accessibility_checks": {
+              "search_input": "PASS",
+              "sort_control": "PASS",
+              "category_filter": "PASS",
+              "product_card": "PASS",
+              "quick_view": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/representative/warm_boutique_listing_desktop.jpg",
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": true,
+            "dead_href_count": 0,
+            "listing_controls": {
+              "sort": {
+                "present": true,
+                "interacted": true,
+                "urlHasSort": false
+              },
+              "filter": {
+                "present": true
+              },
+              "pagination": {
+                "present": true,
+                "labelledNav": true,
+                "numericLinks": 1
+              }
+            },
+            "accessibility_checks": {
+              "search_input": "PASS",
+              "sort_control": "PASS",
+              "category_filter": "PASS",
+              "product_card": "PASS",
+              "quick_view": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": true,
+            "dead_href_count": 0,
+            "listing_controls": {
+              "sort": {
+                "present": true,
+                "interacted": true,
+                "urlHasSort": false
+              },
+              "filter": {
+                "present": true
+              },
+              "pagination": {
+                "present": true,
+                "labelledNav": true,
+                "numericLinks": 1
+              }
+            },
+            "accessibility_checks": {
+              "search_input": "PASS",
+              "sort_control": "PASS",
+              "category_filter": "PASS",
+              "product_card": "PASS",
+              "quick_view": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          }
+        },
+        "pdp": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "gallery_image_count": 3,
+            "variant_transition": {
+              "attempted": true,
+              "changed": true,
+              "controlCount": 6,
+              "before": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-39",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  1
+                ]
+              },
+              "after": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-40",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  2
+                ]
+              }
+            },
+            "real_add_to_cart": {
+              "present": true,
+              "before": "۰",
+              "after": "۲",
+              "changed": true
+            },
+            "real_navigation": {
+              "attempted": true,
+              "href": "/",
+              "resolved": true
+            },
+            "accessibility_checks": {
+              "variant_control": "PASS",
+              "quantity_control": "PASS",
+              "add_to_cart": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/representative/warm_boutique_pdp_desktop.jpg",
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "gallery_image_count": 3,
+            "variant_transition": {
+              "attempted": true,
+              "changed": true,
+              "controlCount": 6,
+              "before": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-39",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  1
+                ]
+              },
+              "after": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-40",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  2
+                ]
+              }
+            },
+            "real_add_to_cart": {
+              "present": true,
+              "before": "۰",
+              "after": "۲",
+              "changed": true
+            },
+            "real_navigation": {
+              "attempted": true,
+              "href": "/",
+              "resolved": true
+            },
+            "accessibility_checks": {
+              "variant_control": "PASS",
+              "quantity_control": "PASS",
+              "add_to_cart": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "gallery_image_count": 3,
+            "variant_transition": {
+              "attempted": true,
+              "changed": true,
+              "controlCount": 6,
+              "before": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-39",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  1
+                ]
+              },
+              "after": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-40",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  2
+                ]
+              }
+            },
+            "real_add_to_cart": {
+              "present": true,
+              "before": "۰",
+              "after": "۲",
+              "changed": true
+            },
+            "real_navigation": {
+              "attempted": true,
+              "href": "/",
+              "resolved": true
+            },
+            "accessibility_checks": {
+              "variant_control": "PASS",
+              "quantity_control": "PASS",
+              "add_to_cart": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          }
+        },
+        "cart": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "real_remove": {
+              "attempted": true,
+              "before": 1,
+              "after": 0,
+              "removed": true
+            },
+            "free_shipping_goal": "PASS",
+            "accessibility_checks": {
+              "quantity_control": "PASS",
+              "remove_control": "PASS",
+              "checkout": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/representative/warm_boutique_cart_desktop.jpg",
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "real_remove": {
+              "attempted": true,
+              "before": 1,
+              "after": 0,
+              "removed": true
+            },
+            "free_shipping_goal": "PASS",
+            "accessibility_checks": {
+              "quantity_control": "PASS",
+              "remove_control": "PASS",
+              "checkout": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "real_remove": {
+              "attempted": true,
+              "before": 1,
+              "after": 0,
+              "removed": true
+            },
+            "free_shipping_goal": "PASS",
+            "accessibility_checks": {
+              "quantity_control": "PASS",
+              "remove_control": "PASS",
+              "checkout": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          }
+        }
+      },
+      "theme": {
+        "tier1_cell": {
+          "occasion": "muharram",
+          "intensity": "balanced",
+          "viewport": "desktop",
+          "run_token": "b894dd54950b8a63e4f7ceb20f5b1857",
+          "key": "warm_boutique",
+          "tier": "tier1",
+          "http_status": 200,
+          "rtl": true,
+          "overflow": false,
+          "rendered_theme": {
+            "theme": "muharram",
+            "tone": "mourning",
+            "intensity": "balanced",
+            "motif": "muted_banner",
+            "accent": "#2B2F36"
+          },
+          "console_errors": [],
+          "page_errors": [],
+          "failed_requests": [],
+          "screenshot": null,
+          "result": "PASS",
+          "cleanup_verified": true
+        },
+        "tier2_cells": {
+          "nowruz__subtle__desktop": {
+            "occasion": "nowruz",
+            "intensity": "subtle",
+            "viewport": "desktop",
+            "run_token": "a13a0572ce5ab6aea2ca01aadd0944f8",
+            "key": "warm_boutique",
+            "tier": "tier2",
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "rendered_theme": {
+              "theme": "nowruz",
+              "tone": "festive",
+              "intensity": "subtle",
+              "motif": "spring_blossom",
+              "accent": "#1FA67A"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/theme/warm_boutique__tier2__nowruz__subtle__desktop.jpg",
+            "result": "PASS",
+            "cleanup_verified": true
+          },
+          "nowruz__subtle__tablet": {
+            "occasion": "nowruz",
+            "intensity": "subtle",
+            "viewport": "tablet",
+            "run_token": "0c265f8e52cdf3c13a45f82d52428bfa",
+            "key": "warm_boutique",
+            "tier": "tier2",
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "rendered_theme": {
+              "theme": "nowruz",
+              "tone": "festive",
+              "intensity": "subtle",
+              "motif": "spring_blossom",
+              "accent": "#1FA67A"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/theme/warm_boutique__tier2__nowruz__subtle__tablet.jpg",
+            "result": "PASS",
+            "cleanup_verified": true
+          },
+          "nowruz__subtle__mobile": {
+            "occasion": "nowruz",
+            "intensity": "subtle",
+            "viewport": "mobile",
+            "run_token": "8b421a04675b731c81d8cf2656dd6fb9",
+            "key": "warm_boutique",
+            "tier": "tier2",
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "rendered_theme": {
+              "theme": "nowruz",
+              "tone": "festive",
+              "intensity": "subtle",
+              "motif": "spring_blossom",
+              "accent": "#1FA67A"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/theme/warm_boutique__tier2__nowruz__subtle__mobile.jpg",
+            "result": "PASS",
+            "cleanup_verified": true
+          },
+          "nowruz__balanced__desktop": {
+            "occasion": "nowruz",
+            "intensity": "balanced",
+            "viewport": "desktop",
+            "run_token": "313615ae7e92502662e86444e17738cb",
+            "key": "warm_boutique",
+            "tier": "tier2",
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "rendered_theme": {
+              "theme": "nowruz",
+              "tone": "festive",
+              "intensity": "balanced",
+              "motif": "spring_blossom",
+              "accent": "#1FA67A"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/theme/warm_boutique__tier2__nowruz__balanced__desktop.jpg",
+            "result": "PASS",
+            "cleanup_verified": true
+          }
+        }
+      }
+    },
+    "editorial_jewelry": {
+      "key": "editorial_jewelry",
+      "version": "3",
+      "page_classes": {
+        "home": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 5,
+            "expected_rsec_count": 5,
+            "product_cards_present": true,
+            "hero_expected": true,
+            "hero_result": "PASS",
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "mobile_nav_opener": "n/a"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/home/editorial_jewelry_home_desktop.jpg",
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 5,
+            "expected_rsec_count": 5,
+            "product_cards_present": true,
+            "hero_expected": true,
+            "hero_result": "PASS",
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "mobile_nav_opener": "n/a"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 5,
+            "expected_rsec_count": 5,
+            "product_cards_present": true,
+            "hero_expected": true,
+            "hero_result": "PASS",
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "mobile_nav_opener": "n/a"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/home/editorial_jewelry_home_mobile.jpg",
+            "result": "PASS"
+          }
+        },
+        "listing": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": true,
+            "dead_href_count": 0,
+            "listing_controls": {
+              "sort": {
+                "present": true,
+                "interacted": true,
+                "urlHasSort": true
+              },
+              "filter": {
+                "present": true
+              },
+              "pagination": {
+                "present": true,
+                "labelledNav": true,
+                "numericLinks": 1
+              }
+            },
+            "accessibility_checks": {
+              "search_input": "PASS",
+              "sort_control": "PASS",
+              "category_filter": "PASS",
+              "product_card": "PASS",
+              "quick_view": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/representative/editorial_jewelry_listing_desktop.jpg",
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": true,
+            "dead_href_count": 0,
+            "listing_controls": {
+              "sort": {
+                "present": true,
+                "interacted": true,
+                "urlHasSort": false
+              },
+              "filter": {
+                "present": true
+              },
+              "pagination": {
+                "present": true,
+                "labelledNav": true,
+                "numericLinks": 1
+              }
+            },
+            "accessibility_checks": {
+              "search_input": "PASS",
+              "sort_control": "PASS",
+              "category_filter": "PASS",
+              "product_card": "PASS",
+              "quick_view": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": true,
+            "dead_href_count": 0,
+            "listing_controls": {
+              "sort": {
+                "present": true,
+                "interacted": true,
+                "urlHasSort": false
+              },
+              "filter": {
+                "present": true
+              },
+              "pagination": {
+                "present": true,
+                "labelledNav": true,
+                "numericLinks": 1
+              }
+            },
+            "accessibility_checks": {
+              "search_input": "PASS",
+              "sort_control": "PASS",
+              "category_filter": "PASS",
+              "product_card": "PASS",
+              "quick_view": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          }
+        },
+        "pdp": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "gallery_image_count": 3,
+            "variant_transition": {
+              "attempted": true,
+              "changed": true,
+              "controlCount": 6,
+              "before": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-39",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  1
+                ]
+              },
+              "after": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-40",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  2
+                ]
+              }
+            },
+            "real_add_to_cart": {
+              "present": true,
+              "before": "۰",
+              "after": "۲",
+              "changed": true
+            },
+            "real_navigation": {
+              "attempted": true,
+              "href": "/",
+              "resolved": true
+            },
+            "accessibility_checks": {
+              "variant_control": "PASS",
+              "quantity_control": "PASS",
+              "add_to_cart": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/representative/editorial_jewelry_pdp_desktop.jpg",
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "gallery_image_count": 3,
+            "variant_transition": {
+              "attempted": true,
+              "changed": true,
+              "controlCount": 6,
+              "before": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-39",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  1
+                ]
+              },
+              "after": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-40",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  2
+                ]
+              }
+            },
+            "real_add_to_cart": {
+              "present": true,
+              "before": "۰",
+              "after": "۲",
+              "changed": true
+            },
+            "real_navigation": {
+              "attempted": true,
+              "href": "/",
+              "resolved": true
+            },
+            "accessibility_checks": {
+              "variant_control": "PASS",
+              "quantity_control": "PASS",
+              "add_to_cart": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "gallery_image_count": 3,
+            "variant_transition": {
+              "attempted": true,
+              "changed": true,
+              "controlCount": 6,
+              "before": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-39",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  1
+                ]
+              },
+              "after": {
+                "sku": "کد کالا: FSH-003-آبی-روشن-40",
+                "price": "۲٬۳۹۸٬۷۰۰ تومان",
+                "activeIndices": [
+                  0,
+                  2
+                ]
+              }
+            },
+            "real_add_to_cart": {
+              "present": true,
+              "before": "۰",
+              "after": "۲",
+              "changed": true
+            },
+            "real_navigation": {
+              "attempted": true,
+              "href": "/",
+              "resolved": true
+            },
+            "accessibility_checks": {
+              "variant_control": "PASS",
+              "quantity_control": "PASS",
+              "add_to_cart": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          }
+        },
+        "cart": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "real_remove": {
+              "attempted": true,
+              "before": 1,
+              "after": 0,
+              "removed": true
+            },
+            "free_shipping_goal": "PASS",
+            "accessibility_checks": {
+              "quantity_control": "PASS",
+              "remove_control": "PASS",
+              "checkout": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/representative/editorial_jewelry_cart_desktop.jpg",
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "real_remove": {
+              "attempted": true,
+              "before": 1,
+              "after": 1,
+              "removed": false
+            },
+            "free_shipping_goal": "PASS",
+            "accessibility_checks": {
+              "quantity_control": "PASS",
+              "remove_control": "PASS",
+              "checkout": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/rastisi_w4c_rate_limit_pilot_5807847b/screenshots/failures/editorial_jewelry_cart_tablet_FAIL.jpg",
+            "result": "FAIL",
+            "reason": "addStatus=200 items=1 totals=true checkout=true qtyUpdate=true realRemove={\"attempted\":true,\"before\":1,\"after\":1,\"removed\":false} freeShippingGoal=PASS accessibility_ok=true"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "real_remove": {
+              "attempted": true,
+              "before": 1,
+              "after": 0,
+              "removed": true
+            },
+            "free_shipping_goal": "PASS",
+            "accessibility_checks": {
+              "quantity_control": "PASS",
+              "remove_control": "PASS",
+              "checkout": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          }
+        }
+      },
+      "theme": {
+        "tier1_cell": {
+          "occasion": "nowruz",
+          "intensity": "balanced",
+          "viewport": "desktop",
+          "run_token": "334d9623c5a326af3860138cf6074bd3",
+          "key": "editorial_jewelry",
+          "tier": "tier1",
+          "http_status": 200,
+          "rtl": true,
+          "overflow": false,
+          "rendered_theme": {
+            "theme": "nowruz",
+            "tone": "festive",
+            "intensity": "balanced",
+            "motif": "spring_blossom",
+            "accent": "#1FA67A"
+          },
+          "console_errors": [],
+          "page_errors": [],
+          "failed_requests": [],
+          "screenshot": null,
+          "result": "PASS",
+          "cleanup_verified": true
+        },
+        "tier2_cells": {}
+      }
+    }
+  }
+}

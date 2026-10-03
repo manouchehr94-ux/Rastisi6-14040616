@@ -37,11 +37,46 @@ from ..storefront_appearance.rendering import (
     global_renderer_template as store_appearance_global_renderer_template,
     resolve_store_appearance_render_state,
     section_variant_for as store_appearance_section_variant_for,
+    theme_overlay_state as store_appearance_theme_overlay_state,
 )
 from ..variant_contract import resolve_active_variant, resolve_renderer_template
 from . import section_appearance_service, section_data_service
 
 TILE_CLASSES = ["t1", "t2", "t3"]
+
+
+#: P5-W2 Repair A — request attribute holding the ONE canonical resolved
+#: appearance state for the current request, so every consumer (the universal
+#: render pipeline AND the shell context processor) reuses a single
+#: ``ResolvedStoreAppearance`` per request instead of resolving the same
+#: persisted Version twice.
+_REQUEST_RESOLVED_APPEARANCE_ATTR = "storefront_resolved_appearance"
+
+
+def resolved_store_appearance_for_request(request, version) -> ResolvedStoreAppearance:
+    """Return the canonical ``ResolvedStoreAppearance`` for ``version``,
+    resolving it at most once per request.
+
+    The first caller in a request (normally
+    ``storefront_context_service.build_universal_storefront_context``) resolves
+    and caches it on the request; later consumers (the shell context processor)
+    reuse the cached instance. Resolution still goes through the single
+    canonical ``resolve_store_appearance_render_state`` — this is a
+    request-scoped memoization, NOT a second resolver. A malformed NEW manifest
+    still raises loudly (the resolver's ``InvalidStoreAppearanceContract`` is
+    never swallowed here).
+    """
+    cached = getattr(request, _REQUEST_RESOLVED_APPEARANCE_ATTR, None)
+    if cached is not None and getattr(cached, "version_id", None) == version.pk:
+        return cached
+    resolved = resolve_store_appearance_render_state(version)
+    try:
+        setattr(request, _REQUEST_RESOLVED_APPEARANCE_ATTR, resolved)
+    except (AttributeError, TypeError):
+        # A non-standard request stand-in that refuses attribute assignment is
+        # acceptable — resolution still succeeded; we simply cannot memoize.
+        pass
+    return resolved
 
 
 _DESTINATION_SELECT_RELATED = (
@@ -57,11 +92,46 @@ def _scoped_hero_slides(store, section):
     اجازه می‌دهد دو نمونه‌ی اسلایدر مستقل (با اسلایدهای متفاوت) وجود
     داشته باشند، بدون این‌که فروشگاه‌های قدیمی که هرگز این ویژگی را لمس
     نکرده‌اند رفتارشان تغییر کند."""
-    scoped = HeroSlide.objects.filter(section=section, is_active=True).select_related(
-        *_DESTINATION_SELECT_RELATED,
-    ).order_by("display_order", "id")
-    if scoped.exists():
-        return scoped
+    # Phase 5, Task 1 — an unsaved (``pk=None``) candidate-preview section
+    # (``preset_service.resolve_preset_candidate``) can never have its own
+    # scoped slides yet (nothing merchant-authored can reference a row that
+    # was never persisted) — this is exactly the same "no scoped slides"
+    # case the store-wide fallback below already exists for, just reached
+    # without first attempting an FK filter Django rejects for an unsaved
+    # instance. Behavior for a real, saved section is completely unchanged.
+    if section.pk is not None:
+        scoped = HeroSlide.objects.filter(section=section, is_active=True).select_related(
+            *_DESTINATION_SELECT_RELATED,
+        ).order_by("display_order", "id")
+        if scoped.exists():
+            return scoped
+    else:
+        # Phase 5, Task 2 (browser-QA finding) — the store-wide
+        # (``section=None``) fallback right below only helps a candidate
+        # preview if the store has genuinely UNSCOPED Hero content. Real
+        # seeded stores (e.g. the canonical ``rasti-mode-demo``) scope ALL
+        # their Hero content to whichever real section the currently-applied
+        # Ready Template actually created — there is no unscoped row to fall
+        # back to, so a candidate preview of a DIFFERENT template showed no
+        # Hero content at all, even though the store plainly owns some. This
+        # third tier reuses the store's own real Hero content from ANY of
+        # its non-archived ``hero_banner`` sections (Draft or Published —
+        # never a stale archived version) before giving up to the
+        # store-wide fallback — the same "show what the store really owns"
+        # principle the store-wide tier already embodies, just not blocked
+        # by an exact (impossible, for an unsaved section) pk match.
+        from ..models import StorefrontLayoutVersion
+
+        same_key_scoped = HeroSlide.objects.filter(
+            section__section_key=section.section_key,
+            section__page__version__layout__store=store,
+            section__page__version__status__in=(
+                StorefrontLayoutVersion.Status.DRAFT, StorefrontLayoutVersion.Status.PUBLISHED,
+            ),
+            is_active=True,
+        ).select_related(*_DESTINATION_SELECT_RELATED).order_by("display_order", "id")
+        if same_key_scoped.exists():
+            return same_key_scoped
     return HeroSlide.objects.filter(store=store, section__isnull=True, is_active=True).select_related(
         *_DESTINATION_SELECT_RELATED,
     ).order_by("display_order", "id")
@@ -86,11 +156,32 @@ def _image_slider_context(store, section):
 
 
 def _scoped_banners(store, section):
-    scoped = PromotionalBanner.objects.filter(section=section, is_active=True).select_related(
-        *_DESTINATION_SELECT_RELATED,
-    ).order_by("display_order", "id")
-    if scoped.exists():
-        return scoped
+    # Phase 5, Task 1 — same unsaved-candidate-section guard as
+    # ``_scoped_hero_slides`` above; identical reasoning.
+    if section.pk is not None:
+        scoped = PromotionalBanner.objects.filter(section=section, is_active=True).select_related(
+            *_DESTINATION_SELECT_RELATED,
+        ).order_by("display_order", "id")
+        if scoped.exists():
+            return scoped
+    else:
+        # Phase 5, Task 2 (browser-QA finding) — same third fallback tier as
+        # ``_scoped_hero_slides`` above; identical reasoning (the Demo
+        # Store's real Banner content is scoped to whichever real section
+        # the currently-applied Ready Template created, not to
+        # ``section=None``).
+        from ..models import StorefrontLayoutVersion
+
+        same_key_scoped = PromotionalBanner.objects.filter(
+            section__section_key=section.section_key,
+            section__page__version__layout__store=store,
+            section__page__version__status__in=(
+                StorefrontLayoutVersion.Status.DRAFT, StorefrontLayoutVersion.Status.PUBLISHED,
+            ),
+            is_active=True,
+        ).select_related(*_DESTINATION_SELECT_RELATED).order_by("display_order", "id")
+        if same_key_scoped.exists():
+            return same_key_scoped
     return PromotionalBanner.objects.filter(store=store, section__isnull=True, is_active=True).select_related(
         *_DESTINATION_SELECT_RELATED,
     ).order_by("display_order", "id")
@@ -255,9 +346,10 @@ def _catalog_product_wall_context(store, section):
 
 
 def _newest_products_context(store, section):
+    item_limit = (section.settings or {}).get("item_limit", 8)
     products = (
         storefront_listing_products(store).select_related("brand").prefetch_related("images", "metafields")
-        .order_by("-created_at")[:8]
+        .order_by("-created_at")[:item_limit]
     )
     return {"products": products}
 
@@ -268,7 +360,8 @@ def _best_sellers_context(store, section):
     (به مستندسازیِ ``best_seller_service`` مراجعه شود). ``pk__in`` ترتیبِ
     رتبه را حفظ نمی‌کند، پس فهرست دستی طبقِ همان ترتیبِ رتبه‌بندی بازسازی
     می‌شود (همان الگویِ ``collection_products_add``ی فازِ B)."""
-    product_ids = best_seller_service.best_selling_product_ids(store, limit=8)
+    item_limit = (section.settings or {}).get("item_limit", 8)
+    product_ids = best_seller_service.best_selling_product_ids(store, limit=item_limit)
     if not product_ids:
         return {"products": []}
     products_by_id = {
@@ -281,9 +374,10 @@ def _best_sellers_context(store, section):
 
 
 def _discounted_products_context(store, section):
+    item_limit = (section.settings or {}).get("item_limit", 6)
     products = (
         storefront_listing_products(store).select_related("brand").prefetch_related("images", "metafields")
-        .filter(discount_percent__gt=0).order_by("-discount_percent")[:6]
+        .filter(discount_percent__gt=0).order_by("-discount_percent")[:item_limit]
     )
     return {"products": products}
 
@@ -432,7 +526,8 @@ def _video_section_context(store, section):
 
 
 def _category_context_for_promo_cards(store, section):
-    categories = Category.objects.filter(store=store, is_active=True).order_by("order", "name")[:4]
+    item_limit = (section.settings or {}).get("item_limit", 4)
+    categories = Category.objects.filter(store=store, is_active=True).order_by("order", "name")[:item_limit]
     return {"categories": categories}
 
 
@@ -489,6 +584,13 @@ PER_INSTANCE_SECTION_KEYS = {
     #: نمونه (``item_limit``/``deadline_hours``) وابسته‌اند، دقیقاً همان
     #: دلیلِ بالا (``product_section``).
     "amazing_offers", "blog_posts",
+    #: Task 6 (Group B) — همین دلیل: از این چکپوینت به بعد،
+    #: ``_newest_products_context``/``_best_sellers_context``/
+    #: ``_discounted_products_context``/``_category_context_for_promo_cards``
+    #: هم به ``item_limit``ی خودِ همان نمونه وابسته‌اند (پیش از این
+    #: چکپوینت، این چهار context builder اصلاً به ``section.settings``
+    #: نگاه نمی‌کردند — یک مقدارِ ثابتِ hardcode‌شده داشتند).
+    "newest_products", "best_sellers", "discounted_products", "promo_cards",
 }
 
 
@@ -497,9 +599,34 @@ def _story_rail_context(store, section):
     section-specific نداشته باشد). همان الگویِ hero_slides."""
     from apps.content.models import StoryRailItem
 
-    scoped = StoryRailItem.objects.filter(section=section, is_active=True).order_by("display_order", "id")
-    if scoped.exists():
-        return {"story_items": scoped}
+    # Phase 5, Task 1 — same unsaved-candidate-section guard as
+    # ``_scoped_hero_slides``/``_scoped_banners`` above; identical reasoning.
+    # (Independent review, Task 1 — found missing here: ``story_rail`` is a
+    # real registered section, used by the Ready Templates
+    # ``playful_lifestyle``/``premium_boutique``, so a candidate preview of
+    # either would otherwise raise on this exact FK filter.)
+    if section.pk is not None:
+        scoped = StoryRailItem.objects.filter(section=section, is_active=True).order_by("display_order", "id")
+        if scoped.exists():
+            return {"story_items": scoped}
+    else:
+        # Phase 5, Task 2 (browser-QA finding) — same third fallback tier as
+        # ``_scoped_hero_slides``/``_scoped_banners`` above; identical
+        # reasoning (the Demo Store's real StoryRailItem content is scoped
+        # to whichever real section the currently-applied Ready Template
+        # created, not to ``section=None``).
+        from ..models import StorefrontLayoutVersion
+
+        same_key_scoped = StoryRailItem.objects.filter(
+            section__section_key=section.section_key,
+            section__page__version__layout__store=store,
+            section__page__version__status__in=(
+                StorefrontLayoutVersion.Status.DRAFT, StorefrontLayoutVersion.Status.PUBLISHED,
+            ),
+            is_active=True,
+        ).order_by("display_order", "id")
+        if same_key_scoped.exists():
+            return {"story_items": same_key_scoped}
     # Fallback: آیتم‌هایِ سراسریِ فروشگاه (section__isnull=True)
     return {"story_items": StoryRailItem.objects.filter(store=store, section__isnull=True, is_active=True).order_by("display_order", "id")}
 
@@ -729,7 +856,20 @@ def _build_items_from_sections(
 
     items = []
     context_cache: dict = {}
-    for section in sections:
+    # PDTX (Phase 5 Task 5) — the canonical editable PDP trust owner is a
+    # ``trust_features`` section placed on the page. When one exists as a
+    # sibling here, ``product_main``'s hard-coded ``.guarantee`` strip must
+    # NOT also render (never two competing trust modules on one PDP). The
+    # sibling list is already fully in scope, so this is a free O(n) check —
+    # no DB query — and it is identical for the published path and the
+    # unsaved-default path, so backward compatibility (stores without the new
+    # section keep the hard-coded strip) is preserved automatically.
+    _sections_list = list(sections)
+    has_sibling_trust_features = any(
+        s.section_key == "trust_features" and getattr(s, "is_active", True)
+        for s in _sections_list
+    )
+    for section in _sections_list:
         try:
             definition = get_definition(section.section_key)
         except UnknownSectionTypeError:
@@ -747,24 +887,32 @@ def _build_items_from_sections(
         )
         effective_settings = dict(section.settings or {})
         render_section = section
+        # Phase 1 (Task 6) / Phase 4 (Task 6, Group F correction) — approved
+        # precedence: an EXPLICIT local override (stamped
+        # ``appearance_overrides.variant_explicit``/``card_style_explicit``
+        # by a genuine merchant edit) is the strongest normal override and
+        # wins over the inherited Store-level family default. Historical rows
+        # WITHOUT a marker keep the current inherited/global overlay behavior,
+        # so existing stores do not visually flip. The Store manifest
+        # selection itself is unchanged; only whether it overlays the local
+        # value differs. Computed here (before the card/badge overlay below)
+        # so both overlays can honor their own marker.
+        _local_overrides = effective_settings.get("appearance_overrides") or {}
+        _variant_explicit = bool(_local_overrides.get("variant_explicit"))
+        _card_style_explicit = bool(_local_overrides.get("card_style_explicit"))
         if store_appearance is not None and section.section_key in CARD_AWARE_SECTION_KEYS:
-            presentation_overlay = {
-                **card_settings_for(store_appearance),
-                **badge_settings_for(store_appearance),
-            }
+            presentation_overlay = dict(badge_settings_for(store_appearance))
+            # ``badge`` has no merchant-facing local write path anywhere, so
+            # its overlay always applies. ``card_style`` does (the legacy
+            # card-settings form) — an explicit local choice must survive a
+            # conflicting Store-level card family selection, exactly like the
+            # variant axis below.
+            if not _card_style_explicit:
+                presentation_overlay.update(card_settings_for(store_appearance))
             if presentation_overlay:
                 effective_card_settings = dict(effective_settings.get("card") or {})
                 effective_card_settings.update(presentation_overlay)
                 effective_settings["card"] = effective_card_settings
-        # Phase 1 (Task 6) — approved precedence: an EXPLICIT local Section
-        # variant (stamped ``appearance_overrides.variant_explicit=True`` by a
-        # genuine merchant variant edit) is the strongest normal override and
-        # wins over the inherited Store-level family default. Historical rows
-        # WITHOUT the marker keep the current inherited/global overlay behavior,
-        # so existing stores do not visually flip. The Store manifest selection
-        # itself is unchanged; only whether it overlays the local value differs.
-        _local_overrides = effective_settings.get("appearance_overrides") or {}
-        _variant_explicit = bool(_local_overrides.get("variant_explicit"))
         # When the local variant is explicit, the manifest variant no longer
         # overlays the section for this render (neither the settings mirror nor
         # the resolved ``active_variant`` below), so the saved local variant wins.
@@ -796,6 +944,10 @@ def _build_items_from_sections(
         context = dict(context_cache[cache_key])
         context["section"] = render_section
         context["settings"] = effective_settings
+        # PDTX — only meaningful for product_main (its template guards the
+        # hard-coded guarantee strip on this flag); harmless elsewhere.
+        if section.section_key == "product_main":
+            context["suppress_guarantee_strip"] = has_sibling_trust_features
         if store_appearance is not None:
             context["store_appearance"] = store_appearance
         # R4 Task 7 — computed AFTER copying the (possibly shared/cached)
@@ -891,6 +1043,64 @@ def build_default_render_items(page_type: str, store, page_context: dict | None 
     ]
     return _build_items_from_sections(sections, store, page_context)
 
+
+def build_candidate_render_items(
+    sections,
+    store,
+    page_context: dict | None = None,
+    *,
+    global_appearance: dict | None = None,
+    store_appearance: ResolvedStoreAppearance | None = None,
+) -> list[dict]:
+    """Phase 5, Task 1 — render a page's worth of UNSAVED ``StorefrontSection``
+    instances (e.g. from ``preset_service.resolve_preset_candidate``) through
+    the exact same shared rendering path every other caller of
+    ``_build_items_from_sections`` already uses — not a second renderer.
+
+    ``_build_items_from_sections`` is already explicitly designed to accept
+    any iterable of StorefrontSection-*shaped* objects, saved or not — see
+    ``build_default_render_items`` above, the existing precedent this reuses
+    for stores that have never published a Storefront V2. This is a thin
+    public wrapper for the candidate-preview case so callers never need the
+    private function directly."""
+    return _build_items_from_sections(
+        sections,
+        store,
+        page_context or {},
+        global_appearance=global_appearance,
+        store_appearance=store_appearance,
+    )
+
+
+def build_candidate_container_rows(candidate_page, items: list[dict]) -> list[dict]:
+    """Phase 5, Task 2 — the smallest read-only candidate adapter for the
+    "container settings must not be ignored" parity requirement (Task-1
+    corrective's ``ResolvedPresetCandidatePage.container_settings``).
+
+    Reuses the existing, already-tested ``group_items_into_rows`` — the same
+    pure, no-persisted-Container row-grouping path ``preview.html`` already
+    falls back to today for any Draft/Published version with no real
+    ``StorefrontContainer`` rows yet (``render_rows.html``'s own
+    ``{% else %}`` branch). ``build_container_render_items`` (the full
+    Container/Cell renderer) genuinely requires persisted rows — see its own
+    ``page.containers``/``item["section"].pk`` lookups — so it cannot render
+    an unsaved candidate without persisting something, which Task 2 must not
+    do. This function does not replace or fork that renderer; it only
+    attaches ``candidate_page``'s already-computed per-row-run
+    ``container_settings`` onto ``group_items_into_rows``'s output, in the
+    same order, so callers receive rows *and* their settings together
+    instead of the settings being silently discarded.
+
+    Row/settings order correspondence is structural, not coincidental: both
+    ``group_items_into_rows`` (contiguous ``row_key`` adjacency over
+    ``items``) and ``candidate_page.container_settings``
+    (``preset_service._entry_runs`` over the same, identically-ordered
+    preset entries that produced ``items``) group by the same contiguous
+    ``row_key`` rule over the same section sequence."""
+    rows = group_items_into_rows(items)
+    for row, container_settings in zip(rows, candidate_page.container_settings):
+        row["container_settings"] = container_settings
+    return rows
 
 
 #: Acceptance Batch 1 (post-U11) — the registry-level distinction the QA

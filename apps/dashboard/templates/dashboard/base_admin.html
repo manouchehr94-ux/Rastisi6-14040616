@@ -286,7 +286,7 @@ ClassicEditor فراخوانی می‌شود و بی‌سروصدا (بدون خ
         </button>
         <div class="nav-group-body" x-show="groups.appearance" x-cloak>
           {% if can_manage_storefront_layout %}
-          <a class="nav-item{% if active_page == 'storefront_builder' %} active{% endif %}" data-page="storefront_appearance" data-admin-v2-priority="2" href="{% url 'dashboard:storefront-builder-editor' %}?panel=appearance">
+          <a class="nav-item{% if active_page == 'storefront_builder' %} active{% endif %}" data-page="storefront_appearance" data-admin-v2-priority="2" href="{% url 'dashboard:storefront-builder-r4-editor' %}?panel=appearance">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2a10 10 0 100 20 4 4 0 010-8 4 4 0 000-8 10 10 0 000-4z"/></svg>
             ظاهر و طراحی
           </a>
@@ -294,9 +294,12 @@ ClassicEditor فراخوانی می‌شود و بی‌سروصدا (بدون خ
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
             قالب‌های آماده
           </a>
-          <a class="nav-item{% if active_page == 'storefront_builder' %} active{% endif %}" data-page="storefront_builder" data-admin-v2-priority="1" href="{% url 'dashboard:storefront-builder-editor' %}">
+          <a class="nav-item{% if active_page == 'storefront_builder' %} active{% endif %}" data-page="storefront_builder" data-admin-v2-priority="1" href="{% url 'dashboard:storefront-builder-r4-editor' %}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
             سازنده فروشگاه
+          </a>
+          <a class="nav-item" data-page="storefront_builder" href="{% url 'dashboard:storefront-builder-editor' %}" style="font-size:.85em;opacity:.75">
+            ادیتور قدیمی (تنظیمات پیشرفته)
           </a>
           {% endif %}
           {% if can_manage_collections %}
@@ -523,11 +526,11 @@ ClassicEditor فراخوانی می‌شود و بی‌سروصدا (بدون خ
   {% if can_view_shipping_settings %}<a data-search-item data-title="ارسال" data-path="ارسال و مالیات ← ارسال" data-keywords="ارسال پست روش ارسال shipping" data-icon="⇢" href="{% url 'dashboard:shipping-setup' %}"></a>{% endif %}
   {% if can_view_coupons %}<a data-search-item data-title="تخفیف‌ها" data-path="فروش ← کدهای تخفیف" data-keywords="تخفیف کوپن جشنواره coupon" data-icon="%" href="{% url 'dashboard:coupon-list' %}"></a>{% endif %}
   {% if can_manage_storefront_layout %}
-  <a data-search-item data-title="سازنده فروشگاه" data-path="فروشگاه ← سازنده فروشگاه" data-keywords="سازنده storefront builder طراحی صفحه سکشن section هیرو" data-icon="✦" href="{% url 'dashboard:storefront-builder-editor' %}"></a>
-  <a data-search-item data-title="ظاهر و طراحی" data-path="فروشگاه ← ظاهر و طراحی" data-keywords="ظاهر رنگ پالت فونت قالب استایل appearance palette" data-icon="◉" href="{% url 'dashboard:storefront-builder-editor' %}?panel=appearance"></a>
-  <a data-search-item data-title="لوگو" data-path="ظاهر و طراحی ← هدر ← لوگو" data-keywords="لوگو آرم نشان فروشگاه logo header" data-icon="R" href="{% url 'dashboard:storefront-builder-editor' %}?panel=header&focus=logo"></a>
-  <a data-search-item data-title="هدر فروشگاه" data-path="ظاهر و طراحی ← هدر" data-keywords="هدر سربرگ جستجو سبد حساب کاربری header" data-icon="⌃" href="{% url 'dashboard:storefront-builder-editor' %}?panel=header"></a>
-  <a data-search-item data-title="فوتر فروشگاه" data-path="ظاهر و طراحی ← فوتر" data-keywords="فوتر پایین صفحه شبکه اجتماعی footer" data-icon="⌄" href="{% url 'dashboard:storefront-builder-editor' %}?panel=footer"></a>
+  <a data-search-item data-title="سازنده فروشگاه" data-path="فروشگاه ← سازنده فروشگاه" data-keywords="سازنده storefront builder طراحی صفحه سکشن section هیرو" data-icon="✦" href="{% url 'dashboard:storefront-builder-r4-editor' %}"></a>
+  <a data-search-item data-title="ظاهر و طراحی" data-path="فروشگاه ← ظاهر و طراحی" data-keywords="ظاهر رنگ پالت فونت قالب استایل appearance palette" data-icon="◉" href="{% url 'dashboard:storefront-builder-r4-editor' %}?panel=appearance"></a>
+  <a data-search-item data-title="لوگو" data-path="ظاهر و طراحی ← هدر ← لوگو" data-keywords="لوگو آرم نشان فروشگاه logo header" data-icon="R" href="{% url 'dashboard:storefront-builder-r4-editor' %}?panel=header&focus=logo"></a>
+  <a data-search-item data-title="هدر فروشگاه" data-path="ظاهر و طراحی ← هدر" data-keywords="هدر سربرگ جستجو سبد حساب کاربری header" data-icon="⌃" href="{% url 'dashboard:storefront-builder-r4-editor' %}?panel=header"></a>
+  <a data-search-item data-title="فوتر فروشگاه" data-path="ظاهر و طراحی ← فوتر" data-keywords="فوتر پایین صفحه شبکه اجتماعی footer" data-icon="⌄" href="{% url 'dashboard:storefront-builder-r4-editor' %}?panel=footer"></a>
   <a data-search-item data-title="قالب‌های آماده" data-path="ظاهر و طراحی ← قالب" data-keywords="قالب تم template ready" data-icon="▦" href="{% url 'dashboard:storefront-builder-templates' %}"></a>
   {% endif %}
   {% if can_manage_collections %}<a data-search-item data-title="کالکشن‌ها" data-path="فروشگاه ← کالکشن‌ها" data-keywords="کالکشن مجموعه محصولات collection" data-icon="◇" href="{% url 'dashboard:collection-list' %}"></a>{% endif %}

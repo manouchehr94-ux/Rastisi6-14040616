@@ -47,12 +47,28 @@ def _due_subscriptions(now, lead_days, store=None):
 @transaction.atomic
 def _generate_one(subscription, *, now):
     """یک فاکتورِ تمدید برایِ دوره‌ی بعدیِ این اشتراک می‌سازد و باز می‌کند، اگر
-    از قبل وجود نداشته باشد. ``(invoice, created)`` را برمی‌گرداند."""
-    # تنزلِ زمان‌بندی‌شده (ADR-80) در آغازِ دوره‌ی بعد اعمال می‌شود: نسخه‌ی پلن
-    # به هدف سوییچ می‌شود و فاکتورِ تمدید با همان نسخه‌ی تازه ساخته می‌شود.
+    از قبل وجود نداشته باشد. ``(invoice, created)`` را برمی‌گرداند.
+
+    ترتیبِ قفل (SUB-001 Repair 4، بازبینیِ مستقلِ معماری — ترمیمِ لازم):
+    پیش‌تر این تابع ابتدا ``ScheduledPlanChange`` را قفل می‌کرد و سپس از
+    طریقِ ``subscription_service.change_plan_version`` رویِ
+    ``StoreSubscription`` قفل می‌گرفت — یعنی ترتیبِ Scheduled→Subscription،
+    برعکسِ ترتیبِ کانونیکِ خودِ ``plan_change_billing_service.
+    start_plan_change`` (که همیشه Subscription→Scheduled قفل می‌گیرد). این
+    دو ترتیبِ معکوس زیرِ PostgreSQL می‌توانست deadlock بسازد. اکنون این تابع
+    هم دقیقاً همان ترتیبِ کانونیک را رعایت می‌کند: ابتدا ``StoreSubscription``
+    با ``select_for_update`` قفل می‌شود، سپس ``ScheduledPlanChange``ی همان
+    اشتراک بررسی/قفل می‌شود، سپس هدفِ زمان‌بندی‌شده (اگر باشد) رویِ همان
+    نمونه‌یِ قفل‌شده اعمال و ردیفِ زمان‌بندی‌شده حذف می‌شود، و بقیه‌ی کارِ
+    تمدید با همان وضعیتِ اشتراکِ قفل‌شده/تازه ادامه می‌یابد."""
     from apps.billing.models import ScheduledPlanChange
+    from apps.subscriptions.models import StoreSubscription
     from apps.subscriptions.services import subscription_service as sub_svc
 
+    subscription = StoreSubscription.objects.select_for_update().get(pk=subscription.pk)
+
+    # تنزلِ زمان‌بندی‌شده (ADR-80) در آغازِ دوره‌ی بعد اعمال می‌شود: نسخه‌ی پلن
+    # به هدف سوییچ می‌شود و فاکتورِ تمدید با همان نسخه‌ی تازه ساخته می‌شود.
     scheduled = ScheduledPlanChange.objects.select_for_update().filter(subscription=subscription).first()
     if scheduled is not None:
         sub_svc.change_plan_version(

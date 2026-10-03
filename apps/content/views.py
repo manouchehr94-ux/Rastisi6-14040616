@@ -9,12 +9,28 @@ from .services import NewsletterSubscribeError, subscribe_to_newsletter
 
 
 def page_detail(request, slug):
-    """نمایش صفحه‌ی محتوایی منتشرشده — مقیّد به فروشگاه جاری."""
+    """نمایش صفحه‌ی محتوایی منتشرشده — مقیّد به فروشگاه جاری.
+
+    P5-W4A — converges onto the canonical universal storefront shell (see
+    storefront_context_service.build_universal_storefront_context's
+    shell_only contract). Local import: matches the existing
+    catalog/cart/home() call-site convention that avoids a module-level
+    dependency on apps.storefront_builder."""
+    from apps.storefront_builder.services.storefront_context_service import (
+        build_universal_storefront_context,
+    )
+
     store = resolve_store_for_storefront(request)
     page = get_object_or_404(
         ContentPage, slug=slug, status=ContentPage.Status.PUBLISHED, store=store,
     )
-    return render(request, "content/page_detail.html", {"page": page})
+    context = {"page": page}
+    context.update(
+        build_universal_storefront_context(
+            request, store, "content_page", page_context=context, shell_only=True,
+        )
+    )
+    return render(request, "content/page_detail.html", context)
 
 
 @require_POST

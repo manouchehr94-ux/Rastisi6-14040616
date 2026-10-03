@@ -1,0 +1,8 @@
+=== TARGETED REGRESSION (Python 3.12.13, raw) — after Preview fix ===
+----------------------------------------------------------------------
+Ran 186 tests in 18.171s
+
+OK (skipped=1)
+Destroying test database for alias 'default'...
+Found 186 test(s).
+System check identified no issues (0 silenced).

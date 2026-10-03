@@ -1,0 +1,147 @@
+{
+  "total": 28,
+  "pass": 28,
+  "fail": 0,
+  "results": [
+    {
+      "name": "2. Gallery opens",
+      "ok": true,
+      "detail": "http://w5c-qa.rastisi.localhost:8765/admin-portal/storefront-builder/templates/"
+    },
+    {
+      "name": "3. Exactly 50 Ready Template cards present",
+      "ok": true,
+      "detail": "cardCount=50, expected=50"
+    },
+    {
+      "name": "3b. Every registered key has a wired preview trigger",
+      "ok": true,
+      "detail": "missing=[]"
+    },
+    {
+      "name": "7. Dialog is visible",
+      "ok": true,
+      "detail": "{\"open\":true,\"ariaHidden\":\"false\",\"title\":\"پیش‌نمایشِ قالبِ «مینا»\",\"frameSrc\":\"http://w5c-qa.rastisi.localhost:8765/admin-portal/storefront-builder/templates/mina_community/preview/?data=merchant\",\"frameCount\":1}"
+    },
+    {
+      "name": "8. Dialog title contains the template label",
+      "ok": true,
+      "detail": "پیش‌نمایشِ قالبِ «مینا»"
+    },
+    {
+      "name": "9. Exactly one preview iframe exists",
+      "ok": true,
+      "detail": "frameCount=1"
+    },
+    {
+      "name": "10. Iframe URL is the canonical live-preview route (merchant default)",
+      "ok": true,
+      "detail": "http://w5c-qa.rastisi.localhost:8765/admin-portal/storefront-builder/templates/mina_community/preview/?data=merchant"
+    },
+    {
+      "name": "12. Iframe URL has data=merchant",
+      "ok": true,
+      "detail": "http://w5c-qa.rastisi.localhost:8765/admin-portal/storefront-builder/templates/mina_community/preview/?data=merchant"
+    },
+    {
+      "name": "13. Preview banner identifies Merchant-data mode",
+      "ok": true,
+      "detail": "found"
+    },
+    {
+      "name": "16. Desktop device state + natural presentation",
+      "ok": true,
+      "detail": "{\"desktopPressed\":\"true\",\"desktopFrameStyle\":{\"width\":\"\",\"transform\":\"\"}}"
+    },
+    {
+      "name": "18. Tablet iframe document width ≈ 768",
+      "ok": true,
+      "detail": "innerWidth=768"
+    },
+    {
+      "name": "20. Mobile iframe document width ≈ 390",
+      "ok": true,
+      "detail": "innerWidth=390"
+    },
+    {
+      "name": "21. Mobile: non-zero rendered body, no error page",
+      "ok": true,
+      "detail": "{\"bodyBox\":{\"x\":445,\"y\":165.203125,\"width\":390,\"height\":480},\"looksLikeErrorPage\":false}"
+    },
+    {
+      "name": "23. Same single iframe element reused after data-source switch",
+      "ok": true,
+      "detail": "frameCount=1"
+    },
+    {
+      "name": "24. Canonical preview URL now Demo mode (no data=merchant)",
+      "ok": true,
+      "detail": "http://w5c-qa.rastisi.localhost:8765/admin-portal/storefront-builder/templates/mina_community/preview/"
+    },
+    {
+      "name": "25. Preview banner identifies Rasti Mode Demo data",
+      "ok": true,
+      "detail": "found"
+    },
+    {
+      "name": "27. Switched back to Merchant",
+      "ok": true,
+      "detail": "http://w5c-qa.rastisi.localhost:8765/admin-portal/storefront-builder/templates/mina_community/preview/?data=merchant"
+    },
+    {
+      "name": "Accessibility: Tab wraps from last to first focusable (focus trap)",
+      "ok": true,
+      "detail": "closeBtnId=qaCloseBtnProbe"
+    },
+    {
+      "name": "29-30. Escape closes dialog and restores focus to the trigger",
+      "ok": true,
+      "detail": "{\"state\":{\"open\":false,\"ariaHidden\":\"true\",\"title\":\"پیش‌نمایشِ قالبِ «مینا»\",\"frameSrc\":\"about:blank\",\"frameCount\":1},\"focusReturnedToTrigger\":true}"
+    },
+    {
+      "name": "Escape-from-iframe setup: focus is genuinely inside the iframe document",
+      "ok": true,
+      "detail": "{\"focusIsInsideIframe\":true,\"frameActiveTag\":\"A\"}"
+    },
+    {
+      "name": "Escape while focus is INSIDE the preview iframe closes the dialog and restores focus to the trigger",
+      "ok": true,
+      "detail": "{\"state\":{\"open\":false,\"ariaHidden\":\"true\",\"title\":\"پیش‌نمایشِ قالبِ «مینا»\",\"frameSrc\":\"about:blank\",\"frameCount\":1},\"focusReturnedAfterIframeEscape\":true}"
+    },
+    {
+      "name": "Normal parent-focus Escape still works after the iframe-focus cycle",
+      "ok": true,
+      "detail": "{\"open\":false,\"ariaHidden\":\"true\",\"title\":\"پیش‌نمایشِ قالبِ «مینا»\",\"frameSrc\":\"about:blank\",\"frameCount\":1}"
+    },
+    {
+      "name": "31-32. Retargeting to a second template shows the NEW template, not stale content",
+      "ok": true,
+      "detail": "http://w5c-qa.rastisi.localhost:8765/admin-portal/storefront-builder/templates/dense_marketplace/preview/?data=merchant"
+    },
+    {
+      "name": "32b. Second template iframe loads successfully",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "33. Close button closes the dialog",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Representative coverage: third (late) template retargets + loads",
+      "ok": true,
+      "detail": "http://w5c-qa.rastisi.localhost:8765/admin-portal/storefront-builder/templates/anniversary_mosaic/preview/?data=merchant"
+    },
+    {
+      "name": "34. Existing Apply control(s) still present",
+      "ok": true,
+      "detail": "applyFormCount=50"
+    },
+    {
+      "name": "Keyboard: Enter on a focused trigger opens the dialog",
+      "ok": true,
+      "detail": "{\"open\":true,\"ariaHidden\":\"false\",\"title\":\"پیش‌نمایشِ قالبِ «پنجاه»\",\"frameSrc\":\"http://w5c-qa.rastisi.localhost:8765/admin-portal/storefront-builder/templates/anniversary_mosaic/preview/?data=merchant\",\"frameCount\":1}"
+    }
+  ]
+}

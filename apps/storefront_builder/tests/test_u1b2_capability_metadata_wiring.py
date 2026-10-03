@@ -241,6 +241,12 @@ class ViewsMigrationPreservesEditorGatingTests(TestCase):
         return reverse("dashboard:storefront-builder-section-settings", args=[section.pk])
 
     def test_motion_aware_section_still_gets_motion_field_and_saves_it(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         section = StorefrontSection.objects.create(
             version=self.draft, section_key="hero_banner", order=0,
         )
@@ -252,6 +258,12 @@ class ViewsMigrationPreservesEditorGatingTests(TestCase):
         self.assertEqual(section.settings["motion"], {"style": "hover_lift"})
 
     def test_non_motion_aware_section_gets_no_motion_field_and_ignores_it(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         section = StorefrontSection.objects.create(
             version=self.draft, section_key="rich_text", order=0,
         )
@@ -265,6 +277,12 @@ class ViewsMigrationPreservesEditorGatingTests(TestCase):
         self.assertNotIn("motion", section.settings)
 
     def test_card_aware_section_context_flag_unchanged(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         section = StorefrontSection.objects.create(
             version=self.draft, section_key="product_section", order=0,
         )
@@ -272,6 +290,12 @@ class ViewsMigrationPreservesEditorGatingTests(TestCase):
         self.assertTrue(resp.context["supports_card"])
 
     def test_column_visual_section_context_flag_unchanged(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         section = StorefrontSection.objects.create(
             version=self.draft, section_key="product_section", order=0,
         )
@@ -279,6 +303,12 @@ class ViewsMigrationPreservesEditorGatingTests(TestCase):
         self.assertTrue(resp.context["supports_columns"])
 
     def test_column_aware_but_not_visual_section_context_flag_still_false(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         """``category_grid`` remains in the broader ``COLUMN_AWARE_SECTION_KEYS``
         storage contract but not the narrower ``COLUMN_VISUAL_SECTION_KEYS`` UI
         allowlist — the migrated context flag must keep that distinction."""
@@ -337,10 +367,14 @@ class RegistryInvariantsUnchangedByU1B2Tests(TestCase):
             SECTION_REGISTRY["image_slider"].template_name,
         )
 
-    def test_multi_banner_layout_variant_still_unvalidated_passthrough(self):
+    def test_multi_banner_layout_variant_now_coerces_malformed_value(self):
+        # Task 6 (Group C) narrowed multi_banner's validate_settings to a
+        # real closed-enum validator — a malformed/unrecognized value is
+        # now coerced to "" (the historical "no override" state) instead
+        # of passing through verbatim.
         definition = get_definition("multi_banner")
         cleaned = definition.validate_settings({"layout_variant": {"anything": "goes", "n": 1}})
-        self.assertEqual(cleaned["layout_variant"], {"anything": "goes", "n": 1})
+        self.assertEqual(cleaned["layout_variant"], "")
 
     def test_persisted_settings_for_representative_sections_still_validate_identically(self):
         """A previously-saved settings dict for a card/motion/background/column

@@ -81,6 +81,19 @@ class PresetSectionEntry:
     #: entry or contiguous row run. Presets stay pure data; no Store IDs or
     #: renderer-specific hooks belong here.
     container_settings: dict | None = None
+    #: Architecture Convergence / Phase 1 — cross-template SEMANTIC identity of
+    #: this recipe row. Pure recipe metadata (NO database field/model/migration/
+    #: separate registry): it is the one canonical way to decide that two rows in
+    #: two *different* Ready Templates represent the same merchant concept (e.g.
+    #: ``hero.primary``), independent of section_key and independent of the
+    #: positional ``template_slot_key`` (``key:vN:page:index``). ``None`` (default)
+    #: is legitimate for legacy/non-Ready structural presets; every Ready Template
+    #: row must carry an explicit, non-empty, per-page-unique role — enforced at
+    #: registration time (see ``_validate_semantic_slot_keys``). The canonical
+    #: token→role / (page,section)→role mapping lives with the A8 recipe
+    #: construction authority (``a8_ready_templates``); it is never reproduced in
+    #: a service.
+    semantic_slot_key: str | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -159,6 +172,77 @@ LAYOUT_PRESET_VERSION_REGISTRY: dict[tuple[str, str], LayoutPresetDefinition] = 
 
 _NUMERIC_VERSION_RE = re.compile(r"^[1-9][0-9]*$")
 
+#: Architecture Convergence / Phase 1 — normalized ``semantic_slot_key`` syntax:
+#: a lowercase ``<domain>.<qualifier>[.<qualifier>...]`` role, never a bare word
+#: and never a positional/index-derived value.
+_SEMANTIC_SLOT_KEY_RE = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
+
+
+def authored_legacy_home(
+    template_key: str, entries: tuple, logical_names: tuple[str, ...],
+) -> tuple:
+    """Explicitly stamp a retained pre-A8 hand-built Ready Template's HOME rows
+    with UNRESOLVED-legacy semantic roles, authored here in recipe source.
+
+    These eight recipes predate the ratified A8 composition-token mapping, so a
+    row's cross-template semantic identity cannot be proved from an approved
+    source. Rather than *infer* a role from ``section_key`` or list index (a
+    heuristic — forbidden: UNKNOWN/AMBIGUOUS ⇒ PRESERVE, NEVER GUESS), each row
+    is given an explicit ``legacy_unresolved.<template_key>.<logical_name>``
+    role. The ``legacy_unresolved`` domain plus the embedded template identity
+    guarantee such a role can never accidentally equal a ratified A8 role
+    (e.g. ``hero.primary``) or another template's legacy role — so switching this
+    content onto a ratified A8 Template resolves NO semantic match and the
+    content is preserved (fail safe), never falsely aligned. ``logical_names``
+    is authored, per-recipe, per-page-unique source data (never index/section_key
+    derived); this helper only pairs it with the rows in order and validates the
+    lengths match — it never manufactures a missing name.
+    """
+    entries = tuple(entries)
+    if len(entries) != len(logical_names):
+        raise InvalidLayoutPresetError(
+            f"Ready Template «{template_key}»: تعداد نام‌های منطقیِ اسلات با ردیف‌های "
+            f"صفحه‌ی اصلی هم‌خوان نیست ({len(logical_names)} != {len(entries)})"
+        )
+    return tuple(
+        dataclasses.replace(entry, semantic_slot_key=f"legacy_unresolved.{template_key}.{name}")
+        for entry, name in zip(entries, logical_names)
+    )
+
+
+def _validate_semantic_slot_keys(definition: "LayoutPresetDefinition") -> None:
+    """Ready Template validation for the cross-template semantic contract.
+
+    Runs only for ``is_ready_template`` definitions (legacy/non-Ready structural
+    presets may legitimately keep ``None`` roles). Every row must carry a
+    non-empty, syntactically valid role, and a role must be unique within one
+    page — a duplicate semantic role on a single page is a fail-closed
+    registration error, exactly like every other built-in-preset shape error in
+    this module (never a runtime error for a real merchant).
+    """
+    if not definition.is_ready_template:
+        return
+    for page_type, entries in definition.pages.items():
+        seen: dict[str, int] = {}
+        for index, entry in enumerate(entries):
+            role = entry.semantic_slot_key
+            if role is None or not str(role).strip():
+                raise InvalidLayoutPresetError(
+                    f"Ready Template «{definition.key}»: ردیفِ «{entry.section_key}» "
+                    f"در صفحه‌ی «{page_type}» باید semantic_slot_key صریح داشته باشد"
+                )
+            if not _SEMANTIC_SLOT_KEY_RE.fullmatch(str(role)):
+                raise InvalidLayoutPresetError(
+                    f"Ready Template «{definition.key}»: semantic_slot_key «{role}» "
+                    f"نحوِ نامعتبر دارد (باید <domain>.<qualifier> باشد)"
+                )
+            if role in seen:
+                raise InvalidLayoutPresetError(
+                    f"Ready Template «{definition.key}»: نقشِ معناییِ تکراری «{role}» "
+                    f"در صفحه‌ی «{page_type}» (ایندکس {seen[role]} و {index})"
+                )
+            seen[role] = index
+
 
 def _complete_store_appearance(
     *, header: str, hero: str, layout: str, product_view: str, card: str,
@@ -179,14 +263,23 @@ def _complete_store_appearance(
             "motion": f"motion.{motion}.v1",
             "footer": f"footer.{footer}.v1",
             "bottom_nav": f"bottom_nav.{bottom_nav}.v1",
+            # P5-W2 — Theme is now a known family; a complete manifest must
+            # carry it. Retained recipes never auto-assign an occasion.
+            "theme": "theme.none.v1",
         },
         "settings": {},
     }
 
 
 def register_layout_preset(definition: LayoutPresetDefinition) -> None:
+    # Every Ready Template must carry EXPLICIT, per-page-unique semantic roles
+    # authored in recipe source (A8 recipes via the ratified token/page mapping;
+    # retained hand-built recipes via ``authored_legacy_home`` + the ratified
+    # non-home mapping). Registration validation fails closed on any missing or
+    # duplicate role — it never manufactures semantic metadata.
     _validate_page_composition_shape(definition)
     _validate_ready_template_store_appearance(definition)
+    _validate_semantic_slot_keys(definition)
 
     identity = (definition.key, definition.version)
     if identity in LAYOUT_PRESET_VERSION_REGISTRY:
@@ -830,19 +923,30 @@ register_layout_preset(LayoutPresetDefinition(
 # not a real one.
 # ==================================================================
 
+# Non-home rows carry their RATIFIED cross-template semantic role explicitly
+# (the approved (page_type, section_key) mapping — identical to the canonical
+# ``a8_ready_templates.NON_HOME_SECTION_SEMANTIC_ROLE`` values). ``listing`` and
+# ``search`` both compose a single ``product_listing`` row but resolve to
+# DISTINCT ratified roles (products.listing vs products.search), so they use
+# separate constants rather than sharing one.
 _U10_STANDARD_PRODUCT_DETAIL_PAGE = (
-    PresetSectionEntry("product_main"),
-    PresetSectionEntry("product_description"),
-    PresetSectionEntry("related_products"),
+    PresetSectionEntry("product_main", semantic_slot_key="product.main"),
+    PresetSectionEntry("product_description", semantic_slot_key="product.description"),
+    PresetSectionEntry("related_products", semantic_slot_key="product.related"),
 )
-_U10_STANDARD_LISTING_PAGE = (PresetSectionEntry("product_listing"),)
+_U10_STANDARD_LISTING_PAGE = (
+    PresetSectionEntry("product_listing", semantic_slot_key="products.listing"),
+)
+_U10_STANDARD_SEARCH_PAGE = (
+    PresetSectionEntry("product_listing", semantic_slot_key="products.search"),
+)
 _U10_STANDARD_COLLECTION_PAGE = (
-    PresetSectionEntry("collection_header"),
-    PresetSectionEntry("collection_products"),
+    PresetSectionEntry("collection_header", semantic_slot_key="collection.header"),
+    PresetSectionEntry("collection_products", semantic_slot_key="collection.products"),
 )
 _U10_STANDARD_CART_PAGE = (
-    PresetSectionEntry("cart_items"),
-    PresetSectionEntry("cart_summary"),
+    PresetSectionEntry("cart_items", semantic_slot_key="cart.items"),
+    PresetSectionEntry("cart_summary", semantic_slot_key="cart.summary"),
 )
 
 
@@ -851,7 +955,7 @@ def _u10_standard_non_home_pages() -> dict:
         "product_detail": _U10_STANDARD_PRODUCT_DETAIL_PAGE,
         "listing": _U10_STANDARD_LISTING_PAGE,
         "collection": _U10_STANDARD_COLLECTION_PAGE,
-        "search": _U10_STANDARD_LISTING_PAGE,
+        "search": _U10_STANDARD_SEARCH_PAGE,
         "cart": _U10_STANDARD_CART_PAGE,
     }
 
@@ -931,7 +1035,7 @@ register_layout_preset(LayoutPresetDefinition(
         "footer_variant": "marketplace_dense",
     },
     pages={
-        "home": _DENSE_MARKETPLACE_BERAITO_HOME_V2,
+        "home": authored_legacy_home("dense_marketplace", _DENSE_MARKETPLACE_BERAITO_HOME_V2, ("offer_flash", "hero", "categories", "trust", "banner_a", "products_bestsellers", "amazing_offers", "products_trending", "banner_pair_a1", "banner_pair_a2", "products_newest", "banner_pair_b1", "banner_pair_b2", "products_curated", "products_popular_compact", "products_special", "products_day_pick", "products_most_viewed_compact", "banner_mini", "products_store_favorites", "banner_strip", "products_for_you", "brands", "blog")),
         **_u10_standard_non_home_pages(),
     },
 ))
@@ -982,7 +1086,7 @@ register_layout_preset(LayoutPresetDefinition(
         "show_payment_logos": True, "footer_variant": "chocolate_dark_columns",
     },
     pages={
-        "home": (
+        "home": authored_legacy_home("premium_leather", (
             # Reference first-fold discovery row.  This is a registered
             # category presentation variant (Store-scoped runtime data), not
             # reference content or a Ready Template branch.  It also keeps the
@@ -1023,7 +1127,7 @@ register_layout_preset(LayoutPresetDefinition(
             _chocolate_product_row("محصولات پربازدید", "most_viewed"),
             PresetSectionEntry("blog_posts"),
             PresetSectionEntry("trust_features"),
-        ),
+        ), ("categories_story", "hero", "categories_badges", "banner_wide", "products_popular", "banner_promo", "products_newest", "banner_wide_2", "products_offers", "categories_by_group", "products_most_viewed", "blog", "trust")),
         **_u10_standard_non_home_pages(),
     },
 ))
@@ -1084,7 +1188,7 @@ register_layout_preset(LayoutPresetDefinition(
     header={"sticky": True, "announcement_enabled": False, "show_search": True, "show_account": True, "show_wishlist": False, "show_cart": True, "header_variant": "beauty_search_nav"},
     footer={"show_newsletter": False, "show_trust_badges": True, "show_payment_logos": True, "footer_variant": "beauty_retail_columns"},
     pages={
-        "home": (
+        "home": authored_legacy_home("warm_boutique", (
             # Wide, short, image-first campaign hero using the Store's own
             # HeroSlide records; no reference merchant image/logo is embedded.
             PresetSectionEntry("hero_banner", settings={
@@ -1158,7 +1262,7 @@ register_layout_preset(LayoutPresetDefinition(
                 "button_label": "عضویت",
                 "background": {"mode": "color", "color": "#F6F6F6"},
             }),
-        ),
+        ), ("hero", "categories", "products_campaign_discounted", "banner_promo4", "products_campaign_newest", "brands", "wall_category_groups", "banner_pair", "wall_collections", "products_most_viewed", "newsletter")),
         **_u10_standard_non_home_pages(),
     },
 ))
@@ -1291,7 +1395,7 @@ register_layout_preset(LayoutPresetDefinition(
         # merchandising-row count into the reference's own range without
         # ever hardcoding a Store-specific id or duplicating identical
         # product groups under different headings.
-        "home": (
+        "home": authored_legacy_home("fashion_promo_catalog", (
             PresetSectionEntry("category_grid", settings={"display_mode": "fashion_flat", "item_limit": 12}),
             # Micro-fix pass — merchant: "hero must auto-slide". Three
             # slides, each a real deterministic Pillow composite of
@@ -1329,7 +1433,7 @@ register_layout_preset(LayoutPresetDefinition(
                 "products_per_group": 14, "minimum_products": 3, "skip_empty_groups": True,
                 "show_view_all": True, "card": _FASHION_PROMO_CARD, **_FASHION_PROMO_ROW,
             }),
-        ),
+        ), ("categories_flat", "hero", "categories_mosaic", "products_discounted", "products_newest", "products_bestsellers", "products_most_viewed", "wall_groups")),
         **{
             **_u10_standard_non_home_pages(),
             # Site-target-overhaul — the master contract's shared
@@ -1341,16 +1445,16 @@ register_layout_preset(LayoutPresetDefinition(
             # ``settings.layout_variant``/``settings.card`` differ, exactly
             # the same axis ``card_style`` already varies on. No other Ready
             # Template's ``pages[...]`` is touched by this override.
-            "listing": (PresetSectionEntry("product_listing", settings={
+            "listing": (PresetSectionEntry("product_listing", semantic_slot_key="products.listing", settings={
                 "layout_variant": "sidebar_dense", "card": _FASHION_PROMO_CARD,
             }),),
-            "search": (PresetSectionEntry("product_listing", settings={
+            "search": (PresetSectionEntry("product_listing", semantic_slot_key="products.search", settings={
                 "layout_variant": "sidebar_dense", "card": _FASHION_PROMO_CARD,
             }),),
             "product_detail": (
-                PresetSectionEntry("product_main", settings={"layout_variant": "fashion"}),
-                PresetSectionEntry("product_description"),
-                PresetSectionEntry("related_products", settings={"card": _FASHION_PROMO_CARD}),
+                PresetSectionEntry("product_main", semantic_slot_key="product.main", settings={"layout_variant": "fashion"}),
+                PresetSectionEntry("product_description", semantic_slot_key="product.description"),
+                PresetSectionEntry("related_products", semantic_slot_key="product.related", settings={"card": _FASHION_PROMO_CARD}),
             ),
         },
     },
@@ -1376,7 +1480,7 @@ register_layout_preset(LayoutPresetDefinition(
     header={"sticky": True, "announcement_enabled": True, "header_variant": "boutique_centered"},
     footer={"show_newsletter": True, "footer_variant": "boutique_editorial"},
     pages={
-        "home": (
+        "home": authored_legacy_home("playful_lifestyle", (
             PresetSectionEntry("story_rail"),
             PresetSectionEntry("hero_banner", settings={"hero_style": "split"}),
             PresetSectionEntry("category_grid", settings={"display_mode": "circular"}),
@@ -1385,7 +1489,7 @@ register_layout_preset(LayoutPresetDefinition(
                 "item_limit": 8, "card": {"card_style": "standard"},
             }),
             PresetSectionEntry("testimonials"),
-        ),
+        ), ("story", "hero", "categories", "products_newest", "testimonials")),
         **_u10_standard_non_home_pages(),
     },
 ))
@@ -1410,7 +1514,7 @@ register_layout_preset(LayoutPresetDefinition(
     header={"sticky": True, "announcement_enabled": False, "header_variant": "legacy_default"},
     footer={"show_newsletter": False, "footer_variant": "legacy_default"},
     pages={
-        "home": (
+        "home": authored_legacy_home("utility_catalog", (
             PresetSectionEntry("category_grid", settings={"display_mode": "grid"}),
             PresetSectionEntry("product_section", settings={
                 "title": "جدیدترین کالاها", "data_source": "newest", "display_mode": "grid",
@@ -1418,7 +1522,7 @@ register_layout_preset(LayoutPresetDefinition(
             }),
             PresetSectionEntry("best_sellers"),
             PresetSectionEntry("trust_features"),
-        ),
+        ), ("categories", "products_newest", "best_sellers", "trust")),
         **_u10_standard_non_home_pages(),
     },
 ))
@@ -1455,7 +1559,7 @@ register_layout_preset(LayoutPresetDefinition(
         "footer_variant": "boutique_editorial",
     },
     pages={
-        "home": (
+        "home": authored_legacy_home("editorial_jewelry", (
             # Store-owned HeroSlide photography is composed into a reusable
             # editorial triptych; no reference imagery or merchant IDs live
             # in the preset.
@@ -1505,7 +1609,7 @@ register_layout_preset(LayoutPresetDefinition(
                 "item_limit": 1, "offset": 4, "layout_variant": "atelier-wide",
                 "responsive": {"desktop_columns": 1, "tablet_columns": 1, "mobile_columns": 1},
             }),
-        ),
+        ), ("hero", "categories_mosaic", "banner_duo_a", "products_newest", "products_bestsellers", "banner_duo_b", "banner_wide")),
         **_u10_standard_non_home_pages(),
     },
 ))
@@ -1543,7 +1647,7 @@ register_layout_preset(LayoutPresetDefinition(
         "mobile_nav_variant": "luxury_floating_cart",
     },
     pages={
-        "home": (
+        "home": authored_legacy_home("dark_digital", (
             PresetSectionEntry("hero_banner", settings={
                 "hero_style": "luxury_showcase", "text_position": "end",
                 "autoplay": False, "show_arrows": False, "show_dots": True,
@@ -1580,7 +1684,7 @@ register_layout_preset(LayoutPresetDefinition(
                     "card_border": True, "quick_add_reveal": "always",
                 },
             }),
-        ),
+        ), ("hero", "categories", "products_today", "trust", "products_bestsellers")),
         **_u10_standard_non_home_pages(),
     },
 ))

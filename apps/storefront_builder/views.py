@@ -12,14 +12,14 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.templatetags.static import static
 from django.urls import reverse
 from django.views.decorators.clickjacking import xframe_options_sameorigin
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from apps.dashboard.decorators import permission_required, staff_required
 from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
 from apps.stores.resolution import resolve_store_for_service
 
 from . import global_region_registry, section_registry
-from .settings_schema import mark_explicit_variant_override
+from .settings_schema import mark_explicit_card_style_override, mark_explicit_variant_override
 from .models import (
     APPEARANCE_CONFIG_DEFAULTS,
     FOOTER_CONFIG_DEFAULTS,
@@ -34,6 +34,7 @@ from .models import (
     StorefrontPage,
     StorefrontSection,
 )
+from . import resource_source
 from .services import (
     appearance_authority_service,
     container_service,
@@ -41,19 +42,49 @@ from .services import (
     layout_service,
     r4_mutation_service,
     row_service,
+    section_data_service,
+    section_structure_service,
 )
 from .services.layout_service import _clone_section_scoped_media
 from .services.render_service import (
+    build_candidate_container_rows,
+    build_candidate_render_items,
     build_container_render_items,
     build_page_render_items,
     group_items_into_rows,
     resolve_store_appearance_render_state,
+    resolved_store_appearance_for_request,
     store_appearance_global_renderer_template,
 )
 
 
 def _resolve_store(request):
     return resolve_store_for_service(request)
+
+
+def _require_legacy_editor_active(view_func):
+    """P5-W5A — the ONE shared eligibility guard for Class A (R3-editor-only
+    redundant mutation routes, per the approved master plan's binding
+    single-active-write-surface policy). For any given Store, only one
+    mutating editor surface may be active: when ``r4_editor_enabled=True``
+    (the live default), these routes fail closed with the SAME convention
+    already used by R4 itself for wrong-editor-mode routes (``raise
+    Http404`` — see ``storefront_r4_reset_storefront``/``storefront_r4_
+    switch_template``/``storefront_r4_design_lab``); when explicitly pinned
+    to ``False``, they remain the rollback editor, unchanged. Applied only
+    to an explicit, named route list — never a module-wide "everything in
+    views.py is legacy" assumption, so shared canonical capabilities
+    (Ready Template Gallery/Apply, Draft Preview, History browser, media)
+    are never accidentally caught. Placed AFTER staff/permission decorators
+    so authentication/authorization behavior is unchanged either way."""
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        store = _resolve_store(request)
+        layout = layout_service.get_or_create_layout(store)
+        if layout.r4_editor_enabled:
+            raise Http404
+        return view_func(request, *args, **kwargs)
+    return wrapper
 
 
 def _history_before(draft):
@@ -93,14 +124,13 @@ def _record_edit_history(label):
 
 
 def _resolve_page_type(raw) -> str:
-    """Phase 2 (سازنده‌ی تک‌صفحه‌ای): رشته‌یِ خامِ ``page`` (از querystring
-    یا فرمِ POST) را به یکی از شش نوعِ معتبرِ ``StorefrontPage.PageType``
-    حل می‌کند — مقدارِ غایب/نامعتبر بی‌صدا به ``HOME`` بازمی‌گردد (نه
-    خطا) تا لینک/فرمِ قدیمیِ بدونِ این پارامتر (پیش از این چکپوینت)
-    دقیقاً همان رفتارِ فعلی را حفظ کند."""
-    if raw in StorefrontPage.PageType.values:
-        return raw
-    return StorefrontPage.PageType.HOME
+    """Phase 2 (سازنده‌ی تک‌صفحه‌ای)، Phase 4 (Task 3B) — رشته‌یِ خامِ ``page``
+    (از querystring یا فرمِ POST) را به یکی از شش نوعِ معتبرِ
+    ``StorefrontPage.PageType`` حل می‌کند. اکنون فقط یک نازک‌لایه‌یِ
+    سازگاریِ اسمِ قدیمی روی ``StorefrontPage.resolve_page_type`` است —
+    که R4 (``r4_views.py``) هم مستقیماً از همان تابعِ مشترک استفاده
+    می‌کند تا دو زنجیره‌یِ اعتبارسنجیِ کپی‌شده وجود نداشته باشد."""
+    return StorefrontPage.resolve_page_type(raw)
 
 
 @staff_required
@@ -170,6 +200,26 @@ class _CandidateAppearanceVersion:
                 for field in ("font", "radius", "button_radius", "density", "motion", "type_scale"):
                     config[field] = getattr(template, field)
         self._config = config
+
+    def effective_appearance_config(self):
+        return self._config
+
+
+class _ReadyTemplateCandidateAppearanceVersion:
+    """Phase 5, Task 2 — same idiom as ``_CandidateAppearanceVersion`` above
+    (a minimal read-only stand-in exposing only ``effective_appearance_config()``,
+    never touching the database), but backed directly by a Task-1
+    ``ResolvedPresetCandidate.appearance_config`` — the candidate's own fully
+    resolved appearance, not a ``template_slug``-derived overlay onto a base
+    config. Setting this as ``request.storefront_appearance_version`` makes
+    ``apps.core.context_processors``' global color/font tokens (consumed by
+    ``base.html`` site-wide, not just this view's own content block) reflect
+    the previewed Ready Template's own DNA, exactly like
+    ``storefront_preview()`` already does for its own candidate-appearance
+    case."""
+
+    def __init__(self, appearance_config: dict):
+        self._config = appearance_config
 
     def effective_appearance_config(self):
         return self._config
@@ -246,7 +296,34 @@ def storefront_preview(request):
     # forcing Container mode when none exist makes otherwise valid Draft
     # sections disappear from Preview.
     use_container_layout = page.containers.exists()
-    store_appearance = resolve_store_appearance_render_state(draft)
+    # P5-W2 Repair A (IMPORTANT 1) — resolve the canonical appearance ONCE per
+    # request and cache it on the request, so the shell context processor
+    # (apps.core.context_processors.shop_settings) reuses this exact resolved
+    # state for its Theme projection instead of resolving the same Draft a
+    # second time. The ``?preview_template`` candidate branch below sets a
+    # transient stand-in (not this Draft) as ``storefront_appearance_version``,
+    # which the context processor never passes to the persisted resolver.
+    store_appearance = resolved_store_appearance_for_request(request, draft)
+    # P5-W3 — transient Design Lab candidate preview. ``?design_lab=<token>``
+    # carries an in-memory appearance-DNA candidate (never persisted, never a
+    # candidate Draft). It is resolved through the EXACT same canonical
+    # resolver + renderer the committed Draft uses; the ONLY difference is
+    # which ``ResolvedStoreAppearance`` feeds ``build_page_render_items``. The
+    # candidate is ALWAYS re-validated server-side against the canonical
+    # registry (untrusted component keys fail closed with 400) — the token is a
+    # transport, never an authority, and never a source of truth. Zero writes.
+    design_lab_token = request.GET.get("design_lab")
+    if design_lab_token:
+        from .services import design_lab_service
+        from .storefront_appearance.contracts import InvalidStoreAppearanceContract
+
+        try:
+            candidate = design_lab_service.decode_candidate_token(design_lab_token)
+            store_appearance = design_lab_service.resolve_candidate_appearance(
+                draft, candidate
+            )
+        except (ValueError, InvalidStoreAppearanceContract):
+            return HttpResponseBadRequest("کاندید آزمایشگاه طراحی نامعتبر است")
     items = build_page_render_items(
         page,
         store,
@@ -269,6 +346,12 @@ def storefront_preview(request):
         )
     else:
         request.storefront_appearance_version = draft
+    # Phase 4 (Task 3C) — the same pattern as ``storefront_appearance_version``
+    # just above: Preview independently sets this request attribute (it does
+    # not call ``build_universal_storefront_context``, which is the public-only
+    # entry point), so ``apps.core.context_processors._versioned_appearance``
+    # resolves the Page Appearance tier identically here.
+    request.storefront_appearance_page = page
     header_config = draft.effective_header_config()
     footer_config = draft.effective_footer_config()
     header_variant_template = store_appearance_global_renderer_template(
@@ -393,6 +476,7 @@ def _container_state_changed_response(request, *, page_type, container_id=None, 
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("افزودن چیدمان")
 def storefront_container_add(request):
     store = _resolve_store(request)
@@ -418,6 +502,7 @@ def storefront_container_add(request):
 
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("تنظیم چیدمان")
 def storefront_container_settings(request, pk):
     container = _get_scoped_container(request, pk)
@@ -484,6 +569,7 @@ def storefront_container_settings(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("تغییر شکل چیدمان")
 def storefront_container_layout(request, pk):
     container = _get_scoped_container(request, pk)
@@ -502,6 +588,7 @@ def storefront_container_layout(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("جابه‌جایی چیدمان")
 def storefront_container_move(request, pk):
     container = _get_scoped_container(request, pk)
@@ -531,6 +618,7 @@ def storefront_container_move(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("حذف چیدمان خالی")
 def storefront_container_remove(request, pk):
     container = _get_scoped_container(request, pk)
@@ -552,6 +640,7 @@ def storefront_container_remove(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("افزودن محتوا به خانه")
 def storefront_cell_add_section(request):
     store = _resolve_store(request)
@@ -628,6 +717,7 @@ def storefront_cell_add_section(request):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("خالی کردن خانه")
 def storefront_cell_clear(request, pk):
     """خالی‌کردنِ کاملِ یک خانه — معنایِ ثابت‌شده‌یِ این endpoint («این
@@ -680,6 +770,7 @@ def storefront_cell_clear(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("افزودن بخش")
 def storefront_section_add(request):
     store = _resolve_store(request)
@@ -784,6 +875,7 @@ def _get_scoped_section(request, pk):
 
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("ویرایش تنظیمات بخش")
 def storefront_section_settings(request, pk):
     """فرم ویرایش تنظیمات — فقط برای انواعی که واقعاً محتوای قابل‌تنظیم
@@ -908,6 +1000,27 @@ def storefront_section_settings(request, pk):
                 "subtitle": request.POST.get("subtitle", ""),
                 "button_label": request.POST.get("button_label", ""),
             }
+        elif section.section_key == "trust_features":
+            icons = request.POST.getlist("tf_icon")
+            titles = request.POST.getlist("tf_title")
+            subtitles = request.POST.getlist("tf_subtitle")
+            raw = {
+                "items": [
+                    {"icon": icon, "title": title, "subtitle": subtitle}
+                    for icon, title, subtitle in zip(icons, titles, subtitles)
+                ],
+            }
+        elif section.section_key == "amazing_offers":
+            raw = {
+                "title": request.POST.get("title", ""),
+                "item_limit": request.POST.get("item_limit", 1),
+                "deadline_hours": request.POST.get("deadline_hours", 8),
+            }
+        elif section.section_key == "blog_posts":
+            raw = {
+                "title": request.POST.get("title", ""),
+                "item_limit": request.POST.get("item_limit", 5),
+            }
         else:
             # انواعی که هیچ فیلدِ اختصاصیِ خودشان را ندارند (فازِ D) —
             # تنها چیزی که این فرم برایشان دارد بلوکِ responsive است.
@@ -926,18 +1039,24 @@ def storefront_section_settings(request, pk):
         if definition.supports_capability("motion"):
             raw["motion"] = {"style": request.POST.get("motion_style", "none")}
         if definition.supports_capability("card"):
-            raw["card"] = _extract_card_raw(request)
+            raw["card"] = _extract_card_raw(request, section)
         if definition.supports_capability("layout_width"):
             raw["layout"] = _extract_layout_raw(request)
-        # Phase 3 (V01) — the legacy Brand form builds ``raw`` fresh from named
-        # POST fields, so a trusted persisted ``appearance_overrides`` block
-        # (which carries the internal explicit-local-variant marker) would be
-        # lost on an ordinary non-variant edit. Carry the stored block forward
-        # so the appearance-override-aware validator can preserve the trusted
-        # marker — exactly like ``spacing`` above. The marker is NOT read from
-        # the client (this form never authors ``appearance_overrides``); it is
-        # copied only from the section's own persisted settings.
-        if section.section_key == "brand_carousel":
+        # Phase 3 (V01) / Task 6 (final-review fix, C1/I1) — every legacy
+        # settings form builds ``raw`` fresh from named POST fields, so a
+        # trusted persisted ``appearance_overrides`` block (which carries an
+        # internal explicit-local-override marker — ``variant_explicit`` or
+        # ``card_style_explicit``) would be lost on an ordinary unrelated
+        # edit. Carry the stored block forward for EVERY
+        # appearance-override-aware section (not just ``brand_carousel`` —
+        # the independent Task-6 reviewer found the marker for
+        # card-aware/product_section sections was being silently dropped by
+        # this same narrow check) so the validator can preserve the trusted
+        # marker — exactly like ``spacing`` above. The marker is NOT read
+        # from the client (this form never authors ``appearance_overrides``
+        # itself); it is copied only from the section's own persisted
+        # settings.
+        if section.section_key in section_registry.APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS:
             stored_overrides = (section.settings or {}).get("appearance_overrides")
             if stored_overrides:
                 raw["appearance_overrides"] = stored_overrides
@@ -964,6 +1083,18 @@ def storefront_section_settings(request, pk):
                     variant_setting_key=variant_key,
                     patch={variant_key: cleaned[variant_key]},
                 )
+            # Phase 4 (Task 6, Group F correction) — same rule, independent
+            # axis: mark the local card_style explicit only on a genuine
+            # change, so the Store Appearance manifest's card family
+            # selection stops silently overriding a merchant's own saved
+            # choice at render time (render_service.py honors this marker
+            # exactly like variant_explicit above).
+            if (
+                definition.supports_capability("card")
+                and "card_style" in request.POST
+                and cleaned.get("card", {}).get("card_style") != (section.settings or {}).get("card", {}).get("card_style")
+            ):
+                cleaned = mark_explicit_card_style_override(settings=cleaned)
             section.settings = cleaned
             section.save(update_fields=["settings", "updated_at"])
             messages.success(request, "تنظیمات ذخیره شد")
@@ -1067,26 +1198,30 @@ def _universal_selection_context(section, context) -> dict:
 
 
 def _validate_universal_selection_ownership(request, section_key, cleaned) -> None:
-    """Reject foreign/nonexistent explicit IDs before they are persisted."""
-    from apps.catalog.models import Brand, Category, MerchantCollection, Product
+    """Reject foreign/nonexistent explicit IDs before they are persisted.
 
-    specs = {
-        "product_section": (Product, "product_ids"),
-        "category_grid": (Category, "category_ids"),
-        "brand_carousel": (Brand, "brand_ids"),
-        "collection_tiles": (MerchantCollection, "collection_ids"),
-    }
-    spec = specs.get(section_key)
-    if spec is None:
-        return
-    model, field = spec
-    ids = cleaned.get(field) or []
-    if not ids:
+    Phase 4 (Task 2) — projects ``cleaned`` into the same typed
+    ``ResourceSource`` R4 uses and delegates to the ONE shared, DB-backed
+    ownership check (``section_data_service.validate_resource_source_ownership``)
+    instead of a second, independently-maintained per-model dict lookup. This
+    also closes a real gap the old dict-based check never covered:
+    ``product_section``'s single-reference auto sources (``data_source`` in
+    {category, brand, collection}) carry a merchant-supplied ``source_id``
+    that was never ownership-checked at write time (only ``product_ids``,
+    i.e. manual mode, was) — the shared check covers both. Any section not
+    in ``resource_source``'s adapter registry has nothing to check here (its
+    own logic never assembles a ``ResourceSource``, e.g. context-aware
+    sections), matching the previous behavior's default no-op.
+    """
+    try:
+        source = resource_source.resource_source_from_section_settings(section_key, cleaned)
+    except resource_source.ResourceSourceError:
         return
     store = _resolve_store(request)
-    owned = set(model.objects.filter(store=store, pk__in=ids).values_list("pk", flat=True))
-    if any(item_id not in owned for item_id in ids):
-        raise ValueError("یک یا چند مورد انتخاب‌شده متعلق به این فروشگاه نیست")
+    try:
+        section_data_service.validate_resource_source_ownership(store=store, source=source)
+    except section_data_service.ResourceSourceOwnershipError:
+        raise ValueError("یک یا چند مورد انتخاب‌شده متعلق به این فروشگاه نیست") from None
 
 def _extract_background_raw(request, section) -> dict:
     """Read the shared merchant-facing background control.
@@ -1109,15 +1244,22 @@ def _extract_background_raw(request, section) -> dict:
 
 
 def _validate_background_asset_ownership(request, background: dict | None) -> None:
-    """Fail closed if a tampered POST points at another Store's MediaAsset."""
-    background = background or {}
-    if background.get("mode") != "image" or not background.get("media_asset_id"):
-        return
-    from apps.content.models import MediaAsset
+    """Fail closed if a tampered POST points at another Store's MediaAsset.
 
+    Phase 5 Task 4B — the DB-backed ownership rule itself now lives in ONE
+    canonical place (``section_data_service.validate_background_asset_ownership``),
+    shared with the R4 mutation path so there is never a second background
+    ownership authority. This request-scoped wrapper only resolves the Store
+    and re-raises the service's error as the legacy view's merchant-facing
+    ``ValueError`` message (shown via ``django.contrib.messages``), exactly as
+    before — the same pattern ``_validate_universal_selection_ownership`` uses
+    for ``validate_resource_source_ownership``.
+    """
     store = _resolve_store(request)
-    if not MediaAsset.objects.filter(store=store, pk=background["media_asset_id"]).exists():
-        raise ValueError("تصویر پس‌زمینه‌ی انتخاب‌شده متعلق به این فروشگاه نیست")
+    try:
+        section_data_service.validate_background_asset_ownership(store=store, background=background)
+    except section_data_service.BackgroundAssetOwnershipError:
+        raise ValueError("تصویر پس‌زمینه‌ی انتخاب‌شده متعلق به این فروشگاه نیست") from None
 
 
 def _background_picker_context(request, section) -> dict:
@@ -1249,12 +1391,36 @@ def _extract_responsive_raw(request, definition) -> dict:
     return raw
 
 
-def _extract_card_raw(request) -> dict:
+#: Phase 4 (Task 6, Group F correction) — every POST field name
+#: ``_extract_card_raw`` reads. A form that sends ANY one of these
+#: genuinely has the card block; a form that sends NONE of them
+#: (``amazing_offers``'s own dedicated branch) never had it.
+_CARD_RAW_POST_KEYS = (
+    "card_show_brand", "card_show_price", "card_show_badge", "card_show_wishlist",
+    "card_show_quick_add", "card_show_rating", "card_border", "card_image_ratio",
+    "card_quick_add_reveal", "card_style",
+)
+
+
+def _extract_card_raw(request, section) -> dict:
     """Phase 8 P0-2 — بلوکِ خامِ «ظاهرِ کارتِ محصول» را از POST می‌خواند،
     فقط برایِ ``CARD_AWARE_SECTION_KEYS``. دقیقاً همان الگویِ
     ``_extract_responsive_raw``: تیک‌های مثبت («نمایشِ …») مستقیم به
     کلیدهایِ ``show_*`` تبدیل می‌شوند (بدونِ وارونگیِ منفی، چون خودِ
-    ``validate_card_settings`` هم مثبت است)."""
+    ``validate_card_settings`` هم مثبت است).
+
+    Phase 4 (Task 6, Group F correction) — دقیقاً همان الگویِ preserve-safeِ
+    ``_extract_background_raw``: یک section مثلِ ``amazing_offers`` شاخه‌یِ
+    فرمِ اختصاصیِ خودش را دارد که کنترل‌هایِ ``card_*`` را اصلاً رندر
+    نمی‌کند — بدونِ این محافظت، Saveِ آن فرم بلوکِ ``card`` را کاملاً به
+    پیش‌فرض‌ها بازمی‌گرداند (یک Save کاملاً مخرب، دقیقاً همان دسته‌ی باگی که
+    Finding 2 برایِ همین سه‌تا رفع کرد). غیابِ هر کدام از کلیدهایِ ``card_*``
+    از POST یعنی این فرمِ خاص هرگز بلوکِ کارت را نداشته — بلوکِ
+    ذخیره‌شده‌یِ فعلی دست‌نخورده حفظ می‌شود. (نه فقط ``card_style`` تنها —
+    فرمی که واقعاً کارت را رندر می‌کند ممکن است یک فیلدِ خاصِ کارت را بدونِ
+    ``card_style`` هم بفرستد.)"""
+    if not any(key in request.POST for key in _CARD_RAW_POST_KEYS):
+        return (section.settings or {}).get("card") or {}
     return {
         "show_brand": request.POST.get("card_show_brand") == "on",
         "show_price": request.POST.get("card_show_price") == "on",
@@ -1320,6 +1486,7 @@ def storefront_section_product_search(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("تغییر چیدمان ردیف")
 def storefront_section_row_layout(request, pk):
     """Apply or replace one safe merchant-facing row preset.
@@ -1578,7 +1745,9 @@ def storefront_section_row_layout(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("حذف بخش")
+@transaction.atomic
 def storefront_section_remove(request, pk):
     section = _get_scoped_section(request, pk)
     page = section.page
@@ -1588,6 +1757,17 @@ def storefront_section_remove(request, pk):
     # قفل‌بودن را می‌بیند، چون آن یک تصمیمِ per-instance و آگاهانه‌تر است).
     if section.is_locked:
         messages.error(request, "این بخش قفل است — ابتدا قفل آن را باز کنید")
+        return storefront_section_list_partial(request, page_type=page_type)
+    # R4 Task 8 (Batch 2, lifecycle-lock parity) — a section can also be
+    # protected indirectly, via its CONTAINER's own lock (V3 Free Layout).
+    # ``section_structure_service.remove_section`` already rejects this
+    # (``container_locked``); this legacy view previously only checked the
+    # section's OWN lock, letting a merchant delete a section straight out
+    # of a Container they had explicitly locked. Same resolution helper as
+    # that canonical function, never a second lock-check implementation.
+    placement_cell = section_structure_service.find_placement_cell(section)
+    if placement_cell is not None and placement_cell.container.is_locked:
+        messages.error(request, "این چیدمان قفل است — ابتدا قفل آن را باز کنید")
         return storefront_section_list_partial(request, page_type=page_type)
     # Phase 1 correction: حذفِ یک عضوِ ردیف، آن ردیف را نامعتبر می‌کند
     # (کمتر از حداقلِ عضو یا مجموعِ عرضِ ناقص) — باید صریحاً رد شود، نه
@@ -1614,6 +1794,7 @@ def storefront_section_remove(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("نمایش/مخفی کردن بخش")
 def storefront_section_toggle(request, pk):
     section = _get_scoped_section(request, pk)
@@ -1625,11 +1806,17 @@ def storefront_section_toggle(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("جمع/باز کردن بخش")
 def storefront_section_collapse_toggle(request, pk):
-    """جمع‌کردن/بازکردن کارت یک بخش داخل ادیتور — فقط UI، مستقل از
-    is_active (A3). ``_get_scoped_section`` تضمین می‌کند فقط بخش‌های
-    همین فروشگاه و فقط در نسخه Draft قابل تغییرند."""
+    """جمع‌کردن/بازکردن کارت یک بخش داخل ادیتور — یک نوشتنِ واقعی روی
+    Draft است (``collapsed_in_editor`` در ``_SECTION_FIELDS`` است و در
+    تاریخچه/عکس‌فوری Draft شرکت می‌کند)، نه صرفاً UI بی‌اثر — P5-W5A
+    Independent-Review repair: قبلاً به‌اشتباه به‌عنوان استثنایِ
+    Class A طبقه‌بندی شده بود؛ اکنون مثل ``storefront_section_toggle``
+    گارد می‌شود. مستقل از is_active (A3). ``_get_scoped_section``
+    تضمین می‌کند فقط بخش‌های همین فروشگاه و فقط در نسخه Draft قابل
+    تغییرند."""
     section = _get_scoped_section(request, pk)
     section.collapsed_in_editor = not section.collapsed_in_editor
     section.save(update_fields=["collapsed_in_editor", "updated_at"])
@@ -1639,6 +1826,7 @@ def storefront_section_collapse_toggle(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("قفل/بازکردن بخش")
 def storefront_section_lock_toggle(request, pk):
     """قفل/بازکردنِ یک بخش — Phase 1 (spec §37). دقیقاً همان الگویِ
@@ -1654,7 +1842,9 @@ def storefront_section_lock_toggle(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("تکرار بخش")
+@transaction.atomic
 def storefront_section_duplicate(request, pk):
     """تکرارِ یک بخش — یک بخشِ منطقیِ **جدید** می‌سازد.
 
@@ -1710,6 +1900,7 @@ def storefront_section_duplicate(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("جابه‌جایی بلاک")
 def storefront_block_move(request, pk):
     """Move/reorder one V3 Block without touching page-level Section order.
@@ -1773,6 +1964,7 @@ def storefront_block_move(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("حذف بلاک")
 def storefront_block_remove(request, pk):
     """Delete exactly one Block from a Cell and keep sibling Blocks/layout."""
@@ -1808,6 +2000,7 @@ def storefront_block_remove(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("بازچینی بخش‌ها")
 def storefront_section_reorder(request):
     """قرارداد یکسان با سایر endpointهای reorder موجود (product-image،
@@ -1864,7 +2057,9 @@ def storefront_section_reorder(request):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("جابه‌جایی بخش")
+@transaction.atomic
 def storefront_section_move(request, pk):
     """جابه‌جایی یک بخش به بالا/پایین — fallback برای موبایل/کیبورد وقتی
     drag-and-drop عملی نیست."""
@@ -1873,6 +2068,17 @@ def storefront_section_move(request, pk):
     # Phase 1 (spec §37 — Lock): «It cannot be moved».
     if section.is_locked:
         messages.error(request, "این بخش قفل است — ابتدا قفل آن را باز کنید")
+        return storefront_section_list_partial(request, page_type=section.page.page_type)
+    # R4 Task 8 (Batch 2, lifecycle-lock parity) — same reasoning as
+    # ``storefront_section_remove`` above: a locked CONTAINER must also
+    # block moving a section out of it, matching
+    # ``section_structure_service.move_section``'s own ``container_locked``
+    # guard. Checked for BOTH sides of the swap below (this same call
+    # covers the source side; the neighbor's own container is checked
+    # right before the swap itself).
+    source_cell = section_structure_service.find_placement_cell(section)
+    if source_cell is not None and source_cell.container.is_locked:
+        messages.error(request, "این چیدمان قفل است — ابتدا قفل آن را باز کنید")
         return storefront_section_list_partial(request, page_type=section.page.page_type)
     # Phase 1A: جابه‌جایی همیشه بینِ خواهر-وبرادرهایِ **همان صفحه** انجام
     # می‌شود (``section.page.sections``، نه ``section.version.sections``ی
@@ -1892,6 +2098,10 @@ def storefront_section_move(request, pk):
         # section مبدأ.
         if other.is_locked:
             messages.error(request, "بخشِ همسایه قفل است — ابتدا قفل آن را باز کنید")
+            return storefront_section_list_partial(request, page_type=section.page.page_type)
+        other_cell = section_structure_service.find_placement_cell(other)
+        if other_cell is not None and other_cell.container.is_locked:
+            messages.error(request, "چیدمانِ بخشِ همسایه قفل است — ابتدا قفل آن را باز کنید")
             return storefront_section_list_partial(request, page_type=section.page.page_type)
         section.order, other.order = other.order, section.order
         # ``section`` (از ``_get_scoped_section``) یک کوئریِ *جدا* از
@@ -1926,6 +2136,7 @@ def storefront_edit_history_state(request):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 def storefront_undo(request):
     return _legacy_history_command(request, "undo")
 
@@ -1933,6 +2144,7 @@ def storefront_undo(request):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 def storefront_redo(request):
     return _legacy_history_command(request, "redo")
 
@@ -1963,6 +2175,7 @@ def _legacy_history_command(request, command: str) -> JsonResponse:
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 def storefront_publish(request):
     """L02 — legacy publish reaches the SAME lifecycle guarantee as R4
     ``publish_draft`` by delegating to the shared ``layout_service.publish``
@@ -2037,14 +2250,33 @@ def storefront_template_gallery(request):
     ``storefront_apply_layout_preset`` (Draft-only، با تأییدِ صریح اگر
     صفحه‌ای از قبل section دارد، هرگز publish خودکار) انجام می‌شود؛ این ویو
     هیچ مسیرِ نوشتنِ جدیدی اضافه نمی‌کند."""
-    from . import appearance_registry, global_region_registry, layout_preset_registry
-    from .services import template_preview_service
     from .variant_contract import validate_template_provenance
 
     store = _resolve_store(request)
     draft = layout_service.get_or_create_draft(store, user=request.user)
     provenance = validate_template_provenance(draft.template_provenance)
     current_template_key = provenance["template"]["key"]
+
+    template_cards = build_ready_template_cards(
+        draft,
+        current_template_key=current_template_key,
+        current_template_version=provenance["template"]["version"],
+    )
+
+    context = {
+        "active_page": "storefront_builder",
+        "template_cards": template_cards,
+        "has_any_template_applied": bool(current_template_key),
+    }
+    return render(request, "dashboard/storefront_builder/template_gallery.html", context)
+
+
+def build_ready_template_card(draft, preset, *, is_current):
+    """One merchant-facing Ready Template card for an exact registered preset
+    version: its real preview thumbnail, default palette swatch and global
+    region labels. Pure read."""
+    from . import appearance_registry, global_region_registry
+    from .services import template_preview_service
 
     def _variant_label(region, variant_key):
         if not variant_key:
@@ -2061,63 +2293,253 @@ def storefront_template_gallery(request):
         return [palette.colors[key] for key in ("primary", "secondary", "accent") if key in palette.colors]
 
     def _thumbnail_fields(preset):
-        # Rasti Mode Demo mission (post-Batch-3) — the merchant-rejected
-        # abstract SVG schematic is now only the safe fallback. The normal
-        # healthy state is a real captured screenshot of the actual public
-        # Rasti Mode Demo storefront rendered under this Template — see
-        # ``template_preview_service.resolve_real_screenshot``'s own
-        # docstring: this is a pure, zero-mutation filesystem check (an
-        # existence check plus one small JSON sidecar read), never a
-        # browser launch, never a live render, never a data mutation.
         screenshot_relpath = template_preview_service.resolve_real_screenshot(preset)
         if screenshot_relpath is not None:
             return {"thumbnail_kind": "screenshot", "thumbnail_url": static(screenshot_relpath), "thumbnail_svg": ""}
-        # Fallback: the always-fresh, zero-I/O SVG schematic from Batch 3 —
-        # never raises; any future Preset shape this hasn't been taught yet
-        # degrades to a neutral placeholder rather than breaking the page.
         return {"thumbnail_kind": "svg", "thumbnail_url": "", "thumbnail_svg": template_preview_service.resolve_gallery_thumbnail(preset)}
 
-    template_cards = [
-        {
-            "preset": preset,
-            "is_current": preset.key == current_template_key,
-            "would_replace_existing_content": _preset_would_replace_content(draft, preset),
-            "palette_swatch": _palette_swatch(preset),
-            **_thumbnail_fields(preset),
-            "header_variant_label": _variant_label(
-                global_region_registry.GLOBAL_HEADER_REGION, (preset.header or {}).get("header_variant"),
+    return {
+        "preset": preset,
+        "is_current": is_current,
+        "would_replace_existing_content": _preset_would_replace_content(draft, preset),
+        "palette_swatch": _palette_swatch(preset),
+        **_thumbnail_fields(preset),
+        "header_variant_label": _variant_label(
+            global_region_registry.GLOBAL_HEADER_REGION, (preset.header or {}).get("header_variant"),
+        ),
+        "footer_variant_label": _variant_label(
+            global_region_registry.GLOBAL_FOOTER_REGION, (preset.footer or {}).get("footer_variant"),
+        ),
+    }
+
+
+def build_ready_template_cards(draft, *, current_template_key, current_template_version):
+    """Read projection of the ONE Ready Template catalog for merchant-facing
+    galleries (the standalone Template Gallery page and the R4 Design Studio
+    gallery). Pure read — never a second catalog/registry: every card comes
+    from ``layout_preset_registry.list_ready_templates()`` (the latest
+    merchant-facing version per key).
+
+    A card is "current" only for the Draft's EXACT applied template identity
+    (key AND version from its provenance). A Draft on an older historical
+    version of the same key therefore never marks the newer catalog card as
+    current; that card stays available for an explicit switch."""
+    from . import layout_preset_registry
+
+    return [
+        build_ready_template_card(
+            draft,
+            preset,
+            is_current=bool(
+                current_template_key
+                and current_template_version
+                and preset.key == current_template_key
+                and preset.version == current_template_version
             ),
-            "footer_variant_label": _variant_label(
-                global_region_registry.GLOBAL_FOOTER_REGION, (preset.footer or {}).get("footer_variant"),
-            ),
-        }
-        # Acceptance Batch 1 (post-U11) — the merchant-facing Gallery must
-        # show only the 8 official Ready Templates, not every registered
-        # LayoutPresetDefinition (5 historical/internal presets remain
-        # registered and applicable elsewhere — e.g. Advanced mode / the
-        # apply-preset endpoint directly — just not surfaced here).
+        )
         for preset in layout_preset_registry.list_ready_templates()
     ]
 
-    context = {
-        "active_page": "storefront_builder",
-        "template_cards": template_cards,
-        "has_any_template_applied": bool(current_template_key),
-    }
-    return render(request, "dashboard/storefront_builder/template_gallery.html", context)
 
+def resolve_applied_template_card(draft, cards, *, current_template_key, current_template_version):
+    """The Draft's applied Ready Template as a display card, resolved by its
+    EXACT provenance identity: the current catalog card when the Draft is on
+    the latest version, otherwise the exact historical version from the
+    canonical ``get_layout_preset_version``. ``None`` when no template is
+    applied or the exact version cannot be resolved — never guesses that the
+    latest version is the applied one. Pure read; never repairs the Draft."""
+    from . import layout_preset_registry
+
+    current_card = next((card for card in cards if card["is_current"]), None)
+    if current_card is not None:
+        return current_card
+    if not (current_template_key and current_template_version):
+        return None
+    historical = layout_preset_registry.get_layout_preset_version(
+        current_template_key, current_template_version,
+    )
+    if historical is None:
+        return None
+    return build_ready_template_card(draft, historical, is_current=True)
+
+
+#: Phase 5, Task 2 — the ONE canonical Demo Store this live-preview view is
+#: allowed to render against. A fixed, server-side, staff-only constant —
+#: never taken from a query parameter or any other request-controlled input
+#: (see the view's own docstring for the full security rationale). Mirrors
+#: the exact same literal every other canonical Demo Store consumer already
+#: uses (``capture_ready_template_previews.py``,
+#: ``seed_ready_template_fashion_demo.py``, ``golden_reference_service.py``)
+#: — this repo's established convention is one small local constant per
+#: consumer, not a shared config module; introducing one now would be a
+#: second, undiscovered source of truth for a single literal string.
+RASTI_MODE_DEMO_STORE_SLUG = "rasti-mode-demo"
+
+
+@require_GET
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
+@xframe_options_sameorigin
+def storefront_template_live_preview(request, key):
+    """Live, non-mutating Ready Template preview for Demo or Merchant data.
+
+    Phase 5 Task 2 established this ONE preview route, Task-1 candidate
+    resolution and the shared renderer.  Task 3 keeps that architecture and
+    adds only a data-context choice:
+
+    P5-W5C explicitly overrides ``xframe_options_sameorigin`` for the same
+    reason ``storefront_preview`` already does: this view is now
+    intentionally embedded inside the Ready Template Gallery's own in-page
+    preview ``<iframe>`` (``template_gallery_preview.js``); the global
+    default DENY (no ``X_FRAME_OPTIONS`` set, ``XFrameOptionsMiddleware``'s
+    own fallback) remains untouched for every other view.
+
+    P5-W5C Independent Architect repair — ``@require_GET`` makes the
+    "GET-only" claim this view already made actually true (a bare POST now
+    gets a controlled 405 instead of silently being accepted); and Demo
+    mode's candidate resolution was changed from ``get_or_create_draft`` to
+    the SAME non-creating ``get_existing_draft`` Merchant mode already
+    used, closing a real gap where a GET request could bootstrap a Draft
+    for the canonical Demo Store if one didn't exist yet. Both modes now
+    share the identical "read an existing Draft or fail closed with 404"
+    contract — Preview creates ZERO persistence in either data mode.
+
+    * default: the canonical ``rasti-mode-demo`` Store (Task-2 behavior),
+    * ``?data=merchant``: the Store resolved by the existing canonical
+      ``resolve_store_for_service`` path via ``_resolve_store(request)``.
+
+    Merchant mode never accepts a Store id/slug from request input and never
+    falls back to Demo data.  It also never bootstraps persistence: candidate
+    resolution requires an already-existing merchant Draft.  If no Draft
+    exists, the request fails closed with 404.  Candidate sections remain
+    transient and are rendered by the same shared renderer as Task 2.
+    """
+    from apps.stores.models import Store
+
+    from . import layout_preset_registry
+    from .services import preset_service
+
+    preset = layout_preset_registry.get_layout_preset(key)
+    if preset is None or not preset.is_ready_template:
+        raise Http404(f"قالبِ آماده‌ی «{key}» یافت نشد.")
+
+    preview_uses_merchant_data = request.GET.get("data") == "merchant"
+    if preview_uses_merchant_data:
+        # The request/host/membership resolver is the sole tenant authority.
+        # Query parameters such as store_id/tenant_id/store are deliberately
+        # ignored and are never consulted here.
+        preview_store = _resolve_store(request)
+        candidate_base_version = layout_service.get_existing_draft(preview_store)
+        if candidate_base_version is None:
+            raise Http404(
+                'برای پیش\u200cنمایش با اطلاعات فروشگاه، ابتدا باید یک پیش\u200cنویس موجود باشد.'
+            )
+    else:
+        # Preserve Task-2 Demo behavior exactly: one fixed server-side Store,
+        # never selected from request input.
+        try:
+            preview_store = Store.objects.get(slug=RASTI_MODE_DEMO_STORE_SLUG)
+        except Store.DoesNotExist as exc:
+            raise Http404(
+                "فروشگاهِ نمایشیِ کانونیِ «rasti-mode-demo» در این محیط وجود ندارد — "
+                "ابتدا دستورِ مدیریتیِ seed_ready_template_fashion_demo (یا "
+                "apply_golden_reference_storefront) را اجرا کنید."
+            ) from exc
+        # P5-W5C Independent Architect repair — a read-only Preview must
+        # never bootstrap a Draft for the Demo Store either, mirroring
+        # Merchant mode exactly: fail closed with 404 if the canonical
+        # Demo Store exists but has no active Draft yet, rather than
+        # silently creating one via get_or_create_draft.
+        candidate_base_version = layout_service.get_existing_draft(preview_store)
+        if candidate_base_version is None:
+            raise Http404(
+                "فروشگاهِ نمایشیِ کانونیِ «rasti-mode-demo» هنوز پیش‌نویسِ "
+                "فعالی ندارد — ابتدا دستورِ مدیریتیِ "
+                "apply_golden_reference_storefront را اجرا کنید."
+            )
+
+    candidate = preset_service.resolve_preset_candidate(candidate_base_version, preset)
+
+    page_type = _resolve_page_type(request.GET.get("page"))
+    candidate_page = candidate.pages[page_type]
+    page_context = _preview_page_context(request, preview_store, page_type)
+    items = build_candidate_render_items(
+        candidate_page.sections,
+        preview_store,
+        page_context=page_context,
+        global_appearance=candidate.appearance_config,
+        store_appearance=candidate.store_appearance,
+    )
+    rows = build_candidate_container_rows(candidate_page, items)
+
+    header_variant_template = store_appearance_global_renderer_template(
+        candidate.store_appearance, "header", candidate.header_config,
+    )
+    footer_variant_template = store_appearance_global_renderer_template(
+        candidate.store_appearance, "footer", candidate.footer_config,
+    )
+    mobile_bottom_nav_template = store_appearance_global_renderer_template(
+        candidate.store_appearance, "bottom_nav", candidate.footer_config,
+    )
+
+    # Same transient appearance idiom established in Task 2.  The request
+    # attribute is consumed by the existing context processor only and is
+    # never persisted.
+    request.storefront_appearance_version = _ReadyTemplateCandidateAppearanceVersion(
+        candidate.appearance_config,
+    )
+
+    # Explicitly override the dashboard ambient context-processor value so
+    # global navigation is scoped to the SAME Store as every section resource.
+    from apps.catalog.models import Category
+
+    nav_categories = (
+        Category.objects.filter(store=preview_store, parent__isnull=True, is_active=True)
+        .prefetch_related("children")
+        .order_by("order", "name")
+    )
+
+    return render(request, "storefront_builder/ready_template_live_preview.html", {
+        "store": preview_store,
+        "preset": preset,
+        "page_type": page_type,
+        "header_config": candidate.header_config,
+        "footer_config": candidate.footer_config,
+        "header_variant_template": header_variant_template,
+        "footer_variant_template": footer_variant_template,
+        "mobile_bottom_nav_template": mobile_bottom_nav_template,
+        "store_appearance": candidate.store_appearance,
+        "rows": rows,
+        "nav_categories": nav_categories,
+        "preview_uses_merchant_data": preview_uses_merchant_data,
+    })
 
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
-@_record_edit_history("اعمال پیش‌تنظیم صفحه‌آرایی")
 def storefront_apply_layout_preset(request):
-    """اعمالِ یکی از چهار Preset درون‌ساختِ V2 (``layout_preset_registry``)
-    روی Draftِ فعلی — Phase 6. کاملاً مستقل از فرمِ Family/Template/Palette
-    در ``storefront_appearance_editor`` (همان ویو دست‌نخورده می‌ماند)؛
-    عمداً یک ویویِ جدا با همان قراردادِ ``storefront_apply_industry_layout``:
-    اگر هرکدام از صفحاتی که این Preset پوشش می‌دهد از قبل Sectionی دارند،
-    بدونِ ``confirm_preset_apply=1`` (تأییدِ صریحِ کاربر در UI) رد می‌شود."""
+    """اعمالِ یک Preset (``layout_preset_registry``) روی Draftِ فعلی.
+
+    Architecture Convergence / Phase 1 — the merchant behavior is split by preset
+    kind, and that split happens BEFORE any destructive-confirmation gate:
+
+    * READY TEMPLATE → the canonical preservation-first, SAME-active-Draft switch
+      (``r4_mutation_service.switch_template_current``): it maps shared semantic
+      slots, introduces missing target slots, never silently destroys merchant
+      work, and records EXACTLY one canonical history entry / one revision
+      increment. Because it is preservation-first, it does NOT go through the
+      "would replace your content" confirmation contract and never tells the
+      merchant their layout/content will be replaced — that warning would be
+      false for this transition.
+
+    * NON-READY STRUCTURAL PRESET → the pre-existing, deliberately destructive
+      ``apply_preset_with_checkpoint`` path, which KEEPS its explicit-confirm gate
+      (``confirm_preset_apply=1`` when a covered page already has sections), its
+      recoverable-checkpoint behavior, and its destructive warning. Phase 1 does
+      not broaden the preservation contract to legacy structural presets.
+
+    Permissions/tenant-scoping/editor-surface guards (the decorators and
+    ``_resolve_store``) are unchanged for both kinds."""
     from . import layout_preset_registry
     from .services import preset_service
 
@@ -2130,6 +2552,24 @@ def storefront_apply_layout_preset(request):
         messages.error(request, "پیش‌تنظیمِ انتخاب‌شده یافت نشد")
         return redirect("dashboard:storefront-builder-editor")
 
+    if preset.is_ready_template:
+        # Preservation-first, same-active-Draft switch through the canonical R4
+        # mutation boundary — no destructive-confirmation gate, records exactly
+        # one history entry / one revision increment (no ``@_record_edit_history``
+        # decorator, which would double-record against ``record_change``).
+        try:
+            r4_mutation_service.switch_template_current(
+                store=store, actor=request.user,
+                template_key=preset.key, template_version=preset.version,
+            )
+            messages.success(request, f"پیش‌تنظیمِ «{preset.label_fa}» اعمال شد")
+        except preset_service.InvalidPresetError as exc:
+            messages.error(request, str(exc))
+        except r4_mutation_service.R4MutationError as exc:
+            messages.error(request, str(exc))
+        return redirect("dashboard:storefront-builder-editor")
+
+    # NON-Ready structural preset — confirmed-destructive checkpoint/apply path.
     would_replace = _preset_would_replace_content(draft, preset)
     if would_replace and request.POST.get("confirm_preset_apply") != "1":
         messages.error(
@@ -2140,13 +2580,16 @@ def storefront_apply_layout_preset(request):
         return redirect("dashboard:storefront-builder-editor")
 
     try:
-        # Acceptance Batch 2 (post-U11) — Issue 1: an explicit Template
-        # switch/apply must never silently mutate away meaningful existing
-        # Draft state; ``apply_preset_with_checkpoint`` preserves it as a
-        # recoverable version-history checkpoint first (never auto-publish,
-        # published version untouched) whenever there is anything worth
-        # preserving.
+        # Its edit-history behavior is unchanged: when nothing is checkpointed
+        # (the SAME Draft is mutated in place) exactly one plain history entry is
+        # recorded; when a checkpoint fires (a fresh active Draft), the old row is
+        # archived and nothing is recorded against it.
+        before_state = _history_before(draft)
         preset_service.apply_preset_with_checkpoint(store, preset, user=request.user)
+        if StorefrontLayoutVersion.objects.filter(
+            pk=draft.pk, status=StorefrontLayoutVersion.Status.DRAFT,
+        ).exists():
+            _history_record(request, draft, before_state, "اعمال پیش‌تنظیم صفحه‌آرایی")
         messages.success(request, f"پیش‌تنظیمِ «{preset.label_fa}» اعمال شد")
     except preset_service.InvalidPresetError as exc:
         messages.error(request, str(exc))
@@ -2162,6 +2605,7 @@ def storefront_apply_layout_preset(request):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("بازنشانی بخش به قالب")
 def storefront_section_reset(request, pk):
     """RESET SECTION — بازنشانیِ یک section به baselineِ Ready Template.
@@ -2186,6 +2630,7 @@ def storefront_section_reset(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("بازنشانی فیلد بخش به قالب")
 def storefront_section_field_reset(request, pk):
     """RESET FIELD / RESET COMPONENT — یک کلیدِ مشخص از ``settings`` این
@@ -2209,6 +2654,7 @@ def storefront_section_field_reset(request, pk):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("بازنشانی تنظیم ظاهر به قالب")
 def storefront_appearance_field_reset(request):
     """RESET FIELD برایِ یک کلیدِ سطحِ‌بالایِ appearance_config (مثلاً
@@ -2230,6 +2676,7 @@ def storefront_appearance_field_reset(request):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("بازنشانی هدر به قالب")
 def storefront_header_reset(request):
     """RESET HEADER — فقط هدر؛ فوتر/صفحات دست‌نخورده می‌مانند. Proportional
@@ -2250,6 +2697,7 @@ def storefront_header_reset(request):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("بازنشانی فوتر به قالب")
 def storefront_footer_reset(request):
     """RESET FOOTER — فقط فوتر؛ هدر/صفحات دست‌نخورده می‌مانند."""
@@ -2268,6 +2716,7 @@ def storefront_footer_reset(request):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("بازنشانی صفحه به قالب")
 def storefront_page_reset(request):
     """RESET PAGE — بازنشانیِ کاملِ ترکیبِ یک صفحه به baseline؛ صفحاتِ
@@ -2298,6 +2747,7 @@ def storefront_page_reset(request):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("بازنشانی کل فروشگاه به قالب")
 def storefront_reset_to_baseline(request):
     """RESET STOREFRONT — بازنشانیِ کاملِ فروشگاه (ظاهر + هدر + فوتر + هر
@@ -2320,6 +2770,7 @@ def storefront_reset_to_baseline(request):
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 def storefront_apply_industry_layout(request):
     """چیدمان پیشنهادیِ صنفِ نصب‌شده‌ی این فروشگاه را در یک Draft جدید اعمال
     می‌کند. اگر فروشگاه از قبل یک نسخه‌ی منتشرشده دارد، بدون
@@ -2346,18 +2797,9 @@ def storefront_apply_industry_layout(request):
     return redirect("dashboard:storefront-builder-editor")
 
 
-@require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
-def storefront_discard(request):
-    store = _resolve_store(request)
-    layout_service.discard_draft(store)
-    messages.success(request, "پیش‌نویس رد شد")
-    return redirect("dashboard:storefront-builder-editor")
-
-
-@staff_required
-@permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("ویرایش ظاهر سایت")
 def storefront_appearance_editor(request):
     """پنلِ «ظاهر سایت» — هابِ Template/Palette/رنگ‌های سفارشی/فونت و
@@ -2612,6 +3054,7 @@ def _extract_footer_extra_blocks_raw(request) -> list[dict]:
 
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("ویرایش هدر")
 def storefront_header_editor(request):
     store = _resolve_store(request)
@@ -2659,6 +3102,7 @@ def storefront_header_editor(request):
 
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 @_record_edit_history("ویرایش فوتر")
 def storefront_footer_editor(request):
     store = _resolve_store(request)
@@ -2720,14 +3164,33 @@ def storefront_history(request):
     store = _resolve_store(request)
     versions = layout_service.list_versions(store)
     layout = layout_service.get_or_create_layout(store)
+    # P5-W5A — when R4 is active, the Restore button below must post
+    # through the new canonical R4-safe endpoint instead of the legacy
+    # (now fail-closed under R4) POST; that endpoint needs the client's
+    # expected current-state precondition, captured at render time. A
+    # race between render and click is a normal, already-handled stale-
+    # write conflict (409, reload and retry), not a TOCTOU gap.
+    #
+    # Independent-Review repair: the precondition binds to BOTH the
+    # Draft's identity and its revision — a revision-only capture is an
+    # ABA hazard (edit_revision defaults to 0 on every new Draft row, so a
+    # stale client could otherwise match an unrelated Draft that replaced
+    # the one it actually observed).
+    current_draft_id = layout.draft_version_id
+    current_draft_revision = (
+        layout.draft_version.edit_revision if current_draft_id else None
+    )
     return render(request, "dashboard/storefront_builder/history.html", {
         "active_page": "storefront_builder", "versions": versions, "layout": layout,
+        "current_draft_id": current_draft_id,
+        "current_draft_revision": current_draft_revision,
     })
 
 
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+@_require_legacy_editor_active
 def storefront_restore(request, pk):
     store = _resolve_store(request)
     try:

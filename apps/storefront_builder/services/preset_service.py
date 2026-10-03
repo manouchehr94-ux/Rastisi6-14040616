@@ -21,11 +21,18 @@
 
 from __future__ import annotations
 
+import dataclasses
+
 from django.db import transaction
 
 from .. import global_region_registry, layout_preset_registry, section_registry
 from ..layout_preset_registry import LayoutPresetDefinition
 from ..models import StorefrontContainer, StorefrontLayoutVersion, StorefrontSection
+from ..storefront_appearance.rendering import (
+    ResolvedStoreAppearance,
+    resolve_store_appearance_manifest_state,
+)
+from ..storefront_appearance.validation import validate_store_appearance_manifest
 from ..variant_contract import build_template_provenance, validate_template_provenance
 from . import appearance_authority_service, container_service, layout_service
 
@@ -271,36 +278,36 @@ def _build_sections_for_page(page, entries, *, preset: LayoutPresetDefinition, p
     return rows
 
 
-@transaction.atomic
-def apply_preset(
-    draft: StorefrontLayoutVersion, preset: LayoutPresetDefinition, *, _record_baseline_snapshot: bool = True,
-) -> None:
-    """Preset را روی ``draft`` اعمال می‌کند — Draft-only (فراخوان مسئولِ
-    عبورِ یک نسخه‌یِ واقعاً Draft است، دقیقاً همان قراردادِ
-    ``apply_family_default_sections``؛ این تابع خودش هرگز
-    ``layout.published_version`` را resolve/لمس نمی‌کند).
+@dataclasses.dataclass(frozen=True)
+class _PreparedPresetApplication:
+    """Phase 5, Task 1 — the pure, read-only result of validating and
+    building everything ``apply_preset()`` needs before its *first* write.
+    Extracted out of ``apply_preset()`` itself (behavior-preserving refactor
+    — the write phase below is unchanged) so the real (writing) Apply path
+    and the new read-only ``resolve_preset_candidate()`` share exactly one
+    validation/preparation implementation and can never drift into two
+    copies of it. Nothing in this dataclass, or in ``_prepare_preset_application``
+    below, ever calls ``.save()`` or otherwise touches the database for
+    writing purposes — every field is a plain in-memory value, and every
+    ``StorefrontSection`` row inside ``pages_to_replace`` is unsaved
+    (``pk=None``)."""
 
-    ترتیبِ عملیات عمداً «همه‌چیز را اول اعتبارسنجی کن، بعد بنویس» است —
-    اگر هرکدام از appearance/header/footer/هر صفحه نامعتبر باشد، هیچ
-    نوشتنی (نه روی Section، نه روی خودِ نسخه) اتفاق نمی‌افتد. علاوه‌براین
-    خودِ تابع در یک تراکنشِ دیتابیسی (``@transaction.atomic``) پیچیده شده
-    تا حتی یک خطایِ غیرمنتظره‌یِ سطحِ دیتابیس هم Draft را نیمه‌اعمال‌شده
-    رها نکند.
+    cleaned_appearance: dict
+    cleaned_header: dict | None
+    cleaned_footer: dict | None
+    pages_to_replace: dict
+    snapshot_pages: dict
 
-    ``_record_baseline_snapshot`` (فقط داخلی — هرگز از بیرونِ این ماژول
-    صدا زده نشود): پستِ‌دمو hardening pass، Issue 4. تنها فراخوانِ
-    مشروعِ ``False`` مسیرِ سازگاریِ عقب‌رویِ ``reset_storefront_to_baseline``
-    است — جایی که محتوایِ Registryِ *فعلی* صرفاً برایِ یک بازنشانیِ
-    best-effort روی Draftی بدونِ عکسِ baselineِ واقعی خوانده می‌شود، نه
-    به‌عنوانِ اعمالِ صریحِ یک Template. چون تطابقِ شماره‌یِ نسخه هرگز اثباتِ
-    قطعیِ «محتوایِ فعلیِ Registry دقیقاً همان چیزی است که آن‌زمان روی این
-    Draft اعمال شد» نیست (نگاه کنید به توضیحِ خودِ آن مسیر)، نوشتنِ آن
-    به‌عنوانِ یک عکسِ «دقیق» در ``template_baseline_snapshot`` یک تاریخِ
-    ساختگی می‌سازد که granular reset (که به یک عکسِ واقعاً دقیق نیاز دارد)
-    را برایِ چنین Draftی به‌اشتباه فعال می‌کند. با ``False``، این تابع
-    هم‌چنان appearance/header/footer/صفحات را می‌نویسد (خودِ رفتارِ
-    بازنشانی)، اما ``template_baseline_snapshot`` را دست‌نخورده
-    (خالی/غایب) رها می‌کند."""
+
+def _prepare_preset_application(
+    draft: StorefrontLayoutVersion, preset: LayoutPresetDefinition,
+    *, check_locked: bool = True,
+) -> _PreparedPresetApplication:
+    """اعتبارسنجی/آماده‌سازیِ appearance/header/footer/صفحات — کاملاً
+    بدونِ نوشتن (نه ``draft.save()``، نه ساخت/حذفِ هیچ ردیفِ
+    Section/Container). این دقیقاً همان «۱» و «۲»یِ قبلیِ ``apply_preset``
+    است؛ استخراج‌شده تا Task 1 (پیش‌نمایشِ کاندیدِ بدونِ نوشتن) بتواند
+    همینجا را دوباره استفاده کند، بدونِ کپی‌کردنِ منطقِ اعتبارسنجی."""
     # --- ۱) اعتبارسنجی/آماده‌سازیِ appearance/header/footer (بدونِ نوشتن) ---
     current_appearance = draft.effective_appearance_config()
     overlay = dict(preset.appearance)
@@ -370,13 +377,30 @@ def apply_preset(
     # --- ۲) آماده‌سازیِ ردیف‌هایِ هر صفحه (بدونِ نوشتن — فقط ساختِ آبجکت) ---
     pages_to_replace = {}
     snapshot_pages = {}
-    for page_type, entries in preset.pages.items():
+    for page_type, raw_entries in preset.pages.items():
+        # Same gate `section_structure_service.add_section`/`duplicate_section`
+        # enforce for merchant-facing adds — a preset recipe must not be able
+        # to create an instance of a section the library itself hides (e.g.
+        # `announcement_bar`, superseded by the header notification bar; two
+        # such instances double-render the same strip). Filtered once, here,
+        # so section-building and Container/row grouping (both keyed off this
+        # same `entries` list) stay in sync.
+        entries = [
+            e for e in raw_entries
+            if not section_registry.get_definition(e.section_key).hidden_from_library
+        ]
         page = draft.get_page(page_type)
         # Phase 1 correction (spec §37 — Lock): این صفحه به‌طورِ کامل
         # جایگزین می‌شود (زیر را نگاه کنید) — اگر یکی از sectionهایِ فعلی‌اش
         # قفل باشد، اعمالِ Preset باید کاملاً رد شود، نه اینکه بی‌صدا آن
         # section را هم مثلِ بقیه حذف کند.
-        if page.sections.filter(is_locked=True).exists():
+        #
+        # Architecture Convergence / Phase 1 — the preservation-first Ready
+        # Template switch passes ``check_locked=False``: it never destroys a
+        # locked section (it preserves it in place), so a locked section must
+        # not block that transition. The destructive ``apply_preset`` /
+        # reset paths keep the default ``check_locked=True`` guard unchanged.
+        if check_locked and page.sections.filter(is_locked=True).exists():
             raise LockedSectionsPresentError(
                 f"Preset «{preset.key}» قابلِ اعمال نیست — صفحه‌ی "
                 f"«{page.get_page_type_display()}» بخشِ قفل‌شده دارد؛ ابتدا قفل آن را باز کنید"
@@ -402,16 +426,53 @@ def apply_preset(
                 "row_key": row.row_key,
                 "row_span": row.row_span,
                 "container_settings": container_settings,
+                # Architecture Convergence / Phase 1 — the recipe row's ratified
+                # cross-template semantic identity, recorded alongside the
+                # positional slot_key so a later exact semantic comparison/reset
+                # never has to re-resolve it from the live registry. Legacy
+                # snapshots that predate this key remain valid (read defensively
+                # with ``.get("semantic_slot_key")``).
+                "semantic_slot_key": entry.semantic_slot_key,
             }
-            for row, container_settings in zip(rows, container_settings_per_section)
+            for row, entry, container_settings in zip(
+                rows, entries, container_settings_per_section
+            )
         ]
 
-    # --- ۳) نوشتن — فقط پس از موفقیتِ کاملِ بخشِ اعتبارسنجی ---
+    return _PreparedPresetApplication(
+        cleaned_appearance=cleaned_appearance,
+        cleaned_header=cleaned_header,
+        cleaned_footer=cleaned_footer,
+        pages_to_replace=pages_to_replace,
+        snapshot_pages=snapshot_pages,
+    )
+
+
+def _write_template_dna_and_baseline(
+    draft: StorefrontLayoutVersion,
+    preset: LayoutPresetDefinition,
+    prepared: _PreparedPresetApplication,
+    *,
+    record_baseline_snapshot: bool,
+) -> None:
+    """Write a Ready Template's Draft-level DNA (appearance/header/footer/
+    provenance/typed manifest) and, optionally, its immutable baseline snapshot
+    — everything ``apply_preset`` writes EXCEPT the page composition itself.
+
+    Extracted so the destructive ``apply_preset`` and the preservation-first
+    ``switch_ready_template_preserving`` share exactly ONE DNA/baseline write
+    path (the master rule: one canonical Ready Template transition authority,
+    never two competing DNA writers). Callers own the ``@transaction.atomic``
+    boundary and decide what happens to composition afterward.
+    """
+    cleaned_appearance = prepared.cleaned_appearance
+    cleaned_header = prepared.cleaned_header
+    cleaned_footer = prepared.cleaned_footer
+
     draft.appearance_config = cleaned_appearance
-    # U7 — records exactly which Ready Template baseline (key + version)
-    # this Draft was just built from, so a later reset can restore that
-    # *recorded* version specifically, not "whatever this preset key
-    # currently means" if its Python definition changes in a future release.
+    # U7 — records exactly which Ready Template baseline (key + version) this
+    # Draft was just built from, so a later reset can restore that recorded
+    # version specifically.
     draft.template_provenance = build_template_provenance(
         template_key=preset.key, template_version=preset.version,
     )
@@ -424,34 +485,39 @@ def apply_preset(
         update_fields.append("footer_config")
     draft.save(update_fields=update_fields)
 
-    # Phase 1 (Task 5, A02 closure) — persist the Ready Template's COMPLETE
-    # declared typed Store Appearance manifest through the canonical authority
-    # service. This runs inside apply_preset's own @transaction.atomic
-    # boundary (the authority service intentionally owns no transaction), so a
-    # later failure still rolls the whole apply back. It is persisted AFTER the
-    # ordinary appearance/header/footer writes above so its compatibility
-    # mirrors (header/footer/bottom_nav/motion) are the authoritative final
-    # selector state and cannot be left stale. Ready Templates always declare a
-    # complete manifest; non-Ready presets may omit it, so guard on presence.
+    # Non-Ready structural preset: mirror its explicit header/footer variant
+    # overlay into the typed manifest through the canonical authority. Ready
+    # Templates are exempt — their COMPLETE declared manifest is applied
+    # authoritatively below (see the original apply_preset commentary).
+    if not preset.store_appearance:
+        if preset.header is not None and "header_variant" in preset.header:
+            appearance_authority_service.apply_header_variant(
+                version=draft, header_variant=cleaned_header["header_variant"],
+            )
+        footer_variant = None
+        mobile_nav_variant = None
+        if preset.footer is not None:
+            if "footer_variant" in preset.footer:
+                footer_variant = cleaned_footer["footer_variant"]
+            if "mobile_nav_variant" in preset.footer:
+                mobile_nav_variant = cleaned_footer["mobile_nav_variant"]
+        if footer_variant is not None or mobile_nav_variant is not None:
+            appearance_authority_service.apply_footer_variant(
+                version=draft,
+                footer_variant=footer_variant,
+                mobile_nav_variant=mobile_nav_variant,
+            )
+
+    # Ready Template: persist the COMPLETE declared typed Store Appearance
+    # manifest through the canonical authority service (inside the caller's
+    # transaction), AFTER the ordinary writes so its compatibility mirrors are
+    # the authoritative final selector state.
     if preset.store_appearance:
         appearance_authority_service.apply_store_appearance_manifest(
             version=draft, manifest=preset.store_appearance
         )
 
-    if _record_baseline_snapshot:
-        # Acceptance Batch 2 (post-U11) — Issue 2: an immutable, normalized
-        # snapshot of the *exact* baseline just applied — independent of the
-        # registry's live ``LayoutPresetDefinition`` for this key, which could
-        # (bug or future edit) change its contents without bumping ``version``.
-        # See the model field's own docstring for the full motivating risk.
-        #
-        # Task 5 — the snapshot is built AFTER the complete typed manifest has
-        # been persisted above, so ``appearance``/``header_config``/
-        # ``footer_config`` capture the manifest-synced state (including the
-        # reserved ``store_appearance`` key and its mirrors). This keeps
-        # reset-to-baseline returning to the fully-applied recipe DNA rather
-        # than reintroducing A02 on reset, and keeps ``_draft_already_matches_preset``
-        # (which compares ``appearance_config`` to ``snapshot["appearance"]``) correct.
+    if record_baseline_snapshot:
         draft.template_baseline_snapshot = {
             "template_key": preset.key,
             "template_version": preset.version,
@@ -459,9 +525,53 @@ def apply_preset(
             "appearance": dict(draft.appearance_config or {}),
             "header_config": dict(draft.header_config) if cleaned_header is not None else None,
             "footer_config": dict(draft.footer_config) if cleaned_footer is not None else None,
-            "pages": snapshot_pages,
+            "pages": prepared.snapshot_pages,
         }
         draft.save(update_fields=["template_baseline_snapshot"])
+
+
+@transaction.atomic
+def apply_preset(
+    draft: StorefrontLayoutVersion, preset: LayoutPresetDefinition, *, _record_baseline_snapshot: bool = True,
+) -> None:
+    """Preset را روی ``draft`` اعمال می‌کند — Draft-only (فراخوان مسئولِ
+    عبورِ یک نسخه‌یِ واقعاً Draft است، دقیقاً همان قراردادِ
+    ``apply_family_default_sections``؛ این تابع خودش هرگز
+    ``layout.published_version`` را resolve/لمس نمی‌کند).
+
+    ترتیبِ عملیات عمداً «همه‌چیز را اول اعتبارسنجی کن، بعد بنویس» است —
+    اگر هرکدام از appearance/header/footer/هر صفحه نامعتبر باشد، هیچ
+    نوشتنی (نه روی Section، نه روی خودِ نسخه) اتفاق نمی‌افتد؛ این را اکنون
+    ``_prepare_preset_application`` (بالا) تضمین می‌کند. علاوه‌براین خودِ
+    تابع در یک تراکنشِ دیتابیسی (``@transaction.atomic``) پیچیده شده تا
+    حتی یک خطایِ غیرمنتظره‌یِ سطحِ دیتابیس هم Draft را نیمه‌اعمال‌شده
+    رها نکند.
+
+    ``_record_baseline_snapshot`` (فقط داخلی — هرگز از بیرونِ این ماژول
+    صدا زده نشود): پستِ‌دمو hardening pass، Issue 4. تنها فراخوانِ
+    مشروعِ ``False`` مسیرِ سازگاریِ عقب‌رویِ ``reset_storefront_to_baseline``
+    است — جایی که محتوایِ Registryِ *فعلی* صرفاً برایِ یک بازنشانیِ
+    best-effort روی Draftی بدونِ عکسِ baselineِ واقعی خوانده می‌شود، نه
+    به‌عنوانِ اعمالِ صریحِ یک Template. چون تطابقِ شماره‌یِ نسخه هرگز اثباتِ
+    قطعیِ «محتوایِ فعلیِ Registry دقیقاً همان چیزی است که آن‌زمان روی این
+    Draft اعمال شد» نیست (نگاه کنید به توضیحِ خودِ آن مسیر)، نوشتنِ آن
+    به‌عنوانِ یک عکسِ «دقیق» در ``template_baseline_snapshot`` یک تاریخِ
+    ساختگی می‌سازد که granular reset (که به یک عکسِ واقعاً دقیق نیاز دارد)
+    را برایِ چنین Draftی به‌اشتباه فعال می‌کند. با ``False``، این تابع
+    هم‌چنان appearance/header/footer/صفحات را می‌نویسد (خودِ رفتارِ
+    بازنشانی)، اما ``template_baseline_snapshot`` را دست‌نخورده
+    (خالی/غایب) رها می‌کند."""
+    prepared = _prepare_preset_application(draft, preset)
+    pages_to_replace = prepared.pages_to_replace
+
+    # --- ۳) نوشتن — فقط پس از موفقیتِ کاملِ بخشِ اعتبارسنجی ---
+    # Draft-level DNA + baseline snapshot go through the ONE canonical writer
+    # shared with the preservation-first switch (see
+    # ``_write_template_dna_and_baseline``); this function then owns the
+    # destructive per-page composition replacement below.
+    _write_template_dna_and_baseline(
+        draft, preset, prepared, record_baseline_snapshot=_record_baseline_snapshot,
+    )
 
     for page, (rows, prepared_container_settings) in pages_to_replace.items():
         # Container/Cell is the new layout layer.  Deleting the page sections
@@ -483,6 +593,356 @@ def apply_preset(
             StorefrontContainer.objects.bulk_update(containers, ["settings"])
 
 
+# ==================================================================
+# Architecture Convergence / Phase 1 — PRESERVATION-FIRST READY TEMPLATE SWITCH.
+#
+# The ONE canonical merchant-facing Ready Template transition algorithm. Unlike
+# ``apply_preset`` (destructive per-page rebuild, used for the initial apply, for
+# non-Ready structural presets, and for resets) this operates IN PLACE on the
+# active Draft (same pk), preserves merchant work wherever semantically valid,
+# and converges every merchant-facing Ready Template change (R4 switch_template,
+# R4 appearance.template.apply, dashboard apply) onto a single authority. It
+# never records history/revision itself — the caller owns the canonical R4
+# mutation boundary (lock / before-snapshot / ``record_change`` / single revision
+# increment), so exactly one history entry and one revision increment result.
+# ==================================================================
+
+
+def _resolve_section_semantic_role(section: StorefrontSection) -> str | None:
+    """Resolve a live section's cross-template semantic role from its positional
+    ``template_slot_key`` (``<key>:v<version>:<page_type>:<index>``), reading the
+    role from that EXACT registered historical recipe version.
+
+    Returns ``None`` for a merchant-created section (empty ``template_slot_key``)
+    or when the exact historical identity cannot be resolved — never a
+    latest-version or heuristic fallback. ``None`` means "no cross-template
+    match", i.e. fail safe / preserve, never guess.
+    """
+    slot = section.template_slot_key or ""
+    if not slot:
+        return None
+    try:
+        template_key, vpart, page_type, index_str = slot.split(":")
+        version = vpart[1:] if vpart.startswith("v") else vpart
+        index = int(index_str)
+    except (ValueError, AttributeError):
+        return None
+    preset = layout_preset_registry.get_layout_preset_version(template_key, version)
+    if preset is None:
+        return None
+    entries = preset.pages.get(page_type, ())
+    if index < 0 or index >= len(entries):
+        return None
+    return getattr(entries[index], "semantic_slot_key", None)
+
+
+def _section_has_scoped_media(section: StorefrontSection) -> bool:
+    """True if this section owns any section-scoped merchant media (Hero slides,
+    promotional banners, story-rail items). Presence of merchant media makes a
+    page preservation-required (never safe to treat as pristine)."""
+    for related_name in ("hero_slides", "banners", "story_items"):
+        manager = getattr(section, related_name, None)
+        if manager is not None and manager.exists():
+            return True
+    return False
+
+
+def _page_is_pristine(page, source_baseline: dict) -> bool:
+    """Conservative page-pristine classifier (Architecture Convergence / Phase 1,
+    section H). A page is pristine — safe to replace with the target Template's
+    canonical composition — ONLY when that can be proven from the recorded source
+    baseline snapshot. Binding rule: ANY Section OR Container/Cell placement
+    modification ⇒ preservation-required. UNCERTAIN = PRESERVE, never DELETE.
+
+    Verifies, against the recorded baseline:
+
+    * every live section still equals its recorded baseline entry exactly
+      (section_key/settings/row_key/row_span/slot_key), is active, is unlocked,
+      and carries no section-scoped merchant media;
+    * the FULL canonical Container/Cell/block placement graph — reconstructed
+      from the baseline entries with the SAME contiguous-``row_key``-run grouping
+      ``rebuild_page_from_legacy_rows`` itself uses (via ``_entry_runs``), so
+      there is NO second layout authority — matches the live graph in every
+      particular: Container count and order, per-Container layout_key, settings
+      and lock, Cell count, and for each Cell its order, span, single canonical
+      block membership and the EXACT section (by stable pk) occupying it. Any
+      moved/added/removed/reordered block, empty or multi-block Cell, changed
+      span/order, or lock ⇒ preservation-required.
+    """
+    pages = (source_baseline or {}).get("pages") or {}
+    entries = pages.get(page.page_type)
+    if not entries:
+        return False
+
+    live_sections = list(page.sections.order_by("order", "id"))
+    if len(live_sections) != len(entries):
+        return False
+    for section, entry in zip(live_sections, entries):
+        if section.section_key != entry.get("section_key"):
+            return False
+        if section.settings != entry.get("settings"):
+            return False
+        if (section.row_key or "") != (entry.get("row_key") or ""):
+            return False
+        if section.row_span != entry.get("row_span"):
+            return False
+        if (section.template_slot_key or "") != (entry.get("slot_key") or ""):
+            return False
+        if not section.is_active or section.is_locked:
+            return False
+        if _section_has_scoped_media(section):
+            return False
+
+    # Reconstruct the expected canonical placement graph from the (now proven
+    # position-matched) live sections, grouped exactly like the container rebuild
+    # groups baseline entries. ``run_container_settings`` is the per-run baseline
+    # Container settings recorded in the snapshot.
+    live_by_position = live_sections  # position i already proven == baseline entry i
+    runs: list[list] = []
+    idx = 0
+    while idx < len(live_by_position):
+        section = live_by_position[idx]
+        key = section.row_key or ""
+        if not key:
+            runs.append([section])
+            idx += 1
+            continue
+        run = [section]
+        idx += 1
+        while idx < len(live_by_position) and (live_by_position[idx].row_key or "") == key:
+            run.append(live_by_position[idx])
+            idx += 1
+        runs.append(run)
+    run_container_settings = _container_settings_from_snapshot_sections(entries)
+
+    live_containers = list(page.containers.order_by("order", "id"))
+    if len(live_containers) != len(runs) or len(runs) != len(run_container_settings):
+        return False
+    for container, run, container_settings in zip(live_containers, runs, run_container_settings):
+        if container.is_locked:
+            return False
+        expected_spans = [(s.row_span if s.row_key else 12) for s in run]
+        if container.layout_key != container_service.layout_key_for_spans(expected_spans):
+            return False
+        if (container.settings or {}) != (container_settings or {}):
+            return False
+        cells = list(container.cells.order_by("order", "id"))
+        if len(cells) != len(run):
+            return False
+        for cell_index, (cell, section, span) in enumerate(zip(cells, run, expected_spans)):
+            if cell.order != cell_index:
+                return False
+            if cell.span != span:
+                return False
+            # StorefrontCell.settings is editable, persisted layout state (also
+            # captured by the canonical Undo/Redo snapshot). The canonical
+            # ``rebuild_page_from_legacy_rows`` builder creates every Cell with
+            # the empty-dict default, so ANY non-empty Cell settings is a merchant
+            # Cell modification ⇒ preservation-required.
+            if (cell.settings or {}) != {}:
+                return False
+            # Placement-pointer consistency: if the new multi-block FK holds any
+            # blocks for this Cell, a legacy single-block OneToOne pointer that
+            # names a DIFFERENT section is a contradictory/ambiguous graph — fail
+            # safe (preserve), never treat an ambiguous placement as pristine.
+            new_fk_pks = {block.pk for block in cell.blocks.all()}
+            if new_fk_pks and cell.section_id is not None and cell.section_id not in new_fk_pks:
+                return False
+            blocks = container_service.get_cell_blocks(cell)
+            if len(blocks) != 1:
+                return False
+            if blocks[0].pk != section.pk:
+                return False
+            if blocks[0].cell_order not in (0, None):
+                # A single canonical block occupies index 0 of its Cell; any
+                # other cell_order signals a merchant multi-block reordering that
+                # left exactly one block here — still a placement modification.
+                return False
+    return True
+
+
+def _pristine_replace_page(page, rows, prepared_container_settings, snapshot_entries, role_to_stable_id) -> None:
+    """Replace a proven-pristine page with the target Template's canonical
+    composition — on the SAME active Draft (no Draft replacement). Mirrors
+    ``apply_preset``'s own per-page write, with one addition: for a target slot
+    whose semantic role matches a role already present on the pristine page, the
+    existing section's ``stable_id`` is reused so its stable logical identity
+    survives the transition (a pristine page carries no merchant media/state to
+    lose, but stable identity is preserved so mapped slots remain the same
+    logical section)."""
+    for row, entry in zip(rows, snapshot_entries):
+        role = entry.get("semantic_slot_key")
+        if role and role in role_to_stable_id:
+            row.stable_id = role_to_stable_id[role]
+        row.pk = None
+
+    page.containers.all().delete()
+    page.sections.all().delete()
+    StorefrontSection.objects.bulk_create(rows)
+    container_service.rebuild_page_from_legacy_rows(page)
+
+    containers = list(page.containers.order_by("order", "id"))
+    if len(containers) != len(prepared_container_settings):
+        raise InvalidPresetError(
+            "تعداد Containerهای ساخته‌شده با داده‌ی Ready Template هم‌خوان نیست"
+        )
+    for container, container_settings in zip(containers, prepared_container_settings):
+        container.settings = container_settings
+    if containers:
+        StorefrontContainer.objects.bulk_update(containers, ["settings"])
+
+
+def _introduce_target_slot(page, entry: dict) -> None:
+    """Introduce a target Template slot that a preservation-required page does
+    not already represent, using the existing canonical Container/Cell placement
+    primitives (a new standalone full-width placement) — never a parallel
+    placement model. Fails SAFE (introduces nothing) rather than violating a real
+    constraint (``max_instances``, section-not-allowed, hidden) — a switch must
+    never delete or displace merchant content to make the target recipe fit."""
+    section_key = entry["section_key"]
+    try:
+        definition = section_registry.get_definition(section_key)
+    except Exception:  # noqa: BLE001 — unknown key -> fail safe / preserve
+        return
+    if definition.hidden_from_library:
+        return
+    if not section_registry.is_section_allowed_on_page(section_key, page.page_type):
+        return
+    if definition.max_instances is not None:
+        existing_count = page.sections.filter(section_key=section_key).count()
+        if existing_count >= definition.max_instances:
+            # Fail safe / preserve: never delete existing merchant content to
+            # satisfy the target recipe.
+            return
+
+    last_order = page.sections.order_by("-order", "-id").values_list("order", flat=True).first()
+    next_order = (last_order + 1) if last_order is not None else 0
+    # The approved safe fallback is a NEW standalone full-width placement. The
+    # introduced section is therefore given standalone legacy-row metadata
+    # (``row_key=""`` / ``row_span=12``) that is CONSISTENT with the single-cell
+    # full-width Container/Cell it is placed into below — never the target
+    # recipe's own ``row_key``/``row_span`` (which describe that recipe's
+    # multi-section composite row and would make the legacy row metadata claim
+    # this section belongs to a row while the canonical Container/Cell graph says
+    # standalone). Implementing the target recipe's COMPLETE canonical row
+    # placement is out of scope for a safe single-slot introduction; the two
+    # representations must never disagree.
+    new_section = StorefrontSection.objects.create(
+        page=page,
+        section_key=section_key,
+        order=next_order,
+        settings=entry["settings"],
+        row_key="",
+        row_span=12,
+        template_slot_key=entry["slot_key"],
+    )
+    # Canonical standalone placement (the RED tests require a real Container/Cell
+    # placement, resolvable via section_structure_service.find_placement_cell).
+    container = container_service.create_empty_container(page, "single")
+    cell = container.cells.order_by("order", "id").first()
+    container_service.place_section(cell, new_section)
+
+
+def _preservation_merge_page(page, snapshot_entries: list[dict]) -> None:
+    """Merge the target Template onto a preservation-required page WITHOUT
+    destroying merchant work. For each target slot: if an existing section shares
+    the same explicit semantic role, that section is preserved and its concrete
+    ``template_slot_key`` is retagged to the target's positional slot (metadata
+    convergence only — never a content overwrite); otherwise the missing target
+    slot is introduced safely. Existing unmatched sections (merchant-created or
+    legacy/source-only) are left completely untouched — preserved with their own
+    logical identity, never deleted and never retagged to the target."""
+    existing_sections = list(page.sections.order_by("order", "id"))
+    role_to_section: dict[str, StorefrontSection] = {}
+    for section in existing_sections:
+        role = _resolve_section_semantic_role(section)
+        if role and role not in role_to_section:
+            role_to_section[role] = section
+
+    for entry in snapshot_entries:
+        role = entry.get("semantic_slot_key")
+        slot_key = entry["slot_key"]
+        matched = role_to_section.get(role) if role else None
+        if matched is not None:
+            # Explicit semantic match -> retag the concrete positional ownership
+            # only. Preserve every merchant-visible/stable-identity property.
+            if (matched.template_slot_key or "") != slot_key:
+                matched.template_slot_key = slot_key
+                matched.save(update_fields=["template_slot_key", "updated_at"])
+        else:
+            _introduce_target_slot(page, entry)
+
+
+@transaction.atomic
+def switch_ready_template_preserving(
+    draft: StorefrontLayoutVersion, preset: LayoutPresetDefinition,
+) -> None:
+    """Canonical preservation-first Ready Template switch, in place on ``draft``
+    (SAME active Draft pk). Applies the target Template's DNA + honest target
+    baseline snapshot through the shared writer, then transitions each page's
+    composition: a proven-pristine page is replaced with the target's canonical
+    composition; a preservation-required page keeps all merchant work, mapping
+    shared semantic slots and introducing missing target slots safely.
+
+    Draft-only and transactional (validation before any write). Never creates a
+    new Draft, never records edit history itself — the caller (the canonical R4
+    mutation boundary) owns lock / base-revision / one history entry / one
+    revision increment. Only valid for Ready Templates.
+
+    TRUE NO-OP: when the Draft already exactly matches this preset (same key +
+    version, coherent same baseline/provenance, same canonical DNA/manifest, and
+    every covered page proven fully pristine — no merchant modification), this
+    returns immediately WITHOUT any write. No Section/Container/Cell row is
+    deleted or recreated, so all database and stable identities are preserved;
+    the caller's ``record_change`` then sees an identical before/after snapshot
+    and advances neither ``edit_revision`` nor history. Any merchant change or
+    uncertainty fails ``_draft_already_matches_preset`` and the full
+    preservation-first transition below runs instead.
+    """
+    if not preset.is_ready_template:
+        raise InvalidPresetError(
+            f"«{preset.label_fa}» یک Ready Template نیست — تعویضِ محتوا-محفوظ فقط "
+            "برایِ Ready Templateها معنادار است"
+        )
+
+    if _draft_already_matches_preset(draft, preset):
+        return
+
+    prepared = _prepare_preset_application(draft, preset, check_locked=False)
+
+    # Classify every page and capture role->stable_id for pristine reuse BEFORE
+    # any write (``_write_template_dna_and_baseline`` overwrites the source
+    # baseline snapshot we classify against).
+    source_baseline = draft.template_baseline_snapshot or {}
+    page_transitions: list[tuple[object, list, list, list[dict], bool, dict]] = []
+    for page, (rows, prepared_container_settings) in prepared.pages_to_replace.items():
+        page_type = page.page_type
+        snapshot_entries = prepared.snapshot_pages[page_type]
+        pristine = _page_is_pristine(page, source_baseline)
+        role_to_stable_id: dict[str, object] = {}
+        if pristine:
+            for section in page.sections.order_by("order", "id"):
+                role = _resolve_section_semantic_role(section)
+                if role and role not in role_to_stable_id:
+                    role_to_stable_id[role] = section.stable_id
+        page_transitions.append(
+            (page, rows, prepared_container_settings, snapshot_entries, pristine, role_to_stable_id)
+        )
+
+    # Draft-level DNA + the honest TARGET baseline snapshot (the target's
+    # canonical recipe — never the merged live state; preserved unmatched
+    # merchant content is deliberately NOT recorded as a target-owned slot).
+    _write_template_dna_and_baseline(draft, preset, prepared, record_baseline_snapshot=True)
+
+    for page, rows, prepared_container_settings, snapshot_entries, pristine, role_to_stable_id in page_transitions:
+        if pristine:
+            _pristine_replace_page(
+                page, rows, prepared_container_settings, snapshot_entries, role_to_stable_id,
+            )
+        else:
+            _preservation_merge_page(page, snapshot_entries)
+
+
 def apply_preset_by_key(draft: StorefrontLayoutVersion, key: str) -> LayoutPresetDefinition:
     """میان‌بُرِ راحت برایِ لایه‌ی ویو — کلیدِ ناشناخته را قبل از هر تغییری
     fail-closed رد می‌کند."""
@@ -491,6 +951,112 @@ def apply_preset_by_key(draft: StorefrontLayoutVersion, key: str) -> LayoutPrese
         raise UnknownPresetError(f"پیش‌تنظیمِ «{key}» یافت نشد")
     apply_preset(draft, preset)
     return preset
+
+
+@dataclasses.dataclass(frozen=True)
+class ResolvedPresetCandidatePage:
+    """One page's worth of candidate section composition. ``sections`` are
+    unsaved (``pk=None``) ``StorefrontSection`` instances, in the same order
+    ``apply_preset()`` would build them in. ``container_settings`` is the
+    same per-contiguous-row-run settings list ``apply_preset()`` would
+    ``bulk_update`` onto the real ``StorefrontContainer`` rows after
+    ``container_service.rebuild_page_from_legacy_rows`` — exposed here
+    unmodified from ``_prepare_preset_application`` (Task-1 corrective,
+    independent review item 11: this was computed already and silently
+    discarded; exposing it is additive, not a new design)."""
+
+    sections: list
+    container_settings: list
+
+
+@dataclasses.dataclass(frozen=True)
+class ResolvedPresetCandidate:
+    """Phase 5, Task 1 — a transient, read-only preview of exactly what
+    ``apply_preset(draft, preset)`` WOULD write, without writing it. Built
+    from ``_prepare_preset_application`` (the same pure validation/
+    preparation ``apply_preset`` itself runs before its first write), so
+    candidate preview and real Apply can never validate/prepare a Ready
+    Template differently.
+
+    Never persisted anywhere: ``pages`` maps page_type to a
+    ``ResolvedPresetCandidatePage`` holding unsaved (``pk=None``)
+    ``StorefrontSection`` instances — exactly the same "unsaved in-memory
+    Section" shape ``render_service.build_default_render_items`` already
+    constructs today for stores that have never published a Storefront V2.
+    This is not a new in-memory-render pattern; it is the existing one,
+    reused, via the new ``render_service.build_candidate_render_items``
+    wrapper.
+
+    ``store_appearance`` (Task 1 corrective) — the typed hero/product_view/
+    card/badge/mega_menu/motion/header/footer/bottom_nav/layout manifest a
+    real Apply would make authoritative, resolved through the exact same
+    pure ``resolve_store_appearance_manifest_state`` the persisted-version
+    path (``resolve_store_appearance_render_state``) uses — one resolver, two
+    callers, never two implementations. ``None`` only for a (non-Ready)
+    preset that declares no ``store_appearance`` at all, mirroring
+    ``apply_preset``'s own ``if preset.store_appearance:`` guard."""
+
+    preset_key: str
+    preset_version: str
+    appearance_config: dict
+    header_config: dict | None
+    footer_config: dict | None
+    pages: dict
+    store_appearance: ResolvedStoreAppearance | None
+
+
+def resolve_preset_candidate(
+    draft: StorefrontLayoutVersion, preset: LayoutPresetDefinition,
+) -> ResolvedPresetCandidate:
+    """Read-only counterpart to ``apply_preset()`` — resolves what applying
+    ``preset`` to ``draft`` would render, WITHOUT writing to ``draft``: no
+    ``draft.save()``, no ``StorefrontSection``/``StorefrontContainer`` row
+    created/deleted/updated, no ``StorefrontEditHistoryEntry``, no Store
+    Appearance manifest write, no baseline snapshot, no new
+    ``StorefrontLayoutVersion``. Raises the exact same ``InvalidPresetError``/
+    ``LockedSectionsPresentError`` ``apply_preset`` would raise for an
+    invalid combination, since both call ``_prepare_preset_application``; a
+    ``preset.store_appearance`` that fails the canonical typed validator
+    raises ``InvalidStoreAppearanceContract`` — the exact same exception the
+    real (persisting) path raises for the same bad input, via the same
+    ``validate_store_appearance_manifest`` function — before anything is
+    written, since this whole function never writes."""
+    prepared = _prepare_preset_application(draft, preset)
+
+    resolved_store_appearance = None
+    if preset.store_appearance:
+        validated = validate_store_appearance_manifest(
+            preset.store_appearance, require_complete=True,
+        )
+        resolved_store_appearance = resolve_store_appearance_manifest_state(
+            validated.manifest, version_id=draft.pk,
+        )
+
+    return ResolvedPresetCandidate(
+        preset_key=preset.key,
+        preset_version=preset.version,
+        appearance_config=prepared.cleaned_appearance,
+        header_config=prepared.cleaned_header,
+        footer_config=prepared.cleaned_footer,
+        pages={
+            page.page_type: ResolvedPresetCandidatePage(
+                sections=rows, container_settings=container_settings,
+            )
+            for page, (rows, container_settings) in prepared.pages_to_replace.items()
+        },
+        store_appearance=resolved_store_appearance,
+    )
+
+
+def resolve_preset_candidate_by_key(
+    draft: StorefrontLayoutVersion, key: str,
+) -> ResolvedPresetCandidate:
+    """میان‌بُرِ خوانش‌محورِ ``apply_preset_by_key`` — کلیدِ ناشناخته را
+    قبل از هر آماده‌سازی‌ای fail-closed رد می‌کند؛ هرگز چیزی نمی‌نویسد."""
+    preset = layout_preset_registry.get_layout_preset(key)
+    if preset is None:
+        raise UnknownPresetError(f"پیش‌تنظیمِ «{key}» یافت نشد")
+    return resolve_preset_candidate(draft, preset)
 
 
 class NoTemplateBaselineError(InvalidPresetError):
@@ -557,6 +1123,40 @@ def reset_storefront_to_baseline(draft: StorefrontLayoutVersion) -> LayoutPreset
     ):
         apply_baseline_snapshot(draft, snapshot)
         return layout_preset_registry.get_layout_preset(template_key)
+
+    # A snapshot that EXISTS but does not match this Draft's current provenance
+    # is a genuinely different situation than "this Draft never had an accurate
+    # snapshot at all" (the legacy-compatibility fallback below). Architecture
+    # Convergence / Phase 1 note: the converged Ready Template switch
+    # (``switch_ready_template_preserving``) now always writes a coherent
+    # provenance-B + baseline-B snapshot, so it never LEAVES this mismatch. This
+    # defensive branch remains for legacy/pre-convergence Drafts that recorded a
+    # provenance without a matching baseline snapshot (e.g. an older
+    # content-preserving switch that updated provenance but not the baseline):
+    # for those, falling through to the fallback below would re-fetch the new
+    # Template from the LIVE registry and do a full ``apply_preset`` — silently
+    # wiping every page's composition, including merchant content — so it is
+    # refused here instead. A Draft with NO snapshot at all (``snapshot`` falsy)
+    # is unaffected by this check and still takes the legacy best-effort path
+    # exactly as before.
+    if snapshot:
+        # Task-10 blocker corrective fix — a mismatched snapshot is only
+        # the *safe* Template-Switch case (``TemplateBaselineVersionChangedError``,
+        # above) when the Draft's current provenance key is still a REAL,
+        # registered Template. If that key no longer exists in the Registry
+        # at all, this was never a legitimate content-preserving switch to
+        # protect — it is the same "unknown preset" situation the legacy
+        # fallback below handles, and must raise ``UnknownPresetError``
+        # exactly like that branch does. Checking existence here (before
+        # raising) is required, not optional: this is the classification
+        # ordering bug the Task-10 regression test caught (CASE C being
+        # misread as CASE B).
+        if layout_preset_registry.get_layout_preset(template_key) is None:
+            raise UnknownPresetError(f"Ready Templateِ «{template_key}» دیگر در Registry موجود نیست")
+        raise TemplateBaselineVersionChangedError(
+            f"عکسِ baselineِ ذخیره‌شده‌یِ این Draft برایِ «{snapshot.get('template_key')}» است، نه «{template_key}» — "
+            f"بازنشانیِ خودکارِ کلِ فروشگاه برایِ این وضعیت (مثلاً پس از تعویضِ محتوا-محفوظِ قالب) پشتیبانی نمی‌شود"
+        )
 
     preset = layout_preset_registry.get_layout_preset(template_key)
     if preset is None:
@@ -637,14 +1237,24 @@ def apply_baseline_snapshot(draft: StorefrontLayoutVersion, snapshot: dict) -> N
 
 
 def _draft_already_matches_preset(draft: StorefrontLayoutVersion, preset: LayoutPresetDefinition) -> bool:
-    """پستِ‌دمو hardening pass (Issue 6) — آیا دوباره‌اعمالِ همین دقیقاً
-    Preset رویِ این Draft هیچ تغییرِ واقعی‌ای ایجاد می‌کند؟ فقط وقتی
-    ``True`` برمی‌گرداند که بتوان با اطمینانِ کامل اثبات کرد — در غیرِ
-    این‌صورت (از جمله Draftِ legacyِ بدونِ عکسِ دقیق — Issue 4) محافظه‌کارانه
-    ``False`` برمی‌گرداند تا مسیرِ امنِ همیشگی (چک‌پوینت + اعمال) اجرا شود؛
-    یک چک‌پوینتِ زائدِ اضافی هرگز خطرناک نیست، اما رد کردنِ یک تغییرِ
-    واقعی به‌اشتباه (به‌عنوانِ no-op) می‌تواند تغییرِ دستیِ مرچنت را بدونِ
-    چک‌پوینت از بین ببرد."""
+    """Prove — conservatively and completely — that re-applying EXACTLY this
+    preset to this Draft would be a semantic NO-OP, so callers can skip the
+    transition entirely and leave the Draft (its Section/Container/Cell
+    identities, revision and history) untouched.
+
+    Returns ``True`` only when ALL hold, else ``False`` (fail safe — a real
+    change misread as a no-op would silently discard merchant work):
+
+      * provenance is exactly this preset key+version;
+      * baseline snapshot is exactly this preset key+version;
+      * appearance/header/footer equal the recorded baseline;
+      * the authoritative typed Store-Appearance manifest equals the preset's
+        declared manifest (canonical DNA);
+      * EVERY baseline-covered page passes the same conservative full canonical
+        graph proof the switch classifier uses (``_page_is_pristine`` — sections
+        + Containers + Cells + settings + block membership/order), NOT a
+        section-only comparison. Any merchant modification or ambiguity ⇒ False.
+    """
     provenance = draft.template_provenance or {}
     template = provenance.get("template") or {}
     if template.get("key") != preset.key or template.get("version") != preset.version:
@@ -661,44 +1271,56 @@ def _draft_already_matches_preset(draft: StorefrontLayoutVersion, preset: Layout
     if snapshot.get("footer_config") is not None and draft.footer_config != snapshot["footer_config"]:
         return False
 
-    for page_type, entries in snapshot["pages"].items():
-        page = draft.get_page(page_type)
-        current_sections = list(page.sections.order_by("order", "id"))
-        if len(current_sections) != len(entries):
+    # Authoritative typed manifest must equal the preset's declared manifest.
+    if preset.store_appearance:
+        from ..storefront_appearance.contracts import InvalidStoreAppearanceContract
+        from ..storefront_appearance.persistence import load_store_appearance_manifest
+        from ..storefront_appearance.validation import manifest_to_primitive
+        try:
+            current_manifest = manifest_to_primitive(load_store_appearance_manifest(draft))
+            declared_manifest = manifest_to_primitive(
+                validate_store_appearance_manifest(preset.store_appearance).manifest
+            )
+        except InvalidStoreAppearanceContract:
             return False
-        for section, entry in zip(current_sections, entries):
-            if (
-                section.section_key != entry["section_key"]
-                or section.settings != entry["settings"]
-                or section.row_key != entry["row_key"]
-                or section.row_span != entry["row_span"]
-                or section.template_slot_key != entry["slot_key"]
-            ):
-                return False
+        if current_manifest != declared_manifest:
+            return False
+
+    # Full conservative canonical-graph proof per covered page (never
+    # section-only): the Draft's own baseline snapshot is exactly this preset's
+    # baseline (verified above), so each page must match it completely.
+    for page_type in snapshot.get("pages", {}):
+        page = draft.get_page(page_type)
+        if not _page_is_pristine(page, snapshot):
+            return False
     return True
 
 
 @transaction.atomic
 def apply_preset_with_checkpoint(store, preset: LayoutPresetDefinition, *, user=None) -> StorefrontLayoutVersion:
-    """Acceptance Batch 2 (post-U11) — Issue 1: نقطه‌ی ورودِ مرچنت‌محورِ
-    اعمال/تعویضِ یک Ready Template. برخلافِ ``apply_preset`` (که همیشه
-    رویِ یک Draftِ صریحاً‌گرفته‌شده درجا mutate می‌کند)، این تابع ابتدا
-    محتوایِ *فعلیِ* Draft را (اگر واقعاً معنادار باشد) به‌عنوانِ یک
-    چک‌پوینتِ قابل‌بازیابی در تاریخچه‌یِ نسخه‌ها نگه می‌دارد
-    (``layout_service.checkpoint_draft_before_replacement``)، و تازه بعد
-    از آن Presetِ جدید را رویِ Draftِ فعالِ (احتمالاً تازه) اعمال می‌کند.
+    """Checkpoint-then-apply wrapper for a **NON-READY STRUCTURAL preset** only.
 
-    پستِ‌دمو hardening pass (Issue 6) — same-template no-op: اگر همین
-    دقیقاً Preset (کلید+نسخه) از قبل، بدونِ هیچ انحرافی، رویِ همین Draft
-    اعمال شده — یعنی دوباره اعمال‌کردنش هیچ تغییرِ واقعی‌ای نمی‌دهد —
-    هیچ چک‌پوینت/Draftِ جدیدی ساخته نمی‌شود؛ همان Draftِ فعلی بدونِ
-    تغییر برگردانده می‌شود. این فقط برایِ جلوگیری از شلوغیِ بی‌فایده‌یِ
-    تاریخچه است، نه یک بهینه‌سازیِ کارایی — هرجا کوچک‌ترین ابهامی باشد
-    (مثلاً Draftِ legacyِ بدونِ عکسِ دقیق)، مسیرِ همیشگیِ چک‌پوینت+اعمال
-    اجرا می‌شود.
-
-    نسخه‌ی منتشرشده هرگز لمس نمی‌شود؛ هرگز خودکار publish نمی‌کند — دقیقاً
-    همان تضمینِ ``restore_version``."""
+    Architecture Convergence / Phase 1 — single-authority rule: a merchant-facing
+    READY TEMPLATE transition MUST go through the ONE canonical preservation-first
+    authority (``switch_ready_template_preserving`` via the R4 mutation boundary),
+    never a destructive clone/checkpoint + full-apply orchestration. This function
+    is therefore **fail-closed for Ready Templates**: it raises
+    ``InvalidPresetError`` for any ``is_ready_template`` preset. It remains the
+    confirmed-destructive checkpoint/apply path for a non-Ready structural preset:
+    it preserves the current Draft's meaningful content as a recoverable
+    version-history checkpoint (``layout_service.checkpoint_draft_before_
+    replacement``) and then applies the structural preset onto the (possibly
+    fresh) active Draft. A same-preset no-op (exact key+version, no drift) makes
+    no new checkpoint/Draft. The Published version is never touched and never
+    auto-published. (For controlled seed/preview/reset/test SETUP that needs a
+    Ready Template applied to a specific Draft, use the lower-level
+    ``apply_preset`` primitive directly.)"""
+    if preset.is_ready_template:
+        raise InvalidPresetError(
+            f"«{preset.label_fa}» یک Ready Template است — تعویضِ مرچنت‌محورِ Ready Template "
+            "باید از مسیرِ کانونیِ محتوا-محفوظ (switch_ready_template_preserving) عبور کند، "
+            "نه از این مسیرِ چک‌پوینت/اعمالِ ساختاری."
+        )
     current_draft = layout_service.get_or_create_draft(store, user=user)
     if _draft_already_matches_preset(current_draft, preset):
         return current_draft
@@ -708,6 +1330,17 @@ def apply_preset_with_checkpoint(store, preset: LayoutPresetDefinition, *, user=
     )
     apply_preset(draft, preset)
     return draft
+
+
+# Architecture Convergence / Phase 1 — the obsolete clone/checkpoint + DNA-only
+# Ready Template switch ``switch_template_preserving_content`` was REMOVED here.
+# It had no production caller after convergence and was a second, competing
+# Ready Template transition implementation alongside the canonical
+# ``switch_ready_template_preserving`` (same active Draft, preservation-first
+# merge, honest Template-B baseline). One canonical Ready Template transition
+# authority now exists, not two. The generic recoverable-checkpoint primitive
+# ``layout_service.checkpoint_draft_before_replacement`` and the reset/version-
+# replacement workflows that legitimately use it are unchanged.
 
 
 @transaction.atomic

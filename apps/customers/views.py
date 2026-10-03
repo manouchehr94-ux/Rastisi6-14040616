@@ -9,7 +9,7 @@ from apps.catalog.services.product_publish_service import storefront_visible_pro
 from apps.core.services import session_service
 from apps.orders.models import Order
 from apps.sms.services import otp_service
-from apps.stores.resolution import resolve_store_for_service
+from apps.stores.resolution import resolve_store_for_service, resolve_store_for_storefront
 
 from .forms import AddressForm, LoginForm, OtpRequestForm, OtpVerifyForm, ProfileForm, SignupForm
 from .models import Address, Customer, Wishlist
@@ -23,17 +23,39 @@ def _can_use_wishlist(request):
 
 
 def wishlist_list(request):
+    # P5-W4A — converge onto the canonical universal storefront shell (see
+    # storefront_context_service.build_universal_storefront_context's
+    # shell_only contract). Local import: matches the existing
+    # catalog/cart/home() call-site convention that avoids a module-level
+    # dependency on apps.storefront_builder.
+    from apps.storefront_builder.services.storefront_context_service import (
+        build_universal_storefront_context,
+    )
+
+    store = resolve_store_for_storefront(request)
     can_view = _can_use_wishlist(request)
     products = []
     if can_view:
+        # P5-W4A — scoped to the current Store (product__store=store), so a
+        # single render only ever shows this Store's products, matching the
+        # write path (wishlist_toggle) which was already Store-scoped. A
+        # global Customer's wishlist may still hold rows for other Stores'
+        # products (Wishlist/Customer have no store FK) — those simply don't
+        # appear on THIS Store's render.
         items = (
-            Wishlist.objects.filter(customer=request.user.customer_profile)
+            Wishlist.objects.filter(customer=request.user.customer_profile, product__store=store)
             .select_related("product", "product__brand")
             .prefetch_related("product__images")
             .order_by("-created_at")
         )
         products = [item.product for item in items]
-    return render(request, "customers/wishlist.html", {"products": products, "can_view": can_view})
+    context = {"products": products, "can_view": can_view}
+    context.update(
+        build_universal_storefront_context(
+            request, store, "wishlist", page_context=context, shell_only=True,
+        )
+    )
+    return render(request, "customers/wishlist.html", context)
 
 
 @require_POST

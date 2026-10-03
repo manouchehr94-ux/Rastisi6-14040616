@@ -1,0 +1,11 @@
+{
+  "template_key": "watchmaker_round",
+  "version": "2",
+  "content_hash": "0133877bb1842327a883d99745f78543abfe1318c72c38363c78fe57c6d621a7",
+  "preview_input_fingerprint": "87912c49d82acc51c36eb0988093fcce27367f9d84ad296a53c71bccf3c0fc22",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "template_key": "collection_index",
+  "version": "1",
+  "content_hash": "47ea408ee15ba92239f45ee10875640acde75f2cf8b82aaf77694f8d354340f1",
+  "preview_input_fingerprint": "cafb8228f552628064a1331dbf9c0d98f372480a187233657607a738f6361930",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}

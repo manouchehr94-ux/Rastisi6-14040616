@@ -5,12 +5,95 @@
 {% block page_sub %}ویرایش بصری صفحات فروشگاه{% endblock %}
 
 {% block extra_css %}
+{% if not layout.r4_editor_enabled %}
 <link rel="stylesheet" href="{% static 'css/storefront_builder.css' %}">
 <link rel="stylesheet" href="{% static 'css/storefront_builder_v22.css' %}">
 <link rel="stylesheet" href="{% static 'css/storefront_builder_r3.css' %}">
+{% endif %}
 {% endblock %}
 
 {% block content %}
+{% if layout.r4_editor_enabled %}
+{% comment %}
+Pre-Task-10 CORRECTIVE closure (Item 2, second legacy retirement pass) —
+R4 is this Store's live default editor, so every merchant-facing surface
+below (composition editing, settings editing, toggle/lock, granular
+reset, Appearance/Header/Footer forms — everything the sfb-r3-shell
+Alpine SPA and its R3 modal used to expose) is now genuine duplicate
+dead-weight UI, per family_certification_matrix.md/legacy_disposition.md.
+Physically removing it here (not merely reclassifying the doc row) is
+what closes Gap 3 in full. The ONLY two capabilities re-verified to have
+no R4 equivalent — restore/history browsing and the industry-vertical
+layout preset — are preserved below, unconditionally reachable. The FULL
+legacy shell (the other branch below, byte-for-byte unchanged) still
+renders whenever r4_editor_enabled is False — the documented per-Store
+rollback safety valve. Retiring the duplicate UI must never also retire
+the one remaining editor for a Store deliberately pinned back to it, so
+this branch is conditional, not an outright deletion of the legacy body
+below.
+{% endcomment %}
+<div class="card">
+  <h2>ادیتور نسخه قدیمی</h2>
+  <p>ادیتور جدید (R4) اکنون ابزار اصلی و مرجع نوشتن برای ویرایش ظاهر این فروشگاه است. این صفحه فقط دو قابلیتی را نگه داشته که هنوز معادلی در R4 ندارند؛ بقیه‌ی امکانات ویرایش (بخش‌ها، چیدمان، ظاهر/هدر/فوتر و…) اکنون فقط از ادیتور جدید در دسترس‌اند.</p>
+  <a class="btn" href="{% url 'dashboard:storefront-builder-r4-editor' %}?page={{ page_type }}">✦ رفتن به ادیتور جدید (R4)</a>
+</div>
+
+<div class="card" style="margin-top:14px">
+  <h3>تاریخچه و بازگردانی نسخه‌ها</h3>
+  <p>نسخه‌های قبلاً منتشرشده را مرور و در صورت نیاز، محتوای یکی از آن‌ها را در یک پیش‌نویس جدید بازگردانی کن.</p>
+  <a class="btn" href="{% url 'dashboard:storefront-builder-history' %}">تاریخچه نسخه‌ها</a>
+</div>
+
+{% if industry_installation %}
+<div class="card" style="margin-top:14px">
+  <h3>چیدمان پیشنهادی صنف</h3>
+  <p>چیدمان پیشنهادیِ صنفِ نصب‌شده روی این فروشگاه را در یک پیش‌نویس جدید اعمال کن.</p>
+  <button type="button" class="btn" id="r4IndustryApplyButton"
+          data-r4-apply-url="{% url 'dashboard:storefront-builder-r4-apply-industry-layout' %}"
+          data-r4-base-draft-id="{{ draft.pk }}"
+          data-r4-base-revision="{{ draft.edit_revision }}"
+          {% if layout.published_version_id %}data-r4-confirm="اعمال چیدمان پیشنهادی، Draft فعلی را جایگزین می‌کند. ادامه می‌دهید؟"{% endif %}>
+    چیدمان پیشنهادی صنف
+  </button>
+</div>
+<script>
+(function () {
+  var btn = document.getElementById('r4IndustryApplyButton');
+  if (!btn) { return; }
+  btn.addEventListener('click', function () {
+    var confirmMsg = btn.getAttribute('data-r4-confirm');
+    var force = false;
+    if (confirmMsg) {
+      if (!confirm(confirmMsg)) { return; }
+      force = true;
+    }
+    fetch(btn.getAttribute('data-r4-apply-url'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': (document.cookie.match(/(?:^|; )csrftoken=([^;]+)/) || [])[1] || '',
+      },
+      body: JSON.stringify({
+        base_draft_id: parseInt(btn.getAttribute('data-r4-base-draft-id'), 10),
+        base_revision: parseInt(btn.getAttribute('data-r4-base-revision'), 10),
+        force: force,
+      }),
+    }).then(function (resp) {
+      if (resp.status === 409) {
+        alert('این صفحه قدیمی شده — لطفاً صفحه را دوباره بارگذاری کنید و امتحان کنید');
+        return;
+      }
+      if (!resp.ok) {
+        alert('اعمال چیدمان صنف ناموفق بود');
+        return;
+      }
+      window.location.reload();
+    });
+  });
+})();
+</script>
+{% endif %}
+{% else %}
 <div class="sfb-shell sfb-prototype-shell sfb-v3-shell sfb-v22-workspace sfb-r3-shell"
      :class="{
        'sfb-fullscreen': fullscreen,
@@ -95,9 +178,29 @@
       <button type="button" class="sfb-v22-action-btn is-primary-context" @click="openAppearancePanel()" title="ظاهر فروشگاه"><span class="sfb-v22-action-icon">◉</span><span>ظاهر فروشگاه</span></button>
       <a class="sfb-v3-ghost-btn" href="{% url 'dashboard:storefront-builder-templates' %}">▦ <span>قالب‌های آماده</span></a>
       <a class="sfb-v3-ghost-btn" href="{% url 'dashboard:storefront-builder-preview' %}?page={{ page_type }}" target="_blank" rel="noopener">◎ <span>پیش‌نمایش</span></a>
+      {% if layout.r4_editor_enabled %}
+      {# Pre-Task-10 remediation (R4 live cutover) — R4 is now the default #}
+      {# canonical merchant editor (dashboard nav already routes there); #}
+      {# this legacy-editor-side link is a convenience for a merchant who #}
+      {# is on this page directly. Still gated on the existing #}
+      {# r4_editor_enabled per-Store flag (unchanged authorization: same #}
+      {# STOREFRONT_LAYOUT_MANAGE-permitted page already resolves `layout` #}
+      {# — no new query, no weakened authorization), now a non-blocking #}
+      {# compatibility flag rather than a rollout gate — only False for a #}
+      {# Store explicitly pinned back to the legacy editor. #}
+      <a class="sfb-v3-ghost-btn" href="{% url 'dashboard:storefront-builder-r4-editor' %}?page={{ page_type }}">✦ <span>ادیتور جدید (R4)</span></a>
+      {% endif %}
       <form method="post" action="{% url 'dashboard:storefront-builder-publish' %}" class="sfb-prototype-publish-form"
             onsubmit="return confirm('این پیش‌نویس روی فروشگاه عمومی منتشر شود؟')">
         {% csrf_token %}
+        {# R4 Task 8 (Batch 2, lifecycle-hardening) — storefront_publish's own
+           stale-aware path (r4_mutation_service.publish_draft) already existed
+           and is already correct; this form simply never sent the token that
+           would engage it. Without this, two browser tabs on the legacy
+           editor could publish over each other's changes with no conflict
+           detection at all, even though the exact same protection R4 already
+           gets was one hidden field away. #}
+        <input type="hidden" name="base_revision" value="{{ draft.edit_revision }}">
         <button type="submit" class="sfb-v3-primary-btn">انتشار <span aria-hidden="true">←</span></button>
       </form>
     </div>
@@ -369,9 +472,11 @@
     </div>
   </div>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
+{% if not layout.r4_editor_enabled %}
 <script>
 // Shared low-level POST used by every settings form's save path (R2 sidebar
 // autosave and the R3 modal's explicit Save/Done buttons alike) — one
@@ -1572,4 +1677,5 @@ function destinationPicker(initialType, initialId, initialName) {
   };
 }
 </script>
+{% endif %}
 {% endblock %}

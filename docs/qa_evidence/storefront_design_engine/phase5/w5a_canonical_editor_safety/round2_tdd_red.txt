@@ -1,0 +1,574 @@
+Found 60 test(s).
+Creating test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+Operations to perform:
+  Synchronize unmigrated apps: messages, staticfiles
+  Apply all migrations: admin, auth, billing, blog, cart, catalog, content, contenttypes, core, customers, notifications, orders, portal, sessions, sms, storefront_builder, stores, subscriptions
+Synchronizing apps without migrations:
+  Creating tables...
+    Running deferred SQL...
+Running migrations:
+  Applying contenttypes.0001_initial... OK
+  Applying auth.0001_initial... OK
+  Applying admin.0001_initial... OK
+  Applying admin.0002_logentry_remove_auto_add... OK
+  Applying admin.0003_logentry_add_action_flag_choices... OK
+  Applying contenttypes.0002_remove_content_type_name... OK
+  Applying auth.0002_alter_permission_name_max_length... OK
+  Applying auth.0003_alter_user_email_max_length... OK
+  Applying auth.0004_alter_user_username_opts... OK
+  Applying auth.0005_alter_user_last_login_null... OK
+  Applying auth.0006_require_contenttypes_0002... OK
+  Applying auth.0007_alter_validators_add_error_messages... OK
+  Applying auth.0008_alter_user_username_max_length... OK
+  Applying auth.0009_alter_user_last_name_max_length... OK
+  Applying auth.0010_alter_group_name_max_length... OK
+  Applying auth.0011_update_proxy_permissions... OK
+  Applying auth.0012_alter_user_first_name_max_length... OK
+  Applying stores.0001_initial... OK
+  Applying stores.0002_create_akhlaghi_store... OK
+  Applying stores.0003_store_admin_subdomain_schema... OK
+  Applying stores.0004_backfill_store_admin_subdomain... OK
+  Applying stores.0005_store_admin_subdomain_enforce_not_null... OK
+  Applying subscriptions.0001_initial... OK
+  Applying subscriptions.0002_storesubscription_subscriptionevent_usagerecord_and_more... OK
+  Applying subscriptions.0003_provision_legacy_subscriptions... OK
+  Applying subscriptions.0004_alter_subscriptionevent_event_type... OK
+  Applying billing.0001_initial... OK
+  Applying billing.0002_billingsequence_subscriptioninvoiceline... OK
+  Applying billing.0003_subscriptionpaymentattempt... OK
+  Applying billing.0004_billingwebhookevent... OK
+  Applying billing.0005_subscriptiondunningstate... OK
+  Applying billing.0006_scheduledplanchange... OK
+  Applying billing.0007_subscriptioncreditnote_subscriptionrefund_and_more... OK
+  Applying blog.0001_initial... OK
+  Applying catalog.0001_initial... OK
+  Applying customers.0001_initial... OK
+  Applying cart.0001_initial... OK
+  Applying cart.0002_initial... OK
+  Applying cart.0003_cart_checkout_token... OK
+  Applying cart.0004_coupon_store_scope_schema... OK
+  Applying cart.0005_backfill_coupon_store... OK
+  Applying cart.0006_coupon_store_enforce_not_null... OK
+  Applying cart.0007_cartitem_gift_wrap... OK
+  Applying stores.0006_store_platform_code_schema... OK
+  Applying stores.0007_backfill_store_platform_code... OK
+  Applying stores.0008_store_platform_code_enforce_not_null... OK
+  Applying stores.0009_storedomain_domain_type_and_redirect... OK
+  Applying stores.0010_storedomain_retire_instead_of_redirect... OK
+  Applying stores.0011_store_onboarding_completed_at... OK
+  Applying stores.0012_backfill_store_onboarding_completed_at... OK
+  Applying stores.0013_store_onboarding_stage... OK
+  Applying stores.0014_store_deletion_requested_at_and_more... OK
+  Applying stores.0015_storeownershiptransfer... OK
+  Applying stores.0016_store_integration_connection... OK
+  Applying stores.0017_platform_owner_admin_gap_fill... OK
+  Applying orders.0001_initial... OK
+  Applying orders.0002_order_tracking_code... OK
+  Applying orders.0003_store_scope_orders_schema... OK
+  Applying catalog.0002_initial... OK
+  Applying catalog.0003_productimage_is_cover_productimage_thumbnail... OK
+  Applying catalog.0004_specification_specificationtemplate_and_more... OK
+  Applying catalog.0005_variant_backfill_and_constraints... OK
+  Applying catalog.0006_store_scope_catalog_schema... OK
+  Applying catalog.0007_backfill_catalog_store... OK
+  Applying catalog.0008_store_scope_catalog_enforce_not_null... OK
+  Applying orders.0004_backfill_orders_store... OK
+  Applying orders.0005_store_scope_orders_enforce_not_null... OK
+  Applying orders.0006_payment_gateway_config_and_attempt... OK
+  Applying orders.0007_refund_refunditem_returnrequest_returnitem_and_more... OK
+  Applying catalog.0009_product_logistics_and_seo_fields... OK
+  Applying catalog.0010_product_image_variant... OK
+  Applying catalog.0011_attribute_option_variant_engine... OK
+  Applying catalog.0012_industry_templates_and_category_schema... OK
+  Applying catalog.0013_attributevalue_source_template_value_and_more... OK
+  Applying catalog.0014_stockmovement... OK
+  Applying catalog.0015_stockmovement_return_item_alter_stockmovement_reason_and_more... OK
+  Applying catalog.0016_stockmovement_refund_item_alter_stockmovement_reason_and_more... OK
+  Applying catalog.0017_alter_stockmovement_reason_warehouse_and_more... OK
+  Applying catalog.0018_provision_default_warehouses... OK
+  Applying orders.0008_shippingraterule_shippingzone_taxclass_taxrate_and_more... OK
+  Applying catalog.0019_product_tax_class... OK
+  Applying catalog.0020_alter_stockmovement_reason... OK
+  Applying catalog.0021_brand_description_brand_is_active_brand_name_en... OK
+  Applying catalog.0022_alter_brand_options_brand_country_brand_sort_order_and_more... OK
+  Applying catalog.0023_attributevalue_swatch_image... OK
+  Applying catalog.0024_productimage_caption_productimage_is_360_and_more... OK
+  Applying catalog.0025_attribute_is_image_driving_productimage_option_value... OK
+  Applying catalog.0026_productvariant_price_productvariant_tax_class_and_more... OK
+  Applying catalog.0027_productoption_input_type_productvariant_sales_limit... OK
+  Applying catalog.0028_product_publish_at_product_visibility_and_more... OK
+  Applying catalog.0029_industry_template_sector... OK
+  Applying catalog.0030_industrytemplate_default_section_keys... OK
+  Applying catalog.0031_product_country_of_origin_product_model_code_and_more... OK
+  Applying catalog.0032_producttag_purpose... OK
+  Applying catalog.0033_product_draft_placeholder... OK
+  Applying catalog.0034_alter_productvideo_provider_add_instagram... OK
+  Applying catalog.0035_merchantcollection_merchantcollectionitem_and_more... OK
+  Applying catalog.0036_merchantcollection_source_legacy_product_tag... OK
+  Applying catalog.0037_category_image... OK
+  Applying catalog.0038_productmetafield... OK
+  Applying storefront_builder.0001_initial... OK
+  Applying storefront_builder.0002_storefrontsection_collapsed_in_editor... OK
+  Applying storefront_builder.0003_storefrontlayoutversion_appearance_config... OK
+  Applying content.0001_content_page... OK
+  Applying content.0002_publication_constraint... OK
+  Applying content.0003_homepage_media... OK
+  Applying content.0004_image_size_validators... OK
+  Applying content.0005_social_link... OK
+  Applying content.0006_navigation_menus... OK
+  Applying content.0007_menu_item_protect_menu_fk... OK
+  Applying content.0008_footer_configuration... OK
+  Applying content.0009_footer_phone_validators... OK
+  Applying content.0010_image_content_validator... OK
+  Applying content.0011_store_scope_settings_schema... OK
+  Applying content.0012_backfill_footer_store... OK
+  Applying content.0013_store_scope_settings_enforce_not_null... OK
+  Applying content.0014_storefront_builder_store_scoping... OK
+  Applying content.0015_assign_legacy_content_ownership... OK
+  Applying content.0016_add_collection_destination... OK
+  Applying content.0017_scope_hero_slides_and_banners_to_section... OK
+  Applying content.0018_storyrailitem... OK
+  Applying content.0019_mediaasset... OK
+  Applying content.0020_placement_asset_fks... OK
+  Applying content.0021_backfill_placement_assets... OK
+  Applying content.0022_alter_heroslide_destination_type_and_more... OK
+  Applying content.0023_newslettersubscriber... OK
+  Applying core.0001_initial... OK
+  Applying core.0002_shopsettings_melipayamak_password_and_more... OK
+  Applying core.0003_add_visual_identity_fields... OK
+  Applying core.0004_theme_tokens... OK
+  Applying core.0005_store_scope_settings_schema... OK
+  Applying core.0006_backfill_shopsettings_store... OK
+  Applying core.0007_store_scope_settings_enforce_not_null... OK
+  Applying core.0008_auditlogentry... OK
+  Applying core.0009_shopsettings_default_tax_class_and_more... OK
+  Applying core.0010_exportjob... OK
+  Applying core.0011_importjob_importrowresult_and_more... OK
+  Applying core.0012_shopsettings_kavenegar_api_key_and_more... OK
+  Applying core.0013_shopsettings_smsrasti_device_token_and_more... OK
+  Applying core.0014_private_storage_deconstructible... OK
+  Applying core.0015_shopsettings_tax_setup_confirmed_at... OK
+  Applying core.0016_shopsettings_gift_wrap... OK
+  Applying customers.0002_customerprofile_customernote_customertag_and_more... OK
+  Applying customers.0003_customersegment_customersegmentrule_and_more... OK
+  Applying notifications.0001_initial... OK
+  Applying orders.0009_shipping_free_over_optional_and_cost_check... OK
+  Applying orders.0010_orderitem_gift_wrap... OK
+  Applying portal.0001_initial... OK
+  Applying portal.0002_platform_configuration_and_audit... OK
+  Applying portal.0003_owner_otp_and_phone... OK
+  Applying portal.0004_alter_ownerotpchallenge_purpose... OK
+  Applying portal.0005_platformconfiguration_sms_fields... OK
+  Applying portal.0006_platform_owner_admin_gap_fill... OK
+  Applying portal.0007_platformconfiguration_enamad_verification_meta_tag... OK
+  Applying portal.0008_platformconfiguration_encrypted_zibal_credentials_and_more... OK
+  Applying portal.0009_platformconfiguration_enamad_auth_code_and_more... OK
+  Applying sessions.0001_initial... OK
+  Applying sms.0001_initial... OK
+  Applying sms.0002_otpcode_code_hash... OK
+  Applying sms.0003_smsoutboxitem... OK
+  Applying sms.0004_smslog_store... OK
+  Applying sms.0005_sms_balance_and_packages... OK
+  Applying sms.0006_seed_sms_packages... OK
+  Applying sms.0007_platform_owner_admin_gap_fill... OK
+  Applying sms.0008_sms_control_center... OK
+  Applying storefront_builder.0004_storefrontsection_stable_id... OK
+  Applying storefront_builder.0005_storefrontpage... OK
+  Applying storefront_builder.0006_ensure_pages_for_existing_versions... OK
+  Applying storefront_builder.0007_storefrontsection_page... OK
+  Applying storefront_builder.0008_backfill_section_page... OK
+  Applying storefront_builder.0009_storefrontsection_page_not_null_and_stable_id_scope... OK
+  Applying storefront_builder.0010_remove_storefrontsection_version... OK
+  Applying storefront_builder.0011_seed_default_non_home_sections... OK
+  Applying storefront_builder.0012_universal_block_row_and_lock... OK
+  Applying storefront_builder.0013_storefrontedithistoryentry... OK
+  Applying storefront_builder.0014_storefront_container_cell_foundation... OK
+  Applying storefront_builder.0015_storefrontsection_cell_and_cell_order... OK
+  Applying storefront_builder.0016_storefrontlayoutversion_template_provenance... OK
+  Applying storefront_builder.0017_add_ready_template_baseline_snapshot_and_slot_key... OK
+  Applying storefront_builder.0018_r4_editor_gate_and_edit_revision... OK
+  Applying storefront_builder.0019_page_appearance_overrides... OK
+  Applying storefront_builder.0020_r4_editor_enabled_default_true... OK
+  Applying stores.0018_storedomain_delivery_readiness... OK
+  Applying subscriptions.0005_platforminvoice_platformpaymentattempt_and_more... OK
+  Applying subscriptions.0006_remove_platform_invoice_and_attempt... OK
+  Applying subscriptions.0007_alter_subscriptionevent_event_type... OK
+System check identified no issues (0 silenced).
+test_appearance_editor_fails_closed_on_get (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARedundantRoutesFailClosedTests.test_appearance_editor_fails_closed_on_get) ... ok
+test_appearance_editor_fails_closed_on_post (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARedundantRoutesFailClosedTests.test_appearance_editor_fails_closed_on_post) ... ok
+test_container_add_fails_closed (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARedundantRoutesFailClosedTests.test_container_add_fails_closed) ... ok
+test_footer_editor_fails_closed (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARedundantRoutesFailClosedTests.test_footer_editor_fails_closed) ... ok
+test_footer_reset_fails_closed (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARedundantRoutesFailClosedTests.test_footer_reset_fails_closed) ... ok
+test_header_editor_fails_closed (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARedundantRoutesFailClosedTests.test_header_editor_fails_closed) ... ok
+test_header_reset_fails_closed (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARedundantRoutesFailClosedTests.test_header_reset_fails_closed) ... ok
+test_legacy_publish_fails_closed (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARedundantRoutesFailClosedTests.test_legacy_publish_fails_closed) ... ok
+test_legacy_redo_fails_closed (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARedundantRoutesFailClosedTests.test_legacy_redo_fails_closed) ... ok
+test_legacy_undo_fails_closed (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARedundantRoutesFailClosedTests.test_legacy_undo_fails_closed) ... ok
+test_reset_to_baseline_fails_closed (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARedundantRoutesFailClosedTests.test_reset_to_baseline_fails_closed) ... ok
+test_section_add_fails_closed (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARedundantRoutesFailClosedTests.test_section_add_fails_closed)
+A fresh Draft already has a default template's sections seeded ... ok
+test_section_collapse_toggle_blocked_request_mutates_nothing (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARedundantRoutesFailClosedTests.test_section_collapse_toggle_blocked_request_mutates_nothing)
+B — the blocked collapse-toggle POST changes neither the ... FAIL
+test_section_collapse_toggle_fails_closed (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARedundantRoutesFailClosedTests.test_section_collapse_toggle_fails_closed)
+P5-W5A Independent-Review repair: the Architect proved this is ... FAIL
+test_section_toggle_fails_closed (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARedundantRoutesFailClosedTests.test_section_toggle_fails_closed) ... ok
+test_appearance_editor_still_works_when_pinned_back (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARollbackStillWorksTests.test_appearance_editor_still_works_when_pinned_back) ... ok
+test_header_reset_still_works_when_pinned_back (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARollbackStillWorksTests.test_header_reset_still_works_when_pinned_back) ... ok
+test_legacy_publish_still_works_when_pinned_back (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARollbackStillWorksTests.test_legacy_publish_still_works_when_pinned_back) ... ok
+test_section_collapse_toggle_still_works_when_pinned_back (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARollbackStillWorksTests.test_section_collapse_toggle_still_works_when_pinned_back)
+C — P5-W5A Independent-Review repair: an R3-pinned Store keeps ... ok
+test_draft_preview_remains_reachable (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassBSharedCapabilitiesRemainReachableTests.test_draft_preview_remains_reachable) ... ok
+test_ready_template_apply_remains_reachable (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassBSharedCapabilitiesRemainReachableTests.test_ready_template_apply_remains_reachable) ... ok
+test_ready_template_gallery_remains_reachable (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassBSharedCapabilitiesRemainReachableTests.test_ready_template_gallery_remains_reachable) ... ok
+test_stale_industry_apply_raises_before_any_draft_row_is_touched (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassCConcurrencyBoundaryTests.test_stale_industry_apply_raises_before_any_draft_row_is_touched) ... ERROR
+test_stale_restore_raises_before_any_draft_row_is_touched (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassCConcurrencyBoundaryTests.test_stale_restore_raises_before_any_draft_row_is_touched) ... ERROR
+test_history_browser_get_never_mutates_draft (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.HistoryBrowserReadOnlyUnderR4Tests.test_history_browser_get_never_mutates_draft) ... ok
+test_history_browser_readable_under_r4 (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.HistoryBrowserReadOnlyUnderR4Tests.test_history_browser_readable_under_r4) ... ok
+test_legacy_industry_apply_fails_closed (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.LegacyClassCRoutesFailClosedUnderR4Tests.test_legacy_industry_apply_fails_closed) ... ok
+test_legacy_restore_fails_closed (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.LegacyClassCRoutesFailClosedUnderR4Tests.test_legacy_restore_fails_closed) ... ok
+test_legacy_industry_apply_still_works_when_pinned_back (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R3PinnedClassCRollbackPreservedTests.test_legacy_industry_apply_still_works_when_pinned_back) ... ok
+test_legacy_restore_still_works_when_pinned_back (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R3PinnedClassCRollbackPreservedTests.test_legacy_restore_still_works_when_pinned_back) ... ok
+test_r4_safe_industry_apply_cross_store_fails_closed (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeIndustryApplyTests.test_r4_safe_industry_apply_cross_store_fails_closed)
+N — tenant isolation: a Store with no installation of its own ... ok
+test_r4_safe_industry_apply_delegates_to_existing_canonical_service (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeIndustryApplyTests.test_r4_safe_industry_apply_delegates_to_existing_canonical_service)
+P ... ok
+test_r4_safe_industry_apply_force_true_overrides_published_guard (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeIndustryApplyTests.test_r4_safe_industry_apply_force_true_overrides_published_guard) ... ok
+test_r4_safe_industry_apply_rate_limit_exhaustion_returns_controlled_response (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeIndustryApplyTests.test_r4_safe_industry_apply_rate_limit_exhaustion_returns_controlled_response)
+The EXISTING, unmodified ``storefront_layout.new_draft`` rate ... [2026-09-19 13:44:21,507] ERROR django.request: Internal Server Error: /admin-portal/storefront-builder/r4/apply-industry-layout/
+Traceback (most recent call last):
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/views/decorators/http.py", line 64, in inner
+    return func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/dashboard/decorators.py", line 103, in wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/dashboard/decorators.py", line 133, in wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/r4_views.py", line 1560, in storefront_r4_apply_industry_layout
+    r4_mutation_service.apply_industry_layout_safe(
+  File "/usr/lib/python3.11/contextlib.py", line 81, in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/services/r4_mutation_service.py", line 1445, in apply_industry_layout_safe
+    return layout_service.apply_industry_layout(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/contextlib.py", line 81, in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/services/layout_service.py", line 1058, in apply_industry_layout
+    enforce_rate_limit("storefront_layout.new_draft", str(store.pk), **_NEW_DRAFT_RATE_LIMIT)
+  File "/home/user/Rastisi6-14040616/apps/core/services/rate_limit.py", line 30, in enforce_rate_limit
+    raise RateLimitExceeded(f"تعداد تلاش برای «{action}» بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید")
+apps.core.services.rate_limit.RateLimitExceeded: تعداد تلاش برای «storefront_layout.new_draft» بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید
+ERROR
+test_r4_safe_industry_apply_rejects_aba_stale_draft_identity_even_with_matching_revision (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeIndustryApplyTests.test_r4_safe_industry_apply_rejects_aba_stale_draft_identity_even_with_matching_revision)
+Independent-Review repair — ABA hazard, Industry-Apply variant: ... FAIL
+test_r4_safe_industry_apply_rejects_inconsistent_null_pairing (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeIndustryApplyTests.test_r4_safe_industry_apply_rejects_inconsistent_null_pairing) ... FAIL
+test_r4_safe_industry_apply_rejects_negative_and_non_integer_precondition_values (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeIndustryApplyTests.test_r4_safe_industry_apply_rejects_negative_and_non_integer_precondition_values) ... FAIL
+test_r4_safe_industry_apply_rejects_stale_no_draft_precondition (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeIndustryApplyTests.test_r4_safe_industry_apply_rejects_stale_no_draft_precondition) ... ok
+test_r4_safe_industry_apply_rejects_stale_precondition (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeIndustryApplyTests.test_r4_safe_industry_apply_rejects_stale_precondition)
+L — same Draft identity, wrong (stale) revision: 409, and the ... ERROR
+test_r4_safe_industry_apply_rejects_truthy_string_force (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeIndustryApplyTests.test_r4_safe_industry_apply_rejects_truthy_string_force)
+Code-review finding: ``bool("false")`` is True in Python — a ... ok
+test_r4_safe_industry_apply_requires_confirm_when_already_published (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeIndustryApplyTests.test_r4_safe_industry_apply_requires_confirm_when_already_published) ... ok
+test_r4_safe_industry_apply_requires_r4_editor_enabled (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeIndustryApplyTests.test_r4_safe_industry_apply_requires_r4_editor_enabled) ... ok
+test_r4_safe_industry_apply_succeeds_with_matching_active_draft (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeIndustryApplyTests.test_r4_safe_industry_apply_succeeds_with_matching_active_draft)
+K ... ok
+test_r4_safe_industry_apply_succeeds_with_no_active_draft (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeIndustryApplyTests.test_r4_safe_industry_apply_succeeds_with_no_active_draft)
+M — no-active-Draft contract. ... ok
+test_r4_safe_restore_cross_store_fails_closed (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeRestoreTests.test_r4_safe_restore_cross_store_fails_closed)
+I — a version belonging to a different Store can never be ... ok
+test_r4_safe_restore_delegates_to_existing_canonical_service (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeRestoreTests.test_r4_safe_restore_delegates_to_existing_canonical_service)
+P — no duplicated business logic: the resulting Draft has the ... ok
+test_r4_safe_restore_rate_limit_exhaustion_returns_controlled_response (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeRestoreTests.test_r4_safe_restore_rate_limit_exhaustion_returns_controlled_response)
+The EXISTING, unmodified ``storefront_layout.restore`` rate ... [2026-09-19 13:44:29,555] ERROR django.request: Internal Server Error: /admin-portal/storefront-builder/r4/restore/1/
+Traceback (most recent call last):
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/views/decorators/http.py", line 64, in inner
+    return func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/dashboard/decorators.py", line 103, in wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/dashboard/decorators.py", line 133, in wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/r4_views.py", line 1504, in storefront_r4_restore
+    r4_mutation_service.restore_version_safe(
+  File "/usr/lib/python3.11/contextlib.py", line 81, in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/services/r4_mutation_service.py", line 1429, in restore_version_safe
+    return layout_service.restore_version(store, version_id, user=actor)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/contextlib.py", line 81, in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/services/layout_service.py", line 909, in restore_version
+    enforce_rate_limit("storefront_layout.restore", str(store.pk), **_RESTORE_RATE_LIMIT)
+  File "/home/user/Rastisi6-14040616/apps/core/services/rate_limit.py", line 30, in enforce_rate_limit
+    raise RateLimitExceeded(f"تعداد تلاش برای «{action}» بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید")
+apps.core.services.rate_limit.RateLimitExceeded: تعداد تلاش برای «storefront_layout.restore» بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید
+ERROR
+test_r4_safe_restore_rejects_inconsistent_null_pairing (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeRestoreTests.test_r4_safe_restore_rejects_inconsistent_null_pairing)
+Reject controlled 400 when only one of base_draft_id/ ... FAIL
+test_r4_safe_restore_rejects_negative_and_non_integer_precondition_values (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeRestoreTests.test_r4_safe_restore_rejects_negative_and_non_integer_precondition_values)
+Reject controlled 400, never a 500/silent coercion, for a ... FAIL
+test_r4_safe_restore_rejects_stale_active_draft_precondition (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeRestoreTests.test_r4_safe_restore_rejects_stale_active_draft_precondition)
+G — same Draft identity, wrong (stale) revision: 409, and the ... ERROR
+test_r4_safe_restore_rejects_stale_no_draft_precondition (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeRestoreTests.test_r4_safe_restore_rejects_stale_no_draft_precondition)
+H (conflict branch) — client expected no Draft (null/null), but ... ok
+test_r4_safe_restore_rejects_wrong_draft_id_with_coincidentally_equal_revision (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeRestoreTests.test_r4_safe_restore_rejects_wrong_draft_id_with_coincidentally_equal_revision)
+Independent-Review repair — ABA hazard: Draft A is replaced by ... FAIL
+test_r4_safe_restore_requires_r4_editor_enabled (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeRestoreTests.test_r4_safe_restore_requires_r4_editor_enabled) ... ok
+test_r4_safe_restore_succeeds_with_matching_active_draft_revision (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeRestoreTests.test_r4_safe_restore_succeeds_with_matching_active_draft_revision)
+F — an active Draft exists and the client's expectation (SAME ... ok
+test_r4_safe_restore_succeeds_with_matching_precondition_no_active_draft (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeRestoreTests.test_r4_safe_restore_succeeds_with_matching_precondition_no_active_draft)
+H — no-active-Draft contract: nothing open yet, client correctly ... ok
+test_design_lab_randomizable_families_excludes_layout_and_mega_menu (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ReservedFamilyDispositionTests.test_design_lab_randomizable_families_excludes_layout_and_mega_menu) ... ok
+test_layout_family_still_has_no_render_consumer (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ReservedFamilyDispositionTests.test_layout_family_still_has_no_render_consumer) ... ok
+test_mega_menu_family_still_has_exactly_one_component (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ReservedFamilyDispositionTests.test_mega_menu_family_still_has_exactly_one_component) ... ok
+test_r4_editor_labels_the_ten_item_registry_as_style_pack (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.StylePackTerminologyTests.test_r4_editor_labels_the_ten_item_registry_as_style_pack) ... ok
+test_ready_template_gallery_still_says_ready_template (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.StylePackTerminologyTests.test_ready_template_gallery_still_says_ready_template) ... ok
+
+======================================================================
+ERROR: test_stale_industry_apply_raises_before_any_draft_row_is_touched (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassCConcurrencyBoundaryTests.test_stale_industry_apply_raises_before_any_draft_row_is_touched)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_phase5_w5a_canonical_editor_safety.py", line 806, in test_stale_industry_apply_raises_before_any_draft_row_is_touched
+    r4_mutation_service.apply_industry_layout_safe(
+  File "/usr/lib/python3.11/contextlib.py", line 81, in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+TypeError: apply_industry_layout_safe() got an unexpected keyword argument 'base_draft_id'
+
+======================================================================
+ERROR: test_stale_restore_raises_before_any_draft_row_is_touched (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassCConcurrencyBoundaryTests.test_stale_restore_raises_before_any_draft_row_is_touched)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_phase5_w5a_canonical_editor_safety.py", line 784, in test_stale_restore_raises_before_any_draft_row_is_touched
+    r4_mutation_service.restore_version_safe(
+  File "/usr/lib/python3.11/contextlib.py", line 81, in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+TypeError: restore_version_safe() got an unexpected keyword argument 'base_draft_id'
+
+======================================================================
+ERROR: test_r4_safe_industry_apply_rate_limit_exhaustion_returns_controlled_response (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeIndustryApplyTests.test_r4_safe_industry_apply_rate_limit_exhaustion_returns_controlled_response)
+The EXISTING, unmodified ``storefront_layout.new_draft`` rate
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_phase5_w5a_canonical_editor_safety.py", line 758, in test_r4_safe_industry_apply_rate_limit_exhaustion_returns_controlled_response
+    resp = self._post_apply(None, None)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_phase5_w5a_canonical_editor_safety.py", line 557, in _post_apply
+    return self.client.post(
+           ^^^^^^^^^^^^^^^^^
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/test/client.py", line 1156, in post
+    response = super().post(
+               ^^^^^^^^^^^^^
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/test/client.py", line 499, in post
+    return self.generic(
+           ^^^^^^^^^^^^^
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/test/client.py", line 671, in generic
+    return self.request(**r)
+           ^^^^^^^^^^^^^^^^^
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/test/client.py", line 1090, in request
+    self.check_exception(response)
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/test/client.py", line 805, in check_exception
+    raise exc_value
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/views/decorators/http.py", line 64, in inner
+    return func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/dashboard/decorators.py", line 103, in wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/dashboard/decorators.py", line 133, in wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/r4_views.py", line 1560, in storefront_r4_apply_industry_layout
+    r4_mutation_service.apply_industry_layout_safe(
+  File "/usr/lib/python3.11/contextlib.py", line 81, in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/services/r4_mutation_service.py", line 1445, in apply_industry_layout_safe
+    return layout_service.apply_industry_layout(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/contextlib.py", line 81, in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/services/layout_service.py", line 1058, in apply_industry_layout
+    enforce_rate_limit("storefront_layout.new_draft", str(store.pk), **_NEW_DRAFT_RATE_LIMIT)
+  File "/home/user/Rastisi6-14040616/apps/core/services/rate_limit.py", line 30, in enforce_rate_limit
+    raise RateLimitExceeded(f"تعداد تلاش برای «{action}» بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید")
+apps.core.services.rate_limit.RateLimitExceeded: تعداد تلاش برای «storefront_layout.new_draft» بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید
+
+======================================================================
+ERROR: test_r4_safe_industry_apply_rejects_stale_precondition (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeIndustryApplyTests.test_r4_safe_industry_apply_rejects_stale_precondition)
+L — same Draft identity, wrong (stale) revision: 409, and the
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_phase5_w5a_canonical_editor_safety.py", line 599, in test_r4_safe_industry_apply_rejects_stale_precondition
+    self.assertEqual(resp.json()["current_draft_id"], draft.pk)
+                     ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+KeyError: 'current_draft_id'
+
+======================================================================
+ERROR: test_r4_safe_restore_rate_limit_exhaustion_returns_controlled_response (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeRestoreTests.test_r4_safe_restore_rate_limit_exhaustion_returns_controlled_response)
+The EXISTING, unmodified ``storefront_layout.restore`` rate
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_phase5_w5a_canonical_editor_safety.py", line 530, in test_r4_safe_restore_rate_limit_exhaustion_returns_controlled_response
+    resp = self._post_restore(v1.pk, None, None)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_phase5_w5a_canonical_editor_safety.py", line 353, in _post_restore
+    return self.client.post(
+           ^^^^^^^^^^^^^^^^^
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/test/client.py", line 1156, in post
+    response = super().post(
+               ^^^^^^^^^^^^^
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/test/client.py", line 499, in post
+    return self.generic(
+           ^^^^^^^^^^^^^
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/test/client.py", line 671, in generic
+    return self.request(**r)
+           ^^^^^^^^^^^^^^^^^
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/test/client.py", line 1090, in request
+    self.check_exception(response)
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/test/client.py", line 805, in check_exception
+    raise exc_value
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/w5a-venv/lib/python3.11/site-packages/django/views/decorators/http.py", line 64, in inner
+    return func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/dashboard/decorators.py", line 103, in wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/dashboard/decorators.py", line 133, in wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/r4_views.py", line 1504, in storefront_r4_restore
+    r4_mutation_service.restore_version_safe(
+  File "/usr/lib/python3.11/contextlib.py", line 81, in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/services/r4_mutation_service.py", line 1429, in restore_version_safe
+    return layout_service.restore_version(store, version_id, user=actor)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/contextlib.py", line 81, in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/services/layout_service.py", line 909, in restore_version
+    enforce_rate_limit("storefront_layout.restore", str(store.pk), **_RESTORE_RATE_LIMIT)
+  File "/home/user/Rastisi6-14040616/apps/core/services/rate_limit.py", line 30, in enforce_rate_limit
+    raise RateLimitExceeded(f"تعداد تلاش برای «{action}» بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید")
+apps.core.services.rate_limit.RateLimitExceeded: تعداد تلاش برای «storefront_layout.restore» بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید
+
+======================================================================
+ERROR: test_r4_safe_restore_rejects_stale_active_draft_precondition (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeRestoreTests.test_r4_safe_restore_rejects_stale_active_draft_precondition)
+G — same Draft identity, wrong (stale) revision: 409, and the
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_phase5_w5a_canonical_editor_safety.py", line 401, in test_r4_safe_restore_rejects_stale_active_draft_precondition
+    self.assertEqual(resp.json()["current_draft_id"], draft.pk)
+                     ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+KeyError: 'current_draft_id'
+
+======================================================================
+FAIL: test_section_collapse_toggle_blocked_request_mutates_nothing (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARedundantRoutesFailClosedTests.test_section_collapse_toggle_blocked_request_mutates_nothing)
+B — the blocked collapse-toggle POST changes neither the
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_phase5_w5a_canonical_editor_safety.py", line 185, in test_section_collapse_toggle_blocked_request_mutates_nothing
+    self.assertEqual(resp.status_code, 404)
+AssertionError: 200 != 404
+
+======================================================================
+FAIL: test_section_collapse_toggle_fails_closed (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.ClassARedundantRoutesFailClosedTests.test_section_collapse_toggle_fails_closed)
+P5-W5A Independent-Review repair: the Architect proved this is
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_phase5_w5a_canonical_editor_safety.py", line 167, in test_section_collapse_toggle_fails_closed
+    self.assertEqual(resp.status_code, 404)
+AssertionError: 200 != 404
+
+======================================================================
+FAIL: test_r4_safe_industry_apply_rejects_aba_stale_draft_identity_even_with_matching_revision (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeIndustryApplyTests.test_r4_safe_industry_apply_rejects_aba_stale_draft_identity_even_with_matching_revision)
+Independent-Review repair — ABA hazard, Industry-Apply variant:
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_phase5_w5a_canonical_editor_safety.py", line 635, in test_r4_safe_industry_apply_rejects_aba_stale_draft_identity_even_with_matching_revision
+    self.assertEqual(resp.status_code, 409)
+AssertionError: 400 != 409
+
+======================================================================
+FAIL: test_r4_safe_industry_apply_rejects_inconsistent_null_pairing (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeIndustryApplyTests.test_r4_safe_industry_apply_rejects_inconsistent_null_pairing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_phase5_w5a_canonical_editor_safety.py", line 658, in test_r4_safe_industry_apply_rejects_inconsistent_null_pairing
+    self.assertEqual(resp.status_code, 400)
+AssertionError: 409 != 400
+
+======================================================================
+FAIL: test_r4_safe_industry_apply_rejects_negative_and_non_integer_precondition_values (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeIndustryApplyTests.test_r4_safe_industry_apply_rejects_negative_and_non_integer_precondition_values)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_phase5_w5a_canonical_editor_safety.py", line 652, in test_r4_safe_industry_apply_rejects_negative_and_non_integer_precondition_values
+    self.assertEqual(resp.status_code, 400, (bad_draft_id, bad_revision))
+AssertionError: 409 != 400 : (-1, 0)
+
+======================================================================
+FAIL: test_r4_safe_restore_rejects_inconsistent_null_pairing (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeRestoreTests.test_r4_safe_restore_rejects_inconsistent_null_pairing)
+Reject controlled 400 when only one of base_draft_id/
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_phase5_w5a_canonical_editor_safety.py", line 477, in test_r4_safe_restore_rejects_inconsistent_null_pairing
+    self.assertEqual(resp.status_code, 400)
+AssertionError: 409 != 400
+
+======================================================================
+FAIL: test_r4_safe_restore_rejects_negative_and_non_integer_precondition_values (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeRestoreTests.test_r4_safe_restore_rejects_negative_and_non_integer_precondition_values)
+Reject controlled 400, never a 500/silent coercion, for a
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_phase5_w5a_canonical_editor_safety.py", line 466, in test_r4_safe_restore_rejects_negative_and_non_integer_precondition_values
+    self.assertEqual(resp.status_code, 400, (bad_draft_id, bad_revision))
+AssertionError: 409 != 400 : (-1, 0)
+
+======================================================================
+FAIL: test_r4_safe_restore_rejects_wrong_draft_id_with_coincidentally_equal_revision (apps.storefront_builder.tests.test_phase5_w5a_canonical_editor_safety.R4SafeRestoreTests.test_r4_safe_restore_rejects_wrong_draft_id_with_coincidentally_equal_revision)
+Independent-Review repair — ABA hazard: Draft A is replaced by
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/storefront_builder/tests/test_phase5_w5a_canonical_editor_safety.py", line 446, in test_r4_safe_restore_rejects_wrong_draft_id_with_coincidentally_equal_revision
+    self.assertEqual(resp.status_code, 409)
+AssertionError: 200 != 409
+
+----------------------------------------------------------------------
+Ran 60 tests in 39.727s
+
+FAILED (failures=8, errors=6)
+Destroying test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...

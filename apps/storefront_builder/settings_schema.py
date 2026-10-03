@@ -30,7 +30,32 @@ ALLOWED_FIELD_TYPES = frozenset({
     "variant",
     "resource_source",
     "appearance_override",
+    "repeater",
+    #: Phase 5 Task 4B — the shared per-section "background" block
+    #: (mode/color/pattern/palette-role/media-asset) that already exists on
+    #: every BACKGROUND_AWARE_SECTION_KEYS section via the
+    #: ``_with_background`` legacy-validator wrapper. Declaring it as a schema
+    #: field only makes the R4 Inspector render + accept it; the AUTHORITY
+    #: for its shape stays ``section_registry.validate_background_settings``
+    #: (run afterward by ``clean_section_schema_patch``), and tenant safety
+    #: for ``media_asset_id`` stays the existing render-time
+    #: ``content.services.resolve_background_media_url`` (fail-closed,
+    #: Store-scoped) — never a second media authority or persistence model.
+    "background",
+    #: Pre-Task-10 corrective closure — an FK picker into the existing
+    #: Store-scoped Menu/MenuItem navigation infrastructure (the same model
+    #: the legacy settings form's own Menu dropdown already uses — see
+    #: ``views.py``'s ``all_menus`` context helper). Exactly the same
+    #: "declare the field, let the view project a dynamic Store-scoped
+    #: choice list into the Inspector context" pattern ``resource_source``
+    #: already established below — never a second Menu authority/model.
+    "menu_picker",
 })
+
+#: R4 Task 6 (Group D) — a ``repeater`` item's own sub-fields must be
+#: simple scalars only: no nested ``repeater`` (no repeater-of-repeater),
+#: and none of the other compound/not-yet-Inspector-rendered types either.
+REPEATER_ITEM_FIELD_TYPES = frozenset({"text", "integer", "boolean", "choice"})
 
 ALLOWED_GROUPS = frozenset({
     "basic",
@@ -71,6 +96,11 @@ class SettingsField:
     max_value: int | None = None
     max_length: int | None = None
     widget_hint: str | None = None
+    #: ``repeater`` only — the shape of each item in the list. ``min_value``/
+    #: ``max_value`` on the repeater field itself bound the item COUNT (not
+    #: any per-item value), reusing the existing integer-bounds attributes
+    #: rather than adding new ones.
+    repeater_item_fields: tuple["SettingsField", ...] = ()
 
     def __post_init__(self) -> None:
         if not self.key:
@@ -82,6 +112,30 @@ class SettingsField:
         if self.group not in ALLOWED_GROUPS:
             raise SettingsSchemaError(
                 f"Unsupported settings group {self.group!r} for key {self.key!r}"
+            )
+
+        if self.field_type == "repeater":
+            if not self.repeater_item_fields:
+                raise SettingsSchemaError(
+                    f"repeater field {self.key!r} must declare at least one repeater_item_fields entry"
+                )
+            item_keys: set[str] = set()
+            for item_field in self.repeater_item_fields:
+                if not isinstance(item_field, SettingsField):
+                    raise SettingsSchemaError(
+                        f"repeater_item_fields for {self.key!r} must contain SettingsField instances"
+                    )
+                if item_field.field_type not in REPEATER_ITEM_FIELD_TYPES:
+                    raise SettingsSchemaError(
+                        f"repeater item field_type {item_field.field_type!r} for {self.key!r}.{item_field.key!r} "
+                        f"is not allowed inside a repeater"
+                    )
+                if item_field.key in item_keys:
+                    raise SettingsSchemaError(f"Duplicate repeater item field key {item_field.key!r} in {self.key!r}")
+                item_keys.add(item_field.key)
+        elif self.repeater_item_fields:
+            raise SettingsSchemaError(
+                f"repeater_item_fields is only valid for field_type='repeater' (got {self.field_type!r} for {self.key!r})"
             )
 
         normalized_choices = []
@@ -173,6 +227,33 @@ def _clean_boolean_value(field: SettingsField, raw_value: object) -> bool:
     )
 
 
+def _clean_repeater_value(field: SettingsField, raw_value: object) -> list:
+    """Shape/type cleaning only, exactly like every other field type here —
+    the section's own legacy validator (run afterward by
+    ``clean_section_schema_patch``) stays the sole authority for business
+    rules (item count caps, "title required else drop", etc.); this only
+    guarantees each item is a dict whose declared sub-fields are the right
+    JSON-safe shape, dropping anything else silently rather than raising,
+    exactly as the legacy validator's own per-item loops already do."""
+    if not isinstance(raw_value, list):
+        raise SettingsSchemaError(f"{field.key!r} must be a list (got {type(raw_value).__name__})")
+    if field.min_value is not None and len(raw_value) < field.min_value:
+        raise SettingsSchemaError(f"{field.key!r} must have at least {field.min_value} item(s)")
+    if field.max_value is not None and len(raw_value) > field.max_value:
+        raise SettingsSchemaError(f"{field.key!r} must have at most {field.max_value} item(s)")
+
+    cleaned_items = []
+    for raw_item in raw_value:
+        if not isinstance(raw_item, dict):
+            raise SettingsSchemaError(f"{field.key!r} items must be objects (got {type(raw_item).__name__})")
+        cleaned_item = {}
+        for item_field in field.repeater_item_fields:
+            item_raw = raw_item.get(item_field.key, item_field.default)
+            cleaned_item[item_field.key] = _clean_field_value(item_field, item_raw)
+        cleaned_items.append(cleaned_item)
+    return cleaned_items
+
+
 def _clean_field_value(field: SettingsField, raw_value: object) -> object:
     if field.field_type == "integer":
         try:
@@ -212,6 +293,47 @@ def _clean_field_value(field: SettingsField, raw_value: object) -> object:
 
     if field.field_type == "appearance_override":
         return validate_appearance_overrides(raw_value)
+
+    if field.field_type == "repeater":
+        return _clean_repeater_value(field, raw_value)
+
+    if field.field_type == "menu_picker":
+        # Same "no value selected" contract as the legacy form's own
+        # `request.POST.get("menu_id") or None` — an empty/blank selection
+        # (or an explicit "" from the <select>'s placeholder option) is a
+        # valid, deliberate "no menu chosen" state, not an error. Store
+        # ownership is NOT re-checked here (this module has no request/store
+        # context) — exactly like the legacy form: the dropdown is already
+        # Store-scoped at render time (never offering a foreign Menu id to
+        # pick from), and render_service re-resolves/ignores a foreign or
+        # stale id at render time regardless of how it got saved. R4 matches
+        # this existing behavior exactly, not a new/stricter contract.
+        if raw_value in (None, "", "null"):
+            return None
+        try:
+            cleaned = int(normalize_digits(raw_value))
+        except (TypeError, ValueError) as exc:
+            raise SettingsSchemaError(
+                f"Invalid menu_picker value for {field.key!r}: {raw_value!r}"
+            ) from exc
+        return cleaned if cleaned > 0 else None
+
+    if field.field_type == "background":
+        # Phase 5 Task 4B — shape guard ONLY (must be a JSON object), exactly
+        # like this module's contract for every compound type: THIS module
+        # has no request/store context and no notion of the section's own
+        # background rules, so it never validates mode/color/pattern/asset
+        # ownership here. The section's ``validate_background_settings``
+        # (invoked by the ``_with_background`` wrapper on its
+        # ``validate_settings``, run afterward by
+        # ``clean_section_schema_patch``) stays the sole authority; a
+        # tampered ``media_asset_id`` is fail-closed at render time by
+        # ``content.services.resolve_background_media_url``.
+        if not isinstance(raw_value, dict):
+            raise SettingsSchemaError(
+                f"{field.key!r} must be an object (got {type(raw_value).__name__})"
+            )
+        return raw_value
 
     if field.field_type == "resource_source":
         # R4 Task 9 — the generic typed shape only (kind/mode/auto_rule/
@@ -333,28 +455,30 @@ def clean_schema_patch(schema: SettingsSchema, raw_patch: dict, current_settings
     return declared_current
 
 
+def _serialize_field(field: SettingsField) -> dict:
+    return {
+        "key": field.key,
+        "label": field.label,
+        "field_type": field.field_type,
+        "group": field.group,
+        "default": field.default,
+        "required": field.required,
+        "choices": [list(pair) for pair in field.choices],
+        "min_value": field.min_value,
+        "max_value": field.max_value,
+        "max_length": field.max_length,
+        "widget_hint": field.widget_hint,
+        "repeater_item_fields": [_serialize_field(item_field) for item_field in field.repeater_item_fields],
+    }
+
+
 def serialize_schema(schema: SettingsSchema) -> dict:
     """Deterministic, JSON-safe metadata for the Inspector layer. Declared
     field order is preserved; no Python callables or runtime objects are
     included."""
     return {
         "preserve_unmanaged": schema.preserve_unmanaged,
-        "fields": [
-            {
-                "key": field.key,
-                "label": field.label,
-                "field_type": field.field_type,
-                "group": field.group,
-                "default": field.default,
-                "required": field.required,
-                "choices": [list(pair) for pair in field.choices],
-                "min_value": field.min_value,
-                "max_value": field.max_value,
-                "max_length": field.max_length,
-                "widget_hint": field.widget_hint,
-            }
-            for field in schema.fields
-        ],
+        "fields": [_serialize_field(field) for field in schema.fields],
     }
 
 
@@ -417,5 +541,33 @@ def mark_explicit_variant_override(
     updated = deepcopy(settings)
     overrides = dict(updated.get("appearance_overrides") or {})
     overrides[VARIANT_EXPLICIT_OVERRIDE_KEY] = True
+    updated["appearance_overrides"] = overrides
+    return updated
+
+
+#: Phase 4 (Task 6, Group F) — the internal explicit-local-card-style marker,
+#: exactly the same mechanism/contract as ``VARIANT_EXPLICIT_OVERRIDE_KEY``
+#: above (lives inside ``appearance_overrides``, rejected by
+#: ``validate_appearance_overrides`` as an unknown key, stamped only by the
+#: trusted server-side path AFTER validation on a genuine change). A
+#: separate key from ``variant_explicit`` because the two axes are
+#: independent: a section may have an explicit local variant, an explicit
+#: local card style, both, or neither.
+CARD_STYLE_EXPLICIT_OVERRIDE_KEY = "card_style_explicit"
+
+
+def mark_explicit_card_style_override(*, settings: dict) -> dict:
+    """Return ``settings`` with the internal explicit-local-card-style marker
+    set. The caller must have already confirmed the change is genuine (the
+    cleaned ``card.card_style`` differs from the previously stored value —
+    the legacy card-settings form always submits ``card_style`` on every
+    POST, so presence alone is not intent, exactly the same rule
+    ``mark_explicit_variant_override``'s caller applies for the variant key).
+    Never mutates ``settings``."""
+    from copy import deepcopy
+
+    updated = deepcopy(settings)
+    overrides = dict(updated.get("appearance_overrides") or {})
+    overrides[CARD_STYLE_EXPLICIT_OVERRIDE_KEY] = True
     updated["appearance_overrides"] = overrides
     return updated

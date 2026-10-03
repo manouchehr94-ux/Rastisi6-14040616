@@ -1,0 +1,28 @@
+NOTE: git status --short was run immediately before this file was
+written and showed NO output (a genuinely clean working tree at HEAD
+5dc796c). This file is then written and staged for the evidence
+commit that follows, so a git status run AFTER this point will show
+exactly this one file as untracked until that commit lands -- that
+is expected and is not leftover dirt from any other change.
+================================================================================
+
+=== git rev-parse HEAD ===
+5dc796cca6f5052c633f96e8d7ebb170b64f5bc2
+
+=== git status --short (working tree before this evidence file existed) ===
+(no output -- clean)
+
+=== git diff --check ===
+exit code: 0
+
+=== python --version ===
+Python 3.12.3
+
+=== django version ===
+5.2.17
+
+=== manage.py check ===
+System check identified no issues (0 silenced).
+
+=== makemigrations --check --dry-run ===
+No changes detected

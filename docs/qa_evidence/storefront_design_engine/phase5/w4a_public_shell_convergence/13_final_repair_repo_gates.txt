@@ -1,0 +1,47 @@
+System check identified no issues (0 silenced).
+[check_exit=0]
+No changes detected
+[makemigrations_check_exit=0]
+[git_diff_check_exit=0]
+ M apps/cart/context_processors.py
+ M apps/content/templates/content/page_detail.html
+ M apps/content/tests/test_page_shell_convergence.py
+ M apps/customers/templates/customers/wishlist.html
+ M apps/customers/tests/test_wishlist_shell_convergence.py
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/03_red_task2_wishlist.txt
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/dark_digital/screenshots/desktop_cms.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/dark_digital/screenshots/desktop_wishlist_anon.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/dark_digital/screenshots/desktop_wishlist_empty.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/dark_digital/screenshots/desktop_wishlist_populated.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/dark_digital/screenshots/mobile_cms.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/dark_digital/screenshots/mobile_wishlist_anon.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/dark_digital/screenshots/mobile_wishlist_empty.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/dark_digital/screenshots/mobile_wishlist_populated.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/dark_digital/screenshots/tablet_cms.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/dark_digital/screenshots/tablet_wishlist_anon.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/dark_digital/screenshots/tablet_wishlist_empty.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/dark_digital/screenshots/tablet_wishlist_populated.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/dark_digital/w4a_browser_qa_result.json
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/warm_boutique/screenshots/desktop_cms.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/warm_boutique/screenshots/desktop_wishlist_anon.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/warm_boutique/screenshots/desktop_wishlist_empty.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/warm_boutique/screenshots/desktop_wishlist_populated.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/warm_boutique/screenshots/mobile_cms.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/warm_boutique/screenshots/mobile_wishlist_anon.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/warm_boutique/screenshots/mobile_wishlist_empty.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/warm_boutique/screenshots/mobile_wishlist_populated.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/warm_boutique/screenshots/tablet_cms.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/warm_boutique/screenshots/tablet_wishlist_anon.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/warm_boutique/screenshots/tablet_wishlist_empty.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/warm_boutique/screenshots/tablet_wishlist_populated.png
+ M docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/browser_qa/warm_boutique/w4a_browser_qa_result.json
+ M tools/storefront_builder_r4_qa/w4a_public_shell_qa.mjs
+?? docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/13_final_repair_repo_gates.txt
+?? docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/14_red_important1_header_count.txt
+?? docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/15_green_important1_header_count.txt
+?? docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/16_green_cart_customers_after_important1.txt
+?? docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/17_customers_base_honest.txt
+?? docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/18_customers_final_honest.txt
+?? docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/19_reconstructed_red_task2_wishlist.txt
+?? docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/20_red_important4_css_link.txt
+?? docs/qa_evidence/storefront_design_engine/phase5/w4a_public_shell_convergence/21_green_important4_css_link.txt

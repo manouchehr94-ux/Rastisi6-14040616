@@ -123,7 +123,19 @@ class BuildRenderItemsTests(TestCase):
     def test_duplicated_section_type_does_not_duplicate_queries(self):
         """بهینه‌سازی کوئری: دو نمونه از یک section_key یکسان (قابلیت
         پشتیبانی‌شده duplicable) نباید کوئری داده را دو بار اجرا کنند —
-        هیچ‌کدام از context builderها به تنظیمات نمونه وابسته نیستند.
+        وقتی context builder به تنظیماتِ خودِ همان نمونه وابسته نیست
+        (بنابراین در ``PER_INSTANCE_SECTION_KEYS`` نیست).
+
+        ``featured_products`` (نه ``newest_products``) عمداً انتخاب شده:
+        از چکپوینتِ Task 6 Group B به بعد، ``newest_products`` خودش
+        ``item_limit``ِ per-instance دارد (نگاه کنید به
+        ``test_different_instances_of_same_type_share_live_data_correctly``
+        برایِ آن دسته)، اما ``featured_products`` یک MARKETING-ALIAS ثابت
+        است که هرگز settings مستقلِ خودش را نداشته (همیشه
+        ``_passthrough_dict``/``_empty_defaults``) — هرچند در پسِ‌پرده
+        همان context builderِ ``newest_products`` را صدا می‌زند، تنظیماتش
+        هرگز ``item_limit`` ندارد، پس واقعاً هنوز نمونه‌یِ درستِ این
+        بهینه‌سازیِ سطح-Store است.
 
         به‌جای یک عدد ثابت (که به وجود/عدم‌وجود محصول در دیتابیس تست
         وابسته است — prefetch وقتی محصولی نیست کوئری اضافه نمی‌زند)،
@@ -133,14 +145,14 @@ class BuildRenderItemsTests(TestCase):
         store = _akhlaghi()
         draft = svc.get_or_create_draft(store)
         draft.sections.all().delete()
-        StorefrontSection.objects.create(version=draft, section_key="newest_products", order=0)
+        StorefrontSection.objects.create(version=draft, section_key="featured_products", order=0)
         with CaptureQueriesContext(connection) as single_ctx:
             items = build_render_items(draft, store)
             for i in items:
                 list(i["context"]["products"])
         single_count = len(single_ctx.captured_queries)
 
-        StorefrontSection.objects.create(version=draft, section_key="newest_products", order=1)
+        StorefrontSection.objects.create(version=draft, section_key="featured_products", order=1)
         with CaptureQueriesContext(connection) as double_ctx:
             items = build_render_items(draft, store)
             for i in items:
@@ -1532,6 +1544,100 @@ class CartContextAwareSectionsTests(TestCase):
         self.assertEqual(item["context"]["totals"], {"grand_total": 5000})
         self.assertEqual(item["context"]["item_count"], 2)
 
+    def test_cart_summary_passes_free_shipping_goal_fields_untouched(self):
+        # P5-W1: the Free-Shipping Goal fields are computed by the pricing
+        # authority (cart_totals) and delivered inside the SAME `totals` object.
+        # render_service._cart_summary_context is display/context-delivery only:
+        # it passes `totals` through verbatim and computes nothing.
+        goal_totals = {
+            "grand_total": 5000,
+            "free_shipping_threshold": 500000,
+            "free_shipping_by_threshold": False,
+            "free_shipping_by_coupon": False,
+            "free_shipping_goal_remaining": 300000,
+            "free_shipping_goal_progress_percent": 40,
+            "free_shipping_goal_applicable": True,
+        }
+        item = self._item_for("cart_summary", {"cart": "CART", "item_count": 2, "totals": goal_totals})
+        # Same dict object passed through, byte-for-byte — no recomputation.
+        self.assertEqual(item["context"]["totals"], goal_totals)
+        self.assertEqual(item["context"]["totals"]["free_shipping_goal_progress_percent"], 40)
+
+    def test_cart_summary_context_does_not_read_shopsettings_or_do_math(self):
+        # Guard the canonical-owner rule: the render context builder must not
+        # read ShopSettings or compute any goal value. Source-level assertion on
+        # the builder function so a future edit that adds threshold math here
+        # (instead of pricing.py) fails loudly.
+        import inspect
+        from apps.storefront_builder.services import render_service as rs
+        src = inspect.getsource(rs._cart_summary_context)
+        self.assertNotIn("ShopSettings", src)
+        self.assertNotIn("free_shipping_threshold", src)
+        self.assertNotIn("free_shipping_goal", src)
+
+
+class FreeShippingGoalTemplateTests(TestCase):
+    """P5-W1 — the cart_summary template renders the Goal from PRECOMPUTED
+    ``totals`` values only (display-only; no arithmetic). Covers the four UI
+    states and proves the coupon success never claims 'threshold reached'."""
+
+    def _render(self, totals):
+        from django.template.loader import render_to_string
+        return render_to_string(
+            "storefront_builder/sections/cart_summary.html",
+            {"cart": object(), "item_count": 1, "totals": totals},
+        )
+
+    def _base(self, **over):
+        t = {
+            "items_total": 100000, "product_discount": 0, "gift_wrap_total": 0,
+            "tax": 0, "grand_total": 100000,
+            "free_shipping_goal_applicable": True, "free_shipping_by_threshold": False,
+            "free_shipping_by_coupon": False, "free_shipping_goal_remaining": 400000,
+            "free_shipping_goal_progress_percent": 20,
+        }
+        t.update(over)
+        return t
+
+    def test_state_a_all_digital_hides_goal(self):
+        html = self._render(self._base(free_shipping_goal_applicable=False))
+        self.assertNotIn("fsg", html)
+        self.assertNotIn("تا ارسال رایگان", html)
+
+    def test_state_b_below_threshold_shows_remaining_and_bounded_bar(self):
+        html = self._render(self._base(free_shipping_goal_progress_percent=20))
+        self.assertIn("fsg--goal", html)
+        self.assertIn("تا ارسال رایگان", html)
+        self.assertIn("width:20%", html)
+
+    def test_state_c_threshold_reached_success(self):
+        html = self._render(self._base(
+            free_shipping_by_threshold=True, free_shipping_goal_remaining=0,
+            free_shipping_goal_progress_percent=100,
+        ))
+        self.assertIn("fsg--success", html)
+        self.assertIn("ارسال رایگان فعال شد", html)
+
+    def test_state_d_coupon_below_threshold_does_not_claim_threshold(self):
+        html = self._render(self._base(free_shipping_by_coupon=True, free_shipping_by_threshold=False))
+        self.assertIn("با کد تخفیف", html)
+        # Must NOT show the threshold-reached copy in the coupon state.
+        self.assertNotIn("width:", html)  # progress bar suppressed in success state
+
+    def test_template_does_no_arithmetic(self):
+        # The template must not compute remaining/progress; assert it references
+        # the precomputed keys and contains no subtraction/division tags.
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        tmpl = Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/templates/storefront_builder/sections/cart_summary.html",
+        ).read_text(encoding="utf-8")
+        self.assertIn("free_shipping_goal_progress_percent", tmpl)
+        self.assertIn("free_shipping_goal_remaining", tmpl)
+        # no {% widthratio %} / arithmetic filters computing the goal
+        self.assertNotIn("widthratio", tmpl)
+
 
 class BuildDefaultRenderItemsTests(TestCase):
     """Phase 5: Storeای که هرگز Storefront V2 منتشر نکرده باید هنوز هم
@@ -1692,3 +1798,108 @@ class BrandCarouselViewAllAnchorTests(TestCase):
         ctx = self._context(display_mode="grid", show_view_all=True, destination=self._SEARCH_DEST)
         html = self._html(ctx, display_mode="grid")
         self.assertIn(f'href="{reverse("catalog:product-list")}"', html)
+
+
+
+class SliderTransitionRenderTests(TestCase):
+    """Phase 5 Task 5 — STRANS: the slider ``transition`` reaches the render
+    context via the SAME slider_settings path as every other slider field, and
+    an existing section with no explicit transition renders as the historical
+    hard cut (default 'cut')."""
+
+    def setUp(self):
+        cache.clear()
+
+    def _items_for(self, draft, store, section_key):
+        items = build_render_items(draft, store)
+        return next(i for i in items if i["section"].section_key == section_key)
+
+    def test_transition_default_is_cut_when_unset(self):
+        store = _akhlaghi()
+        draft = svc.get_or_create_draft(store)
+        draft.sections.filter(section_key="hero_banner").delete()
+        StorefrontSection.objects.create(version=draft, section_key="hero_banner", order=900, settings={})
+        item = self._items_for(draft, store, "hero_banner")
+        self.assertEqual(item["context"]["slider_settings"]["transition"], "cut")
+
+    def test_explicit_transition_reaches_render_context(self):
+        store = _akhlaghi()
+        draft = svc.get_or_create_draft(store)
+        draft.sections.filter(section_key="hero_banner").delete()
+        StorefrontSection.objects.create(
+            version=draft, section_key="hero_banner", order=900,
+            settings={"transition": "fade"},
+        )
+        item = self._items_for(draft, store, "hero_banner")
+        self.assertEqual(item["context"]["slider_settings"]["transition"], "fade")
+
+    def test_image_slider_transition_reaches_the_same_runtime(self):
+        # STRANS remediation (CASE A): image_slider is NOT a dead control — it
+        # reuses the exact same slider runtime as hero_banner
+        # (``_image_slider_context`` delegates to ``_hero_banner_context``),
+        # so ``transition`` flows through ``slider_settings`` identically.
+        store = _akhlaghi()
+        draft = svc.get_or_create_draft(store)
+        draft.sections.filter(section_key="image_slider").delete()
+        StorefrontSection.objects.create(
+            version=draft, section_key="image_slider", order=901,
+            settings={"transition": "slide"},
+        )
+        item = self._items_for(draft, store, "image_slider")
+        self.assertEqual(item["context"]["slider_settings"]["transition"], "slide")
+
+    def test_image_slider_transition_default_is_cut_when_unset(self):
+        store = _akhlaghi()
+        draft = svc.get_or_create_draft(store)
+        draft.sections.filter(section_key="image_slider").delete()
+        StorefrontSection.objects.create(version=draft, section_key="image_slider", order=901, settings={})
+        item = self._items_for(draft, store, "image_slider")
+        self.assertEqual(item["context"]["slider_settings"]["transition"], "cut")
+
+
+
+class SliderTransitionRuntimeContractTests(TestCase):
+    """Phase 5 Task 5 (STRANS) — the hero slider runtime consumes the canonical
+    ``slider_settings.transition`` (no second slider / no animation library),
+    and the CSS provides a reduced-motion-safe preset. Source-contract style,
+    matching the repo's existing template/JS source assertions."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        cls.hero_tmpl = Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/templates/storefront_builder/partials/hero_slider_body.html",
+        ).read_text(encoding="utf-8")
+        cls.home_css = Path(
+            dj_settings.BASE_DIR, "apps/catalog/static/css/home.css",
+        ).read_text(encoding="utf-8")
+
+    def test_hero_template_wires_transition_from_slider_settings(self):
+        self.assertIn('data-hero-transition="{{ slider_settings.transition', self.hero_tmpl)
+        # cut keeps the historical x-show hard cut.
+        self.assertIn("transition === 'cut'", self.hero_tmpl)
+
+    def test_css_has_fade_slide_presets_and_reduced_motion(self):
+        self.assertIn('[data-hero-transition="fade"]', self.home_css)
+        self.assertIn('[data-hero-transition="slide"]', self.home_css)
+        self.assertIn("prefers-reduced-motion: reduce", self.home_css)
+
+    def test_no_second_slider_or_animation_library_introduced(self):
+        # No external animation library import sneaked into the hero template.
+        for banned in ("swiper", "slick", "gsap", "aos.js", "cdn"):
+            self.assertNotIn(banned, self.hero_tmpl.lower())
+
+    def test_hero_banner_and_image_slider_share_the_same_transition_aware_body(self):
+        # STRANS remediation (CASE A): image_slider's transition control is
+        # genuinely live because both section templates include the SAME
+        # transition-aware body partial — one runtime, no second slider.
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        base = Path(dj_settings.BASE_DIR, "apps/storefront_builder/templates/storefront_builder/sections")
+        hero = (base / "hero_banner.html").read_text(encoding="utf-8")
+        image_slider = (base / "image_slider.html").read_text(encoding="utf-8")
+        self.assertIn("storefront_builder/partials/hero_slider_body.html", hero)
+        self.assertIn("storefront_builder/partials/hero_slider_body.html", image_slider)

@@ -117,8 +117,26 @@ def _activate_or_renew(invoice, *, actor, now):
             subscription, period_start=period_start, period_end=period_end, actor=actor, idempotency_key=idem,
         )
     elif invoice.kind == SubscriptionInvoice.Kind.PLAN_CHANGE:
-        # ارتقا فقط پس از پرداختِ کاملِ فاکتورِ تغییرِ پلن اعمال می‌شود (ADR-80)
-        # — نسخه‌ی پلن حالا به نسخه‌ی هدفِ فاکتور سوییچ می‌شود.
+        # SUB-001 Repair 4 (همگراییِ دفاعی، تصمیمِ معمار): در عملیاتِ
+        # کانونیکِ فعلی، ``ScheduledPlanChange`` و یک فاکتورِ قابلِ‌پرداختِ
+        # ``PLAN_CHANGE`` دیگر هرگز هم‌زمان برایِ یک اشتراک زنده نمی‌مانند
+        # (``start_plan_change``/``execute_platform_admin_plan_override``
+        # هر دو پیش از ساختن/اجرا آن را جانشین می‌کنند). اما داده‌یِ
+        # تاریخی/پیش از این ترمیم یا هر ناهماهنگیِ دیگر ممکن است هنوز هر دو
+        # را هم‌زمان داشته باشد. اکنون پول واقعاً جابه‌جا شده — تأییدِ
+        # Providerی که همین بالا اعمال شد رخداده و برنمی‌گردد (هیچ بازپرداختِ
+        # جعلی‌ای اینجا ساخته نمی‌شود) — پس تصمیمِ *پرداخت‌شده* باید پیروز
+        # شود: هر ``ScheduledPlanChange``یِ باقی‌مانده همینجا، زیرِ همینِ
+        # قفلِ اشتراک، از طریقِ همان کمکِ کانونیکِ
+        # ``plan_change_billing_service.supersede_scheduled_plan_change``
+        # (با ثبتِ حسابرسی) پاک می‌شود، سپس هدفِ پرداخت‌شده اعمال می‌شود.
+        from apps.billing.services import plan_change_billing_service as pcb
+
+        pcb.supersede_scheduled_plan_change(
+            subscription, actor=actor,
+            reason="ارتقایِ تأییدشده‌یِ پرداخت جایِ تنزلِ زمان‌بندی‌شده‌یِ باقی‌مانده را گرفت",
+            replacement_intent=f"paid_plan_change_invoice:{invoice.pk}",
+        )
         sub_svc.change_plan_version(
             subscription, invoice.plan_version, actor=actor, reason="ارتقا پس از پرداخت",
             idempotency_key=idem,

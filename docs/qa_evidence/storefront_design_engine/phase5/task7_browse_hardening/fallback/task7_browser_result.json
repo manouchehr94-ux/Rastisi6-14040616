@@ -1,0 +1,262 @@
+{
+  "host": "t7fallback.rastisi.localhost",
+  "base": "http://t7fallback.rastisi.localhost:8817",
+  "query": "تیشرت",
+  "started_at": "2026-09-14T16:39:18.950Z",
+  "checks": [
+    {
+      "name": "pag:status:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "pag:no-overflow:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl",
+        "scrollWidth": 1440,
+        "clientWidth": 1440
+      }
+    },
+    {
+      "name": "pag:labelled-nav:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "label": true
+      }
+    },
+    {
+      "name": "pag:bounded-controls:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "numericLinks": 1,
+        "ellipsis": 0,
+        "rows": 1
+      }
+    },
+    {
+      "name": "pag:has-prev-next:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "hasPrev": true,
+        "hasNext": true
+      }
+    },
+    {
+      "name": "pag:ellipsis-not-link:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "ellipsisAsLink": false
+      }
+    },
+    {
+      "name": "pag:current-page:desktop-1440",
+      "status": "INFO",
+      "detail": {
+        "current": "۲",
+        "numPagesSeenOnP1": 1
+      }
+    },
+    {
+      "name": "search:desktop-header-search-unchanged:desktop-1440",
+      "status": "PASS",
+      "detail": {
+        "headerSearch": true
+      }
+    },
+    {
+      "name": "pag:status:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "pag:no-overflow:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl",
+        "scrollWidth": 768,
+        "clientWidth": 768
+      }
+    },
+    {
+      "name": "pag:labelled-nav:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "label": true
+      }
+    },
+    {
+      "name": "pag:bounded-controls:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "numericLinks": 1,
+        "ellipsis": 0,
+        "rows": 1
+      }
+    },
+    {
+      "name": "pag:has-prev-next:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "hasPrev": true,
+        "hasNext": true
+      }
+    },
+    {
+      "name": "pag:ellipsis-not-link:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "ellipsisAsLink": false
+      }
+    },
+    {
+      "name": "pag:current-page:tablet-768",
+      "status": "INFO",
+      "detail": {
+        "current": "۲",
+        "numPagesSeenOnP1": 1
+      }
+    },
+    {
+      "name": "search:desktop-header-search-unchanged:tablet-768",
+      "status": "PASS",
+      "detail": {
+        "headerSearch": true
+      }
+    },
+    {
+      "name": "pag:status:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "pag:no-overflow:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "dir": "rtl",
+        "scrollWidth": 390,
+        "clientWidth": 390
+      }
+    },
+    {
+      "name": "pag:labelled-nav:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "label": true
+      }
+    },
+    {
+      "name": "pag:bounded-controls:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "numericLinks": 1,
+        "ellipsis": 0,
+        "rows": 1
+      }
+    },
+    {
+      "name": "pag:has-prev-next:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "hasPrev": true,
+        "hasNext": true
+      }
+    },
+    {
+      "name": "pag:ellipsis-not-link:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "ellipsisAsLink": false
+      }
+    },
+    {
+      "name": "pag:current-page:mobile-390",
+      "status": "INFO",
+      "detail": {
+        "current": "۲",
+        "numPagesSeenOnP1": 1
+      }
+    },
+    {
+      "name": "search:header-not-mobile-entry:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "headerSearchVisible": false
+      }
+    },
+    {
+      "name": "search:drawer-opens:mobile-390",
+      "status": "PASS",
+      "detail": {}
+    },
+    {
+      "name": "search:one-drawer-form:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "forms": 1,
+        "hasInput": true,
+        "inputName": "q",
+        "hasName": true
+      }
+    },
+    {
+      "name": "search:input-name-q:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "name": "q"
+      }
+    },
+    {
+      "name": "search:input-accessible-name:mobile-390",
+      "status": "PASS",
+      "detail": {}
+    },
+    {
+      "name": "search:url-has-q:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "url": "http://t7fallback.rastisi.localhost:8817/products/?q=%D8%AA%DB%8C%D8%B4%D8%B1%D8%AA"
+      }
+    },
+    {
+      "name": "search:results-rendered:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "resultCards": 12
+      }
+    },
+    {
+      "name": "search:task5-escape-still-works:mobile-390",
+      "status": "PASS",
+      "detail": {
+        "stillOpen": false
+      }
+    },
+    {
+      "name": "nojs:pagination-href",
+      "status": "PASS",
+      "detail": {}
+    },
+    {
+      "name": "nojs:drawer-search-get-form",
+      "status": "PASS",
+      "detail": {}
+    }
+  ],
+  "console_errors": [],
+  "console_error_count": 0,
+  "finished_at": "2026-09-14T16:39:28.292Z",
+  "summary": {
+    "total": 33,
+    "pass": 30,
+    "fail": 0,
+    "warn": 0,
+    "info": 3
+  }
+}

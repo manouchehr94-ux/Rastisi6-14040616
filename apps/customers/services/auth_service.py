@@ -123,6 +123,20 @@ def merge_guest_cart(request, customer: Customer) -> None:
         return
 
     user_cart, _ = Cart.objects.get_or_create(customer=customer)
+
+    # CAT-002 حصارِ عضویت (membership fence) — این مسیر عضویتِ ``user_cart``
+    # را عوض می‌کند (انتقالِ یک CartItem با ``item.cart = user_cart`` یا
+    # افزایشِ تعدادِ یک قلمِ موجود). پیش از هر تغییرِ عضویت، خودِ ردیفِ
+    # ``user_cart`` را قفل کن تا اگر تسویه‌حسابی روی همین Cart در جریان
+    # باشد، این ادغام تا آزادشدنِ آن فنس مسدود بماند (و برعکس) — پس هیچ‌گاه
+    # یک قلمِ منتقل‌شده بینِ اسنپ‌شاتِ نهاییِ تسویه‌حساب و commit سر نمی‌خورد.
+    # این مسیر Product/Variant را قفل نمی‌کند، پس ترتیبِ قفلِ آن صرفاً
+    # Cart → CartItem است و با ترتیبِ کلیِ Product/Variant → Cart → CartItem
+    # سازگار می‌ماند (بدونِ وارونگیِ بن‌بست). فقط ``user_cart`` (هدفِ
+    # عضویت) قفل می‌شود؛ ``guest_cart`` در پایان حذف می‌شود و هدفِ هیچ
+    # تسویه‌حسابِ هم‌زمانی نیست.
+    user_cart = Cart.objects.select_for_update().get(pk=user_cart.pk)
+
     for item in guest_cart.items.select_related("product", "variant"):
         existing = user_cart.items.filter(product=item.product, variant=item.variant).first()
         if existing:
