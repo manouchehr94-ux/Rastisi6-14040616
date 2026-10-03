@@ -4,7 +4,7 @@ from apps.storefront_builder import media_views as storefront_builder_media_view
 from apps.storefront_builder import r4_views as storefront_builder_r4_views
 from apps.storefront_builder import views as storefront_builder_views
 
-from . import engagement_views, payment_reconciliation_views, views
+from . import cod_views, engagement_views, payment_reconciliation_views, views
 
 app_name = "dashboard"
 
@@ -404,6 +404,7 @@ urlpatterns = [
 
     # --- استرداد (Refunds) ---
     path("orders/<str:code>/refund/", views.order_refund_form, name="order-refund"),
+    path("orders/<str:code>/cod-payment/", cod_views.order_confirm_cod_payment, name="order-cod-payment"),
 
     # --- مرجوعی‌ها (Returns) ---
     path("returns/", views.return_list, name="return-list"),

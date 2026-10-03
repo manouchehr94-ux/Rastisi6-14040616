@@ -108,6 +108,25 @@
   </div>
 </div>
 
+{% if can_confirm_cod %}
+<div class="card" style="margin-bottom:16px">
+  <div class="card-head"><h3>💵 تأیید دریافتِ وجه (پرداخت در محل)</h3></div>
+  <div class="card-body">
+    <p style="font-size:12.5px;color:var(--muted)">فقط پس از دریافتِ واقعیِ وجه تأیید کنید. مبلغ باید دقیقاً برابرِ مبلغِ کلِ سفارش باشد. تأیید قابلِ بازگشت نیست؛ اصلاح فقط با «ثبت استرداد» انجام می‌شود. وضعیتِ سفارش تغییر نمی‌کند و پیامکی ارسال نمی‌شود (رسیدِ پرداخت به ایمیلِ مشتری می‌رود).</p>
+    <form method="post" action="{% url 'dashboard:order-cod-payment' order.code %}" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      {% csrf_token %}<input type="hidden" name="token" value="{{ cod_token }}">
+      <label>مبلغِ دریافتی (تومان)<br><input class="inp" name="amount" value="{{ order.grand_total|floatformat:0 }}" dir="ltr" required style="width:150px"></label>
+      <label>روشِ دریافت<br><select class="inp" name="method">{% for value, label in cod_methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+      <label>شماره‌ی رسید (اختیاری)<br><input class="inp" name="reference" maxlength="60" dir="ltr" style="width:180px"></label>
+      <button class="btn btn-primary" onclick="return confirm('دریافتِ کاملِ وجه را تأیید می‌کنید؟ این کار قابلِ بازگشت نیست.')">تأییدِ دریافت</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% for tx in payment_transactions %}{% if tx.method != 'gateway' %}
+<p style="font-size:12.5px;margin-bottom:12px">✅ {{ tx.get_method_display }} — تأییدشده توسط {{ tx.confirmed_by|default:"—" }}{% if tx.confirmed_at %} در {{ tx.confirmed_at|date:"Y-m-d H:i" }}{% endif %}{% if tx.ref_id %} — رسید: <span dir="ltr">{{ tx.ref_id }}</span>{% endif %} ({{ tx.code }})</p>
+{% endif %}{% endfor %}
+
 <div class="card" style="margin-bottom:16px">
   <div class="card-head">
     <h3>استرداد و مرجوعی</h3>

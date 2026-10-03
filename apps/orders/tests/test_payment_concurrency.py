@@ -222,3 +222,55 @@ class PaymentRaceTests(TransactionTestCase):
         self.assertEqual(Coupon.objects.get(pk=self.coupon.pk).used_count, used_after_order - 1)
         self.assertEqual(order.status_history.filter(to_status="canceled").count(), 1)
         self.assertEqual(NotificationOutbox.objects.filter(order=order, event_key="order.canceled").count(), 1)
+
+    # ---- تأییدِ دریافتِ COD (M3) ----
+    def test_parallel_cod_confirmations_apply_exactly_once(self):
+        from apps.notifications.models import NotificationOutbox
+        from apps.orders.services import cod_payment_service as cod
+
+        user = User.objects.create_user(username="cod-mgr", password="x12345678")
+        self.customer.email = "cod@example.com"
+        self.customer.save(update_fields=["email"])
+        cod_gw = PaymentGateway.objects.create(store=self.store, name="در محل", slug="cod")
+        order = self.order()
+        Order.objects.filter(pk=order.pk).update(payment_gateway=cod_gw)
+        results, lock = [], threading.Lock()
+
+        def job():
+            try:
+                cod.confirm_collection(order.pk, store=self.store, actor=user, amount=order.grand_total, method="cod_cash", reference="R")
+                outcome = "ok"
+            except cod.AlreadyConfirmed:
+                outcome = "already"
+            with lock:
+                results.append(outcome)
+
+        errors = self.race([job for _ in range(5)])
+        self.assertEqual(errors, [])
+        self.assertEqual(sorted(results), ["already"] * 4 + ["ok"])
+        order.refresh_from_db()
+        self.assertEqual(order.payment_status, Order.PaymentStatus.PAID)
+        self.assertEqual(Transaction.objects.filter(order=order, status="ok").count(), 1)
+        self.assertEqual(CouponRedemption.objects.get(order=order).status, CouponRedemption.Status.REDEEMED)
+        self.assertEqual(Coupon.objects.get(pk=self.coupon.pk).used_count, 1)
+        self.assertEqual(NotificationOutbox.objects.filter(order=order, event_key="payment.succeeded").count(), 1)
+
+    def test_cod_confirmation_vs_cancellation_is_serialised(self):
+        from apps.orders.services import cod_payment_service as cod
+
+        user = User.objects.create_user(username="cod-mgr2", password="x12345678")
+        cod_gw = PaymentGateway.objects.create(store=self.store, name="در محل", slug="cod")
+        for _ in range(6):
+            order = self.order()
+            Order.objects.filter(pk=order.pk).update(payment_gateway=cod_gw)
+            errors = self.race([
+                lambda: cod.confirm_collection(order.pk, store=self.store, actor=user, amount=order.grand_total, method="cod_pos"),
+                lambda: change_order_status(Order.objects.get(pk=order.pk), Order.Status.CANCELED, store=self.store),
+            ])
+            # یکی برنده است؛ دیگری فقط با خطای کنترل‌شده‌ی دامنه رد می‌شود (لغو یا «لغوشده»)، هرگز حالتِ نیمه‌کاره
+            self.assertTrue(all(isinstance(e, (cod.CodConfirmationError, ValueError)) for e in errors), errors)
+            order.refresh_from_db()
+            ok_tx = Transaction.objects.filter(order=order, status="ok").count()
+            self.assertEqual(ok_tx, 1 if order.payment_status == Order.PaymentStatus.PAID else 0)
+            self.assertEqual(order.status, Order.Status.CANCELED)
+            self.assertEqual(CouponRedemption.objects.get(order=order).status, CouponRedemption.Status.RELEASED)

@@ -21,9 +21,16 @@ from apps.orders.models import Order, Transaction
 from apps.orders.services.coupon_redemption_service import mark_redeemed
 
 
-def apply_payment_success(order: Order, *, store, ref_id: str, note: str, from_statuses=None, gateway=None) -> Transaction | None:
+def apply_payment_success(
+    order: Order, *, store, ref_id: str, note: str, from_statuses=None, gateway=None,
+    advance_to_processing: bool = True, send_sms: bool = True, method: str = Transaction.Method.GATEWAY,
+    confirmed_by=None,
+) -> Transaction | None:
     """سفارش را «پرداخت‌شده» می‌کند و همه‌ی اثرهای جانبیِ این گذار را دقیقاً یک‌بار اجرا می‌کند.
 
+    ``advance_to_processing=False``: وضعیتِ سفارش دست‌نخورده می‌ماند (تأییدِ دریافتِ COD — سفارش ممکن است
+    ارسال‌شده/تحویل‌شده باشد). ``send_sms=False``: پیامکِ «پرداخت موفق» ارسال نمی‌شود (ایمیلِ رخداد همچنان).
+    ``method``/``confirmed_by``: برایِ تأییدِ دستی روی تراکنش ثبت می‌شود.
     ``gateway``: درگاهِ ثبت‌شده در تراکنشِ سازگاری (پیش‌فرض: درگاهِ سفارش).
     ``from_statuses``: وضعیت‌هایِ پرداختی که این گذار از آن‌ها مجاز است؛ ``None`` یعنی هر وضعیتِ
     غیر از ``paid``. گذار با یک UPDATE شرطی انجام می‌شود (رقابتِ دو درخواستِ همزمان: فقط یکی
@@ -48,10 +55,13 @@ def apply_payment_success(order: Order, *, store, ref_id: str, note: str, from_s
 
     tx = Transaction.objects.create(
         code=_generate_transaction_code(), order=order, gateway=gateway or order.payment_gateway,
-        amount=order.grand_total, status=Transaction.Status.OK, ref_id=ref_id,
+        amount=order.grand_total, status=Transaction.Status.OK, ref_id=ref_id, method=method,
+        confirmed_by=confirmed_by, confirmed_at=timezone.now() if confirmed_by is not None else None,
     )
-    change_order_status(order, Order.Status.PROCESSING, note=note, store=store)
-    transaction.on_commit(
-        lambda: send_event_sms(SmsEvent.PAYMENT_SUCCESS, order.customer.phone, _order_sms_context(order), store=store)
-    )
+    if advance_to_processing:
+        change_order_status(order, Order.Status.PROCESSING, note=note, store=store)
+    if send_sms:
+        transaction.on_commit(
+            lambda: send_event_sms(SmsEvent.PAYMENT_SUCCESS, order.customer.phone, _order_sms_context(order), store=store)
+        )
     return tx

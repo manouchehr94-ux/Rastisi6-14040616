@@ -3576,6 +3576,19 @@ def order_detail(request, code):
     context["active_page"] = "orders"
     context["can_manage_refunds"] = membership_has_permission(request.store_membership, REFUND_MANAGE)
     context["can_manage_returns"] = membership_has_permission(request.store_membership, RETURN_MANAGE)
+    from apps.orders.services import cod_payment_service
+    from apps.stores.authorization import ORDER_CONFIRM_COD_PAYMENT
+    import secrets as _secrets
+
+    context["can_confirm_cod"] = (
+        membership_has_permission(request.store_membership, ORDER_CONFIRM_COD_PAYMENT)
+        and cod_payment_service.can_confirm(order)
+    )
+    context["cod_token"] = _secrets.token_hex(16)
+    context["cod_methods"] = cod_payment_service.METHODS and [
+        (m, dict(order.transactions.model.Method.choices)[m]) for m in cod_payment_service.METHODS
+    ]
+    context["payment_transactions"] = order.transactions.filter(status="ok").select_related("confirmed_by")
     return render(request, "dashboard/order_detail.html", context)
 
 

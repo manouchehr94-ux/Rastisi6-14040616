@@ -574,6 +574,18 @@ class Transaction(TimeStampedModel):
     amount = models.DecimalField("مبلغ", max_digits=14, decimal_places=0)
     status = models.CharField("وضعیت", max_length=10, choices=Status.choices, default=Status.PENDING)
     ref_id = models.CharField("شماره ارجاع بانکی", max_length=60, blank=True)
+    # --- تأییدِ دستیِ دریافتِ وجهِ پرداخت در محل (افزودنیِ سازگارِ عقب‌رو؛ ردیف‌هایِ قدیمی: gateway/بدونِ تأییدکننده) ---
+    class Method(models.TextChoices):
+        GATEWAY = "gateway", "درگاه پرداخت"
+        COD_CASH = "cod_cash", "نقدیِ پرداخت در محل"
+        COD_POS = "cod_pos", "کارتخوانِ پرداخت در محل"
+
+    method = models.CharField("روش دریافت", max_length=10, choices=Method.choices, default=Method.GATEWAY)
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="تأییدکننده", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="confirmed_transactions",
+    )
+    confirmed_at = models.DateTimeField("زمانِ تأیید", null=True, blank=True)
 
     class Meta:
         verbose_name = "تراکنش"
