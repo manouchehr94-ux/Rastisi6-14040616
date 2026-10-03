@@ -222,7 +222,7 @@ def _check_store_ids(store, model, ids, label, *, store_field="store"):
 
 def _all_lines(ctx):
     for order in ctx.orders:
-        yield from order.lines
+        yield from order.get_lines()
 
 
 # ---- برگِ ردیفِ کالا ---------------------------------------------------------

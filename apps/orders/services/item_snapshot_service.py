@@ -46,6 +46,14 @@ def _category_info(category) -> dict | None:
     return {"id": category.pk, "name": category.name, "ancestor_ids": ancestors}
 
 
+def _related(instance, name: str, *select_related):
+    """Rows of a reverse relation: the prefetched cache when the caller prefetched it (bulk evaluation —
+    one query per chunk, see ``rule_data``), else the original joined query (single order at checkout)."""
+    if name in getattr(instance, "_prefetched_objects_cache", {}):
+        return getattr(instance, name).all()
+    return getattr(instance, name).select_related(*select_related)
+
+
 def build_item_snapshot(product, variant=None, *, source: str = "snapshot") -> dict:
     colors: list[dict] = []
     sizes: list[str] = []
@@ -76,7 +84,7 @@ def build_item_snapshot(product, variant=None, *, source: str = "snapshot") -> d
             add_size(variant.value)
         else:
             add_attr(normalize_text(variant.attribute), variant.value)
-        for link in variant.option_values.select_related("option", "option_value"):
+        for link in _related(variant, "option_values", "option", "option_value"):
             option, value = link.option, link.option_value
             if option.input_type == "color" or _is_color_name(option.label):
                 add_color(value.label, value.color_hex)
@@ -85,7 +93,7 @@ def build_item_snapshot(product, variant=None, *, source: str = "snapshot") -> d
             else:
                 add_attr(option.attribute.code if option.attribute_id else normalize_text(option.label), value.label)
 
-    for pav in product.attribute_values.select_related("attribute", "value"):
+    for pav in _related(product, "attribute_values", "attribute", "value"):
         attribute = pav.attribute
         if pav.value_id:
             label, hex_code = pav.value.label, pav.value.color_hex

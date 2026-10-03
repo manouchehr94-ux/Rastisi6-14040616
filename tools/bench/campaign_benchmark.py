@@ -120,7 +120,7 @@ def make_campaign(store, name, tree):
     return c
 
 
-def one(scenario: str, mode: str, issue_sample: int):
+def one(scenario: str, mode: str, issue_sample: int, sample: int = 0):
     from apps.catalog.models import Product
     from apps.engagement.services import campaign_service as cs
     from apps.stores.models import Store
@@ -133,7 +133,11 @@ def one(scenario: str, mode: str, issue_sample: int):
     started = time.perf_counter()
     with connection.execute_wrapper(counter):
         if mode == "eligible":
-            n = sum(1 for _ in cs.compute_eligible(campaign))
+            cand = None
+            if sample:  # bounded candidate subset (used for baselines of very slow code paths)
+                from apps.customers.models import Customer
+                cand = list(Customer.objects.filter(phone__startswith="0913").order_by("pk").values_list("pk", flat=True)[:sample])
+            n = sum(1 for _ in cs.compute_eligible(campaign, candidate_ids=cand))
         elif mode == "preview":
             n = cs.preview(campaign)["count"]
         else:  # issue a bounded sample through the real execute path
@@ -146,23 +150,25 @@ def one(scenario: str, mode: str, issue_sample: int):
             n = run.issued + run.skipped_existing
     wall = time.perf_counter() - started
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    print(json.dumps({"scenario": scenario, "mode": mode, "count": n, "wall_s": round(wall, 2), "queries": counter.n,
+    print(json.dumps({"scenario": scenario, "mode": mode, "sample": sample, "count": n, "wall_s": round(wall, 2), "queries": counter.n,
                       "sql_s": round(counter.seconds, 2), "peak_rss_mb": round(peak / 1024, 1),
                       "rss_growth_mb": round((peak - base_rss) / 1024, 1)}))
 
 
-def run_all(issue_sample: int):
+def run_all(issue_sample: int, sample: int = 0):
     print(f"{'scenario':24} {'mode':9} {'count':>8} {'wall_s':>8} {'queries':>8} {'sql_s':>7} {'peakMB':>8} {'growthMB':>9}")
     for scenario in trees([1]).keys():
-        for mode in ("eligible", "preview"):
-            out = subprocess.run([sys.executable, __file__, "one", scenario, mode, str(issue_sample)],
+        for mode in (("eligible",) if sample else ("eligible", "preview")):
+            out = subprocess.run([sys.executable, __file__, "one", scenario, mode, str(issue_sample), str(sample)],
                                  capture_output=True, text=True, env=os.environ)
             if out.returncode:
                 print(scenario, mode, "FAILED", out.stderr[-300:])
                 continue
             r = json.loads(out.stdout.strip().splitlines()[-1])
             print(f"{r['scenario']:24} {r['mode']:9} {r['count']:>8} {r['wall_s']:>8} {r['queries']:>8} {r['sql_s']:>7} {r['peak_rss_mb']:>8} {r['rss_growth_mb']:>9}")
-    r = subprocess.run([sys.executable, __file__, "one", "aggregate_order_count", "issue", str(issue_sample)],
+    if sample:
+        return
+    r = subprocess.run([sys.executable, __file__, "one", "aggregate_order_count", "issue", str(issue_sample), "0"],
                        capture_output=True, text=True, env=os.environ)
     print("issuance:", r.stdout.strip().splitlines()[-1] if r.returncode == 0 else r.stderr[-300:])
 
@@ -174,14 +180,16 @@ if __name__ == "__main__":
     s.add_argument("--customers", type=int, default=100000)
     r = sub.add_parser("run")
     r.add_argument("--issue-sample", type=int, default=5000)
+    r.add_argument("--sample", type=int, default=0, help="restrict candidates to the first N customers (baselines only)")
     o = sub.add_parser("one")
     o.add_argument("scenario")
     o.add_argument("mode")
     o.add_argument("issue_sample", type=int, nargs="?", default=5000)
+    o.add_argument("sample", type=int, nargs="?", default=0)
     a = ap.parse_args()
     if a.cmd == "seed":
         seed(a.customers)
     elif a.cmd == "run":
-        run_all(a.issue_sample)
+        run_all(a.issue_sample, a.sample)
     else:
-        one(a.scenario, a.mode, a.issue_sample)
+        one(a.scenario, a.mode, a.issue_sample, a.sample)

@@ -381,6 +381,130 @@ All of the above should be clean (no drift, no unexpected `check --deploy`
 warnings left unexplained, full test suite green) before pointing a real
 domain at the deployment.
 
+## 12. Commerce & engagement operations (hardening phase)
+
+Everything here extends the existing cron-based architecture (ADR-49): **no Celery, no queue, no scheduler framework.**
+Status labels used below: *verified locally* (automated tests / staging PostgreSQL), *external verification pending*
+(needs access this environment does not have). Nothing in this section has been deployed or run in production.
+
+### 12.1 Background jobs — schedule, dependencies, safety
+
+| Job (management command) | Frequency | Depends on | Idempotency / concurrency | Exit status |
+|---|---|---|---|---|
+| `process_notification_outbox --limit 200` | every 5 min | email backend / SMS provider configured | rows are claimed atomically (`SELECT … FOR UPDATE SKIP LOCKED`), stale `SENDING` claims are re-taken after 10 min, `dedupe_key` per message, backoff 1/5/30/120/360 min then `dead`; consent re-checked at send time | non-zero only if the *whole* batch failed (provider down) |
+| `run_engagement_jobs --no-deliver` | hourly (or daily 08:15) | outbox job above | unique `CampaignIssuance(campaign, customer, cycle_key)`; per-customer errors isolated; a failing campaign does not stop delivery | non-zero if any campaign/issuance error occurred (after all work finished) |
+| `expire_unpaid_orders` | every 10 min | per-store `unpaid_online_order_ttl_minutes` (**default 0 = no-op**) | order row lock → re-check → cancel through the lifecycle; one failing order does not stop the batch | non-zero if any order failed |
+| `expire_inventory_reservations` | every 10 min | — | batch-safe conditional updates | 0 |
+| `refresh_customer_segments` | daily 03:30 | — | per-segment errors isolated | non-zero if any segment failed |
+| `cleanup_expired_exports` | daily 03:00 | — | — | 0 |
+| `check_background_jobs` | every 15 min (monitoring) | — | read-only | 0 OK / 1 WARNING / 2 CRITICAL |
+
+All commands that can overlap use a PostgreSQL advisory lock (`apps/core/job_lock.py`); a second concurrent run prints
+`skipped: another … is still running` and exits 0. On SQLite (dev/tests) the lock is a no-op.
+
+Example crontab (deployment-specific paths/users must be adapted; **not installed by this repository**):
+```
+CRON_TZ=Asia/Tehran
+*/5  * * * * cd /srv/rastisi && python manage.py process_notification_outbox --limit 200 >> /var/log/rastisi/outbox.log 2>&1
+15   * * * * cd /srv/rastisi && python manage.py run_engagement_jobs --no-deliver     >> /var/log/rastisi/engagement.log 2>&1
+*/10 * * * * cd /srv/rastisi && python manage.py expire_inventory_reservations        >> /var/log/rastisi/reservations.log 2>&1
+*/10 * * * * cd /srv/rastisi && python manage.py expire_unpaid_orders                 >> /var/log/rastisi/expiry.log 2>&1
+30   3 * * * cd /srv/rastisi && python manage.py refresh_customer_segments            >> /var/log/rastisi/segments.log 2>&1
+*/15 * * * * cd /srv/rastisi && python manage.py check_background_jobs                >> /var/log/rastisi/health.log 2>&1
+```
+Time zone: the application uses `TIME_ZONE = "Asia/Tehran"` for Jalali periods/occasions and birthday cycles; the jobs themselves
+are time-zone independent (they compare UTC timestamps). Set `CRON_TZ` (or the server TZ) consistently so "hourly/daily" means what
+the owner expects. Missing configuration is never destructive: with every TTL at 0 the expiry job does nothing, and a store with
+no SMS/e-mail configuration produces `failed`/`skipped` rows, not lost data.
+
+`check_background_jobs` reports (from the data the jobs maintain): notification backlog age (WARNING > 30 min, CRITICAL > 2 h), claims stuck
+in `SENDING`, `dead` deliveries in 24 h, campaign runs with errors in 24 h, overdue inventory reservations, unpaid orders past
+TTL + grace (only for stores with expiry enabled), and open payment reconciliations (WARNING; CRITICAL if older than 24 h).
+*Verified locally by tests; not verified on a real scheduler — see §12.7.*
+
+### 12.2 Payment gateway (Zibal): what is and is not verified
+
+Implemented and tested against the documented response contract with mocked HTTP (`apps/orders/tests/test_payment_discrepancy.py`):
+verify result `100` (fresh) and `201` (already verified) are both treated as gateway-confirmed; amounts are exchanged in **Rial** (store
+amounts are Toman × 10); a confirmed payment whose amount differs, or whose amount is missing/unreadable, is **never** applied as a
+normal paid order — it becomes a `PaymentReconciliation` (confirmed mismatch, or *suspected* when the gateway result is ambiguous and
+the customer returned claiming success), with staff e-mail and a Finance → تطبیق پرداخت‌ها entry.
+
+**Not verified (official Zibal documentation and sandbox were unreachable from the build environment).** An operator with Zibal
+account access must confirm before any order-expiry TTL is enabled:
+
+1. How long a `trackId`/payment session stays payable (and whether the payment page link expires).
+2. Whether Zibal retries the callback, and how many times / for how long.
+3. What `verify` returns after the session expired (result code, `amount`, `status`) and for a payment completed after expiry.
+4. Exact meaning of `result 201` and of callback `status`/`success` values in production vs. sandbox (`merchant=zibal`).
+5. Whether production `verify` always returns `amount` (the adapter now treats a missing amount as ambiguous, not as success).
+6. Whether partially paid/overpaid amounts are possible.
+
+Until those answers are documented **keep `unpaid_online_order_ttl_minutes = 0`** for every store. The safe lower bound for a TTL
+is *longer than the confirmed session lifetime + the grace period*; do not enable a speculative 60 minutes.
+
+### 12.3 SMS / e-mail delivery verification
+
+`python manage.py verify_delivery_channels` (read-only) audits: e-mail backend is real (console/locmem/dummy are reported **NOT REAL**), SMTP
+settings present, sender domain (SPF/DKIM/DMARC must be checked at the DNS provider), per-store SMS backend + credentials present
+(secrets never printed), sender number, credit balance, platform OTP backend. Exit code 1 if anything is not production-ready.
+
+Real-provider test (operator, with a **dedicated test recipient you control**):
+```
+python manage.py verify_delivery_channels --send-test-email qa@your-domain --confirm-test-recipient
+python manage.py verify_delivery_channels --send-test-sms 09XXXXXXXXX --store <slug> --confirm-test-recipient
+```
+"Accepted by provider" (what the system records as `SENT`) is **not** "delivered": no delivery receipts are consumed. Confirm on the handset/inbox.
+Note the SMS `console` backend and Django's console e-mail backend mark messages as sent without delivering anything — never run
+production on them. Legacy transactional SMS remains synchronous by design (S3 not implemented). *Real-provider delivery: not verified here.*
+
+### 12.4 Promotional consent
+
+Policy (single implementation: `apps/customers/services/consent_service.py`): unknown consent is **not granted**; SMS and e-mail are
+independent; every change records source + time (+ audit event when a store context exists); consent is re-checked at queue time and
+again at send time; transactional/security messages never depend on it. New customers default to no consent; signup/checkout checkboxes
+are never pre-ticked; checkout can only *grant*, withdrawal is in account settings.
+
+Migration `customers.0006` adds fields/defaults, `0007` backfills: every pre-existing `True` (which was the unverifiable column default)
+becomes `False/legacy_unverified`; every `False` becomes `legacy_opt_out`. **Bulk promotional sends to existing customers therefore stop
+until consent is recorded again.** Audit: `python manage.py promotional_consent report`. Where a store holds documented external evidence of
+opt-in, import it: `promotional_consent import --file consent.csv --channel sms --evidence "<ref>" --store <slug> [--apply]` (dry-run by default).
+Product/legal decisions needing external confirmation (not decided by tests): lawful basis and consent wording for Iran, whether consent is
+per-store or per-account (currently per customer account across stores), retention of the consent evidence, and whether a one-click
+unsubscribe link/short code is required in each promotional message.
+
+### 12.5 Pricing and checkout confirmation
+
+`pricing.sync_cart_prices` is the single re-pricing step: the checkout summary always shows current authoritative prices and posts the
+displayed grand total; `create_order_from_cart` re-prices under product/variant row locks and refuses (nothing created) when the total differs from
+what the customer saw, so the customer must re-confirm the new amount. The persisted order total is what the payment attempt and the gateway
+receive (Toman → Rial in the adapter). Client-supplied totals are comparison-only.
+
+### 12.6 Migrations — production-like verification, ordering, rollback
+
+Branch migrations (apply in dependency order; Django resolves it): `customers.0004–0007`, `cart.0008–0009`, `catalog.0039`, `core.0017–0018`,
+`engagement.0001–0002`, `orders.0011–0019`, `notifications.0002–0003`.
+
+Verified on a **synthetic populated PostgreSQL 16 database built at the base commit schema** (100,000 customers, 150,000 orders, 300,000 items,
+89,736 transactions, 200,000 SMS logs; *not* a copy of production — none was available): forward migration of the whole sequence took ≈16 s total
+(largest steps: `customers.0007` backfill 4.4 s, `orders.0016` coupon-redemption backfill 3.0 s, `notifications.0002` 2.1 s); order/transaction/SMS counts and
+monetary sums identical before/after; no orphaned rows; every one of 29,970 coupon orders received a ledger row; backfills re-run idempotently;
+`makemigrations --check` clean; `check` clean.
+Locking risk: `customers.0006/0007` and `orders.0016` rewrite/update whole tables (row locks for seconds at this scale; run in a maintenance window or
+low traffic); the other steps are additive (`ADD COLUMN` with constant default, new tables, indexes — `orders.0015` creates indexes without `CONCURRENTLY`).
+Schema vs. data reversibility: reverse migrations exist and ran on the populated copy, **but** `customers.0005` cannot be reversed once an operator longer than 20
+characters (e.g. `greater_than_or_equal`) is stored (`value too long for type character varying(20)`), and reversing `customers.0007` restores the old unverifiable
+`True` consent. Treat the deploy as **roll-forward**: take a backup first, and recover by restoring the backup (or fixing forward), not by reversing.
+
+Procedure (operator, **do not run against production without explicit authorization**): `pg_dump -Fc` backup → restore into a staging DB and rehearse
+`migrate` + `check` + `makemigrations --check` + `verify_coupon_consistency` + `promotional_consent report` → compare counts/sums → schedule window → `migrate` →
+post-checks (same commands) → keep the backup until the first full business day passes.
+
+### 12.7 What remains unverified (external access required)
+
+Real Zibal session/callback behaviour; real SMS/e-mail delivery; a real cron scheduler (the crontab above is a template, not a deployed fact); a sanitized
+production database copy for migration rehearsal; Firefox and WebKit runs of the browser suite (only Chromium runtimes are installed here).
+
 ## What this PR does **not** do
 
 - No real payment gateway (Zibal) — the checkout payment step is still

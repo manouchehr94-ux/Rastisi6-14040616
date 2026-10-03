@@ -52,7 +52,15 @@ class OrderView:
     coupon_id: int | None
     discount_total: Decimal
     has_return: bool
-    lines: list = field(default_factory=list)
+    #: ``None`` = not loaded yet. Rules that never look at order lines (order totals/counts/cities…) never
+    #: pay for loading them; ``get_lines()`` loads the whole chunk's lines with a handful of queries.
+    lines: list | None = None
+    _loader: object = field(default=None, repr=False, compare=False)
+
+    def get_lines(self) -> list:
+        if self.lines is None:
+            self.lines = self._loader(self.pk) if self._loader is not None else []
+        return self.lines
 
     def amount(self, basis: str) -> Decimal:
         if basis == "items_total":
@@ -63,7 +71,7 @@ class OrderView:
 
     @property
     def item_count(self) -> int:
-        return sum(line.quantity for line in self.lines)
+        return sum(line.quantity for line in self.get_lines())
 
 
 @dataclass
@@ -102,16 +110,42 @@ def customers_with_valid_orders(store, valid_statuses, start=None, end=None) -> 
     return set(valid_orders_qs(store, valid_statuses, start, end).values_list("customer_id", flat=True).distinct())
 
 
+class _ChunkLines:
+    """بارگذاریِ تنبلِ ردیف‌هایِ همه‌ی سفارش‌هایِ یک دسته — با اولین نیاز، همه با چند query (نه N+1)."""
+
+    def __init__(self, order_ids):
+        self.order_ids = list(order_ids)
+        self.by_order = None
+
+    def __call__(self, order_pk):
+        if self.by_order is None:
+            from django.db.models import Prefetch
+
+            from apps.catalog.models import ProductAttributeValue
+            from apps.orders.models import OrderItem
+
+            items = (
+                OrderItem.objects.filter(order_id__in=self.order_ids)
+                .select_related("product", "product__brand", "product__category", "product__category__parent", "variant")
+                .prefetch_related(
+                    Prefetch("product__attribute_values", queryset=ProductAttributeValue.objects.select_related("attribute", "value")),
+                    "variant__option_values__option__attribute", "variant__option_values__option_value",
+                )
+                .order_by("order_id", "pk")
+            )
+            self.by_order = {}
+            for item in items:
+                self.by_order.setdefault(item.order_id, []).append(LineView(
+                    product_id=item.product_id, sku=item.sku, name=item.product_name, quantity=item.quantity,
+                    unit_price=item.unit_price, line_total=item.line_total, snapshot=effective_item_snapshot(item),
+                ))
+        return self.by_order.get(order_pk, [])
+
+
 def _order_views(orders, tz) -> list[OrderView]:
+    loader = _ChunkLines(o.pk for o in orders)
     views = []
     for order in orders:
-        lines = [
-            LineView(
-                product_id=item.product_id, sku=item.sku, name=item.product_name, quantity=item.quantity,
-                unit_price=item.unit_price, line_total=item.line_total, snapshot=effective_item_snapshot(item),
-            )
-            for item in order.items.all()
-        ]
         address = order.address or {}
         views.append(OrderView(
             pk=order.pk, code=order.code, created_at=order.created_at.astimezone(tz),
@@ -119,7 +153,8 @@ def _order_views(orders, tz) -> list[OrderView]:
             shipping_cost=order.shipping_cost, status=order.status, payment_status=order.payment_status,
             gateway_id=order.payment_gateway_id, shipping_method_id=order.shipping_method_id,
             province=address.get("province", ""), city=address.get("city", ""), coupon_id=order.coupon_id,
-            discount_total=order.product_discount + order.coupon_discount, has_return=order.has_return, lines=lines,
+            discount_total=order.product_discount + order.coupon_discount, has_return=order.has_return,
+            _loader=loader,
         ))
     return views
 
@@ -136,7 +171,6 @@ def load_orders(store, customer_ids, valid_statuses, start=None, end=None):
     qs = (
         Order.objects.filter(store=store, customer_id__in=list(customer_ids))
         .annotate(refunded_sum=Subquery(refunded), has_return=Exists(returned))
-        .prefetch_related("items__product", "items__variant")
         .order_by("created_at", "pk")
     )
     if start is not None:
