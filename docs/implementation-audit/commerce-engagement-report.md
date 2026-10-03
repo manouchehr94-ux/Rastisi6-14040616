@@ -575,3 +575,105 @@ Not re-run (untouched code): `storefront_builder` (its pre-existing failures, §
 5. Newly paid COD orders enter statistics, segments (legacy definition — unchanged) and campaigns from confirmation onwards; no backfill.
 6. Staff e-mail for late payments only goes to owners with an e-mail address / configured extra recipients; otherwise the dashboard list is the only channel.
 7. Pre-existing and unrelated: SQLite-only appearance fixture (above), storefront_builder/stores demo-media failures.
+
+## 17. Comprehensive production-readiness hardening (nine outstanding risks)
+
+Scope: resolve the nine outstanding risks with the existing architecture only. Branch `feature/commerce-engagement-system`, base of this phase `ca0b11e`.
+No merge, no deployment, no live-database migration, `SEGMENT_ORDER_DEFINITION` still `legacy`, COD still never auto-paid, report kept.
+Labels: **DONE AND VERIFIED**, **IMPLEMENTED — EXTERNAL VERIFICATION PENDING**, **BLOCKED — AUTHORIZED ACCESS REQUIRED**, **BLOCKED — OWNER DECISION REQUIRED**, **NOT STARTED**.
+
+### 17.0 Status and evidence
+
+| # | Issue | Status | Evidence |
+|---|---|---|---|
+| 1 | Gateway amount mismatch / reconciliation | **DONE AND VERIFIED** (against the documented Zibal contract; real gateway behaviour is item 3) | `test_payment_discrepancy.py` (22 tests) + PostgreSQL races in `test_payment_concurrency.py` |
+| 2 | Promotional consent / existing-customer migration | **IMPLEMENTED — OWNER DECISION REQUIRED** for legal wording/basis and per-store vs per-account consent; engineering acceptance criteria met | `test_promotional_consent.py` (22 tests incl. migration, PostgreSQL-verified); migration run on 100k-customer PostgreSQL |
+| 3 | Zibal session lifetime / callback behaviour | **BLOCKED — AUTHORIZED ACCESS REQUIRED** (docs + sandbox unreachable); TTL stays 0; checklist in PRODUCTION_CONFIGURATION §12.2 | adapter-contract tests; egress blocked (`help.zibal.ir` denied by the proxy) |
+| 4 | Real SMS/e-mail delivery | **IMPLEMENTED — EXTERNAL VERIFICATION PENDING** (no provider credentials/network) | `verify_delivery_channels` + 6 tests; existing backend contract tests; operator commands in §12.3 |
+| 5 | Cron/background jobs | **IMPLEMENTED — EXTERNAL VERIFICATION PENDING** (no scheduler available; no claim that cron runs in production) | `test_background_jobs.py` + PostgreSQL advisory-lock test; `check_background_jobs`; crontab template |
+| 6 | Migration safety | **DONE AND VERIFIED** on representative synthetic PostgreSQL data; **production rehearsal outstanding** (no sanitized production copy) | §17.6 |
+| 7 | Cart/order pricing consistency | **DONE AND VERIFIED** | `test_checkout_price_confirmation.py` (19 tests) + PostgreSQL parallel-checkout test |
+| 8 | Campaign performance at 100k+ | **DONE AND VERIFIED** (budgets met; one documented scaling limit: issuance throughput) | `tools/bench/campaign_benchmark.py`, §17.8 |
+| 9 | Cross-browser / mobile / accessibility | **IMPLEMENTED — EXTERNAL VERIFICATION PENDING** (Chromium verified; Firefox/WebKit runtimes not installed) | `accessibility_e2e.py` 67/67 on Chromium (3 viewports) + existing 22/22 and 27/27 |
+
+### 17.1 Issue 1 — amount mismatch and ambiguous verification (commit `a50ec25`)
+
+* **Original problem.** `ZibalAdapter.verify_payment` raised `GatewayVerificationError("amount_mismatch")` *after* Zibal had confirmed the payment (result 100/201); the caller treated it like a plain failure, marked the attempt failed and kept nothing about the money.
+* **Reused components.** `gateway_payment_service` (single verification flow), `PaymentAttempt`, `PaymentReconciliation` (+ its staff page/permissions `REFUND_VIEW/REFUND_MANAGE`), `staff.late_payment` event through the existing dispatcher/outbox, the lock order *order row → attempt*.
+* **Changes.** `gateways/base.py` (`GatewayAmountMismatchError` carrying Rial evidence), `gateways/zibal.py` (Rial amount compared; a success **without a readable amount** is `GatewayResponseError("amount_unavailable")` — ambiguous, never success), `models.PaymentReconciliation` (`evidence_level` confirmed|suspected, `reported_amount`, kinds `amount_mismatch`/`verify_ambiguous`, resolutions `not_paid`/`auto_verified`; migration `orders.0019`, additive), `gateway_payment_service` (`_record_discrepancy`, `_open_reconciliation` upgrade path, `_close_suspected_record`, `PaymentAmountMismatch`), `order_expiry_service` (an open reconciliation blocks automatic expiry), `notifications` (recipients = owners **plus every active member holding `refund.manage`** via `EventDef.staff_permission`), reconciliation page (level badge, reported amount, new resolution options), `orders/views.py` (customer message).
+* **Behaviour.** Confirmed mismatch → attempt `SUCCEEDED` (gateway-supported), one reconciliation (`confirmed`, expected vs reported amount, masked evidence), **no** `Transaction`, order/coupon/stock untouched, one staff e-mail. Ambiguous result (timeout/connection/invalid JSON/missing amount) **only when the callback claimed success** → `suspected` record, attempt not marked succeeded, nothing asserted as collected; a later clean verification applies the payment and auto-closes the record, a later confirmation on a canceled order upgrades the same record (second notification). Gateway rejections never create records.
+* **Compatibility.** Existing rows default to `confirmed` (they were all gateway-verified). Old callers unaffected.
+* **Tests.** 22 + 1 (financial-staff recipients) in `test_payment_discrepancy.py`: correct amount, toman-as-rial, under/over payment, canceled order, second attempt after paid, duplicate callbacks, ambiguous cases, upgrade/auto-close, expiry block, store isolation and permissions; PostgreSQL: parallel duplicate mismatch callbacks (one record, one notification) and mismatch-vs-cancel race (3 reruns stable).
+* **External verification.** None (real Zibal unavailable). **Risk left:** Zibal's real field names/values are taken from the documented contract and third-party SDK descriptions; confirm with item 3's checklist.
+
+### 17.2 Issue 2 — promotional consent (commit `c8b494d`)
+
+* **Audit.** `Customer.accepts_promotional_sms/email` were added by `customers.0004` with `default=True`; no signup/checkout control existed, the account page was the only writer, no timestamp/source/audit trail existed, and the dispatcher checked the flag only when queuing. A stored `True` therefore proves nothing.
+* **Policy (one implementation).** `customers/services/consent_service.py`: unknown = not granted; independent channels; `set_promotional_consent` records source + timestamp (+ `customer.consent_changed` audit event with store scope, no personal data); `grant_at_opt_in` for signup/checkout (never withdraws); `fresh_promotional_consent` for the send-time recheck. `profile_service.update_communication_preferences` and the dispatcher delegate to it.
+* **Enforcement points.** queue time (`dispatcher._consented`) and **send time** (`notification_service._process` → `skipped/consent_withdrawn`, also for manual retries); transactional/security/staff/test sends exempt.
+* **UI.** Signup and checkout show two **unticked** checkboxes; checkout can only grant; account settings grants/withdraws; dashboard customer page shows state + source.
+* **Migration.** `customers.0006` (additive fields, defaults → False), `0007` backfill: legacy `True` → `False/legacy_unverified`, legacy `False` → `legacy_opt_out`; idempotent; reverse restores the pre-policy state only for untouched rows. **Effect: bulk promotional sends to existing customers stop until consent is re-recorded.** Operator tooling: `promotional_consent report|import` (dry-run default; import requires `--evidence` and `--store`).
+* **Fixture fixes (intended, not weakened).** Test fixtures that relied on the old default now set consent explicitly.
+* **Open decisions (not decided by tests).** Lawful basis/wording for Iran; per-store vs per-account consent (currently account-wide); evidence retention; need for an unsubscribe link/short code.
+
+### 17.3 Issue 3 — Zibal (no code change beyond 17.1)
+
+Not verified: payment-session lifetime, link expiry, callback retries, verify-after-expiry, `201` semantics in production, sandbox vs production differences. Official docs (`help.zibal.ir`) and the gateway are blocked by the environment's egress proxy; only third-party SDK pages were reachable (they confirm result `201` = processed before, Rial amounts, callback `trackId/success/status`, and say nothing about lifetime). Therefore `unpaid_online_order_ttl_minutes` remains **0**; an open reconciliation, in-flight attempts and confirmed payments already protect against cancelling money in flight, and late callbacks are always verified. The exact checklist for the person with Zibal access is PRODUCTION_CONFIGURATION §12.2.
+
+### 17.4 Issue 4 — delivery verification
+
+`verify_delivery_channels` (read-only audit; explicit `--confirm-test-recipient` for test sends): flags console/locmem/dummy e-mail backends and the SMS `console` backend as **NOT REAL** (they record `SENT` without delivering — a real production risk because `ShopSettings.sms_backend` defaults to `console`), missing SMTP/provider credentials, missing sender number, zero credits; never prints secrets. Existing contract tests cover Melipayamak/Kavenegar/SMSRasti request/response handling, credit gate, history mirror, dedupe, backoff/retry. **Accepted-by-provider ≠ delivered** (no delivery receipts are consumed) is documented. Real-provider delivery: **not verified** — no authorized credentials/network.
+
+### 17.5 Issue 5 — background jobs
+
+Audit: all jobs were already idempotent and per-item isolated except: exit codes were always 0, a failing order aborted the whole expiry batch, a failing campaign-run summary skipped delivery, no overlap guard, no health command. Changes: `core/job_lock.py` (PostgreSQL advisory lock, no-op elsewhere) on the four overlap-prone commands; non-zero exit after all work is done (campaign errors, any expiry/segment failure, whole-batch delivery failure); per-order error isolation in `expire_unpaid_orders`; `deliver_pending` reports `skipped`; `check_background_jobs` (OK/WARNING/CRITICAL from the data the jobs maintain); crontab template + runbook in PRODUCTION_CONFIGURATION §12.1. No new scheduler/queue/table. Not verified on a real scheduler.
+
+### 17.6 Issue 6 — migration safety
+
+Synthetic populated PostgreSQL 16 database at the **base-commit schema** (not production): 100,000 customers, 150,000 orders, 300,000 items, 89,736 transactions, 200,000 SMS logs, 29,970 coupon orders. Full forward migration (customers 0004–0007, cart 0008–0009, catalog 0039, core 0017–0018, engagement 0001–0002, orders 0011–0019, notifications 0002–0003): **≈16 s total**; slowest `customers.0007` 4.4 s, `orders.0016` 3.0 s, `notifications.0002` 2.1 s. Verified identical before/after: customer/order/item/transaction/SMS counts and the sums of order totals, item lines and transaction amounts; zero orphaned items/transactions; all 29,970 coupon orders got a redemption ledger row; consent backfill 100,000 → `legacy_unverified`; backfills idempotent on re-run; `makemigrations --check` clean; `check` clean. The earlier migrations of this branch (`notifications.0003`, `customers.0005`, `orders.0017/0018`, `core.0018`) were also verified forward/backward/forward on the staging database in earlier phases.
+Reversibility: schema reverse exists and ran on the populated copy; **data** reverse is not safe — `customers.0005` reverse fails once a 21-character operator is stored (`value too long for type character varying(20)`; the failed reverse left 0006/0007 reversed, i.e. old unverifiable consent restored), so deployment is **roll-forward with a restorable backup**. Locking: `customers.0006/0007` and `orders.0016` touch every row (seconds at this size), `orders.0015` builds indexes without `CONCURRENTLY`; others additive. Procedure/checklists: PRODUCTION_CONFIGURATION §12.6. **Outstanding:** rehearsal on a sanitized production copy (none available).
+
+### 17.7 Issue 7 — pricing consistency
+
+Audit: `CartItem.unit_price` (and `gift_wrap_unit_price`) are add-time snapshots; `cart_totals` used them directly for both the checkout summary and order creation, so a later catalogue price change was neither shown nor re-validated (the order silently kept the stale price), while coupon/shipping/tax/stock were already evaluated live. Fix: `pricing.sync_cart_prices` (single re-pricing step, `resolve_effective_price` + gift-wrap price rules) used (a) by the checkout summary and (b) in `create_order_from_cart` under the product/variant row locks; the page posts the displayed grand total (`expected_total`, stored in the checkout session so the OTP path keeps it); a differing total raises `PriceChangedError` (everything rolled back, nothing created) → `PriceChanged` toast with the new amount; the customer presses pay again to confirm. Client totals are comparison-only; absent field = direct call (no UI). Persisted order total = attempt amount = gateway amount (Rial = Toman×10). Historical orders/refunds use order snapshots (tested). 19 tests: price up/down, discount %, variant, gift-wrap price/off, shipping, coupon expiry, stock, tampered totals, duplicate token, refunds, history, payment-attempt amount; PostgreSQL parallel checkout with one token → one order, stock decremented once.
+
+### 17.8 Issue 8 — campaign performance (100,000 customers / 150,000 orders / 300,000 items)
+
+Synthetic data only (`tools/bench/campaign_benchmark.py seed|run`, PostgreSQL 16 on the 4-core build container; subprocess per scenario).
+**Bottleneck (measured with cProfile):** `effective_item_snapshot → build_item_snapshot` issued live catalogue queries *per order item* for legacy items and the item rows were loaded for every rule type — 13,700 queries / 25 s per 5,000 customers (≈ 280k queries, ≈ 8 min extrapolated for 100k).
+**Change:** order lines are loaded lazily per 500-customer chunk (`OrderView.get_lines`, only when a rule reads lines) with prefetch-aware snapshots (`item_snapshot_service._related`): same data, a constant number of queries per chunk. **Exact semantics preserved:** the eligible-ID sets of all four scenarios are identical before/after on the same sample (verified by dumping and diffing), engagement suite unchanged and green, new tests pin the zero-item-query and constant-query properties and snapshot parity.
+
+| Scenario (100k customers) | Eligible | Wall | Queries | Peak RSS |
+|---|---|---|---|---|
+| order_count ≥ 2 (aggregate) | 22,763 | 13.3 s | 956 | 92 MB |
+| spend ≥ 3M (aggregate) | 27,469 | 12.9 s | 956 | 92 MB |
+| nested AND/OR/NOT with line_match + canceled-history | 12,174 | 50.5 s | 1,194 | 115 MB |
+| customer-only rule (everyone) | 77,630 | 8.2 s | 1,095 | 92 MB |
+| preview (same rules) | same counts | 12.8 / 12.8 / 50.1 / 8.2 s | ≈ same | ≈ same |
+
+Baseline (before) on a 5,000-customer sample: 25.2 s / 13,701 queries / 113 MB for each order-based rule (customer-only 1.1 s / 59 queries).
+Budgets set for this hardware: eligibility/preview ≤ 60 s, ≤ 2,000 queries, ≤ 150 MB peak at 100k — **met**. Issuance throughput (real `execute_campaign`, personalised coupon + 1 e-mail + 1 SMS notification row + audit): 5,000 issuances in 65 s ≈ **77/s, 16 queries each** → ≈ 22 minutes for 100k in a single run — **documented scaling limit** (each issuance takes the campaign row lock, so parallel runs are serialised by design; runs are resumable and idempotent). Concurrency: PostgreSQL tests run two/three parallel executions → exactly one issuance, coupon and notification per customer, re-runs no-ops. Remaining limit: candidate ids are materialised as ints (≈ 1 MB per 100k) and `execute_campaign` holds the eligible id list in memory.
+
+### 17.9 Issue 9 — browser / accessibility
+
+New `tools/engagement_e2e/accessibility_e2e.py` (Playwright + axe-core WCAG 2.1 A/AA + best-practice): 3 viewports (1280×900, 768×1024 touch, 390×844 mobile touch) on Chromium: keyboard-only add/nest/AND-OR/NOT, focus never lost, tab order monotonic in DOM order, accessible names (unique, descriptive), roles, announced errors, aria-invalid, Persian digits/Jalali input, touch targets ≥ 24 px, no horizontal overflow/clipped controls, touch tap add/delete, no JS errors. First run found 24/67 failures — real defects, all fixed in the existing UI: no `role=group`/names on groups and conditions, duplicate delete/operator names, focus dropped to `<body>` after every add/remove/operator change (focus management added in `rule_builder.js`), delete-button contrast 3.13:1 (`.btn-danger` now `#b91c1c`/dark `#fca5a5`), search-hint contrast, unnamed burger button, nested-interactive search trigger, field errors not announced (`role=alert` in the shared `partials/field.html`). Result: **67/67 pass, axe 0 violations** on all viewports; existing suites 22/22 (rule builder) and 27/27 (workflow) still pass. **Firefox and WebKit: NOT RUN** (runtimes absent: `/opt/pw-browsers` contains only Chromium; downloading browsers is disabled) — run the same script where they are installed.
+
+### 17.10 Architecture consistency review
+
+Checked, no new duplicate found: one payment-success lifecycle (`apply_payment_success`); one gateway verification + reconciliation flow (`gateway_payment_service`/`PaymentReconciliation`, extended not replaced); one coupon rule set (`coupon_rules`) and ledger; one pricing path (`cart_totals` + `sync_cart_prices`, the latter using the same `resolve_effective_price`; `create_order_from_cart` has no caller bypassing it); one outbox/dispatcher (staff recipients extended by `EventDef.staff_permission`); one SMS provider/billing stack; one consent policy (`consent_service`; dispatcher and profile service delegate, the dashboard only displays); one rules engine (optimised, not forked); one job approach (cron + commands + advisory lock helper). Legitimate separations kept: synchronous legacy SMS vs outbox, cached segments vs live campaign evaluation, coupon definitions vs redemption ledger, payment attempts vs transactions. `SEGMENT_ORDER_DEFINITION` is still `legacy`.
+
+### 17.11 Regression (HEAD after the staff-notification commit)
+
+| Suite | DB | Result |
+|---|---|---|
+| dashboard | SQLite | 1496 run, OK |
+| sms, portal, notifications, engagement, core, customers, cart, orders | SQLite | 1609 run, OK (21 skipped = PostgreSQL-only) |
+| catalog, billing, blog, content, subscriptions | SQLite | 1526 run, OK (1 skipped) |
+| stores + storefront_builder | SQLite | see note below |
+| orders, cart, engagement, notifications, sms, customers, core, segment/order/settings dashboard views, all concurrency tests | PostgreSQL 16 | 1313 run, 0 failures, **1 error**: `AppearanceRenderingRegressionTests` (varchar(7) fixture), identical on the untouched base `185166a` |
+
+Note: a first `--parallel 4` run aborted (`cannot pickle 'traceback' object`) and produced no result; it was discarded and the suites were rerun serially. stores/storefront_builder carry the pre-existing failures documented in §16.4 (storefront_builder, stores demo-media pair); the exact counts of this rerun are recorded in the final message. Browser: Chromium 22/22 + 27/27 + 67/67.
+
+### 17.12 Remaining external access and decisions
+
+Zibal documentation/sandbox access (item 3, blocks enabling any TTL); real SMS/e-mail provider credentials and a dedicated test recipient (item 4); a real scheduler/staging server for cron (item 5); a sanitized production DB copy for migration rehearsal and a backup/restore drill (item 6); Firefox + WebKit runtimes (item 9); owner decisions: consent legal basis/wording and per-store vs per-account scope, whether to allow gateway-refund automation, switching segments to the `valid` definition (§11.3), issuance-throughput target for very large campaigns.
