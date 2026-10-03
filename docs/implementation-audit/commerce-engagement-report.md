@@ -669,10 +669,10 @@ Checked, no new duplicate found: one payment-success lifecycle (`apply_payment_s
 | dashboard | SQLite | 1496 run, OK |
 | sms, portal, notifications, engagement, core, customers, cart, orders | SQLite | 1609 run, OK (21 skipped = PostgreSQL-only) |
 | catalog, billing, blog, content, subscriptions | SQLite | 1526 run, OK (1 skipped) |
-| stores + storefront_builder | SQLite | see note below |
+| stores + storefront_builder | SQLite | 3278 run, 31 failures + 3 errors, 4 skipped — **the same 34 tests fail on the untouched base export of `185166a`** (31 failures + 3 errors, set diff empty) |
 | orders, cart, engagement, notifications, sms, customers, core, segment/order/settings dashboard views, all concurrency tests | PostgreSQL 16 | 1313 run, 0 failures, **1 error**: `AppearanceRenderingRegressionTests` (varchar(7) fixture), identical on the untouched base `185166a` |
 
-Note: a first `--parallel 4` run aborted (`cannot pickle 'traceback' object`) and produced no result; it was discarded and the suites were rerun serially. stores/storefront_builder carry the pre-existing failures documented in §16.4 (storefront_builder, stores demo-media pair); the exact counts of this rerun are recorded in the final message. Browser: Chromium 22/22 + 27/27 + 67/67.
+Note: a first `--parallel 4` run aborted (`cannot pickle 'traceback' object`) and produced no result; it was discarded and the suites were rerun serially. stores/storefront_builder carry the pre-existing failures documented in §16.4 (storefront_builder, stores demo-media pair); exact counts of this rerun are in the table above. Browser: Chromium 22/22 + 27/27 + 67/67.
 
 ### 17.12 Remaining external access and decisions
 
