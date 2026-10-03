@@ -65,43 +65,43 @@ class Command(BaseCommand):
 
     # -------------------------------------------------------------------- sms
     def audit_sms(self, slug) -> list[str]:
+        """همان تصمیمِ زمانِ اجرا: روشِ هر فروشگاه ``phone`` (SmsRasti) یا ``platform`` (درگاهِ مرکزی) است؛
+        اعتبارنامه‌ی ارائه‌دهنده فقط یک‌بار و در سطحِ پلتفرم بررسی می‌شود (نه به‌ازایِ فروشگاه)."""
         from apps.core.models import ShopSettings
-        from apps.sms.models import SmsBalance
+        from apps.sms.services.delivery_status_service import get_sms_delivery_status
 
         problems = []
         shops = ShopSettings.objects.filter(sms_enabled=True).select_related("store")
         if slug:
             shops = shops.filter(store__slug=slug)
-        B = ShopSettings.SmsBackend
+        platform = None
         for shop in shops:
-            backend = shop.sms_backend
-            line = f"sms store={shop.store.slug} backend={backend}"
-            if backend == B.CONSOLE:
-                line += " -> NOT REAL (messages are marked sent but never leave the server)"
-                problems.append(f"{shop.store.slug}: console SMS backend")
-            elif backend == B.MELIPAYAMAK and not (shop.melipayamak_username and shop.melipayamak_password):
-                line += " -> credentials MISSING"
-                problems.append(f"{shop.store.slug}: melipayamak credentials missing")
-            elif backend == B.KAVENEGAR and not shop.kavenegar_api_key:
-                line += " -> API key MISSING"
-                problems.append(f"{shop.store.slug}: kavenegar api key missing")
-            elif backend == B.SMSRASTI and not shop.smsrasti_device_token:
-                line += " -> device token MISSING"
-                problems.append(f"{shop.store.slug}: smsrasti device token missing")
+            status = get_sms_delivery_status(shop.store)
+            platform = status["platform"]
+            line = f"sms store={shop.store.slug} method={status['method']} health={status['health']}"
+            if status["method"] == "phone":
+                seen = status["device"]["last_seen_at"]
+                line += f" device_paired={status['device']['paired']} device_online={status['device']['online']} last_seen={seen:%Y-%m-%d %H:%M}" if seen else f" device_paired={status['device']['paired']} device_online=False last_seen=never"
+                line += f" queued={status['queue']['pending'] + status['queue']['sending']} failed={status['queue']['failed']}"
             else:
-                line += " -> configured (secrets not printed)"
-            if backend != B.CONSOLE and not shop.sms_sender_number and backend != B.SMSRASTI:
-                line += "; sender number NOT set (provider-approved sender/template required)"
-                problems.append(f"{shop.store.slug}: sender number missing")
-            credits = SmsBalance.objects.filter(store=shop.store).values_list("credits", flat=True).first()
-            line += f"; credits={credits if credits is not None else 'no balance row'}"
-            if credits is not None and credits <= 0 and backend != B.CONSOLE:
-                problems.append(f"{shop.store.slug}: no SMS credit")
+                line += f" credits={status['credits']}"
             self.stdout.write(line)
-        owner_backend = getattr(settings, "RASTISI_OWNER_SMS_BACKEND", "console")
-        self.stdout.write(f"platform (OTP/owner) sms backend: {owner_backend}" + (" -> NOT REAL" if owner_backend == "console" else ""))
-        if owner_backend == "console":
-            problems.append("platform OTP backend is console")
+            for message in status["errors"]:
+                self.stdout.write(f"  ERROR: {message}")
+                problems.append(f"{shop.store.slug}: {message}")
+            for message in status["warnings"]:
+                self.stdout.write(f"  WARNING: {message}")
+        if platform is None:
+            from apps.portal.services.owner_sms_service import describe_platform_backend
+
+            platform = describe_platform_backend()
+        self.stdout.write(
+            f"platform sms gateway (used by 'platform' stores, all OTP/security): provider={platform['provider']} "
+            f"{'REAL' if platform['real'] else 'NOT REAL (nothing is delivered)'}"
+        )
+        for message in platform["problems"]:
+            self.stdout.write(f"  PLATFORM PROBLEM: {message}")
+            problems.append(f"platform: {message}")
         return problems
 
     def test_sms(self, phone: str, slug):
@@ -117,4 +117,6 @@ class Command(BaseCommand):
         if log is None:
             self.stdout.write("test sms: not attempted (sms disabled for the store)")
         else:
-            self.stdout.write(f"test sms: status={log.status} provider={log.provider} (accepted != delivered; confirm on the handset)")
+            note = ("QUEUED for the Android device — delivered only after the device acknowledges (watch the SmsRasti queue)"
+                    if log.provider == "smsrasti" else "accepted != delivered; confirm on the handset")
+            self.stdout.write(f"test sms: status={log.status} provider={log.provider} ({note})")

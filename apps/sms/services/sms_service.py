@@ -98,13 +98,17 @@ def _dispatch(*, event_key: str, phone: str, message: str, store, template=None,
     # مرحله‌ی resolve/تماس Provider برای پیام عادی برسد. OTP هم مستقل از
     # انتخاب SmsRastiِ فروشگاه از Provider آنلاین مرکزی عبور می‌کند.
     backend = None
+    # اعتبارِ پیامکِ پلتفرم فقط برایِ ارسال از درگاهِ مرکزی مصرف می‌شود: پیام‌هایِ روشِ «گوشی» از سیم‌کارتِ خودِ
+    # فروشگاه می‌روند (هزینه‌ی پلتفرم ندارند) و OTP همیشه از درگاهِ مرکزی (با سقفِ بدهیِ OTP) می‌رود.
+    uses_platform_credit = is_otp or ShopSettings.load(store=store).sms_delivery_method == "platform"
 
     try:
-        before, reserved_after = reserve_credits(
-            store=store, units=quote.billable_units, is_otp=is_otp,
-        )
-        log.balance_before = before
-        log.balance_after = reserved_after
+        if uses_platform_credit:
+            before, reserved_after = reserve_credits(
+                store=store, units=quote.billable_units, is_otp=is_otp,
+            )
+            log.balance_before = before
+            log.balance_after = reserved_after
     except InsufficientSmsCreditError as exc:
         log.status = SmsLog.Status.FAILED
         log.error_message = (
@@ -149,12 +153,12 @@ def _dispatch(*, event_key: str, phone: str, message: str, store, template=None,
         log.status = SmsLog.Status.SENT
         log.provider_ref_id = result.provider_ref_id
         log.sent_at = timezone.now()
-        log.cost_toman = quote.cost_toman
+        log.cost_toman = quote.cost_toman if uses_platform_credit else 0
     else:
-        refunded = refund_credits(store=store, units=quote.billable_units)
         log.status = SmsLog.Status.FAILED
         log.error_message = result.error_message
-        log.balance_after = refunded
+        if uses_platform_credit:
+            log.balance_after = refund_credits(store=store, units=quote.billable_units)
     log.save(update_fields=[
         "status", "provider", "provider_ref_id", "error_message", "attempt_count",
         "sent_at", "cost_toman", "balance_before", "balance_after", "updated_at",
@@ -297,5 +301,6 @@ def retry_smsrasti_outbox_item(*, item_id: int, store) -> SmsOutboxItem:
     item.status = SmsOutboxItem.Status.PENDING
     item.error_message = ""
     item.claimed_at = None
-    item.save(update_fields=["status", "error_message", "claimed_at", "updated_at"])
+    item.attempt_count = 0  # دورِ تازه؛ سقفِ claim دوباره از صفر شمرده می‌شود
+    item.save(update_fields=["status", "error_message", "claimed_at", "attempt_count", "updated_at"])
     return item

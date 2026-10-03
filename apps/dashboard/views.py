@@ -239,6 +239,7 @@ from apps.orders.services.return_service import (
 from apps.sms.events import EVENT_VARIABLES, SmsEvent
 from apps.sms.models import SmsBillingPolicy, SmsPackage, SmsPackagePurchase, SmsTemplate
 from apps.sms.services import balance_service
+from apps.sms.services.delivery_status_service import get_sms_delivery_status
 from apps.sms.services.sms_service import (
     RetryNotEligibleError,
     SmsTemplateError,
@@ -4153,6 +4154,7 @@ def _settings_context(
             "sms_enabled": shop.sms_enabled, "sms_backend": shop.sms_backend,
         }),
         "smsrasti_device_token": shop.smsrasti_device_token,
+        "sms_status": get_sms_delivery_status(store),
         "sms_balance": balance_service.get_or_create_balance(store=store),
         "sms_billing_policy": SmsBillingPolicy.load(),
         "sms_packages": balance_service.list_active_packages(),

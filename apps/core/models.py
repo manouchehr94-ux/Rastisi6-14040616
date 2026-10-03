@@ -172,6 +172,8 @@ class ShopSettings(TimeStampedModel):
     smsrasti_device_token = models.CharField(
         "توکنِ دستگاهِ اسمس‌راستی", max_length=64, blank=True, unique=True, null=True,
     )
+    #: آخرین poll موفقِ دستگاهِ SmsRasti — تنها نشانه‌ی قابل‌اندازه‌گیریِ «دستگاه متصل است».
+    smsrasti_last_seen_at = models.DateTimeField("آخرین اتصالِ دستگاهِ اسمس‌راستی", null=True, blank=True)
 
     # --- هویت بصری ---
     logo = models.ImageField("لوگوی فروشگاه", upload_to="shop/branding/", blank=True)
@@ -196,6 +198,13 @@ class ShopSettings(TimeStampedModel):
 
     def __str__(self):
         return self.name
+
+    @property
+    def sms_delivery_method(self) -> str:
+        """تنها دو روشِ ارسال برایِ پیامکِ مشتریانِ فروشگاه: ``phone`` (گیت‌وی اندرویدِ SmsRasti) یا
+        ``platform`` (درگاهِ مرکزیِ پلتفرم). مقدارهایِ قدیمیِ console/melipayamak/kavenegar همگی «platform» اند
+        (همان کاری که ``sms_service.get_backend`` همیشه می‌کرد)."""
+        return "phone" if self.sms_backend == self.SmsBackend.SMSRASTI else "platform"
 
     @classmethod
     def load(cls, store=None) -> "ShopSettings":
