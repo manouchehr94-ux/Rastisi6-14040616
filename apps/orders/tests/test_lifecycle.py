@@ -118,13 +118,18 @@ class PaymentSuccessParityTests(LifecycleBase):
         self.assertTrue(again.is_final)
         self.assertEqual(self.signature(order), before)
 
-    def test_second_attempt_after_paid_is_canceled_not_double_paid(self):
+    def test_second_confirmed_attempt_after_paid_is_reconciled_not_double_applied(self):
+        """پرداختِ تأییدشده‌ی دوم برایِ سفارشِ پرداخت‌شده: اثرِ جانبیِ دوم ندارد، اما گم هم نمی‌شود (تطبیق)."""
+        from apps.orders.models import PaymentReconciliation
+
         order = self.new_order()
         self.gateway_pay(order)
         before = self.signature(order)
         attempt2, result = self.gateway_pay(order)
-        self.assertEqual(result.status, PaymentAttempt.Status.CANCELED)
+        self.assertEqual(result.status, PaymentAttempt.Status.SUCCEEDED)  # پول واقعاً کسر شده
         self.assertEqual(self.signature(order), before)
+        record = PaymentReconciliation.objects.get(attempt=attempt2)
+        self.assertEqual((record.kind, record.status), (PaymentReconciliation.Kind.ALREADY_PAID, PaymentReconciliation.Status.OPEN))
 
     def test_success_without_coupon_has_no_redemption_side_effects(self):
         order = self.new_order(coupon=False)

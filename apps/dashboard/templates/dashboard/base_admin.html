@@ -352,6 +352,10 @@ ClassicEditor فراخوانی می‌شود و بی‌سروصدا (بدون خ
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg>
             پرداخت‌ها
           </a>
+          <a class="nav-item{% if active_page == 'payment-reconciliations' %} active{% endif %}" data-page="payment-reconciliations" href="{% url 'dashboard:payment-reconciliations' %}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg>
+            تطبیق پرداخت‌ها
+          </a>
           {% endif %}
           {% if can_manage_settings %}
           <a class="nav-item{% if active_page == 'settings' and request.GET.section == 'finance' %} active{% endif %}" data-page="finance-settings" href="{% url 'dashboard:settings' %}?section=finance">

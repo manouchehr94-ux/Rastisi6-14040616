@@ -33,7 +33,7 @@ from django.utils import timezone
 from apps.orders.encryption import CredentialEncryptionError
 from apps.orders.gateways import get_adapter
 from apps.orders.gateways.base import GatewayError
-from apps.orders.models import Order, PaymentAttempt, PaymentGatewayConfig, Transaction
+from apps.orders.models import Order, PaymentAttempt, PaymentGatewayConfig, PaymentReconciliation, Transaction
 
 logger = logging.getLogger("payment")
 
@@ -48,6 +48,10 @@ class PaymentServiceError(Exception):
 
 class PaymentAlreadyPaidError(PaymentServiceError):
     """Order is already paid."""
+
+
+class OrderNotPayableError(PaymentServiceError):
+    """Order can no longer be paid (e.g. it was canceled)."""
 
 
 class PaymentConfigError(PaymentServiceError):
@@ -95,7 +99,13 @@ def initiate_payment(
         PaymentConfigError: Gateway not configured properly.
         PaymentInitiationError: Gateway rejected the request.
     """
-    # Guard: already paid
+    # Guard: re-read the authoritative state (the caller's object may be stale — e.g. the order was
+    # canceled by staff or by the expiry job while the customer was on the payment page).
+    current = Order.objects.filter(pk=order.pk).values("status", "payment_status").first()
+    if current is not None:
+        order.status, order.payment_status = current["status"], current["payment_status"]
+    if order.status == Order.Status.CANCELED:
+        raise OrderNotPayableError("این سفارش لغو شده و قابل پرداخت نیست")
     if order.payment_status == Order.PaymentStatus.PAID:
         raise PaymentAlreadyPaidError("این سفارش قبلاً پرداخت شده است")
 
@@ -194,78 +204,155 @@ def initiate_payment(
 # ---------------------------------------------------------------------------
 
 
+def _sanitized_evidence(result) -> dict:
+    """شواهدِ تأییدِ درگاه برایِ ذخیره — فقط فیلدهایِ امن (کارتِ ماسک‌شده، بدونِ اعتبارنامه/PII)."""
+    return {
+        "ref_id": str(getattr(result, "ref_id", ""))[:100],
+        "card_number": str(getattr(result, "card_number", ""))[:25],
+        "status_code": getattr(result, "status_code", 0),
+        "message": str(getattr(result, "message", ""))[:200],
+    }
+
+
+def _open_reconciliation(*, attempt, order, kind, evidence, error="") -> PaymentReconciliation:
+    """رکوردِ تطبیق (یکتا به‌ازای هر تلاش) + اعلانِ کارکنان. idempotent."""
+    from apps.notifications.services.notification_service import sanitize_error
+
+    error = sanitize_error(error)
+    record, created = PaymentReconciliation.objects.get_or_create(
+        attempt=attempt,
+        defaults=dict(
+            store=attempt.store, order=order, kind=kind, amount=attempt.amount,
+            gateway_track_id=attempt.gateway_track_id, gateway_ref_id=attempt.gateway_ref_id,
+            order_status_at_detection=order.status, payment_status_at_detection=order.payment_status,
+            evidence=evidence, error_message=(error or "")[:300],
+        ),
+    )
+    if created:
+        logger.error(
+            "Confirmed gateway payment NOT applied (%s): order=%s attempt=%s ref=%s amount=%s",
+            kind, order.code, attempt.public_id, attempt.gateway_ref_id, attempt.amount,
+        )
+        from apps.notifications.services import business_events
+
+        business_events.late_payment(record)
+    return record
+
+
+def _apply_verified_payment(attempt_pk: int, result, store) -> PaymentAttempt:
+    """درگاه پول را تأیید کرده؛ سفارش را (اگر هنوز قابل‌پرداخت است) پرداخت‌شده می‌کند، وگرنه
+    شواهد را در ``PaymentReconciliation`` نگه می‌دارد — هرگز بی‌صدا گم نمی‌شود.
+
+    قفل: ابتدا ردیفِ **سفارش** و بعد تلاش (همان ترتیبِ ``change_order_status``/job انقضا) تا لغو و
+    پرداختِ همزمان سریال شوند: یا لغو برنده است (⇒ تطبیق) یا پرداخت (⇒ لغوِ بعدی از PROCESSING)."""
+    from apps.orders.services.lifecycle import apply_payment_success
+
+    with transaction.atomic():
+        pending = PaymentAttempt.objects.get(pk=attempt_pk)
+        order = Order.objects.select_for_update().get(pk=pending.order_id)
+        attempt = PaymentAttempt.objects.select_for_update().select_related("store").get(pk=attempt_pk)
+        if attempt.status == PaymentAttempt.Status.SUCCEEDED:
+            return attempt  # رقابتِ دو callback: دیگری پردازش کرده است
+
+        attempt.status = PaymentAttempt.Status.SUCCEEDED
+        attempt.gateway_ref_id = result.ref_id
+        attempt.verified_at = timezone.now()
+        attempt.failure_code = ""
+        attempt.failure_message = ""
+        attempt.save(update_fields=["status", "gateway_ref_id", "verified_at", "failure_code", "failure_message", "updated_at"])
+        evidence = _sanitized_evidence(result)
+        K = PaymentReconciliation.Kind
+
+        if order.status == Order.Status.CANCELED:
+            _open_reconciliation(attempt=attempt, order=order, kind=K.ORDER_CANCELED, evidence=evidence)
+            return attempt
+        if order.payment_status == Order.PaymentStatus.PAID:
+            _open_reconciliation(attempt=attempt, order=order, kind=K.ALREADY_PAID, evidence=evidence)
+            return attempt
+        if order.payment_status != Order.PaymentStatus.PENDING:
+            _open_reconciliation(attempt=attempt, order=order, kind=K.NOT_PAYABLE, evidence=evidence)
+            return attempt
+
+        try:
+            with transaction.atomic():  # savepoint: خطا نباید شواهدِ پرداخت را با خود ببرد
+                tx = apply_payment_success(
+                    order, store=store, ref_id=result.ref_id, from_statuses=(Order.PaymentStatus.PENDING,),
+                    note="پرداخت آنلاین موفق — سفارش به پردازش منتقل شد",
+                )
+        except Exception as exc:  # noqa: BLE001 — حفظِ شواهد مهم‌تر از نوعِ خطاست
+            logger.exception("Applying verified payment failed: order=%s attempt=%s", order.code, attempt.public_id)
+            _open_reconciliation(
+                attempt=attempt, order=order, kind=K.PROCESSING_ERROR, evidence=evidence,
+                error=f"{type(exc).__name__}: {exc}",
+            )
+            return attempt
+        if tx is None:
+            _open_reconciliation(attempt=attempt, order=order, kind=K.ALREADY_PAID, evidence=evidence)
+            return attempt
+    logger.info("Payment verified and order paid: order=%s attempt=%s ref=%s", order.code, attempt.public_id, result.ref_id)
+    return attempt
+
+
 def process_callback_and_verify(
     *,
     attempt_public_id: str,
     callback_data: dict,
     store,
 ) -> PaymentAttempt:
-    """Process a gateway callback: lock attempt, verify with gateway, update states.
+    """Process a gateway callback: verify with the gateway, then apply or reconcile.
 
-    This is the authoritative payment confirmation path. It:
-    1. Locks the PaymentAttempt row (select_for_update)
-    2. Checks for already-processed (idempotent)
-    3. Calls gateway verify_payment
-    4. On success: marks attempt SUCCEEDED, order PAID, triggers transition
-    5. On failure: marks attempt FAILED with reason
-
-    Args:
-        attempt_public_id: The PaymentAttempt's public_id.
-        callback_data: Query params or POST data from the callback.
-        store: Authoritative store.
-
-    Returns:
-        Updated PaymentAttempt.
-
-    Raises:
-        PaymentVerificationFailed: If verification fails (order NOT paid).
+    * ``SUCCEEDED`` attempt → idempotent return (duplicate callback).
+    * Any other attempt — **including final ones** (failed/canceled/expired) — is verified with the
+      gateway: money may have been taken (late callback, duplicate attempt, expired session).
+    * Verified success on a payable order → order paid via ``apply_payment_success``.
+    * Verified success on a canceled / already-paid / non-payable order (or if applying fails) →
+      attempt recorded ``SUCCEEDED`` + persistent ``PaymentReconciliation``; the order is **not**
+      reopened, marked paid or given its coupon back.
+    * Verification failure on an open attempt → attempt ``FAILED`` (or ``CANCELED`` if the order was
+      already paid) and ``PaymentVerificationFailed``; on an already-final attempt nothing changes.
     """
-    # Pre-check: attempt exists (outside atomic to allow raising without rollback)
     attempt = (
         PaymentAttempt.objects
         .select_related("order", "gateway_config")
         .filter(public_id=attempt_public_id, store=store)
         .first()
     )
-
     if attempt is None:
         raise PaymentVerificationFailed("تلاش پرداخت یافت نشد")
 
-    # Already processed — idempotent return
-    if attempt.is_final:
-        logger.info(
-            "Callback for already-final attempt: %s status=%s",
-            attempt.public_id, attempt.status,
-        )
+    if attempt.status == PaymentAttempt.Status.SUCCEEDED:
+        logger.info("Callback for already-succeeded attempt: %s", attempt.public_id)
         return attempt
 
+    was_final = attempt.is_final
     order = attempt.order
+    open_statuses = [s for s in PaymentAttempt.Status.values if s not in PaymentAttempt.FINAL_STATUSES]
+    if not was_final:
+        # گذارِ شرطی (نه ذخیره‌ی کورکورانه): callbackِ همزمانی که همین تلاش را SUCCEEDED کرده نباید پاک شود.
+        PaymentAttempt.objects.filter(pk=attempt.pk, status__in=open_statuses).update(
+            status=PaymentAttempt.Status.PENDING, updated_at=timezone.now(),
+        )
 
-    # Already paid by another attempt — mark this one as canceled
-    if order.payment_status == Order.PaymentStatus.PAID:
-        attempt.status = PaymentAttempt.Status.CANCELED
-        attempt.failure_message = "سفارش قبلاً توسط تلاش دیگری پرداخت شده"
-        attempt.save(update_fields=["status", "failure_message", "updated_at"])
-        return attempt
+    def fail(code: str, message: str, exc_message: str):
+        if not was_final:  # یک تلاشِ نهایی‌شده با callbackِ تکراری/دیرهنگام بازنویسی نمی‌شود
+            fresh_paid = Order.objects.filter(pk=order.pk, payment_status=Order.PaymentStatus.PAID).exists()
+            PaymentAttempt.objects.filter(pk=attempt.pk, status__in=open_statuses).update(
+                status=PaymentAttempt.Status.CANCELED if fresh_paid else PaymentAttempt.Status.FAILED,
+                failure_code=code, failure_message=message[:300], updated_at=timezone.now(),
+            )
+        raise PaymentVerificationFailed(exc_message)
 
-    # Mark as pending verification
-    attempt.status = PaymentAttempt.Status.PENDING
-    attempt.save(update_fields=["status", "updated_at"])
+    if not attempt.gateway_track_id:
+        fail("no_track_id", "شناسه‌ی پیگیریِ درگاه ثبت نشده", "تلاش پرداخت قابل‌تأیید نیست")
 
-    # Get adapter and credentials
     gateway_config = attempt.gateway_config
     try:
         adapter = get_adapter(gateway_config.gateway_code)
         credentials = gateway_config.get_credentials()
     except (KeyError, CredentialEncryptionError) as exc:
-        attempt.status = PaymentAttempt.Status.FAILED
-        attempt.failure_code = "config_error"
-        attempt.failure_message = "خطای پیکربندی درگاه"
-        attempt.save(update_fields=["status", "failure_code", "failure_message", "updated_at"])
-        logger.error("Config error during verification: %s", exc)
-        raise PaymentVerificationFailed("خطای پیکربندی درگاه") from exc
+        fail("config_error", "خطای پیکربندی درگاه", "خطای پیکربندی درگاه")
+        raise exc  # unreachable — fail() always raises
 
-    # Server-to-server verification
     try:
         result = adapter.verify_payment(
             track_id=attempt.gateway_track_id,
@@ -276,55 +363,11 @@ def process_callback_and_verify(
             sandbox=gateway_config.is_sandbox,
         )
     except GatewayError as exc:
-        attempt.status = PaymentAttempt.Status.FAILED
-        attempt.failure_code = getattr(exc, "code", "verify_error")
-        attempt.failure_message = str(exc)[:300]
-        attempt.save(update_fields=["status", "failure_code", "failure_message", "updated_at"])
         logger.warning("Verification failed: attempt=%s error=%s", attempt.public_id, exc)
-        raise PaymentVerificationFailed(str(exc)) from exc
+        fail(getattr(exc, "code", "verify_error"), str(exc), str(exc))
 
     if not result.success:
-        attempt.status = PaymentAttempt.Status.FAILED
-        attempt.failure_code = f"status_{result.status_code}"
-        attempt.failure_message = result.message[:300] if result.message else "تأیید پرداخت ناموفق"
-        attempt.save(update_fields=["status", "failure_code", "failure_message", "updated_at"])
-        logger.info("Verification returned failure: attempt=%s", attempt.public_id)
-        raise PaymentVerificationFailed(
-            result.message or "تأیید پرداخت توسط درگاه ناموفق بود"
-        )
+        logger.info("Verification returned failure: attempt=%s final=%s", attempt.public_id, was_final)
+        fail(f"status_{result.status_code}", result.message or "تأیید پرداخت ناموفق", result.message or "تأیید پرداخت توسط درگاه ناموفق بود")
 
-    # SUCCESS — use atomic block for the critical order-paid transition
-    with transaction.atomic():
-        # Re-lock the attempt inside the atomic block
-        attempt = PaymentAttempt.objects.select_for_update().get(pk=attempt.pk)
-
-        # Double-check not already final (concurrent callback race)
-        if attempt.is_final:
-            return attempt
-
-        attempt.status = PaymentAttempt.Status.SUCCEEDED
-        attempt.gateway_ref_id = result.ref_id
-        attempt.verified_at = timezone.now()
-        attempt.save(update_fields=["status", "gateway_ref_id", "verified_at", "updated_at"])
-
-        # گذارِ «پرداخت‌شده» + همه‌ی اثرهای جانبی (مصرف کد، اعلان، hook کمپین، تراکنشِ سازگاری،
-        # PROCESSING، پیامک) یک‌جا در lifecycle؛ فقط از PENDING (UPDATE شرطی برایِ امنیتِ رقابت).
-        from apps.orders.services.lifecycle import apply_payment_success
-
-        tx = apply_payment_success(
-            order, store=store, ref_id=result.ref_id, from_statuses=(Order.PaymentStatus.PENDING,),
-            note="پرداخت آنلاین موفق — سفارش به پردازش منتقل شد",
-        )
-        if tx is None:
-            # Order was already paid by a concurrent request
-            logger.warning(
-                "Order already paid when attempt succeeded: order=%s attempt=%s",
-                order.code, attempt.public_id,
-            )
-            return attempt
-
-    logger.info(
-        "Payment verified and order paid: order=%s attempt=%s ref=%s",
-        order.code, attempt.public_id, result.ref_id,
-    )
-    return attempt
+    return _apply_verified_payment(attempt.pk, result, store)

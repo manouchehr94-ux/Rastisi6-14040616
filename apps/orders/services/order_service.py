@@ -382,6 +382,10 @@ def change_order_status(
     Store که برای پیامکِ تغییر وضعیت استفاده می‌شود؛ این تابع خودش هرگز
     Store را دوباره از Host یا حالت سازگاری حدس نمی‌زند.
     """
+    # قفلِ ردیفِ سفارش و خواندنِ وضعیتِ معتبر: لغو/پرداخت/job انقضای همزمان سریال می‌شوند
+    # (callback پرداخت نیز همین ردیف را اول قفل می‌کند). شیِ فراخوان با دیتابیس همگام می‌شود.
+    locked = Order.objects.select_for_update().only("status", "payment_status").get(pk=order.pk)
+    order.status, order.payment_status = locked.status, locked.payment_status
     from_status = order.status
 
     if from_status in FINAL_STATUSES:

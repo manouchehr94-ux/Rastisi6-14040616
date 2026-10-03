@@ -276,6 +276,16 @@ _register(
         default_email_body="{customer_name} برای «{product_title}» نظری با امتیاز {rating} ثبت کرد و در انتظار بررسی است.",
         sms_enabled_default=False, email_enabled_default=False,
     ),
+    EventDef(
+        "staff.late_payment", "پرداختِ تأییدشده‌ی نیازمندِ رسیدگی (اعلان به کارکنان)", TRANSACTIONAL,
+        {"order_number": "شماره سفارش", "order_total": "مبلغِ تأییدشده (تومان)", "customer_name": "نام مشتری",
+         "store_name": "نام فروشگاه", "reconciliation_reason": "دلیل"},
+        audience=AUDIENCE_STAFF,
+        default_sms="پرداختِ {order_total} تومانیِ سفارش {order_number} توسط درگاه تأیید شد اما اعمال نشد ({reconciliation_reason}). به بخش تطبیق پرداخت‌ها مراجعه کنید.",
+        default_email_subject="پرداختِ تأییدشده‌ی نیازمندِ رسیدگی — سفارش {order_number}",
+        default_email_body="درگاه پرداختِ {order_total} تومانیِ سفارش {order_number} ({customer_name}) را تأیید کرده اما سفارش آن را نپذیرفته است.\nدلیل: {reconciliation_reason}\nسفارش به‌طور خودکار بازگشایی یا پرداخت‌شده نشد. لطفاً از بخش «تطبیق پرداخت‌ها» در پنل مدیریت رسیدگی کنید (استردادِ دستی یا بازگشاییِ دستی).",
+        sms_enabled_default=False, email_enabled_default=True,
+    ),
 )
 
 

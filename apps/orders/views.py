@@ -2,6 +2,7 @@ import json
 import logging
 
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth import login as auth_login
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -195,7 +196,7 @@ def payment_start(request, code):
     from apps.orders.models import PaymentGatewayConfig
 
     order = _get_own_order(request, code)
-    if order.payment_status != Order.PaymentStatus.PENDING:
+    if order.payment_status != Order.PaymentStatus.PENDING or order.status == Order.Status.CANCELED:
         return redirect("customers:account-order-detail", code=order.code)
 
     store = resolve_store_for_service(request)
@@ -229,7 +230,7 @@ def payment_callback(request, code, status):
     if not settings.PAYMENTS_SIMULATION_ENABLED:
         raise Http404
     order = _get_own_order(request, code)
-    if order.payment_status == Order.PaymentStatus.PENDING:
+    if order.payment_status == Order.PaymentStatus.PENDING and order.status != Order.Status.CANCELED:
         simulate_payment(order, status == "success", store=resolve_store_for_service(request))
     return redirect("orders:payment-result", code=order.code)
 
@@ -343,6 +344,7 @@ def payment_initiate(request, code):
     """
     from apps.orders.models import PaymentAttempt, PaymentGatewayConfig
     from apps.orders.services.gateway_payment_service import (
+        OrderNotPayableError,
         PaymentAlreadyPaidError,
         PaymentConfigError,
         PaymentInitiationError,
@@ -356,6 +358,11 @@ def payment_initiate(request, code):
     # Already paid — go to result
     if order.payment_status == Order.PaymentStatus.PAID:
         return redirect("orders:payment-result", code=order.code)
+    # Canceled orders can never be paid (payment safety guard)
+    if order.status == Order.Status.CANCELED:
+        return render(request, "orders/payment_result.html", {
+            "order": order, "error": "این سفارش لغو شده و قابل پرداخت نیست.",
+        })
 
     # Find active gateway config for this order's gateway code
     # Try to match by slug from the legacy PaymentGateway on the order
@@ -429,6 +436,8 @@ def payment_initiate(request, code):
         )
     except PaymentAlreadyPaidError:
         return redirect("orders:payment-result", code=order.code)
+    except OrderNotPayableError as exc:
+        return render(request, "orders/payment_result.html", {"order": order, "error": str(exc)})
     except (PaymentConfigError, PaymentInitiationError) as exc:
         logger.warning("Payment initiation failed for order %s: %s", order.code, exc)
         return render(request, "orders/payment_result.html", {
@@ -499,6 +508,18 @@ def gateway_callback(request, attempt_id):
     except PaymentVerificationFailed as exc:
         logger.info("Payment verification failed for attempt %s: %s", attempt_id, exc)
         # Don't expose error details to the customer — redirect to result
-        pass
+    except Exception:  # noqa: BLE001 — a gateway callback must never end in an uncontrolled 500
+        logger.exception("Unexpected error while processing payment callback for attempt %s", attempt_id)
+        messages.warning(
+            request,
+            "پردازش پرداخت با خطا مواجه شد. اگر مبلغی از حساب شما کسر شده، با پشتیبانی تماس بگیرید؛ پرداخت شما ثبت و پیگیری می‌شود.",
+        )
+    else:
+        reconciliation = getattr(attempt, "reconciliation", None) if attempt.is_successful else None
+        if reconciliation is not None:
+            messages.warning(
+                request,
+                "پرداخت شما دریافت شد اما سفارش قابل تکمیل نبود. مبلغ توسط پشتیبانی بررسی و در صورت نیاز بازگردانده می‌شود.",
+            )
 
     return redirect("orders:payment-result", code=order.code)

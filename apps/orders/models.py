@@ -913,6 +913,62 @@ class PaymentAttempt(TimeStampedModel):
         return self.status == self.Status.SUCCEEDED
 
 
+class PaymentReconciliation(TimeStampedModel):
+    """رکوردِ پایدارِ «پولی که درگاه تأیید کرده اما سفارش آن را نپذیرفته».
+
+    وقتی تأییدِ درگاه موفق است ولی سفارش دیگر قابلِ پرداخت نیست (لغوشده، قبلاً
+    پرداخت‌شده، یا خطایِ پردازش)، شواهدِ پرداخت (شناسه‌ها، مبلغ، پاسخِ تأیید) اینجا
+    نگه داشته می‌شود تا هرگز بی‌صدا گم نشود. سفارش **خودکار بازگشایی/پرداخت‌شده/دوباره
+    رزروِ کد** نمی‌شود؛ مدیرِ مجاز آن را دستی (استرداد خارج از سیستم، بازگشایی دستی…)
+    رسیدگی و علامت‌گذاری می‌کند. به‌ازای هر ``PaymentAttempt`` حداکثر یک رکورد (idempotent)."""
+
+    class Kind(models.TextChoices):
+        ORDER_CANCELED = "order_canceled", "سفارش لغو شده بود"
+        ALREADY_PAID = "already_paid", "سفارش قبلاً پرداخت شده بود (پرداخت تکراری)"
+        NOT_PAYABLE = "not_payable", "سفارش در وضعیتِ قابلِ پرداخت نبود"
+        PROCESSING_ERROR = "processing_error", "خطا در پردازشِ پرداختِ تأییدشده"
+
+    class Status(models.TextChoices):
+        OPEN = "open", "باز"
+        RESOLVED = "resolved", "رسیدگی‌شده"
+
+    class Resolution(models.TextChoices):
+        REFUNDED_OUTSIDE = "refunded_outside", "استردادِ خارج از سیستم انجام شد"
+        ORDER_REINSTATED = "order_reinstated", "سفارش دستی بازگشایی/جایگزین شد"
+        NO_ACTION = "no_action", "نیازی به اقدام نبود"
+
+    store = models.ForeignKey("stores.Store", verbose_name="فروشگاه", on_delete=models.PROTECT, related_name="payment_reconciliations")
+    order = models.ForeignKey(Order, verbose_name="سفارش", on_delete=models.PROTECT, related_name="payment_reconciliations")
+    attempt = models.OneToOneField(
+        PaymentAttempt, verbose_name="تلاش پرداخت", on_delete=models.PROTECT, related_name="reconciliation",
+    )
+    kind = models.CharField("نوع", max_length=20, choices=Kind.choices)
+    status = models.CharField("وضعیت", max_length=10, choices=Status.choices, default=Status.OPEN, db_index=True)
+    amount = models.DecimalField("مبلغِ تأییدشده", max_digits=14, decimal_places=0)
+    gateway_track_id = models.CharField("شناسه‌ی پیگیری درگاه", max_length=100, blank=True, default="")
+    gateway_ref_id = models.CharField("شماره‌ی ارجاع بانکی", max_length=100, blank=True, default="")
+    order_status_at_detection = models.CharField("وضعیتِ سفارش در لحظه‌ی کشف", max_length=15, blank=True, default="")
+    payment_status_at_detection = models.CharField("وضعیتِ پرداختِ سفارش در لحظه‌ی کشف", max_length=15, blank=True, default="")
+    evidence = models.JSONField("شواهدِ تأیید درگاه (بدونِ اطلاعاتِ حساس)", default=dict, blank=True)
+    error_message = models.CharField("خطا (امن)", max_length=300, blank=True, default="")
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="رسیدگی‌کننده", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="resolved_payment_reconciliations",
+    )
+    resolved_at = models.DateTimeField("زمانِ رسیدگی", null=True, blank=True)
+    resolution = models.CharField("نتیجه‌ی رسیدگی", max_length=20, choices=Resolution.choices, blank=True, default="")
+    resolution_note = models.CharField("یادداشتِ رسیدگی", max_length=500, blank=True, default="")
+
+    class Meta:
+        verbose_name = "تطبیقِ پرداخت"
+        verbose_name_plural = "تطبیق‌هایِ پرداخت"
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["store", "status", "-created_at"], name="idx_reconcile_store_status")]
+
+    def __str__(self):
+        return f"{self.get_kind_display()} — {self.order_id} ({self.get_status_display()})"
+
+
 # ===========================================================================
 # Refund domain (Admin Panel Completion Program checkpoint 2 — ADR-33/34)
 # ===========================================================================

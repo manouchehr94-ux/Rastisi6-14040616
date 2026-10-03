@@ -97,3 +97,16 @@ def review_created(review, store) -> None:
                  "customer_name": review.customer.full_name, "store_name": store.name},
         dedupe_key=f"review:{review.pk}",
     )
+
+
+def late_payment(record) -> None:
+    """پرداختِ تأییدشده‌ای که اعمال نشد (``PaymentReconciliation``) → ایمیل به کارکنان؛ یک‌بار به‌ازای هر رکورد."""
+    from apps.core.utils import format_toman
+
+    order = record.order
+    ctx = {
+        **cb.order_context(record.store, order),
+        "order_total": format_toman(record.amount, with_unit=False),
+        "reconciliation_reason": record.get_kind_display(),
+    }
+    safe_dispatch("staff.late_payment", store=record.store, order=order, context=ctx, dedupe_key=f"reconcile:{record.pk}")
