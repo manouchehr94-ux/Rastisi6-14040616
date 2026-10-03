@@ -243,7 +243,12 @@ class Command(BaseCommand):
             if current.get("layout_preset_key") == preset.key:
                 self.stdout.write(f"  [{preset.key}] از قبل منتشر شده — بدونِ Apply/Publishِ تازه.")
                 return
-        preset_service.apply_preset_with_checkpoint(store, preset)
+        # Controlled preview setup: apply the Ready Template through the
+        # lower-level ``apply_preset`` primitive on the active Draft (the
+        # merchant-facing checkpoint wrapper is fail-closed for Ready Templates —
+        # Architecture Convergence / Phase 1 single-authority rule).
+        preview_draft = layout_service.get_or_create_draft(store)
+        preset_service.apply_preset(preview_draft, preset)
         layout_service.publish(store)
         self.stdout.write(f"  [{preset.key}] Apply + Publish شد.")
 

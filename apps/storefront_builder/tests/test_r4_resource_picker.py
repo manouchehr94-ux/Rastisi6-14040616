@@ -54,6 +54,9 @@ class R4ResourcePickerTestCase(StorefrontBuilderViewsTestCase):
         self.collection_section = StorefrontSection.objects.create(
             version=self.draft, section_key="collection_tiles", order=2,
         )
+        self.category_section = StorefrontSection.objects.create(
+            version=self.draft, section_key="category_grid", order=3,
+        )
 
     def _make_product(self, *, store=None, name="کالای پیکر", slug="picker-product", sku="SKU-PICKER"):
         store = store or self.store
@@ -144,9 +147,13 @@ class UnsupportedKindTests(R4ResourcePickerTestCase):
         response = self.client.get(self._picker_url(kind="widget"))
         self.assertEqual(response.status_code, 400)
 
-    def test_category_kind_is_not_exposed(self):
+    def test_category_kind_is_now_exposed(self):
+        # Task 6 — category is converged onto the shared Picker (the
+        # ResourceSource adapter already existed; only the registry/Picker
+        # wiring was missing), so the category kind now resolves (was a
+        # controlled 400 before).
         response = self.client.get(self._picker_url(kind="category"))
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 200)
 
     def test_collection_kind_is_now_exposed(self):
         # Task 4 (V03) — collection is converged onto the shared Picker, so
@@ -594,6 +601,214 @@ class CollectionInspectorResolvesTests(R4ResourcePickerTestCase):
         # 404; after (b) it resolves 200 and exposes the generic picker control.
         response = self.client.get(
             reverse("dashboard:storefront-builder-r4-section-inspector", args=[self.collection_section.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-r4-resource-picker-open")
+
+
+class CategoryPickerSearchTests(R4ResourcePickerTestCase):
+    def test_category_route_resolves_and_uses_shared_template(self):
+        response = self.client.get(self._picker_url(kind="category"))
+        self.assertEqual(response.status_code, 200)
+        templates = [t.name for t in response.templates if t.name]
+        self.assertIn("dashboard/storefront_builder/r4/partials/resource_picker.html", templates)
+
+    def test_category_search_excludes_foreign_store_categories(self):
+        own = self._make_category(name="دستهِ خودیِ جستجو", slug="own-search-category")
+        foreign = self._make_category(
+            store=_second_store(), name="دستهِ غریبهِ جستجو", slug="foreign-search-category",
+        )
+        response = self.client.get(self._picker_url(kind="category", q="جستجو"))
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        self.assertIn(own.name, body)
+        self.assertNotIn(foreign.name, body)
+
+    def test_category_search_excludes_inactive_categories(self):
+        active = self._make_category(name="دستهِ فعالِ جستجو", slug="active-search-category")
+        inactive = self._make_category(name="دستهِ غیرفعالِ جستجو", slug="inactive-search-category")
+        inactive.is_active = False
+        inactive.save(update_fields=["is_active"])
+        response = self.client.get(self._picker_url(kind="category", q="جستجو"))
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        self.assertIn(active.name, body)
+        self.assertNotIn(inactive.name, body)
+
+    def test_category_serialized_by_name_no_name_en_attribute_error(self):
+        # Category has no name_en; the picker must dispatch category
+        # EXPLICITLY, never fall through to the brand name_en path.
+        cat = self._make_category(name="دستهِ نامدار", slug="named-category")
+        response = self.client.get(self._picker_url(kind="category"))
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        self.assertIn(cat.name, body)
+        self.assertIn(f'data-r4-picker-item-id="{cat.pk}"', body)
+
+    def test_category_picker_exposes_all_active_auto_rule(self):
+        response = self.client.get(self._picker_url(kind="category"))
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        self.assertIn('data-r4-picker-auto-rule="all_active"', body)
+
+    def test_category_max_items_cap_is_twelve(self):
+        response = self.client.get(self._picker_url(kind="category"))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("<span data-r4-picker-max-items>12</span>", response.content.decode())
+
+    def test_category_over_cap_selected_is_rejected(self):
+        cats = [self._make_category(name=f"دستهِ سقف {i}", slug=f"cap-category-{i}") for i in range(13)]
+        ids = [c.pk for c in cats]
+        response = self.client.get(self._picker_url(kind="category", selected=ids, q="no-such-query-xyz"))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "too_many_selected_resources")
+
+    def test_category_selected_items_preserve_requested_order_and_exclude_foreign(self):
+        c1 = self._make_category(name="دستهِ ترتیبِ یک", slug="order-cat-one")
+        c2 = self._make_category(name="دستهِ ترتیبِ دو", slug="order-cat-two")
+        foreign = self._make_category(store=_second_store(), name="دستهِ غریبهِ ترتیب", slug="order-cat-foreign")
+        response = self.client.get(self._picker_url(
+            kind="category", q="no-such-query-xyz", selected=[c2.pk, c1.pk, foreign.pk],
+        ))
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        self.assertIn(c1.name, body)
+        self.assertIn(c2.name, body)
+        self.assertNotIn(foreign.name, body)
+        self.assertLess(body.index(c2.name), body.index(c1.name))
+
+
+class CategoryManualOwnershipTests(R4ResourcePickerTestCase):
+    def test_foreign_category_manual_id_is_rejected(self):
+        foreign = self._make_category(store=_second_store(), name="دستهِ غریبهِ دستی", slug="foreign-manual-category")
+        starting_revision = self.draft.edit_revision
+        original_settings = dict(self.category_section.settings)
+        before_count = self._history_count()
+
+        response = self._post_mutation({
+            "base_revision": starting_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": self.category_section.pk,
+                "patch": self._source_patch(kind="category", mode="manual", manual_ids=[foreign.pk]),
+            },
+        })
+
+        self.assertEqual(response.status_code, 400)
+        body = response.json()
+        self.assertIs(body["ok"], False)
+        self.assertEqual(body["code"], "invalid_resource_ownership")
+
+        self.category_section.refresh_from_db()
+        self.assertEqual(self.category_section.settings, original_settings)
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.edit_revision, starting_revision)
+        self.assertEqual(self._history_count(), before_count)
+
+    def test_missing_category_manual_id_is_rejected(self):
+        starting_revision = self.draft.edit_revision
+        original_settings = dict(self.category_section.settings)
+        before_count = self._history_count()
+
+        response = self._post_mutation({
+            "base_revision": starting_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": self.category_section.pk,
+                "patch": self._source_patch(kind="category", mode="manual", manual_ids=[999999]),
+            },
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "invalid_resource_ownership")
+        self.category_section.refresh_from_db()
+        self.assertEqual(self.category_section.settings, original_settings)
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.edit_revision, starting_revision)
+        self.assertEqual(self._history_count(), before_count)
+
+    def test_same_store_valid_category_manual_ids_succeed_with_legacy_shape(self):
+        c1 = self._make_category(name="دستهِ معتبرِ یک", slug="valid-manual-cat1")
+        c2 = self._make_category(name="دستهِ معتبرِ دو", slug="valid-manual-cat2")
+        starting_revision = self.draft.edit_revision
+        before_count = self._history_count()
+
+        response = self._post_mutation({
+            "base_revision": starting_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": self.category_section.pk,
+                "patch": self._source_patch(kind="category", mode="manual", manual_ids=[c1.pk, c2.pk]),
+            },
+        })
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertIs(body["ok"], True)
+        self.assertEqual(body["new_revision"], starting_revision + 1)
+
+        self.category_section.refresh_from_db()
+        self.assertNotIn("source", self.category_section.settings)
+        self.assertEqual(self.category_section.settings["category_ids"], [c1.pk, c2.pk])
+
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.edit_revision, starting_revision + 1)
+        self.assertEqual(self._history_count(), before_count + 1)
+
+    def test_category_all_active_auto_succeeds_no_ownership_lookup(self):
+        starting_revision = self.draft.edit_revision
+        response = self._post_mutation({
+            "base_revision": starting_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": self.category_section.pk,
+                "patch": self._source_patch(kind="category", mode="auto", auto_rule="all_active"),
+            },
+        })
+        self.assertEqual(response.status_code, 200)
+        self.category_section.refresh_from_db()
+        self.assertNotIn("source", self.category_section.settings)
+        self.assertEqual(self.category_section.settings["category_ids"], [])
+
+    def test_category_source_patch_preserves_display_mode_variant_marker(self):
+        # The variant marker (display_mode) survives a source-only patch.
+        self.category_section.settings = {
+            **self.category_section.settings, "display_mode": "circular",
+        }
+        self.category_section.save(update_fields=["settings"])
+        starting_revision = self.draft.edit_revision
+        response = self._post_mutation({
+            "base_revision": starting_revision,
+            "mutation": {
+                "type": "section.update_settings",
+                "section_id": self.category_section.pk,
+                "patch": self._source_patch(kind="category", mode="auto", auto_rule="all_active"),
+            },
+        })
+        self.assertEqual(response.status_code, 200)
+        self.category_section.refresh_from_db()
+        self.assertEqual(self.category_section.settings["display_mode"], "circular")
+
+
+class CategoryPickerGateTests(R4ResourcePickerTestCase):
+    def test_category_picker_gate_off_returns_404(self):
+        self.layout.r4_editor_enabled = False
+        self.layout.save(update_fields=["r4_editor_enabled"])
+        response = self.client.get(self._picker_url(kind="category"))
+        self.assertEqual(response.status_code, 404)
+
+    def test_category_picker_anonymous_denied(self):
+        self.client.logout()
+        response = self.client.get(self._picker_url(kind="category"))
+        self.assertNotEqual(response.status_code, 200)
+
+
+class CategoryInspectorResolvesTests(R4ResourcePickerTestCase):
+    def test_category_grid_inspector_resolves_after_schema(self):
+        # Before Task 6 the category_grid section had no schema → inspector
+        # 404; after, it resolves 200 and exposes the generic picker control.
+        response = self.client.get(
+            reverse("dashboard:storefront-builder-r4-section-inspector", args=[self.category_section.pk])
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "data-r4-resource-picker-open")

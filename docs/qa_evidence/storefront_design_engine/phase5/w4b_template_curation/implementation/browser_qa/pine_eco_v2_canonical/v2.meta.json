@@ -1,0 +1,11 @@
+{
+  "template_key": "pine_eco",
+  "version": "2",
+  "content_hash": "b8440f97022d517f2ae8093cd1d54d0e930147827194f80d897c73bcf17cfa27",
+  "preview_input_fingerprint": "529765c47454936133f1eeec80ece4b1e6feeeff5684176ecfe25c05a441e002",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}

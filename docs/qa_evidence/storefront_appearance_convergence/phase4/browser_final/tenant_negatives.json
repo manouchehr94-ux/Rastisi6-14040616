@@ -1,0 +1,8 @@
+{
+  "anonymous_preview_get": {
+    "url": "/admin-portal/storefront-builder/preview/?page=home",
+    "status_code": 302,
+    "rejected": true,
+    "note": "Unauthenticated GET against the real Preview view/permission stack via Django's test Client (not the browser, not a skipped fixture) — expected 302 (redirect to login) or 403, never 200."
+  }
+}

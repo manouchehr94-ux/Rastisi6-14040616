@@ -364,6 +364,12 @@ class EditorRejectsUnknownVariantTests(TestCase):
 
     @override_settings(ALLOWED_HOSTS=[ADMIN_HOST, "testserver"])
     def test_post_with_unknown_variant_key_is_rejected(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         resp = self.client.post(reverse("dashboard:storefront-builder-header"), {
             "show_cart": "on", "header_variant": "totally_made_up_variant",
         })
@@ -373,6 +379,12 @@ class EditorRejectsUnknownVariantTests(TestCase):
 
     @override_settings(ALLOWED_HOSTS=[ADMIN_HOST, "testserver"])
     def test_post_with_valid_variant_key_round_trips(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         resp = self.client.post(reverse("dashboard:storefront-builder-header"), {
             "show_cart": "on", "header_variant": "premium_three_column",
         })

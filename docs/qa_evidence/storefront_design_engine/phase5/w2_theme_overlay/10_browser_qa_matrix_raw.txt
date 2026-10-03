@@ -1,0 +1,38 @@
+P5-W2 Browser QA matrix — raw per-case output (Python 3.12.13)
+Public route: http://localhost:8878/products/ (Host rasti-mode-demo.rastisi.localhost)
+Each line: <viewport>: occasion=<theme>/<intensity>/<motif> overflowPx=<scrollWidth-innerWidth>
+overflowPx=-10 at every viewport => NO horizontal overflow. No console errors on any load.
+
+===== TEMPLATE A = dense_marketplace (published version 16) =====
+yalda subtle  (motif pomegranate_night, opacity 0.06):
+    1440x900: occasion=yalda/subtle/pomegranate_night overflowPx=-10
+    768x1024: occasion=yalda/subtle/pomegranate_night overflowPx=-10
+    390x844:  occasion=yalda/subtle/pomegranate_night overflowPx=-10
+yalda balanced (opacity 0.12):
+    1440x900: occasion=yalda/balanced/pomegranate_night overflowPx=-10
+    768x1024: occasion=yalda/balanced/pomegranate_night overflowPx=-10
+    390x844:  occasion=yalda/balanced/pomegranate_night overflowPx=-10
+yalda strong (opacity 0.20):
+    1440x900: occasion=yalda/strong/pomegranate_night overflowPx=-10
+    768x1024: occasion=yalda/strong/pomegranate_night overflowPx=-10
+    390x844:  occasion=yalda/strong/pomegranate_night overflowPx=-10
+ramadan subtle/balanced/strong (motif crescent_lantern):
+    1440x900/768x1024/390x844: occasion=ramadan/<int>/crescent_lantern overflowPx=-10 (all 9)
+muharram subtle/balanced/strong (motif muted_banner, mourning):
+    1440x900/768x1024/390x844: occasion=muharram/<int>/muted_banner overflowPx=-10 (all 9)
+console errors: none
+
+===== TEMPLATE B = editorial_jewelry (re-seeded, materially different) =====
+yalda subtle/balanced/strong (motif pomegranate_night):
+    1440x900/768x1024/390x844: occasion=yalda/<int>/pomegranate_night overflowPx=-10 (all 9)
+ramadan subtle/balanced/strong (motif crescent_lantern):
+    1440x900/768x1024/390x844: occasion=ramadan/<int>/crescent_lantern overflowPx=-10 (all 9)
+muharram subtle/balanced/strong (motif muted_banner, mourning):
+    1440x900/768x1024/390x844: occasion=muharram/<int>/muted_banner overflowPx=-10 (all 9)
+console errors: none
+
+Totals: 2 templates × 3 themes × 3 intensities × 3 viewports = 54 cases.
+All occasion/tone/intensity/motif markers correct; identical behavior across
+both materially different templates (template independence proven); no
+horizontal overflow; no console errors. theme.none restore => occasion=none
+tone=neutral motif='' active=False (no decoration).

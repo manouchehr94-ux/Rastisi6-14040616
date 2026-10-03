@@ -1,0 +1,10 @@
+{
+  "new_console_errors": 12,
+  "known_fixture_console_noise": 12,
+  "unexpected_console_errors": 0,
+  "unexpected_console_sample": [],
+  "page_errors": 0,
+  "new_request_failures": 0,
+  "unexpected_request_failures": 0,
+  "unexpected_request_failure_sample": []
+}

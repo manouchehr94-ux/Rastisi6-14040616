@@ -147,12 +147,86 @@ class FeatureGateTests(R4MutationApiTestCase):
 
 
 class NonSchemaSectionTests(R4MutationApiTestCase):
-    def test_faq_section_inspector_is_not_found(self):
-        faq_section = StorefrontSection.objects.create(
-            version=self.draft, section_key="faq", order=1,
+    def test_context_aware_domain_owned_section_inspector_is_not_found(self):
+        # ``faq`` was this test's original representative — Task 6 Group D
+        # later gave it a real schema (the new ``repeater`` field type's
+        # first user), so it no longer qualifies. ``single_banner`` was the
+        # representative after that, but R4 Task 7 (Batch 3) intentionally
+        # made a schema-less section return 200 (a minimal media-only
+        # Inspector) whenever it owns a media kind — single_banner does
+        # (``banners``), so it no longer 404s either; see
+        # ``MediaOnlySectionInspectorTests`` below for its new contract.
+        # ``product_main`` is the correct representative now: it is
+        # CONTEXT-AWARE-DOMAIN-OWNED — no schema AND no media kind, so it
+        # genuinely has nothing for the Inspector to show.
+        product_main_section = StorefrontSection.objects.create(
+            version=self.draft, section_key="product_main", order=1,
         )
-        response = self.client.get(_inspector_url(faq_section.pk))
+        response = self.client.get(_inspector_url(product_main_section.pk))
         self.assertEqual(response.status_code, 404)
+
+
+class MediaOnlySectionInspectorTests(R4MutationApiTestCase):
+    """R4 Task 7 (Batch 3) — a schema-less section that DOES own a media
+    kind (story_rail/single_banner today) gets a minimal media-only
+    Inspector instead of a 404, linking to the existing, unmodified legacy
+    media management screen — never a new media UI/authority."""
+
+    def test_single_banner_inspector_links_to_existing_media_management(self):
+        single_banner_section = StorefrontSection.objects.create(
+            version=self.draft, section_key="single_banner", order=1,
+        )
+        response = self.client.get(_inspector_url(single_banner_section.pk))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-r4-section-inspector")
+        self.assertContains(response, f'data-r4-section-id="{single_banner_section.pk}"')
+        self.assertContains(
+            response,
+            reverse(
+                "dashboard:storefront-builder-section-media-list",
+                kwargs={"pk": single_banner_section.pk, "kind": "banners"},
+            ),
+        )
+        self.assertNotContains(response, "<iframe")
+        self.assertNotContains(response, "sfb-modal")
+        self.assertNotContains(response, "<form")
+
+    def test_story_rail_inspector_links_to_existing_media_management(self):
+        story_rail_section = StorefrontSection.objects.create(
+            version=self.draft, section_key="story_rail", order=1,
+        )
+        response = self.client.get(_inspector_url(story_rail_section.pk))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            reverse(
+                "dashboard:storefront-builder-section-media-list",
+                kwargs={"pk": story_rail_section.pk, "kind": "story-items"},
+            ),
+        )
+
+    def test_hero_banner_inspector_also_links_to_media_management(self):
+        # hero_banner HAS a schema (unlike story_rail/single_banner) but is
+        # ALSO media-owning — the link is added to the normal schema-driven
+        # Inspector partial in this case, not a separate media-only shell.
+        response = self.client.get(_inspector_url(self.section.pk))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            reverse(
+                "dashboard:storefront-builder-section-media-list",
+                kwargs={"pk": self.section.pk, "kind": "hero-slides"},
+            ),
+        )
+
+    def test_rich_text_inspector_has_no_media_link(self):
+        # rich_text has neither a media kind — the link must not appear.
+        rich_text_section = StorefrontSection.objects.create(
+            version=self.draft, section_key="rich_text", order=1,
+        )
+        response = self.client.get(_inspector_url(rich_text_section.pk))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "r4-inspector-media-link")
 
 
 class MethodContractTests(R4MutationApiTestCase):
@@ -299,10 +373,22 @@ class R4EditorJsSidebarContractTests(R4MutationApiTestCase):
         # R4 Task 11 legitimately adds two more sanctioned POST endpoints
         # (history/, publish/) alongside the original mutate/ — this guard
         # is "no ROGUE extra write path", not "exactly one POST forever".
+        # P5-W3 adds the transient Design Lab endpoint (design-lab/), which is
+        # READ-ONLY (computes candidates, writes nothing); the real Design Lab
+        # persistence still flows through the SAME canonical mutate/ endpoint
+        # (design_lab.apply_candidate via R4.enqueueMutation), never a new
+        # write target. So the WRITE endpoints remain exactly the sanctioned
+        # three; the two extra POSTs are the read-only Design Lab calls.
         self.assertIn("mutate/", self.js_source)
         self.assertIn("history/", self.js_source)
         self.assertIn("publish/", self.js_source)
-        self.assertEqual(self.js_source.count("method: 'POST'"), 3)
+        # The read-only Design Lab endpoint URL comes from the server-rendered
+        # data attribute, never a hardcoded JS write target.
+        self.assertIn("data-r4-design-lab-url", self.js_source)
+        self.assertEqual(self.js_source.count("method: 'POST'"), 5)
+        # The Design Lab apply still routes through the ONE mutation queue,
+        # never a bespoke write endpoint.
+        self.assertIn("enqueueMutation(body.mutation)", self.js_source)
 
     def test_rich_text_save_flows_through_enqueue_mutation(self):
         self.assertIn("sfb-rich-editor", self.js_source)
@@ -377,10 +463,22 @@ class AppearanceOverrideWidgetTests(R4MutationApiTestCase):
         self.assertNotIn('type="text"', appearance_chunk)
 
     def test_uses_no_r3_endpoint_and_no_new_endpoint(self):
+        # Scoped to the appearance_override widget's own chunk — same
+        # slicing ``test_no_json_or_css_free_text_input_for_appearance_override``
+        # above already uses. R4 Task 7 (Batch 3) added a genuine, unrelated
+        # link to the existing media management screen elsewhere in the
+        # Inspector (outside this widget) — this test's actual contract was
+        # always "the appearance_override widget itself never calls any
+        # backend endpoint (R3 or new)", never "the whole Inspector response
+        # contains no admin URL anywhere."
         response = self.client.get(_inspector_url(self.section.pk))
         content = response.content.decode()
-        self.assertNotIn("/admin-portal/", content)
-        self.assertNotIn("section-settings", content)
+        advanced_start = content.index('data-r4-tab-panel="advanced"')
+        advanced_chunk = content[advanced_start:]
+        appearance_start = advanced_chunk.index('data-r4-field-type="appearance_override"')
+        appearance_chunk = advanced_chunk[appearance_start:appearance_start + 1500]
+        self.assertNotIn("/admin-portal/", appearance_chunk)
+        self.assertNotIn("section-settings", appearance_chunk)
 
     def test_inherited_appearance_projection_is_typed_and_minimal(self):
         response = self.client.get(_inspector_url(self.section.pk))
@@ -558,3 +656,598 @@ class BrandCarouselV02InspectorFilteringTests(R4MutationApiTestCase):
         section.refresh_from_db()
         self.assertEqual(section.settings, before)
         self.assertTrue(section.settings["show_view_all"])  # dormant, intact
+
+
+
+# ------------------------------------------------------------------------
+# Phase 5 Task 4A — Global-vs-section scope labeling. A merchant must always
+# know whether a control affects the whole storefront or only the selected
+# section. The Section indicator is added GENERICALLY to the one shared
+# schema-driven field renderer (settings_field.html), never by branching on
+# a specific section_key; the Global indicator is added to the Global Design
+# rendering path (r4/editor.html). Also pins the canonical contextual rule
+# (Section Inspector and Global Design never show as one mixed panel).
+# ------------------------------------------------------------------------
+
+
+class Task4ASectionScopeLabelTests(R4MutationApiTestCase):
+    SECTION_SCOPE_LABEL = "فقط این بخش"
+
+    def test_every_section_field_row_carries_a_section_scope_indicator(self):
+        response = self.client.get(_inspector_url(self.section.pk))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        # One machine-readable marker per rendered field row, plus the
+        # merchant-facing Persian wording.
+        field_row_count = content.count("data-r4-field-row")
+        self.assertGreater(field_row_count, 0)
+        self.assertEqual(content.count('data-r4-scope="section"'), field_row_count)
+        self.assertIn(self.SECTION_SCOPE_LABEL, content)
+
+    def test_scope_indicator_is_generic_not_section_name_branched(self):
+        template_source = Path(
+            settings.BASE_DIR,
+            "apps/storefront_builder/templates/dashboard/storefront_builder/r4/partials/settings_field.html",
+        ).read_text(encoding="utf-8")
+        # The scope indicator lives in the generic renderer and must never
+        # branch on a concrete section type. (``rich_text`` is intentionally
+        # NOT checked here — it is a generic field_type this renderer already
+        # branches on, not a section-name branch.)
+        self.assertIn('data-r4-scope="section"', template_source)
+        for section_name in ("hero_banner", "product_section", "brand_carousel", "single_banner"):
+            self.assertNotIn(section_name, template_source)
+
+    def test_scope_indicator_exposes_no_implementation_terminology(self):
+        response = self.client.get(_inspector_url(self.section.pk))
+        content = response.content.decode()
+        # Assert on the VISIBLE chip element only (its rendered inner text),
+        # not surrounding HTML — merchants only ever see the chip text.
+        import re
+        chips = re.findall(r'<span class="r4-field-scope"[^>]*>(.*?)</span>', content)
+        self.assertTrue(chips)
+        for chip_text in chips:
+            self.assertEqual(chip_text, self.SECTION_SCOPE_LABEL)
+            for forbidden in ("field_type", "section_key", "registry", "JSON", "settings_schema"):
+                self.assertNotIn(forbidden, chip_text)
+
+    def test_rich_text_section_also_gets_generic_section_scope(self):
+        rich_text_section = StorefrontSection.objects.create(
+            version=self.draft, section_key="rich_text", order=1,
+        )
+        response = self.client.get(_inspector_url(rich_text_section.pk))
+        content = response.content.decode()
+        self.assertIn('data-r4-scope="section"', content)
+        self.assertIn(self.SECTION_SCOPE_LABEL, content)
+
+
+class Task4AGlobalScopeLabelTests(R4MutationApiTestCase):
+    GLOBAL_SCOPE_LABEL = "سراسری — کل فروشگاه"
+
+    def _editor(self):
+        return self.client.get(reverse("dashboard:storefront-builder-r4-editor"))
+
+    def test_global_design_panel_carries_a_global_scope_indicator(self):
+        response = self._editor()
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        # The Global Design panel is the global-scope rendering path.
+        global_idx = content.index('id="r4GlobalDesign"')
+        global_chunk = content[global_idx:]
+        self.assertIn('data-r4-scope="global"', global_chunk)
+        self.assertIn(self.GLOBAL_SCOPE_LABEL, global_chunk)
+
+    def test_section_scope_wording_never_appears_inside_global_design(self):
+        response = self._editor()
+        content = response.content.decode()
+        global_idx = content.index('id="r4GlobalDesign"')
+        global_chunk = content[global_idx:]
+        self.assertNotIn("فقط این بخش", global_chunk)
+
+
+class Task4AContextualExclusivityContractTests(R4MutationApiTestCase):
+    """Product Owner rule: ONE SELECTION -> ONE CONTEXT. Opening a Section
+    Inspector must close Global Design (and vice-versa) so the two are never
+    shown as one mixed panel. This pins the existing canonical behavior with
+    regression coverage (Task 4A requirement)."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.js_source = Path(
+            settings.BASE_DIR,
+            "apps/storefront_builder/static/storefront_builder/r4_editor.js",
+        ).read_text(encoding="utf-8")
+
+    def test_open_section_closes_global_design(self):
+        open_idx = self.js_source.index("openSection = function")
+        open_chunk = self.js_source[open_idx:open_idx + 400]
+        self.assertIn("closeGlobalDesign()", open_chunk)
+
+    def test_open_global_design_closes_the_section_inspector(self):
+        self.assertIn("openGlobalDesign", self.js_source)
+        open_global_idx = self.js_source.index("function openGlobalDesign")
+        open_global_chunk = self.js_source[open_global_idx:open_global_idx + 400]
+        self.assertIn("closeInspector()", open_global_chunk)
+
+
+
+# ------------------------------------------------------------------------
+# Phase 5 Task 4B — media/background editing ported INTO R4. A media/
+# background-capable section must render a real R4 picker control (a new
+# generic `background` schema field type), not only a legacy-link stub. The
+# picker reuses the existing Media Library (Store-scoped MediaAsset) and the
+# existing background pattern registry; it saves through the EXISTING Draft
+# mutation flow (section.update_settings) — no new media authority, no new
+# persistence model, no direct filesystem access.
+# ------------------------------------------------------------------------
+
+
+class Task4BBackgroundFieldInspectorTests(R4MutationApiTestCase):
+    def test_hero_banner_advanced_renders_a_real_background_picker_control(self):
+        response = self.client.get(_inspector_url(self.section.pk))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+
+        advanced_start = content.index('data-r4-tab-panel="advanced"')
+        advanced_chunk = content[advanced_start:]
+
+        # A real, interactive control — not merely the passive out-link stub.
+        self.assertIn('data-r4-field-key="background"', advanced_chunk)
+        self.assertIn('data-r4-field-type="background"', advanced_chunk)
+        self.assertIn("data-r4-background-mode", advanced_chunk)
+        self.assertIn("data-r4-background-color", advanced_chunk)
+        self.assertIn("data-r4-background-pattern", advanced_chunk)
+        self.assertIn("data-r4-background-media", advanced_chunk)
+
+    def test_background_picker_reuses_store_media_library_assets(self):
+        from apps.content.models import MediaAsset
+
+        own_asset = MediaAsset.objects.create(store=self.store, image="uploads/own-bg.jpg")
+        response = self.client.get(_inspector_url(self.section.pk))
+        content = response.content.decode()
+        # The merchant's own asset is offered as a selectable option.
+        self.assertIn(f'value="{own_asset.pk}"', content)
+
+    def test_background_picker_never_offers_a_foreign_store_asset(self):
+        from apps.content.models import MediaAsset
+
+        other_store = Store.objects.create(
+            name="فروشگاه دیگر پس‌زمینه", slug="r4-bg-other-store",
+            admin_subdomain="r4-bg-other-store",
+        )
+        foreign_asset = MediaAsset.objects.create(store=other_store, image="uploads/foreign-bg.jpg")
+        response = self.client.get(_inspector_url(self.section.pk))
+        content = response.content.decode()
+        self.assertNotIn(f'value="{foreign_asset.pk}"', content)
+
+    def test_background_control_is_generic_not_section_name_branched(self):
+        template_source = Path(
+            settings.BASE_DIR,
+            "apps/storefront_builder/templates/dashboard/storefront_builder/r4/partials/settings_field.html",
+        ).read_text(encoding="utf-8")
+        self.assertIn('field.field_type == "background"', template_source)
+        for section_name in ("hero_banner", "product_section", "single_banner"):
+            self.assertNotIn(section_name, template_source)
+
+    def test_background_control_shows_no_raw_url_or_json_input(self):
+        response = self.client.get(_inspector_url(self.section.pk))
+        content = response.content.decode()
+        bg_start = content.index('data-r4-field-type="background"')
+        bg_chunk = content[bg_start:bg_start + 2000]
+        # Never a free-text URL/JSON/CSS surface for backgrounds.
+        self.assertNotIn('data-r4-field-type="json"', bg_chunk)
+        self.assertNotIn("http://", bg_chunk)
+
+
+class Task4BBackgroundJsContractTests(R4MutationApiTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.js_source = Path(
+            settings.BASE_DIR,
+            "apps/storefront_builder/static/storefront_builder/r4_editor.js",
+        ).read_text(encoding="utf-8")
+
+    def test_background_widget_saves_through_the_single_enqueue_mutation_path(self):
+        # A dedicated compound-widget listener (like appearance_override /
+        # repeater) that routes through the ONE existing mutation queue —
+        # never a second save path, never a modal.
+        self.assertIn("data-r4-background-mode", self.js_source)
+        bg_idx = self.js_source.index("data-r4-background-mode")
+        bg_chunk = self.js_source[bg_idx:bg_idx + 1600]
+        self.assertIn("enqueueMutation", bg_chunk)
+        self.assertIn("section.update_settings", bg_chunk)
+
+    def test_background_widget_adds_no_new_write_endpoint(self):
+        # Task 4B must not add a 4th WRITE POST target. The canonical WRITE
+        # endpoints remain the sanctioned three (mutate/history/publish); the
+        # background widget itself adds none. P5-W3 later added two READ-ONLY
+        # Design Lab POST fetches (design-lab/ candidate calls, which write
+        # nothing — the real apply reuses mutate/), so the literal POST count
+        # is five. The background widget still routes its own save through the
+        # single enqueueMutation(section.update_settings) path.
+        self.assertEqual(self.js_source.count("method: 'POST'"), 5)
+        self.assertNotIn("modal", self.js_source.lower())
+
+
+
+# ------------------------------------------------------------------------
+# Phase 5 Task 4D — sidebar -> preview selection sync. When a Section is
+# selected from the R4 sidebar/structure UI, R4 must post the canonical
+# selection into the EXISTING preview iframe (sfb:setSelection), which
+# preview.html already applies as the highlight. R4 must NOT reimplement the
+# highlight logic and must NOT create a second selected-section state — it
+# uses the existing section identity and the existing openSection selection.
+# ------------------------------------------------------------------------
+
+
+class Task4DSelectionSyncJsContractTests(R4MutationApiTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.js_source = Path(
+            settings.BASE_DIR,
+            "apps/storefront_builder/static/storefront_builder/r4_editor.js",
+        ).read_text(encoding="utf-8")
+
+    def test_r4_posts_set_selection_into_the_preview_iframe(self):
+        # The missing outbound message R4 never sent before this task.
+        self.assertIn("sfb:setSelection", self.js_source)
+        self.assertIn("previewFrame.contentWindow.postMessage", self.js_source)
+
+    def test_set_selection_is_posted_with_the_canonical_origin(self):
+        idx = self.js_source.index("sfb:setSelection")
+        chunk = self.js_source[idx:idx + 300]
+        # Targeted to this window's origin, never "*".
+        self.assertIn("window.location.origin", chunk)
+        self.assertNotIn("postMessage(", chunk.replace("previewFrame.contentWindow.postMessage(", ""))
+
+    def test_open_section_carries_the_selected_section_id_into_the_preview(self):
+        # openSection is the single selection entry point (sidebar click,
+        # preview-originated selectSection/openSectionSettings all route to
+        # it) — it drives the preview selection through one shared helper.
+        open_idx = self.js_source.index("openSection = function")
+        open_chunk = self.js_source[open_idx:open_idx + 2400]
+        self.assertIn("syncPreviewSelection()", open_chunk)
+        # The helper posts setSelection carrying the current selected id.
+        helper_idx = self.js_source.index("function syncPreviewSelection")
+        helper_chunk = self.js_source[helper_idx:helper_idx + 400]
+        self.assertIn("sfb:setSelection", helper_chunk)
+        self.assertIn("sectionId: R4.selected", helper_chunk)
+
+    def test_no_second_selected_section_state_is_introduced(self):
+        # R4.selected stays the single selection authority — no parallel
+        # selection variable, and the preview highlight logic itself is not
+        # reimplemented here (that stays in preview.html).
+        self.assertIn("R4.selected", self.js_source)
+        self.assertNotIn("applyBuilderSelection", self.js_source)
+        self.assertNotIn("sfb-rsec-selected", self.js_source)
+
+    def test_preview_originated_selection_events_are_still_handled(self):
+        # The existing inbound contract (preview -> R4) must be preserved.
+        self.assertIn("sfb:selectSection", self.js_source)
+        self.assertIn("sfb:openSectionSettings", self.js_source)
+
+
+class Task4DPreviewStillOwnsHighlightTests(R4MutationApiTestCase):
+    """preview.html already owns the incoming sfb:setSelection -> highlight
+    application; Task 4D must reuse it, not duplicate it."""
+
+    def test_preview_template_still_handles_incoming_set_selection(self):
+        preview_source = Path(
+            settings.BASE_DIR,
+            "apps/storefront_builder/templates/storefront_builder/preview.html",
+        ).read_text(encoding="utf-8")
+        self.assertIn("sfb:setSelection", preview_source)
+        self.assertIn("applyBuilderSelection", preview_source)
+        self.assertIn("sfb-rsec-selected", preview_source)
+
+
+
+# ------------------------------------------------------------------------
+# Phase 5 Task 4 remediation (R1a) — media editing is R4-NATIVE. A merchant
+# manages a media-bearing section's items (slides/banners/story items) inside
+# the R4 Inspector, reusing the canonical media_views CRUD/authority — never a
+# passive target="_blank" link to the legacy full-page screen as the normal
+# workflow, and never a second media model/view/service.
+# ------------------------------------------------------------------------
+
+
+class Task4AR4NativeMediaSchemaSectionTests(R4MutationApiTestCase):
+    """hero_banner is schema-enabled AND media-bearing (hero-slides)."""
+
+    def test_inspector_embeds_the_canonical_media_manager_inline(self):
+        response = self.client.get(_inspector_url(self.section.pk))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        # The canonical media list body is embedded inline (its stable id).
+        self.assertIn('id="mediaList"', content)
+        # An R4-native "manage media" region wraps it (in-panel, not a page).
+        self.assertIn("data-r4-media-manager", content)
+
+    def test_inspector_media_is_not_a_passive_blank_link_workflow(self):
+        response = self.client.get(_inspector_url(self.section.pk))
+        content = response.content.decode()
+        # The old passive out-link must no longer be the media workflow.
+        self.assertNotIn('target="_blank"', content)
+
+    def test_inspector_media_manager_uses_canonical_media_endpoints(self):
+        response = self.client.get(_inspector_url(self.section.pk))
+        content = response.content.decode()
+        # Add + list endpoints are the existing canonical media URLs.
+        add_url = reverse(
+            "dashboard:storefront-builder-section-media-add",
+            kwargs={"pk": self.section.pk, "kind": "hero-slides"},
+        )
+        self.assertIn(add_url, content)
+
+    def test_existing_slide_appears_in_the_inline_manager(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from apps.content.models import HeroSlide
+
+        png = SimpleUploadedFile("s.png", b"\x89PNG\r\n\x1a\n", content_type="image/png")
+        HeroSlide.objects.create(
+            store=self.store, section=self.section, title="اسلاید تستی", desktop_image=png, is_active=True,
+        )
+        response = self.client.get(_inspector_url(self.section.pk))
+        content = response.content.decode()
+        self.assertIn("اسلاید تستی", content)
+
+
+class Task4AR4NativeMediaOnlySectionTests(R4MutationApiTestCase):
+    """single_banner / story_rail are media-only (no schema) but media-bearing —
+    they get the same R4-native inline manager, not a legacy out-link."""
+
+    def test_single_banner_media_is_r4_native_inline(self):
+        single_banner = StorefrontSection.objects.create(
+            version=self.draft, section_key="single_banner", order=1,
+        )
+        response = self.client.get(_inspector_url(single_banner.pk))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("data-r4-media-manager", content)
+        self.assertIn('id="mediaList"', content)
+        self.assertNotIn('target="_blank"', content)
+
+    def test_story_rail_media_is_r4_native_inline(self):
+        story_rail = StorefrontSection.objects.create(
+            version=self.draft, section_key="story_rail", order=1,
+        )
+        response = self.client.get(_inspector_url(story_rail.pk))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("data-r4-media-manager", content)
+        self.assertNotIn('target="_blank"', content)
+
+
+class Task4ANoMediaLinkForNonMediaSectionTests(R4MutationApiTestCase):
+    def test_rich_text_inspector_has_no_media_manager(self):
+        rich_text = StorefrontSection.objects.create(
+            version=self.draft, section_key="rich_text", order=1,
+        )
+        response = self.client.get(_inspector_url(rich_text.pk))
+        content = response.content.decode()
+        self.assertNotIn("data-r4-media-manager", content)
+
+
+class Task4ANoDuplicateMediaAuthorityTests(R4MutationApiTestCase):
+    def test_no_new_media_urls_were_added(self):
+        from apps.dashboard import urls as dashboard_urls
+
+        url_names = {p.name for p in dashboard_urls.urlpatterns if getattr(p, "name", None)}
+        # Only the existing canonical media URLs may exist — no R4-specific
+        # media CRUD endpoint.
+        for forbidden in (
+            "storefront-builder-r4-media-list",
+            "storefront-builder-r4-media-add",
+            "storefront-builder-r4-media-edit",
+            "storefront-builder-r4-section-media",
+        ):
+            self.assertNotIn(forbidden, url_names)
+        # The canonical ones remain present.
+        for canonical in (
+            "storefront-builder-section-media-list",
+            "storefront-builder-section-media-add",
+            "storefront-builder-section-media-delete",
+        ):
+            self.assertIn(canonical, url_names)
+
+    def test_media_views_remains_the_single_media_model_owner(self):
+        # No second media library module was introduced.
+        import apps.storefront_builder.media_views as mv
+
+        self.assertTrue(hasattr(mv, "_MEDIA_KINDS"))
+        # The three canonical models stay the only media models the builder uses.
+        kinds = set(mv._MEDIA_KINDS)
+        self.assertEqual(kinds, {"hero-slides", "banners", "story-items"})
+
+
+class Task4AInspectorHtmxProcessedTests(R4MutationApiTestCase):
+    """R1a — the inline media manager relies on htmx-bound controls, but the
+    Inspector HTML is injected via innerHTML (which htmx does not auto-process).
+    openSection must call htmx.process() on the injected Inspector so the
+    embedded canonical media manager's add/edit/toggle/delete controls actually
+    work inline — reusing htmx (already loaded by base_admin), not a second
+    binding mechanism."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.js_source = Path(
+            settings.BASE_DIR,
+            "apps/storefront_builder/static/storefront_builder/r4_editor.js",
+        ).read_text(encoding="utf-8")
+
+    def test_open_section_processes_htmx_on_injected_inspector(self):
+        open_idx = self.js_source.index("openSection = function")
+        open_chunk = self.js_source[open_idx:open_idx + 1800]
+        self.assertIn("htmx.process", open_chunk)
+
+
+
+# ------------------------------------------------------------------------
+# Phase 5 Task 4 remediation (R2) — Global Design scope must be unambiguous
+# PER editable group, not only a single panel-level chip. Every
+# .r4-global-design-group visibly carries the Global scope indicator, added
+# generically (one marker per group, never duplicated per concrete setting,
+# never a second settings renderer). Global Design / Section Inspector stay
+# mutually exclusive.
+# ------------------------------------------------------------------------
+
+
+class Task4R2GlobalGroupScopeLabelTests(R4MutationApiTestCase):
+    GLOBAL_SCOPE_LABEL = "سراسری — کل فروشگاه"
+
+    def _editor(self):
+        return self.client.get(reverse("dashboard:storefront-builder-r4-editor"))
+
+    def test_every_global_design_group_carries_a_global_scope_indicator(self):
+        response = self._editor()
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        # Count the editable Global Design groups and require one group-level
+        # scope marker per group.
+        group_count = content.count('class="r4-global-design-group')
+        self.assertGreaterEqual(group_count, 3)
+        group_scope_count = content.count('data-r4-scope="global-group"')
+        self.assertEqual(group_scope_count, group_count)
+
+    def test_group_scope_indicator_uses_the_merchant_global_wording(self):
+        response = self._editor()
+        content = response.content.decode()
+        # Each group-level marker carries the merchant-facing Persian wording.
+        idx = content.index('data-r4-scope="global-group"')
+        chunk = content[idx:idx + 120]
+        self.assertIn(self.GLOBAL_SCOPE_LABEL, chunk)
+
+    def test_group_scope_is_generic_not_per_setting(self):
+        # The marker count equals the number of GROUPS, never the (much larger)
+        # number of individual global controls — proving it is not duplicated
+        # per concrete setting.
+        response = self._editor()
+        content = response.content.decode()
+        group_count = content.count('class="r4-global-design-group')
+        control_count = content.count("data-r4-global-field")
+        group_scope_count = content.count('data-r4-scope="global-group"')
+        self.assertEqual(group_scope_count, group_count)
+        self.assertLess(group_scope_count, control_count)
+
+
+# ------------------------------------------------------------------------
+# Final-QA Defect 2 — Hero "Add Slide" R4-inline submission must never 500.
+#
+# Root cause: ``section_media_form_body.html`` chose the hx-post URL with
+# ``{% if item %}`` — Python truthiness of a model INSTANCE, which is
+# always true, even for a fresh, still-unsaved ``HeroSlide()`` the view
+# re-renders with after a failed ``full_clean()`` on the ADD flow (the
+# error-redisplay branch sets ``item = obj`` unconditionally). That made the
+# error-redisplay of an ADD attempt pick the EDIT url pattern with
+# ``item_pk=item.pk`` where ``item.pk`` is ``None`` -> ``NoReverseMatch`` ->
+# HTTP 500, and — because htmx does not swap DOM on a non-2xx response —
+# with zero merchant-visible feedback. The canonical view/persistence path
+# itself was already correct; only the template's edit-vs-add branch
+# needed ``item.pk`` (a real primary key) instead of bare ``item``.
+# ------------------------------------------------------------------------
+class HeroAddSlideR4InlineSubmissionTests(R4MutationApiTestCase):
+    def _img(self, name="slide.png"):
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        buf = BytesIO()
+        Image.new("RGB", (800, 400), (10, 20, 30)).save(buf, "PNG")
+        return SimpleUploadedFile(name, buf.getvalue(), content_type="image/png")
+
+    def _add_url(self):
+        return reverse(
+            "dashboard:storefront-builder-section-media-add",
+            kwargs={"pk": self.section.pk, "kind": "hero-slides"},
+        )
+
+    def _post_inline(self, data):
+        return self.client.post(
+            self._add_url(), data, HTTP_HX_REQUEST="true", HTTP_HX_R4_INLINE="1",
+        )
+
+    # 1. Hero Add Slide GET/render does not raise.
+    def test_get_render_does_not_raise(self):
+        response = self.client.get(
+            self._add_url(), HTTP_HX_REQUEST="true", HTTP_HX_R4_INLINE="1",
+        )
+        self.assertEqual(response.status_code, 200)
+
+    # 2. Invalid empty submission does not 500; the merchant sees a usable
+    #    re-rendered form (the canonical HTMX validation-response contract).
+    def test_invalid_empty_submission_does_not_500(self):
+        response = self._post_inline({"title": "بدون تصویر", "is_active": "on"})
+        self.assertEqual(response.status_code, 200, response.content)
+
+    # 3. Invalid submission produces zero write.
+    def test_invalid_submission_writes_nothing(self):
+        from apps.content.models import HeroSlide
+
+        before = HeroSlide.objects.filter(section=self.section).count()
+        self._post_inline({"title": "بدون تصویر", "is_active": "on"})
+        self.assertEqual(HeroSlide.objects.filter(section=self.section).count(), before)
+
+    # 4. Valid image submission succeeds, through the existing canonical
+    #    media path (no second upload/storage path).
+    def test_valid_image_submission_succeeds(self):
+        from apps.content.models import HeroSlide
+
+        response = self._post_inline({
+            "title": "اسلاید معتبر", "subtitle": "زیرعنوان",
+            "desktop_image": self._img(), "is_active": "on",
+        })
+        self.assertEqual(response.status_code, 200, response.content)
+        slide = HeroSlide.objects.get(section=self.section, title="اسلاید معتبر")
+        self.assertTrue(slide.desktop_image)
+
+    # 5 + 6. Valid submission persists after reload, and the existing
+    #    canonical MediaAsset authority (never a second one) recorded it.
+    def test_valid_submission_persists_and_uses_canonical_media_asset(self):
+        from apps.content.models import HeroSlide, MediaAsset
+
+        self._post_inline({
+            "title": "اسلاید ماندگار", "desktop_image": self._img(), "is_active": "on",
+        })
+        slide = HeroSlide.objects.get(section=self.section, title="اسلاید ماندگار")
+        self.assertIsNotNone(slide.desktop_asset_id)
+        self.assertTrue(MediaAsset.objects.filter(pk=slide.desktop_asset_id).exists())
+
+        list_response = self.client.get(
+            reverse(
+                "dashboard:storefront-builder-section-media-list",
+                kwargs={"pk": self.section.pk, "kind": "hero-slides"},
+            ),
+            HTTP_HX_REQUEST="true", HTTP_HX_R4_INLINE="1",
+        )
+        self.assertEqual(list_response.status_code, 200)
+        self.assertIn("اسلاید ماندگار", list_response.content.decode())
+
+    # An edit-flow error-redisplay must still pick the EDIT url (a real,
+    # already-persisted item_pk) — proving the fix is scoped to the ADD
+    # flow's unsaved-object case, never breaking the existing edit path.
+    def test_edit_flow_error_redisplay_keeps_the_edit_url(self):
+        from apps.content.models import HeroSlide
+
+        slide = HeroSlide.objects.create(
+            store=self.store, section=self.section, title="اسلاید موجود",
+            desktop_image=self._img(), is_active=True,
+        )
+        edit_url = reverse(
+            "dashboard:storefront-builder-section-media-edit",
+            kwargs={"pk": self.section.pk, "kind": "hero-slides", "item_pk": slide.pk},
+        )
+        # An invalid edit submission (blanking the required image while
+        # leaving no existing file behind is not directly expressible here,
+        # so this uses a show_button/no-destination validation failure from
+        # HeroSlide.clean() instead) must re-render, not 500, and must keep
+        # pointing at THIS item's edit url.
+        response = self.client.post(
+            edit_url, {"title": "اسلاید موجود", "is_active": "on", "show_button": "on"},
+            HTTP_HX_REQUEST="true", HTTP_HX_R4_INLINE="1",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertIn(edit_url, response.content.decode())

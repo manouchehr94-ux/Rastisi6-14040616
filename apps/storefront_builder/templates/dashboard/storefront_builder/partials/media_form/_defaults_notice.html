@@ -1,0 +1,14 @@
+{% load storefront_builder_extras %}
+{% comment %}
+Shown ONLY when ADDING an item while the store-wide defaults are what the
+storefront is currently showing for this section: saving the first own item
+switches the renderer to the section's own items and hides the defaults.
+Pure information — it changes no behavior (see media_defaults_service).
+{% endcomment %}
+{% media_default_state section config as dstate %}
+{% if not item.pk and dstate.in_effect %}
+<div class="sfb-media-defaults-notice" role="note" data-r4-media-defaults-notice
+     style="border:1px solid #f0d9a7;background:#fff8e6;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12.5px;line-height:1.7">
+  اکنون {{ dstate.items|length }} تصویر پیش‌فرض فروشگاه نمایش داده می‌شود. با ذخیرهٔ این {{ config.label }} جدید، فقط {{ config.label_plural }} اختصاصی نمایش داده می‌شوند و پیش‌فرض‌ها پنهان می‌شوند. اگر می‌خواهید آن‌ها هم بمانند، ابتدا از فهرست، «قابل‌ویرایش کردن تصاویر پیش‌فرض» را بزنید.
+</div>
+{% endif %}

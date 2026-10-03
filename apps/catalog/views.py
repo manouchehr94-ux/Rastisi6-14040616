@@ -110,10 +110,10 @@ def home(request):
         "max_discount": stats["max_discount"] or 0,
         "blog_posts": BlogPost.objects.order_by("-published_at")[:5],
         "special_offer_deadline": (timezone.now() + timedelta(hours=8)).isoformat(),
-        "hero_slides": HeroSlide.objects.filter(is_active=True, store=store).select_related(
+        "hero_slides": HeroSlide.objects.filter(is_active=True, store=store, section__isnull=True).select_related(
             "destination_category", "destination_product", "destination_brand"
         ),
-        "promo_banners": PromotionalBanner.objects.filter(is_active=True, store=store).select_related(
+        "promo_banners": PromotionalBanner.objects.filter(is_active=True, store=store, section__isnull=True).select_related(
             "destination_category", "destination_product", "destination_brand"
         ),
     }
@@ -307,6 +307,22 @@ def build_product_listing_context(request, store):
     paginator = Paginator(qs, PRODUCTS_PER_PAGE)
     page_obj = paginator.get_page(request.GET.get("page"))
 
+    # Phase 5 Task 7 (Browse hardening, Gap #2) — bounded, Django-native page
+    # window. The template previously iterated the FULL ``page_range`` (every
+    # page number), which at scale produced an unusable multi-row pagination
+    # control on mobile (discovery evidence). We keep the canonical Django
+    # ``Paginator`` and use its OWN ``get_elided_page_range`` — no custom
+    # windowing algorithm, no second pagination state. ``on_each_side=0`` /
+    # ``on_ends=1`` yields a tight ``1 … n … last`` window: browser-tuned for
+    # Task 7 because ``on_each_side=1`` still wrapped the control to two rows at
+    # 390px on an 8-page fixture, whereas this tighter native window keeps it to
+    # a single row — no custom logic, no CSS page-hiding.
+    # ``pagination_ellipsis`` is Django's own sentinel so the template can
+    # render a non-link separator without duplicating pagination semantics.
+    pagination_range = list(
+        paginator.get_elided_page_range(page_obj.number, on_each_side=0, on_ends=1)
+    )
+
     filter_categories = Category.objects.filter(store=store, parent__isnull=True, is_active=True).prefetch_related(
         Prefetch("children", queryset=Category.objects.filter(store=store, is_active=True).order_by("order", "name"))
     ).order_by("order", "name")
@@ -330,6 +346,9 @@ def build_product_listing_context(request, store):
     return {
         "page_obj": page_obj,
         "products": page_obj.object_list,
+        # Task 7 Gap #2 — bounded page window + Django's own ellipsis sentinel.
+        "pagination_range": pagination_range,
+        "pagination_ellipsis": Paginator.ELLIPSIS,
         "query": query,
         "sort_key": sort_key,
         "sort_options": LIST_SORT_OPTIONS,
@@ -350,16 +369,22 @@ def build_product_listing_context(request, store):
     }
 
 
+def _product_listing_card_settings(render_items) -> dict:
+    """Phase 4 (Task 3E) — extract the ``product_listing`` section's own
+    resolved, merchant-overridden card settings (the exact same value the
+    full-page render's own section template threads into
+    ``product_list_results.html`` via ``settings.card``) out of the shared
+    canonical render_items list. Fails safe to ``{}`` (template defaults)
+    if the section is somehow missing — never crashes the listing page."""
+    for item in render_items:
+        if item["section"].section_key == "product_listing":
+            return item["context"]["settings"].get("card") or {}
+    return {}
+
+
 def product_list(request):
     store = resolve_store_for_storefront(request)
     context = build_product_listing_context(request, store)
-
-    if request.headers.get("HX-Request") == "true":
-        # G2: on an HTMX filter/pagination swap, also refresh the breadcrumb +
-        # heading (which live outside #product-results) out-of-band so they never
-        # go stale relative to the pushed URL/results.
-        context["listing_header_oob"] = True
-        return render(request, "catalog/partials/product_list_results.html", context)
 
     # Phase 1B: این یک route است که هم «لیست/دسته‌بندی» و هم «جستجو» را
     # پوشش می‌دهد (بدون URL جداگانه‌ی جستجو — نگاه کنید به گزارشِ ممیزیِ
@@ -372,7 +397,24 @@ def product_list(request):
     from apps.storefront_builder.models import StorefrontPage
 
     page_type = StorefrontPage.PageType.SEARCH if context["query"] else StorefrontPage.PageType.LISTING
-    context.update(build_universal_storefront_context(request, store, page_type, page_context=context))
+    # Phase 4 (Task 3E) — the canonical context builder now runs on BOTH the
+    # HTMX fragment path and the full-page path (previously the HTMX branch
+    # returned before this ever ran), through the exact same call — no
+    # second fragment renderer. Before this fix, an HTMX filter/pagination
+    # swap never received the merchant's product_listing card-style
+    # override (``card_settings``), so it silently reverted to template
+    # defaults until the next full page load.
+    universal_context = build_universal_storefront_context(request, store, page_type, page_context=context)
+    context.update(universal_context)
+    context["card_settings"] = _product_listing_card_settings(universal_context.get("render_items") or [])
+
+    if request.headers.get("HX-Request") == "true":
+        # G2: on an HTMX filter/pagination swap, also refresh the breadcrumb +
+        # heading (which live outside #product-results) out-of-band so they never
+        # go stale relative to the pushed URL/results.
+        context["listing_header_oob"] = True
+        return render(request, "catalog/partials/product_list_results.html", context)
+
     return render(request, "catalog/product_list.html", context)
 
 
@@ -588,6 +630,18 @@ def collection_index(request):
 
     context = {"collections": page_obj.object_list, "page_obj": page_obj}
     context.update(build_universal_storefront_context(request, store, StorefrontPage.PageType.COLLECTION, page_context=context))
+    # Phase 4 (Task 3D, Ruling L) — StorefrontPage.PageType.COLLECTION means
+    # Collection DETAIL composition; this call above only needs the shared
+    # canonical Global Appearance/Header/Footer half of the returned
+    # context. Collection Index is intentionally a domain-owned direct
+    # listing page — it does NOT introduce a seventh Builder page type, and
+    # ``collection_index.html`` must never include ``render_rows.html`` or
+    # otherwise render the returned ``render_items``/``rows`` keys, which
+    # belong to Collection Detail's section composition (both routes share
+    # the same page_type slot, so those keys ARE present in this dict, but
+    # consuming them here would silently leak Detail's Builder content onto
+    # this page — see test_collection_public_views.CollectionIndexBoundaryTests
+    # for the enforced boundary, including an end-to-end leak-proof test).
     return render(request, "catalog/collection_index.html", context)
 
 

@@ -1,0 +1,16 @@
+=== CANDIDATE-PREVIEW REGRESSION (Python 3.12.13) — after Preview single-resolution fix ===
+--- task2 + NonDestructiveTemplatePreviewTests ---
+Ran 24 tests in 224.900s
+
+OK
+Destroying test database for alias 'default'...
+Found 24 test(s).
+System check identified no issues (0 silenced).
+
+--- task3 merchant preview ---
+Ran 11 tests in 26.056s
+
+OK
+Destroying test database for alias 'default'...
+Found 11 test(s).
+System check identified no issues (0 silenced).

@@ -1,0 +1,13 @@
+=== RUNTIME ===
+Python 3.12.13
+/projects/sandbox/Rastisi6-14040616/.venv312/bin/python
+Django 5.2.17
+=== FOCUSED W2 (raw) ===
+..........................................................
+----------------------------------------------------------------------
+Ran 58 tests in 14.101s
+
+OK
+Destroying test database for alias 'default'...
+Found 58 test(s).
+System check identified no issues (0 silenced).

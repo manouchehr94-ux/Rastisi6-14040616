@@ -48,7 +48,15 @@ touched from Preview) — everything else (mega-menu, categories) is identical.
 {% endif %}
 
 <header class="header{% if hc.sticky %} sfb-sticky{% endif %}"><div class="wrap">
-  <button class="h-btn burger" @click="mobileNavOpen = !mobileNavOpen" aria-label="منو">
+  {% comment %}Phase 5 Task 5 (MDR) — on the live storefront the burger opens
+  the accessible off-canvas drawer (below) via the shared mobileDrawerOpen
+  scope; inside the read-only Builder Preview it keeps the legacy desktop-nav
+  toggle only (no live overlay).{% endcomment %}
+  <button class="h-btn burger" type="button"
+          {% if is_live_storefront %}@click="mobileDrawerOpen = true"
+          :aria-expanded="mobileDrawerOpen ? 'true' : 'false'"
+          aria-controls="mobile-nav-drawer"{% else %}@click="mobileNavOpen = !mobileNavOpen"{% endif %}
+          aria-label="منو">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
   </button>
   <a class="logo" href="{% if is_live_storefront %}/{% else %}#{% endif %}"{% if is_builder_preview %} onclick="return false"{% endif %}>
@@ -254,4 +262,10 @@ touched from Preview) — everything else (mega-menu, categories) is identical.
 </div>
 {% endif %}
 {% endfor %}
+
+{% comment %}Phase 5 Task 5 (MDR) — the ONE shared accessible mobile nav drawer.
+Rendered on the live storefront only (the Builder Preview iframe is read-only
+and keeps the legacy desktop-nav toggle). Same partial base.html uses, so there
+is a single drawer implementation across every header shell.{% endcomment %}
+{% if is_live_storefront %}{% include "partials/mobile_nav_drawer.html" %}{% endif %}
 {% endwith %}

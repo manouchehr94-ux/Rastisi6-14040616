@@ -1,0 +1,26 @@
+{% load storefront_builder_extras %}
+{# Media form field group — image files. Shared by the legacy linear form and the R4 modal's "تصاویر" tab. #}
+{% for f in config.file_fields %}
+{% with current_url=item|getattribute:f.thumb %}
+<div class="form-group">
+  <label for="id_{{ f.name }}">{{ f.label }}{% if f.required and not item.pk %} (الزامی){% endif %}</label>
+  {% if item.pk and current_url %}
+  <img class="sfb-media-current" src="{{ current_url }}" alt="{{ f.label }} (فعلی)">
+  {% endif %}
+  <input type="file" name="{{ f.name }}" id="id_{{ f.name }}" accept="image/png,image/jpeg,image/webp">
+  {% if f.name in reselect_fields %}
+  <p class="sfb-media-reselect" role="status" style="font-size:12.5px;color:#b7494c;margin:6px 0 0">فایلی که انتخاب کرده بودید ذخیره نشد؛ لطفاً تصویر را دوباره انتخاب کنید.</p>
+  {% endif %}
+  {# An asset-backed row (cloned / adopted) has an EMPTY legacy file but a real image, so test the effective url too. #}
+  {% if item and item|getattribute:f.name or current_url %}
+    {% if f.remove_field %}
+    <label style="display:flex;align-items:center;gap:6px;font-weight:normal;margin-top:6px">
+      <input type="checkbox" name="{{ f.remove_field }}"> {{ f.remove_label }}
+    </label>
+    {% else %}
+    <p style="font-size:12px;color:var(--muted);margin:6px 0 0">تصویر فعلی حفظ می‌شود مگر فایل جدیدی انتخاب کنید.</p>
+    {% endif %}
+  {% endif %}
+</div>
+{% endwith %}
+{% endfor %}

@@ -430,15 +430,33 @@ class GalleryRealScreenshotIntegrationTests(TestCase):
         mocked_apply.assert_not_called()
         mocked_checkpoint.assert_not_called()
 
-    def test_screenshot_image_can_be_opened_larger_via_a_plain_non_mutating_link(self):
+    def test_screenshot_click_opens_the_non_mutating_in_page_live_preview(self):
         """Mission Step 30: 'preview may open larger non-mutating view' —
-        implemented as a plain <a href> to the static image itself (no
-        view logic, so structurally non-mutating)."""
+        was originally a plain <a href> to the static image itself; P5-W5C
+        (Ready Template Preview UX) supersedes that with the SAME
+        non-mutating guarantee but a materially better merchant outcome —
+        the screenshot now opens the real in-page live preview (large,
+        Desktop/Tablet/Mobile, Demo/Merchant data) instead of the raw
+        static image, per that phase's explicit product requirement
+        ("clicking the screenshot ... should open the IN-PAGE preview
+        experience"). The href still targets a plain, real, non-mutating
+        GET URL (now the canonical live-preview route, still no view
+        logic beyond what that already-non-mutating view does) — so this
+        is a structural upgrade of Step 30's contract, not a relaxation of
+        it: a no-JS browser still gets a working direct link, and a
+        JS-enabled one gets the strictly richer in-page dialog
+        (template_gallery_preview.js)."""
         response = self.client.get(self.url)
         content = response.content.decode()
         for card in response.context["template_cards"]:
             if card["thumbnail_kind"] == "screenshot":
-                self.assertIn(f'href="{card["thumbnail_url"]}"', content)
+                preview_url = reverse(
+                    "dashboard:storefront-builder-template-live-preview",
+                    kwargs={"key": card["preset"].key},
+                )
+                self.assertIn(f'data-tpl-preview-trigger', content)
+                self.assertIn(f'data-tpl-preview-url-demo="{preview_url}"', content)
+                self.assertIn(f'data-tpl-preview-url-merchant="{preview_url}?data=merchant"', content)
 
 
 class CaptureCommandSafetyTests(TestCase):
@@ -470,3 +488,54 @@ class CaptureCommandSafetyTests(TestCase):
         Store.objects.filter(slug="rasti-mode-demo").delete()
         with self.assertRaises(CommandError):
             call_command("capture_ready_template_previews", stdout=StringIO())
+
+
+class TextFingerprintLineEndingNormalizationTests(TestCase):
+    """Windows-parity regression: ``preview_input_fingerprint`` hashes text
+    inputs (the demo media manifest JSON and the seed command's own source)
+    via ``_file_hash``. A Windows checkout can materialize those text files
+    with CRLF instead of the committed LF, which must NOT change the hash —
+    otherwise Linux-generated committed fingerprints resolve as stale on
+    Windows and ``resolve_real_screenshot`` wrongly returns ``None``.
+
+    These tests use temporary files with explicit byte content, so they never
+    depend on the running platform's checkout / autocrlf configuration."""
+
+    def _hash_bytes(self, raw: bytes) -> str:
+        import os
+        import tempfile
+
+        fd, name = tempfile.mkstemp()
+        try:
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(raw)
+            return tps._file_hash(Path(name))
+        finally:
+            os.unlink(name)
+
+    def test_lf_crlf_cr_same_logical_text_hash_identically(self):
+        base_lf = b"line one\nline two\nline three\n"
+        crlf = b"line one\r\nline two\r\nline three\r\n"
+        cr = b"line one\rline two\rline three\r"
+
+        h_lf = self._hash_bytes(base_lf)
+        h_crlf = self._hash_bytes(crlf)
+        h_cr = self._hash_bytes(cr)
+
+        self.assertEqual(h_lf, h_crlf, "CRLF must hash identically to LF")
+        self.assertEqual(h_lf, h_cr, "lone CR must hash identically to LF")
+
+    def test_lf_bytes_are_unchanged_by_normalization(self):
+        # The committed inputs are LF on Linux; normalization must be a no-op
+        # for them so existing Linux-generated fingerprints stay valid.
+        lf = b"a\nb\nc\n"
+        self.assertEqual(tps._canonicalize_text_bytes(lf), lf)
+
+    def test_real_content_change_still_changes_the_hash(self):
+        original = b"catalog: 50 products\nprice tier: A\n"
+        changed = b"catalog: 51 products\nprice tier: A\n"  # a genuine content edit
+        self.assertNotEqual(
+            self._hash_bytes(original),
+            self._hash_bytes(changed),
+            "a real text-content change must still produce a different hash",
+        )

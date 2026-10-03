@@ -32,6 +32,8 @@ class StoreAppearanceFamilyContractTests(SimpleTestCase):
                 "motion",
                 "footer",
                 "bottom_nav",
+                # P5-W2 — reversible occasion Theme appearance-token family.
+                "theme",
             ),
         )
         validate_family_catalog(COMPONENT_FAMILIES.values())

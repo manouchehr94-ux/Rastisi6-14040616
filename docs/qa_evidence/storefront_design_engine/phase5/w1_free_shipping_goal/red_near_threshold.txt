@@ -1,0 +1,25 @@
+Creating test database for alias 'default'...
+FF
+======================================================================
+FAIL: test_just_below_threshold_progress_is_99_not_100 (apps.cart.tests.test_pricing.FreeShippingGoalTests.test_just_below_threshold_progress_is_99_not_100)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/projects/sandbox/Rastisi6-14040616/apps/cart/tests/test_pricing.py", line 454, in test_just_below_threshold_progress_is_99_not_100
+    self.assertLess(t["free_shipping_goal_progress_percent"], 100)
+AssertionError: 100 not less than 100
+
+======================================================================
+FAIL: test_one_unit_below_threshold_progress_below_100 (apps.cart.tests.test_pricing.FreeShippingGoalTests.test_one_unit_below_threshold_progress_below_100)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/projects/sandbox/Rastisi6-14040616/apps/cart/tests/test_pricing.py", line 462, in test_one_unit_below_threshold_progress_below_100
+    self.assertLess(t["free_shipping_goal_progress_percent"], 100)
+AssertionError: 100 not less than 100
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.015s
+
+FAILED (failures=2)
+Destroying test database for alias 'default'...
+Found 2 test(s).
+System check identified no issues (0 silenced).

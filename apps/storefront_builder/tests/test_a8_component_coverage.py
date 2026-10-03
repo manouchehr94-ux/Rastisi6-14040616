@@ -30,6 +30,8 @@ EXPECTED_ADVERTISED_COUNTS = {
     "motion": 3,
     "footer": 8,
     "bottom_nav": 7,
+    # P5-W2 — Ready Templates advertise only the Theme no-op.
+    "theme": 1,
 }
 
 

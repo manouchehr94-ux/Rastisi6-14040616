@@ -62,6 +62,15 @@ class TemplateGalleryTests(TestCase):
         self.admin_client = Client(HTTP_HOST=ADMIN_HOST)
         self.admin_client.login(username="u8_gallery_owner", password="pass12345")
         self.url = reverse("dashboard:storefront-builder-templates")
+        # Pre-Task-10 CORRECTIVE closure (Item 2) — the legacy editor's own
+        # topbar link to the Gallery (test_gallery_reachable_from_advanced_
+        # editor_topbar below) now renders only in the still-required FULL
+        # legacy body; the Gallery itself is unaffected (its own template,
+        # and already globally reachable from base_admin.html's persistent
+        # nav/search regardless of this flag).
+        layout = svc.get_or_create_layout(self.store)
+        layout.r4_editor_enabled = False
+        layout.save(update_fields=["r4_editor_enabled"])
 
     def test_lists_every_registered_ready_template(self):
         """Acceptance Batch 1 (post-U11) — the Gallery now shows only the

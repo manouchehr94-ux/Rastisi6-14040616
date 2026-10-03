@@ -10,7 +10,7 @@ image_text و product_section). معادلِ merchant-facing بلوکِ JSON
 <details class="sfb-advanced-field" x-show="inspectorTab === 'advanced'" x-cloak style="margin-top:6px" {% if dest.destination_type and dest.destination_type != "none" %}open{% endif %}>
   <summary style="cursor:pointer;font-size:13px;color:var(--muted)">لینک این بخش</summary>
   <div style="margin-top:10px" x-data="destinationPicker(
-        '{{ dest.destination_type|default:"none" }}',
+        '{{ dest.destination_type|default:"none"|escapejs }}',
         {{ dest.destination_id|default:"null" }},
         '{{ destination_product_name|default:""|escapejs }}')">
     <div class="form-group">

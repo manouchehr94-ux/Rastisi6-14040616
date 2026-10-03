@@ -2,7 +2,7 @@ from django.test import SimpleTestCase
 
 from apps.storefront_builder import resource_source as resource_source_module
 from apps.storefront_builder import section_registry
-from apps.storefront_builder.section_registry import SectionDefinition, get_definition
+from apps.storefront_builder.section_registry import SectionDefinition, TrustFeaturesSettingsError, get_definition
 from apps.storefront_builder.settings_schema import (
     SettingsField,
     SettingsSchema,
@@ -346,11 +346,21 @@ class JsonSafeDefaultTests(SimpleTestCase):
 
 
 class RichTextSchemaRegistrationTests(SimpleTestCase):
-    def test_rich_text_is_schema_enabled_with_exactly_body_html(self):
+    def test_rich_text_is_schema_enabled_with_body_html_plus_projected_background(self):
+        # rich_text declares exactly ``body_html`` itself; it is also
+        # BACKGROUND_AWARE, so the canonical capability projection
+        # (_with_background_schema_field in _finalize_registry) appends the
+        # generic ``background`` picker field. This is the single canonical
+        # source of that field — never hand-added to the schema constant.
         rich_text = section_registry.get_definition("rich_text")
         self.assertIsNotNone(rich_text.settings_schema)
         self.assertEqual(
             [f.key for f in rich_text.settings_schema.fields],
+            ["body_html", "background"],
+        )
+        # The raw module-level constant still declares only its own field.
+        self.assertEqual(
+            [f.key for f in section_registry.RICH_TEXT_SCHEMA.fields],
             ["body_html"],
         )
 
@@ -381,7 +391,11 @@ class HeroBannerSchemaRegistrationTests(SimpleTestCase):
                 "show_dots",
                 "loop",
                 "text_position",
+                # Phase 5 Task 5 (STRANS) — between-slide transition style.
+                "transition",
                 "appearance_overrides",
+                # Phase 5 Task 4B — the per-section background picker field.
+                "background",
             ],
         )
 
@@ -430,17 +444,93 @@ class HeroBannerSchemaRegistrationTests(SimpleTestCase):
 
 
 class NoOtherSectionBecomesSchemaEnabledTests(SimpleTestCase):
-    def test_image_slider_shares_the_slider_validator_but_is_not_schema_enabled(self):
-        # image_slider uses the exact same _validate_slider_settings /
-        # default_slider_settings pair as hero_banner, but has no
-        # `variants` registered — Task 4 must not accidentally schema-
-        # enable it just because it shares the validator function.
+    def test_image_slider_is_now_schema_enabled_via_its_own_schema(self):
+        # image_slider shares _validate_slider_settings/default_slider_settings
+        # with hero_banner but has no `variants` registered, so Task 4
+        # deliberately did NOT schema-enable it just because it shares the
+        # validator function. Task 6 gives it its own IMAGE_SLIDER_SCHEMA
+        # (identical to HERO_BANNER_SCHEMA minus the hero_style field, which
+        # only has a rendered control on hero_banner's settings form).
         image_slider = section_registry.get_definition("image_slider")
-        self.assertIsNone(image_slider.settings_schema)
+        self.assertIsNotNone(image_slider.settings_schema)
+        field_keys = {field.key for field in image_slider.settings_schema.fields}
+        self.assertNotIn("hero_style", field_keys)
 
     def test_representative_unrelated_section_is_still_unschematized(self):
-        faq = section_registry.get_definition("faq")
-        self.assertIsNone(faq.settings_schema)
+        # ``faq`` was this test's original representative — Task 6 Group D
+        # later gave it a real schema (the repeater field type's first
+        # user), so it no longer qualifies. ``single_banner`` is now the
+        # correct representative: it has NO settings-driven field at all
+        # (its render context ignores section.settings entirely — see the
+        # explicit FIXED/STATIC disposition comment on its
+        # SectionDefinition), so unlike every other family here it will
+        # never legitimately gain a schema.
+        single_banner = section_registry.get_definition("single_banner")
+        self.assertIsNone(single_banner.settings_schema)
+
+
+class SchemaEnablementRegistryGuardTests(SimpleTestCase):
+    """Phase 4 (Task 4) — backfills the R4-schema-enable guard across the
+    WHOLE registry, not just the two sampled families
+    (``NoOtherSectionBecomesSchemaEnabledTests`` above only ever checked
+    ``image_slider``/``faq``). As Task 6 gives each of the remaining MIGRATE
+    families its own R4 settings schema, this test fails immediately unless
+    that family's key is deliberately added to ``EXPECTED_SCHEMA_ENABLED``
+    (unschematized is implicit: any registered key not in that set) in the
+    SAME change — no family can become schema-enabled (or silently regress
+    to unschematized) without this guard noticing."""
+
+    # The families with an R4 settings schema today (Phase 3's two
+    # certified pilots — brand_carousel, collection_tiles — plus
+    # hero_banner, rich_text, product_section; Task 6 adds category_grid,
+    # image_slider, blog_posts, amazing_offers, quick_links, video_section,
+    # newsletter, image_text, multi_banner, Group B's
+    # newest_products/best_sellers/discounted_products/promo_cards, and
+    # Group D's trust_features/faq/testimonials (the first schemas to use
+    # the new "repeater" field type). single_banner is deliberately
+    # excluded: it has no settings-driven field at all (Task 6 Group C
+    # fixed/static disposition).
+    EXPECTED_SCHEMA_ENABLED = frozenset({
+        "hero_banner",
+        "brand_carousel",
+        "rich_text",
+        "product_section",
+        "collection_tiles",
+        "category_grid",
+        "image_slider",
+        "blog_posts",
+        "amazing_offers",
+        "quick_links",
+        "video_section",
+        "newsletter",
+        "image_text",
+        "multi_banner",
+        "newest_products",
+        "best_sellers",
+        "discounted_products",
+        "promo_cards",
+        "trust_features",
+        "faq",
+        "testimonials",
+    })
+
+    def test_every_registered_section_key_matches_its_expected_schema_state(self):
+        definitions = section_registry.list_definitions()
+        registered_keys = {definition.key for definition in definitions}
+        # The guard set must itself track the registry — a typo'd or
+        # retired key here must fail loudly, not silently no-op.
+        self.assertTrue(self.EXPECTED_SCHEMA_ENABLED.issubset(registered_keys))
+
+        mismatches = []
+        for definition in definitions:
+            expected_enabled = definition.key in self.EXPECTED_SCHEMA_ENABLED
+            actually_enabled = definition.settings_schema is not None
+            if expected_enabled != actually_enabled:
+                mismatches.append((definition.key, expected_enabled, actually_enabled))
+        self.assertEqual(
+            mismatches, [],
+            f"schema-enablement drift (key, expected_enabled, actually_enabled): {mismatches}",
+        )
 
 
 class CleanSectionSchemaPatchBridgeTests(SimpleTestCase):
@@ -466,6 +556,27 @@ class CleanSectionSchemaPatchBridgeTests(SimpleTestCase):
 
         expected = rich_text.validate_settings({**current, "body_html": "<p>سلام</p>"})
         self.assertEqual(bridged, expected)
+
+    def test_quick_links_menu_picker_bridge_matches_legacy_validator_result(self):
+        # Pre-Task-10 corrective closure — menu_id was previously an
+        # "Unknown settings key" through this R4 bridge (not schema-
+        # declared at all); now it is a real menu_picker field.
+        quick_links = section_registry.get_definition("quick_links")
+        current = quick_links.validate_settings(quick_links.default_settings())
+
+        bridged = clean_section_schema_patch(quick_links, {"menu_id": 7}, current)
+
+        expected = quick_links.validate_settings({**current, "menu_id": 7})
+        self.assertEqual(bridged, expected)
+        self.assertEqual(bridged["menu_id"], 7)
+
+    def test_quick_links_menu_picker_empty_string_clears_selection(self):
+        quick_links = section_registry.get_definition("quick_links")
+        current = quick_links.validate_settings({"menu_id": 7})
+
+        bridged = clean_section_schema_patch(quick_links, {"menu_id": ""}, current)
+
+        self.assertIsNone(bridged["menu_id"])
 
     def test_hero_preserves_supported_legacy_wrapper_blocks(self):
         hero = section_registry.get_definition("hero_banner")
@@ -773,3 +884,333 @@ class Phase3SharedPilotPreservationTests(SimpleTestCase):
                 else:
                     self.assertNotIn("show_view_all", sourced)
                     self.assertNotIn("desktop_columns", sourced["responsive"])
+
+
+class RepeaterFieldContractTests(SimpleTestCase):
+    """Task 6 (Group D) — the new ``repeater`` field type's own contract
+    layer (shape/length cleaning only; business rules like "drop an item
+    missing a required text" stay the section's own validate_settings'
+    job, exercised separately in RepeaterSchemaEnabledFamilyTests below)."""
+
+    def _schema(self, **field_kwargs):
+        return SettingsSchema(fields=(
+            SettingsField(
+                "items", "آیتم‌ها", "repeater", "basic",
+                default=[],
+                repeater_item_fields=(
+                    SettingsField("label", "برچسب", "text", "basic", default="", max_length=10),
+                    SettingsField("enabled", "فعال", "boolean", "basic", default=False),
+                ),
+                **field_kwargs,
+            ),
+        ))
+
+    def test_repeater_field_requires_repeater_item_fields(self):
+        with self.assertRaises(SettingsSchemaError):
+            SettingsField("items", "آیتم‌ها", "repeater", "basic", default=[])
+
+    def test_repeater_item_fields_rejected_on_non_repeater_field(self):
+        with self.assertRaises(SettingsSchemaError):
+            SettingsField(
+                "title", "عنوان", "text", "basic", default="",
+                repeater_item_fields=(SettingsField("x", "x", "text", "basic"),),
+            )
+
+    def test_nested_repeater_item_field_type_is_rejected(self):
+        with self.assertRaises(SettingsSchemaError):
+            SettingsField(
+                "items", "آیتم‌ها", "repeater", "basic", default=[],
+                repeater_item_fields=(
+                    SettingsField("nested", "تودرتو", "repeater", "basic", default=[],
+                                  repeater_item_fields=(SettingsField("x", "x", "text", "basic"),)),
+                ),
+            )
+
+    def test_duplicate_repeater_item_field_key_is_rejected(self):
+        with self.assertRaises(SettingsSchemaError):
+            SettingsField(
+                "items", "آیتم‌ها", "repeater", "basic", default=[],
+                repeater_item_fields=(
+                    SettingsField("x", "یک", "text", "basic"),
+                    SettingsField("x", "دو", "text", "basic"),
+                ),
+            )
+
+    def test_valid_list_of_items_is_cleaned_per_declared_sub_field(self):
+        schema = self._schema()
+        cleaned = clean_schema_patch(schema, {"items": [
+            {"label": "برچسب یک", "enabled": "on"},
+            {"label": "کوتاه"},
+        ]}, {})
+        self.assertEqual(cleaned["items"], [
+            {"label": "برچسب یک", "enabled": True},
+            {"label": "کوتاه", "enabled": False},
+        ])
+
+    def test_overlong_repeater_item_sub_field_is_rejected(self):
+        # Sub-field cleaning delegates to the exact same _clean_field_value
+        # every top-level "text" field uses, which rejects an overlong
+        # value rather than silently truncating it.
+        schema = self._schema()
+        with self.assertRaises(SettingsSchemaError):
+            clean_schema_patch(schema, {"items": [
+                {"label": "این یک برچسبِ خیلی طولانی است", "enabled": False},
+            ]}, {})
+
+    def test_non_list_value_is_rejected(self):
+        schema = self._schema()
+        with self.assertRaises(SettingsSchemaError):
+            clean_schema_patch(schema, {"items": {"not": "a list"}}, {})
+
+    def test_non_dict_item_is_rejected(self):
+        schema = self._schema()
+        with self.assertRaises(SettingsSchemaError):
+            clean_schema_patch(schema, {"items": ["not a dict"]}, {})
+
+    def test_min_value_bounds_item_count(self):
+        schema = self._schema(min_value=1)
+        with self.assertRaises(SettingsSchemaError):
+            clean_schema_patch(schema, {"items": []}, {})
+
+    def test_max_value_bounds_item_count(self):
+        schema = self._schema(max_value=1)
+        with self.assertRaises(SettingsSchemaError):
+            clean_schema_patch(schema, {"items": [{"label": "a"}, {"label": "b"}]}, {})
+
+    def test_serialize_schema_includes_repeater_item_fields(self):
+        schema = self._schema(max_value=6)
+        payload = serialize_schema(schema)
+        items_field = payload["fields"][0]
+        self.assertEqual(items_field["field_type"], "repeater")
+        self.assertEqual(items_field["max_value"], 6)
+        sub_keys = [f["key"] for f in items_field["repeater_item_fields"]]
+        self.assertEqual(sub_keys, ["label", "enabled"])
+
+    def test_preserve_unmanaged_keeps_other_keys_when_patching_items(self):
+        schema = self._schema()
+        current = {"items": [], "unmanaged_key": "still here"}
+        cleaned = clean_schema_patch(schema, {"items": [{"label": "x"}]}, current)
+        self.assertEqual(cleaned["unmanaged_key"], "still here")
+
+
+class RepeaterSchemaEnabledFamilyTests(SimpleTestCase):
+    """Task 6 (Group D) — trust_features/faq/testimonials, end to end
+    through clean_section_schema_patch (schema cleaning THEN the real
+    legacy validator), proving the repeater field type composes correctly
+    with each family's own business rules rather than bypassing them."""
+
+    def test_trust_features_schema_round_trips_and_still_enforces_required_title(self):
+        definition = get_definition("trust_features")
+        current = definition.validate_settings({})
+        cleaned = clean_section_schema_patch(definition, {
+            "items": [{"icon": "🚚", "title": "ارسال رایگان", "subtitle": "تا ۲۴ ساعت"}],
+        }, current)
+        self.assertEqual(cleaned["items"], [
+            {"icon": "🚚", "title": "ارسال رایگان", "subtitle": "تا ۲۴ ساعت"},
+        ])
+        # The schema layer accepts a blank title (shape-only cleaning); the
+        # legacy validator still rejects it afterward — the business rule
+        # is not bypassed just because the write path is new.
+        with self.assertRaises(TrustFeaturesSettingsError):
+            clean_section_schema_patch(definition, {"items": [{"icon": "x", "title": "", "subtitle": ""}]}, current)
+
+    def test_trust_features_schema_enforces_max_items_cap(self):
+        definition = get_definition("trust_features")
+        current = definition.validate_settings({})
+        too_many = [{"icon": "x", "title": f"عنوان {i}", "subtitle": ""} for i in range(7)]
+        with self.assertRaises(SettingsSchemaError):
+            clean_section_schema_patch(definition, {"items": too_many}, current)
+
+    def test_faq_schema_round_trips_title_and_items(self):
+        definition = get_definition("faq")
+        current = definition.validate_settings({})
+        cleaned = clean_section_schema_patch(definition, {
+            "title": "پرسش‌های پرتکرار",
+            "items": [{"question": "سوالِ تست؟", "answer": "پاسخِ تست"}],
+        }, current)
+        self.assertEqual(cleaned["title"], "پرسش‌های پرتکرار")
+        self.assertEqual(cleaned["items"], [{"question": "سوالِ تست؟", "answer": "پاسخِ تست"}])
+
+    def test_faq_schema_drops_item_missing_answer_via_legacy_validator(self):
+        definition = get_definition("faq")
+        current = definition.validate_settings({})
+        cleaned = clean_section_schema_patch(definition, {
+            "items": [{"question": "بدون پاسخ؟", "answer": ""}],
+        }, current)
+        self.assertEqual(cleaned["items"], [])
+
+    def test_testimonials_schema_round_trips_title_and_items(self):
+        definition = get_definition("testimonials")
+        current = definition.validate_settings({})
+        cleaned = clean_section_schema_patch(definition, {
+            "title": "نظرات",
+            "items": [{"name": "سارا", "quote": "عالی بود", "role": "تهران"}],
+        }, current)
+        self.assertEqual(cleaned["title"], "نظرات")
+        self.assertEqual(cleaned["items"], [{"name": "سارا", "quote": "عالی بود", "role": "تهران"}])
+
+    def test_testimonials_schema_drops_item_missing_name_via_legacy_validator(self):
+        definition = get_definition("testimonials")
+        current = definition.validate_settings({})
+        cleaned = clean_section_schema_patch(definition, {
+            "items": [{"name": "", "quote": "بدون نام", "role": ""}],
+        }, current)
+        self.assertEqual(cleaned["items"], [])
+
+
+
+# ------------------------------------------------------------------------
+# Phase 5 Task 4 remediation (R1b) — the generic `background` schema field is
+# projected CANONICALLY onto EVERY schema-enabled BACKGROUND_AWARE section
+# (capability-driven), not hand-added to hero_banner alone. Non-schema
+# background-aware sections (context/media-only) get no schema field — they
+# have no schema to attach to (documented exception, out of Task-4 scope).
+# ------------------------------------------------------------------------
+
+
+class BackgroundCapabilityProjectionTests(SimpleTestCase):
+    def _schema_enabled_background_aware_keys(self):
+        keys = []
+        for key in section_registry.BACKGROUND_AWARE_SECTION_KEYS:
+            definition = section_registry.get_definition(key)
+            if definition.settings_schema is not None:
+                keys.append(key)
+        return keys
+
+    def test_every_schema_enabled_background_aware_section_exposes_background_field(self):
+        projected = self._schema_enabled_background_aware_keys()
+        # Sanity: this set is broad, not just hero_banner.
+        self.assertIn("hero_banner", projected)
+        self.assertIn("image_slider", projected)
+        self.assertIn("multi_banner", projected)
+        self.assertGreater(len(projected), 5)
+        for key in projected:
+            definition = section_registry.get_definition(key)
+            field = definition.settings_schema.get_field("background")
+            self.assertIsNotNone(field, f"{key} is background-aware + schema-enabled but has no background field")
+            self.assertEqual(field.field_type, "background", key)
+            self.assertEqual(field.group, "advanced", key)
+
+    def test_background_field_default_is_canonical_default_background_settings(self):
+        for key in self._schema_enabled_background_aware_keys():
+            field = section_registry.get_definition(key).settings_schema.get_field("background")
+            self.assertEqual(field.default, section_registry.default_background_settings(), key)
+
+    def test_non_background_aware_schema_section_has_no_background_field(self):
+        # A schema-enabled section that is NOT background-aware must not get
+        # the field. cart_summary has no schema; use a schema-enabled section
+        # that is deliberately excluded from BACKGROUND_AWARE_SECTION_KEYS.
+        # (If none exist, this assertion is vacuously safe.)
+        for definition in section_registry.list_definitions():
+            if definition.settings_schema is None:
+                continue
+            if definition.key in section_registry.BACKGROUND_AWARE_SECTION_KEYS:
+                continue
+            self.assertIsNone(
+                definition.settings_schema.get_field("background"),
+                f"{definition.key} is NOT background-aware but exposes a background field",
+            )
+
+    def test_projection_is_not_manually_duplicated_in_hero_schema_constant(self):
+        # The base HERO_BANNER_SCHEMA constant must NOT carry a hand-added
+        # background field — the projection is the single canonical source,
+        # so the field is present on the finalized definition but absent from
+        # the raw module-level schema constant.
+        self.assertIsNone(section_registry.HERO_BANNER_SCHEMA.get_field("background"))
+        self.assertIsNotNone(
+            section_registry.get_definition("hero_banner").settings_schema.get_field("background")
+        )
+
+    def test_background_field_is_last_and_deduplicated(self):
+        # Projection appends exactly one background field (never a duplicate)
+        # and places it last in the finalized schema.
+        for key in self._schema_enabled_background_aware_keys():
+            fields = section_registry.get_definition(key).settings_schema.fields
+            bg_fields = [f for f in fields if f.key == "background"]
+            self.assertEqual(len(bg_fields), 1, key)
+            self.assertEqual(fields[-1].key, "background", key)
+
+    def test_documented_non_schema_background_aware_sections_have_no_schema(self):
+        # These 8 background-aware sections are context/media-only (no schema)
+        # — the documented exception. They must remain schema-less so the
+        # projection correctly skips them.
+        documented_non_schema = {
+            "catalog_product_wall", "collection_header", "featured_products",
+            "product_description", "product_video", "related_products",
+            "single_banner", "story_rail",
+        }
+        for key in documented_non_schema:
+            definition = section_registry.get_definition(key)
+            self.assertIn(key, section_registry.BACKGROUND_AWARE_SECTION_KEYS, key)
+            self.assertIsNone(definition.settings_schema, key)
+
+
+
+# ------------------------------------------------------------------------
+# Phase 5 Task 5 — STRANS: hero/image slider between-slide transition control.
+# A single CLOSED enum field ``transition`` (cut/fade/slide) on the EXISTING
+# shared slider validator + hero/image slider schema. Backward-compatible
+# default = "cut" (the historical hard-cut behavior). No second slider, no
+# free-text animation field.
+# ------------------------------------------------------------------------
+
+
+class SliderTransitionValidatorTests(SimpleTestCase):
+    def test_transition_default_is_cut(self):
+        cleaned = section_registry._validate_slider_settings({})
+        self.assertEqual(cleaned["transition"], "cut")
+        self.assertEqual(section_registry.default_slider_settings()["transition"], "cut")
+
+    def test_transition_accepts_cut_fade_slide(self):
+        for value in ("cut", "fade", "slide"):
+            cleaned = section_registry._validate_slider_settings({"transition": value})
+            self.assertEqual(cleaned["transition"], value)
+
+    def test_invalid_transition_normalizes_to_cut(self):
+        # Same closed-enum discipline as hero_style/text_position: an
+        # unknown/legacy value never round-trips into storage.
+        for bad in ("zoom", "", None, 5, "FADE ", "arbitrary-css"):
+            cleaned = section_registry._validate_slider_settings({"transition": bad})
+            self.assertEqual(cleaned["transition"], "cut", bad)
+
+    def test_transition_choices_constant_is_closed_enum(self):
+        self.assertEqual(section_registry.SLIDER_TRANSITION_CHOICES, ("cut", "fade", "slide"))
+
+    def test_other_slider_settings_unchanged_by_transition(self):
+        cleaned = section_registry._validate_slider_settings(
+            {"autoplay": False, "interval_ms": 3000, "transition": "fade"}
+        )
+        self.assertIs(cleaned["autoplay"], False)
+        self.assertEqual(cleaned["interval_ms"], 3000)
+        self.assertEqual(cleaned["transition"], "fade")
+        # All the historical keys still present.
+        for key in ("autoplay", "interval_ms", "show_arrows", "show_dots", "loop", "text_position", "hero_style"):
+            self.assertIn(key, cleaned)
+
+
+class SliderTransitionSchemaFieldTests(SimpleTestCase):
+    def test_hero_banner_schema_has_transition_choice_field(self):
+        hero = section_registry.get_definition("hero_banner")
+        field = hero.settings_schema.get_field("transition")
+        self.assertIsNotNone(field)
+        self.assertEqual(field.field_type, "choice")
+        self.assertEqual(field.default, "cut")
+        self.assertEqual(field.group, "advanced")
+        self.assertEqual(
+            {value for value, _label in field.choices},
+            {"cut", "fade", "slide"},
+        )
+
+    def test_image_slider_schema_has_transition_choice_field(self):
+        image_slider = section_registry.get_definition("image_slider")
+        field = image_slider.settings_schema.get_field("transition")
+        self.assertIsNotNone(field)
+        self.assertEqual(field.field_type, "choice")
+        self.assertEqual(field.default, "cut")
+
+    def test_transition_clean_through_schema_patch(self):
+        hero = section_registry.get_definition("hero_banner")
+        cleaned = clean_schema_patch(hero.settings_schema, {"transition": "slide"}, {})
+        self.assertEqual(cleaned["transition"], "slide")
+        with self.assertRaises(SettingsSchemaError):
+            clean_schema_patch(hero.settings_schema, {"transition": "zoom"}, {})

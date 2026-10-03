@@ -313,6 +313,26 @@ def brand_resource_source_to_legacy_patch(source: ResourceSource) -> dict:
     raise ResourceSourceError(f"unsupported brand auto_rule {source.auto_rule!r}")
 
 
+# -------------------------------------------------- Category compatibility
+
+def category_resource_source_from_settings(settings: Mapping) -> ResourceSource:
+    settings = settings or {}
+    category_ids = settings.get("category_ids") or []
+    if category_ids:
+        return ResourceSource(kind="category", mode="manual", manual_ids=tuple(category_ids))
+    return ResourceSource(kind="category", mode="auto", auto_rule="all_active")
+
+
+def category_resource_source_to_legacy_patch(source: ResourceSource) -> dict:
+    if source.kind != "category":
+        raise ResourceSourceError(f"expected kind='category', got {source.kind!r}")
+    if source.mode == "manual":
+        return {"category_ids": list(source.manual_ids)}
+    if source.auto_rule == "all_active":
+        return {"category_ids": []}
+    raise ResourceSourceError(f"unsupported category auto_rule {source.auto_rule!r}")
+
+
 # ----------------------------------------------- Collection compatibility
 
 def collection_resource_source_from_settings(settings: Mapping) -> ResourceSource:
@@ -353,6 +373,11 @@ _SECTION_ADAPTERS: dict[str, dict] = {
         "kind": "collection",
         "from_settings": collection_resource_source_from_settings,
         "to_legacy_patch": collection_resource_source_to_legacy_patch,
+    },
+    "category_grid": {
+        "kind": "category",
+        "from_settings": category_resource_source_from_settings,
+        "to_legacy_patch": category_resource_source_to_legacy_patch,
     },
 }
 

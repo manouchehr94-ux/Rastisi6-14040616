@@ -132,6 +132,11 @@ COLLECTION_MANAGE = "collection.manage"
 STAFF_MANAGE = "staff.manage"
 DOMAIN_MANAGE = "domain.manage"  # reserved — no domain-management UI yet
 SUBSCRIPTION_MANAGE = "subscription.manage"  # coarse legacy key — kept for back-compat
+# Soft-deleting the whole Store is the single most destructive owner action.
+# It gets its own granular key (rather than reusing SETTINGS_MANAGE) and is
+# Owner-only via _OWNER_ONLY below — no view may hardcode an "if OWNER" check;
+# they must gate on this canonical permission through ``user_has_permission``.
+STORE_DELETE = "store.delete"
 
 # Checkpoint 5A — SaaS subscription / usage visibility + plan change.
 # SUBSCRIPTION_VIEW / USAGE_VIEW are read-only insight (billing status, quota
@@ -180,7 +185,7 @@ ALL_PERMISSIONS = frozenset({
     AUDIT_LOG_VIEW,
     SETTINGS_MANAGE, PAYMENT_SETTINGS_MANAGE, SMS_SETTINGS_MANAGE, CONTENT_MANAGE, STOREFRONT_LAYOUT_MANAGE,
     COLLECTION_MANAGE,
-    STAFF_MANAGE, DOMAIN_MANAGE, SUBSCRIPTION_MANAGE,
+    STAFF_MANAGE, DOMAIN_MANAGE, SUBSCRIPTION_MANAGE, STORE_DELETE,
     SUBSCRIPTION_VIEW, SUBSCRIPTION_CHANGE, USAGE_VIEW,
     BILLING_VIEW, BILLING_ACCOUNT_MANAGE, BILLING_PAYMENT_MANAGE, SUBSCRIPTION_CANCEL,
 })
@@ -224,6 +229,8 @@ _OWNER_ONLY = frozenset({
     STAFF_MANAGE, DOMAIN_MANAGE, SUBSCRIPTION_MANAGE, SUBSCRIPTION_CHANGE,
     # Cancelling the subscription is an Owner-only decision (checkpoint 5B).
     SUBSCRIPTION_CANCEL,
+    # Soft-deleting the entire Store is the most destructive action — Owner-only.
+    STORE_DELETE,
 })
 
 #: What each role may do. Deliberately explicit and centralized — no view

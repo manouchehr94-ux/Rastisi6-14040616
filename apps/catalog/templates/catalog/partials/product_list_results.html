@@ -37,34 +37,45 @@ URL/back-button honest.{% endcomment %}
   {% endfor %}
 </div>
 
+{% comment %}Task 7 (Browse hardening, Gap #2) — bounded, Django-native page
+window. Iterates the view's ``pagination_range`` (from Paginator.get_elided_page_range)
+instead of the full page_range, so the control stays usable on mobile at any
+page count. Each numeric item keeps the EXACT prior contract: querystring
+preserved, hx-get/#product-results/hx-push-url/hx-indicator, and a no-JS href.
+The ellipsis (``pagination_ellipsis``, Django's own sentinel) is a non-link
+separator — it never generates ?page=…. Semantic labelled <nav> + aria-current
+on the current page are the approved related a11y repair.{% endcomment %}
 {% if page_obj.paginator.num_pages > 1 %}
-<div class="pagination">
+<nav class="pagination" aria-label="صفحه‌بندی محصولات">
   {% if page_obj.has_previous %}
   <a href="?page={{ page_obj.previous_page_number }}{% if querystring %}&{{ querystring }}{% endif %}"
      hx-get="?page={{ page_obj.previous_page_number }}{% if querystring %}&{{ querystring }}{% endif %}"
-     hx-target="#product-results" hx-push-url="true" hx-indicator="#plpLoading">قبلی</a>
+     hx-target="#product-results" hx-push-url="true" hx-indicator="#plpLoading" rel="prev">قبلی</a>
   {% else %}
-  <span class="disabled">قبلی</span>
+  <span class="disabled" aria-disabled="true">قبلی</span>
   {% endif %}
 
-  {% for num in page_obj.paginator.page_range %}
-    {% if num == page_obj.number %}
-    <span class="current">{{ num|fa_number }}</span>
+  {% for num in pagination_range %}
+    {% if num == pagination_ellipsis %}
+    <span class="ellipsis" aria-hidden="true">{{ num }}</span>
+    {% elif num == page_obj.number %}
+    <span class="current" aria-current="page">{{ num|fa_number }}</span>
     {% else %}
     <a href="?page={{ num }}{% if querystring %}&{{ querystring }}{% endif %}"
        hx-get="?page={{ num }}{% if querystring %}&{{ querystring }}{% endif %}"
-       hx-target="#product-results" hx-push-url="true" hx-indicator="#plpLoading">{{ num|fa_number }}</a>
+       hx-target="#product-results" hx-push-url="true" hx-indicator="#plpLoading"
+       aria-label="صفحه {{ num|fa_number }}">{{ num|fa_number }}</a>
     {% endif %}
   {% endfor %}
 
   {% if page_obj.has_next %}
   <a href="?page={{ page_obj.next_page_number }}{% if querystring %}&{{ querystring }}{% endif %}"
      hx-get="?page={{ page_obj.next_page_number }}{% if querystring %}&{{ querystring }}{% endif %}"
-     hx-target="#product-results" hx-push-url="true" hx-indicator="#plpLoading">بعدی</a>
+     hx-target="#product-results" hx-push-url="true" hx-indicator="#plpLoading" rel="next">بعدی</a>
   {% else %}
-  <span class="disabled">بعدی</span>
+  <span class="disabled" aria-disabled="true">بعدی</span>
   {% endif %}
-</div>
+</nav>
 {% endif %}
 
 {% else %}

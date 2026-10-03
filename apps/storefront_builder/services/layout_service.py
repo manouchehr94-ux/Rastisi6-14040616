@@ -26,6 +26,11 @@ from apps.core.services.rate_limit import enforce_rate_limit
 
 from .. import appearance_registry, global_region_registry, layout_preset_registry
 from . import container_service
+from ..section_media_contract import (
+    ASSET_FK_FIELDS as _ASSET_FK_FIELDS,
+    PLACEMENT_CONTENT_FIELDS as _PLACEMENT_CONTENT_FIELDS,
+    SCOPED_MEDIA_MODELS as _SCOPED_MEDIA_MODELS,
+)
 from ..models import (
     APPEARANCE_COLOR_KEYS,
     APPEARANCE_CONFIG_DEFAULTS,
@@ -492,6 +497,38 @@ def validate_appearance_config(config: dict) -> dict:
     # فروشگاه‌هایِ قدیمی‌تر ممکن است غیرِ «modern» باشد) به‌عنوانِ fallback
     # می‌خواند — یعنی صفر تغییرِ بصری برایِ فروشگاه‌هایی که این پنلِ جدید
     # را هرگز لمس نکرده‌اند.
+    #
+    # Phase 4 (Task 3C) — this exact sparse-by-design shape (absence means
+    # "inherit", never a fabricated default) is why these 5 fields, and only
+    # these 5, were chosen as the Page Appearance tier's allowed key set
+    # (see PAGE_APPEARANCE_KEYS / validate_page_appearance_overrides below):
+    # they are already architecturally distinct from the core brand-identity
+    # tokens (colors/font/button_style/motion/type_scale) that
+    # apps.core.context_processors._global_identity_version's own docstring
+    # explicitly requires stay Store-global/never page-varying (a customer
+    # must see the same brand on product-detail as on Home) — extracted into
+    # a standalone helper so the page-scoped validator below reuses the
+    # exact same per-field choice-set checks, never a second copy.
+    _apply_structural_page_fields(config, cleaned)
+
+    return cleaned
+
+
+#: Phase 4 (Task 3C) — the Page Appearance tier's bounded, typed, sparse
+#: override key set. Deliberately exactly these 5 pre-existing "structural,
+#: non-identity" fields (see the comment above) — never colors/font/
+#: button_style/motion/type_scale/palette_slug/template_slug, which must
+#: stay Store-global per the explicit architecture decision in
+#: apps.core.context_processors._global_identity_version.
+PAGE_APPEARANCE_KEYS = frozenset({"content_width", "grid_density", "card_shadow", "card_hover", "hero_style"})
+
+
+def _apply_structural_page_fields(config: dict, cleaned: dict) -> None:
+    """Mutates ``cleaned`` in place with any of the 5 ``PAGE_APPEARANCE_KEYS``
+    present (non-empty) in ``config`` — shared by ``validate_appearance_config``
+    (Store-global, full-defaulted) and ``validate_page_appearance_overrides``
+    (Page-scoped, sparse) so the exact same choice-set validation is never
+    duplicated between the two tiers."""
     content_width = config.get("content_width")
     if content_width:
         try:
@@ -530,6 +567,21 @@ def validate_appearance_config(config: dict) -> dict:
             raise AppearanceConfigValidationError("سبکِ هیرویِ انتخاب‌شده نامعتبر است")
         cleaned["hero_style"] = hero_style
 
+
+def validate_page_appearance_overrides(raw: dict) -> dict:
+    """Phase 4 (Task 3C) — the Page Appearance tier's own validator: a
+    BOUNDED, TYPED, SPARSE override (never a fully-defaulted dict like
+    ``validate_appearance_config`` produces) — only keys genuinely present
+    in ``raw`` are validated and kept; everything else is absent, meaning
+    "inherit from Store Global" (never a fabricated value). Unknown keys are
+    silently dropped (the same "unknown key ignored" convention every other
+    appearance validator in this module already uses)."""
+    if not isinstance(raw, dict):
+        raise AppearanceConfigValidationError("پیکربندیِ ظاهرِ صفحه باید یک شیء باشد")
+    cleaned: dict = {}
+    _apply_structural_page_fields(
+        {key: value for key, value in raw.items() if key in PAGE_APPEARANCE_KEYS}, cleaned,
+    )
     return cleaned
 
 
@@ -537,53 +589,41 @@ def get_or_create_layout(store) -> StorefrontLayout:
     return StorefrontLayout.provision_for(store)
 
 
+def get_existing_draft(store) -> StorefrontLayoutVersion | None:
+    """Return the current Draft without provisioning or mutating lifecycle state.
+
+    This is the read-only counterpart needed by preview-only callers.  The
+    lifecycle service remains the sole owner of Draft lookup semantics: callers
+    pass a concrete Store and receive only an existing DRAFT version.  Missing
+    layout, missing Draft, or an inconsistent non-DRAFT pointer all fail closed
+    as ``None``; Published is never substituted for Draft here.
+    """
+    layout = (
+        StorefrontLayout.objects.select_related("draft_version")
+        .filter(store=store)
+        .first()
+    )
+    if layout is None:
+        return None
+    draft = layout.draft_version
+    if draft is None or draft.status != StorefrontLayoutVersion.Status.DRAFT:
+        return None
+    return draft
+
+
 def _next_version_number(layout: StorefrontLayout) -> int:
     last = layout.versions.order_by("-version_number").first()
     return (last.version_number + 1) if last else 1
 
 
-#: نگاشتِ نوعِ رسانه‌یِ مقیّد به section → (نامِ related_name رویِ
-#: StorefrontSection، لیستِ فیلدهایی که مستقیماً کپی می‌شوند بدونِ تغییرِ
-#: معنا). ``asset`` فیلدهای FKِ اشاره‌گر به ``MediaAsset`` عمداً از این
-#: لیست جدا نگه داشته شده‌اند (نگاه کنید به ``_ASSET_FK_FIELDS`` پایین) —
-#: تصمیمِ مالک ۴/۵: کلون‌کردنِ Placement هرگز نباید Placementِ منبع (که
-#: معمولاً به نسخه‌ی Published تعلق دارد) را تغییر دهد؛ فقط یک ردیفِ
-#: **جدید** با همان اشاره‌گرِ MediaAsset ساخته می‌شود.
-_SCOPED_MEDIA_MODELS = ("hero_slides", "banners", "story_items")
-
-#: هر مدلِ Placement کدام فیلدهایِ FKِ اشاره‌گر به ``MediaAsset`` دارد —
-#: این‌ها هم دقیقاً مثلِ بقیه‌ی فیلدها کپی می‌شوند (همان مقدارِ
-#: asset_id، نه ساختنِ asset تازه) چون تصمیمِ مالک ۵ صریحاً می‌گوید
-#: Placementِ کلون‌شده باید به **همان** ``MediaAsset`` اشاره کند، نه یک
-#: کپیِ تازه از فایل.
-_ASSET_FK_FIELDS = {
-    "hero_slides": ("desktop_asset_id", "mobile_asset_id"),
-    "banners": ("desktop_asset_id", "mobile_asset_id"),
-    "story_items": ("image_asset_id",),
-}
-
-#: فیلدهایِ محتواییِ غیرِ FK هر مدلِ Placement — کپی می‌شوند دقیقاً همان‌طور
-#: که هستند (بدونِ منطقِ خاص).
-_PLACEMENT_CONTENT_FIELDS = {
-    "hero_slides": (
-        "title", "subtitle", "button_label", "show_button", "is_active", "display_order",
-        "destination_type", "destination_category_id", "destination_product_id",
-        "destination_brand_id", "destination_collection_id", "destination_external_url",
-        "open_in_new_tab",
-    ),
-    "banners": (
-        "title", "description", "button_label", "show_button", "is_active", "display_order",
-        "destination_type", "destination_category_id", "destination_product_id",
-        "destination_brand_id", "destination_collection_id", "destination_external_url",
-        "open_in_new_tab",
-    ),
-    "story_items": (
-        "title", "is_active", "display_order",
-        "destination_type", "destination_category_id", "destination_product_id",
-        "destination_brand_id", "destination_collection_id", "destination_external_url",
-        "open_in_new_tab",
-    ),
-}
+#: Media-publish-dirty repair (final hardening) — ``_SCOPED_MEDIA_MODELS``/
+#: ``_ASSET_FK_FIELDS``/``_PLACEMENT_CONTENT_FIELDS`` used to be defined
+#: directly here; they now live in the neutral shared contract
+#: (``..section_media_contract``, imported above, aliased back to their
+#: original private names) so ``models.compute_fingerprint`` can import
+#: the exact same definitions without depending on this service module's
+#: private constants, and without this service depending on a second,
+#: independently-maintained copy.
 
 
 def _clone_section_scoped_media(source_section: StorefrontSection, target_section: StorefrontSection) -> None:
@@ -680,6 +720,16 @@ def _clone_version_content(source: StorefrontLayoutVersion | None, target: Store
             # هر شش صفحه را می‌سازد — اما به‌جایِ کرش، defensive skip
             # (همان الگویِ section_key ناشناخته در render_service).
             continue
+
+        # Phase 4 (Task 3C) — the Page Appearance tier must survive exactly
+        # like header/footer/appearance_config above: a Draft spun off a
+        # Published version (the normal post-publish "resume editing" flow)
+        # must start from that version's actual effective state, not
+        # silently drop a merchant's page-level override the moment they
+        # publish and reopen the editor.
+        if target_page.page_appearance_overrides != source_page.page_appearance_overrides:
+            target_page.page_appearance_overrides = dict(source_page.page_appearance_overrides or {})
+            target_page.save(update_fields=["page_appearance_overrides"])
 
         source_sections = list(source_page.sections.order_by("order", "id"))
         cloned_sections = [

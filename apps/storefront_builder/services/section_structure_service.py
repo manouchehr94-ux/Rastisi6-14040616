@@ -5,11 +5,17 @@ messages framework, no user-facing HTML. ``r4_mutation_service`` is the only
 caller — it converts ``SectionStructureError.code`` into the stable
 ``R4MutationError`` codes the mutation boundary already returns.
 
-Every function here operates on the active Home Draft page only (Phase 1's
-single-page vertical slice) and preserves real Container/Cell composition —
-none of these ever call ``container_service.rebuild_page_from_legacy_rows``,
-which would destroy empty Cells, multi-block Cells, and merchant-chosen
-layouts (see the architecture ruling in the Task 8 plan).
+Phase 4 (Task 3B) generalized every function here from Home-only to all six
+``StorefrontPage.PageType`` values — ``add_section`` takes an explicit,
+caller-validated ``page_type``; ``remove_section``/``duplicate_section``/
+``move_section`` infer their page from the resolved ``section_id`` itself
+(a section already uniquely belongs to exactly one page on exactly one
+Draft, so no separate page_type input is needed or asked for — the same
+principle the legacy editor's per-section views already use). None of these
+ever call ``container_service.rebuild_page_from_legacy_rows``, which would
+destroy empty Cells, multi-block Cells, and merchant-chosen layouts (see the
+architecture ruling in the Task 8 plan) — that invariant is unchanged by the
+page-type generalization.
 """
 
 from __future__ import annotations
@@ -17,7 +23,7 @@ from __future__ import annotations
 import copy
 
 from .. import section_registry
-from ..models import StorefrontCell, StorefrontPage, StorefrontSection
+from ..models import StorefrontCell, StorefrontContainer, StorefrontPage, StorefrontSection
 from . import container_service, layout_service, row_service
 
 
@@ -27,28 +33,33 @@ class SectionStructureError(ValueError):
         super().__init__(code)
 
 
-def _home_page(draft) -> StorefrontPage:
-    return draft.get_page(StorefrontPage.PageType.HOME)
-
-
 def _scoped_section(draft, section_id) -> StorefrontSection:
     """The one strict scoping rule every mutation must use: a crafted
     ``section_id`` belonging to another Store, another page, or a
-    non-active-Draft version is indistinguishable from "does not exist"."""
+    non-active-Draft version is indistinguishable from "does not exist".
+
+    Phase 4 (Task 3B): scoped by ``page__version=draft`` only — not by a
+    specific ``page_type`` — because the section_id itself already uniquely
+    identifies exactly one page on this exact Draft; requiring a second,
+    redundant page_type match here would just be a copy of that same fact,
+    never a real additional safety boundary."""
     try:
         return StorefrontSection.objects.select_for_update().get(
             pk=section_id,
             page__version=draft,
-            page__page_type=StorefrontPage.PageType.HOME,
         )
     except StorefrontSection.DoesNotExist:
         raise SectionStructureError("section_not_found") from None
 
 
-def _find_placement_cell(section: StorefrontSection):
+def find_placement_cell(section: StorefrontSection):
     """Same-Cell resolution the rest of the codebase already uses: prefer
     the new multi-block FK, fall back to the legacy single-block OneToOne
-    reverse pointer."""
+    reverse pointer. Public (R4 Task 8, Batch 2) — ``views.py``'s legacy
+    ``storefront_section_remove``/``storefront_section_move`` reuse this
+    SAME resolution to check container-level locks, matching what this
+    module's own ``remove_section``/``duplicate_section``/``move_section``
+    already enforce, rather than re-deriving cell placement a second way."""
     cell = section.cell
     if cell is None:
         cell = StorefrontCell.objects.filter(section=section).select_related("container").first()
@@ -75,15 +86,17 @@ def _next_page_order(page) -> int:
     return (last.order + 1) if last is not None else 0
 
 
-def add_section(*, draft, section_key: str) -> StorefrontSection:
+def add_section(*, draft, section_key: str, page_type: str) -> StorefrontSection:
     if not isinstance(section_key, str) or not section_key:
         raise SectionStructureError("invalid_section_key")
+    if page_type not in StorefrontPage.PageType.values:
+        raise SectionStructureError("invalid_page_type")
 
     definition = _get_definition(section_key)
     if definition is None:
         raise SectionStructureError("invalid_section_key")
 
-    page = _home_page(draft)
+    page = draft.get_page(page_type)
     if not section_registry.is_section_allowed_on_page(section_key, page.page_type):
         raise SectionStructureError("section_not_allowed_on_page")
     if definition.hidden_from_library:
@@ -103,6 +116,68 @@ def add_section(*, draft, section_key: str) -> StorefrontSection:
     container = container_service.create_empty_container(page, "single")
     cell = container.cells.order_by("order", "id").first()
     container_service.place_section(cell, new_section)
+    return new_section
+
+
+def _scoped_cell(draft, cell_id) -> StorefrontCell:
+    """Same strict scoping rule as ``_scoped_section`` above, for a Cell
+    id instead of a Section id."""
+    try:
+        return StorefrontCell.objects.select_for_update().select_related("container", "container__page").get(
+            pk=cell_id, container__page__version=draft,
+        )
+    except StorefrontCell.DoesNotExist:
+        raise SectionStructureError("cell_not_found") from None
+
+
+def add_section_to_cell(*, draft, section_key: str, cell_id: int) -> StorefrontSection:
+    """R4 Task 7 (final-review fix, IMPORTANT-2; sixth-reviewer fix,
+    MINOR-2) — place a NEW section into a specific, possibly-EMPTY Cell,
+    reusing the legacy ``storefront_cell_add_section`` view's own checks
+    (``views.py``) and canonical placement calls
+    (``container_service.place_section`` for a truly empty Cell,
+    ``add_block`` for a Cell that already holds a Block) — never a second
+    composition authority. The CHECKS are the same set (section_key ->
+    allowed-on-page -> hidden_from_library -> max_instances) plus one this
+    Draft-scoped entry point additionally enforces (``container_locked``,
+    which the legacy view has no equivalent of); the ORDER differs, since
+    here the Cell must be resolved (and therefore its Container's lock
+    state known, and its page derived) before any section-level check can
+    run — the legacy view instead receives page_type as a separate
+    parameter and can validate section-key/page/max-instances before ever
+    touching the target Cell. Stricter here, never looser. Without this
+    function, ``container.change_layout``'s grow branch can create an
+    empty Cell that no other R4 mutation could ever fill — the exact gap
+    the second independent Task-7 reviewer found."""
+    if not isinstance(section_key, str) or not section_key:
+        raise SectionStructureError("invalid_section_key")
+
+    definition = _get_definition(section_key)
+    if definition is None:
+        raise SectionStructureError("invalid_section_key")
+
+    cell = _scoped_cell(draft, cell_id)
+    if cell.container.is_locked:
+        raise SectionStructureError("container_locked")
+    page = cell.container.page
+
+    if not section_registry.is_section_allowed_on_page(section_key, page.page_type):
+        raise SectionStructureError("section_not_allowed_on_page")
+    if definition.hidden_from_library:
+        raise SectionStructureError("section_hidden_from_library")
+    if definition.max_instances is not None:
+        existing_count = page.sections.filter(section_key=section_key).count()
+        if existing_count >= definition.max_instances:
+            raise SectionStructureError("max_instances_exceeded")
+
+    new_section = StorefrontSection.objects.create(
+        page=page, section_key=section_key, order=_next_page_order(page),
+        settings=definition.default_settings(),
+    )
+    if container_service.get_cell_blocks(cell):
+        container_service.add_block(cell, new_section)
+    else:
+        container_service.place_section(cell, new_section)
     return new_section
 
 
@@ -128,7 +203,7 @@ def remove_section(*, draft, section_id: int) -> None:
     container_service.ensure_page_containers(page)
     section.refresh_from_db()
 
-    cell = _find_placement_cell(section)
+    cell = find_placement_cell(section)
     if cell is not None and cell.container.is_locked:
         raise SectionStructureError("container_locked")
 
@@ -151,7 +226,7 @@ def duplicate_section(*, draft, section_id: int) -> StorefrontSection:
     container_service.ensure_page_containers(page)
     section.refresh_from_db()
 
-    cell = _find_placement_cell(section)
+    cell = find_placement_cell(section)
     if cell is not None and cell.container.is_locked:
         raise SectionStructureError("container_locked")
 
@@ -181,6 +256,52 @@ def duplicate_section(*, draft, section_id: int) -> StorefrontSection:
     source_index = section.cell_order
     container_service.add_block(cell, new_section, at_index=source_index + 1)
     return new_section
+
+
+def toggle_section_active(*, draft, section_id: int) -> StorefrontSection:
+    """R4 Task 7 (Batch 1) — the exact same flag/effect as the legacy
+    ``storefront_section_toggle`` view (``views.py``): flips ``is_active``
+    only. Independent of ``is_locked``/duplicable/removable, exactly like
+    the legacy view's own field-level independence."""
+    section = _scoped_section(draft, section_id)
+    section.is_active = not section.is_active
+    section.save(update_fields=["is_active", "updated_at"])
+    return section
+
+
+def toggle_section_locked(*, draft, section_id: int) -> StorefrontSection:
+    """R4 Task 7 (Batch 1) — the exact same flag as the legacy
+    ``storefront_section_lock_toggle`` view (spec §37): only the flag is
+    toggled here; the actual lock EFFECT (refusing move/remove) is enforced
+    where it already is, in ``remove_section``/``move_section`` above."""
+    section = _scoped_section(draft, section_id)
+    section.is_locked = not section.is_locked
+    section.save(update_fields=["is_locked", "updated_at"])
+    return section
+
+
+def _scoped_container(draft, container_id) -> StorefrontContainer:
+    """Same strict scoping rule as ``_scoped_section`` above, for a
+    Container id instead of a Section id."""
+    try:
+        return StorefrontContainer.objects.select_for_update().get(
+            pk=container_id, page__version=draft,
+        )
+    except StorefrontContainer.DoesNotExist:
+        raise SectionStructureError("container_not_found") from None
+
+
+def change_container_layout(*, draft, container_id: int, layout_key: str) -> StorefrontContainer:
+    """R4 Task 7 (Batch 1) — multi-column composition, wired to the EXACT
+    SAME canonical service the legacy editor's own layout-preset UI already
+    uses (``container_service.change_container_layout``): content-preserving
+    grow/shrink, never a second implementation of the merge-on-shrink/
+    locked-container rules that already live there."""
+    container = _scoped_container(draft, container_id)
+    try:
+        return container_service.change_container_layout(container, layout_key)
+    except container_service.ContainerLayoutError as exc:
+        raise SectionStructureError("invalid_container_layout") from exc
 
 
 def build_structure_projection(page) -> list[dict]:
@@ -280,3 +401,48 @@ def move_section(*, draft, section_id: int, direction: str) -> None:
 
     StorefrontSection.objects.filter(pk=section.pk).update(order=sim_source.order)
     StorefrontSection.objects.filter(pk=target_section.pk).update(order=sim_target.order)
+
+
+def move_section_to_cell(*, draft, section_id: int, cell_id: int, at_index: int | None = None) -> StorefrontSection:
+    """Pre-Task-10 remediation (composition parity closure) — arbitrary/
+    non-adjacent valid section placement, the gap Task 7's own B1 audit
+    (item #5) explicitly left open: ``move_section`` above only ever swaps
+    a section with its immediately-ADJACENT slot in the structure
+    projection. This is the same "place section X into cell Y at index Z"
+    primitive ``add_section_to_cell`` already established for a brand-new
+    section (Task 7 final-review fix, IMPORTANT-2), applied here to an
+    EXISTING section instead — reusing the exact same canonical
+    ``container_service.move_block`` the adjacent-swap path above already
+    calls, never a second placement authority.
+
+    A locked source/target Container, or a legacy row member (whose linear
+    adjacency the row-compat system depends on — the same guard
+    ``remove_section`` already enforces), is rejected rather than silently
+    breaking that other system."""
+    section = _scoped_section(draft, section_id)
+    if section.is_locked:
+        raise SectionStructureError("section_locked")
+    if row_service.is_row_member(section):
+        raise SectionStructureError("row_member")
+
+    page = section.page
+    container_service.ensure_page_containers(page)
+    section.refresh_from_db()
+
+    source_cell = find_placement_cell(section)
+    if source_cell is not None and source_cell.container.is_locked:
+        raise SectionStructureError("container_locked")
+
+    target_cell = _scoped_cell(draft, cell_id)
+    if target_cell.container.page_id != page.pk:
+        raise SectionStructureError("cell_not_found")
+    if target_cell.container.is_locked:
+        raise SectionStructureError("target_container_locked")
+
+    try:
+        container_service.move_block(section, target_cell, at_index=at_index)
+    except container_service.ContainerLayoutError as exc:
+        raise SectionStructureError("invalid_placement") from exc
+    StorefrontSection.objects.filter(pk=section.pk).update(order=_next_page_order(page))
+    section.refresh_from_db()
+    return section

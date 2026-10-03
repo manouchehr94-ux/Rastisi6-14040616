@@ -48,7 +48,24 @@ from . import layout_service
 # Anything outside this set (e.g. the reserved ``store_appearance`` typed
 # manifest, or future canonical/provenance state) is OPAQUE to this
 # transformation and must survive a managed-field patch untouched.
-_MANAGED_APPEARANCE_KEYS = frozenset(APPEARANCE_CONFIG_DEFAULTS)
+#
+# Pre-Task-10 remediation — bug fix: this set previously omitted
+# ``layout_service.PAGE_APPEARANCE_KEYS`` (content_width/grid_density/
+# card_shadow/card_hover/hero_style), the 5 Phase 8 P0-7 structural fields.
+# ``validate_appearance_config`` has always cleaned/returned them when
+# posted (they are deliberately sparse-by-design, not part of
+# ``APPEARANCE_CONFIG_DEFAULTS``), and the legacy ``storefront_appearance_
+# editor`` view has always read and posted them — but this merge loop only
+# ever copied keys already in ``APPEARANCE_CONFIG_DEFAULTS`` back onto the
+# saved config, so a Store-global (non-Template, non-Page-override) edit of
+# any of these 5 fields was silently discarded by both the legacy editor and
+# every caller of ``apply_appearance_patch``, R4 included. Reproduced
+# directly against this function before the fix (a bare ``content_width``
+# patch left the saved config completely untouched); fixed by including the
+# same 5-key set ``layout_service.validate_page_appearance_overrides``
+# already uses as its own canonical allowlist — no new field, no schema
+# change, single source of truth.
+_MANAGED_APPEARANCE_KEYS = frozenset(APPEARANCE_CONFIG_DEFAULTS) | layout_service.PAGE_APPEARANCE_KEYS
 
 # Legacy-selector registry-reference prefixes, reused from the persistence
 # adapter's own conventions. We do not maintain a second component-key map.
@@ -151,6 +168,65 @@ def _typed_key_for_selector(
     return component_key
 
 
+def apply_theme(
+    *,
+    version,
+    component_key: str,
+    intensity: str | None = None,
+):
+    """P5-W2 — the canonical reversible occasion-Theme write primitive.
+
+    Changes ONLY Theme-owned state: ``selections["theme"]`` and
+    ``settings["theme"]``. Every other family selection and every other
+    family's settings survive untouched (built on ``_manifest_with_family``,
+    which replaces exactly one selection). It NEVER touches
+    ``template_baseline_snapshot`` — Theme reversibility is owned entirely by
+    the Theme-owned manifest slice, not by Ready-Template baseline semantics.
+
+    Draft/lifecycle/authorization/locking/revision remain the caller's
+    responsibility; this writes through the single canonical persistence
+    primitive exactly like ``apply_header_variant``.
+    """
+    from ..theme_catalog import DEFAULT_THEME_INTENSITY
+
+    # Selecting "No Theme" (the no-op) is canonically identical to clearing:
+    # a no-op occasion carries no meaningful intensity, so it must never
+    # retain a stray intensity setting. Route it to the same result as
+    # clear_theme() rather than persisting theme.none.v1 + a dead intensity.
+    if component_key == "theme.none.v1":
+        return clear_theme(version=version)
+
+    if intensity is None:
+        intensity = DEFAULT_THEME_INTENSITY
+
+    primitive = _manifest_with_family(
+        version, family_key="theme", component_key=component_key
+    )
+    theme_settings = dict(primitive["settings"].get("theme", {}))
+    theme_settings["intensity"] = intensity
+    primitive["settings"]["theme"] = theme_settings
+    # validate_store_appearance_manifest (invoked by persistence) enforces the
+    # bounded intensity enum and that ``component_key`` is a real theme
+    # component — an unknown occasion or intensity fails closed here.
+    persist_store_appearance_manifest(version, primitive)
+    return version
+
+
+def clear_theme(*, version):
+    """P5-W2 — reset the occasion Theme to the safe no-op, changing NOTHING
+    else. Sets ``selections["theme"] = theme.none.v1`` and removes
+    ``settings["theme"]``. Non-theme selections and non-theme settings are
+    preserved byte-for-byte (a customization made before enabling a Theme is
+    never lost). Must NOT restore from ``template_baseline_snapshot``.
+    """
+    primitive = _manifest_with_family(
+        version, family_key="theme", component_key="theme.none.v1"
+    )
+    primitive["settings"].pop("theme", None)
+    persist_store_appearance_manifest(version, primitive)
+    return version
+
+
 def apply_header_variant(
     *,
     version,
@@ -210,6 +286,60 @@ def apply_footer_variant(
     return version
 
 
+def apply_component_variant(
+    *,
+    version,
+    family: str,
+    component_key: str,
+):
+    """P5-W3 — the ONE generalized canonical appearance-component writer.
+
+    Changes exactly the ``family`` selection to ``component_key`` (a typed
+    component key already resolved from the canonical registry), preserving
+    every other family selection and every family's settings — built on
+    ``_manifest_with_family`` exactly like ``apply_theme``/``apply_header_
+    variant`` already are, then persisted through the single validating
+    ``persist_store_appearance_manifest`` primitive.
+
+    This is the canonical *write-time reconciliation* seam W3's Design Lab
+    Apply needs for families (``hero``/``product_view``/``card``/``badge``)
+    whose variant historically took visual effect only via a render-time
+    manifest overlay: writing ``selections[family] = component_key`` here is
+    exactly what makes that selection persisted canonical state, so the
+    persisted manifest and the rendered component agree after Apply.
+
+    Draft/lifecycle/authorization/locking/revision remain the caller's
+    responsibility (the R4 mutation boundary). This is a pure state-transform
+    primitive, identical in contract to the sibling ``apply_*`` writers.
+
+    Validation is fail-closed: an unknown family, an unknown component key, or
+    a component key belonging to a different family raises
+    ``InvalidStoreAppearanceContract`` BEFORE any write. (The final complete
+    manifest — including cross-family compatibility hard-errors — is validated
+    again inside ``persist_store_appearance_manifest``.)
+    """
+    from ..storefront_appearance.families import COMPONENT_FAMILIES
+    from ..storefront_appearance.registry import get_component
+
+    if not isinstance(family, str) or family not in COMPONENT_FAMILIES:
+        raise InvalidStoreAppearanceContract(f"unknown appearance family: {family!r}")
+    if not isinstance(component_key, str):
+        raise InvalidStoreAppearanceContract(
+            f"invalid component key for {family}: {component_key!r}"
+        )
+    component = get_component(component_key)
+    if component is None or component.family_key != family:
+        raise InvalidStoreAppearanceContract(
+            f"component {component_key!r} does not belong to family {family!r}"
+        )
+
+    manifest = _manifest_with_family(
+        version, family_key=family, component_key=component_key
+    )
+    persist_store_appearance_manifest(version, manifest)
+    return version
+
+
 def apply_ready_template_appearance(
     *,
     version,
@@ -254,3 +384,43 @@ def apply_ready_template_appearance(
         persist_store_appearance_manifest(version, preset.store_appearance)
 
     return version
+
+
+class PageAppearanceNotDraftError(ValueError):
+    """Phase 4 (Task 3C) — a Page Appearance patch was attempted against a
+    page whose version is not the active Draft. Tenant-safety/lifecycle
+    boundary, not a validation error — never silently applied to a
+    Published (immutable, historical) or Archived version."""
+
+
+def apply_page_appearance_patch(*, page, patch: Mapping[str, Any]):
+    """Phase 4 (Task 3C) — the ONE canonical write primitive for the Page
+    Appearance tier. Draft-only (mirrors every other mutation boundary in
+    this domain — Published/Archived versions are immutable history);
+    sparse-merge (only the keys present in ``patch`` change; every other
+    key already stored on ``page.page_appearance_overrides`` survives
+    untouched — the same principle ``_merge_appearance_config`` applies for
+    Store Global, simpler here since this JSON field only ever holds the
+    bounded ``PAGE_APPEARANCE_KEYS`` set, so there is no opaque-key
+    preservation concern)."""
+    if page.version.status != page.version.__class__.Status.DRAFT:
+        raise PageAppearanceNotDraftError(
+            "بازنویسیِ ظاهرِ صفحه فقط رویِ Draftِ فعال مجاز است"
+        )
+    validated_patch = layout_service.validate_page_appearance_overrides(dict(patch))
+    merged = dict(page.page_appearance_overrides or {})
+    merged.update(validated_patch)
+    page.page_appearance_overrides = merged
+    page.save(update_fields=["page_appearance_overrides", "updated_at"])
+    return page
+
+
+def effective_page_appearance_config(*, store_appearance_config: Mapping[str, Any], page) -> dict:
+    """Phase 4 (Task 3C) — the canonical resolver: Store Global's already-
+    fully-defaulted appearance config, with this Page's sparse override (if
+    any) applied on top for exactly the bounded ``PAGE_APPEARANCE_KEYS``
+    set. This is the ONE function Preview and Public both must call — never
+    a second, independently-derived resolution of the same precedence."""
+    resolved = dict(store_appearance_config)
+    resolved.update(dict(page.page_appearance_overrides or {}))
+    return resolved

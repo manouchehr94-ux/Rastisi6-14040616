@@ -1,0 +1,13 @@
+REGRESSION RESULT: 408 tests, 1 failure + 1 error.
+
+The 1 failure + 1 error are BOTH in FullscreenEditorTests (R4 fullscreen editor
+topbar), unrelated to P5-W1 (cart free-shipping goal):
+  ERROR: apps.storefront_builder.tests.test_views.FullscreenEditorTests.test_fullscreen_state_is_a_pure_css_toggle_not_a_new_route
+  FAIL:  apps.storefront_builder.tests.test_views.FullscreenEditorTests.test_fullscreen_button_is_in_v3_topbar_with_device_and_zoom_controls
+
+PRE-EXISTING — reproduced independently against the certified base
+ef4f4e3397e9cdf7904f126aa877105e332dc0e0 in a clean git worktree with ZERO W1
+changes: same 1 failure + 1 error (Ran 4 tests ... FAILED failures=1 errors=1).
+
+Therefore W1 introduces NO new regression. All cart/pricing/render_service
+tests (incl. the 12 new W1 pricing cases + template state tests) pass.
