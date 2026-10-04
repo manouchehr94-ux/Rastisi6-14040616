@@ -6,7 +6,9 @@ class PlatformHostRoutingTests(TestCase):
     def test_marketing_host_serves_portal_home(self):
         response = self.client.get("/", HTTP_HOST="rastisi.localhost")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "راستیسی")
+        # Canonical brand spelling uses a zero-width non-joiner: راستی‌سی.
+        self.assertContains(response, "راستی\u200cسی")
+        self.assertRegex(response.content.decode(), r"<title>[^<]*راستی\u200cسی[^<]*</title>")
 
     def test_platform_admin_host_serves_platform_admin_login_redirect(self):
         response = self.client.get("/", HTTP_HOST="platformadmins.rastisi.localhost")
