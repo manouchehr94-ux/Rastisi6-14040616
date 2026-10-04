@@ -33,17 +33,30 @@ class OwnerRegisterForm(forms.Form):
 
 
 class OwnerLoginForm(forms.Form):
-    """اکنون فقط برایِ ورودِ مدیرِ پلتفرم استفاده می‌شود (ایمیل+رمز — بدونِ
-    OTP، یک تصمیمِ محافظه‌کارانه‌ی امنیتی — نگاه کنید به یکپارچه‌سازیِ
-    احرازِ هویت)؛ ورودِ مالک از ``OwnerIdentifierLoginForm`` استفاده می‌کند."""
+    """Platform-admin password form: three identifiers, unchanged superuser gate.
 
-    email = forms.EmailField(
-        label="ایمیل", widget=forms.EmailInput(attrs={"autocomplete": "username"}),
+    The hidden optional email is a POST-compatibility alias for legacy
+    clients; only identifier is rendered by the current template.
+    """
+
+    identifier = forms.CharField(
+        label="شماره موبایل، نام کاربری یا ایمیل", required=False,
+        widget=forms.TextInput(attrs={"autocomplete": "username", "dir": "ltr"}),
     )
+    email = forms.EmailField(required=False, widget=forms.HiddenInput)
     password = forms.CharField(
-        label="رمز عبور", widget=forms.PasswordInput(attrs={"autocomplete": "current-password"}),
+        label="رمز عبور",
+        widget=forms.PasswordInput(attrs={"autocomplete": "current-password"}),
     )
     remember_me = forms.BooleanField(label="مرا به خاطر بسپار", required=False)
+
+    def clean(self):
+        cleaned = super().clean()
+        identifier = (cleaned.get("identifier") or cleaned.get("email") or "").strip()
+        if not identifier:
+            self.add_error("identifier", "شماره موبایل، نام کاربری یا ایمیل الزامی است")
+        cleaned["identifier"] = identifier
+        return cleaned
 
 
 class OwnerIdentifierLoginForm(forms.Form):
