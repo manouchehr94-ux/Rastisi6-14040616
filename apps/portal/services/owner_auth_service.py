@@ -1,4 +1,4 @@
-"""لایه‌ی سرویسِ هویتِ مالک — ثبت‌نام/ورود/بازیابیِ رمز با ایمیل+رمز عبور.
+"""لایه‌ی سرویسِ هویتِ مالک — ثبت‌نام، ورود با موبایل/ایمیل/نام کاربری و بازیابی رمز.
 
 عمداً از ``apps.customers.services.auth_service`` جداست (ADR-93): آن سرویس
 مشتریِ فروشگاه می‌سازد (شناسه = موبایل، همیشه به یک ``store`` وابسته است)؛
@@ -62,35 +62,70 @@ def authenticate_owner(request, *, email: str, password: str):
 
 
 def authenticate_owner_by_identifier(request, *, identifier: str, password: str):
-    """احرازِ هویتِ یکپارچه — شناسه می‌تواند ایمیل یا شماره موبایل باشد
-    (کانونیکالِ ورودِ مالک، یکپارچه‌سازیِ احرازِ هویت). این تابع فقط
-    «کاربر کیست» را پاسخ می‌دهد — «آیا مجاز به دسترسی به این Store/پلتفرم
-    است» مسئولیتِ لایه‌ی مجوز (authorization) در فراخوان است، نه این‌جا.
+    """Authenticate with email, mobile number or username + password.
 
-    شناسه‌یابی: اگر ``@`` داشته باشد ایمیل فرض می‌شود (``User.email``،
-    case-insensitive)؛ وگرنه شماره موبایل فرض و نرمال می‌شود، سپس از رویِ
-    ``OwnerProfile.phone`` (نه مستقیم ``User.username``، تا حسابِ خالص‌
-    مشتری که تصادفاً همان ``username`` را دارد هرگز به‌عنوانِ مالک وارد
-    نشود) کاربر پیدا می‌شود.
+    This resolves *identity* only. Access to a specific merchant dashboard
+    still requires an ACTIVE StoreMembership and a valid admin host, enforced
+    by the existing handoff and dashboard permission layers. A plain Customer
+    never gains merchant privileges simply by sharing a username or phone.
 
-    شناسه‌ی نامعتبر/ناموجود، رمزِ نادرست، و کاربرِ غیرِفعال هر سه دقیقاً
-    یک نتیجه (``None``) دارند — هیچ‌کدام فاش نمی‌شود کدام‌یک بود."""
+    Ambiguous case-insensitive identifiers fail closed instead of selecting
+    an arbitrary account. Password validation remains Django's authenticate().
+    """
     identifier = (identifier or "").strip()
     if not identifier or not password:
         return None
 
+    user = None
     if _looks_like_email(identifier):
-        user = User.objects.filter(email__iexact=_normalize_email(identifier)).first()
+        matches = list(User.objects.filter(email__iexact=_normalize_email(identifier))[:2])
+        if len(matches) > 1:
+            return None
+        if matches:
+            user = matches[0]
     else:
         try:
             phone = normalize_iranian_phone(identifier)
         except InvalidPhoneError:
-            return None
-        profile = OwnerProfile.objects.select_related("user").filter(phone=phone).first()
-        user = profile.user if profile is not None else None
+            phone = None
+        if phone is not None:
+            profile = OwnerProfile.objects.select_related("user").filter(phone=phone).first()
+            user = profile.user if profile is not None else None
+
+            # Legacy merchant staff can have User.username == phone without
+            # an OwnerProfile. Only an existing merchant membership or a
+            # platform superuser may use this compatibility path.
+            if user is None:
+                from apps.stores.models import StoreMembership
+
+                candidate = User.objects.filter(username=phone).first()
+                if candidate is not None and (
+                    candidate.is_superuser
+                    or StoreMembership.objects.filter(
+                        user=candidate, status=StoreMembership.MembershipStatus.ACTIVE
+                    ).exists()
+                ):
+                    user = candidate
 
     if user is None:
-        return None
+        # A legacy arbitrary username (including an email-shaped username
+        # with no User.email) is allowed only for owner/staff identities.
+        matches = list(User.objects.filter(username__iexact=identifier)[:2])
+        if len(matches) != 1:
+            return None
+        candidate = matches[0]
+        from apps.stores.models import StoreMembership
+
+        if not (
+            candidate.is_superuser
+            or OwnerProfile.objects.filter(user=candidate).exists()
+            or StoreMembership.objects.filter(
+                user=candidate, status=StoreMembership.MembershipStatus.ACTIVE
+            ).exists()
+        ):
+            return None
+        user = candidate
+
     return authenticate(request, username=user.username, password=password)
 
 

@@ -136,7 +136,7 @@ class PlatformAdminEmailLoginWithDifferentUsernameTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("_auth_user_id", self.client.session)
-        self.assertContains(response, "ایمیل، رمز عبور، یا دسترسی نامعتبر است")
+        self.assertContains(response, "شناسه، رمز عبور، یا دسترسی نامعتبر است")
 
     def test_login_with_unknown_email_fails_with_the_same_generic_error(self):
         response = self.client.post(
@@ -146,7 +146,7 @@ class PlatformAdminEmailLoginWithDifferentUsernameTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("_auth_user_id", self.client.session)
-        self.assertContains(response, "ایمیل، رمز عبور، یا دسترسی نامعتبر است")
+        self.assertContains(response, "شناسه، رمز عبور، یا دسترسی نامعتبر است")
 
     def test_remember_me_still_works_with_email_login(self):
         self.client.post(
@@ -215,3 +215,53 @@ class PlatformAdminEmailLoginWithDifferentUsernameTests(TestCase):
         entry = PlatformAuditLogEntry.objects.get(action_code="platform_admin.login_failed")
         self.assertIsNone(entry.actor)
         self.assertEqual(entry.object_label, "no-such-user@example.com")
+
+
+@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
+class PlatformAdminThreeIdentifierTests(TestCase):
+    """Username/mobile/email are accepted without broadening admin access."""
+
+    def setUp(self):
+        from apps.portal.models import OwnerProfile
+
+        cache.clear()
+        self.admin = User.objects.create_user(
+            username="platformroot", email="platformroot@example.com",
+            password="StrongPass123!", is_staff=True, is_superuser=True,
+        )
+        OwnerProfile.objects.create(
+            user=self.admin, full_name="Platform Root", phone="09129870001",
+        )
+
+    def _post(self, identifier):
+        return self.client.post(
+            "/login/",
+            {"identifier": identifier, "password": "StrongPass123!"},
+            HTTP_HOST=_HOST,
+        )
+
+    def test_form_renders_three_identifier_field(self):
+        response = self.client.get("/login/", HTTP_HOST=_HOST)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="identifier"')
+        self.assertContains(response, "شماره موبایل، نام کاربری یا ایمیل")
+
+    def test_username_login(self):
+        self.assertEqual(self._post("PLATFORMROOT").status_code, 302)
+        self.assertEqual(int(self.client.session["_auth_user_id"]), self.admin.pk)
+
+    def test_mobile_login(self):
+        self.assertEqual(self._post("09129870001").status_code, 302)
+        self.assertEqual(int(self.client.session["_auth_user_id"]), self.admin.pk)
+
+    def test_email_login(self):
+        self.assertEqual(self._post("PLATFORMROOT@example.com").status_code, 302)
+        self.assertEqual(int(self.client.session["_auth_user_id"]), self.admin.pk)
+
+    def test_non_superuser_cannot_login_with_valid_username(self):
+        User.objects.create_user(
+            username="not_superuser", password="StrongPass123!", is_staff=True,
+        )
+        response = self._post("not_superuser")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("_auth_user_id", self.client.session)

@@ -126,10 +126,13 @@ class StoreResolutionEndToEndSmokeTests(TestCase):
         self.assertIsNotNone(response.wsgi_request.store)
         self.assertEqual(response.wsgi_request.store.slug, "akhlaghi")
 
-    def test_dashboard_login_page_renders_under_testserver_host(self):
+    def test_dashboard_login_page_redirects_under_testserver_host(self):
+        # Store resolution still runs; the legacy login URL then redirects to
+        # the canonical central login instead of rendering a local form.
         client = Client()
         response = client.get("/admin-portal/login/")
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login/", response["Location"])
         self.assertTrue(hasattr(response.wsgi_request, "store"))
 
     def test_localhost_host_header_also_resolves_akhlaghi(self):

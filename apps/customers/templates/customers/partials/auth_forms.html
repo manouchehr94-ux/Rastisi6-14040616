@@ -18,7 +18,7 @@
       </div>
       {% endif %}
       <div class="fg">
-        <label>ایمیل یا شماره موبایل</label>
+        <label>شماره موبایل، نام کاربری یا ایمیل</label>
         <input type="text" name="identifier" autocomplete="username" dir="ltr" value="{{ login_form.identifier.value|default_if_none:'' }}">
         {% for err in login_form.identifier.errors %}<div style="color:var(--pink);font-size:11px;margin-top:4px">{{ err }}</div>{% endfor %}
       </div>

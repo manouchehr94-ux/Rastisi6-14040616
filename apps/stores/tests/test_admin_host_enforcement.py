@@ -72,9 +72,13 @@ class AdminHostEnforcementTests(TestCase):
         response = self.client.get(reverse("dashboard:dashboard"), HTTP_HOST=ADMIN_HOST)
         self.assertEqual(response.status_code, 200)
 
-    def test_correct_admin_host_login_page_renders(self):
+    def test_correct_admin_host_login_page_redirects_to_central_login(self):
+        # The legacy merchant login URL is a compatibility redirect: on the
+        # store's own admin host it hands off to the one canonical login with a
+        # signed, store-bound admin_return (never a second password form).
         response = self.client.get(reverse("dashboard:login"), HTTP_HOST=ADMIN_HOST)
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login/?admin_return=", response["Location"])
 
     # ---------------------------------------------------------- public domain blocked
 

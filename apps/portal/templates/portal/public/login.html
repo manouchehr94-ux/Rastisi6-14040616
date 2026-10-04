@@ -31,7 +31,7 @@
           {% if admin_return %}<input type="hidden" name="admin_return" value="{{ admin_return }}">{% endif %}
           {% if password_form.non_field_errors %}<div class="p-alert p-alert-error">{{ password_form.non_field_errors.0 }}</div>{% endif %}
 
-          <div class="p-field"><label for="id_identifier">ایمیل یا شماره موبایل</label>{{ password_form.identifier }}{% if password_form.identifier.errors %}<div class="p-error">{{ password_form.identifier.errors.0 }}</div>{% endif %}</div>
+          <div class="p-field"><label for="id_identifier">شماره موبایل، نام کاربری یا ایمیل</label>{{ password_form.identifier }}{% if password_form.identifier.errors %}<div class="p-error">{{ password_form.identifier.errors.0 }}</div>{% endif %}</div>
           <div class="p-field"><label for="id_password">رمز عبور</label>{{ password_form.password }}{% if password_form.password.errors %}<div class="p-error">{{ password_form.password.errors.0 }}</div>{% endif %}</div>
           <label class="p-remember-me">{{ password_form.remember_me }} مرا به خاطر بسپار</label>
 

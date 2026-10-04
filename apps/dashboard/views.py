@@ -399,45 +399,57 @@ from .services.orders_admin_service import (
 VALID_RANGES = {"week", "month", "year"}
 
 
-@admin_host_required
 def admin_login(request):
-    """صفحه‌ی ورود اختصاصی پنل مدیریت — مستقل از فروشگاه، اما هنوز هم فقط
-    روی میزبان مدیریت مجاز قابل‌دسترسی (نگاه کنید به ``admin_host_required``)."""
-    if request.user.is_authenticated and request.user.is_staff:
-        return redirect(request.GET.get("next", "/admin-portal/"))
+    """Compatibility entry point; authenticate only on the canonical portal.
 
-    error = ""
-    username = ""
+    A store-specific admin host gets a signed, short-lived admin_return
+    handoff. An ambiguous localhost/127.0.0.1 host in DEBUG goes to My Stores
+    via the central login instead of a confusing 404. No arbitrary public or
+    production host can serve merchant authentication.
+    """
+    from urllib.parse import urlencode
 
-    if request.method == "POST":
-        username = request.POST.get("username", "").strip()
-        password = request.POST.get("password", "")
-        user = authenticate(request, username=username, password=password)
+    from django.conf import settings
+    from django.utils.http import url_has_allowed_host_and_scheme
 
-        if user is not None and user.is_staff:
-            auth_login(request, user)
-            next_url = request.POST.get("next", request.GET.get("next", "/admin-portal/"))
-            # Prevent open redirect — ensure next is a relative admin path
-            if not next_url.startswith("/admin-portal/"):
-                next_url = "/admin-portal/"
-            return redirect(next_url)
-        elif user is not None and not user.is_staff:
-            error = "شما به پنل مدیریت دسترسی ندارید"
-        else:
-            error = "نام کاربری یا رمز عبور اشتباه است"
-
-    from apps.stores.resolution import resolve_store_for_admin_request, resolve_storefront_url_for_store
+    from apps.portal.services.handoff_service import build_admin_return_token
+    from apps.stores.authorization import get_active_membership
+    from apps.stores.hostnames import build_cross_host_url
+    from apps.stores.resolution import (
+        resolve_store_for_admin_request,
+        strip_port,
+    )
 
     store = resolve_store_for_admin_request(request)
-    storefront_url = resolve_storefront_url_for_store(store, request) if store else None
+    central_login = build_cross_host_url(
+        request, hostname=settings.RASTISI_PLATFORM_PRIMARY_HOST, path="/login/",
+    )
+    if store is None:
+        # On a multi-store development DB localhost cannot identify which
+        # merchant's admin portal is being requested. Let the user log into
+        # the central portal and choose a store; never guess one.
+        host = strip_port(request.get_host()).lower()
+        if settings.DEBUG and host in {"localhost", "127.0.0.1", "[::1]"}:
+            return redirect(central_login)
+        raise Http404
 
-    next_url = request.GET.get("next", "/admin-portal/")
-    return render(request, "dashboard/login.html", {
-        "error": error,
-        "username": username,
-        "next": next_url,
-        "STOREFRONT_URL": storefront_url,
-    })
+    next_url = request.GET.get("next") or request.POST.get("next") or "/admin-portal/"
+    if not (
+        next_url.startswith("/admin-portal/")
+        and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()})
+    ):
+        next_url = "/admin-portal/"
+
+    if request.user.is_authenticated and get_active_membership(request.user, store):
+        return redirect(next_url)
+
+    # The old per-store username/password POST is deliberately retired.
+    # Never authenticate a second time or rely on global is_staff. Existing
+    # bookmarks/old form POSTs go to the ONE central password/OTP login.
+    token = build_admin_return_token(
+        admin_subdomain=store.admin_subdomain, destination_path=next_url,
+    )
+    return redirect(f"{central_login}?{urlencode({'admin_return': token})}")
 
 
 @admin_host_required

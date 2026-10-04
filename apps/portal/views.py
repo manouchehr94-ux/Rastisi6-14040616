@@ -296,6 +296,13 @@ def login_view(request):
     ``portal:login-password`` جداگانه می‌رود (نگاه کنید به ``login_
     password`` پایین‌تر) تا هیچ‌کدام منطقِ دیگری را پیچیده نکند."""
     if request.user.is_authenticated:
+        # An already signed-in owner arriving with a signed admin_return (for
+        # example from the legacy /admin-portal/login/ redirect) continues to
+        # that store's handoff; ACTIVE membership is still enforced by
+        # ``issue_ticket``. Without one this is the usual My Stores redirect.
+        admin_return = request.GET.get("admin_return") or ""
+        if admin_return:
+            return _post_login_redirect(request, request.user, next_url="", admin_return=admin_return)
         return redirect("portal:app-home")
 
     next_url = request.GET.get("next") or request.POST.get("next") or ""
