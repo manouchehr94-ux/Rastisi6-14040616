@@ -109,7 +109,7 @@ _OCCASION_NOUNS = {
     Campaign.Occasion.BIRTHDAY: "تولد شما",
     Campaign.Occasion.REGISTRATION_ANNIVERSARY: "سالگرد عضویت شما",
     Campaign.Occasion.FIRST_PURCHASE_ANNIVERSARY: "سالگرد اولین خرید شما",
-    Campaign.Occasion.REACTIVATION: "بازگشت شما",
+    Campaign.Occasion.REACTIVATION: "دیدار دوباره با شما",
 }
 
 

@@ -149,6 +149,9 @@ def resolve_candidates(campaign: Campaign, today: dt.date) -> dict[int, str]:
     return {}
 
 
+NO_OFFSET_KINDS = frozenset({K.ORDER_MILESTONE, K.SPENDING_MILESTONE, K.REACTIVATION})
+
+
 def notification_event_key(campaign: Campaign) -> str:
     """رویدادِ اعلانِ این کمپین. پیامِ هر ترکیبِ «زمان‌بندی × نوعِ هدیه» قالبِ مستقلِ پلتفرم دارد:
     پیامِ «فقط تبریک» هرگز وعده‌یِ هدیه/کد نمی‌دهد و پیامِ پیش/پس از مناسبت با زمانِ واقعیِ
@@ -160,7 +163,8 @@ def notification_event_key(campaign: Campaign) -> str:
         return {
             "percent": "campaign.offer_percent", "fixed": "campaign.offer_fixed",
         }.get(campaign.coupon_type, "campaign.offer_free_ship")
-    offset = campaign.occasion_offset_days
+    # نقطه‌ی عطف/بازگشت با «برقرارشدنِ شرط» اجرا می‌شوند و offset در resolve_candidates بی‌اثر است ⇒ پیام همیشه «همان روز»
+    offset = 0 if campaign.occasion_kind in NO_OFFSET_KINDS else campaign.occasion_offset_days
     timing = "before" if offset < 0 else "after" if offset > 0 else "on"
     family = "birthday" if campaign.occasion_kind == K.BIRTHDAY else "generic"
     return _OCCASION_EVENT_KEYS[(family, timing, has_gift)]

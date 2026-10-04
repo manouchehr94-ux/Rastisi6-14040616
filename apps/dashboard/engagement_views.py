@@ -127,16 +127,18 @@ MONTHS = ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرد�
 VALIDITY_DAYS = (3, 7, 14, 30, 90)
 
 
-def _wizard_sources(store) -> dict:
+def _wizard_sources(store, schema=None) -> dict:
     """گزینه‌هایِ «مخاطبِ خاص» — فقط از دادهٔ همین فروشگاه."""
-    from apps.customers.models import Customer
+    from apps.customers.models import Address, Customer
     from apps.engagement.services import rule_data
 
-    schema = ui_schema.build_schema(store)
-    cities = sorted({
-        c for c in Customer.objects.filter(pk__in=rule_data.store_customer_ids(store)).exclude(city="")
-        .values_list("city", flat=True).distinct()[:500]
-    })
+    schema = schema or ui_schema.build_schema(store)
+    ids = rule_data.store_customer_ids(store)
+    # همان منبعی که قاعده‌ی «شهرِ مشتری» ارزیابی می‌کند: آدرسِ پیش‌فرض، و در نبودِ آن شهرِ پروفایل
+    cities = sorted(
+        {c.strip() for c in Customer.objects.filter(pk__in=ids).exclude(city="").values_list("city", flat=True).distinct()[:500]}
+        | {c.strip() for c in Address.objects.filter(customer_id__in=ids).exclude(city="").values_list("city", flat=True).distinct()[:500]}
+    )
     sources = schema["sources"]
     return {
         "city": [[c, c] for c in cities],
@@ -151,7 +153,7 @@ def _form_context(request, form, campaign):
     days = {str(d) for d in VALIDITY_DAYS}
     current_days = str(form["code_valid_days"].value() or "")
     shop_sms_enabled = _sms_globally_enabled(request.store)
-    sources = _wizard_sources(request.store)
+    sources = _wizard_sources(request.store, schema)
     try:
         offset_value = int(form["occasion_offset_days"].value() or 0)
     except (TypeError, ValueError):

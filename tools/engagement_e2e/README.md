@@ -31,4 +31,4 @@ Templates are cached by `runserver --noreload`: re-run `reset.sh` after editing 
 lives inside **«مخاطب خاص می‌خواهم» → «شرط‌های ترکیبی… (پیشرفته)»** and must be enabled with the
 `#cw-use-custom` checkbox. `rule_builder_e2e.py`, `workflow_e2e.py` and `accessibility_e2e.py` were written for the
 old single-page form and have **not** been updated/run against the wizard (they need the Postgres staging DB above).
-Browser coverage of the wizard is in `apps/dashboard/tests/test_campaign_wizard_browser.py` (part of `manage.py test`).
+Browser coverage of the wizard is in `apps/dashboard/tests/test_campaign_wizard_browser.py` (opt-in: `CW_BROWSER_TESTS=1 python manage.py test apps.dashboard.tests.test_campaign_wizard_browser`, run it on its own — a LiveServer flush collides with `serialized_rollback` live tests in the same process).

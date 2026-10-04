@@ -3,7 +3,11 @@
 روی سرورِ زنده‌ی تستِ Django و دیتابیسِ آزمایشیِ تست اجرا می‌شود (هیچ دیتابیسِ محلی/عملیاتی لمس نمی‌شود)
 و هیچ پیامک/ایمیلی ارسال نمی‌شود. اگر Playwright/Chromium نصب نباشد، تست‌ها SKIP می‌شوند (نه PASS).
 
-اجرا: ``python manage.py test apps.dashboard.tests.test_campaign_wizard_browser``
+این تست‌ها پیش‌فرض SKIP هستند (opt-in): ``LiveServerTestCase`` پس از پایان دیتابیسِ تست را flush می‌کند و با
+``serialized_rollback``ِ دیگر تست‌هایِ زنده (مثلاً ``apps.sms.tests.test_gateway_live``) در یک پردازش
+تداخل می‌کند (IntegrityError روی django_content_type). پس فقط به‌صورتِ صریح و جدا اجرا کنید:
+
+``CW_BROWSER_TESTS=1 python manage.py test apps.dashboard.tests.test_campaign_wizard_browser``
 مسیرِ Chromium را می‌توان با ``CW_BROWSER_PATH`` تعیین کرد؛ عکس‌ها در ``CW_SCREENSHOT_DIR`` (در صورتِ تعریف) ذخیره می‌شوند."""
 
 import os
@@ -43,6 +47,7 @@ def _browser_path():
     return None
 
 
+@unittest.skipUnless(os.environ.get("CW_BROWSER_TESTS") == "1", "تستِ مرورگری opt-in است: CW_BROWSER_TESTS=1")
 @unittest.skipIf(sync_playwright is None, "Playwright نصب نیست")
 @override_settings(ALLOWED_HOSTS=[HOST, "127.0.0.1", "localhost", "testserver"])
 class CampaignWizardBrowserTests(StaticLiveServerTestCase):

@@ -99,6 +99,22 @@ class WizardRenderTests(WizardBase):
         self.assertIn(mine.pk, [o[0] for o in r.context["wizard_config"] and dict((k, v) for k, _l, v in r.context["extra_groups"])["category"]])
 
 
+class CitySourceTests(WizardBase):
+    def test_city_choices_come_from_store_customer_addresses_only(self):
+        from apps.customers.models import Address
+
+        item = self.product("کالا", M)
+        mine = self.customer("من")
+        self.order(mine, [(item, 1)], when=timezone.now(), city="اصفهان")  # آدرسِ سفارش/پروفایل
+        Address.objects.filter(customer=mine).update(city="اصفهان")
+        stranger = self.customer("غریبه")
+        Address.objects.create(customer=stranger, receiver_name="غ", phone=stranger.phone, province="x", city="شهر-بیگانه", postal_code="1111111111", full_address="x")
+        r = self.client.get(reverse("dashboard:campaign-add") + "?kind=campaigns")
+        cities = [c[0] for k, _l, opts in r.context["extra_groups"] if k == "city" for c in opts]
+        self.assertIn("اصفهان", cities)
+        self.assertNotIn("شهر-بیگانه", cities)
+
+
 class WizardSaveTests(WizardBase):
     # ---- مناسبت‌ها ------------------------------------------------------------
     def test_create_each_occasion_kind_as_draft_without_issuing_or_sending(self):
@@ -698,3 +714,130 @@ class DeliveryRulesTests(WizardBase):
         cs.execute_campaign(off)
         cs.send_expiry_reminders(self.store)
         self.assertEqual(NotificationOutbox.objects.filter(event_key="coupon.expiring").count(), before)
+
+
+def browser_like_post_data(html: str) -> dict:
+    """مقادیری که مرورگر هنگامِ «ذخیره» از فرمِ رندرشده می‌فرستد (بدونِ هیچ تغییرِ کاربر)."""
+    from bs4 import BeautifulSoup
+
+    form = BeautifulSoup(html, "html.parser").find("form", id="cw-form")
+    data: dict = {}
+
+    def add(name, value):
+        data.setdefault(name, []).append(value)
+
+    for el in form.find_all(["input", "select", "textarea"]):
+        name = el.get("name")
+        if not name or el.has_attr("disabled"):
+            continue
+        if el.name == "input":
+            kind = el.get("type", "text")
+            if kind in ("checkbox", "radio"):
+                if el.has_attr("checked"):
+                    add(name, el.get("value", "on"))
+            elif kind != "submit":
+                add(name, el.get("value", ""))
+        elif el.name == "textarea":
+            add(name, el.text.strip("\n"))
+        else:
+            chosen = el.find("option", selected=True) or el.find("option")
+            if chosen is not None:
+                add(name, chosen.get("value", chosen.text))
+    return {k: (v if len(v) > 1 else v[0]) for k, v in data.items()}
+
+
+class EditRoundTripTests(WizardBase):
+    """باز کردنِ هر کمپینِ قدیمی و ذخیره‌ی بدونِ تغییر نباید هیچ فیلدی را عوض کند."""
+
+    FIELDS = (
+        "name", "description", "trigger_type", "rules", "rule_scope", "period_mode", "period_jalali_year", "period_start_month",
+        "period_end_month", "period_start_date", "period_end_date", "valid_payment_statuses", "amount_basis", "reward_type",
+        "coupon_type", "coupon_value", "coupon_max_discount", "coupon_min_order", "coupon_applies_to_gift_wrap", "code_prefix",
+        "personalized", "code_starts_at", "code_expires_at", "code_valid_days", "total_redemption_limit", "per_customer_limit",
+        "per_customer_period_days", "max_issuances", "validity_from_delivery", "channels", "reminder_days_before_expiry",
+        "occasion_kind", "occasion_name", "occasion_offset_days", "occasion_params", "active_from", "active_until",
+        "custom_email_subject", "custom_email_body", "custom_sms_body",
+    )
+
+    def snapshot(self, c):
+        c.refresh_from_db()
+        return {f: getattr(c, f) for f in self.FIELDS}
+
+    def roundtrip(self, campaign):
+        before = self.snapshot(campaign)
+        url = reverse("dashboard:campaign-edit", args=[campaign.pk])
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, 200)
+        r = self.client.post(url, browser_like_post_data(r.content.decode()))
+        self.assertEqual(r.status_code, 302, getattr(r, "context", None) and r.context["form"].errors)
+        after = self.snapshot(campaign)
+        diff = {k: (before[k], after[k]) for k in before if before[k] != after[k]}
+        if diff.get("valid_payment_statuses", (None, None))[0] == [] and diff["valid_payment_statuses"][1] == ["paid"]:
+            del diff["valid_payment_statuses"]  # [] و ["paid"] در موتور یکی‌اند (``or ["paid"]``)
+        return diff
+
+    def test_legacy_occasion_with_every_old_field(self):
+        tree = {"type": "group", "op": "and", "negate": False, "children": [
+            {"type": "customer_city", "values": ["شیراز"]}, {"type": "lifetime_orders", "op": "gte", "value": "2"}]}
+        c = Campaign.objects.create(
+            store=self.store, name="مناسبت قدیمی", description="d", trigger_type="occasion", occasion_kind="holiday",
+            occasion_name="شب یلدا", occasion_params={"month": 9, "day": 30}, occasion_offset_days=-2, rules=tree,
+            period_mode="jalali_months", period_jalali_year=1404, period_start_month=1, period_end_month=6,
+            rule_scope="same_order", amount_basis="items_total", valid_payment_statuses=["paid", "refunded"],
+            coupon_type="percent", coupon_value=Decimal(25), coupon_max_discount=Decimal(2_000_000), coupon_min_order=Decimal(100_000),
+            code_prefix="YLDA", personalized=False, code_valid_days=10, total_redemption_limit=50, per_customer_limit=2,
+            per_customer_period_days=60, max_issuances=300, validity_from_delivery=True, coupon_applies_to_gift_wrap=True,
+            channels=["sms"], channels_explicit=True, reminder_days_before_expiry=2, active_until=jdt(1450, 1, 1, 23, 59, 59),
+            custom_email_subject="موضوع", custom_email_body="سلام {customer_name} {discount_code}", custom_sms_body="قدیمی",
+        )
+        self.assertEqual(self.roundtrip(c), {})
+
+    def test_legacy_manual_campaign_with_custom_rules_period_dates_and_fixed_expiry(self):
+        tree = {"type": "group", "op": "or", "negate": False, "children": [
+            {"type": "customer_city", "values": ["شیراز"]}, {"type": "customer_type", "value": "new"}]}
+        c = Campaign.objects.create(
+            store=self.store, name="قدیمی", trigger_type="scheduled", rules=tree, period_mode="dates",
+            period_start_date=jdt(1404, 1, 1).date(), period_end_date=jdt(1404, 6, 31).date(), coupon_type="fixed",
+            coupon_value=Decimal(70000), code_starts_at=jdt(1405, 1, 1, 0, 0, 0), code_expires_at=jdt(1405, 6, 31, 23, 59, 59),
+            code_valid_days=None, active_from=jdt(1405, 1, 1, 0, 0, 0), channels=[], channels_explicit=False, per_customer_limit=1,
+        )
+        diff = self.roundtrip(c)
+        # تنها تفاوتِ مجاز: کمپینِ قدیمی بدونِ انتخابِ صریحِ کانال، «همه‌ی کانال‌ها» را صریح نشان می‌دهد (همان معنی)
+        self.assertEqual(set(diff), {"channels"})
+        self.assertEqual(sorted(diff["channels"][1]), ["email", "sms"])
+
+    def test_legacy_reward_none_and_free_ship_campaigns(self):
+        for kw in (dict(reward_type="none", coupon_value=Decimal(0)), dict(coupon_type="free_ship", coupon_value=Decimal(0), code_valid_days=5)):
+            c = Campaign.objects.create(store=self.store, name="ق", trigger_type="manual", channels=["email"], channels_explicit=True, **kw)
+            self.assertEqual(self.roundtrip(c), {}, kw)
+
+
+class OffsetlessOccasionTests(WizardBase):
+    """«۳ روز قبل/۱ روز بعد» برای مناسبت‌هایی که روزِ تقویمی ندارند عملیاتی نیست؛ نباید قابل‌انتخاب یا اثرگذار باشد."""
+
+    def test_milestone_and_reactivation_ignore_offset_in_form_and_message(self):
+        for kind, extra in (("reactivation", {"occ_days": "30"}), ("order_milestone", {"occ_n": "3"}), ("spending_milestone", {"occ_amount": "1000000"})):
+            r = self.post_new(self.occasion_payload(name=f"o-{kind}", occasion_kind=kind, occasion_offset_days="-3", **extra))
+            self.assertEqual(r.status_code, 302, kind)
+            c = Campaign.objects.get(name=f"o-{kind}")
+            self.assertEqual(c.occasion_offset_days, 0, kind)
+            self.assertEqual(occasions.notification_event_key(c), "occasion.generic", kind)
+        legacy = Campaign.objects.create(store=self.store, name="ق", trigger_type="occasion", occasion_kind="reactivation", occasion_params={"days": 30}, occasion_offset_days=-3)
+        self.assertEqual(occasions.notification_event_key(legacy), "occasion.generic")  # offset قدیمی بی‌اثر بود؛ پیام هم «قبل» نیست
+
+    def test_calendar_occasions_still_use_offset(self):
+        r = self.post_new(self.occasion_payload(name="h", occasion_kind="holiday", occ_month="9", occ_day="30", occasion_offset_days="-3"))
+        self.assertEqual(Campaign.objects.get(name="h").occasion_offset_days, -3)
+
+
+class TestSendCannotCarryCustomSmsText(WizardBase):
+    def test_store_test_send_of_platform_managed_event_uses_platform_text_only(self):
+        from django.core import mail
+
+        url = reverse("dashboard:notification-template-test", args=["campaign.announce"])
+        self.client.post(url, {"channel": "sms", "recipient": "09120001111", "sms_body": "متن جعلی فروشنده"})
+        rows = NotificationOutbox.objects.filter(is_test=True, event_key="campaign.announce")
+        self.assertEqual(rows.count(), 1)
+        self.assertNotIn("متن جعلی", rows[0].body)
+        self.assertIn("آغاز شد", rows[0].body)
+        self.assertEqual(len(mail.outbox), 0)

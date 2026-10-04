@@ -10,7 +10,7 @@ from django import forms
 from apps.core.jalali_utils import JalaliDateError, parse_jalali_date, store_timezone
 from apps.core.utils import normalize_digits
 from apps.engagement.models import Campaign
-from apps.engagement.services import simple_setup
+from apps.engagement.services import occasions, simple_setup
 
 
 def _jdate(raw) -> dt.date | None:
@@ -64,6 +64,14 @@ class FreeMultipleField(forms.MultipleChoiceField):
 
     def valid_value(self, value):
         return True
+
+
+def _audience_for_edit(campaign: Campaign) -> dict:
+    """در حالتِ مناسبت، انتخابِ مخاطب در رابط نمایش داده نمی‌شود؛ پس قواعدِ قبلیِ هر مناسبت بدونِ تغییر
+    (به‌صورتِ «سفارشی») حفظ می‌شود تا ویرایش چیزی را از بین نبرد."""
+    if campaign.trigger_type == Campaign.Trigger.OCCASION and campaign.rules:
+        return {"kind": simple_setup.AUDIENCE_CUSTOM, "extra_kind": "", "extra_values": []}
+    return simple_setup.detect_audience(campaign.rules, campaign.store)
 
 
 class CampaignForm(forms.Form):
@@ -215,7 +223,10 @@ class CampaignForm(forms.Form):
         campaign.reward_type = cd["reward_type"]
         campaign.coupon_type = cd["coupon_type"]
         campaign.coupon_value = Decimal(cd["coupon_value"] or 0)
-        campaign.coupon_max_discount = Decimal(cd["coupon_max_discount"]) if cd["coupon_max_discount"] else None
+        # سقفِ مبلغ فقط برایِ تخفیفِ درصدی معنا دارد
+        campaign.coupon_max_discount = (
+            Decimal(cd["coupon_max_discount"]) if cd["coupon_max_discount"] and cd["coupon_type"] == "percent" else None
+        )
         campaign.coupon_min_order = Decimal(cd["coupon_min_order"] or 0)
         campaign.coupon_applies_to_gift_wrap = cd["coupon_applies_to_gift_wrap"]
         campaign.code_prefix = cd["code_prefix"].strip().upper()
@@ -236,6 +247,8 @@ class CampaignForm(forms.Form):
         campaign.occasion_kind = (cd["occasion_kind"] or "") if campaign.trigger_type == Campaign.Trigger.OCCASION else ""
         campaign.occasion_name = cd["occasion_name"].strip()
         campaign.occasion_offset_days = cd["occasion_offset_days"] or 0
+        if campaign.occasion_kind in occasions.NO_OFFSET_KINDS:
+            campaign.occasion_offset_days = 0  # این مناسبت‌ها روزِ مشخصی ندارند؛ «قبل/بعد» بی‌اثر است
         params = {}
         kind = campaign.occasion_kind
         if kind == Campaign.Occasion.ORDER_MILESTONE:
@@ -288,5 +301,5 @@ class CampaignForm(forms.Form):
             "occ_month": p.get("month", ""), "occ_day": p.get("day", ""),
             "occ_date": to_fa_digits(format_jalali(dt.date.fromisoformat(p["date"]))) if p.get("date") else "",
             "active_from": jd(campaign.active_from), "active_until": jd(campaign.active_until),
-            **{f"audience_{k}": v for k, v in simple_setup.detect_audience(campaign.rules, campaign.store).items()},
+            **{f"audience_{k}": v for k, v in _audience_for_edit(campaign).items()},
         }

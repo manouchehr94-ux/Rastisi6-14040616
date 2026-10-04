@@ -47,6 +47,19 @@
         <input type="hidden" name="occasion_offset_days" value="{{ form.occasion_offset_days.value|default:'0' }}">
         <input type="hidden" name="channels_explicit" value="1">
         <input type="hidden" name="rules_json" id="id_rules_json" value="{{ form.rules_json.value|default:'{}' }}">
+        <input type="hidden" name="occasion_name" value="{{ form.occasion_name.value|default:'' }}">
+        {% if is_occasion %}{# فیلدهایی که در حالتِ مناسبت نمایش داده نمی‌شوند، هنگامِ ویرایش دست‌نخورده حفظ می‌شوند #}
+        <input type="hidden" name="active_from" value="{{ form.active_from.value|default:'' }}">
+        <input type="hidden" name="period_mode" value="{{ form.period_mode.value|default:'none' }}">
+        <input type="hidden" name="period_jalali_year" value="{{ form.period_jalali_year.value|default:'' }}">
+        <input type="hidden" name="period_start_month" value="{{ form.period_start_month.value|default:'' }}">
+        <input type="hidden" name="period_end_month" value="{{ form.period_end_month.value|default:'' }}">
+        <input type="hidden" name="period_start_date" value="{{ form.period_start_date.value|default:'' }}">
+        <input type="hidden" name="period_end_date" value="{{ form.period_end_date.value|default:'' }}">
+        <input type="hidden" name="rule_scope" value="{{ form.rule_scope.value|default:'aggregate' }}">
+        <input type="hidden" name="amount_basis" value="{{ form.amount_basis.value|default:'net_total' }}">
+        {% for v in form.valid_payment_statuses.value %}<input type="hidden" name="valid_payment_statuses" value="{{ v }}">{% endfor %}
+        {% endif %}
 
         <!-- ================= مرحله ۱ ================= -->
         <section class="cw-panel" id="cw-step1" data-step="1" aria-labelledby="cw-h1">
@@ -146,7 +159,7 @@
           </div>
           <div class="cw-conditional" id="cw-reward-details">
             <div class="cw-field" id="cw-amount-block"><label class="cw-field-label" id="cw-amount-label" for="id_coupon_value">چند درصد تخفیف بدهیم؟</label><div style="position:relative"><input id="id_coupon_value" name="coupon_value" class="cw-text-input cw-date-input" style="padding-left:76px" inputmode="numeric" value="{{ form.coupon_value.value|default:'' }}"><span id="cw-amount-unit" style="position:absolute;left:12px;top:9px;color:#8589a0;font-size:11px">درصد</span></div><div class="cw-error" id="cw-amount-error">مقدار تخفیف معتبر نیست.</div>{% include "dashboard/partials/cw_errors.html" with f=form.coupon_value %}</div>
-            <div class="cw-field" id="cw-validity-block"><label class="cw-field-label" for="id_code_valid_days">مشتری چند روز فرصت استفاده داشته باشد؟</label><select class="cw-select-input" id="id_code_valid_days" name="code_valid_days">{% if has_fixed_expiry and not form.code_valid_days.value %}<option value="" selected>طبق تاریخ انقضای ثابتِ قبلی</option>{% endif %}{% for d, label in validity_days %}<option value="{{ d }}" {% if form.code_valid_days.value|stringformat:"s" == d|stringformat:"s" %}selected{% elif not form.code_valid_days.value and not has_fixed_expiry and d == 7 %}selected{% endif %}>{{ label }}{% if d == 7 %} (پیشنهادی){% endif %}</option>{% endfor %}</select><div class="cw-field-help">برای هر مشتری، مدت اعتبار کد از زمان صدور محاسبه می‌شود.</div>{% include "dashboard/partials/cw_errors.html" with f=form.code_valid_days %}</div>
+            <div class="cw-field" id="cw-validity-block"><label class="cw-field-label" for="id_code_valid_days">مشتری چند روز فرصت استفاده داشته باشد؟</label><select class="cw-select-input" id="id_code_valid_days" name="code_valid_days">{% if not form.code_valid_days.value and campaign %}<option value="" selected>{% if has_fixed_expiry %}طبق تاریخ انقضای ثابتِ قبلی{% else %}— مدتِ اعتبار را انتخاب کن —{% endif %}</option>{% endif %}{% for d, label in validity_days %}<option value="{{ d }}" {% if form.code_valid_days.value|stringformat:"s" == d|stringformat:"s" %}selected{% elif not form.code_valid_days.value and not campaign and d == 7 %}selected{% endif %}>{{ label }}{% if d == 7 %} (پیشنهادی){% endif %}</option>{% endfor %}</select><div class="cw-field-help">برای هر مشتری، مدت اعتبار کد از زمان صدور محاسبه می‌شود.</div>{% include "dashboard/partials/cw_errors.html" with f=form.code_valid_days %}</div>
           </div>
           <details class="cw-advanced" id="cw-advanced-reward"><summary>تنظیمات بیشتر هدیه (اختیاری)</summary><div class="cw-advanced-body">
             <div class="cw-field-row"><div class="cw-field"><label class="cw-field-label" for="id_coupon_min_order">حداقل مبلغ سفارش (تومان)</label><input class="cw-text-input cw-date-input" id="id_coupon_min_order" name="coupon_min_order" inputmode="numeric" value="{% if form.coupon_min_order.value %}{{ form.coupon_min_order.value }}{% endif %}" placeholder="بدون محدودیت">{% include "dashboard/partials/cw_errors.html" with f=form.coupon_min_order %}</div><div class="cw-field" id="cw-max-discount-block"><label class="cw-field-label" for="id_coupon_max_discount">سقف مبلغ تخفیف (تومان)</label><input class="cw-text-input cw-date-input" id="id_coupon_max_discount" name="coupon_max_discount" inputmode="numeric" value="{{ form.coupon_max_discount.value|default:'' }}" placeholder="بدون سقف">{% include "dashboard/partials/cw_errors.html" with f=form.coupon_max_discount %}</div></div>
@@ -177,12 +190,16 @@
           </div>
           <div class="cw-hline"></div><div class="cw-mini-heading" id="cw-timing-heading">{% if is_occasion %}این هدیه چه زمانی داده شود؟{% else %}این کمپین چه زمانی اجرا شود؟{% endif %}</div>
           {% if is_occasion %}
-          <div id="cw-occasion-timing"><div class="cw-segment" id="cw-offset-options">
+          <div id="cw-occasion-timing">
+          <div class="cw-hidden" data-show-field="occasion_kind" data-show-values="reactivation,order_milestone,spending_milestone"><div class="cw-muted-note" style="margin:0"><span class="cw-text-icon">⏱</span><span>این مناسبت به‌محض برقرارشدنِ شرطِ انتخابی بررسی می‌شود؛ زمانِ دیگری (روز قبل/بعد) برایش معنا ندارد.</span></div></div>
+          <div data-show-field="occasion_kind" data-show-values="birthday,registration_anniversary,first_purchase_anniversary,holiday,custom_date">
+<div class="cw-segment" id="cw-offset-options">
             <button class="cw-seg-btn" type="button" data-offset="0" aria-pressed="false">همان روز (پیشنهادی)</button>
             <button class="cw-seg-btn" type="button" data-offset="-3" aria-pressed="false">۳ روز قبل</button>
             <button class="cw-seg-btn" type="button" data-offset="1" aria-pressed="false">۱ روز بعد</button>
             {% if custom_offset is not None %}<button class="cw-seg-btn" type="button" data-offset="{{ custom_offset }}" aria-pressed="false">{% if custom_offset < 0 %}{{ custom_offset_abs|fa_number }} روز قبل (قبلی){% else %}{{ custom_offset|fa_number }} روز بعد (قبلی){% endif %}</button>{% endif %}
           </div><div class="cw-field-help">برای تولد و سالگرد، هر مشتری فقط در چرخه مربوط به خودش پاداش می‌گیرد؛ ارسال تکراری نداریم. پیامِ روزهای قبل و بعد با زمانِ واقعیِ صدورِ هدیه هماهنگ است.</div>{% include "dashboard/partials/cw_errors.html" with f=form.occasion_offset_days %}</div>
+          </div>
           {% else %}
           <div id="cw-campaign-timing"><div class="cw-segment" id="cw-timing-options">
             <button class="cw-seg-btn" type="button" data-timing="manual" aria-pressed="false">خودم اجرا می‌کنم</button>

@@ -40,6 +40,7 @@
   };
   var EXTRA_WORD = { city: 'شهر', category: 'دسته', tag: 'برچسب', segment: 'گروه' };
   var MORE_OCC = ['order_milestone', 'spending_milestone', 'holiday', 'custom_date'];
+  var NO_OFFSET = ['reactivation', 'order_milestone', 'spending_milestone'];
   var PARAM_OCC = ['reactivation', 'order_milestone', 'spending_milestone', 'holiday', 'custom_date'];
 
   function toast(msg) {
@@ -89,6 +90,7 @@
   }
   function timeText() {
     if (MODE === 'occasion') {
+      if (NO_OFFSET.indexOf(val('occasion_kind')) >= 0) return 'خودکار؛ به‌محض برقرارشدن شرط مناسبت';
       var o = Number(val('occasion_offset_days') || 0);
       if (o === 0) return 'خودکار؛ در روز مناسبت';
       return 'خودکار؛ ' + fa(Math.abs(o)) + (o < 0 ? ' روز پیش از مناسبت' : ' روز پس از مناسبت');
@@ -123,6 +125,7 @@
     });
     if (MODE === 'occasion') {
       var o = val('occasion_kind');
+      if (NO_OFFSET.indexOf(o) >= 0 && val('occasion_offset_days') !== '0') setVal('occasion_offset_days', '0');
       $('#cw-occ-params').classList.toggle('cw-hidden', PARAM_OCC.indexOf(o) < 0);
       if (MORE_OCC.indexOf(o) >= 0) setMoreOcc(true);
     }
@@ -179,6 +182,7 @@
     var r = rewardChoice();
     if (r === 'percent') { var n = num('coupon_value', NaN); if (!(n >= 1 && n <= 100)) { $('#cw-amount-error').textContent = 'درصد تخفیف باید بین ۱ تا ۱۰۰ باشد.'; $('#cw-amount-error').classList.add('cw-show'); return fail('درصد تخفیف باید بین ۱ تا ۱۰۰ باشد.', 'coupon_value'); } }
     if (r === 'fixed') { var m = num('coupon_value', NaN); if (!(m >= 1)) { $('#cw-amount-error').textContent = 'مبلغ تخفیف باید بزرگ‌تر از صفر باشد.'; $('#cw-amount-error').classList.add('cw-show'); return fail('مبلغ تخفیف باید بزرگ‌تر از صفر باشد.', 'coupon_value'); } }
+    if (r !== 'none' && !val('code_valid_days') && !val('code_expires_at')) { return fail('مدتِ اعتبارِ کد را انتخاب کن.', 'code_valid_days'); }
     if (r !== 'none') {
       var bad = ['coupon_min_order', 'coupon_max_discount', 'max_issuances'].filter(function (id) { return val(id) !== '' && num(id, -1) < (id === 'coupon_min_order' ? 0 : 1); });
       if (bad.length) return fail('تنظیمات پیشرفته باید عدد صحیح و مثبت باشند.', bad[0]);
@@ -303,7 +307,7 @@
     });
     $('#cw-review-overlay').classList.add('cw-open'); $('#cw-close-review').focus();
   }
-  function closeReview() { $('#cw-review-overlay').classList.remove('cw-open'); }
+  function closeReview() { var o = $('#cw-review-overlay'), was = o.classList.contains('cw-open'); o.classList.remove('cw-open'); if (was) { var t = $('#cw-view-review'); if (t) t.focus(); } }
   $('#cw-view-review').addEventListener('click', function () {
     for (var i = 1; i <= 3; i++) { if (!validators[i]()) { go(i); validators[i](); return; } }
     loadPreview().then(showReview, showReview);  // متنِ پیش‌نمایش پیش از مرور نهایی تازه می‌شود
