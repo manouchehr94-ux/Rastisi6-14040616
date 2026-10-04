@@ -47,11 +47,10 @@ class OwnerLoginForm(forms.Form):
 
 
 class OwnerIdentifierLoginForm(forms.Form):
-    """فرمِ کانونیکالِ ورودِ مالک با رمز عبور — شناسه می‌تواند ایمیل یا
-    شماره موبایل باشد (یکپارچه‌سازیِ احرازِ هویت)."""
+    """فرمِ یکپارچه‌ی ورود با رمز: موبایل، نام کاربری یا ایمیل."""
 
     identifier = forms.CharField(
-        label="ایمیل یا شماره موبایل",
+        label="شماره موبایل، نام کاربری یا ایمیل",
         widget=forms.TextInput(attrs={"autocomplete": "username", "dir": "ltr"}),
     )
     password = forms.CharField(
