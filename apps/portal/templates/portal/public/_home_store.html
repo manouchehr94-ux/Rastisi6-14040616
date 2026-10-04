@@ -1,0 +1,26 @@
+{% comment %}Abstract sample storefront used inside the landing-page builder demos. Deliberately product-agnostic: placeholder names and shapes only, so the page never reads as "a shop selling X". Params: store_name, layout, palette.{% endcomment %}
+<div class="rh-store" data-layout="{{ layout|default:'classic' }}" data-palette="{{ palette|default:'forest' }}">
+  <div class="rh-store-head">
+    <strong class="rh-store-name" data-rh-name>{{ store_name|default:"نام فروشگاه" }}</strong>
+    <span class="rh-store-nav"><span>محصولات</span><span>دسته‌ها</span><span>تماس</span></span>
+    <span class="rh-store-cart" aria-hidden="true"></span>
+  </div>
+  <div class="rh-store-banner">
+    <div class="rh-store-banner-copy">
+      <small>معرفی فروشگاه</small>
+      <h3>عنوان اصلی فروشگاه شما</h3>
+      <p>یک جمله کوتاه درباره برند و محصولاتی که عرضه می‌کنید.</p>
+      <span class="rh-store-btn">مشاهده محصولات</span>
+    </div>
+    <div class="rh-store-art" aria-hidden="true"><i></i><i></i></div>
+  </div>
+  <div class="rh-store-products">
+    <div class="rh-store-products-head"><strong>محصولات</strong><small>مشاهده همه</small></div>
+    <div class="rh-store-grid">
+      <div class="rh-store-card"><div class="rh-store-thumb"></div><div class="rh-store-meta"><strong>محصول نمونه ۱</strong><small>قیمت محصول</small></div></div>
+      <div class="rh-store-card"><div class="rh-store-thumb"></div><div class="rh-store-meta"><strong>محصول نمونه ۲</strong><small>قیمت محصول</small></div></div>
+      <div class="rh-store-card"><div class="rh-store-thumb"></div><div class="rh-store-meta"><strong>محصول نمونه ۳</strong><small>قیمت محصول</small></div></div>
+      <div class="rh-store-card"><div class="rh-store-thumb"></div><div class="rh-store-meta"><strong>محصول نمونه ۴</strong><small>قیمت محصول</small></div></div>
+    </div>
+  </div>
+</div>

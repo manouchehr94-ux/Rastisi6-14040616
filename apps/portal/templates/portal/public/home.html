@@ -1,176 +1,319 @@
 {% extends "portal/public/base_public.html" %}
 {% load static %}
 {% load public_photos %}
-{% block title %}راستی‌سی | فروشگاه شما، با امضای خودتان{% endblock %}
-{% block meta_description %}<meta name="description" content="راستی‌سی؛ ساخت و مدیریت فروشگاه اینترنتی با ظاهر اختصاصی، مدیریت محصولات و سفارش‌ها و تجربه خرید مناسب موبایل.">{% endblock %}
+{% block title %}راستی‌سی | فروشگاه‌ساز اینترنتی؛ ساخت و مدیریت فروشگاه آنلاین{% endblock %}
+{% block meta_description %}<meta name="description" content="راستی‌سی یک فروشگاه‌ساز اینترنتی است: بدون برنامه‌نویسی فروشگاه خودت را بساز، ظاهرش را شخصی‌سازی کن، محصولات را اضافه کن و سفارش‌ها را از پنل مدیریت دنبال کن.">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fa_IR">
+<meta property="og:title" content="راستی‌سی | فروشگاه‌ساز اینترنتی">
+<meta property="og:description" content="با راستی‌سی فروشگاه اینترنتی خودت را بساز و مدیریت کن.">{% endblock %}
+
+{% block extra_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'portal/css/public-home-v3.css' %}?v=20261004-1">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"SoftwareApplication","name":"راستی‌سی","applicationCategory":"BusinessApplication","operatingSystem":"Web","inLanguage":"fa-IR","description":"فروشگاه‌ساز اینترنتی برای ساخت، شخصی‌سازی ظاهر و مدیریت فروشگاه آنلاین."},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"راستی‌سی دقیقاً چیست؟","acceptedAnswer":{"@type":"Answer","text":"راستی‌سی یک فروشگاه‌ساز اینترنتی است؛ ابزاری برای ساخت و مدیریت فروشگاه آنلاین خودت. راستی‌سی کالایی نمی‌فروشد و بازار یا مارکت‌پلیس هم نیست."}},{"@type":"Question","name":"برای ساخت فروشگاه باید برنامه‌نویسی بلد باشم؟","acceptedAnswer":{"@type":"Answer","text":"نه. ساخت فروشگاه، انتخاب ظاهر و افزودن محصول از طریق فرم‌ها و پنل مدیریت انجام می‌شود."}},{"@type":"Question","name":"چه بخش‌هایی از ظاهر فروشگاه را می‌توانم تغییر بدهم؟","acceptedAnswer":{"@type":"Answer","text":"ظاهر فروشگاه را از میان گزینه‌های پشتیبانی‌شده، مثل نام، رنگ و قالب، شخصی‌سازی می‌کنی. دموی همین صفحه نمونه‌ای ساده از این تجربه است."}},{"@type":"Question","name":"نمونه فروشگاه‌های این صفحه مشتری واقعی هستند؟","acceptedAnswer":{"@type":"Answer","text":"نه. فروشگاه‌های نمونه فقط برای نمایش امکان‌های ظاهری ساخته شده‌اند و فروشگاه مشتری واقعی نیستند."}},{"@type":"Question","name":"هزینه استفاده از راستی‌سی چقدر است؟","acceptedAnswer":{"@type":"Answer","text":"پلن‌های فعال و شرایط شروع در صفحه تعرفه‌ها منتشر می‌شود."}}]}]}</script>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script src="{% static 'portal/js/public-home-v3.js' %}?v=20261004-1" defer></script>
+{% endblock %}
 
 {% block content %}
 {% public_photo 'stilllife' as public_stilllife %}
-{% public_photo 'olive' as public_olive %}
-{% public_photo 'clay' as public_clay %}
-{% public_photo 'ivory' as public_ivory %}
-{% public_photo 'ceramics' as public_ceramics %}
 {% public_photo 'fashion' as public_fashion %}
 {% public_photo 'skincare' as public_skincare %}
-{% public_photo 'bag' as public_bag %}
-<section class="rs-hero">
-  <div class="rs-container">
-    <div class="rs-hero-grid">
-      <div class="rs-hero-copy">
-        <div class="rs-eyebrow">ساخت و مدیریت فروشگاه اینترنتی</div>
-        <h1>فروشگاهِ شما.<br><em>با امضای خودتان.</em></h1>
-        <p class="rs-hero-desc">با راستی‌سی، فروشگاه آنلاین خودتان را بسازید؛ از چیدمان ویترین تا محصولات و سفارش‌ها، همه را از یک‌جا مدیریت کنید.</p>
-        <div class="rs-actions">
-          <a class="rs-btn rs-btn-primary" href="{% url 'portal:register' %}">ساخت فروشگاه</a>
-          <a class="rs-link" href="{% url 'portal:design' %}">اول، طراحی را ببینم</a>
-        </div>
-        <p class="rs-hero-note"><span class="rs-value-dot"></span>فروشگاه مستقل شما؛ نه یک غرفه در بازار دیگران.</p>
-      </div>
 
-      <div class="rs-hero-art">
-        <div class="rs-preview">
-          <div class="rs-browser"><span class="rs-browser-dots"><i></i><i></i><i></i></span><span>فروشگاه نمونه راستی‌سی</span></div>
-          <div class="rs-demo-store">
-            <div class="rs-demo-head"><strong class="rs-demo-brand">خانه آبان</strong><span class="rs-demo-nav"><span>محصولات</span><span>درباره ما</span><span>تماس</span></span></div>
-            <div class="rs-demo-hero">
-              <div class="rs-demo-copy"><small>مجموعه تازه</small><h3>اشیایی برای خانه‌ای که شبیه شماست.</h3><p>یک ویترین روشن و شخصی برای معرفی محصولات و روایت برند.</p><span class="rs-demo-action">دیدن محصولات</span></div>
-              <div class="rs-demo-art"><img src="{{ public_stilllife.url }}" alt="{{ public_stilllife.alt|default:'گلدان سفید و ظروف دست‌ساز در نور طبیعی' }}" width="1100" height="825" loading="eager" decoding="async"></div>
+{# ───────── Hero: the tool and its output, not a shop window ───────── #}
+<section class="rh-hero" aria-labelledby="rh-hero-title">
+  <div class="rs-container rh-hero-grid">
+    <div class="rh-hero-copy">
+      <p class="rh-badge"><span class="rh-badge-dot" aria-hidden="true"></span>فروشگاه‌ساز اینترنتی</p>
+      <h1 id="rh-hero-title"><span class="rh-line">با راستی‌سی فروشگاه اینترنتی</span> <span class="rh-line">خودت را بساز و مدیریت کن</span></h1>
+      <p class="rh-hero-desc">راستی‌سی یک فروشگاه‌ساز است، نه فروشگاه کالا و نه بازار. بدون برنامه‌نویسی فروشگاهت را از صفر می‌سازی، ظاهرش را از میان امکانات موجود شخصی‌سازی می‌کنی، محصولات را اضافه می‌کنی و سفارش‌ها را از پنل مدیریت دنبال می‌کنی.</p>
+      <div class="rh-actions">
+        <a class="rs-btn rs-btn-primary rh-btn-lg" href="{% url 'portal:register' %}">شروع ساخت فروشگاه</a>
+        <a class="rs-btn rs-btn-outline rh-btn-lg" href="#demo">دموی زنده را امتحان کن</a>
+      </div>
+      <ul class="rh-hero-points">
+        <li>بدون نیاز به برنامه‌نویسی</li>
+        <li>نام، رنگ و قالب قابل تغییر</li>
+        <li>محصول و سفارش در یک پنل</li>
+      </ul>
+    </div>
+
+    <div class="rh-bench" data-rh-hero role="img" aria-label="تصویر نمایشی از محیط ساخت فروشگاه راستی‌سی: در یک سمت تنظیمات نام، قالب و رنگ، و در سمت دیگر پیش‌نمایش زنده فروشگاه">
+      <div class="rh-window">
+        <div class="rh-window-bar"><span class="rh-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>محیط ساخت فروشگاه</span><span class="rh-tag">نمونه نمایشی</span></div>
+        <div class="rh-bench-body">
+          <div class="rh-bench-panel" aria-hidden="true">
+            <p class="rh-pane-title">ساخت</p>
+            <div class="rh-field"><small>نام فروشگاه</small><span data-rh-hero-name>فروشگاه من</span></div>
+            <div class="rh-field"><small>قالب</small>
+              <span class="rh-chips"><i data-rh-hero-layout="classic" class="is-on">ساده</i><i data-rh-hero-layout="editorial">مجله‌ای</i><i data-rh-hero-layout="compact">فشرده</i></span>
             </div>
-            <div class="rs-demo-products">
-              <div class="rs-demo-products-head"><strong>محصولات منتخب</strong><small>مشاهده همه</small></div>
-              <div class="rs-demo-grid">
-                <div class="rs-demo-card"><div class="rs-demo-photo"><img src="{{ public_olive.url }}" alt="" width="400" height="447" loading="lazy" decoding="async"></div><strong>گلدان دست‌ساز</strong><small>۱٬۲۸۰٬۰۰۰ تومان</small></div>
-                <div class="rs-demo-card"><div class="rs-demo-photo"><img src="{{ public_clay.url }}" alt="" width="368" height="311" loading="lazy" decoding="async"></div><strong>ظرف سرامیکی</strong><small>۹۸۰٬۰۰۰ تومان</small></div>
-                <div class="rs-demo-card"><div class="rs-demo-photo"><img src="{{ public_ivory.url }}" alt="" width="360" height="536" loading="lazy" decoding="async"></div><strong>ست رومیزی</strong><small>۱٬۶۴۰٬۰۰۰ تومان</small></div>
-              </div>
+            <div class="rh-field"><small>رنگ برند</small>
+              <span class="rh-dots-row"><i data-rh-hero-palette="forest" class="is-on"></i><i data-rh-hero-palette="indigo"></i><i data-rh-hero-palette="copper"></i><i data-rh-hero-palette="graphite"></i></span>
             </div>
+            <ul class="rh-steps-mini">
+              <li class="is-on">هویت و ظاهر</li><li>محصولات</li><li>سفارش‌ها</li>
+            </ul>
+          </div>
+          <div class="rh-bench-out" aria-hidden="true">
+            <p class="rh-pane-title">فروشگاهِ خروجی <span class="rh-live"><i></i>پیش‌نمایش زنده</span></p>
+            <div class="rh-bench-store" data-rh-hero-store>{% include "portal/public/_home_store.html" with store_name="فروشگاه من" layout="classic" palette="forest" %}</div>
           </div>
         </div>
-        <div class="rs-theme-card"><div class="rs-theme-card-head"><span>رنگ برندتان</span><span>●</span></div><div class="rs-swatches"><i class="rs-swatch"></i><i class="rs-swatch"></i><i class="rs-swatch"></i><i class="rs-swatch"></i></div></div>
       </div>
     </div>
+  </div>
 
-    <div class="rs-value-rail">
-      <div><span class="rs-value-dot"></span>فروشگاه مستقل</div>
-      <div><span class="rs-value-dot"></span>طراحی بدون کدنویسی</div>
-      <div><span class="rs-value-dot"></span>محصول و سفارش، یک‌جا</div>
-      <div><span class="rs-value-dot"></span>تجربه مناسب موبایل</div>
+  <div class="rs-container">
+    <ul class="rh-rail" aria-label="خلاصه امکانات">
+      <li><b>ساخت فروشگاه</b> بدون برنامه‌نویسی</li>
+      <li><b>شخصی‌سازی</b> قالب، رنگ و نام</li>
+      <li><b>مدیریت</b> محصول، تصویر و سفارش</li>
+      <li><b>نمایش خوب</b> روی موبایل و دسکتاپ</li>
+    </ul>
+  </div>
+</section>
+
+{# ───────── One platform → many different stores ───────── #}
+<section class="rh-section" id="stores" aria-labelledby="rh-stores-title">
+  <div class="rs-container">
+    <div class="rh-head">
+      <h2 id="rh-stores-title">یک پلتفرم، فروشگاه‌هایی با ظاهر کاملاً متفاوت</h2>
+      <p>راستی‌سی ابزار ساخت و مدیریت است؛ آنچه مشتری می‌بیند فروشگاه خود توست. سه مثال زیر نشان می‌دهند یک ابزار می‌تواند چند هویت مختلف بسازد.</p>
     </div>
-  </div>
-</section>
-<section class="rs-kinetic-band" aria-label="مسیر راستی‌سی">
-  <div class="rs-kinetic-track" aria-hidden="true">
-    <span>ساخت فروشگاه</span><span>طراحی ویترین</span><span>مدیریت محصول</span><span>پیگیری سفارش</span><span>تجربه موبایل</span><span>هویت مستقل</span>
-    <span>ساخت فروشگاه</span><span>طراحی ویترین</span><span>مدیریت محصول</span><span>پیگیری سفارش</span><span>تجربه موبایل</span><span>هویت مستقل</span>
-  </div>
-</section>
 
-<section class="rs-section rs-container rs-intro">
-  <div class="rs-eyebrow">راستی‌سی، در یک جمله</div>
-  <p>یک فروشگاه خوب، فقط یک صفحه زیبا نیست.<br><span>جایی‌ست که هویت شما دیده می‌شود، مشتری خرید می‌کند و شما کسب‌وکارتان را اداره می‌کنید.</span></p>
-</section>
-
-<section class="rs-section-sm rs-container">
-  <div class="rs-section-head">
-    <div><div class="rs-eyebrow">یک فروشگاه، چند کار مهم</div><h2 class="rs-title">ویترین، مدیریت و فروش.<br>در یک مسیر پیوسته.</h2></div>
-    <div><p class="rs-lead">به‌جای کنار هم گذاشتن چند ابزار پراکنده، مسیر اصلی فروشگاه را در یک تجربه دنبال کنید؛ از چیزی که مشتری می‌بیند تا کاری که بعد از سفارش انجام می‌دهید.</p></div>
-  </div>
-  <div class="rs-bento">
-    <article class="rs-bento-card is-wide">
-      <span class="rs-bento-index">01 / ویترین</span>
-      <h3>اولین برخورد مشتری،<br>باید شبیه برند شما باشد.</h3>
-      <p>ظاهر فروشگاه، معرفی محصول و دعوت به خرید باید یک زبان مشترک داشته باشند.</p>
-      <div class="rs-bento-visual" aria-hidden="true"><img src="{{ public_stilllife.url }}" alt="" width="1100" height="825" loading="lazy" decoding="async"></div>
-    </article>
-    <article class="rs-bento-card is-accent"><span class="rs-bento-index">02 / محصول</span><h3>اطلاعات محصول، یک‌بار و منظم.</h3><p>نام، تصویر، قیمت و موجودی در ساختاری نگهداری می‌شوند که ویترین از آن استفاده می‌کند.</p></article>
-    <article class="rs-bento-card is-soft"><span class="rs-bento-index">03 / سفارش</span><h3>بعد از خرید، مسیر ادامه دارد.</h3><p>سفارش باید در محیط مدیریت دیده شود تا پیگیری روزمره روشن بماند.</p></article>
-    <article class="rs-bento-card"><span class="rs-bento-index">04 / موبایل</span><h3>صفحه کوچک، تجربه کوچک نیست.</h3><p>ویترین و مسیر خرید باید برای موبایل هم خوانا، قابل لمس و روشن باشند.</p></article>
-    <article class="rs-bento-card"><span class="rs-bento-index">05 / هویت</span><h3>فروشگاه مستقل، نه یک غرفه تکراری.</h3><p>هدف این است که برند خودتان دیده شود و ساختار فروشگاه پشت آن منظم بماند.</p><div class="rs-bento-photo"><img src="{{ public_bag.url }}" alt="{{ public_bag.alt|default:'کیف و اکسسوری در چیدمان مینیمال' }}" loading="lazy" decoding="async" width="320" height="160"></div></article>
-  </div>
-</section>
-
-<section class="rs-section-sm rs-container">
-  <div class="rs-section-head">
-    <div><div class="rs-eyebrow"><span class="rs-eyebrow-index">01</span>ویترین شما، شبیه خود شما</div><h2 class="rs-title">یک شکل برای<br>همه کسب‌وکارها؟ <span class="rs-title-soft">نه.</span></h2></div>
-    <div><p class="rs-lead">هر کسب‌وکار بیان خودش را دارد. از یک نقطه شروع مناسب آغاز کنید و ظاهر فروشگاه را با هویت برندتان هماهنگ کنید.</p><a class="rs-link" href="{% url 'portal:design' %}">تجربه طراحی فروشگاه</a></div>
-  </div>
-  <div class="rs-gallery">
-    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>خانه آبان</b><span>محصولات · داستان ما</span></div><div class="rs-gallery-scene"><img src="{{ public_ceramics.url }}" alt="{{ public_ceramics.alt|default:'چیدمان گلدان و ظروف سرامیکی در خانه' }}" width="1100" height="738" loading="lazy" decoding="async"></div></div></div><div class="rs-gallery-info"><div><h3>آرام و طبیعی</h3><p>برای خانه، لایف‌استایل و محصولات دست‌ساز</p></div><span>←</span></div></article>
-    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>نورا</b><span>New · Shop</span></div><div class="rs-gallery-scene"><img src="{{ public_fashion.url }}" alt="{{ public_fashion.alt|default:'پیراهن کتانی روشن با چیدمان مینیمال' }}" width="1100" height="738" loading="lazy" decoding="async"></div></div></div><div class="rs-gallery-info"><div><h3>روایی و ادیتوریال</h3><p>برای پوشاک، اکسسوری و برندهای تصویری</p></div><span>←</span></div></article>
-    <article class="rs-gallery-card"><div class="rs-gallery-visual"><div class="rs-gallery-window"><div class="rs-gallery-bar"><b>رُزا</b><span>Beauty · Care</span></div><div class="rs-gallery-scene"><img src="{{ public_skincare.url }}" alt="{{ public_skincare.alt|default:'محصولات مراقبت پوست در نور طبیعی' }}" width="640" height="480" loading="lazy" decoding="async"></div></div></div><div class="rs-gallery-info"><div><h3>گرم و شخصی</h3><p>برای زیبایی، مراقبت و محصولات بوتیکی</p></div><span>←</span></div></article>
-  </div>
-</section>
-
-<section class="rs-section rs-dark">
-  <div class="rs-container rs-operations">
-    <div>
-      <div class="rs-eyebrow"><span class="rs-eyebrow-index">02</span>پشت ویترین، یک سیستم یکپارچه</div>
-      <h2>فقط زیبا دیده نشوید.<br>منظم هم اداره کنید.</h2>
-      <p class="rs-lead">ویترین خوب آغاز ماجراست. محصولات، سفارش‌ها و مشتری‌ها باید پشت همان ویترین جای روشنی داشته باشند.</p>
-      <div class="rs-operation-list">
-        <div class="rs-operation"><strong>محصول و موجودی</strong><p>اطلاعات، تصویر، قیمت و موجودی را در یک ساختار منظم نگه دارید.</p></div>
-        <div class="rs-operation"><strong>سفارش‌ها</strong><p>از ثبت سفارش تا پیگیری وضعیت، جریان کار روشن باقی می‌ماند.</p></div>
-        <div class="rs-operation"><strong>مشتری‌ها</strong><p>اطلاعات مشتری و سابقه تعامل از محیط مدیریت قابل دسترسی است.</p></div>
+    <div class="rh-fan">
+      <div class="rh-fan-root"><span class="rh-fan-mark" aria-hidden="true"></span><div><strong>راستی‌سی</strong><small>ابزار ساخت و مدیریت فروشگاه</small></div></div>
+      <div class="rh-fan-grid">
+        <figure class="rh-sample" data-palette="copper" data-layout="editorial">
+          <div class="rh-sample-window">
+            <div class="rh-window-bar"><span class="rh-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="rh-tag">فروشگاه نمونه ساخته‌شده با راستی‌سی</span></div>
+            <div class="rh-sample-body">
+              <div class="rh-sample-head"><strong>فروشگاه پوشاک</strong><span>جدیدترین‌ها · مجموعه‌ها</span></div>
+              <div class="rh-sample-photo"><img src="{{ public_fashion.url }}" alt="{{ public_fashion.alt }}" width="1100" height="738" loading="lazy" decoding="async"></div>
+              <div class="rh-sample-tiles" aria-hidden="true"><i></i><i></i><i></i></div>
+            </div>
+          </div>
+          <figcaption><strong>پوشاک</strong><span>ظاهر مجله‌ای و تصویرمحور</span></figcaption>
+        </figure>
+        <figure class="rh-sample" data-palette="indigo" data-layout="classic">
+          <div class="rh-sample-window">
+            <div class="rh-window-bar"><span class="rh-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="rh-tag">فروشگاه نمونه ساخته‌شده با راستی‌سی</span></div>
+            <div class="rh-sample-body">
+              <div class="rh-sample-head"><strong>فروشگاه زیبایی</strong><span>مراقبت · آرایش</span></div>
+              <div class="rh-sample-photo"><img src="{{ public_skincare.url }}" alt="{{ public_skincare.alt }}" width="640" height="480" loading="lazy" decoding="async"></div>
+              <div class="rh-sample-tiles" aria-hidden="true"><i></i><i></i><i></i></div>
+            </div>
+          </div>
+          <figcaption><strong>زیبایی</strong><span>ظاهر گرم و نزدیک به برند</span></figcaption>
+        </figure>
+        <figure class="rh-sample" data-palette="forest" data-layout="compact">
+          <div class="rh-sample-window">
+            <div class="rh-window-bar"><span class="rh-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="rh-tag">فروشگاه نمونه ساخته‌شده با راستی‌سی</span></div>
+            <div class="rh-sample-body">
+              <div class="rh-sample-head"><strong>فروشگاه خانه</strong><span>دکور · لوازم</span></div>
+              <div class="rh-sample-photo"><img src="{{ public_stilllife.url }}" alt="{{ public_stilllife.alt }}" width="1100" height="825" loading="lazy" decoding="async"></div>
+              <div class="rh-sample-tiles" aria-hidden="true"><i></i><i></i><i></i></div>
+            </div>
+          </div>
+          <figcaption><strong>خانه</strong><span>ظاهر آرام و ساده</span></figcaption>
+        </figure>
       </div>
+      <p class="rh-footnote">این سه فروشگاه نمونه‌اند و برای نمایش امکان‌های ظاهری ساخته شده‌اند؛ مشتری یا نمونه‌کار واقعی نیستند.</p>
     </div>
-    <div class="rs-admin">
-      <div class="rs-admin-head"><strong>راستی‌سی / مدیریت فروشگاه</strong><span>خانه آبان</span></div>
-      <div class="rs-admin-body">
-        <div class="rs-admin-nav"><span>محصولات</span><span>سفارش‌ها</span><span>مشتری‌ها</span><span>طراحی فروشگاه</span><span>تنظیمات</span></div>
-        <div class="rs-admin-content"><div class="rs-admin-top"><h3>محصولات</h3><span class="rs-admin-add">+ محصول جدید</span></div>
-          <div class="rs-admin-row"><strong>گلدان دست‌ساز</strong><span>۱٬۲۸۰٬۰۰۰</span><span class="rs-status">فعال</span></div>
-          <div class="rs-admin-row"><strong>ظرف سرامیکی</strong><span>۹۸۰٬۰۰۰</span><span class="rs-status">فعال</span></div>
-          <div class="rs-admin-row"><strong>ست رومیزی</strong><span>۱٬۶۴۰٬۰۰۰</span><span class="rs-status">فعال</span></div>
-          <div class="rs-admin-row"><strong>فنجان مینیمال</strong><span>۶۹۰٬۰۰۰</span><span class="rs-status">فعال</span></div>
+  </div>
+</section>
+
+{# ───────── Real sequence: three steps ───────── #}
+<section class="rh-section rh-section-soft" id="path" aria-labelledby="rh-path-title">
+  <div class="rs-container">
+    <div class="rh-head">
+      <h2 id="rh-path-title">از صفر تا فروشگاه، در سه قدم</h2>
+      <p>مسیر کار ساده است: اول فروشگاه را می‌سازی، بعد محصول‌ها را می‌آوری، و در نهایت مدیریتش می‌کنی.</p>
+    </div>
+    <ol class="rh-path">
+      <li><span class="rh-path-n" aria-hidden="true">۱</span><h3>ساخت فروشگاه</h3><p>نام، نوع کسب‌وکار و رنگ برند را مشخص می‌کنی و فروشگاهت ساخته می‌شود.</p></li>
+      <li><span class="rh-path-n" aria-hidden="true">۲</span><h3>افزودن محصولات</h3><p>نام، قیمت، موجودی و تصویر هر محصول را از پنل مدیریت وارد می‌کنی.</p></li>
+      <li><span class="rh-path-n" aria-hidden="true">۳</span><h3>مدیریت فروشگاه</h3><p>سفارش‌ها را می‌بینی، وضعیتشان را پیگیری می‌کنی و ظاهر فروشگاه را هر زمان خواستی تنظیم می‌کنی.</p></li>
+    </ol>
+  </div>
+</section>
+
+{# ───────── Interactive demo ───────── #}
+<section class="rh-demo" id="demo" aria-labelledby="rh-demo-title">
+  <div class="rs-container">
+    <div class="rh-head rh-head-dark">
+      <h2 id="rh-demo-title">فروشگاه نمونه را همین‌جا شخصی‌سازی کن</h2>
+      <p>اسم را عوض کن، رنگ و قالب را انتخاب کن و نمای دسکتاپ یا موبایل را ببین. این فقط یک دموی ساده است: حسابی ساخته نمی‌شود و چیزی ذخیره نمی‌شود.</p>
+    </div>
+
+    <div class="rh-demo-grid" data-rh-demo>
+      <form class="rh-controls" aria-label="تنظیمات فروشگاه نمونه">
+        <div class="rh-control">
+          <label for="rh-demo-name">نام فروشگاه</label>
+          <input id="rh-demo-name" name="demo_store_name" type="text" value="فروشگاه من" maxlength="22" autocomplete="off" spellcheck="false" enterkeyhint="done" data-rh-input-name>
+        </div>
+
+        <fieldset class="rh-control">
+          <legend>قالب</legend>
+          <div class="rh-seg" role="group">
+            <button type="button" data-rh-layout="classic" aria-pressed="true">ساده</button>
+            <button type="button" data-rh-layout="editorial" aria-pressed="false">مجله‌ای</button>
+            <button type="button" data-rh-layout="compact" aria-pressed="false">فشرده</button>
+          </div>
+        </fieldset>
+
+        <fieldset class="rh-control">
+          <legend>رنگ برند</legend>
+          <div class="rh-palettes" role="group">
+            <button type="button" data-rh-palette="forest" aria-pressed="true"><i data-palette="forest"></i>سبز جنگلی</button>
+            <button type="button" data-rh-palette="indigo" aria-pressed="false"><i data-palette="indigo"></i>نیلی</button>
+            <button type="button" data-rh-palette="copper" aria-pressed="false"><i data-palette="copper"></i>مسی</button>
+            <button type="button" data-rh-palette="graphite" aria-pressed="false"><i data-palette="graphite"></i>زغالی</button>
+          </div>
+        </fieldset>
+
+        <fieldset class="rh-control">
+          <legend>نمایش</legend>
+          <div class="rh-seg" role="group">
+            <button type="button" data-rh-device="desktop" aria-pressed="true">دسکتاپ</button>
+            <button type="button" data-rh-device="mobile" aria-pressed="false">موبایل</button>
+          </div>
+        </fieldset>
+
+        <div class="rh-controls-foot">
+          <button type="button" class="rh-reset" data-rh-reset>بازنشانی دمو</button>
+          <a class="rs-btn rs-btn-accent" href="{% url 'portal:register' %}">همین را واقعی بساز</a>
+        </div>
+      </form>
+
+      <div class="rh-stage" data-rh-stage data-device="desktop">
+        <div class="rh-stage-label"><span class="rh-tag">دمو · فروشگاه نمونه</span><output data-rh-summary aria-live="polite">قالب ساده · سبز جنگلی · دسکتاپ</output></div>
+        <div class="rh-stage-frame">
+          <div class="rh-window-bar rh-window-bar-light"><span class="rh-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>پیش‌نمایش فروشگاه شما</span></div>
+          <div data-rh-store>{% include "portal/public/_home_store.html" with store_name="فروشگاه من" layout="classic" palette="forest" %}</div>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<section class="rs-section rs-container rs-mobile">
-  <div>
-    <div class="rs-eyebrow"><span class="rs-eyebrow-index">03</span>اندازه عوض می‌شود، کیفیت نه</div>
-    <h2 class="rs-title">ویترین شما،<br>همیشه دم دست.</h2>
-    <p class="rs-lead">از دیدن محصول تا رسیدن به سبد خرید، فروشگاه باید برای صفحه کوچک هم روشن، سریع و قابل فهم باشد.</p>
+{# ───────── Admin panel ───────── #}
+<section class="rh-section" id="manage" aria-labelledby="rh-manage-title">
+  <div class="rs-container rh-manage">
+    <div class="rh-manage-copy">
+      <h2 id="rh-manage-title">پنل مدیریت: محصول، تصویر و سفارش در یک‌جا</h2>
+      <p>بعد از ساخت فروشگاه، کارهای هر روز از یک پنل انجام می‌شود: محصول اضافه و ویرایش می‌کنی، تصویرها را مرتب می‌کنی و سفارش‌ها را از ثبت تا تحویل دنبال می‌کنی.</p>
+      <ul class="rh-checks">
+        <li>افزودن و ویرایش اطلاعات محصول</li>
+        <li>مدیریت تصاویر محصولات</li>
+        <li>پیگیری وضعیت سفارش‌ها</li>
+      </ul>
+      <p class="rh-footnote">تصویر کنار صفحه نمونه‌ای نمایشی از پنل است و داده‌های آن واقعی نیستند.</p>
+    </div>
+
+    <div class="rh-panel" data-rh-tabs>
+      <div class="rh-window-bar"><span class="rh-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>پنل مدیریت فروشگاه</span><span class="rh-tag">نمونه نمایشی</span></div>
+      <div class="rh-panel-body">
+        <div class="rh-tablist" role="tablist" aria-label="بخش‌های پنل مدیریت">
+          <button type="button" role="tab" id="rh-tab-products" aria-controls="rh-pane-products" aria-selected="true">محصولات</button>
+          <button type="button" role="tab" id="rh-tab-images" aria-controls="rh-pane-images" aria-selected="false" tabindex="-1">تصاویر</button>
+          <button type="button" role="tab" id="rh-tab-orders" aria-controls="rh-pane-orders" aria-selected="false" tabindex="-1">سفارش‌ها</button>
+        </div>
+
+        <div class="rh-pane" role="tabpanel" id="rh-pane-products" aria-labelledby="rh-tab-products" tabindex="0">
+          <div class="rh-pane-top"><strong>محصولات</strong><span class="rh-add">+ محصول جدید</span></div>
+          <table class="rh-table">
+            <thead><tr><th scope="col">محصول</th><th scope="col">موجودی</th><th scope="col">وضعیت</th></tr></thead>
+            <tbody>
+              <tr><th scope="row"><i class="rh-thumb" aria-hidden="true"></i>محصول نمونه ۱</th><td>۱۸ عدد</td><td><span class="rh-pill is-ok">فعال</span></td></tr>
+              <tr><th scope="row"><i class="rh-thumb" aria-hidden="true"></i>محصول نمونه ۲</th><td>۶ عدد</td><td><span class="rh-pill is-ok">فعال</span></td></tr>
+              <tr><th scope="row"><i class="rh-thumb" aria-hidden="true"></i>محصول نمونه ۳</th><td>۰ عدد</td><td><span class="rh-pill is-off">ناموجود</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="rh-pane" role="tabpanel" id="rh-pane-images" aria-labelledby="rh-tab-images" tabindex="0" hidden>
+          <div class="rh-pane-top"><strong>تصاویر محصول نمونه ۱</strong><span class="rh-add">+ افزودن تصویر</span></div>
+          <div class="rh-images" aria-hidden="true">
+            <div class="rh-image is-main"><span>تصویر اصلی</span></div>
+            <div class="rh-image"></div><div class="rh-image"></div>
+            <div class="rh-image rh-image-drop"><span>تصویر را اینجا رها کنید</span></div>
+          </div>
+        </div>
+
+        <div class="rh-pane" role="tabpanel" id="rh-pane-orders" aria-labelledby="rh-tab-orders" tabindex="0" hidden>
+          <div class="rh-pane-top"><strong>سفارش‌ها</strong><span class="rh-add is-quiet">فیلتر وضعیت</span></div>
+          <table class="rh-table">
+            <thead><tr><th scope="col">سفارش</th><th scope="col">مشتری</th><th scope="col">وضعیت</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">سفارش نمونه ۱</th><td>مشتری نمونه</td><td><span class="rh-pill">در انتظار</span></td></tr>
+              <tr><th scope="row">سفارش نمونه ۲</th><td>مشتری نمونه</td><td><span class="rh-pill is-work">در حال پردازش</span></td></tr>
+              <tr><th scope="row">سفارش نمونه ۳</th><td>مشتری نمونه</td><td><span class="rh-pill is-ok">ارسال شده</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
-  <div class="rs-phone-stage"><div class="rs-phone"><div class="rs-phone-screen"><div class="rs-phone-top"></div><div class="rs-demo-store"><div class="rs-demo-head"><strong class="rs-demo-brand">خانه آبان</strong></div><div class="rs-demo-hero"><div class="rs-demo-copy"><small>مجموعه تازه</small><h3>برای خانه شما</h3><p></p><span class="rs-demo-action">خرید</span></div><div class="rs-demo-art"><img src="{{ public_ceramics.url }}" alt="{{ public_ceramics.alt|default:'چیدمان گلدان و ظروف سرامیکی در خانه' }}" width="1100" height="738" loading="lazy" decoding="async"></div></div><div class="rs-demo-products"><div class="rs-demo-grid"><div class="rs-demo-card"><div class="rs-demo-photo"><img src="{{ public_olive.url }}" alt="" width="400" height="447" loading="lazy" decoding="async"></div><strong>گلدان</strong></div><div class="rs-demo-card"><div class="rs-demo-photo"><img src="{{ public_clay.url }}" alt="" width="368" height="311" loading="lazy" decoding="async"></div><strong>ظرف</strong></div><div class="rs-demo-card"><div class="rs-demo-photo"><img src="{{ public_ivory.url }}" alt="" width="360" height="536" loading="lazy" decoding="async"></div><strong>ست</strong></div></div></div></div></div></div></div>
 </section>
 
-<section class="rs-section-sm rs-container">
-  <div class="rs-journey">
-    <article class="rs-journey-item"><span class="rs-journey-index">01</span><h3>فروشگاه را بسازید</h3><p>نام، هویت و ساختار اولیه فروشگاه را مشخص کنید.</p></article>
-    <article class="rs-journey-item"><span class="rs-journey-index">02</span><h3>محصولات را اضافه کنید</h3><p>محصول، قیمت، تصویر و موجودی را وارد کنید.</p></article>
-    <article class="rs-journey-item"><span class="rs-journey-index">03</span><h3>فروش و مدیریت کنید</h3><p>فروشگاه را منتشر کنید و سفارش‌ها را از پنل خودتان دنبال کنید.</p></article>
+{# ───────── Mobile ───────── #}
+<section class="rh-section rh-section-soft" id="mobile" aria-labelledby="rh-mobile-title">
+  <div class="rs-container rh-mobile">
+    <div class="rh-mobile-copy">
+      <h2 id="rh-mobile-title">فروشگاهت روی موبایل هم خوانا و قابل لمس است</h2>
+      <p>بیشتر مشتری‌ها از گوشی سر می‌زنند. فروشگاهی که با راستی‌سی می‌سازی برای صفحه کوچک هم چیده شده است؛ می‌توانی همین را در دموی بالا با کلید «موبایل» ببینی.</p>
+      <a class="rs-link" href="#demo">برگرد به دمو</a>
+    </div>
+    <div class="rh-phone-stage">
+      <div class="rh-phone" aria-hidden="true">
+        <div class="rh-phone-notch"></div>
+        {% include "portal/public/_home_store.html" with store_name="فروشگاه من" layout="classic" palette="indigo" %}
+      </div>
+    </div>
   </div>
 </section>
 
-
-<section class="rs-section-sm rs-container">
-  <div class="rs-section-head">
-    <div><div class="rs-eyebrow">از ایده تا فروشگاه</div><h2 class="rs-title">شروع را کوتاه کنید.<br>بعد، مرحله‌به‌مرحله جلو بروید.</h2></div>
-    <div><p class="rs-lead">ساخت فروشگاه قرار نیست با انبوه تنظیمات شروع شود. ابتدا هویت و ساختار اصلی را بسازید و جزئیات را در ادامه کامل کنید.</p></div>
-  </div>
-  <div class="rs-flow">
-    <article class="rs-flow-step"><span>01</span><h3>حساب را بسازید</h3><p>نقطه شروع برای ورود به محیط مالک فروشگاه.</p></article>
-    <article class="rs-flow-step"><span>02</span><h3>فروشگاه را شکل دهید</h3><p>نام، هویت و ساختار اولیه را مشخص کنید.</p></article>
-    <article class="rs-flow-step"><span>03</span><h3>محصولات را وارد کنید</h3><p>اطلاعات و تصاویر محصولات را منظم اضافه کنید.</p></article>
-    <article class="rs-flow-step"><span>04</span><h3>منتشر و مدیریت کنید</h3><p>ویترین را در اختیار مشتری بگذارید و سفارش‌ها را دنبال کنید.</p></article>
+{# ───────── Plans pointer ───────── #}
+<section class="rh-section-tight">
+  <div class="rs-container">
+    <div class="rh-plans">
+      <div><h2>هزینه و شرایط شروع</h2><p>پلن‌های فعال، دوره پرداخت و شرایط شروع در صفحه تعرفه‌ها منتشر می‌شود.</p></div>
+      <a class="rs-btn rs-btn-outline" href="{% url 'portal:plans' %}">دیدن تعرفه‌ها</a>
+    </div>
   </div>
 </section>
 
-<section class="rs-section-sm rs-container">
-  <div class="rs-pricing-strip"><div><div class="rs-eyebrow">انتخاب روشن، قبل از شروع</div><h2>تعرفه را بشناسید.<br>با اطمینان تصمیم بگیرید.</h2></div><div><p>پلن‌های فعال، دوره پرداخت و شرایط شروع را پیش از تصمیم ببینید.</p><a class="rs-link" href="{% url 'portal:plans' %}">بررسی تعرفه‌ها و شرایط</a></div></div>
-</section>
-
-<section class="rs-section rs-container rs-home-faq">
-  <div><div class="rs-eyebrow">پیش از شروع</div><h2 class="rs-title">شاید سؤال<br>شما هم باشد.</h2><a class="rs-link" href="{% url 'portal:help' %}">همه پرسش‌ها</a></div>
-  <div>
-    <details class="rs-faq-item" open><summary>راستی‌سی دقیقاً چه کاری انجام می‌دهد؟</summary><p>برای ساخت و مدیریت فروشگاه اینترنتی است؛ از ظاهر ویترین تا محصول، سفارش و مدیریت روزانه.</p></details>
-    <details class="rs-faq-item"><summary>آیا برای ساخت فروشگاه باید برنامه‌نویسی بلد باشم؟</summary><p>خیر. مسیرهای اصلی ساخت و شخصی‌سازی برای استفاده بدون کدنویسی طراحی شده‌اند.</p></details>
-    <details class="rs-faq-item"><summary>می‌توانم ظاهر فروشگاهم را تغییر بدهم؟</summary><p>بله. ساختار طراحی راستی‌سی برای انتخاب سبک، رنگ و تنظیم ظاهر فروشگاه ساخته شده است.</p></details>
+{# ───────── FAQ ───────── #}
+<section class="rh-section" id="faq" aria-labelledby="rh-faq-title">
+  <div class="rs-container rh-faq">
+    <div class="rh-head rh-head-side">
+      <h2 id="rh-faq-title">سؤال‌های رایج</h2>
+      <p>اگر پاسخ سؤالت اینجا نیست، به <a class="rs-inline-link" href="{% url 'portal:help' %}">راهنما</a> سر بزن یا <a class="rs-inline-link" href="{% url 'portal:contact' %}">با ما تماس بگیر</a>.</p>
+    </div>
+    <div class="rh-faq-list">
+      <details class="rh-faq-item" open><summary>راستی‌سی دقیقاً چیست؟</summary><p>یک فروشگاه‌ساز اینترنتی؛ ابزاری برای ساخت و مدیریت فروشگاه آنلاین خودت. راستی‌سی کالایی نمی‌فروشد و بازار یا مارکت‌پلیس هم نیست.</p></details>
+      <details class="rh-faq-item"><summary>برای ساخت فروشگاه باید برنامه‌نویسی بلد باشم؟</summary><p>نه. ساخت فروشگاه، انتخاب ظاهر و افزودن محصول از طریق فرم‌ها و پنل مدیریت انجام می‌شود.</p></details>
+      <details class="rh-faq-item"><summary>چه بخش‌هایی از ظاهر فروشگاه را می‌توانم تغییر بدهم؟</summary><p>ظاهر فروشگاه را از میان گزینه‌های پشتیبانی‌شده، مثل نام، رنگ و قالب، شخصی‌سازی می‌کنی. دموی همین صفحه نمونه‌ای ساده از این تجربه است.</p></details>
+      <details class="rh-faq-item"><summary>نمونه فروشگاه‌های این صفحه مشتری واقعی هستند؟</summary><p>نه. فروشگاه‌های نمونه فقط برای نمایش امکان‌های ظاهری ساخته شده‌اند و فروشگاه مشتری واقعی نیستند.</p></details>
+      <details class="rh-faq-item"><summary>هزینه استفاده از راستی‌سی چقدر است؟</summary><p>پلن‌های فعال و شرایط شروع در <a class="rs-inline-link" href="{% url 'portal:plans' %}">صفحه تعرفه‌ها</a> منتشر می‌شود.</p></details>
+    </div>
   </div>
 </section>
 
-<section class="rs-final"><div class="rs-container rs-final-inner"><div><div class="rs-eyebrow">شروع از همین‌جا</div><h2>فروشگاهتان را<br>با نام خودتان بسازید.</h2><p>از ایجاد حساب تا ساخت اولین فروشگاه، مسیر را مرحله‌به‌مرحله پیش ببرید.</p></div><a class="rs-btn rs-btn-primary" href="{% url 'portal:register' %}">ساخت فروشگاه</a></div></section>
+{# ───────── Final CTA ───────── #}
+<section class="rh-final" aria-labelledby="rh-final-title">
+  <div class="rs-container rh-final-inner">
+    <div><h2 id="rh-final-title">فروشگاه اینترنتی خودت را بساز</h2><p>حساب بساز، نام و ظاهر فروشگاه را مشخص کن و مدیریتش را از پنل شروع کن.</p></div>
+    <div class="rh-actions">
+      <a class="rs-btn rs-btn-primary rh-btn-lg" href="{% url 'portal:register' %}">شروع ساخت فروشگاه</a>
+      <a class="rs-btn rs-btn-outline rh-btn-lg" href="#demo">دموی زنده</a>
+    </div>
+  </div>
+</section>
 {% endblock %}
