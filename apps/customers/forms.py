@@ -17,11 +17,10 @@ class PhoneCleanMixin:
 
 
 class LoginForm(forms.Form):
-    """فرمِ کانونیکالِ ورودِ مشتری با رمز عبور — شناسه می‌تواند ایمیل یا
-    شماره موبایل باشد (یکپارچه‌سازیِ احرازِ هویت)."""
+    """فرمِ ورودِ مشتری با رمز: موبایل، نام کاربری یا ایمیل."""
 
     identifier = forms.CharField(
-        label="ایمیل یا شماره موبایل", max_length=150,
+        label="شماره موبایل، نام کاربری یا ایمیل", max_length=150,
         widget=forms.TextInput(attrs={"autocomplete": "username", "dir": "ltr"}),
     )
     password = forms.CharField(
@@ -35,8 +34,10 @@ class LoginForm(forms.Form):
             return value
         try:
             return normalize_iranian_phone(value)
-        except InvalidPhoneError as exc:
-            raise forms.ValidationError(exc.messages[0] if exc.messages else str(exc)) from exc
+        except InvalidPhoneError:
+            # A non-phone identifier can be a legacy username. The scoped
+            # auth service will validate identity and the password.
+            return value
 
 
 class OtpRequestForm(PhoneCleanMixin, forms.Form):
