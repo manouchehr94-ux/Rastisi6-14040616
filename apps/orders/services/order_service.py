@@ -259,7 +259,9 @@ def _lock_cart_items_and_resolve_final_prices(
     locked_cart = Cart.objects.select_for_update().get(pk=cart_id)
 
     locked_items = list(
-        CartItem.objects.select_for_update()
+        # of=("self",): PostgreSQL نمی‌تواند FOR UPDATE را روی سمتِ nullableِ
+        # LEFT JOINِ ``variant`` بزند؛ قفلِ Product/Variant جداگانه گرفته شده.
+        CartItem.objects.select_for_update(of=("self",))
         .filter(cart_id=locked_cart.pk)
         .select_related("product", "variant")
         .order_by("pk")

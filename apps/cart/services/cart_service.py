@@ -231,7 +231,7 @@ def reprice_cart_items(cart) -> bool:
         } if variant_ids else {}
 
         items = list(
-            cart.items.select_for_update().select_related("product", "variant").order_by("pk")
+            cart.items.select_for_update(of=("self",)).select_related("product", "variant").order_by("pk")
         )
 
         for item in items:
