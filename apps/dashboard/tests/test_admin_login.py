@@ -97,7 +97,8 @@ class MerchantAccessTests(TestCase):
             username="real_owner_without_global_staff", password="StrongPass123!",
             is_staff=False,
         )
-        _grant_akhlaghi_membership(merchant)
+        # Stores allow a single OWNER row; a second member uses another role.
+        _grant_akhlaghi_membership(merchant, role=StoreMembership.Role.ADMINISTRATOR)
         self.client.force_login(merchant)
         self.assertEqual(self.client.get("/admin-portal/").status_code, 200)
 

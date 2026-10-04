@@ -451,6 +451,7 @@ def admin_login(request):
     )
     return redirect(f"{central_login}?{urlencode({'admin_return': token})}")
 
+
 @admin_host_required
 def consume_admin_handoff(request, token):
     """Receiving end of the owner-portal handoff (Section H, ADR-98).

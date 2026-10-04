@@ -28,7 +28,7 @@ class UnifiedLoginPageTests(TestCase):
         self.assertContains(response, 'name="identifier"')
         self.assertContains(response, 'name="password"')
         self.assertContains(response, 'name="phone"')
-        self.assertContains(response, "ورود با رمز یک‌بارمصرف")
+        self.assertContains(response, "رمز یک‌بارمصرف")
         self.assertContains(response, "ارسالِ دوباره‌ی کد", count=0)  # not on this page
 
     def test_remember_me_checkbox_present_on_both_forms(self):

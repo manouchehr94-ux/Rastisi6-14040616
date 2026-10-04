@@ -137,6 +137,7 @@ def authenticate_customer_by_identifier(request, *, identifier: str, password: s
 
     return authenticate(request, username=customer.user.username, password=password)
 
+
 @transaction.atomic
 def merge_guest_cart(request, customer: Customer) -> None:
     """سبد خرید مهمان (بر اساس session_key) را با سبد کاربر واردشده ادغام می‌کند."""
