@@ -1,0 +1,17 @@
+--- /tmp/claude-0/r4v/run.orig.mjs	2026-10-04 07:39:32.304391497 +0000
++++ /tmp/claude-0/r4v/run.p1.mjs	2026-10-04 07:39:32.320742850 +0000
+@@ -73,10 +73,10 @@
+ fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
+ 
+ const SAVE_STATE = {
+-  saved: 'ذخیره شد',
+-  saving: 'در حال ذخیره...',
+-  error: 'خطا در ذخیره تغییرات',
+-  conflict: 'نسخه‌ی جدیدتری از این صفحه موجود است',
++  saved: 'پیش‌نویس ذخیره شد',
++  saving: 'در حال ذخیره…',
++  error: 'ذخیره ناموفق',
++  conflict: 'تعارض نسخه',
+ };
+ 
+ const result = {
