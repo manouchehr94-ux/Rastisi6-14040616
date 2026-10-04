@@ -52,19 +52,15 @@ def login_view(request):
             form.add_error(None, "تعداد تلاش ورود بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید.")
             return render(request, "portal/platform_admin/login.html", {"form": form})
         if form.is_valid():
-            email = form.cleaned_data["email"].strip().lower()
-            # AUTH_USER_MODEL's USERNAME_FIELD is "username", not "email" — so
-            # authenticate() must be called with the real username. We look the
-            # user up by email first (this form is email-only, unlike the
-            # identifier-based owner login) and authenticate with their actual
-            # username, exactly like apps.portal.services.owner_auth_service.
-            # authenticate_owner_by_identifier does for its email branch.
-            candidate = get_user_model().objects.filter(email__iexact=email).first()
-            user = None
-            if candidate is not None:
-                user = authenticate(
-                    request, username=candidate.username, password=form.cleaned_data["password"],
-                )
+            from .services import owner_auth_service
+
+            identifier = form.cleaned_data["identifier"]
+            # Same password/identity resolver as the canonical portal login.
+            # This endpoint remains on its own Platform Admin Host and STILL
+            # requires both global is_staff AND is_superuser after auth.
+            user = owner_auth_service.authenticate_owner_by_identifier(
+                request, identifier=identifier, password=form.cleaned_data["password"],
+            )
             if user is not None and _is_platform_staff(user):
                 auth_login(request, user)
                 session_service.apply_remember_me(request, form.cleaned_data.get("remember_me", False))
@@ -75,10 +71,10 @@ def login_view(request):
                 return redirect("portal_platform_admin:home")
             record_platform_audit_event(
                 actor=user, action_code="platform_admin.login_failed",
-                object_type="User", object_id=user.pk if user else None, object_label=email,
-                result="failure",
+                object_type="User", object_id=user.pk if user else None,
+                object_label=identifier, result="failure",
             )
-            form.add_error(None, "ایمیل، رمز عبور، یا دسترسی نامعتبر است")
+            form.add_error(None, "شناسه، رمز عبور، یا دسترسی نامعتبر است")
     else:
         form = OwnerLoginForm()
     return render(request, "portal/platform_admin/login.html", {"form": form})
