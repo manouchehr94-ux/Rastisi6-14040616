@@ -1,6 +1,6 @@
 {
-  "db_backup": "/tmp/claude-0/RastiSi4_r4_qa_backups/storefront-builder-r4-qa-20261004-111405.sqlite3",
-  "pre_run_sha256": "487b9e31598f4f84960c13d48c0624dff267e3c37357bf20cc456306abaab7d5",
-  "post_restore_sha256": "487b9e31598f4f84960c13d48c0624dff267e3c37357bf20cc456306abaab7d5",
+  "db_backup": "/tmp/claude-0/RastiSi4_r4_qa_backups/storefront-builder-r4-qa-20261004-132800.sqlite3",
+  "pre_run_sha256": "85e585e2333798f0ee16c4221d7ed9e3b91a07c0485442f806608ae5afd1fd32",
+  "post_restore_sha256": "85e585e2333798f0ee16c4221d7ed9e3b91a07c0485442f806608ae5afd1fd32",
   "match": true
 }

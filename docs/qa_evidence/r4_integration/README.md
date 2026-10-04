@@ -1,9 +1,11 @@
 # R4 browser regression — merged branch vs current `main` (41c2569)
 
-Fixture: the project's own `manage.py qa_storefront_builder_r4 --phase3` (sections, hero slide + media, products, brands, collections, tenant negatives), against the sole migration-seeded `akhlaghi` Store in a fresh SQLite DB per tree (`harness/seed.py`, `harness/run.sh`). Both trees ran the identical command with identical runner (`harness/save_state_labels.patch` aligns the runner's save-state labels with the Design Studio's current labels; without it 01 also fails).
+Command (identical on both trees, fresh SQLite DB each, sole migration-seeded `akhlaghi` Store, `harness/seed.py` + `harness/run.sh`):
 
-Result (20 scenario entries incl. phase3 gates, identical on both trees): **2 PASS** (`01-initial-r4`, `02-hero-basic-autosave`), **18 FAIL** — the same 18 on `main` and on the merged branch. Failures are timeouts on selectors the pre-Design-Studio runner expects (`[data-r4-inspector-close]` hidden, `#r4StructureAddSelect`, `[data-r4-resource-picker-open]`), i.e. `run.mjs` (last changed 2026-09-18) is stale against the Design Studio editor on `main` (landed 2026-09-26+). This is **not a passing gate**; it is evidence of no *differential* regression plus a tooling defect on `main`.
+    manage.py qa_storefront_builder_r4 --store-slug akhlaghi --username r4owner --phase3 --report-dir <dir>
 
-Code diff of the merge vs `main` inside R4/storefront areas is only: `render_service.py` (+1 line), `sections/cart_items.html`, `sections/product_main.html` (gift-wrap UI).
+Fixture = the project's own `--phase3` fixture (sections, hero slide + media, products, brands, collections, tenant negatives, broken-image/task6/final-remediation families).
 
-`main/` and `merged/` hold browser.log, per-scenario JSON, metrics, fixture and failure screenshots.
+Runner: `tools/storefront_builder_r4_qa/run.mjs`, **ported to the Design Studio editor** (the committed runner pre-dated it and failed 18/20 identically on `main` and on the merged tree before the port — see report §20). Port = test-tool only: Studio save-state labels; Structure as panel mode; add-section / publish / discard / template-switch via the Studio dialogs; move/enable/lock via inspector actions; inline R4-native media manager; row layout disclosure; Studio conflict dialog; `?studio_notice=` replaceState counted with its reload; one narrowly-allowed ERR_ABORTED (Studio background status-refresh GET superseded by a reload, within 2s of a real navigation). No scenario assertion was removed or weakened; where the Studio replaced a control, the same contract is asserted on its replacement.
+
+Result (20 scenario entries = 17 numbered + final/phase3 gates): **merged 20/20 PASS, main 20/20 PASS, command exit 0 on both.** `main/` and `merged/` hold browser.log, per-scenario JSON (`r4-browser-result.json`), metrics, fixture, db-restore-proof and screenshots.
