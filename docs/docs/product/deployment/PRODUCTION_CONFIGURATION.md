@@ -506,10 +506,7 @@ unsubscribe link/short code is required in each promotional message.
 
 ### 12.5 Pricing and checkout confirmation
 
-`pricing.sync_cart_prices` is the single re-pricing step: the checkout summary always shows current authoritative prices and posts the
-displayed grand total; `create_order_from_cart` re-prices under product/variant row locks and refuses (nothing created) when the total differs from
-what the customer saw, so the customer must re-confirm the new amount. The persisted order total is what the payment attempt and the gateway
-receive (Toman → Rial in the adapter). Client-supplied totals are comparison-only.
+One mechanism (CAT-002, from `main`): `cart_service.reprice_cart_items` re-prices the cart snapshot (unit price and gift-wrap price) from the catalogue before order creation; `create_order_from_cart(require_confirmed_prices=True)` resolves final prices once under product/variant → cart → cart-item locks and raises `LivePriceChangedError` on any drift from what the customer confirmed — including a displayed total that no longer matches (`expected_total`, comparison only: shipping/coupon/tax/gift-wrap changes) — after which the cart is re-priced and the customer must re-confirm (`PriceChangeReviewRequired`). The persisted order total is what the payment attempt and the gateway receive (Toman → Rial in the adapter). Historical orders/refunds use order snapshots.
 
 ### 12.6 Migrations — production-like verification, ordering, rollback
 

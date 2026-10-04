@@ -24,7 +24,7 @@ Permanent technical documentation for the four integrated systems added on
 | Gateway verification + reconciliation | `apps/orders/gateways/*`, `apps/orders/services/gateway_payment_service.py`, `PaymentReconciliation`, dashboard Finance → تطبیق پرداخت‌ها |
 | Cash on delivery confirmation (manual, permissioned) | `apps/orders/services/cod_payment_service.py`, permission `order.confirm_cod_payment`, `Transaction.{method,confirmed_by,confirmed_at}` |
 | Unpaid online order expiry (default off) | `apps/orders/services/order_expiry_service.py`, `manage.py expire_unpaid_orders`, `ShopSettings.unpaid_online_order_*` |
-| Price re-confirmation at checkout | `apps/cart/services/pricing.py::sync_cart_prices`, `order_service.PriceChangedError`, `checkout_service.PriceChanged` |
+| Price re-confirmation at checkout (CAT-002, single mechanism) | `apps/cart/services/cart_service.py::reprice_cart_items`, `order_service._lock_cart_items_and_resolve_final_prices` (+ `LivePriceChangedError`, `CartMembershipChangedError`), `checkout_service.PriceChangeReviewRequired` |
 | Shared order definitions (valid order, active refund) | `apps/orders/services/order_definitions.py`, `Refund.INACTIVE_STATUSES` |
 | Job reliability / health | `apps/core/job_lock.py`, `manage.py check_background_jobs`, `verify_delivery_channels` |
 | Admin UI | `apps/dashboard/engagement_views.py`, `engagement_forms.py`, `static/js/rule_builder.js` |
@@ -81,9 +81,7 @@ Permanent technical documentation for the four integrated systems added on
   definitely-online orders through the normal cancellation path (stock + coupon released). Skips confirmed payments, in-flight
   attempts and open reconciliations; re-checks under the order lock; never touches COD. Not to be enabled until Zibal's session
   lifetime/callback behaviour is verified (see PRODUCTION_CONFIGURATION §12.2).
-* **Checkout amount**: the summary re-prices from the authoritative catalogue (`sync_cart_prices`), posts the displayed total, and order
-  creation (under product/variant row locks) refuses to create the order when the total differs, so the customer must
-  re-confirm the new amount. Payment attempts take `order.grand_total`; the gateway adapter converts to Rial.
+* **Checkout amount (CAT-002, one mechanism)**: before order creation the cart snapshot is re-priced from the catalogue (`reprice_cart_items`; unit price and the gift-wrap price); under product/variant → cart → cart-item locks the final prices are resolved once and any drift from the price the customer confirmed (or a displayed total that no longer matches: shipping/coupon/tax/gift-wrap) raises `LivePriceChangedError` → rollback, re-price, `PriceChangeReviewRequired` (one message), so the customer must re-confirm. The page posts the displayed total (`expected_total`) for comparison only; it is never used as the charge. Payment attempts take `order.grand_total`; the gateway adapter converts to Rial.
 * **Segments**: `SEGMENT_ORDER_DEFINITION` stays `legacy`; the shared definitions (`order_definitions`) also provide the `valid`
   definition behind an explicit switch (needs owner approval — audiences change).
 
