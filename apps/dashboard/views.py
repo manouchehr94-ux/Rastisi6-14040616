@@ -236,7 +236,7 @@ from apps.orders.services.return_service import (
     reject_return_request,
     review_return_request,
 )
-from apps.sms.events import EVENT_VARIABLES, SmsEvent
+from apps.sms.events import EVENT_VARIABLES, PLATFORM_MANAGED_EVENTS, STORE_HIDDEN_EVENTS, SmsEvent
 from apps.sms.models import SmsBillingPolicy, SmsPackage, SmsPackagePurchase, SmsTemplate
 from django.utils.functional import SimpleLazyObject
 
@@ -4583,7 +4583,7 @@ def settings_smsrasti_regenerate_token(request):
 @staff_required
 @permission_required(SMS_SETTINGS_MANAGE)
 def sms_template_form(request, pk):
-    template = get_object_or_404(SmsTemplate.objects.exclude(event_key__in=[SmsEvent.PLATFORM_OWNER_OTP, SmsEvent.PLATFORM_TEST, SmsEvent.NOTIFICATION]), pk=pk)
+    template = get_object_or_404(SmsTemplate.objects.exclude(event_key__in=STORE_HIDDEN_EVENTS), pk=pk)
 
     if request.method == "POST":
         form = SmsTemplateForm(request.POST, event_key=template.event_key)
@@ -4617,7 +4617,7 @@ def sms_template_form(request, pk):
 @staff_required
 @permission_required(SMS_SETTINGS_MANAGE)
 def sms_template_toggle(request, pk):
-    template = get_object_or_404(SmsTemplate.objects.exclude(event_key__in=[SmsEvent.PLATFORM_OWNER_OTP, SmsEvent.PLATFORM_TEST, SmsEvent.NOTIFICATION]), pk=pk)
+    template = get_object_or_404(SmsTemplate.objects.exclude(event_key__in=STORE_HIDDEN_EVENTS), pk=pk)
     template.is_active = not template.is_active
     template.save(update_fields=["is_active", "updated_at"])
     state = "فعال" if template.is_active else "غیرفعال"
@@ -4634,6 +4634,9 @@ def sms_template_toggle(request, pk):
 def sms_test_send(request):
     form = SmsTestForm(request.POST)
     event_key = request.POST.get("event_key", "")
+    if event_key in PLATFORM_MANAGED_EVENTS:
+        messages.error(request, "متنِ این پیامک را راستی‌سی مدیریت می‌کند و از این بخش قابلِ ارسال آزمایشی نیست")
+        return redirect("/admin-portal/settings/?section=sms")
     if form.is_valid():
         try:
             log = send_test_sms(

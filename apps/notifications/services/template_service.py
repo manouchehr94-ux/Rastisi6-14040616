@@ -56,29 +56,49 @@ def is_legacy_sms(event_key: str, channel: str) -> bool:
     return channel == ev.SMS and bool(ev.get_event(event_key).legacy_sms_event)
 
 
+def is_platform_sms(event_key: str, channel: str) -> bool:
+    """متنِ پیامکِ این رویداد فقط در اختیارِ پلتفرم است (کمپین/مناسبت): از ردیفِ سراسریِ
+    ``SmsTemplate`` خوانده می‌شود و هیچ مسیرِ فروشگاه‌محوری حقِ نوشتن/جایگزینیِ آن را ندارد."""
+    return channel == ev.SMS and bool(ev.get_event(event_key).platform_sms_event)
+
+
+def _sms_source_event(event_key: str) -> str:
+    event = ev.get_event(event_key)
+    return event.legacy_sms_event or event.platform_sms_event
+
+
+def _reads_from_sms_template(event_key: str, channel: str) -> bool:
+    return is_legacy_sms(event_key, channel) or is_platform_sms(event_key, channel)
+
+
+class PlatformManagedError(TemplateError):
+    """تلاش برایِ ویرایشِ متنی که فقط پلتفرم مدیریت می‌کند."""
+
+
 def _legacy_sms_row(event_key: str):
     from apps.sms.models import SmsTemplate
 
-    legacy_event = ev.get_event(event_key).legacy_sms_event
     SmsTemplate.ensure_defaults()
-    return SmsTemplate.objects.filter(event_key=legacy_event).first()
+    return SmsTemplate.objects.filter(event_key=_sms_source_event(event_key)).first()
 
 
 def get_template(store, event_key: str, channel: str) -> dict:
     """قالبِ مؤثر: برایِ پیامکِ رویدادهایِ قدیمی، ``SmsTemplate`` (همان که واقعاً ارسال
     می‌شود، با واژگانِ جدید)؛ وگرنه ردیفِ Store اگر موجود باشد وگرنه پیش‌فرضِ رویداد."""
     event = ev.get_event(event_key)
-    if is_legacy_sms(event_key, channel):
+    if _reads_from_sms_template(event_key, channel):
         from apps.notifications import legacy_sms
         from apps.sms.events import DEFAULT_TEMPLATES
 
+        source = _sms_source_event(event_key)
         row = _legacy_sms_row(event_key)
-        body = row.body if row else DEFAULT_TEMPLATES.get(event.legacy_sms_event, "")
-        default = DEFAULT_TEMPLATES.get(event.legacy_sms_event, "")
+        body = row.body if row else DEFAULT_TEMPLATES.get(source, "")
+        default = DEFAULT_TEMPLATES.get(source, "")
         return {
             "enabled": row.is_active if row else True, "subject": "", "extra_recipients": "",
-            "body": legacy_sms.body_to_new(event.legacy_sms_event, body),
-            "customized": body != default, "row": None, "managed_by": "legacy_sms",
+            "body": legacy_sms.body_to_new(source, body),
+            "customized": body != default, "row": None,
+            "managed_by": "platform" if event.platform_sms_event else "legacy_sms",
         }
     row = NotificationTemplate.objects.filter(store=store, event_key=event_key, channel=channel).first()
     if row is not None:
@@ -102,6 +122,8 @@ def save_template(store, event_key: str, channel: str, *, enabled: bool, subject
     event = ev.get_event(event_key)
     if channel not in ev.CHANNELS:
         raise TemplateError("کانالِ نامعتبر.")
+    if is_platform_sms(event_key, channel):
+        raise PlatformManagedError("متنِ این پیامک را فقط راستی‌سی مدیریت می‌کند و قابلِ ویرایش نیست.")
     body = (body or "").strip()
     subject = (subject or "").strip()
     if enabled and not body:
@@ -129,7 +151,7 @@ def _legacy_body_or_error(event_key: str, body: str) -> str:
     from apps.notifications import legacy_sms
     from apps.sms.services.sms_service import SmsTemplateError, validate_template_body
 
-    legacy_event = ev.get_event(event_key).legacy_sms_event
+    legacy_event = _sms_source_event(event_key)
     try:
         legacy_body = legacy_sms.body_to_legacy(legacy_event, body)
         validate_template_body(legacy_event, legacy_body)
@@ -152,6 +174,8 @@ def _save_legacy_sms(store, event_key: str, *, enabled: bool, body: str) -> Noti
 
 
 def reset_template(store, event_key: str, channel: str) -> None:
+    if is_platform_sms(event_key, channel):
+        raise PlatformManagedError("متنِ این پیامک را فقط راستی‌سی مدیریت می‌کند و قابلِ بازنشانی نیست.")
     if is_legacy_sms(event_key, channel):
         from apps.sms.events import DEFAULT_TEMPLATES
 
@@ -165,20 +189,22 @@ def preview(store, event_key: str, channel: str, *, subject: str | None = None, 
     """پیش‌نمایش با داده‌ی نمونه‌ی رویداد (بدونِ ذخیره و بدونِ ارسال)."""
     event = ev.get_event(event_key)
     current = get_template(store, event_key, channel)
+    if is_platform_sms(event_key, channel):
+        body = None  # متنِ پیامکِ پلتفرم‌محور هرگز از ورودیِ کاربر خوانده نمی‌شود
     body = current["body"] if body is None else body
     subject = current["subject"] if subject is None else subject
-    if is_legacy_sms(event_key, channel):
+    if _reads_from_sms_template(event_key, channel):
         _legacy_body_or_error(event_key, body)
     else:
         validate_text(event_key, body, what="متن")
     context = dict(event.sample)
     context["store_name"] = getattr(store, "name", context.get("store_name", ""))
-    if is_legacy_sms(event_key, channel):
+    if _reads_from_sms_template(event_key, channel):
         # `{{`/`}}` در متنِ قدیمی آکولادِ تحت‌اللفظی است
         from apps.notifications import legacy_sms
         from apps.sms.services import template_renderer
 
-        legacy_event = event.legacy_sms_event
+        legacy_event = _sms_source_event(event_key)
         text = template_renderer.render(
             legacy_sms.body_to_legacy(legacy_event, body),
             {old: context.get(new, "") for old, new in legacy_sms.legacy_to_new_map(legacy_event).items()},

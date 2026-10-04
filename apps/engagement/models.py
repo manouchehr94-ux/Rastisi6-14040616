@@ -97,7 +97,15 @@ class Campaign(TimeStampedModel):
 
     # --- اطلاع‌رسانی ---
     channels = models.JSONField("کانال‌ها", default=list, blank=True)
-    custom_sms_body = models.TextField("متنِ پیامکِ اختصاصیِ کمپین", blank=True, default="")
+    channels_explicit = models.BooleanField(
+        "کانال‌ها صریحاً انتخاب شده‌اند", default=False,
+        help_text="خاموش (کمپین‌هایِ قدیمی): فهرستِ خالیِ کانال‌ها یعنی «همه‌ی کانال‌هایِ فعال». "
+                  "روشن: فهرست دقیقاً همان است و خالی یعنی هیچ پیامی ارسال نشود.",
+    )
+    custom_sms_body = models.TextField(
+        "متنِ پیامکِ اختصاصیِ کمپین (منسوخ)", blank=True, default="",
+        help_text="دیگر هرگز ارسال نمی‌شود: متنِ پیامکِ کمپین/مناسبت فقط از قالبِ پلتفرم می‌آید.",
+    )
     custom_email_subject = models.CharField("موضوعِ ایمیلِ اختصاصیِ کمپین", max_length=200, blank=True, default="")
     custom_email_body = models.TextField("متنِ ایمیلِ اختصاصیِ کمپین", blank=True, default="")
     reminder_days_before_expiry = models.PositiveSmallIntegerField("یادآوریِ انقضا (روز مانده)", null=True, blank=True)

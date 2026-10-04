@@ -4,7 +4,7 @@
 فراخوانی می‌شود (طبق اصل «منطق در لایه‌ی سرویس»، نه در ویو یا اینجا دوباره).
 """
 
-from apps.sms.events import EVENT_VARIABLES, SmsEvent
+from apps.sms.events import EVENT_VARIABLES, STORE_HIDDEN_EVENTS, SmsEvent
 from apps.sms.models import SmsLog, SmsOutboxItem, SmsTemplate
 
 LOG_STATUS_FILTERS = [("", "همه وضعیت‌ها")] + list(SmsLog.Status.choices)
@@ -25,9 +25,8 @@ def templates_with_variables():
     SmsTemplate.ensure_defaults()
     templates = {t.event_key: t for t in SmsTemplate.objects.all()}
     rows = []
-    platform_only = {SmsEvent.PLATFORM_OWNER_OTP, SmsEvent.PLATFORM_TEST, SmsEvent.NOTIFICATION}
     for event_key in SmsEvent.values:
-        if event_key in platform_only:
+        if event_key in STORE_HIDDEN_EVENTS:
             continue
         template = templates.get(event_key)
         if template is None:

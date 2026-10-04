@@ -140,6 +140,8 @@ def dispatch_event(
             continue
         tpl = dict(template_service.get_template(store, event_key, channel))
         override = (overrides or {}).get(channel) or {}
+        if template_service.is_platform_sms(event_key, channel):
+            override = {}  # متنِ پیامکِ کمپین/مناسبت فقط از قالبِ پلتفرم می‌آید؛ هیچ override ای پذیرفته نمی‌شود
         if override.get("body"):
             tpl["body"] = override["body"]
             if channel == ev.EMAIL and override.get("subject"):

@@ -10,6 +10,7 @@ from django import forms
 from apps.core.jalali_utils import JalaliDateError, parse_jalali_date, store_timezone
 from apps.core.utils import normalize_digits
 from apps.engagement.models import Campaign
+from apps.engagement.services import simple_setup
 
 
 def _jdate(raw) -> dt.date | None:
@@ -58,13 +59,27 @@ class OptionalIntField(forms.CharField):
         return number
 
 
+class FreeMultipleField(forms.MultipleChoiceField):
+    """چندانتخابیِ بدونِ فهرستِ ثابت (شهر/شناسه‌ها)؛ اعتبارسنجیِ واقعی در ``simple_setup`` و با ``store`` است."""
+
+    def valid_value(self, value):
+        return True
+
+
 class CampaignForm(forms.Form):
+    """فرمِ ساده‌ی کمپین/مناسبت. نکته‌یِ امنیتی: **هیچ فیلدِ متنِ پیامکی وجود ندارد** — متنِ پیامک
+    فقط از قالبِ پلتفرم می‌آید؛ پس هر ``custom_sms_body`` در POST کاملاً نادیده گرفته می‌شود."""
+
     name = forms.CharField(label="نام", max_length=150)
     description = forms.CharField(label="توضیحات", required=False, widget=forms.Textarea)
     trigger_type = forms.ChoiceField(label="نوعِ اجرا", choices=Campaign.Trigger.choices)
     rules_json = forms.CharField(label="قواعد", required=False, widget=forms.HiddenInput)
-    rule_scope = forms.ChoiceField(label="دامنه‌ی ارزیابی", choices=Campaign.Scope.choices)
-    period_mode = forms.ChoiceField(label="بازه‌ی خرید", choices=Campaign.PeriodMode.choices)
+    # مخاطبِ ساده: اگر ارسال نشود (فراخوانیِ قدیمی) رفتار همان «قواعدِ سفارشی» است.
+    audience_kind = forms.ChoiceField(label="مخاطبان", required=False, choices=[(c, c) for c in simple_setup.AUDIENCE_CHOICES])
+    audience_extra_kind = forms.ChoiceField(label="مخاطبِ خاص", required=False, choices=[(c, c) for c in simple_setup.EXTRA_CHOICES])
+    audience_extra_values = FreeMultipleField(label="موردهایِ مخاطبِ خاص", required=False)
+    rule_scope = forms.ChoiceField(label="دامنه‌ی ارزیابی", required=False, choices=Campaign.Scope.choices)
+    period_mode = forms.ChoiceField(label="بازه‌ی خرید", required=False, choices=Campaign.PeriodMode.choices)
     period_jalali_year = OptionalIntField(label="سالِ شمسی", min_value=1300, max_value=1600)
     period_start_month = OptionalIntField(label="ماهِ شروع", min_value=1, max_value=12)
     period_end_month = OptionalIntField(label="ماهِ پایان", min_value=1, max_value=12)
@@ -74,10 +89,10 @@ class CampaignForm(forms.Form):
         label="وضعیت‌هایِ پرداختِ معتبر", required=False,
         choices=[("paid", "پرداخت‌شده"), ("pending", "در انتظار پرداخت"), ("refunded", "مسترد"), ("failed", "ناموفق")],
     )
-    amount_basis = forms.ChoiceField(label="مبنای مبلغ", choices=Campaign.AmountBasis.choices)
+    amount_basis = forms.ChoiceField(label="مبنای مبلغ", required=False, choices=Campaign.AmountBasis.choices)
 
-    reward_type = forms.ChoiceField(label="پاداش", choices=Campaign.Reward.choices)
-    coupon_type = forms.ChoiceField(label="نوعِ تخفیف", choices=[("percent", "درصدی"), ("fixed", "مبلغ ثابت"), ("free_ship", "ارسال رایگان")])
+    reward_type = forms.ChoiceField(label="پاداش", required=False, choices=Campaign.Reward.choices)
+    coupon_type = forms.ChoiceField(label="نوعِ تخفیف", required=False, choices=[("percent", "درصدی"), ("fixed", "مبلغ ثابت"), ("free_ship", "ارسال رایگان")])
     coupon_value = OptionalIntField(label="مقدار", min_value=0)
     coupon_max_discount = OptionalIntField(label="سقفِ تخفیف", min_value=1)
     coupon_min_order = OptionalIntField(label="حداقل سفارش", min_value=0)
@@ -94,9 +109,7 @@ class CampaignForm(forms.Form):
     validity_from_delivery = forms.BooleanField(label="اعتبار از لحظه‌ی تحویلِ اعلان", required=False)
 
     channels = forms.MultipleChoiceField(label="کانال‌ها", required=False, choices=[("sms", "پیامک"), ("email", "ایمیل")])
-    custom_sms_body = forms.CharField(label="متنِ پیامکِ اختصاصی", required=False, widget=forms.Textarea)
-    custom_email_subject = forms.CharField(label="موضوعِ ایمیلِ اختصاصی", required=False, max_length=200)
-    custom_email_body = forms.CharField(label="متنِ ایمیلِ اختصاصی", required=False, widget=forms.Textarea)
+    channels_explicit = forms.BooleanField(label="کانال‌ها صریح", required=False)
     reminder_days_before_expiry = OptionalIntField(label="یادآوریِ انقضا (روز)", min_value=1, max_value=365)
 
     occasion_kind = forms.ChoiceField(label="نوعِ مناسبت", required=False, choices=[("", "—")] + list(Campaign.Occasion.choices))
@@ -127,8 +140,21 @@ class CampaignForm(forms.Form):
         for name in ("period_start_date", "period_end_date", "code_starts_at", "code_expires_at", "active_from", "active_until", "occ_date"):
             self.fields[name].widget.attrs["placeholder"] = "۱۴۰۵/۰۷/۰۱"
         self.fields["description"].widget.attrs["rows"] = 2
-        for name in ("custom_sms_body", "custom_email_body"):
-            self.fields[name].widget.attrs["rows"] = 3
+
+    def clean_rule_scope(self):
+        return self.cleaned_data.get("rule_scope") or Campaign.Scope.AGGREGATE
+
+    def clean_period_mode(self):
+        return self.cleaned_data.get("period_mode") or Campaign.PeriodMode.NONE
+
+    def clean_amount_basis(self):
+        return self.cleaned_data.get("amount_basis") or Campaign.AmountBasis.NET
+
+    def clean_reward_type(self):
+        return self.cleaned_data.get("reward_type") or Campaign.Reward.COUPON
+
+    def clean_coupon_type(self):
+        return self.cleaned_data.get("coupon_type") or "percent"
 
     def clean_rules_json(self):
         raw = self.cleaned_data.get("rules_json", "").strip()
@@ -142,7 +168,27 @@ class CampaignForm(forms.Form):
             raise forms.ValidationError("ساختارِ قواعد نامعتبر است.")
         return data
 
+    def clean(self):
+        cleaned = super().clean()
+        kind = cleaned.get("audience_kind") or simple_setup.AUDIENCE_CUSTOM
+        extra = cleaned.get("audience_extra_kind") or ""
+        if kind != simple_setup.AUDIENCE_CUSTOM and extra and not cleaned.get("audience_extra_values"):
+            self.add_error("audience_extra_values", "برای «مخاطبِ خاص» حداقل یک مورد را انتخاب کنید.")
+        if cleaned.get("trigger_type") == Campaign.Trigger.OCCASION and not cleaned.get("occasion_kind"):
+            self.add_error("occasion_kind", "مناسبت را انتخاب کنید.")
+        return cleaned
+
     # --- تبدیل به مدل ---------------------------------------------------------
+    def _audience_rules(self, campaign: Campaign) -> dict:
+        """قواعدِ شمول: «مخاطبِ ساده» → درختِ معتبر؛ «سفارشی/قدیمی» → همان ``rules_json``."""
+        cd = self.cleaned_data
+        kind = cd.get("audience_kind") or simple_setup.AUDIENCE_CUSTOM
+        if kind == simple_setup.AUDIENCE_CUSTOM:
+            return cd["rules_json"]
+        return simple_setup.build_audience_rules(
+            kind, cd.get("audience_extra_kind") or "", cd.get("audience_extra_values") or [], campaign.store,
+        )
+
     @staticmethod
     def _start_of_day(d):
         return dt.datetime.combine(d, dt.time.min, tzinfo=store_timezone()) if d else None
@@ -156,7 +202,7 @@ class CampaignForm(forms.Form):
         campaign.name = cd["name"].strip()
         campaign.description = cd["description"]
         campaign.trigger_type = cd["trigger_type"]
-        campaign.rules = cd["rules_json"]
+        campaign.rules = self._audience_rules(campaign)
         campaign.rule_scope = cd["rule_scope"]
         campaign.period_mode = cd["period_mode"]
         campaign.period_jalali_year = cd["period_jalali_year"]
@@ -183,11 +229,11 @@ class CampaignForm(forms.Form):
         campaign.per_customer_period_days = cd["per_customer_period_days"]
         campaign.validity_from_delivery = cd["validity_from_delivery"]
         campaign.channels = cd["channels"]
-        campaign.custom_sms_body = cd["custom_sms_body"].strip()
-        campaign.custom_email_subject = cd["custom_email_subject"].strip()
-        campaign.custom_email_body = cd["custom_email_body"].strip()
+        campaign.channels_explicit = cd["channels_explicit"]
+        # متنِ پیامک (و متنِ اختیاریِ قدیمیِ ایمیل) عمداً دست‌نخورده می‌ماند: از فرم تغییر نمی‌کند.
         campaign.reminder_days_before_expiry = cd["reminder_days_before_expiry"]
-        campaign.occasion_kind = cd["occasion_kind"] or ""
+        # نوعِ مناسبت فقط برایِ کمپینِ مناسبتی معنا دارد
+        campaign.occasion_kind = (cd["occasion_kind"] or "") if campaign.trigger_type == Campaign.Trigger.OCCASION else ""
         campaign.occasion_name = cd["occasion_name"].strip()
         campaign.occasion_offset_days = cd["occasion_offset_days"] or 0
         params = {}
@@ -232,8 +278,9 @@ class CampaignForm(forms.Form):
             "per_customer_limit": campaign.per_customer_limit or "", "max_issuances": campaign.max_issuances or "",
             "per_customer_period_days": campaign.per_customer_period_days or "",
             "validity_from_delivery": campaign.validity_from_delivery,
-            "channels": campaign.channels or [], "custom_sms_body": campaign.custom_sms_body,
-            "custom_email_subject": campaign.custom_email_subject, "custom_email_body": campaign.custom_email_body,
+            # کمپینِ قدیمیِ بدونِ انتخابِ صریح یعنی «همه‌ی کانال‌ها» — همان را نشان بده
+            "channels": campaign.channels if (campaign.channels_explicit or campaign.channels) else ["sms", "email"],
+            "channels_explicit": True,
             "reminder_days_before_expiry": campaign.reminder_days_before_expiry or "",
             "occasion_kind": campaign.occasion_kind, "occasion_name": campaign.occasion_name,
             "occasion_offset_days": campaign.occasion_offset_days,
@@ -241,4 +288,5 @@ class CampaignForm(forms.Form):
             "occ_month": p.get("month", ""), "occ_day": p.get("day", ""),
             "occ_date": to_fa_digits(format_jalali(dt.date.fromisoformat(p["date"]))) if p.get("date") else "",
             "active_from": jd(campaign.active_from), "active_until": jd(campaign.active_until),
+            **{f"audience_{k}": v for k, v in simple_setup.detect_audience(campaign.rules, campaign.store).items()},
         }

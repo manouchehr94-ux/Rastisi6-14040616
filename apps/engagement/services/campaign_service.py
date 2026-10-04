@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import re
 import secrets
 from datetime import timedelta
 from decimal import Decimal
@@ -23,7 +24,7 @@ from apps.core.jalali_utils import (
 )
 from apps.core.services.audit_service import record_audit_event
 from apps.engagement.models import Campaign, CampaignIssuance, CampaignRun
-from apps.engagement.services import occasions, rule_data, rules
+from apps.engagement.services import occasions, rule_data, rules, simple_setup
 from apps.notifications import events as notif_events
 from apps.notifications.services import context_builders, template_service
 from apps.notifications.services.dispatcher import dispatch_event
@@ -132,8 +133,9 @@ def validate_campaign(campaign: Campaign) -> list[str]:
     elif campaign.trigger_type == Campaign.Trigger.EVENT and campaign.period_mode != Campaign.PeriodMode.NONE:
         pass  # بازه با رویداد سازگار است (قواعد تصمیم می‌گیرند)
 
+    # متنِ پیامک هرگز از کمپین نمی‌آید (فقط قالبِ پلتفرم)؛ فقط متنِ اختیاریِ ایمیلِ قدیمی اعتبارسنجی می‌شود.
     event_key = occasions.notification_event_key(campaign)
-    for text, label in ((campaign.custom_sms_body, "پیامک"), (campaign.custom_email_body, "ایمیل"), (campaign.custom_email_subject, "موضوعِ ایمیل")):
+    for text, label in ((campaign.custom_email_body, "ایمیل"), (campaign.custom_email_subject, "موضوعِ ایمیل")):
         if text:
             try:
                 template_service.validate_text(event_key, text, what=f"متنِ اختصاصیِ {label}")
@@ -249,28 +251,46 @@ def _coupon_for(campaign: Campaign, customer, now) -> Coupon:
 # ------------------------------------------------------------------ صدور و اعلان
 
 
-def _notify(campaign: Campaign, customer, issuance: CampaignIssuance, coupon: Coupon | None) -> None:
-    event_key = occasions.notification_event_key(campaign)
+def notification_channels(campaign: Campaign) -> list[str] | None:
+    """کانال‌هایِ اطلاع‌رسانیِ این کمپین: فهرستِ صریح، ``[]`` = هیچ پیامی، ``None`` = همه‌ی کانال‌هایِ
+    فعالِ رویداد (فقط برایِ کمپین‌هایِ قدیمی که ``channels_explicit`` ندارند)."""
+    chosen = [c for c in (campaign.channels or []) if c in notif_events.CHANNELS]
+    if campaign.channels_explicit:
+        return chosen
+    return chosen or None
+
+
+def message_context(campaign: Campaign, customer, coupon: Coupon | None) -> dict:
+    """متغیرهایِ پیام از دادهٔ واقعیِ کمپین/مشتری/کد. هم ارسالِ واقعی (``_notify``) و هم
+    پیش‌نمایشِ فرم از همین تابع استفاده می‌کنند؛ پس متنِ پیش‌نمایش و متنِ ارسال یکی است."""
+    occasion_name = simple_setup.effective_occasion_name(campaign)
     ctx = {
         **context_builders.customer_context(campaign.store, customer),
-        "campaign_name": campaign.name, "occasion_name": campaign.occasion_name or campaign.name,
+        "campaign_name": campaign.name, "occasion_name": occasion_name,
         "discount_code": "", "discount_amount": "", "discount_max": "", "discount_expires_at": "",
         "reward_description": campaign.name,
     }
     if coupon is not None:
         ctx.update(context_builders.coupon_context(
-            campaign.store, customer, coupon, campaign_name=campaign.name,
-            occasion_name=campaign.occasion_name or campaign.name,
+            campaign.store, customer, coupon, campaign_name=campaign.name, occasion_name=occasion_name,
         ))
         ctx["reward_description"] = f"کد تخفیف {coupon.code} ({ctx['discount_amount']})"
+    return ctx
+
+
+def _notify(campaign: Campaign, customer, issuance: CampaignIssuance, coupon: Coupon | None) -> None:
+    channels = notification_channels(campaign)
+    if channels == []:
+        return  # فروشنده ارسالِ پیام را خاموش کرده است
+    event_key = occasions.notification_event_key(campaign)
+    ctx = message_context(campaign, customer, coupon)
+    # متنِ پیامک هرگز override نمی‌شود (قالبِ پلتفرم). فقط متنِ اختیاریِ ایمیلِ قدیمی حفظ شده است.
     overrides = {}
-    if campaign.custom_sms_body:
-        overrides["sms"] = {"body": campaign.custom_sms_body}
     if campaign.custom_email_body:
         overrides["email"] = {"subject": campaign.custom_email_subject, "body": campaign.custom_email_body}
     rows = dispatch_event(
         event_key, store=campaign.store, customer=customer, context=ctx, dedupe_key=f"issuance:{issuance.pk}",
-        channels=campaign.channels or None, overrides=overrides or None,
+        channels=channels, overrides=overrides or None,
         metadata={
             "campaign_id": campaign.pk, "issuance_id": issuance.pk, "coupon_id": coupon.pk if coupon else None,
             # اعتبار از لحظه‌ی تحویل: پس از اولین ارسالِ موفق، انقضا مجدداً از همان لحظه محاسبه می‌شود
@@ -283,6 +303,52 @@ def _notify(campaign: Campaign, customer, issuance: CampaignIssuance, coupon: Co
     if rows:
         issuance.notified_at = timezone.now()
         issuance.save(update_fields=["notified_at", "updated_at"])
+
+
+SAMPLE_CUSTOMER_NAME = "سارا احمدی"
+
+
+def preview_message(campaign: Campaign, *, channel: str = "sms", now=None) -> dict:
+    """پیش‌نمایشِ فقط‌خواندنیِ پیام برایِ یک کمپینِ ذخیره‌نشده/ذخیره‌شده — بدونِ صدورِ کد، بدونِ
+    ارسال و بدونِ نوشتن در دیتابیس. قالب از همان ``template_service.get_template`` و رندر از
+    همان ``render_text`` می‌آید که ``dispatch_event`` برایِ ارسالِ واقعی به‌کار می‌برد؛ تاریخِ
+    انقضا از اعتبارِ واقعیِ کد (``_coupon_expiry``) محاسبه می‌شود، نه تاریخِ نمونه."""
+    from types import SimpleNamespace
+
+    now = now or timezone.now()
+    store = campaign.store
+    event_key = occasions.notification_event_key(campaign)
+    customer = SimpleNamespace(full_name=SAMPLE_CUSTOMER_NAME)
+    coupon = None
+    if campaign.reward_type == Campaign.Reward.COUPON:
+        prefix = (campaign.code_prefix or "GIFT").upper().strip("-")
+        coupon = Coupon(
+            store=store, code=f"{prefix}-AB12CD34", type=campaign.coupon_type,
+            value=campaign.coupon_value if campaign.coupon_type != Coupon.Type.FREE_SHIP else 0,
+            max_discount=campaign.coupon_max_discount, expires_at=_coupon_expiry(campaign, now),
+        )
+    ctx = message_context(campaign, customer, coupon)
+    ctx.setdefault("store_name", store.name)
+    template = template_service.get_template(store, event_key, channel)
+    text, missing = template_service.render_text(template["body"], ctx)
+    event = notif_events.get_event(event_key)
+    used, parts = [], []
+    for piece in re.split(r"(\{[A-Za-z_][A-Za-z0-9_]*\})", template["body"]):
+        if not piece:
+            continue
+        match = template_service._VAR_RE.fullmatch(piece)
+        if match:
+            rendered, _ = template_service.render_text(piece, ctx)
+            parts.append({"text": rendered, "variable": match.group(1)})
+            label = event.variables.get(match.group(1))
+            if label and label not in used:
+                used.append(label)
+        else:
+            parts.append({"text": piece})
+    return {
+        "event_key": event_key, "event_label": event.label, "text": text, "missing": missing,
+        "enabled": bool(template["enabled"]), "variables": used, "parts": parts,
+    }
 
 
 def issue_reward(campaign: Campaign, customer, cycle_key: str, *, now=None) -> str:
@@ -481,9 +547,12 @@ def send_expiry_reminders(store=None, *, now=None) -> int:
             days_left = max(0, (coupon.expires_at - now).days)
             ctx = {**context_builders.coupon_context(campaign.store, issuance.customer, coupon, campaign_name=campaign.name),
                    "days_left": str(days_left)}
+            channels = notification_channels(campaign)
+            if channels == []:
+                continue  # ارسالِ پیامِ این کمپین خاموش است
             rows = dispatch_event(
                 "coupon.expiring", store=campaign.store, customer=issuance.customer, context=ctx,
-                dedupe_key=f"expiring:{coupon.pk}", channels=campaign.channels or None,
+                dedupe_key=f"expiring:{coupon.pk}", channels=channels,
                 metadata={"campaign_id": campaign.pk, "issuance_id": issuance.pk},
             )
             sent += len(rows)

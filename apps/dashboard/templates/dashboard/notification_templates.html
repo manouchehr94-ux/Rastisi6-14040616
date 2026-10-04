@@ -20,7 +20,7 @@
     <td><b>{{ row.event.label }}</b><br><small dir="ltr" style="color:var(--muted)">{{ row.event.key }}</small></td>
     <td>{{ row.category }}</td>
     <td>{% if row.event.audience == 'staff' %}کارکنان{% else %}مشتری{% endif %}</td>
-    <td>{% if row.legacy_sms %}{% if row.sms.enabled %}<span class="badge b-green" title="قالبِ مشترکِ «قالب‌هایِ پیامک» — همین متن ارسال می‌شود">فعال (مشترک)</span>{% else %}<span class="badge b-amber">غیرفعال</span>{% endif %}{% elif row.sms.enabled %}<span class="badge b-green">فعال</span>{% else %}<span class="badge b-amber">غیرفعال</span>{% endif %}{% if row.sms.customized %} ✎{% endif %}</td>
+    <td>{% if row.platform_sms %}<span class="badge b-green" title="متنِ این پیامک را راستی‌سی مدیریت می‌کند">🔒 متنِ راستی‌سی</span>{% elif row.legacy_sms %}{% if row.sms.enabled %}<span class="badge b-green" title="قالبِ مشترکِ «قالب‌هایِ پیامک» — همین متن ارسال می‌شود">فعال (مشترک)</span>{% else %}<span class="badge b-amber">غیرفعال</span>{% endif %}{% elif row.sms.enabled %}<span class="badge b-green">فعال</span>{% else %}<span class="badge b-amber">غیرفعال</span>{% endif %}{% if row.sms.customized %} ✎{% endif %}</td>
     <td>{% if row.email.enabled %}<span class="badge b-green">فعال</span>{% else %}<span class="badge b-amber">غیرفعال</span>{% endif %}{% if row.email.customized %} ✎{% endif %}</td>
     <td><a class="btn btn-sm" href="{% url 'dashboard:notification-template-edit' row.event.key %}">ویرایش</a></td>
   </tr>
