@@ -42,9 +42,28 @@ EMPTY_TOTALS = {
     "tax_lines": [],
     "prices_include_tax": False,
     "tax_rounding_policy": "",
+    "gift_wrap_total": Decimal("0"),
+    "gift_wrap_discount": Decimal("0"),
     "grand_total": Decimal("0"),
     "coupon_applied": False,
+    "coupon_error_code": "",
+    "coupon_error_message": "",
 }
+
+
+def _request_customer(request):
+    """مشتریِ واردشده (یا ``None`` برایِ مهمان) — برایِ بررسیِ مالکیتِ کدهایِ اختصاصی."""
+    user = getattr(request, "user", None)
+    if user is None or not user.is_authenticated:
+        return None
+    return getattr(user, "customer_profile", None)
+
+
+#: دلیل‌هایی که پیامِ عمومیِ «نامعتبر/منقضی» نشان می‌دهند — برایِ کدِ اختصاصیِ
+#: مشتریِ دیگر هم همین پیام می‌آید تا وجودِ کد لو نرود.
+_GENERIC_COUPON_REASONS = frozenset({
+    "inactive", "not_started", "expired", "wrong_customer",
+})
 
 
 def _state(request) -> dict:
@@ -58,7 +77,35 @@ def get_address(request) -> dict:
 def save_address(request, cleaned_data) -> None:
     state = _state(request)
     state["address"] = {field: cleaned_data.get(field, "") for field in ADDRESS_FIELDS}
+    # تاریخ تولد (اختیاری): فقط مقدارِ معتبرِ غیرخالی ذخیره می‌شود؛ ارسالِ خالی
+    # هرگز مقدارِ قبلی (نشست یا پروفایل) را پاک نمی‌کند. به‌عنوانِ ISO میلادی
+    # (قابلِ سریال‌سازی در نشست) نگه داشته و پس از ثبتِ موفقِ سفارش روی
+    # مشتریِ *احرازشده* اعمال می‌شود (نه پیش از تأییدِ OTP).
+    birth = cleaned_data.get("birth_date")
+    if birth:
+        state["birth_date"] = birth.isoformat()
+    # رضایتِ تبلیغاتی: همیشه با مقدارِ همین ارسالِ فرم جایگزین می‌شود (تیک‌برداشتن پیش از ثبتِ سفارش یعنی «نه»).
+    state["promo_consent"] = {
+        "sms": bool(cleaned_data.get("accepts_promotional_sms")),
+        "email": bool(cleaned_data.get("accepts_promotional_email")),
+    }
     request.session.modified = True
+
+
+def address_initial(request) -> dict:
+    """مقدارِ اولیه‌ی فرمِ آدرس: آدرسِ نشست + تاریخ تولد (نشست، وگرنه ذخیره‌شده در پروفایل)."""
+    initial = dict(get_address(request))
+    birth = _state(request).get("birth_date")
+    consent = _state(request).get("promo_consent") or {}
+    initial["accepts_promotional_sms"] = bool(consent.get("sms"))
+    initial["accepts_promotional_email"] = bool(consent.get("email"))
+    if birth:
+        initial["birth_date"] = birth
+    else:
+        customer = _request_customer(request)
+        if customer is not None and customer.birth_date:
+            initial["birth_date"] = customer.birth_date
+    return initial
 
 
 def active_shipping_methods(*, store, address: dict | None = None):
@@ -138,7 +185,7 @@ def get_or_create_checkout_token(cart) -> str:
     return cart.checkout_token
 
 
-def get_applied_coupon(request, cart):
+def get_applied_coupon(request, cart, customer=None):
     """کد تخفیف فعلی نشست را برمی‌گرداند؛ اگر دیگر معتبر نباشد از نشست پاک می‌شود.
 
     جست‌وجو همیشه با ``store`` فعلی فیلتر می‌شود (ADR-32) — یک کدِ ذخیره‌شده
@@ -149,8 +196,12 @@ def get_applied_coupon(request, cart):
         return None
     store = resolve_store_for_service(request)
     coupon = Coupon.objects.filter(code=code, store=store).first()
-    totals = cart_totals(cart, store=store)
-    if coupon is None or not coupon_is_applicable(coupon, totals["items_total"]):
+    if coupon is not None:
+        totals = cart_totals(
+            cart, store=store, coupon=coupon, customer=customer or _request_customer(request),
+            payment_gateway=get_selected_payment_gateway(request),
+        )
+    if coupon is None or not totals["coupon_applied"]:
         _state(request).pop("coupon_code", None)
         request.session.modified = True
         return None
@@ -163,9 +214,16 @@ def apply_coupon(request, cart, code: str) -> tuple[bool, str]:
         return False, "لطفاً کد تخفیف را وارد کنید"
     store = resolve_store_for_service(request)
     coupon = Coupon.objects.filter(code=code, store=store).first()
-    totals = cart_totals(cart, store=store)
-    if coupon is None or not coupon_is_applicable(coupon, totals["items_total"]):
+    if coupon is None:
         return False, "کد تخفیف نامعتبر است یا منقضی شده"
+    totals = cart_totals(
+        cart, store=store, coupon=coupon, customer=_request_customer(request),
+        payment_gateway=get_selected_payment_gateway(request),
+    )
+    if not totals["coupon_applied"]:
+        if totals["coupon_error_code"] in _GENERIC_COUPON_REASONS:
+            return False, "کد تخفیف نامعتبر است یا منقضی شده"
+        return False, totals["coupon_error_message"]
     _state(request)["coupon_code"] = coupon.code
     request.session.modified = True
     label = coupon.label or coupon.get_type_display()
@@ -197,6 +255,22 @@ class PriceChangeReviewRequired(CheckoutError):
 
     def __init__(self):
         super().__init__(PRICE_CHANGED_MESSAGE)
+
+
+def save_expected_total(request, raw) -> None:
+    """مبلغی که مشتری در همین صفحه دید و با فشردنِ «پرداخت» تأیید کرد (فقط برایِ **مقایسه**؛ هرگز مبنای
+    دریافت نیست). نامعتبر/خالی ⇒ بدونِ مقایسه (مثلاً فراخوانیِ مستقیم)."""
+    from decimal import Decimal, InvalidOperation
+
+    state = _state(request)
+    try:
+        value = Decimal(str(raw).strip())
+        if value < 0:
+            raise InvalidOperation
+        state["expected_total"] = str(value)
+    except (InvalidOperation, ValueError, TypeError):
+        state.pop("expected_total", None)
+    request.session.modified = True
 
 
 def _resolve_or_create_address(customer, address_data: dict) -> Address:
@@ -264,8 +338,11 @@ def finalize_order(request, cart, customer):
     if payment_gateway is None:
         raise CheckoutError("هیچ درگاه پرداخت فعالی موجود نیست")
 
-    coupon = get_applied_coupon(request, cart)
+    coupon = get_applied_coupon(request, cart, customer)
     store = resolve_store_for_service(request)
+    birth_date_raw = _state(request).get("birth_date", "")
+    expected_total = _state(request).get("expected_total")
+    promo_consent = dict(_state(request).get("promo_consent") or {})
 
     from apps.orders.services.order_service import (
         CartMembershipChangedError,
@@ -279,10 +356,11 @@ def finalize_order(request, cart, customer):
                 cart, customer=customer, vendor=vendor, address=address,
                 shipping_method=shipping_method, payment_gateway=payment_gateway,
                 coupon=coupon, note=address_data.get("note", ""), store=store,
-                idempotency_key=token, require_confirmed_prices=True,
+                idempotency_key=token, require_confirmed_prices=True, expected_total=expected_total,
             )
             cart.items.all().delete()
     except LivePriceChangedError as exc:
+        _state(request).pop("expected_total", None)  # مبلغِ جدید باید دوباره نمایش داده و تأیید شود
         # CAT-002 Blocker A — قیمتِ زنده در فاصله‌ی بینِ reprice اولیه‌ی این
         # درخواست و قفلِ نهایی دوباره تغییر کرد. کلِ تراکنشِ بالا (Address،
         # Order، OrderItem، رزرو/مصرفِ موجودی، افزایشِ used_countِ کوپن، حذفِ
@@ -301,6 +379,26 @@ def finalize_order(request, cart, customer):
         raise PriceChangeReviewRequired() from exc
     except ValueError as exc:
         raise CheckoutError(str(exc)) from exc
+
+    if birth_date_raw:
+        from apps.customers.services.profile_service import BirthDateError, update_birth_date
+
+        try:
+            update_birth_date(customer, birth_date_raw)
+        except BirthDateError:  # نباید رخ دهد (پیش‌تر اعتبارسنجی شده)؛ سفارش هرگز بخاطرِ تولد شکست نمی‌خورد
+            logger.warning("invalid stored birth date for customer %s", customer.pk)
+
+    if promo_consent.get("sms") or promo_consent.get("email"):
+        from apps.customers.models import Customer as _Customer
+        from apps.customers.services import consent_service
+
+        try:  # رضایت هرگز سفارش را متوقف نمی‌کند
+            consent_service.grant_at_opt_in(
+                customer, source=_Customer.ConsentSource.CHECKOUT,
+                sms=bool(promo_consent.get("sms")), email=bool(promo_consent.get("email")), store=store,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("recording checkout consent failed for customer %s", customer.pk)
 
     # Session clearing happens AFTER successful database commit
     request.session.pop(SESSION_KEY, None)
@@ -327,6 +425,7 @@ def build_context(request, cart) -> dict:
         totals = cart_totals(
             cart, store=resolve_store_for_service(request), coupon=coupon, shipping_method=selected_shipping,
             province=address.get("province", ""), city=address.get("city", ""), postal_code=address.get("postal_code", ""),
+            customer=_request_customer(request), payment_gateway=selected_payment,
         )
         cart_items = list(cart.items.select_related("product", "variant").all())
         for item in cart_items:

@@ -73,10 +73,10 @@ fs.mkdirSync(manifest.report_dir, { recursive: true });
 fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
 
 const SAVE_STATE = {
-  saved: 'ذخیره شد',
-  saving: 'در حال ذخیره...',
-  error: 'خطا در ذخیره تغییرات',
-  conflict: 'نسخه‌ی جدیدتری از این صفحه موجود است',
+  saved: 'پیش‌نویس ذخیره شد',
+  saving: 'در حال ذخیره…',
+  error: 'ذخیره ناموفق',
+  conflict: 'تعارض نسخه',
 };
 
 const result = {
@@ -113,6 +113,9 @@ let publicPage;
 // heuristic that can sample the network while a reload is still queued.
 const PREVIEW_URL_FRAGMENT = '/storefront-builder/preview/';
 let inFlightPreviewRequests = 0;
+let inFlightStatusRequests = 0;
+let currentScenarioName = '';
+let lastEditorWriteAt = 0;
 
 // Scenario-crossing discovered state (never hardcoded — always read from
 // the manifest or the rendered UI).
@@ -178,12 +181,13 @@ function deleteStaleScreenshots() {
 const onlyScenarioFilter = process.env.R4_QA_ONLY_SCENARIO || null;
 
 async function scenario(name, fn) {
-  if (onlyScenarioFilter && !name.includes(onlyScenarioFilter)) {
+  if (onlyScenarioFilter && !new RegExp(onlyScenarioFilter).test(name)) {
     result.scenarios.push({ name, status: 'SKIP', ms: 0 });
     console.log(`SKIP  ${name}`);
     return;
   }
   const started = Date.now();
+  currentScenarioName = name;
   try {
     await fn();
     result.scenarios.push({ name, status: 'PASS', ms: Date.now() - started });
@@ -346,8 +350,20 @@ async function openSectionViaPreview(sectionKey) {
   // an empty Section.
   const box = await locator.boundingBox();
   assert(box, `Could not resolve a bounding box for [data-section-key="${sectionKey}"]`);
-  await locator.click({ position: { x: box.width / 2, y: Math.max(box.height - 6, 1) } });
+  // Design Studio keeps the previously opened Section's inspector in the DOM
+  // until the new one is fetched; wait for the clicked Section's own id so we
+  // never observe the stale inspector.
+  const wantedId = await locator.getAttribute('data-section-id');
+  // Tall sections (e.g. a 900px product grid) are clipped by the Studio's
+  // smaller preview viewport, so their bottom edge is off-screen; clicking
+  // 90px from the top still clears the floating toolbar.
+  await locator.click({ position: { x: box.width / 2, y: Math.max(Math.min(box.height - 6, 90), 1) } });
   await page.locator('[data-r4-section-inspector]').waitFor({ state: 'visible', timeout: 10000 });
+  await page.waitForFunction(
+    (id) => { const el = document.querySelector('[data-r4-section-inspector]'); return el && el.getAttribute('data-r4-section-id') === String(id); },
+    wantedId,
+    { timeout: 10000 },
+  );
   return page.getAttribute('[data-r4-section-inspector]', 'data-r4-section-id');
 }
 
@@ -367,11 +383,11 @@ async function openSectionById(sectionId) {
 }
 
 async function closeInspectorIfOpen() {
+  // Design Studio: the inspector close button lives in a panel view that is
+  // hidden unless the Section inspector view is active — visibility of the
+  // button itself (not the legacy #r4Inspector[hidden] attribute) is the truth.
   const closeBtn = page.locator('[data-r4-inspector-close]');
-  if (await closeBtn.count()) {
-    const hidden = await page.getAttribute('#r4Inspector', 'hidden');
-    if (hidden === null) await closeBtn.click();
-  }
+  if (await closeBtn.count() && await closeBtn.first().isVisible()) await closeBtn.first().click();
 }
 
 // Round-2 corrective Finding C — deterministic main-frame navigation
@@ -395,7 +411,12 @@ async function withExpectedNavigation(actionFn, { count = 1 } = {}) {
   await settlePreviewFrame();
   const before = result.main_frame_navigations.length;
   await actionFn();
-  const gained = result.main_frame_navigations.length - before;
+  // Design Studio announces publish/discard/template-switch through a one-shot
+  // ?studio_notice= flag it removes again with history.replaceState — a
+  // same-document "navigation" Playwright also reports. It belongs to the one
+  // real reload that caused it, so it is not counted as a second navigation.
+  const batch = result.main_frame_navigations.slice(before);
+  const gained = batch.filter((entry, i) => !(i > 0 && batch[i - 1].url.includes('studio_notice=') && !entry.url.includes('studio_notice='))).length;
   assert(gained === count, `Expected exactly ${count} main-frame navigation(s) from this action, got ${gained}`);
   for (let i = before; i < result.main_frame_navigations.length; i += 1) {
     result.main_frame_navigations[i].expected = true;
@@ -461,7 +482,14 @@ async function settlePreviewFrame() {
     // bound, the request-failure gate would still catch the resulting abort,
     // so nothing is silently hidden.
     const drainDeadline = Date.now() + 8000;
-    while (inFlightPreviewRequests > 0 && Date.now() < drainDeadline) {
+    // Design Studio refreshes undo/redo/"unpublished" status with a GET of the
+    // editor page 700ms after each saved edit (r4_studio.js scheduleStatusRefresh).
+    // Let that debounce fire (>700ms after the last save) and drain, so the
+    // coming navigation cannot abort it.
+    while (Date.now() - lastEditorWriteAt < 1000 && Date.now() < drainDeadline) {
+      await page.waitForTimeout(50);
+    }
+    while ((inFlightPreviewRequests > 0 || inFlightStatusRequests > 0) && Date.now() < drainDeadline) {
       await page.waitForTimeout(50);
     }
 
@@ -591,22 +619,97 @@ async function scenario03HeroAdvancedTypography() {
   await closeInspectorIfOpen();
 }
 
+// ---- Design Studio helpers --------------------------------------------------
+// The Design Studio presents Structure as a panel mode, "add section" as a
+// dialog and per-Section move/duplicate/remove as inspector actions — all of
+// which still end in the same single R4 mutate POST the legacy controls did.
+async function showStructurePanel() {
+  const rows = page.locator('[data-r4-structure-row]').first();
+  if (!(await rows.isVisible())) {
+    await page.click('[data-rastisi-action="structure"]');
+    await rows.waitFor({ state: 'visible', timeout: 5000 });
+  }
+}
+
+async function showRowLayoutControls() {
+  // Per-Container layout/settings controls live in the Structure panel's
+  // "چیدمان ردیف‌ها" disclosure (collapsed by default; re-rendered closed after
+  // structural mutations).
+  await showStructurePanel();
+  const disclosure = page.locator('details.rs-rows');
+  if (!(await disclosure.evaluate((el) => el.open))) await disclosure.locator(':scope > summary').click();
+}
+
+async function addSectionViaDialog(sectionKey) {
+  await showStructurePanel();
+  await page.click('[data-rastisi-action="add-section"]');
+  await page.locator('#r4StructureAddSelect').waitFor({ state: 'visible', timeout: 5000 });
+  await page.selectOption('#r4StructureAddSelect', sectionKey);
+  await page.click('#r4StructureAddButton');
+}
+
+async function dismissStudioDialog() {
+  // After Publish / Template switch the Studio opens an announcement dialog
+  // over the workspace; close it like a merchant would before continuing.
+  const dialog = page.locator('.modal-backdrop .modal');
+  if (await dialog.count() && await dialog.first().isVisible()) {
+    await page.click('.modal-backdrop [data-rastisi-action="close-modal"]');
+    await dialog.first().waitFor({ state: 'detached', timeout: 5000 });
+  }
+}
+
+async function publishViaDialog() {
+  // Design Studio: "انتشار" opens a confirmation dialog; the confirm action is
+  // the one that performs the (single) publish POST and reloads the workspace.
+  await page.click('#r4PublishButton');
+  await page.locator('[data-rastisi-action="confirm-publish"]').waitFor({ state: 'visible', timeout: 5000 });
+  await page.click('[data-rastisi-action="confirm-publish"]');
+}
+
+async function currentTemplateKey() {
+  // The Studio's server-rendered catalog (#rsStudioData) is the single source
+  // of the Draft's declared Ready Template.
+  return page.evaluate(() => {
+    const data = JSON.parse(document.getElementById('rsStudioData').textContent);
+    const current = (data.templates || []).find((t) => t.is_current);
+    return current ? current.key : null;
+  });
+}
+
+async function switchTemplateViaGallery(key) {
+  // Design Studio: gallery dialog -> "اعمال" on the template tile performs
+  // the one switch-template POST and reloads the workspace.
+  await page.click('[data-rastisi-action="templates"]');
+  const apply = page.locator(`[data-rastisi-action="switch-template"][data-key="${key}"]`);
+  await apply.waitFor({ state: 'visible', timeout: 5000 });
+  await apply.click();
+}
+
+async function discardViaDialog() {
+  // Design Studio: History dialog -> "کنار گذاشتن پیش‌نویس" -> confirmation dialog.
+  await page.click('[data-rastisi-action="history"]');
+  await page.locator('.modal-backdrop [data-rastisi-action="discard"]').waitFor({ state: 'visible', timeout: 5000 });
+  await page.click('.modal-backdrop [data-rastisi-action="discard"]');
+  await page.locator('[data-rastisi-action="confirm-discard"]').waitFor({ state: 'visible', timeout: 5000 });
+  await page.click('[data-rastisi-action="confirm-discard"]');
+}
+
+async function moveSectionViaInspector(sectionId, direction) {
+  await openSectionById(sectionId);
+  await page.click(`[data-rastisi-action="section-${direction}"]`);
+}
+
 // =============================================================================
 // Section 15 — Scenario 4: Add Product + reorder
 // =============================================================================
 async function scenario04AddProductAndReorder() {
-  const structureOpen = await page.evaluate(() => document.querySelector('[data-r4-shell]').dataset.r4StructureOpen);
-  if (structureOpen !== 'true') {
-    await page.click('#r4StructureToggle');
-    await page.locator('#r4Structure').waitFor({ state: 'visible', timeout: 5000 });
-  }
+  await showStructurePanel();
 
   const idsBefore = await page.locator('[data-r4-structure-row]').evaluateAll((els) => els.map((el) => el.getAttribute('data-r4-structure-section-id')));
 
   const beforeMutateCount = result.mutation_posts.length;
   const beforeNavCount = result.main_frame_navigations.length;
-  await page.selectOption('#r4StructureAddSelect', 'product_section');
-  await page.click('#r4StructureAddButton');
+  await addSectionViaDialog('product_section');
   await waitSaved();
   await page.waitForFunction((n) => document.querySelectorAll('[data-r4-structure-row]').length === n, idsBefore.length + 1, { timeout: 10000 });
   assert(result.mutation_posts.length - beforeMutateCount === 1, `Expected exactly 1 add mutation, got ${result.mutation_posts.length - beforeMutateCount}`);
@@ -621,7 +724,7 @@ async function scenario04AddProductAndReorder() {
   const moveDirection = indexBeforeMove > 0 ? 'up' : 'down';
 
   const beforeMoveMutateCount = result.mutation_posts.length;
-  await page.click(`[data-r4-structure-row][data-r4-structure-section-id="${productSectionId}"] [data-r4-structure-move="${moveDirection}"]`);
+  await moveSectionViaInspector(productSectionId, moveDirection);
   await waitSaved();
   await page.waitForFunction(
     (old) => JSON.stringify(Array.from(document.querySelectorAll('[data-r4-structure-row]')).map((el) => el.getAttribute('data-r4-structure-section-id'))) !== JSON.stringify(old),
@@ -885,7 +988,12 @@ async function scenario09StaleConflict() {
   const staleBody = await staleResponse.json();
   assert(staleBody?.code === 'stale_revision', `Expected the 409 body code to be exactly "stale_revision", got ${JSON.stringify(staleBody)}`);
   assert(await page.evaluate(() => window.RastiSiR4.conflict) === true, 'R4.conflict must become true');
-  assert(await page.locator('#r4ConflictBanner').isVisible(), 'Conflict banner must be visible');
+  // Design Studio surfaces the conflict as its own dialog and deliberately
+  // hides the legacy R4 banner (r4_studio.css: #r4ConflictBanner{display:none});
+  // the banner element still exists, and the visible signal is the dialog.
+  assert((await page.locator('#r4ConflictBanner').count()) === 1, 'Conflict banner element must exist');
+  await page.locator('.modal-backdrop .modal').filter({ hasText: 'پیش‌نویس در جای دیگری تغییر کرده' }).waitFor({ state: 'visible', timeout: 5000 });
+  assert(await page.locator('[data-rastisi-action="save-reload"]').isVisible(), 'Conflict dialog must offer the reload action');
   assert(result.main_frame_navigations.length === navCountBeforeStale, 'No auto-reload may occur immediately after the conflict');
 
   staleConflictExpected = { url: staleEntry.url, windowStart: staleWindowStart, windowEnd: staleWindowEnd };
@@ -937,7 +1045,7 @@ async function scenario10Publish() {
   const beforePublishCount = result.publish_posts.length;
   await withExpectedNavigation(() => Promise.all([
     page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
-    page.click('#r4PublishButton'),
+    publishViaDialog(),
   ]));
   await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });
   assert(result.publish_posts.length - beforePublishCount === 1, `Expected exactly 1 publish POST, got ${result.publish_posts.length - beforePublishCount}`);
@@ -1003,6 +1111,7 @@ async function scenario11PublicParity() {
 // =============================================================================
 async function scenario12NewDraftOnlyChange() {
   await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });
+  await dismissStudioDialog();
   // Publish cloned the just-Published version's content into a brand-new
   // Draft with new Section PKs — rediscover Product from the fresh Preview,
   // never reuse the old (now-immutable, Published-version) productSectionId.
@@ -1144,8 +1253,9 @@ function attachNetworkInstrumentation(targetPage, { source } = {}) {
   targetPage.on('requestfailed', (request) => {
     const url = request.url();
     if (source === 'admin' && url.includes(PREVIEW_URL_FRAGMENT)) inFlightPreviewRequests -= 1;
+    if (source === 'admin' && request.method() === 'GET' && request.resourceType() === 'fetch' && url.includes('/storefront-builder/r4/') && !url.includes('/r4/resources') && !url.includes('/inspector/')) inFlightStatusRequests -= 1;
     if (url.startsWith('data:')) return;
-    result.request_failures.push({ url, method: request.method(), error: request.failure()?.errorText || '', source, at: Date.now() });
+    result.request_failures.push({ url, method: request.method(), error: request.failure()?.errorText || '', source, scenario: currentScenarioName, at: Date.now() });
   });
   // Preview child-iframe request-lifecycle tracking, scoped strictly to the
   // admin `page` (source === 'admin'). This is installed here, alongside the
@@ -1154,11 +1264,14 @@ function attachNetworkInstrumentation(targetPage, { source } = {}) {
   // before any main-frame navigation, guaranteeing no preview GET is left
   // in-flight to be aborted (net::ERR_ABORTED).
   if (source === 'admin') {
+    const isStatusRefresh = (request) => request.method() === 'GET' && request.resourceType() === 'fetch' && request.url().includes('/storefront-builder/r4/') && !request.url().includes('/r4/resources') && !request.url().includes('/inspector/');
     targetPage.on('request', (request) => {
       if (request.url().includes(PREVIEW_URL_FRAGMENT)) inFlightPreviewRequests += 1;
+      if (isStatusRefresh(request)) inFlightStatusRequests += 1;
     });
     targetPage.on('requestfinished', (request) => {
       if (request.url().includes(PREVIEW_URL_FRAGMENT)) inFlightPreviewRequests -= 1;
+      if (isStatusRefresh(request)) inFlightStatusRequests -= 1;
     });
   }
   targetPage.on('response', (response) => {
@@ -1170,12 +1283,27 @@ function attachNetworkInstrumentation(targetPage, { source } = {}) {
     else if (url.includes('/r4/publish/')) bucket = 'publish_posts';
     else if (url.includes('/r4/discard/')) bucket = 'discard_posts';
     else if (url.includes('/r4/switch-template/')) bucket = 'switch_template_posts';
-    if (bucket) result[bucket].push({ url, status, source });
+    if (bucket) { result[bucket].push({ url, status, source }); if (source === 'admin') lastEditorWriteAt = Date.now(); }
 
     if (status >= 400 && !FAVICON_URL_PATTERN.test(url)) {
       result.http_error_responses.push({ url, status, source, bucket, at: Date.now() });
     }
   });
+}
+
+// Design Studio refreshes undo/redo/"unpublished" status with a background GET
+// of the editor page (r4_studio.js refreshStatus) and treats a failed refresh as
+// "status stays as last known" (.catch). When a reload (publish, discard,
+// template switch, page change) supersedes it, Chromium reports that single GET
+// as net::ERR_ABORTED. That is the one narrowly-allowed abort: an editor-page
+// GET, aborted, within 2s of a real main-frame navigation. Any other failed
+// request — or the same abort with no navigation around it — still fails.
+function isBenignStatusRefreshAbort(failure) {
+  if (!failure || failure.source !== 'admin' || failure.method !== 'GET' || failure.error !== 'net::ERR_ABORTED') return false;
+  let pathname;
+  try { pathname = new URL(failure.url).pathname; } catch (_error) { return false; }
+  if (pathname !== new URL(manifest.builder_url).pathname) return false;
+  return result.main_frame_navigations.some((nav) => Math.abs(new Date(nav.at).getTime() - failure.at) <= 2000);
 }
 
 async function finalInstrumentationAssertions() {
@@ -1202,7 +1330,7 @@ async function finalInstrumentationAssertions() {
 
   assert(result.page_errors.length === 0, `Page errors: ${JSON.stringify(result.page_errors.slice(0, 5))}`);
 
-  const unexpectedRequestFailures = result.request_failures.filter((f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url));
+  const unexpectedRequestFailures = result.request_failures.filter((f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url) && !isBenignStatusRefreshAbort(f));
   assert(unexpectedRequestFailures.length === 0, `Failed requests: ${JSON.stringify(unexpectedRequestFailures.slice(0, 5))}`);
 
   // Round-2 corrective Finding B — the full R4/Preview/Public HTTP-error
@@ -1857,7 +1985,7 @@ async function phase3CartHtmx(fx) {
           badgeText: badge ? badge.textContent.trim() : null,
         };
       });
-      assert(cartDom.itemCount >= 1, `Cart must have at least one line item, got ${cartDom.itemCount}`);
+      assert(cartDom.itemCount >= 1, `Cart must have at least one line item, got ${cartDom.itemCount} (viewport ${vp.name}; add-to-cart status ${added.status}; cart count badge ${cartDom.badgeText}; cart sections: ${JSON.stringify(await cartPage.evaluate(() => Array.from(document.querySelectorAll('#cart-container .rsec')).map((el) => (el.querySelector('h2, h3') || el).textContent.replace(/\s+/g, ' ').trim().slice(0, 40))))}; cart tail: ${(await cartPage.evaluate(() => (document.querySelector('#cart-container') || document.body).innerHTML)).replace(/\s+/g, ' ').slice(-500)})`);
       assert(cartDom.incUrl && /\/cart\/items\/\d+\/update\/$/.test(cartDom.incUrl), `Could not read a real quantity-update hx-post URL, got ${cartDom.incUrl}`);
       assert(cartDom.removeUrl && /\/cart\/items\/\d+\/remove\/$/.test(cartDom.removeUrl), `Could not read a real item-remove hx-post URL, got ${cartDom.removeUrl}`);
       const itemId = cartDom.incUrl.match(/\/cart\/items\/(\d+)\/update\//)[1];
@@ -2782,7 +2910,7 @@ async function phase3Task6FamilyGate() {
   );
   const pageErrorsBefore = result.page_errors.slice();
   const requestFailuresBefore = result.request_failures.filter(
-    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url),
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url) && !isBenignStatusRefreshAbort(f),
   );
   const httpErrorResponsesBefore = result.http_error_responses.filter(
     (e) => !isExpectedStale409Response(e) && !isExpectedBrokenImageNoise(e.url),
@@ -2823,7 +2951,7 @@ async function phase3Task6FamilyGate() {
     `phase3-task6-family-gate: unexpected new page errors: ${JSON.stringify(result.page_errors.slice(pageErrorsBefore.length))}`,
   );
   const requestFailuresAfter = result.request_failures.filter(
-    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url),
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url) && !isBenignStatusRefreshAbort(f),
   );
   assert(
     requestFailuresAfter.length === requestFailuresBefore.length,
@@ -3184,7 +3312,7 @@ async function phase3FinalRemediationFamilyGate() {
   );
   const pageErrorsBefore = result.page_errors.slice();
   const requestFailuresBefore = result.request_failures.filter(
-    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url),
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url) && !isBenignStatusRefreshAbort(f),
   );
   const httpErrorResponsesBefore = result.http_error_responses.filter(
     (e) => !isExpectedStale409Response(e) && !isExpectedBrokenImageNoise(e.url),
@@ -3196,7 +3324,12 @@ async function phase3FinalRemediationFamilyGate() {
   await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
 
   for (const cfg of FINAL_REMEDIATION_SCALAR_EDITS) {
-    await task6FamilyFieldEditScenario(cfg);
+    try {
+      await task6FamilyFieldEditScenario(cfg);
+    } catch (error) {
+      error.message = `[${cfg.sectionKey}.${cfg.fieldKey}] ${error.message}`;
+      throw error;
+    }
   }
   for (const cfg of FINAL_REMEDIATION_REPEATER_EDITS) {
     await finalRemediationRepeaterEditScenario(cfg);
@@ -3228,11 +3361,12 @@ async function phase3FinalRemediationFamilyGate() {
   const beforeFinalPublishCount = result.publish_posts.length;
   await withExpectedNavigation(() => Promise.all([
     page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
-    page.click('#r4PublishButton'),
+    publishViaDialog(),
   ]));
   await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
   assert(result.publish_posts.length - beforeFinalPublishCount === 1, `phase3-final-remediation-family-gate: expected exactly 1 publish POST, got ${result.publish_posts.length - beforeFinalPublishCount}`);
   assert(result.publish_posts[result.publish_posts.length - 1].status === 200, 'phase3-final-remediation-family-gate: publish must return 200');
+  await dismissStudioDialog();
 
   await publicPage.reload({ waitUntil: 'domcontentloaded', timeout: 20000 });
   const publishedFinalRemediationHtml = await publicPage.content();
@@ -3323,7 +3457,7 @@ async function phase3FinalRemediationFamilyGate() {
     `phase3-final-remediation-family-gate: unexpected new page errors: ${JSON.stringify(result.page_errors.slice(pageErrorsBefore.length))}`,
   );
   const requestFailuresAfter = result.request_failures.filter(
-    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url),
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url) && !isBenignStatusRefreshAbort(f),
   );
   assert(
     requestFailuresAfter.length === requestFailuresBefore.length,
@@ -3360,7 +3494,7 @@ async function scenario14CompositionAndRecoveryGate() {
   );
   const pageErrorsBefore = result.page_errors.slice();
   const requestFailuresBefore = result.request_failures.filter(
-    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url),
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url) && !isBenignStatusRefreshAbort(f),
   );
   const httpErrorResponsesBefore = result.http_error_responses.filter(
     (e) => !isExpectedStale409Response(e) && !isExpectedBrokenImageNoise(e.url),
@@ -3379,25 +3513,20 @@ async function scenario14CompositionAndRecoveryGate() {
   await withExpectedNavigation(() => page.goto(manifest.builder_url, { waitUntil: 'domcontentloaded' }));
   await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
 
-  const structureOpen = await page.evaluate(() => document.querySelector('[data-r4-shell]').dataset.r4StructureOpen);
-  if (structureOpen !== 'true') {
-    await page.click('#r4StructureToggle');
-    await page.locator('#r4Structure').waitFor({ state: 'visible', timeout: 5000 });
-  }
+  await showStructurePanel();
 
   // ---- Multi-column composition: reshape hero_banner's own (single-
   // column) Container to a 2-up layout, reusing container_service.
   // change_container_layout's existing grow-with-empty-cells behavior.
   const heroSectionId = await openSectionViaPreview('hero_banner');
   await closeInspectorIfOpen();
-  const heroContainerId = await page.evaluate((sectionId) => {
-    const row = document.querySelector(`[data-r4-structure-row][data-r4-structure-section-id="${sectionId}"]`);
-    let el = row ? row.previousElementSibling : null;
-    while (el && !el.hasAttribute('data-r4-structure-container-row')) el = el.previousElementSibling;
-    return el ? el.getAttribute('data-r4-structure-container-id') : null;
-  }, heroSectionId);
+  // Design Studio's Structure rows carry no Container id; the Preview's own
+  // wrapper does (responsive_section_wrapper.html: data-container-id), and
+  // the Structure panel's container groups use the very same id.
+  const heroContainerId = await (await previewFrame()).locator(`[data-section-id="${heroSectionId}"]`).first().getAttribute('data-container-id');
   assert(heroContainerId, 'Could not discover hero_banner\'s own Container id from the Structure panel');
 
+  await showRowLayoutControls();
   const layoutSelect = page.locator(`[data-r4-structure-container-row][data-r4-structure-container-id="${heroContainerId}"] [data-r4-structure-layout-select]`);
   await layoutSelect.waitFor({ state: 'visible', timeout: 5000 });
   const beforeLayoutMutateCount = result.mutation_posts.length;
@@ -3448,10 +3577,7 @@ async function scenario14CompositionAndRecoveryGate() {
 
   await withExpectedNavigation(() => page.reload({ waitUntil: 'domcontentloaded' }));
   await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });
-  if ((await page.evaluate(() => document.querySelector('[data-r4-shell]').dataset.r4StructureOpen)) !== 'true') {
-    await page.click('#r4StructureToggle');
-    await page.locator('#r4Structure').waitFor({ state: 'visible', timeout: 5000 });
-  }
+  await showStructurePanel();
   const emptyCellStillListed = await page.locator(`[data-r4-structure-empty-cell][data-r4-structure-cell-id="${emptyCellId}"]`).count();
   assert(emptyCellStillListed === 0, 'cell.add_section: the now-filled Cell must no longer appear in the empty-cells picker after reload');
 
@@ -3471,26 +3597,31 @@ async function scenario14CompositionAndRecoveryGate() {
   const brandSectionId = await openSectionViaPreview('brand_carousel');
   await closeInspectorIfOpen();
   const brandCarouselPreviewSelector = `[data-section-key="brand_carousel"][data-section-id="${brandSectionId}"]`;
-  await page.click(`[data-r4-structure-row][data-r4-structure-section-id="${brandSectionId}"] [data-r4-structure-toggle-active]`);
+  await openSectionById(brandSectionId);
+  await page.click('[data-rastisi-action="section-enable"]');
   await waitSaved();
   frame = await previewFrame();
   await frame.locator(brandCarouselPreviewSelector).waitFor({ state: 'detached', timeout: 10000 });
 
-  await page.click(`[data-r4-structure-row][data-r4-structure-section-id="${brandSectionId}"] [data-r4-structure-toggle-active]`);
+  await page.click('[data-rastisi-action="section-enable"]');
   await waitSaved();
   frame = await previewFrame();
   await frame.locator(brandCarouselPreviewSelector).waitFor({ state: 'visible', timeout: 10000 });
 
   // ---- Lock: move buttons disable/re-enable with the flag; unlock again
   // so this section behaves normally afterward.
-  await page.click(`[data-r4-structure-row][data-r4-structure-section-id="${brandSectionId}"] [data-r4-structure-toggle-locked]`);
+  await openSectionById(brandSectionId);
+  await page.click('[data-rastisi-action="section-lock"]');
   await waitSaved();
-  const brandMoveUp = page.locator(`[data-r4-structure-row][data-r4-structure-section-id="${brandSectionId}"] [data-r4-structure-move="up"]`);
+  const brandMoveUp = page.locator('[data-rastisi-action="section-up"]');
+  await page.waitForFunction(() => document.querySelector('[data-rastisi-action="section-up"]')?.disabled === true, null, { timeout: 5000 });
   assert(await brandMoveUp.isDisabled(), 'section.toggle_locked: move-up must be disabled on a locked section');
 
-  await page.click(`[data-r4-structure-row][data-r4-structure-section-id="${brandSectionId}"] [data-r4-structure-toggle-locked]`);
+  await page.click('[data-rastisi-action="section-lock"]');
   await waitSaved();
+  await page.waitForFunction(() => document.querySelector('[data-rastisi-action="section-up"]')?.disabled === false, null, { timeout: 5000 });
   assert(!(await brandMoveUp.isDisabled()), 'section.toggle_locked: move-up must be re-enabled once unlocked');
+  await closeInspectorIfOpen();
 
   // ---- Granular reset: click-through reset-to-baseline is certified at
   // the Django level (BaselineResetMutationTests/DraftReplacingEndpointTests
@@ -3506,18 +3637,25 @@ async function scenario14CompositionAndRecoveryGate() {
   // — the per-section icon disables itself, and the two whole-storefront
   // buttons do not render at all, when there is genuinely nothing to
   // reset to.
-  const resetIcon = page.locator(`[data-r4-structure-row][data-r4-structure-section-id="${brandSectionId}"] [data-r4-structure-reset-to-baseline]`);
-  assert(await resetIcon.isDisabled(), 'section.reset_to_baseline: the reset icon must be disabled for a section with no Ready Template baseline');
+  // Design Studio renders the per-Section reset action only when the Section
+  // has a Ready Template baseline (data-rs-section-baseline); here it must
+  // therefore not be offered at all.
+  await openSectionById(brandSectionId);
+  assert(await page.locator('[data-rastisi-action="section-reset"]').count() === 0, 'section.reset_to_baseline: the reset action must not be offered for a section with no Ready Template baseline');
+  await closeInspectorIfOpen();
   assert(await page.locator('#r4ResetStorefrontButton').count() === 0, 'Reset Storefront button must not render when the Draft has no baseline at all');
   assert(await page.locator('#r4ResetPageButton').count() === 0, 'Reset Page button must not render when the Draft has no baseline at all');
 
   // ---- Media reachability: hero_banner (schema-enabled, media-owning)
   // gets a real "manage media" link inside its normal Inspector partial.
   await openSectionViaPreview('hero_banner');
-  const mediaLink = page.locator('[data-r4-section-inspector] .r4-inspector-media-link a');
-  await mediaLink.waitFor({ state: 'visible', timeout: 5000 });
-  const mediaHref = await mediaLink.getAttribute('href');
-  assert(mediaHref && mediaHref.includes('/media/hero-slides/'), `hero_banner Inspector: expected a hero-slides media management link, got: ${mediaHref}`);
+  // Design Studio / Phase 5 Task 4: media editing is R4-native and embedded
+  // inline in the Inspector (data-r4-media-manager) instead of a link out; its
+  // controls must still be wired to the hero-slides media endpoints.
+  const mediaManager = page.locator('[data-r4-section-inspector] [data-r4-media-manager]');
+  await mediaManager.waitFor({ state: 'visible', timeout: 5000 });
+  const mediaHtml = await mediaManager.evaluate((el) => el.outerHTML);
+  assert(mediaHtml.includes('/media/hero-slides/'), 'hero_banner Inspector: expected the inline media manager to be wired to the hero-slides media endpoints');
   await closeInspectorIfOpen();
 
   // ---- Non-Home page editing: the page switcher actually loads a
@@ -3547,10 +3685,9 @@ async function scenario14CompositionAndRecoveryGate() {
   // scenario10) must exist immediately after, with the normal starting
   // edit_revision.
   const beforeDiscardCount = result.discard_posts.length;
-  page.once('dialog', (dialog) => dialog.accept());
   await withExpectedNavigation(() => Promise.all([
     page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
-    page.click('#r4DiscardButton'),
+    discardViaDialog(),
   ]));
   await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });
   assert(result.discard_posts.length - beforeDiscardCount === 1, `Expected exactly 1 discard POST, got ${result.discard_posts.length - beforeDiscardCount}`);
@@ -3570,7 +3707,7 @@ async function scenario14CompositionAndRecoveryGate() {
     `scenario14-composition-and-recovery: unexpected new page errors: ${JSON.stringify(result.page_errors.slice(pageErrorsBefore.length))}`,
   );
   const requestFailuresAfter = result.request_failures.filter(
-    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url),
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url) && !isBenignStatusRefreshAbort(f),
   );
   assert(
     requestFailuresAfter.length === requestFailuresBefore.length,
@@ -3618,8 +3755,17 @@ async function openTask8ProductSection(expectedText) {
   await locator.scrollIntoViewIfNeeded();
   const box = await locator.boundingBox();
   assert(box, `Could not resolve a bounding box for the product_section containing "${expectedText}"`);
-  await locator.click({ position: { x: box.width / 2, y: Math.max(box.height - 6, 1) } });
+  // Design Studio keeps the previously opened Section's inspector in the DOM
+  // until the new one is fetched; wait for the clicked Section's own id so we
+  // never observe the stale inspector.
+  const wantedId = await locator.getAttribute('data-section-id');
+  await locator.click({ position: { x: box.width / 2, y: Math.max(Math.min(box.height - 6, 90), 1) } });
   await page.locator('[data-r4-section-inspector]').waitFor({ state: 'visible', timeout: 10000 });
+  await page.waitForFunction(
+    (id) => { const el = document.querySelector('[data-r4-section-inspector]'); return el && el.getAttribute('data-r4-section-id') === String(id); },
+    wantedId,
+    { timeout: 10000 },
+  );
   return page.getAttribute('[data-r4-section-inspector]', 'data-r4-section-id');
 }
 
@@ -3656,7 +3802,7 @@ async function scenario15TemplateSwitchLifecycleGate() {
   );
   const pageErrorsBefore = result.page_errors.slice();
   const requestFailuresBefore = result.request_failures.filter(
-    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url),
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url) && !isBenignStatusRefreshAbort(f),
   );
   const httpErrorResponsesBefore = result.http_error_responses.filter(
     (e) => !isExpectedStale409Response(e) && !isExpectedBrokenImageNoise(e.url),
@@ -3668,15 +3814,11 @@ async function scenario15TemplateSwitchLifecycleGate() {
   await withExpectedNavigation(() => page.goto(manifest.builder_url, { waitUntil: 'domcontentloaded' }));
   await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
 
-  await openGlobalDesignPanel();
-
   // ---- Step 1: start from Template A ----
-  await page.selectOption('#r4TemplateSwitchSelect', 'dense_marketplace');
-  page.once('dialog', (dialog) => dialog.accept());
   const beforeSwitchToACount = result.switch_template_posts.length;
   await withExpectedNavigation(() => Promise.all([
     page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
-    page.click('#r4SwitchTemplateButton'),
+    switchTemplateViaGallery('dense_marketplace'),
   ]));
   await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
   assert(result.switch_template_posts.length - beforeSwitchToACount === 1, `Expected exactly 1 switch-template POST for Template A, got ${result.switch_template_posts.length - beforeSwitchToACount}`);
@@ -3706,14 +3848,9 @@ async function scenario15TemplateSwitchLifecycleGate() {
   // never section settings — so this is genuine, reliably-visible
   // merchant-authored content.
   const task8Sentinel = `R4 Task 8 QA ${Date.now()}`;
-  const structureOpenForTask8 = await page.evaluate(() => document.querySelector('[data-r4-shell]').dataset.r4StructureOpen);
-  if (structureOpenForTask8 !== 'true') {
-    await page.click('#r4StructureToggle');
-    await page.locator('#r4Structure').waitFor({ state: 'visible', timeout: 5000 });
-  }
+  await showStructurePanel();
   const task8SectionIdsBefore = await page.locator('[data-r4-structure-row]').evaluateAll((els) => els.map((el) => el.getAttribute('data-r4-structure-section-id')));
-  await page.selectOption('#r4StructureAddSelect', 'product_section');
-  await page.click('#r4StructureAddButton');
+  await addSectionViaDialog('product_section');
   await waitSaved();
   await page.waitForFunction((n) => document.querySelectorAll('[data-r4-structure-row]').length === n, task8SectionIdsBefore.length + 1, { timeout: 10000 });
   const task8SectionIdsAfter = await page.locator('[data-r4-structure-row]').evaluateAll((els) => els.map((el) => el.getAttribute('data-r4-structure-section-id')));
@@ -3729,11 +3866,12 @@ async function scenario15TemplateSwitchLifecycleGate() {
   const beforePublishCount = result.publish_posts.length;
   await withExpectedNavigation(() => Promise.all([
     page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
-    page.click('#r4PublishButton'),
+    publishViaDialog(),
   ]));
   await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });
   assert(result.publish_posts.length - beforePublishCount === 1, `Expected exactly 1 publish POST, got ${result.publish_posts.length - beforePublishCount}`);
   assert(result.publish_posts[result.publish_posts.length - 1].status === 200, 'Publish must return 200');
+  await dismissStudioDialog();
 
   const task8PublicPage = await context.newPage();
   attachNetworkInstrumentation(task8PublicPage, { source: 'public-task8' });
@@ -3746,17 +3884,12 @@ async function scenario15TemplateSwitchLifecycleGate() {
   // from the just-published version — layout_service.get_or_create_draft's
   // own documented behavior), so it still carries the merchant content.
   // Switch to Template B on THIS Draft. ----
-  await openGlobalDesignPanel();
-  const templateSelectBeforeB = page.locator('#r4TemplateSwitchSelect');
-  await templateSelectBeforeB.waitFor({ state: 'visible', timeout: 10000 });
-  assert(await templateSelectBeforeB.inputValue() === 'dense_marketplace', 'The fresh post-publish Draft must still declare Template A as current');
+  assert(await currentTemplateKey() === 'dense_marketplace', 'The fresh post-publish Draft must still declare Template A as current');
 
-  await page.selectOption('#r4TemplateSwitchSelect', 'premium_leather');
-  page.once('dialog', (dialog) => dialog.accept());
   const beforeSwitchToBCount = result.switch_template_posts.length;
   await withExpectedNavigation(() => Promise.all([
     page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
-    page.click('#r4SwitchTemplateButton'),
+    switchTemplateViaGallery('premium_leather'),
   ]));
   await page.locator('[data-r4-shell]').waitFor({ state: 'visible', timeout: 15000 });
   assert(result.switch_template_posts.length - beforeSwitchToBCount === 1, `Expected exactly 1 switch-template POST for Template B, got ${result.switch_template_posts.length - beforeSwitchToBCount}`);
@@ -3775,9 +3908,7 @@ async function scenario15TemplateSwitchLifecycleGate() {
   // ---- Step 6: Draft Preview reflects Template B's DNA — a real
   // rendered-class difference in the Preview iframe, not just the
   // <select>'s own reported value. ----
-  await openGlobalDesignPanel();
-  const templateSelectAfterB = page.locator('#r4TemplateSwitchSelect');
-  assert(await templateSelectAfterB.inputValue() === 'premium_leather', 'The Draft must now declare Template B as current');
+  assert(await currentTemplateKey() === 'premium_leather', 'The Draft must now declare Template B as current');
   const frameAfterSwitch = await previewFrame();
   const headerClassB = await frameAfterSwitch.locator('header.gh').getAttribute('class');
   const headerVariantClassB = (headerClassB || '').split(/\s+/).find((cls) => cls.startsWith('gh--'));
@@ -3828,9 +3959,7 @@ async function scenario15TemplateSwitchLifecycleGate() {
   staleSwitchConflictExpected = { url: staleSwitchResult.url, windowStart: staleSwitchWindowStart, windowEnd: staleSwitchWindowEnd };
   await withExpectedNavigation(() => page.reload({ waitUntil: 'domcontentloaded' }));
   await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });
-  await openGlobalDesignPanel();
-  assert(await page.locator('#r4TemplateSwitchSelect').inputValue() === 'premium_leather', 'The rejected stale switch-template attempt must not have changed the Draft\'s declared Template');
-  await closeGlobalDesignPanel();
+  assert(await currentTemplateKey() === 'premium_leather', 'The rejected stale switch-template attempt must not have changed the Draft\'s declared Template');
 
   // ---- Step 9: history/undo remains coherent on the NEW post-switch
   // Draft. Its edit history starts genuinely empty (Draft-replacing
@@ -3878,11 +4007,12 @@ async function scenario15TemplateSwitchLifecycleGate() {
   const beforeSecondPublishCount = result.publish_posts.length;
   await withExpectedNavigation(() => Promise.all([
     page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
-    page.click('#r4PublishButton'),
+    publishViaDialog(),
   ]));
   await page.locator('[data-r4-shell]').waitFor({ state: 'visible' });
   assert(result.publish_posts.length - beforeSecondPublishCount === 1, `Expected exactly 1 publish POST for Template B, got ${result.publish_posts.length - beforeSecondPublishCount}`);
   assert(result.publish_posts[result.publish_posts.length - 1].status === 200, 'Publish of Template B must return 200');
+  await dismissStudioDialog();
 
   await task8PublicPage.reload({ waitUntil: 'domcontentloaded' });
   publicHtml = await task8PublicPage.content();
@@ -3907,7 +4037,7 @@ async function scenario15TemplateSwitchLifecycleGate() {
     `scenario15-template-switch-lifecycle: unexpected new page errors: ${JSON.stringify(result.page_errors.slice(pageErrorsBefore.length))}`,
   );
   const requestFailuresAfter = result.request_failures.filter(
-    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url),
+    (f) => !FAVICON_URL_PATTERN.test(f.url || '') && !isExpectedBrokenImageNoise(f.url) && !isExpectedVideoEmbedNetworkFailure(f.url) && !isBenignStatusRefreshAbort(f),
   );
   assert(
     requestFailuresAfter.length === requestFailuresBefore.length,

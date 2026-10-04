@@ -48,7 +48,37 @@ def get_platform_sms_backend(provider: str | None = None) -> SmsBackend:
         return UnavailableBackend(
             provider_code=selected, error_message="شرکت پیامکی انتخاب‌شده غیرفعال است",
         )
-    return ConsoleBackend()
+    # «console» هرگز نباید در production «ارسال‌شده + کسرِ اعتبار» ثبت کند: فقط وقتی مجاز است که صریحاً اجازه
+    # داده شده باشد (تست/توسعه — همان پرچمِ OTP)؛ وگرنه شکستِ صریح با پیامِ قابل‌اقدام.
+    if settings.RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP:
+        return ConsoleBackend()
+    return UnavailableBackend(
+        provider_code="console",
+        error_message="درگاه پیامکِ مرکزیِ پلتفرم پیکربندی نشده است؛ به پشتیبانی پلتفرم اطلاع دهید",
+    )
+
+
+def describe_platform_backend() -> dict:
+    """سلامتِ درگاهِ مرکزیِ پلتفرم بر پایه‌ی **همان** تصمیمی که ارسال واقعاً می‌گیرد (برایِ پایش/``verify_delivery_channels``).
+    → ``{"provider", "real", "problems": [..]}`` — بدونِ افشایِ رازها."""
+    backend = get_platform_sms_backend()
+    provider = getattr(backend, "provider_code", "") or "unknown"
+    problems: list[str] = []
+    if isinstance(backend, ConsoleBackend):
+        problems.append("درگاه پلتفرم console است؛ پیامی واقعاً ارسال نمی‌شود")
+    elif isinstance(backend, UnavailableBackend):
+        problems.append(backend.error_message)
+    elif isinstance(backend, MelipayamakBackend):
+        if not (backend.username and backend.password):
+            problems.append("نام‌کاربری/رمزِ ملی‌پیامکِ پلتفرم تنظیم نشده است")
+        if not backend.sender:
+            problems.append("شماره‌ی فرستنده‌ی پلتفرم تنظیم نشده است")
+    elif isinstance(backend, KavenegarBackend):
+        if not backend.api_key:
+            problems.append("کلیدِ API کاوه‌نگارِ پلتفرم تنظیم نشده است")
+        if not backend.sender:
+            problems.append("شماره‌ی فرستنده‌ی پلتفرم تنظیم نشده است")
+    return {"provider": provider, "real": not isinstance(backend, (ConsoleBackend, UnavailableBackend)), "problems": problems}
 
 
 def send_platform_sms(*, to: str, text: str, provider: str | None = None) -> SmsSendResult:

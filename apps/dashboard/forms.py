@@ -578,11 +578,27 @@ class GiftWrapSettingsForm(NumericCleanMixin, forms.Form):
 
     gift_wrap_available = forms.BooleanField(label="کادوپیچی در دسترس است", required=False)
     gift_wrap_price = forms.CharField(
-        label="هزینه‌ی کادوپیچی (تومان، هر قلم)", widget=forms.TextInput(attrs={"class": "inp"})
+        label="هزینه‌ی کادوپیچی (تومان؛ ۰ = رایگان)", widget=forms.TextInput(attrs={"class": "inp"})
     )
+    gift_wrap_pricing_scope = forms.ChoiceField(
+        label="مبنای محاسبه‌ی هزینه", choices=ShopSettings.GiftWrapScope.choices, required=False,
+        initial=ShopSettings.GiftWrapScope.PER_UNIT, widget=forms.Select(attrs={"class": "inp"}),
+    )
+    gift_wrap_title = forms.CharField(
+        label="عنوان سرویس", max_length=80, required=False, widget=forms.TextInput(attrs={"class": "inp"}),
+    )
+    gift_wrap_description = forms.CharField(
+        label="توضیح سرویس", max_length=300, required=False, widget=forms.TextInput(attrs={"class": "inp"}),
+    )
+    gift_wrap_message_enabled = forms.BooleanField(label="امکان نوشتن پیام کارت هدیه", required=False)
+    gift_wrap_image = forms.ImageField(label="تصویر نمونه", required=False)
+    remove_gift_wrap_image = forms.BooleanField(label="حذف تصویر فعلی", required=False)
 
     def clean_gift_wrap_price(self):
         return self._clean_int("gift_wrap_price", min_value=0)
+
+    def clean_gift_wrap_title(self):
+        return self.cleaned_data.get("gift_wrap_title", "").strip() or "کادوپیچی"
 
 
 class SmsConnectionForm(forms.Form):
@@ -797,4 +813,23 @@ class VisualIdentityForm(forms.Form):
 
         if failures:
             raise forms.ValidationError(failures)
+        return cleaned
+
+
+class OrderExpirySettingsForm(forms.Form):
+    """مهلتِ پرداختِ سفارش‌هایِ آنلاین (۰ = غیرفعال). COD هرگز منقضی نمی‌شود."""
+
+    unpaid_online_order_ttl_minutes = forms.IntegerField(
+        label="مهلتِ پرداخت (دقیقه؛ ۰ = غیرفعال)", min_value=0, max_value=10080, widget=forms.NumberInput(attrs={"class": "inp", "dir": "ltr"}),
+    )
+    unpaid_online_order_grace_minutes = forms.IntegerField(
+        label="مهلتِ تکمیلی (دقیقه)", min_value=0, max_value=1440, widget=forms.NumberInput(attrs={"class": "inp", "dir": "ltr"}),
+    )
+    unpaid_expiry_notify_sms = forms.BooleanField(label="ارسالِ پیامکِ لغو", required=False)
+
+    def clean(self):
+        cleaned = super().clean()
+        ttl = cleaned.get("unpaid_online_order_ttl_minutes")
+        if ttl and ttl < 15:
+            self.add_error("unpaid_online_order_ttl_minutes", "مهلت باید ۰ (غیرفعال) یا حداقل ۱۵ دقیقه باشد.")
         return cleaned

@@ -1,0 +1,68 @@
+{% extends "dashboard/base_admin.html" %}
+{% load persian %}
+{% block title %}{{ event.label }} | قالب اعلان{% endblock %}
+{% block page_title %}{{ event.label }}{% endblock %}
+{% block page_sub %}{{ category_label }} · {% if event.audience == 'staff' %}اعلان به کارکنان{% else %}اعلان به مشتری{% endif %} · <span dir="ltr">{{ event.key }}</span>{% endblock %}
+{% block content %}
+<div class="card" style="margin-bottom:14px"><div class="card-body">
+  <b>متغیرهای مجازِ این رویداد</b> (با آکولاد در متن بنویسید؛ متغیرِ دیگر پذیرفته نمی‌شود):
+  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+    {% for name, label in variables %}<code dir="ltr" title="{{ label }}" style="padding:2px 8px;background:var(--bg-soft,#f3f4f6);border-radius:6px">{{ '{' }}{{ name }}{{ '}' }}</code><small style="color:var(--muted);margin-inline-end:8px">{{ label }}</small>{% endfor %}
+  </div>
+</div></div>
+
+<form method="post" class="form-card">
+  {% csrf_token %}
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px">
+    <fieldset class="card"><legend class="card-head" style="padding:10px 18px"><b>📱 پیامک</b></legend><div class="card-body">
+      {% if not sms_globally_enabled %}<p class="badge b-red" style="white-space:normal">ارسالِ پیامک در تنظیماتِ این فروشگاه غیرفعال است؛ تا فعال‌شدنِ آن هیچ پیامکی (حتی با قالبِ فعال) ارسال نمی‌شود.</p>{% endif %}
+      {% if event.legacy_sms_event %}
+        {% if can_edit_legacy_sms %}<p class="badge b-amber" style="white-space:normal">این همان قالبِ «قالب‌هایِ پیامک» (تنظیمات ← پیامک) است و پیامکِ واقعیِ این رویداد را می‌سازد. توجه: این قالب میانِ همه‌ی فروشگاه‌هایِ پلتفرم مشترک است.</p>
+        {% else %}<p class="badge b-red" style="white-space:normal">ویرایشِ این قالب نیازمندِ دسترسیِ «تنظیماتِ پیامک» است؛ فقط نمایش.</p>{% endif %}
+      {% endif %}
+      <label><input type="checkbox" name="sms_enabled" {% if templates.sms.enabled %}checked{% endif %} {% if event.legacy_sms_event and not can_edit_legacy_sms %}disabled{% endif %}> فعال</label>
+      <textarea class="inp" name="sms_body" id="sms_body" rows="5" {% if event.legacy_sms_event and not can_edit_legacy_sms %}readonly{% endif %} style="margin-top:8px;width:100%" aria-label="متن پیامک">{{ templates.sms.body }}</textarea>
+      {% if errors.sms %}<div class="coup-err" style="color:var(--red)">{{ errors.sms }}</div>{% endif %}
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button type="button" class="btn btn-sm" hx-post="{% url 'dashboard:notification-template-preview' event.key %}" hx-include="#sms_body,[name=csrfmiddlewaretoken]" hx-vals='{"channel":"sms"}' hx-target="#preview-sms">پیش‌نمایش</button>
+        {% if templates.sms.customized %}<button type="submit" name="action" value="reset" class="btn btn-sm" onclick="document.getElementById('reset-channel').value='sms'">بازگشت به پیش‌فرض</button>{% endif %}
+      </div>
+      <div id="preview-sms"></div>
+    </div></fieldset>
+
+    <fieldset class="card"><legend class="card-head" style="padding:10px 18px"><b>📧 ایمیل</b></legend><div class="card-body">
+      <label><input type="checkbox" name="email_enabled" {% if templates.email.enabled %}checked{% endif %}> فعال</label>
+      <input class="inp" name="email_subject" id="email_subject" value="{{ templates.email.subject }}" placeholder="موضوع ایمیل" style="margin-top:8px;width:100%" aria-label="موضوع ایمیل">
+      <textarea class="inp" name="email_body" id="email_body" rows="8" style="margin-top:8px;width:100%" aria-label="متن ایمیل">{{ templates.email.body }}</textarea>
+      {% if errors.email %}<div class="coup-err" style="color:var(--red)">{{ errors.email }}</div>{% endif %}
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button type="button" class="btn btn-sm" hx-post="{% url 'dashboard:notification-template-preview' event.key %}" hx-include="#email_subject,#email_body,[name=csrfmiddlewaretoken]" hx-vals='{"channel":"email"}' hx-target="#preview-email">پیش‌نمایش</button>
+        {% if templates.email.customized %}<button type="submit" name="action" value="reset" class="btn btn-sm" onclick="document.getElementById('reset-channel').value='email'">بازگشت به پیش‌فرض</button>{% endif %}
+      </div>
+      <div id="preview-email"></div>
+    </div></fieldset>
+  </div>
+  <input type="hidden" name="channel" id="reset-channel" value="">
+  {% if event.audience == 'staff' %}
+  <div class="card" style="margin-top:14px"><div class="card-body">
+    <label for="extra_recipients"><b>گیرندگانِ اعلان (کارکنان)</b> — هر خط یک ایمیل یا شماره موبایل؛ مالکِ فروشگاه همیشه ایمیل می‌گیرد</label>
+    <textarea class="inp" name="extra_recipients" id="extra_recipients" rows="3" style="width:100%;margin-top:6px" dir="ltr">{{ extra_recipients }}</textarea>
+  </div></div>
+  {% endif %}
+  <div class="btn-row" style="margin-top:14px">
+    <button type="submit" class="btn btn-primary">ذخیره</button>
+    <a class="btn btn-secondary" href="{% url 'dashboard:notification-templates' %}">بازگشت</a>
+  </div>
+</form>
+
+<div class="card" style="margin-top:14px"><div class="card-head"><h3>ارسالِ آزمایشی</h3></div><div class="card-body">
+  <p style="font-size:12.5px;color:var(--muted)">با داده‌ی نمونه و به شماره/ایمیلِ دلخواه (حداکثر ۱۰ بار در ساعت). متنِ فعلیِ فرم (ذخیره‌نشده) استفاده می‌شود.</p>
+  <form method="post" action="{% url 'dashboard:notification-template-test' event.key %}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    {% csrf_token %}
+    <select name="channel" class="inp" style="width:120px" aria-label="کانال"><option value="sms">پیامک</option><option value="email">ایمیل</option></select>
+    <input class="inp" name="recipient" placeholder="09123456789 یا name@example.com" dir="ltr" style="width:260px" aria-label="گیرنده‌ی آزمایشی" required>
+    <input type="hidden" name="sms_body" id="test_sms_body"><input type="hidden" name="email_body" id="test_email_body"><input type="hidden" name="email_subject" id="test_email_subject">
+    <button class="btn" onclick="document.getElementById('test_sms_body').value=document.getElementById('sms_body').value;document.getElementById('test_email_body').value=document.getElementById('email_body').value;document.getElementById('test_email_subject').value=document.getElementById('email_subject').value">ارسالِ آزمایشی</button>
+  </form>
+</div></div>
+{% endblock %}

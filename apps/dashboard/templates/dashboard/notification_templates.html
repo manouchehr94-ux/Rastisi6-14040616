@@ -1,0 +1,31 @@
+{% extends "dashboard/base_admin.html" %}
+{% load persian %}
+{% block title %}قالب‌های اعلان | پنل مدیریت{% endblock %}
+{% block page_title %}اعلان‌های پیامکی و ایمیلی{% endblock %}
+{% block page_sub %}برایِ هر رویدادِ کسب‌وکار، قالبِ جداگانه‌ی پیامک و ایمیل را فعال و ویرایش کنید{% endblock %}
+{% block content %}
+{% if not sms_globally_enabled %}<div class="card" style="margin-bottom:12px"><div class="card-body"><span class="badge b-red" style="white-space:normal">ارسالِ پیامک در تنظیماتِ این فروشگاه غیرفعال است؛ تا فعال‌شدنِ آن هیچ قالبِ پیامکی اثری ندارد.</span></div></div>{% endif %}
+<div class="page-header">
+  <div>
+    <h2>✉️ قالب‌های اعلان</h2>
+    <p class="page-desc">پیام‌هایِ تراکنشی و امنیتی مستقل از رضایتِ تبلیغاتی ارسال می‌شوند؛ پیام‌هایِ تبلیغاتی فقط برایِ مشتریانِ موافق.</p>
+  </div>
+  <a class="btn btn-secondary" href="{% url 'dashboard:notification-history' %}">تاریخچه‌ی ارسال</a>
+</div>
+<div class="card"><div class="table-wrap"><table>
+  <thead><tr><th>رویداد</th><th>دسته</th><th>مخاطب</th><th>پیامک</th><th>ایمیل</th><th></th></tr></thead>
+  <tbody>
+  {% for row in rows %}
+  <tr>
+    <td><b>{{ row.event.label }}</b><br><small dir="ltr" style="color:var(--muted)">{{ row.event.key }}</small></td>
+    <td>{{ row.category }}</td>
+    <td>{% if row.event.audience == 'staff' %}کارکنان{% else %}مشتری{% endif %}</td>
+    <td>{% if row.legacy_sms %}{% if row.sms.enabled %}<span class="badge b-green" title="قالبِ مشترکِ «قالب‌هایِ پیامک» — همین متن ارسال می‌شود">فعال (مشترک)</span>{% else %}<span class="badge b-amber">غیرفعال</span>{% endif %}{% elif row.sms.enabled %}<span class="badge b-green">فعال</span>{% else %}<span class="badge b-amber">غیرفعال</span>{% endif %}{% if row.sms.customized %} ✎{% endif %}</td>
+    <td>{% if row.email.enabled %}<span class="badge b-green">فعال</span>{% else %}<span class="badge b-amber">غیرفعال</span>{% endif %}{% if row.email.customized %} ✎{% endif %}</td>
+    <td><a class="btn btn-sm" href="{% url 'dashboard:notification-template-edit' row.event.key %}">ویرایش</a></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div></div>
+<p style="font-size:12px;color:var(--muted);margin-top:8px">✎ = قالبِ سفارشی‌شده. «قدیمی»: پیامکِ این رویداد همچنان از بخشِ تنظیماتِ پیامک ارسال می‌شود و این‌جا فقط ایمیلش قابلِ تنظیم است.</p>
+{% endblock %}

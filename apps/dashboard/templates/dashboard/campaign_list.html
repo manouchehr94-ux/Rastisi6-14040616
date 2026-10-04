@@ -1,0 +1,63 @@
+{% extends "dashboard/base_admin.html" %}
+{% load persian %}
+{% block title %}{% if kind == 'occasions' %}مناسبت‌ها{% else %}کمپین‌ها{% endif %} | پنل مدیریت{% endblock %}
+{% block page_title %}{% if kind == 'occasions' %}مناسبت‌ها و پاداش‌ها{% else %}کمپین‌های تخفیف{% endif %}{% endblock %}
+{% block page_sub %}تعریفِ کمپینِ هوشمند بدونِ کدنویسی؛ صدورِ خودکارِ کدِ تخفیفِ اختصاصی و اطلاع‌رسانی{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2>{% if kind == 'occasions' %}🎂 مناسبت‌ها{% else %}🎯 کمپین‌ها{% endif %}</h2>
+    <p class="page-desc">{% if kind == 'occasions' %}تولد، سالگرد، نقاطِ عطف، تعطیلات و مناسبت‌های اختصاصی — هر مناسبت یک کمپین با نوعِ اجرایِ «مناسبت» است.{% else %}مشتریانِ مشمول طبقِ قواعدِ شما شناسایی و کدِ اختصاصی برایشان صادر می‌شود.{% endif %}</p>
+  </div>
+  {% if can_manage %}
+  <div style="display:flex;gap:8px">
+    <a href="{% url 'dashboard:campaign-add' %}?kind=campaigns" class="btn btn-primary">کمپین جدید</a>
+    <a href="{% url 'dashboard:campaign-add' %}?kind=occasions" class="btn">مناسبتِ جدید</a>
+  </div>
+  {% endif %}
+</div>
+
+<form method="get" class="card" style="display:flex;gap:10px;padding:12px 18px;margin-bottom:14px;flex-wrap:wrap" role="search">
+  <input type="hidden" name="kind" value="{{ kind }}">
+  <input class="inp" name="q" value="{{ q }}" placeholder="جستجوی نام" style="width:220px" aria-label="جستجوی نام">
+  <select class="inp" name="status" style="width:180px" aria-label="وضعیت">
+    <option value="">همه‌ی وضعیت‌ها</option>
+    {% for value, label in statuses %}<option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  <button class="btn">فیلتر</button>
+  <a class="btn" href="?kind=">همه</a><a class="btn" href="?kind=campaigns">کمپین‌ها</a><a class="btn" href="?kind=occasions">مناسبت‌ها</a>
+</form>
+
+{% if page.object_list %}
+<div class="card">
+  <div class="table-wrap"><table>
+    <thead><tr><th>نام</th><th>نوع</th><th>پاداش</th><th>صادرشده</th><th>وضعیت</th><th>آخرین اجرا</th></tr></thead>
+    <tbody>
+    {% for c in page %}
+    <tr>
+      <td><a href="{% url 'dashboard:campaign-detail' c.pk %}"><b>{{ c.name }}</b></a></td>
+      <td>{{ c.get_trigger_type_display }}{% if c.occasion_kind %}<br><small style="color:var(--muted)">{{ c.get_occasion_kind_display }}</small>{% endif %}</td>
+      <td>{% if c.reward_type == 'coupon' %}{% if c.coupon_type == 'percent' %}{{ c.coupon_value|floatformat:0|fa_number }}٪{% elif c.coupon_type == 'fixed' %}{{ c.coupon_value|toman }}{% else %}ارسال رایگان{% endif %}{% else %}فقط اطلاع‌رسانی{% endif %}</td>
+      <td>{{ c.issued_count|fa_number }}</td>
+      <td><span class="badge {% if c.status == 'active' %}b-green{% elif c.status == 'draft' %}b-amber{% elif c.status == 'paused' %}b-amber{% else %}b-red{% endif %}">{{ c.get_status_display }}</span></td>
+      <td>{% if c.last_run_at %}{{ c.last_run_at|jalali }}{% else %}—{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% if page.has_other_pages %}
+<div style="display:flex;gap:8px;margin-top:12px">
+  {% if page.has_previous %}<a class="btn btn-sm" href="?page={{ page.previous_page_number }}&kind={{ kind }}&status={{ status }}&q={{ q }}">قبلی</a>{% endif %}
+  <span>صفحه {{ page.number|fa_number }} از {{ page.paginator.num_pages|fa_number }}</span>
+  {% if page.has_next %}<a class="btn btn-sm" href="?page={{ page.next_page_number }}&kind={{ kind }}&status={{ status }}&q={{ q }}">بعدی</a>{% endif %}
+</div>
+{% endif %}
+{% else %}
+<div class="card"><div class="empty-state">
+  <span class="empty-icon">🎯</span>
+  <div class="empty-title">هنوز کمپین یا مناسبتی تعریف نشده</div>
+  {% if can_manage %}<a href="{% url 'dashboard:campaign-add' %}?kind={{ kind }}" class="btn btn-primary">ساختِ اولین مورد</a>{% endif %}
+</div></div>
+{% endif %}
+{% endblock %}

@@ -36,3 +36,16 @@ def jalali(value, fmt="%Y/%m/%d"):
     except (TypeError, ValueError):
         return ""
     return to_fa_digits(jd.strftime(fmt))
+
+
+@register.filter
+def jalali_input(value):
+    """مقدارِ فیلدِ تاریخ برایِ ``<input>``: ``date`` میلادی → ``۱۳۷۰/۰۵/۲۳``؛ متنِ
+    کاربر (خطایِ اعتبارسنجی) دست‌نخورده برگردانده می‌شود."""
+    import datetime as _dt
+
+    if not value:
+        return ""
+    if isinstance(value, _dt.date):
+        return to_fa_digits(jdatetime.date.fromgregorian(date=value).strftime("%Y/%m/%d"))
+    return value

@@ -60,12 +60,30 @@ class SignupForm(PhoneCleanMixin, forms.Form):
     full_name = forms.CharField(label="نام و نام خانوادگی", max_length=150)
     phone = forms.CharField(label="شماره موبایل", max_length=15)
     password = forms.CharField(label="رمز عبور", widget=forms.PasswordInput)
+    # اختیاری و هرگز از پیش‌انتخاب‌شده — رضایت فقط با تیکِ صریحِ مشتری ثبت می‌شود.
+    accepts_promotional_sms = forms.BooleanField(label="دریافت پیامک‌های تبلیغاتی", required=False)
+    accepts_promotional_email = forms.BooleanField(label="دریافت ایمیل‌های تبلیغاتی", required=False)
 
 
-class ProfileForm(forms.Form):
+class BirthDateFieldMixin:
+    """فیلدِ اختیاریِ تاریخ تولد (ورودی/نمایشِ جلالی) — مقدارِ خالی یعنی «تغییر نده»."""
+
+    def clean_birth_date(self):
+        from apps.customers.services.profile_service import BirthDateError, parse_birth_date
+
+        try:
+            return parse_birth_date(self.cleaned_data.get("birth_date", ""))
+        except BirthDateError as exc:
+            raise forms.ValidationError(str(exc)) from exc
+
+
+class ProfileForm(BirthDateFieldMixin, forms.Form):
     full_name = forms.CharField(label="نام و نام خانوادگی", max_length=150)
     email = forms.EmailField(label="ایمیل", required=False)
     city = forms.CharField(label="شهر", max_length=80, required=False)
+    birth_date = forms.CharField(label="تاریخ تولد", max_length=12, required=False)
+    accepts_promotional_sms = forms.BooleanField(label="دریافت پیامک‌های تبلیغاتی", required=False)
+    accepts_promotional_email = forms.BooleanField(label="دریافت ایمیل‌های تبلیغاتی", required=False)
 
 
 class AddressForm(PhoneCleanMixin, forms.Form):

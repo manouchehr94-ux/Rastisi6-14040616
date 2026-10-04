@@ -41,10 +41,15 @@
         {% if order.payment_status == "paid" %}
         <h2>پرداخت با موفقیت انجام شد</h2>
         <p>سفارش شما ثبت شد و پس از پردازش ارسال می‌گردد. از خریدتان سپاسگزاریم 🌹</p>
+        {% elif order.status == "canceled" %}
+        <h2>این سفارش لغو شده است</h2>
+        <p>سفارشِ لغوشده قابل پرداخت نیست. اگر مبلغی از حساب شما کسر شده، با پشتیبانی تماس بگیرید؛ پرداخت شما ثبت و پیگیری می‌شود.</p>
         {% else %}
         <h2>پرداخت ناموفق بود</h2>
         <p>تراکنش تأیید نشد. هیچ مبلغی از حساب شما کسر نشده است.</p>
         {% endif %}
+        {% if error %}<p role="alert">{{ error }}</p>{% endif %}
+        {% for message in messages %}<p role="alert">{{ message }}</p>{% endfor %}
       </div>
       <div class="res-b">
         <div class="res-rows">

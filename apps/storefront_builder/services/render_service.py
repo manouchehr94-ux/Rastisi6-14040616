@@ -649,6 +649,7 @@ def _product_main_context(store, section, page_context):
         "product": product,
         "variant_selector": page_context.get("variant_selector"),
         "product_price_json": page_context.get("product_price_json"),
+        "gift_wrap": page_context.get("gift_wrap"),
         "gallery_slides": page_context.get("gallery_slides"),
         "review_count": page_context.get("review_count", 0),
     }

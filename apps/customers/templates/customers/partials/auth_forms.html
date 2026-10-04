@@ -61,6 +61,12 @@
         <input type="password" name="password" placeholder="••••••••">
         {% for err in signup_form.password.errors %}<div style="color:var(--pink);font-size:11px;margin-top:4px">{{ err }}</div>{% endfor %}
       </div>
+      <fieldset style="border:0;padding:0;margin:0 0 10px">
+        <legend style="font-size:12px;margin-bottom:4px">پیام‌های تبلیغاتی (اختیاری)</legend>
+        <label style="display:block;font-size:12px"><input type="checkbox" name="accepts_promotional_sms" value="on"> دریافت پیامک تبلیغاتی</label>
+        <label style="display:block;font-size:12px"><input type="checkbox" name="accepts_promotional_email" value="on"> دریافت ایمیل تبلیغاتی</label>
+        <small style="color:var(--muted,#6b7280)">هر زمان از «حساب من» می‌توانید لغو کنید. پیام‌های سفارش و امنیت همیشه ارسال می‌شوند.</small>
+      </fieldset>
       <button type="submit" class="btn btn-primary">ثبت‌نام</button>
     </form>
   </div>

@@ -47,6 +47,12 @@ class CartItem(TimeStampedModel):
         "هزینه‌ی کادوپیچی (اسنپ‌شات)", max_digits=12, decimal_places=0, default=0,
     )
 
+    gift_wrap_option_code = models.CharField(
+        "گزینه‌ی کادوپیچی", max_length=30, blank=True, default="standard",
+        help_text="آماده‌ی افزودنِ گزینه‌هایِ متعددِ کادوپیچی با قیمت‌هایِ متفاوت در آینده.",
+    )
+    gift_message = models.CharField("پیامِ کارت‌هدیه", max_length=200, blank=True, default="")
+
     class Meta:
         verbose_name = "قلم سبد خرید"
         verbose_name_plural = "اقلام سبد خرید"
@@ -89,6 +95,40 @@ class Coupon(TimeStampedModel):
     used_count = models.PositiveIntegerField("تعداد استفاده‌شده", default=0)
     expires_at = models.DateTimeField("تاریخ انقضا", null=True, blank=True)
     is_active = models.BooleanField("فعال", default=True)
+
+    # --- قابلیت‌های پیشرفته (کمپین‌ها / کدهای شخصی‌سازی‌شده) ---
+    starts_at = models.DateTimeField("تاریخ فعال‌سازی", null=True, blank=True)
+    # کدِ اختصاصیِ یک مشتری: فقط همان مشتری می‌تواند از آن استفاده کند. CASCADE
+    # عمدی است — SET_NULL یک کدِ اختصاصی را پس از حذفِ مشتری به کدِ عمومی تبدیل می‌کرد.
+    customer = models.ForeignKey(
+        "customers.Customer", verbose_name="مشتریِ مالک (کد اختصاصی)", on_delete=models.CASCADE,
+        null=True, blank=True, related_name="coupons",
+    )
+    max_discount = models.DecimalField(
+        "سقفِ مبلغِ تخفیف (تومان)", max_digits=12, decimal_places=0, null=True, blank=True,
+    )
+    max_order = models.DecimalField(
+        "حداکثر مبلغِ سبد", max_digits=12, decimal_places=0, null=True, blank=True,
+    )
+    per_customer_limit = models.PositiveIntegerField("سقفِ استفاده برای هر مشتری", null=True, blank=True)
+    # اگر پر باشد، سقفِ هر مشتری فقط در پنجره‌ی N روزِ اخیر شمرده می‌شود
+    # (مثلاً «حداکثر ۱ بار در هر ۳۰ روز»)؛ خالی = در کلِ عمرِ کد.
+    per_customer_period_days = models.PositiveIntegerField("پنجره‌ی سقفِ هر مشتری (روز)", null=True, blank=True)
+    # زمانِ اولین تحویلِ موفقِ اعلانِ این کد؛ برایِ کدهایی که اعتبارشان از لحظه‌ی
+    # «تحویل» (نه صدور) حساب می‌شود (``Campaign.validity_from_delivery``).
+    delivery_anchored_at = models.DateTimeField("زمانِ تحویلِ اعلان (مبدأ اعتبار)", null=True, blank=True)
+    min_items = models.PositiveIntegerField("حداقل تعدادِ اقلام", null=True, blank=True)
+    max_items = models.PositiveIntegerField("حداکثر تعدادِ اقلام", null=True, blank=True)
+    applies_to_gift_wrap = models.BooleanField(
+        "تخفیف روی هزینه‌ی کادوپیچی هم اعمال شود", default=False,
+    )
+    stacks_with_product_discount = models.BooleanField(
+        "قابل‌جمع با تخفیفِ خودِ کالا", default=True,
+        help_text="اگر خاموش باشد، روی اقلامی که تخفیفِ کالا دارند اعمال نمی‌شود.",
+    )
+    # محدودیت‌های ساختاریِ اعتبارسنجی‌شده — نگاه کنید به
+    # ``apps.cart.services.coupon_rules.validate_restrictions``.
+    restrictions = models.JSONField("محدودیت‌ها", default=dict, blank=True)
 
     class Meta:
         verbose_name = "کد تخفیف"

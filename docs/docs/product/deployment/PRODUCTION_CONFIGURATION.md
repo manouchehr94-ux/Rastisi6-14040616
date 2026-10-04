@@ -381,6 +381,158 @@ All of the above should be clean (no drift, no unexpected `check --deploy`
 warnings left unexplained, full test suite green) before pointing a real
 domain at the deployment.
 
+## 12. Commerce & engagement operations (hardening phase)
+
+Everything here extends the existing cron-based architecture (ADR-49): **no Celery, no queue, no scheduler framework.**
+Status labels used below: *verified locally* (automated tests / staging PostgreSQL), *external verification pending*
+(needs access this environment does not have). Nothing in this section has been deployed or run in production.
+
+### 12.1 Background jobs — schedule, dependencies, safety
+
+| Job (management command) | Frequency | Depends on | Idempotency / concurrency | Exit status |
+|---|---|---|---|---|
+| `process_notification_outbox --limit 200` | every 5 min | email backend / SMS provider configured | rows are claimed atomically (`SELECT … FOR UPDATE SKIP LOCKED`), stale `SENDING` claims are re-taken after 10 min, `dedupe_key` per message, backoff 1/5/30/120/360 min then `dead`; consent re-checked at send time | non-zero only if the *whole* batch failed (provider down) |
+| `run_engagement_jobs --no-deliver` | hourly (or daily 08:15) | outbox job above | unique `CampaignIssuance(campaign, customer, cycle_key)`; per-customer errors isolated; a failing campaign does not stop delivery | non-zero if any campaign/issuance error occurred (after all work finished) |
+| `expire_unpaid_orders` | every 10 min | per-store `unpaid_online_order_ttl_minutes` (**default 0 = no-op**) | order row lock → re-check → cancel through the lifecycle; one failing order does not stop the batch | non-zero if any order failed |
+| `expire_inventory_reservations` | every 10 min | — | batch-safe conditional updates | 0 |
+| `refresh_customer_segments` | daily 03:30 | — | per-segment errors isolated | non-zero if any segment failed |
+| `cleanup_expired_exports` | daily 03:00 | — | — | 0 |
+| `check_background_jobs` | every 15 min (monitoring) | — | read-only | 0 OK / 1 WARNING / 2 CRITICAL |
+
+All commands that can overlap use a PostgreSQL advisory lock (`apps/core/job_lock.py`); a second concurrent run prints
+`skipped: another … is still running` and exits 0. On SQLite (dev/tests) the lock is a no-op.
+
+**Ready-to-apply configuration:** `deploy/cron/rastisi.crontab` (all six jobs, `CRON_TZ=Asia/Tehran`, `MAILTO`), `deploy/cron/run_job.sh` (per-job wrapper:
+loads the environment file with `DATABASE_URL`/`DJANGO_SECRET_KEY`/`DJANGO_EMAIL_*`/provider settings from `/etc/rastisi/env`, activates the virtualenv, `cd`s to the app,
+appends timestamped output to `/var/log/rastisi/<job>.log`, preserves the exit code, and runs `$RASTISI_ALERT_CMD "<subject>"` with the log tail on stdin when a job fails),
+and `deploy/cron/validate_jobs.sh` (staging validation: DB/config check, delivery audit, expiry dry-run, reservations, segments, engagement queue-only twice, health).
+Adapt `RASTISI_APP_DIR`, `RASTISI_VENV`, `RASTISI_ENV_FILE`, `RASTISI_LOG_DIR`, `MAILTO`, `RASTISI_ALERT_CMD` (e.g. `mail -s`), add log rotation (`logrotate` for `/var/log/rastisi/*.log`),
+and route `check_background_jobs` exit codes 1/2 to your monitoring (the wrapper's alert already covers any non-zero exit).
+Locally verified (against the staging PostgreSQL copy, **not** a real scheduler): the wrapper loads/activates/logs, preserves exit codes, fires the alert command on failure (this test found and fixed a bug where
+the alert never ran), and `validate_jobs.sh` passes (the delivery audit exits 1 there because the staging platform gateway is console — expected and reported, not a hard failure).
+
+**Validation on a real server (operator):** install the crontab for the app user (`crontab -u app deploy/cron/rastisi.crontab`), run `bash deploy/cron/validate_jobs.sh`, then check that
+(a) `crontab -l` lists the entries; (b) within 5 minutes `/var/log/rastisi/outbox.log` shows a new `=== … end outbox rc=0`; (c) briefly stop the database on **staging** and confirm the alert fires and the
+job exits non-zero; (d) start two copies of one job and confirm one prints `skipped: another … is still running`; (e) after the next hour `engagement.log` shows `end engagement rc=0`, and with an
+active birthday/scheduled campaign the customer's reward appears in their account and the outbox rows become `sent` (or `skipped/no_promotional_consent`).
+
+Time zone: the application uses `TIME_ZONE = "Asia/Tehran"` for Jalali periods/occasions and birthday cycles; the jobs themselves
+are time-zone independent (they compare UTC timestamps). Set `CRON_TZ` (or the server TZ) consistently so "hourly/daily" means what
+the owner expects. Missing configuration is never destructive: with every TTL at 0 the expiry job does nothing, and a store with
+no SMS/e-mail configuration produces `failed`/`skipped` rows, not lost data.
+
+`check_background_jobs` reports (from the data the jobs maintain): notification backlog age (WARNING > 30 min, CRITICAL > 2 h), claims stuck
+in `SENDING`, `dead` deliveries in 24 h, campaign runs with errors in 24 h, overdue inventory reservations, unpaid orders past
+TTL + grace (only for stores with expiry enabled), and open payment reconciliations (WARNING; CRITICAL if older than 24 h).
+*Verified locally by tests; not verified on a real scheduler — see §12.7.*
+
+### 12.2 Payment gateway (Zibal): what is and is not verified
+
+Implemented and tested against the documented response contract with mocked HTTP (`apps/orders/tests/test_payment_discrepancy.py`):
+verify result `100` (fresh) and `201` (already verified) are both treated as gateway-confirmed; amounts are exchanged in **Rial** (store
+amounts are Toman × 10); a confirmed payment whose amount differs, or whose amount is missing/unreadable, is **never** applied as a
+normal paid order — it becomes a `PaymentReconciliation` (confirmed mismatch, or *suspected* when the gateway result is ambiguous and
+the customer returned claiming success), with staff e-mail and a Finance → تطبیق پرداخت‌ها entry.
+
+**Not verified (official Zibal documentation and sandbox were unreachable from the build environment).** An operator with Zibal
+account access must confirm before any order-expiry TTL is enabled:
+
+1. How long a `trackId`/payment session stays payable (and whether the payment page link expires).
+2. Whether Zibal retries the callback, and how many times / for how long.
+3. What `verify` returns after the session expired (result code, `amount`, `status`) and for a payment completed after expiry.
+4. Exact meaning of `result 201` and of callback `status`/`success` values in production vs. sandbox (`merchant=zibal`).
+5. Whether production `verify` always returns `amount` (the adapter now treats a missing amount as ambiguous, not as success).
+6. Whether partially paid/overpaid amounts are possible.
+
+Until those answers are documented **keep `unpaid_online_order_ttl_minutes = 0`** for every store. The safe lower bound for a TTL
+is *longer than the confirmed session lifetime + the grace period*; do not enable a speculative 60 minutes.
+
+### 12.3 SMS / e-mail delivery
+
+**Architecture (one system).** A store owner picks exactly ONE SMS delivery method in Settings → SMS: **Phone** (the owner's Android phone through the
+SmsRasti app/gateway, `ShopSettings.sms_backend = smsrasti`) or **Platform** (RastiSi's central provider and credentials, configured only by the platform
+administrator in `PlatformConfiguration`). Every eligible event — transactional (`send_event_sms`) and new-system/campaign (`NotificationOutbox` →
+`send_raw_sms`) — is routed by `sms_service.get_backend` through the store's method automatically; there are no per-event providers and no per-store
+provider credentials (the legacy `console/melipayamak/kavenegar` store values all mean "platform"). Rules enforced by tests
+(`apps/sms/tests/test_delivery_routing.py`): no silent switch between methods (a store on Phone never falls back to paid platform delivery, a store on
+Platform never uses the phone); changing the method affects only later messages (queued ones are never re-sent); **platform credit is consumed only by
+platform delivery** and by OTP; Phone delivery consumes none; OTP/security SMS and platform-owner authentication always use the central gateway; legacy
+transactional SMS stays synchronous and its events have no outbox SMS (no duplicate sends); an unconfigured platform "console" gateway fails loudly
+(`درگاه پیامکِ مرکزی پیکربندی نشده`) instead of recording SENT + charging.
+Customer-facing text speaks for the store (`{shop_name}`); only platform-owner OTP/test messages mention RastiSi (guarded by a test).
+
+**SmsRasti device protocol** (`apps/sms/gateway_views.py`): pairing = per-store secret token; `poll` stamps `smsrasti_last_seen_at` (device "online" = polled within
+5 min), hands out the oldest pending message once (`SENDING`, row lock + `skip_locked`), re-offers an unacknowledged message after 120 s at most 5 times and
+then marks it `FAILED` (bounded, no endless duplicate sends); `ack` is idempotent (a SENT message is final), a failed ack marks the item and its `SmsLog`
+FAILED, a later retry (dashboard → resets the claim counter) re-queues it and the history follows the real outcome. Offline device = messages stay queued in order.
+`success` for Phone means "queued", not "delivered" — delivery is the device's acknowledgement.
+
+**Status for the store admin** (Settings → SMS, `delivery_status_service`): selected method, health (ok/warning/error), credit (platform only), device
+paired/online/last seen (phone only), queue (pending/sending/failed), failures in 24 h, and actionable errors (SMS disabled, device not paired/never connected/offline with N queued,
+no credit, platform gateway problems — which only the platform admin can fix).
+
+**Operator audit:** `python manage.py verify_delivery_channels [--store slug]` reports the same truth per store (method, device/credit state) and the platform gateway once
+(provider real/NOT REAL, missing platform credentials — never printed), plus the e-mail backend (console/locmem/dummy = NOT REAL), SMTP settings, sender domain (SPF/DKIM/DMARC
+must be checked at the DNS provider). Exit code 1 if anything is not production-ready.
+
+**What is verified, and how.** Automated, mocked-HTTP/local-sink only: routing matrix, credit rules, provider failure/refund, device poll/ack/duplicate/timeout/retry,
+parallel polling on PostgreSQL, e-mail through the real Django SMTP transport against a local in-process SMTP sink (envelope, multipart, backoff, single re-send,
+invalid recipient, consent). **Not verified against any real service** (no credentials, no Android device, no mail account in the build environment).
+
+**Operator verification steps (needs real access):**
+1. Platform admin: configure the central provider (Platform Admin → SMS) and run `verify_delivery_channels` → must print `provider=… REAL`, no PLATFORM PROBLEM.
+2. Platform method: with a store on Platform and credit > 0 run
+   `python manage.py verify_delivery_channels --send-test-sms 09XXXXXXXXX --store <slug> --confirm-test-recipient` (a number you control) and confirm the handset received it.
+   "SENT" only means the provider accepted the request.
+3. Phone method: pair a real phone (generate the token in Settings → SMS, enter it in the SmsRasti app), confirm the dashboard shows "device connected", send the same test
+   command, watch the queue item go pending → sending → sent on the phone's acknowledgement; switch the phone to airplane mode and confirm the device shows offline and messages stay queued.
+4. E-mail: `verify_delivery_channels --send-test-email you@your-domain --confirm-test-recipient`; check inbox/spam, SPF/DKIM/DMARC headers.
+Do not send tests to customers.
+
+### 12.4 Promotional consent
+
+Policy (single implementation: `apps/customers/services/consent_service.py`): unknown consent is **not granted**; SMS and e-mail are
+independent; every change records source + time (+ audit event when a store context exists); consent is re-checked at queue time and
+again at send time; transactional/security messages never depend on it. New customers default to no consent; signup/checkout checkboxes
+are never pre-ticked; checkout can only *grant*, withdrawal is in account settings.
+
+Migration `customers.0006` adds fields/defaults, `0007` backfills: every pre-existing `True` (which was the unverifiable column default)
+becomes `False/legacy_unverified`; every `False` becomes `legacy_opt_out`. **Bulk promotional sends to existing customers therefore stop
+until consent is recorded again.** Audit: `python manage.py promotional_consent report`. Where a store holds documented external evidence of
+opt-in, import it: `promotional_consent import --file consent.csv --channel sms --evidence "<ref>" --store <slug> [--apply]` (dry-run by default).
+Product/legal decisions needing external confirmation (not decided by tests): lawful basis and consent wording for Iran, whether consent is
+per-store or per-account (currently per customer account across stores), retention of the consent evidence, and whether a one-click
+unsubscribe link/short code is required in each promotional message.
+
+### 12.5 Pricing and checkout confirmation
+
+One mechanism (CAT-002, from `main`): `cart_service.reprice_cart_items` re-prices the cart snapshot (unit price and gift-wrap price) from the catalogue before order creation; `create_order_from_cart(require_confirmed_prices=True)` resolves final prices once under product/variant → cart → cart-item locks and raises `LivePriceChangedError` on any drift from what the customer confirmed — including a displayed total that no longer matches (`expected_total`, comparison only: shipping/coupon/tax/gift-wrap changes) — after which the cart is re-priced and the customer must re-confirm (`PriceChangeReviewRequired`). The persisted order total is what the payment attempt and the gateway receive (Toman → Rial in the adapter). Historical orders/refunds use order snapshots.
+
+### 12.6 Migrations — production-like verification, ordering, rollback
+
+Branch migrations (apply in dependency order; Django resolves it): `customers.0004–0007`, `cart.0008–0009`, `catalog.0039`, `core.0017–0018`,
+`engagement.0001–0002`, `orders.0011–0019`, `notifications.0002–0003`.
+
+Verified on a **synthetic populated PostgreSQL 16 database built at the base commit schema** (100,000 customers, 150,000 orders, 300,000 items,
+89,736 transactions, 200,000 SMS logs; *not* a copy of production — none was available): forward migration of the whole sequence took ≈16 s total
+(largest steps: `customers.0007` backfill 4.4 s, `orders.0016` coupon-redemption backfill 3.0 s, `notifications.0002` 2.1 s); order/transaction/SMS counts and
+monetary sums identical before/after; no orphaned rows; every one of 29,970 coupon orders received a ledger row; backfills re-run idempotently;
+`makemigrations --check` clean; `check` clean.
+Locking risk: `customers.0006/0007` and `orders.0016` rewrite/update whole tables (row locks for seconds at this scale; run in a maintenance window or
+low traffic); the other steps are additive (`ADD COLUMN` with constant default, new tables, indexes — `orders.0015` creates indexes without `CONCURRENTLY`).
+Schema vs. data reversibility: reverse migrations exist and ran on the populated copy, **but** `customers.0005` cannot be reversed once an operator longer than 20
+characters (e.g. `greater_than_or_equal`) is stored (`value too long for type character varying(20)`), and reversing `customers.0007` restores the old unverifiable
+`True` consent. Treat the deploy as **roll-forward**: take a backup first, and recover by restoring the backup (or fixing forward), not by reversing.
+
+Backup/restore drill executed on the staging copy: `pg_dump -Fc` (16 MB) → `pg_restore` into a fresh database → the 12 count/sum checks identical to the source → `check` clean → `promotional_consent report` identical → applying the one newer migration (`core.0019`, 0.07 s) left every count/sum unchanged. Procedure (operator, **do not run against production without explicit authorization**): `pg_dump -Fc` backup → restore into a staging DB and rehearse
+`migrate` + `check` + `makemigrations --check` + `verify_coupon_consistency` + `promotional_consent report` → compare counts/sums → schedule window → `migrate` →
+post-checks (same commands) → keep the backup until the first full business day passes.
+
+### 12.7 What remains unverified (external access required)
+
+Real Zibal session/callback behaviour (official docs and sandbox unreachable — re-checked in the follow-up phase, still unverifiable); real SMS (platform provider and the SmsRasti Android device) and e-mail delivery; a real cron scheduler (the crontab above is a template, not a deployed fact); a sanitized
+production database copy for migration rehearsal; Firefox and WebKit runs of the browser suite — to run them elsewhere: `pip install playwright && playwright install firefox webkit`, `cd tools/engagement_e2e && npm i axe-core`, `E2E_PG_BASE=postgres://user:pw@host:5432 bash tools/engagement_e2e/reset.sh`, then `python tools/engagement_e2e/accessibility_e2e.py` (it launches Chromium, Firefox and WebKit in turn and prints `NOT RUN` for any missing runtime); (in this environment Playwright browser hosts, Mozilla and PPA hosts are blocked by the environment's egress proxy; Ubuntu's `firefox` package is a snap stub — cannot be installed here).
+
 ## What this PR does **not** do
 
 - No real payment gateway (Zibal) — the checkout payment step is still

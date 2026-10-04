@@ -1,0 +1,8 @@
+<div role="status" aria-live="polite" style="margin-top:8px;padding:10px;border:1px dashed var(--line,#d9dce3);border-radius:10px">
+{% if error %}<span style="color:var(--red,#dc2626)">{{ error }}</span>
+{% else %}
+  {% if result.subject %}<div><b>موضوع:</b> {{ result.subject }}</div>{% endif %}
+  <div dir="rtl" style="white-space:pre-wrap">{{ result.body }}</div>
+  <small style="color:var(--muted)">{{ result.length }} نویسه (با داده‌ی نمونه){% if result.sms_long %} — ⚠ پیامک طولانی است و بیش از یک بخش محاسبه می‌شود{% endif %}</small>
+{% endif %}
+</div>

@@ -1,22 +1,21 @@
 """رندر قالب، کنترل اعتبار، ارسال و ثبت تاریخچه پیامک."""
 
 import logging
-import re
 import secrets
 
 from django.utils import timezone
 
 from apps.core.models import ShopSettings
 
-from ..events import EVENT_VARIABLES, SmsEvent
+from ..events import DEFAULT_TEMPLATES, EVENT_VARIABLES, SmsEvent
 from ..models import SmsLog, SmsOutboxItem, SmsTemplate
+from . import template_renderer
 from .backends import MelipayamakBackend, SmsBackend, SmsRastiBackend
 from .billing_policy_service import (
     InsufficientSmsCreditError, quote_message, refund_credits, reserve_credits,
 )
 
 logger = logging.getLogger(__name__)
-VARIABLE_RE = re.compile(r"\{(\w+)\}")
 
 
 class SmsTemplateError(Exception):
@@ -24,15 +23,27 @@ class SmsTemplateError(Exception):
 
 
 def validate_template_body(event_key: str, body: str) -> None:
+    """اعتبارسنجیِ سخت‌گیرانه (S2): فقط ``{متغیرِ مجاز}`` و ``{{``/``}}``؛ هر ساختارِ
+    دیگر (``{x.y}``، ``{x[0]}``، ``{x:fmt}``، آکولادِ تنها…) رد می‌شود."""
     allowed = EVENT_VARIABLES.get(event_key, {})
-    used = set(VARIABLE_RE.findall(body))
-    unknown = used - set(allowed.keys())
-    if unknown:
-        allowed_list = "، ".join(f"{{{k}}}" for k in allowed) or "—"
-        raise SmsTemplateError(
-            f"متغیر ناشناخته در قالب: {{{'، '.join(sorted(unknown))}}}. "
-            f"متغیرهای مجاز این رویداد: {allowed_list}"
-        )
+    try:
+        template_renderer.validate(body, allowed)
+    except template_renderer.StrictTemplateError as exc:
+        if exc.kind == "unknown":
+            allowed_list = "، ".join(f"{{{k}}}" for k in allowed) or "—"
+            raise SmsTemplateError(
+                f"متغیر ناشناخته در قالب: {{{'، '.join(exc.names)}}}. "
+                f"متغیرهای مجاز این رویداد: {allowed_list}"
+            ) from exc
+        raise SmsTemplateError(str(exc)) from exc
+
+
+def _mirror_history(log, *, context=None, is_test=False):
+    """S0: آینه‌ی فقط‌تاریخچه در ``apps.notifications`` (ارسال همچنان همزمان/قدیمی؛
+    هرگز استثنا نمی‌دهد و ارسال دوباره‌ای ایجاد نمی‌کند)."""
+    from apps.notifications.services.legacy_history import safe_record_legacy_sms
+
+    return safe_record_legacy_sms(log, context=context, is_test=is_test)
 
 
 def get_backend(*, store) -> SmsBackend:
@@ -50,11 +61,28 @@ def regenerate_smsrasti_device_token(*, store) -> str:
     return shop.smsrasti_device_token
 
 
-def _render(template: SmsTemplate, context: dict, shop_name: str) -> str:
-    validate_template_body(template.event_key, template.body)
-    defaults = dict.fromkeys(EVENT_VARIABLES.get(template.event_key, {}), "")
+def _render(template: SmsTemplate, context: dict, shop_name: str, *, fallback_unsafe: bool = False) -> str:
+    """رندرِ امن. ``fallback_unsafe``: برایِ ارسالِ واقعی — قالبِ ذخیره‌شده‌ای که
+    ساختارِ غیرمجازِ قدیمی دارد (و قبلاً با ``str.format`` رندر می‌شد) نباید ارسالِ
+    پیامکِ آن رویداد را متوقف کند؛ متنِ پیش‌فرضِ همان رویداد جایگزین و خطا لاگ
+    می‌شود. متغیرِ ناشناخته مثلِ قبل خطا می‌دهد (ارسال نمی‌شود)."""
+    allowed = EVENT_VARIABLES.get(template.event_key, {})
+    defaults = dict.fromkeys(allowed, "")
     full_context = {**defaults, **context, "shop_name": shop_name}
-    return template.body.format(**full_context)
+    body = template.body
+    try:
+        template_renderer.validate(body, allowed)
+    except template_renderer.StrictTemplateError as exc:
+        if exc.kind == "syntax" and fallback_unsafe and template.event_key in DEFAULT_TEMPLATES:
+            logger.error(
+                "SmsTemplate %s (event=%s) has unsafe syntax (%s); using default text. "
+                "Run `manage.py audit_sms_templates`.", template.pk, template.event_key, exc,
+            )
+            body = DEFAULT_TEMPLATES[template.event_key]
+        else:
+            validate_template_body(template.event_key, body)
+            raise SmsTemplateError(str(exc)) from exc
+    return template_renderer.render(body, full_context, allowed)
 
 
 def _dispatch(*, event_key: str, phone: str, message: str, store, template=None, context=None) -> SmsLog:
@@ -70,13 +98,17 @@ def _dispatch(*, event_key: str, phone: str, message: str, store, template=None,
     # مرحله‌ی resolve/تماس Provider برای پیام عادی برسد. OTP هم مستقل از
     # انتخاب SmsRastiِ فروشگاه از Provider آنلاین مرکزی عبور می‌کند.
     backend = None
+    # اعتبارِ پیامکِ پلتفرم فقط برایِ ارسال از درگاهِ مرکزی مصرف می‌شود: پیام‌هایِ روشِ «گوشی» از سیم‌کارتِ خودِ
+    # فروشگاه می‌روند (هزینه‌ی پلتفرم ندارند) و OTP همیشه از درگاهِ مرکزی (با سقفِ بدهیِ OTP) می‌رود.
+    uses_platform_credit = is_otp or ShopSettings.load(store=store).sms_delivery_method == "platform"
 
     try:
-        before, reserved_after = reserve_credits(
-            store=store, units=quote.billable_units, is_otp=is_otp,
-        )
-        log.balance_before = before
-        log.balance_after = reserved_after
+        if uses_platform_credit:
+            before, reserved_after = reserve_credits(
+                store=store, units=quote.billable_units, is_otp=is_otp,
+            )
+            log.balance_before = before
+            log.balance_after = reserved_after
     except InsufficientSmsCreditError as exc:
         log.status = SmsLog.Status.FAILED
         log.error_message = (
@@ -121,12 +153,12 @@ def _dispatch(*, event_key: str, phone: str, message: str, store, template=None,
         log.status = SmsLog.Status.SENT
         log.provider_ref_id = result.provider_ref_id
         log.sent_at = timezone.now()
-        log.cost_toman = quote.cost_toman
+        log.cost_toman = quote.cost_toman if uses_platform_credit else 0
     else:
-        refunded = refund_credits(store=store, units=quote.billable_units)
         log.status = SmsLog.Status.FAILED
         log.error_message = result.error_message
-        log.balance_after = refunded
+        if uses_platform_credit:
+            log.balance_after = refund_credits(store=store, units=quote.billable_units)
     log.save(update_fields=[
         "status", "provider", "provider_ref_id", "error_message", "attempt_count",
         "sent_at", "cost_toman", "balance_before", "balance_after", "updated_at",
@@ -148,14 +180,16 @@ def send_event_sms(event_key: str, phone: str, context: dict | None = None, *, s
         effective_context = context or {}
         if event_key == SmsEvent.OTP:
             effective_context = {"expire_minutes": "2", **effective_context}
-        message = _render(template, effective_context, shop.name)
+        message = _render(template, effective_context, shop.name, fallback_unsafe=True)
         # Provider Pattern باید همان مقادیر نهایی رندر را داشته باشد؛ نام فروشگاه
         # همیشه از ShopSettings می‌آید و ورودی caller نمی‌تواند آن را جعل کند.
         provider_context = {**effective_context, "shop_name": shop.name}
-        return _dispatch(
+        log = _dispatch(
             event_key=event_key, phone=phone, message=message, store=store,
             template=template, context=provider_context,
         )
+        _mirror_history(log, context=provider_context)
+        return log
     except Exception:
         logger.exception("send_event_sms failed for event=%s phone=%s store=%s", event_key, phone, store.slug)
         return None
@@ -196,10 +230,12 @@ def send_test_sms(*, event_key: str, phone: str, store) -> SmsLog:
     shop = ShopSettings.load(store=store)
     message = _render(template, DUMMY_TEST_CONTEXT, shop.name)
     provider_context = {**DUMMY_TEST_CONTEXT, "shop_name": shop.name}
-    return _dispatch(
+    log = _dispatch(
         event_key=event_key, phone=phone, message=message, store=store,
         template=template, context=provider_context,
     )
+    _mirror_history(log, context=provider_context, is_test=True)
+    return log
 
 
 class RetryNotEligibleError(Exception):
@@ -251,6 +287,7 @@ def retry_failed_log(*, log_id: int, store) -> SmsLog:
         "sent_at", "character_count", "billable_units", "unit_price_toman",
         "cost_toman", "balance_before", "balance_after", "updated_at",
     ])
+    _mirror_history(log)
     return log
 
 
@@ -264,5 +301,6 @@ def retry_smsrasti_outbox_item(*, item_id: int, store) -> SmsOutboxItem:
     item.status = SmsOutboxItem.Status.PENDING
     item.error_message = ""
     item.claimed_at = None
-    item.save(update_fields=["status", "error_message", "claimed_at", "updated_at"])
+    item.attempt_count = 0  # دورِ تازه؛ سقفِ claim دوباره از صفر شمرده می‌شود
+    item.save(update_fields=["status", "error_message", "claimed_at", "attempt_count", "updated_at"])
     return item

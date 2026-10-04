@@ -305,21 +305,21 @@ class ProcessCallbackTests(GatewayPaymentServiceTestBase):
 
     @patch("apps.orders.gateways.zibal.requests.post")
     def test_already_paid_by_another_attempt_cancels_this(self, mock_post):
-        # Simulate order already paid
+        """سفارش قبلاً پرداخت شده: تلاشِ دوم **همچنان با درگاه راستی‌آزمایی می‌شود** (ممکن است پول کسر شده
+        باشد)؛ اگر درگاه ناموفق گفت ⇒ تلاش لغو می‌شود، اگر موفق گفت ⇒ تطبیقِ «پرداخت تکراری» (نه از دست رفتن)."""
         self.order.payment_status = Order.PaymentStatus.PAID
         self.order.save()
-
         attempt = self._create_redirect_ready_attempt()
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"result": 202, "status": -1, "message": "Canceled by user"}
+        mock_post.return_value = mock_response
 
-        result = process_callback_and_verify(
-            attempt_public_id=attempt.public_id,
-            callback_data={},
-            store=self.store,
-        )
+        with self.assertRaises(PaymentVerificationFailed):
+            process_callback_and_verify(attempt_public_id=attempt.public_id, callback_data={}, store=self.store)
 
-        self.assertEqual(result.status, PaymentAttempt.Status.CANCELED)
-        # verify_payment should NOT be called
-        mock_post.assert_not_called()
+        attempt.refresh_from_db()
+        self.assertEqual(attempt.status, PaymentAttempt.Status.CANCELED)
+        self.assertEqual(mock_post.call_count, 1)
 
     def test_nonexistent_attempt_raises(self):
         with self.assertRaises(PaymentVerificationFailed):

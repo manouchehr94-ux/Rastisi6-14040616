@@ -52,6 +52,21 @@
   </div>
 </div>
 
+{% if order.gift_wrap_total or gift_wrap_items %}
+<div class="card" style="margin-bottom:16px;border:2px solid #f59e0b" role="note" aria-label="دستورالعمل کادوپیچی">
+  <div class="card-head"><h3>🎁 دستورالعمل کادوپیچی (برای انبار/بسته‌بندی)</h3></div>
+  <div class="card-body">
+    <ul style="margin:0;padding-inline-start:18px;display:grid;gap:6px">
+      {% for item in items %}{% if item.gift_wrap_selected %}
+      <li><b>{{ item.product_name }}</b>{% if item.variant_label %} — {{ item.variant_label }}{% endif %} × {{ item.quantity|fa_number }}
+        {% if item.gift_message %}<div style="margin-top:2px;padding:6px 10px;background:#fffbeb;border-radius:8px">✉️ پیام کارت: «{{ item.gift_message }}»</div>{% endif %}</li>
+      {% endif %}{% endfor %}
+    </ul>
+    <small style="color:var(--muted)">هزینه‌ی کادوپیچی: {{ order.gift_wrap_total|toman }}{% if order.gift_wrap_scope %} · مبنا: {{ order.gift_wrap_scope }}{% endif %}</small>
+  </div>
+</div>
+{% endif %}
+
 <div class="card" style="margin-bottom:16px">
   <div class="card-head"><h3>اقلام سفارش</h3></div>
   <div class="table-wrap"><table>
@@ -65,6 +80,7 @@
             <div>
               <b>{{ item.product_name }}</b>
               {% if item.variant_label %}<div style="font-size:11.5px;color:var(--muted)">{{ item.variant_label }}</div>{% endif %}
+              {% if item.gift_wrap_selected %}<div style="font-size:11.5px;color:#b45309">🎁 کادوپیچی{% if item.gift_message %} — «{{ item.gift_message }}»{% endif %}</div>{% endif %}
             </div>
           </div>
         </td>
@@ -80,6 +96,8 @@
       <div class="tot-row"><span>جمع کالاها:</span><span>{{ order.items_total|toman }}</span></div>
       {% if order.product_discount %}<div class="tot-row"><span>تخفیف کالاها:</span><span style="color:var(--red)">−{{ order.product_discount|toman }}</span></div>{% endif %}
       {% if order.coupon_discount %}<div class="tot-row"><span>تخفیف کد تخفیف:</span><span style="color:var(--red)">−{{ order.coupon_discount|toman }}</span></div>{% endif %}
+      {% if order.gift_wrap_total %}<div class="tot-row"><span>🎁 کادوپیچی:</span><span>{{ order.gift_wrap_total|toman }}</span></div>{% endif %}
+      {% if order.gift_wrap_discount %}<div class="tot-row"><span>(از تخفیف بالا، روی کادوپیچی):</span><span style="color:var(--red)">−{{ order.gift_wrap_discount|toman }}</span></div>{% endif %}
       <div class="tot-row"><span>هزینه‌ی ارسال:</span><span>{% if order.shipping_cost %}{{ order.shipping_cost|toman }}{% else %}رایگان{% endif %}</span></div>
       <div class="tot-row"><span>مالیات:</span><span>{{ order.tax|toman }}</span></div>
       <div class="tot-row grand"><span>مبلغ نهایی:</span><span style="color:var(--primary)">{{ order.grand_total|toman }}</span></div>
@@ -89,6 +107,25 @@
     </div>
   </div>
 </div>
+
+{% if can_confirm_cod %}
+<div class="card" style="margin-bottom:16px">
+  <div class="card-head"><h3>💵 تأیید دریافتِ وجه (پرداخت در محل)</h3></div>
+  <div class="card-body">
+    <p style="font-size:12.5px;color:var(--muted)">فقط پس از دریافتِ واقعیِ وجه تأیید کنید. مبلغ باید دقیقاً برابرِ مبلغِ کلِ سفارش باشد. تأیید قابلِ بازگشت نیست؛ اصلاح فقط با «ثبت استرداد» انجام می‌شود. وضعیتِ سفارش تغییر نمی‌کند و پیامکی ارسال نمی‌شود (رسیدِ پرداخت به ایمیلِ مشتری می‌رود).</p>
+    <form method="post" action="{% url 'dashboard:order-cod-payment' order.code %}" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      {% csrf_token %}<input type="hidden" name="token" value="{{ cod_token }}">
+      <label>مبلغِ دریافتی (تومان)<br><input class="inp" name="amount" value="{{ order.grand_total|floatformat:0 }}" dir="ltr" required style="width:150px"></label>
+      <label>روشِ دریافت<br><select class="inp" name="method">{% for value, label in cod_methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+      <label>شماره‌ی رسید (اختیاری)<br><input class="inp" name="reference" maxlength="60" dir="ltr" style="width:180px"></label>
+      <button class="btn btn-primary" onclick="return confirm('دریافتِ کاملِ وجه را تأیید می‌کنید؟ این کار قابلِ بازگشت نیست.')">تأییدِ دریافت</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% for tx in payment_transactions %}{% if tx.method != 'gateway' %}
+<p style="font-size:12.5px;margin-bottom:12px">✅ {{ tx.get_method_display }} — تأییدشده توسط {{ tx.confirmed_by|default:"—" }}{% if tx.confirmed_at %} در {{ tx.confirmed_at|date:"Y-m-d H:i" }}{% endif %}{% if tx.ref_id %} — رسید: <span dir="ltr">{{ tx.ref_id }}</span>{% endif %} ({{ tx.code }})</p>
+{% endif %}{% endfor %}
 
 <div class="card" style="margin-bottom:16px">
   <div class="card-head">

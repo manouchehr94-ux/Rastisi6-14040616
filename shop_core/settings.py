@@ -120,6 +120,7 @@ INSTALLED_APPS = [
     "apps.billing",
     "apps.portal",
     "apps.notifications",
+    "apps.engagement",
 ]
 
 # apps.stores.middleware.StoreResolutionMiddleware runs immediately after

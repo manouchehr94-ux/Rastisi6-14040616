@@ -27,7 +27,7 @@ class DeliverPendingTests(TestCase):
         user = User.objects.create_user(username="09121340011", password="a-very-strong-pass-1")
         enqueue(channel=NotificationOutbox.Channel.IN_APP, body="متن", recipient_user=user)
         result = deliver_pending()
-        self.assertEqual(result, {"processed": 1, "sent": 1, "failed": 0})
+        self.assertEqual(result, {"processed": 1, "sent": 1, "failed": 0, "skipped": 0})
         notification = NotificationOutbox.objects.get(recipient_user=user)
         self.assertEqual(notification.status, NotificationOutbox.Status.SENT)
         self.assertIsNotNone(notification.sent_at)

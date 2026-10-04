@@ -17,6 +17,7 @@ from apps.catalog.services.inventory_service import (
     restock_return_item,
 )
 from apps.core.services.audit_service import record_audit_event
+from apps.notifications.services import business_events
 from apps.orders.models import OrderItem, Refund, ReturnItem, ReturnRequest
 
 RETURN_NUMBER_PREFIX = "RET"
@@ -78,6 +79,7 @@ def create_return_request(
         object_type="ReturnRequest", object_id=return_request.pk, object_label=return_request.return_number,
         after={"reason": reason, "item_count": len(line_requests)},
     )
+    business_events.return_event(return_request, "requested")
     return return_request
 
 
@@ -125,6 +127,7 @@ def approve_return_request(
         store=store, actor=actor, action_code="return.approved",
         object_type="ReturnRequest", object_id=return_request.pk, object_label=return_request.return_number,
     )
+    business_events.return_event(return_request, "approved")
     return return_request
 
 
@@ -142,6 +145,7 @@ def reject_return_request(return_request: ReturnRequest, *, store, actor=None, r
         object_type="ReturnRequest", object_id=return_request.pk, object_label=return_request.return_number,
         after={"reason": rejection_reason},
     )
+    business_events.return_event(return_request, "rejected", reason=rejection_reason)
     return return_request
 
 

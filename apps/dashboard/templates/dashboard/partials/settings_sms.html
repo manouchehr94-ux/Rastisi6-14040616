@@ -1,6 +1,23 @@
 {% load persian %}
+<div class="card" style="margin-bottom:18px" id="sms-delivery-status" role="region" aria-label="وضعیت ارسال پیامک">
+  <div class="card-head"><h3>📡 وضعیتِ ارسالِ پیامک</h3>
+    <span class="badge {% if sms_status.health == 'ok' %}b-green{% elif sms_status.health == 'warning' %}b-amber{% else %}b-red{% endif %}">{% if sms_status.health == 'ok' %}سالم{% elif sms_status.health == 'warning' %}هشدار{% else %}نیازمندِ اقدام{% endif %}</span></div>
+  <div class="card-body" style="font-size:13px">
+    <div><b>روشِ ارسال:</b> {{ sms_status.method_label }} — همه‌ی پیامک‌هایِ رویدادی (سفارش، پرداخت، تخفیف، کمپین) به‌طورِ خودکار با همین روش فرستاده می‌شوند.</div>
+    {% if sms_status.method == 'platform' %}
+    <div style="margin-top:6px"><b>اعتبارِ باقی‌مانده:</b> {{ sms_status.credits|fa_number }}</div>
+    {% else %}
+    <div style="margin-top:6px"><b>دستگاه:</b> {% if sms_status.device.online %}متصل{% elif sms_status.device.last_seen_at %}آفلاین (آخرین اتصال {{ sms_status.device.last_seen_at|jalali:"%Y/%m/%d %H:%M" }}){% elif sms_status.device.paired %}جفت‌شده، هنوز متصل نشده{% else %}جفت نشده{% endif %}</div>
+    {% endif %}
+    <div style="margin-top:6px"><b>صف:</b> در انتظار {{ sms_status.queue.pending|fa_number }} · در حال ارسال {{ sms_status.queue.sending|fa_number }} · ناموفق {{ sms_status.queue.failed|fa_number }} · ناموفقِ ۲۴ ساعتِ اخیر {{ sms_status.failed_24h|fa_number }}</div>
+    {% for message in sms_status.errors %}<div role="alert" style="margin-top:8px;color:#b91c1c">⛔ {{ message }}</div>{% endfor %}
+    {% for message in sms_status.warnings %}<div style="margin-top:8px;color:#92400e">⚠️ {{ message }}</div>{% endfor %}
+    <div style="margin-top:8px;font-size:11.5px;color:var(--muted)">کدِ ورود (OTP) و پیام‌هایِ امنیتی همیشه از درگاهِ مرکزی و اعتبارِ پلتفرم می‌روند، مستقل از روشِ انتخابی.</div>
+  </div>
+</div>
+
 <div class="card" style="margin-bottom:18px">
-  <div class="card-head"><h3>💳 اعتبار پیامک</h3><span class="hint">پیامک‌ها از درگاهِ مرکزیِ پلتفرم ارسال می‌شوند</span></div>
+  <div class="card-head"><h3>💳 اعتبار پیامک</h3><span class="hint">اعتبار فقط برایِ ارسال از درگاهِ مرکزیِ پلتفرم (و OTP) مصرف می‌شود؛ روشِ «گوشی» اعتبار مصرف نمی‌کند</span></div>
   <div class="card-body">
     <div class="form-group" style="display:flex;justify-content:space-between;align-items:center;background:var(--bg);padding:12px 14px;border-radius:12px">
       <div><b style="font-size:13px">اعتبارِ باقی‌مانده</b><div style="font-size:11.5px;color:var(--muted)">هر {{ sms_billing_policy.chars_per_credit|fa_number }} کاراکتر = یک اعتبار؛ OTP می‌تواند تا {{ sms_billing_policy.otp_overdraft_limit|fa_number }} اعتبار منفی شود</div></div>

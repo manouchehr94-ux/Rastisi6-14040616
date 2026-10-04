@@ -6,9 +6,10 @@
 
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
-from django.utils import timezone
 
 from apps.cart.models import Coupon
+from apps.cart.services import coupon_rules, gift_wrap_service
+from apps.catalog.models import Category
 from apps.catalog.services.pricing_service import resolve_regular_price
 from apps.core.models import ShopSettings
 from apps.orders.services import shipping_service, tax_service
@@ -36,43 +37,71 @@ def _round(amount: Decimal) -> Decimal:
 
 
 def coupon_is_applicable(coupon: Coupon, items_total: Decimal) -> bool:
-    """آیا این کد تخفیف در حال حاضر قابل اعمال است (فعال، منقضی‌نشده، سقف استفاده و حداقل سفارش رعایت‌شده)."""
+    """سازگاریِ رو‌به‌عقب: آیا کد فعال/در بازه/دارایِ ظرفیت است و حداقل سفارش رعایت شده.
+    منطق فقط در ``coupon_rules`` است؛ ارزیابیِ کامل (مالکیت، محدودیت‌ها) ``evaluate_coupon``."""
     if coupon is None:
         return False
-    if not coupon.is_active:
+    if coupon_rules.validity_failure(coupon) or coupon_rules.capacity_failure(coupon):
         return False
-    if coupon.expires_at and coupon.expires_at <= timezone.now():
-        return False
-    if coupon.usage_limit is not None and coupon.used_count >= coupon.usage_limit:
-        return False
-    if items_total < coupon.min_order:
-        return False
-    return True
+    return items_total >= coupon.min_order
 
 
-def _allocate_coupon_discount(items, *, items_total: Decimal, coupon_discount: Decimal) -> list[Decimal]:
-    """سهمِ هر قلم از ``coupon_discount`` را تناسبی تخصیص می‌دهد — آخرین قلم
-    باقیمانده را می‌گیرد تا مجموعِ دقیقِ تخصیص‌ها همیشه با ``coupon_discount``
-    برابر باشد (بدونِ اختلافِ گردکردن)، چون این مجموع دقیقاً همان چیزی است
-    که مسیرِ قدیمیِ محاسبه‌ی مالیات به آن نیاز دارد تا با فرمولِ پیشین
-    (پیش از checkpoint 3B) کاملاً یکسان بماند."""
+def _allocate_coupon_discount(items, *, items_total: Decimal, coupon_discount: Decimal, eligible_keys=None) -> list[Decimal]:
+    """سهمِ هر قلم از ``coupon_discount`` را تناسبی تخصیص می‌دهد — آخرین قلمِ
+    مشمول باقیمانده را می‌گیرد تا مجموعِ دقیقِ تخصیص‌ها همیشه با
+    ``coupon_discount`` برابر باشد (بدونِ اختلافِ گردکردن). اگر
+    ``eligible_keys`` داده شود فقط اقلامِ مشمول سهم می‌گیرند (کدِ مخصوصِ
+    کالا/دسته/برند) و ``items_total`` جمعِ همان اقلامِ مشمول است."""
     if not items or coupon_discount == 0 or items_total == 0:
         return [Decimal("0") for _ in items]
 
-    allocations = []
+    eligible = [i for i, item in enumerate(items) if eligible_keys is None or item.pk in eligible_keys]
+    allocations = [Decimal("0") for _ in items]
     allocated_so_far = Decimal("0")
-    for item in items[:-1]:
-        line_total = item.unit_price * item.quantity
+    for idx in eligible[:-1]:
+        line_total = items[idx].unit_price * items[idx].quantity
         share = _round(coupon_discount * line_total / items_total)
-        allocations.append(share)
+        allocations[idx] = share
         allocated_so_far += share
-    allocations.append(coupon_discount - allocated_so_far)
+    if eligible:
+        allocations[eligible[-1]] = coupon_discount - allocated_so_far
     return allocations
+
+
+def build_coupon_lines(items, coupon: Coupon | None) -> list[coupon_rules.CouponLine]:
+    """اقلامِ سبد را به ``CouponLine`` تبدیل می‌کند. زنجیره‌ی دسته‌ها فقط وقتی
+    کد محدودیتِ دسته دارد (یک کوئری) بارگذاری می‌شود."""
+    restrictions = (coupon.restrictions or {}) if coupon is not None else {}
+    needs_categories = bool(restrictions.get("category_ids") or restrictions.get("excluded_category_ids"))
+    parent_of = {}
+    if needs_categories and items:
+        parent_of = dict(Category.objects.filter(store_id=items[0].product.store_id).values_list("id", "parent_id"))
+
+    def chain(category_id):
+        ids, seen = set(), set()
+        while category_id and category_id not in seen:
+            seen.add(category_id)
+            ids.add(category_id)
+            category_id = parent_of.get(category_id)
+        return frozenset(ids)
+
+    return [
+        coupon_rules.CouponLine(
+            key=item.pk, product_id=item.product_id,
+            category_ids=chain(item.product.category_id) if needs_categories else frozenset(
+                {item.product.category_id} if item.product.category_id else ()
+            ),
+            brand_id=item.product.brand_id, unit_price=item.unit_price, quantity=item.quantity,
+            regular_price=resolve_regular_price(item.product, item.variant),
+        )
+        for item in items
+    ]
 
 
 def cart_totals(
     cart, *, store, coupon: Coupon | None = None, shipping_method=None,
     province: str = "", city: str = "", postal_code: str = "",
+    customer=None, payment_gateway=None, enforce_coupon_usage: bool = True,
 ) -> dict:
     """جمع کامل سبد خرید را طبق قواعد کسب‌وکار محاسبه می‌کند.
 
@@ -109,18 +138,35 @@ def cart_totals(
 
     product_discount = raw_total - items_total
 
-    coupon_applied = coupon_is_applicable(coupon, items_total)
-    coupon_discount = Decimal("0")
-    free_shipping_by_coupon = False
-    if coupon_applied:
-        if coupon.type == Coupon.Type.PERCENT:
-            coupon_discount = _round(items_total * coupon.value / Decimal("100"))
-        elif coupon.type == Coupon.Type.FIXED:
-            coupon_discount = min(coupon.value, items_total)
-        elif coupon.type == Coupon.Type.FREE_SHIP:
-            free_shipping_by_coupon = True
+    shop = ShopSettings.load(store=store)
+    gift_wrap_lines = gift_wrap_service.cart_gift_wrap_lines(items, shop)
+    gift_wrap_total = gift_wrap_service.gift_wrap_charge(gift_wrap_lines, shop.gift_wrap_pricing_scope)
 
-    after_coupon = items_total - coupon_discount
+    coupon_error_code = ""
+    coupon_error_message = ""
+    coupon_discount = Decimal("0")
+    coupon_item_discount = Decimal("0")
+    coupon_gift_wrap_discount = Decimal("0")
+    free_shipping_by_coupon = False
+    eligible_keys = None
+    coupon_applied = False
+    if coupon is not None:
+        evaluation = coupon_rules.evaluate_coupon(
+            coupon, lines=build_coupon_lines(items, coupon), customer=customer,
+            gift_wrap_total=gift_wrap_total, payment_gateway=payment_gateway,
+            shipping_method=shipping_method, check_usage=enforce_coupon_usage,
+        )
+        coupon_applied = evaluation.ok
+        if evaluation.ok:
+            coupon_discount = evaluation.discount
+            coupon_item_discount = evaluation.item_discount
+            coupon_gift_wrap_discount = evaluation.gift_wrap_discount
+            free_shipping_by_coupon = evaluation.free_shipping
+            eligible_keys = evaluation.eligible_keys
+        else:
+            coupon_error_code, coupon_error_message = evaluation.code, evaluation.message
+
+    after_coupon = items_total - coupon_item_discount
 
     # ارسالِ رایگان — همان محاسبه‌ی قبلی، فقط آستانه یک‌بار خوانده می‌شود و
     # بازاستفاده می‌شود (P5-W1: منبعِ آستانه دوباره در view/template خوانده
@@ -176,7 +222,12 @@ def cart_totals(
             shipping_method, subtotal=after_coupon, weight_grams=weight_grams,
         )
 
-    discount_allocations = _allocate_coupon_discount(items, items_total=items_total, coupon_discount=coupon_discount)
+    eligible_total = items_total if eligible_keys is None else sum(
+        (i.unit_price * i.quantity for i in items if i.pk in eligible_keys), Decimal("0"),
+    )
+    discount_allocations = _allocate_coupon_discount(
+        items, items_total=eligible_total, coupon_discount=coupon_item_discount, eligible_keys=eligible_keys,
+    )
     tax_line_items = [
         {
             "item_ref": item.pk,
@@ -193,17 +244,17 @@ def cart_totals(
     tax = tax_result["line_tax_total"]
     shipping_tax = tax_result["shipping_tax"]
 
-    # کادوپیچی (toranj_gifting: optional_addon_checkbox_updates_total) — جمعِ
-    # هزینه‌ی کادوپیچیِ همه‌ی اقلامِ سبد. عمداً هیچ تخفیف/کدِ تخفیفی روی این
-    # مبلغ اعمال نمی‌شود (یک افزونه‌ی خدماتی است، نه بخشی از قیمتِ کالا) و
-    # مالیات هم روی آن محاسبه نمی‌شود — این یک تصمیمِ سکوپِ محدودِ همین
-    # افزونه است، نه یک قاعده‌ی مالیاتیِ جدیدِ عمومی.
-    gift_wrap_total = sum((item.gift_wrap_line_total for item in items), Decimal("0"))
+    # کادوپیچی (gift_wrap_total بالاتر محاسبه شد): مالیات روی آن محاسبه
+    # نمی‌شود؛ تخفیفِ کد فقط وقتی روی آن اعمال می‌شود که
+    # ``Coupon.applies_to_gift_wrap`` روشن باشد (``coupon_gift_wrap_discount``).
 
     # وقتی قیمت‌ها inclusive باشند، مالیاتِ کالا از قبل داخلِ items_total
     # نشسته و نباید دوباره افزوده شود — نگاه کنید به ADR-45 و
     # ``tax_service``'s ``tax_added_to_grand_total``.
-    grand_total = after_coupon + shipping_cost + tax_result["tax_added_to_grand_total"] + gift_wrap_total
+    grand_total = (
+        after_coupon + shipping_cost + tax_result["tax_added_to_grand_total"]
+        + gift_wrap_total - coupon_gift_wrap_discount
+    )
 
     return {
         "items_total": items_total,
@@ -226,6 +277,13 @@ def cart_totals(
         "prices_include_tax": tax_result["prices_include_tax"],
         "tax_rounding_policy": tax_result["tax_rounding_policy"],
         "gift_wrap_total": gift_wrap_total,
+        "gift_wrap_discount": coupon_gift_wrap_discount,
+        "gift_wrap_scope": shop.gift_wrap_pricing_scope,
+        "gift_wrap_allocations": gift_wrap_service.gift_wrap_allocations(gift_wrap_lines, shop.gift_wrap_pricing_scope),
+        "coupon_item_discount": coupon_item_discount,
+        "coupon_allocations": {item.pk: alloc for item, alloc in zip(items, discount_allocations)},
         "grand_total": grand_total,
         "coupon_applied": coupon_applied,
+        "coupon_error_code": coupon_error_code,
+        "coupon_error_message": coupon_error_message,
     }

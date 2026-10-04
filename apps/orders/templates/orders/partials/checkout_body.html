@@ -47,6 +47,19 @@
           <textarea class="inp" name="full_address" rows="2">{{ address_form.full_address.value|default_if_none:'' }}</textarea>
           {% for err in address_form.full_address.errors %}<div class="coup-err">{{ err }}</div>{% endfor %}
         </div>
+        <div class="fg">
+          <label for="id_birth_date">تاریخ تولد (اختیاری)</label>
+          <input class="inp" id="id_birth_date" name="birth_date" dir="ltr" inputmode="numeric" autocomplete="bday"
+                 value="{{ address_form.birth_date.value|jalali_input }}" placeholder="۱۳۷۰/۰۵/۲۳" aria-describedby="bd-help">
+          <small id="bd-help" style="color:var(--muted,#6b7280)">تاریخ شمسی؛ برای دریافت هدیه‌ی تولد. در صورت خالی‌گذاشتن، تاریخ ذخیره‌شده‌ی شما تغییری نمی‌کند.</small>
+          {% for err in address_form.birth_date.errors %}<div class="coup-err">{{ err }}</div>{% endfor %}
+        </div>
+        <fieldset class="fg" style="border:0;padding:0;margin:0 0 12px">
+          <legend style="font-size:13px;margin-bottom:6px">پیام‌های تبلیغاتی (اختیاری)</legend>
+          <label style="display:block"><input type="checkbox" name="accepts_promotional_sms" value="on" {% if address_form.accepts_promotional_sms.value %}checked{% endif %}> دریافت پیامک تبلیغاتی (تخفیف و مناسبت‌ها)</label>
+          <label style="display:block"><input type="checkbox" name="accepts_promotional_email" value="on" {% if address_form.accepts_promotional_email.value %}checked{% endif %}> دریافت ایمیل تبلیغاتی</label>
+          <small style="color:var(--muted,#6b7280)">پیام‌های مربوط به سفارش و پرداخت همیشه ارسال می‌شوند. هر زمان از «حساب من» قابل لغو است.</small>
+        </fieldset>
         <div class="fg" style="margin-bottom:0">
           <label>توضیحات سفارش (اختیاری)</label>
           <input class="inp" name="note" value="{{ address_form.note.value|default_if_none:'' }}" placeholder="مثلاً: لطفاً قبل از ارسال هماهنگ کنید">
@@ -173,7 +186,7 @@
         <div class="save-note">🎁 شما در این خرید {{ savings|toman }} صرفه‌جویی کردید!</div>
         {% endif %}
         <button type="button" class="btn btn-primary btn-block" style="margin-top:14px;height:52px;font-size:15px"
-                hx-post="{% url 'orders:checkout-pay' %}" hx-include="#address-fields" hx-target="#checkout-container" hx-swap="innerHTML">
+                hx-post="{% url 'orders:checkout-pay' %}" hx-include="#address-fields" hx-vals='{"expected_total": "{{ totals.grand_total|floatformat:"0u" }}"}' hx-target="#checkout-container" hx-swap="innerHTML">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
           ادامه و پرداخت امن
         </button>

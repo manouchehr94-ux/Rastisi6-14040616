@@ -180,6 +180,14 @@ class Product(TimeStampedModel):
         "درصد تخفیف", default=0, validators=[MinValueValidator(0), MaxValueValidator(100)]
     )
 
+    # کادوپیچی — فقط وقتی مؤثر است که کادوپیچی در ``ShopSettings`` هم فعال
+    # باشد. تنوع‌ها (variants) همیشه از کالای والد ارث می‌برند.
+    gift_wrap_enabled = models.BooleanField("امکانِ کادوپیچیِ این کالا", default=True)
+    gift_wrap_price = models.DecimalField(
+        "هزینه‌ی کادوپیچیِ اختصاصیِ این کالا (تومان)", max_digits=12, decimal_places=0,
+        null=True, blank=True, help_text="خالی = استفاده از قیمتِ عمومیِ فروشگاه؛ ۰ = رایگان.",
+    )
+
     stock = models.PositiveIntegerField("موجودی انبار", default=0)
     status = models.CharField("وضعیت", max_length=10, choices=Status.choices, default=Status.ACTIVE)
     product_type = models.CharField(

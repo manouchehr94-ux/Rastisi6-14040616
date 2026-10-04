@@ -1,0 +1,58 @@
+{% extends "dashboard/base_admin.html" %}
+{% block title %}کادوپیچی کالاها | پنل مدیریت{% endblock %}
+{% block page_title %}کادوپیچیِ کالاها{% endblock %}
+{% block page_sub %}فعال/غیرفعال‌سازی و قیمتِ اختصاصیِ کادوپیچی برای هر کالا{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2>🎁 کادوپیچیِ کالاها</h2>
+    <p class="page-desc">
+      وضعیت سراسری: {% if shop.gift_wrap_available %}<span class="badge b-green">فعال</span>{% else %}<span class="badge b-amber">غیرفعال — ابتدا از تنظیمات مالی فعال کنید</span>{% endif %}
+      · قیمت پیش‌فرض: {{ shop.gift_wrap_price }} تومان · مبنا: {{ shop.get_gift_wrap_pricing_scope_display }}
+      · قیمتِ خالی = قیمت پیش‌فرض؛ ۰ = رایگان. تنوع‌ها از کالای والد ارث می‌برند.
+    </p>
+  </div>
+  <a class="btn btn-secondary" href="/admin-portal/settings/?section=finance">تنظیمات کادوپیچی</a>
+</div>
+
+<form method="get" class="card" style="display:flex;gap:10px;padding:12px 18px;margin-bottom:14px;flex-wrap:wrap">
+  <input class="inp" name="q" value="{{ q }}" placeholder="جستجوی نام یا SKU" style="width:240px">
+  <select class="inp" name="filter" style="width:200px">
+    <option value="">همه‌ی کالاها</option>
+    <option value="disabled" {% if filter == 'disabled' %}selected{% endif %}>کادوپیچی غیرفعال</option>
+    <option value="custom_price" {% if filter == 'custom_price' %}selected{% endif %}>دارای قیمت اختصاصی</option>
+  </select>
+  <button class="btn">فیلتر</button>
+</form>
+
+<div class="card">
+  <div class="table-wrap"><table>
+    <thead><tr><th>کالا</th><th>SKU</th><th>کادوپیچی فعال</th><th>قیمت اختصاصی (تومان)</th>{% if can_edit %}<th></th>{% endif %}</tr></thead>
+    <tbody>
+    {% for product in page %}
+    <tr>
+      <td><b>{{ product.name }}</b></td>
+      <td dir="ltr">{{ product.sku }}</td>
+      <td><input type="checkbox" name="gift_wrap_enabled" form="gwf-{{ product.pk }}" {% if product.gift_wrap_enabled %}checked{% endif %} {% if not can_edit %}disabled{% endif %} aria-label="کادوپیچی فعال برای {{ product.name }}"></td>
+      <td><input class="inp" name="gift_wrap_price" form="gwf-{{ product.pk }}" inputmode="numeric" value="{{ product.gift_wrap_price|default_if_none:'' }}" placeholder="پیش‌فرض" style="width:140px" {% if not can_edit %}disabled{% endif %} aria-label="قیمت کادوپیچی {{ product.name }}"></td>
+      {% if can_edit %}<td>
+        <form id="gwf-{{ product.pk }}" method="post" action="{% url 'dashboard:gift-wrap-product-update' product.pk %}">
+          {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <button class="btn btn-sm btn-primary">ذخیره</button>
+        </form>
+      </td>{% endif %}
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:30px">کالایی یافت نشد</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% if page.has_other_pages %}
+<div style="display:flex;gap:8px;margin-top:12px">
+  {% if page.has_previous %}<a class="btn btn-sm" href="?page={{ page.previous_page_number }}&q={{ q }}&filter={{ filter }}">قبلی</a>{% endif %}
+  <span>صفحه {{ page.number }} از {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}<a class="btn btn-sm" href="?page={{ page.next_page_number }}&q={{ q }}&filter={{ filter }}">بعدی</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

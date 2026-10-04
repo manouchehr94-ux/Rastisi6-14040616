@@ -119,8 +119,36 @@ class ShopSettings(TimeStampedModel):
     # قیمتِ ارسال‌شده‌ی کلاینت برای این افزونه اعتماد نمی‌کند.
     gift_wrap_available = models.BooleanField("کادوپیچی در دسترس است", default=False)
     gift_wrap_price = models.DecimalField(
-        "هزینه‌ی کادوپیچی (تومان، هر قلم)", max_digits=12, decimal_places=0, default=0,
+        "هزینه‌ی کادوپیچی (تومان؛ ۰ = رایگان)", max_digits=12, decimal_places=0, default=0,
     )
+
+    class GiftWrapScope(models.TextChoices):
+        PER_UNIT = "per_unit", "به‌ازای هر عددِ کالا"
+        PER_LINE = "per_line", "به‌ازای هر ردیفِ سبد"
+        PER_ORDER = "per_order", "یک‌بار برای کلِ سفارش"
+
+    # سیاستِ صریحِ محاسبه‌ی هزینه‌ی کادوپیچی — پیش‌فرض ``per_unit`` تا رفتارِ
+    # قبلی (تعداد × قیمت) حفظ شود. نگاه کنید به ``gift_wrap_service.gift_wrap_charge``.
+    gift_wrap_pricing_scope = models.CharField(
+        "مبنای محاسبه‌ی هزینه‌ی کادوپیچی", max_length=10, choices=GiftWrapScope.choices,
+        default=GiftWrapScope.PER_UNIT,
+    )
+    gift_wrap_title = models.CharField("عنوان سرویسِ کادوپیچی", max_length=80, default="کادوپیچی")
+    gift_wrap_description = models.CharField("توضیحِ سرویسِ کادوپیچی", max_length=300, blank=True, default="")
+    gift_wrap_image = models.ImageField("تصویرِ نمونه‌ی کادوپیچی", upload_to="shop/gift_wrap/", blank=True)
+    gift_wrap_message_enabled = models.BooleanField("امکانِ نوشتنِ پیامِ کارت‌هدیه", default=True)
+
+    # --- انقضایِ سفارش‌هایِ پرداخت‌نشده‌ی آنلاین (پیش‌فرض: غیرفعال) ---
+    unpaid_online_order_ttl_minutes = models.PositiveIntegerField(
+        "مهلتِ پرداختِ سفارشِ آنلاین (دقیقه؛ ۰ = غیرفعال)", default=0,
+        help_text="سفارشِ در انتظارِ پرداختِ آنلاین پس از این مدت لغو می‌شود (موجودی و ظرفیتِ کدِ تخفیف برمی‌گردد). "
+                  "۰ یعنی هرگز. مقدارِ پیشنهادی ۶۰ — باید از طولِ عمرِ نشستِ درگاه بیشتر باشد.",
+    )
+    unpaid_online_order_grace_minutes = models.PositiveIntegerField(
+        "مهلتِ تکمیلی برایِ پرداختِ در حال انجام (دقیقه)", default=30,
+        help_text="سفارشی که تلاشِ پرداختِ بازی با فعالیتِ کمتر از این مدت دارد منقضی نمی‌شود.",
+    )
+    unpaid_expiry_notify_sms = models.BooleanField("ارسالِ پیامکِ لغو هنگامِ انقضا", default=False)
 
     class SmsBackend(models.TextChoices):
         CONSOLE = "console", "کنسول (فقط لاگ، برای توسعه)"
@@ -144,6 +172,8 @@ class ShopSettings(TimeStampedModel):
     smsrasti_device_token = models.CharField(
         "توکنِ دستگاهِ اسمس‌راستی", max_length=64, blank=True, unique=True, null=True,
     )
+    #: آخرین poll موفقِ دستگاهِ SmsRasti — تنها نشانه‌ی قابل‌اندازه‌گیریِ «دستگاه متصل است».
+    smsrasti_last_seen_at = models.DateTimeField("آخرین اتصالِ دستگاهِ اسمس‌راستی", null=True, blank=True)
 
     # --- هویت بصری ---
     logo = models.ImageField("لوگوی فروشگاه", upload_to="shop/branding/", blank=True)
@@ -168,6 +198,13 @@ class ShopSettings(TimeStampedModel):
 
     def __str__(self):
         return self.name
+
+    @property
+    def sms_delivery_method(self) -> str:
+        """تنها دو روشِ ارسال برایِ پیامکِ مشتریانِ فروشگاه: ``phone`` (گیت‌وی اندرویدِ SmsRasti) یا
+        ``platform`` (درگاهِ مرکزیِ پلتفرم). مقدارهایِ قدیمیِ console/melipayamak/kavenegar همگی «platform» اند
+        (همان کاری که ``sms_service.get_backend`` همیشه می‌کرد)."""
+        return "phone" if self.sms_backend == self.SmsBackend.SMSRASTI else "platform"
 
     @classmethod
     def load(cls, store=None) -> "ShopSettings":

@@ -34,6 +34,7 @@ from .base import (
     GatewayCredentialError,
     GatewayPaymentError,
     GatewayResponseError,
+    GatewayAmountMismatchError,
     GatewayVerificationError,
     PaymentCreationResult,
     PaymentGatewayAdapter,
@@ -278,19 +279,38 @@ class ZibalAdapter(PaymentGatewayAdapter):
         # Check if verification was successful
         is_success = result_code in (ZIBAL_RESULT_SUCCESS, ZIBAL_RESULT_ALREADY_VERIFIED)
 
-        # Amount verification — Zibal returns amount in Rial
+        # Amount verification — Zibal returns amount in Rial. A success result with a different or
+        # unreadable amount must never be applied as a normal paid order; the evidence is carried in the
+        # exception so the caller can persist it (money may have moved).
         if is_success:
-            returned_amount = data.get("amount")
             expected_rial = int(expected_amount) * TOMAN_TO_RIAL
-            if returned_amount is not None and int(returned_amount) != expected_rial:
+            evidence = {
+                "result_code": result_code,
+                "ref_id": str(data.get("refNumber", ""))[:100],
+                "card_number": str(data.get("cardNumber", ""))[:25],
+                "status_code": data.get("status", 0),
+                "expected_rial": expected_rial,
+            }
+            raw_amount = data.get("amount")
+            try:
+                returned_rial = int(raw_amount)
+            except (TypeError, ValueError):
+                logger.error("Zibal verify success without a usable amount: trackId=%s", track_id)
+                raise GatewayResponseError(
+                    "درگاه پرداخت را تأیید کرد اما مبلغ را اعلام نکرد.",
+                    code="amount_unavailable",
+                    details={"evidence": evidence},
+                )
+            evidence["returned_rial"] = returned_rial
+            if returned_rial != expected_rial:
                 logger.error(
                     "Zibal amount mismatch: expected=%d got=%d trackId=%s",
-                    expected_rial, returned_amount, track_id,
+                    expected_rial, returned_rial, track_id,
                 )
-                raise GatewayVerificationError(
+                raise GatewayAmountMismatchError(
                     "مبلغ تأییدشده با مبلغ سفارش مطابقت ندارد.",
                     code="amount_mismatch",
-                    details={"expected_rial": expected_rial, "returned_rial": returned_amount},
+                    details={"expected_rial": expected_rial, "returned_rial": returned_rial, "evidence": evidence},
                 )
 
         ref_id = str(data.get("refNumber", "")) if is_success else ""

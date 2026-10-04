@@ -38,6 +38,40 @@
       <label class="field-label" for="id_expires_at">تاریخ انقضا</label>
       <input type="date" name="expires_at" id="id_expires_at" value="{{ coupon.expires_at|date:'Y-m-d'|default:'' }}" class="form-input">
     </div>
+    <details style="margin:12px 0" {% if coupon.max_discount or coupon.starts_at or coupon.per_customer_limit or coupon.restrictions %}open{% endif %}>
+      <summary style="cursor:pointer;font-weight:600">تنظیمات پیشرفته (سقف تخفیف، محدودیت‌ها)</summary>
+      <div style="margin-top:10px">
+        {% if coupon.customer %}<p class="badge b-amber" style="white-space:normal">این کد اختصاصیِ «{{ coupon.customer.full_name }}» است و فقط خودِ او می‌تواند از آن استفاده کند.</p>{% endif %}
+        <div class="field-group"><label class="field-label" for="id_starts_at">تاریخ فعال‌سازی</label>
+          <input type="date" name="starts_at" id="id_starts_at" value="{{ coupon.starts_at|date:'Y-m-d'|default:'' }}" class="form-input"></div>
+        <div class="field-group"><label class="field-label" for="id_max_discount">سقف مبلغ تخفیف (تومان؛ برای تخفیف درصدی)</label>
+          <input type="number" name="max_discount" id="id_max_discount" value="{{ coupon.max_discount|default_if_none:'' }}" min="1" class="form-input"></div>
+        <div class="field-group"><label class="field-label" for="id_per_customer_limit">سقف استفاده برای هر مشتری</label>
+          <input type="number" name="per_customer_limit" id="id_per_customer_limit" value="{{ coupon.per_customer_limit|default_if_none:'' }}" min="1" class="form-input"></div>
+        <div class="field-group"><label class="field-label" for="id_per_customer_period_days">پنجره‌ی سقفِ هر مشتری (روز؛ خالی = کلِ عمرِ کد)</label>
+          <input type="number" name="per_customer_period_days" id="id_per_customer_period_days" value="{{ coupon.per_customer_period_days|default_if_none:'' }}" min="1" class="form-input"></div>
+        <div class="field-group"><label class="field-label" for="id_max_order">حداکثر مبلغ سبد</label>
+          <input type="number" name="max_order" id="id_max_order" value="{{ coupon.max_order|default_if_none:'' }}" min="0" class="form-input"></div>
+        <div class="field-group"><label class="field-label" for="id_min_items">حداقل تعداد اقلام</label>
+          <input type="number" name="min_items" id="id_min_items" value="{{ coupon.min_items|default_if_none:'' }}" min="1" class="form-input"></div>
+        <div class="field-group"><label class="field-label" for="id_max_items">حداکثر تعداد اقلام</label>
+          <input type="number" name="max_items" id="id_max_items" value="{{ coupon.max_items|default_if_none:'' }}" min="1" class="form-input"></div>
+        <div class="field-group"><label class="field-label" for="id_category_ids">فقط برای این دسته‌ها (شاملِ زیرمجموعه)</label>
+          <select name="category_ids" id="id_category_ids" multiple size="4" class="form-select">{% for c in categories %}<option value="{{ c.pk }}" {% if c.pk in restrictions.category_ids %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>
+        <div class="field-group"><label class="field-label" for="id_brand_ids">فقط برای این برندها</label>
+          <select name="brand_ids" id="id_brand_ids" multiple size="4" class="form-select">{% for b in brands %}<option value="{{ b.pk }}" {% if b.pk in restrictions.brand_ids %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select></div>
+        <div class="field-group"><label class="field-label" for="id_excluded_category_ids">به‌جز این دسته‌ها</label>
+          <select name="excluded_category_ids" id="id_excluded_category_ids" multiple size="4" class="form-select">{% for c in categories %}<option value="{{ c.pk }}" {% if c.pk in restrictions.excluded_category_ids %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>
+        <div class="field-group"><label class="field-label" for="id_excluded_brand_ids">به‌جز این برندها</label>
+          <select name="excluded_brand_ids" id="id_excluded_brand_ids" multiple size="4" class="form-select">{% for b in brands %}<option value="{{ b.pk }}" {% if b.pk in restrictions.excluded_brand_ids %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select></div>
+        <div class="field-group"><label class="field-label" for="id_payment_gateway_ids">فقط با این روش‌های پرداخت</label>
+          <select name="payment_gateway_ids" id="id_payment_gateway_ids" multiple size="3" class="form-select">{% for g in gateways %}<option value="{{ g.pk }}" {% if g.pk in restrictions.payment_gateway_ids %}selected{% endif %}>{{ g.name }}</option>{% endfor %}</select></div>
+        <label class="toggle-field"><input type="checkbox" name="stacks_with_product_discount" {% if coupon.stacks_with_product_discount or not coupon %}checked{% endif %}>
+          <div class="toggle-content"><span class="toggle-title">قابل‌جمع با تخفیفِ خودِ کالا</span></div></label>
+        <label class="toggle-field"><input type="checkbox" name="applies_to_gift_wrap" {% if coupon.applies_to_gift_wrap %}checked{% endif %}>
+          <div class="toggle-content"><span class="toggle-title">تخفیف روی هزینه‌ی کادوپیچی هم اعمال شود</span></div></label>
+      </div>
+    </details>
     <label class="toggle-field">
       <input type="checkbox" name="is_active" {% if coupon.is_active or not coupon %}checked{% endif %}>
       <div class="toggle-content"><span class="toggle-title">فعال</span></div>

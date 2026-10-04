@@ -4,6 +4,7 @@
 """
 
 import random
+from decimal import Decimal
 
 from django.db import IntegrityError, transaction
 
@@ -19,7 +20,12 @@ from apps.catalog.services.reservation_service import (
 from apps.core.services.audit_service import record_audit_event
 from apps.core.utils import format_toman
 from apps.orders.models import Order, OrderItem, OrderStatusHistory
+from apps.notifications.services import business_events
 from apps.orders.services import shipping_service
+from apps.orders.services.coupon_redemption_service import (
+    CouponUnavailableError, lock_coupon, release_redemption, reserve_redemption,
+)
+from apps.orders.services.item_snapshot_service import build_item_snapshot
 from apps.sms.events import SmsEvent
 from apps.sms.services.sms_service import send_event_sms
 
@@ -253,7 +259,9 @@ def _lock_cart_items_and_resolve_final_prices(
     locked_cart = Cart.objects.select_for_update().get(pk=cart_id)
 
     locked_items = list(
-        CartItem.objects.select_for_update()
+        # of=("self",): PostgreSQL نمی‌تواند FOR UPDATE را روی سمتِ nullableِ
+        # LEFT JOINِ ``variant`` بزند؛ قفلِ Product/Variant جداگانه گرفته شده.
+        CartItem.objects.select_for_update(of=("self",))
         .filter(cart_id=locked_cart.pk)
         .select_related("product", "variant")
         .order_by("pk")
@@ -294,6 +302,17 @@ def _lock_cart_items_and_resolve_final_prices(
         # (refreshed) همین ردیف‌های قفل‌شده.
         fresh_price = resolve_effective_price(product, variant)
 
+        # قیمتِ کادوپیچیِ اسنپ‌شات‌شده نیز بخشی از «قیمتِ تأییدشده» است (همان مسیرِ واحدِ CAT-002).
+        if locked_item.gift_wrap_selected:
+            from apps.cart.services.gift_wrap_service import resolve_gift_wrap_selection
+
+            wrap_allowed, live_wrap = resolve_gift_wrap_selection(product.store, requested=True, product=product)
+            if wrap_allowed and live_wrap != locked_item.gift_wrap_unit_price:
+                if require_confirmed_prices:
+                    raise LivePriceChangedError("قیمتِ کادوپیچی با آخرین قیمتِ تأییدشده‌ی سبد فرق دارد")
+                locked_item.gift_wrap_unit_price = live_wrap
+                locked_item.save(update_fields=["gift_wrap_unit_price", "updated_at"])
+
         if fresh_price != locked_item.unit_price:
             if require_confirmed_prices:
                 # CAT-002 Blocker A — قیمتِ زنده با آخرین قیمتِ تأییدشده‌ی
@@ -312,7 +331,7 @@ def _lock_cart_items_and_resolve_final_prices(
 @transaction.atomic
 def create_order_from_cart(
     cart, *, customer, vendor, address, shipping_method, payment_gateway,
-    coupon=None, note="", store, idempotency_key="", require_confirmed_prices=False,
+    coupon=None, note="", store, idempotency_key="", require_confirmed_prices=False, expected_total=None,
 ):
     """سفارش را از روی سبد خرید می‌سازد و همه‌ی مبالغ را اسنپ‌شات می‌کند.
 
@@ -373,6 +392,11 @@ def create_order_from_cart(
 
     locked_products, locked_variants = _lock_and_revalidate_items(items, store=store)
 
+    if coupon is not None:
+        # قفلِ ردیفِ کد تا دو سفارشِ همزمانِ یک کد سریال شوند (Postgres)؛ سقفِ کل
+        # علاوه بر این با compare-and-set اتمیک در reserve_redemption تضمین می‌شود.
+        coupon = lock_coupon(coupon.pk)
+
     # CAT-002 — یک اسنپ‌شاتِ نهاییِ منسجم: زیرِ همان قفلِ Product/Variant
     # بالا، ردیف‌های ``CartItem`` قفل می‌شوند و *همان ردیف‌های قفل‌شده*
     # (Blocker B) برایِ عضویت/کالا/تنوع/تعداد/قیمت به‌عنوان اسنپ‌شاتِ
@@ -405,7 +429,14 @@ def create_order_from_cart(
     totals = cart_totals(
         cart, store=store, coupon=coupon, shipping_method=shipping_method,
         province=province, city=city, postal_code=postal_code,
+        customer=customer, payment_gateway=payment_gateway,
     )
+    if expected_total is not None and Decimal(expected_total) != totals["grand_total"]:
+        # مبلغِ نهاییِ معتبر (شاملِ ارسال/کوپن/کادوپیچی/مالیات) با مبلغی که مشتری دید فرق دارد — همان مسیرِ واحدِ
+        # CAT-002: رول‌بک، reprice و تأییدِ دوباره (نه مکانیزمِ دوم).
+        raise LivePriceChangedError("مبلغِ نهایی با مبلغِ تأییدشده‌ی مشتری فرق دارد")
+    coupon_applied = totals["coupon_applied"]
+    gift_wrap_active = totals["gift_wrap_allocations"]
     tax_lines_by_item = {line["item_ref"]: line for line in totals["tax_lines"]}
     shipping_zone = totals["shipping_zone"]
     shipping_rate_rule = totals["shipping_rate_rule"]
@@ -421,7 +452,7 @@ def create_order_from_cart(
                 address=_snapshot_address(address),
                 shipping_method=shipping_method,
                 payment_gateway=payment_gateway,
-                coupon=coupon,
+                coupon=coupon if coupon_applied else None,
                 items_total=totals["items_total"],
                 product_discount=totals["product_discount"],
                 coupon_discount=totals["coupon_discount"],
@@ -446,6 +477,9 @@ def create_order_from_cart(
                 prices_include_tax=totals["prices_include_tax"],
                 tax_rounding_policy=totals["tax_rounding_policy"],
                 shipping_tax=totals["shipping_tax"],
+                gift_wrap_total=totals["gift_wrap_total"],
+                gift_wrap_discount=totals["gift_wrap_discount"],
+                gift_wrap_scope=totals["gift_wrap_scope"] if totals["gift_wrap_total"] else "",
             )
     except IntegrityError:
         if idempotency_key:
@@ -474,19 +508,23 @@ def create_order_from_cart(
             quantity=locked_item.quantity,
             unit_price=unit_price,
             line_total=unit_price * locked_item.quantity,
-            discount_allocation=tax_line.get("discount_allocation", 0) or 0,
+            discount_allocation=totals["coupon_allocations"].get(locked_item.pk, 0) or 0,
             taxable_amount=tax_line.get("taxable_amount", 0) or 0,
             tax_class_code=tax_line.get("tax_class_code", ""),
             tax_class_name=tax_line.get("tax_class_name", ""),
             tax_rate_percent=tax_line.get("tax_rate_percent"),
             unit_tax=tax_line.get("unit_tax") or 0,
             total_tax=tax_line.get("total_tax") or 0,
-            # کادوپیچی — دقیقاً همان اسنپ‌شاتِ سطحِ قلمِ سبدِ قفل‌شده (نه
-            # بازخوانیِ دوباره‌ی ShopSettings) تا اگر مدیر بین افزودن به سبد و
-            # ثبتِ سفارش قیمتِ کادوپیچی را تغییر دهد، این ردیفِ تاریخی
-            # دست‌نخورده بماند — دقیقاً همان استدلالِ unit_price بالا.
-            gift_wrap_selected=locked_item.gift_wrap_selected,
-            gift_wrap_unit_price=locked_item.gift_wrap_unit_price,
+            # کادوپیچی — دقیقاً همان اسنپ‌شاتِ سطحِ قلمِ سبدِ قفل‌شده (نه بازخوانیِ
+            # دوباره‌ی ShopSettings) تا اگر مدیر بین افزودن به سبد و ثبتِ سفارش قیمتِ
+            # کادوپیچی را تغییر دهد، این ردیفِ تاریخی دست‌نخورده بماند. فقط وقتی
+            # کادوپیچی «مؤثر» است (انتخاب‌شده و هنوز مجاز) ثبت می‌شود — همان تصمیمی
+            # که cart_totals برایِ مبلغِ سفارش گرفته.
+            gift_wrap_selected=locked_item.pk in gift_wrap_active,
+            gift_wrap_unit_price=locked_item.gift_wrap_unit_price if locked_item.pk in gift_wrap_active else 0,
+            gift_wrap_option_code=locked_item.gift_wrap_option_code if locked_item.pk in gift_wrap_active else "",
+            gift_message=locked_item.gift_message if locked_item.pk in gift_wrap_active else "",
+            attributes_snapshot=build_item_snapshot(product, variant),
         )
         # با قفلِ قبلی (_lock_and_revalidate_items)، شکستِ رزرو/مصرف عملاً
         # نباید پیش بیاید — reserve_inventory همچنان دوباره (به‌صورت اتمیک،
@@ -515,22 +553,28 @@ def create_order_from_cart(
         order=order, from_status="", to_status=order.status, note="سفارش ثبت شد"
     )
 
-    if coupon is not None and totals["coupon_applied"]:
-        coupon.used_count += 1
-        coupon.save(update_fields=["used_count"])
+    if coupon is not None and coupon_applied:
+        try:
+            reserve_redemption(
+                coupon=coupon, order=order, customer=customer, discount_amount=totals["coupon_discount"],
+            )
+        except CouponUnavailableError as exc:
+            raise ValueError(str(exc)) from exc
 
     transaction.on_commit(
         lambda: send_event_sms(
             SmsEvent.ORDER_PLACED, order.customer.phone, _order_sms_context(order), store=store
         )
     )
+    business_events.order_created(order)
 
     return order
 
 
 @transaction.atomic
 def change_order_status(
-    order: Order, to_status: str, *, by=None, note: str = "", tracking_code: str = "", store
+    order: Order, to_status: str, *, by=None, note: str = "", tracking_code: str = "", store,
+    suppress_sms: bool = False,
 ) -> Order:
     """وضعیت سفارش را تغییر می‌دهد و حتماً یک رکورد OrderStatusHistory می‌سازد.
 
@@ -539,6 +583,10 @@ def change_order_status(
     Store که برای پیامکِ تغییر وضعیت استفاده می‌شود؛ این تابع خودش هرگز
     Store را دوباره از Host یا حالت سازگاری حدس نمی‌زند.
     """
+    # قفلِ ردیفِ سفارش و خواندنِ وضعیتِ معتبر: لغو/پرداخت/job انقضای همزمان سریال می‌شوند
+    # (callback پرداخت نیز همین ردیف را اول قفل می‌کند). شیِ فراخوان با دیتابیس همگام می‌شود.
+    locked = Order.objects.select_for_update().only("status", "payment_status").get(pk=order.pk)
+    order.status, order.payment_status = locked.status, locked.payment_status
     from_status = order.status
 
     if from_status in FINAL_STATUSES:
@@ -564,6 +612,7 @@ def change_order_status(
         # بدونِ گذارِ خروجی است، پس این مسیر برای هر سفارش حداکثر یک‌بار اجرا
         # می‌شود.
         restock_order(store=store, order=order, actor=by)
+        release_redemption(order, reason="order_canceled")
         record_audit_event(
             store=store, actor=by, action_code="order.cancelled",
             object_type="Order", object_id=order.pk, object_label=order.code,
@@ -574,8 +623,10 @@ def change_order_status(
         order=order, from_status=from_status, to_status=to_status, changed_by=by, note=note
     )
 
+    business_events.order_status_changed(order, to_status)
+
     sms_event = STATUS_SMS_EVENTS.get(to_status)
-    if sms_event:
+    if sms_event and not suppress_sms:
         transaction.on_commit(
             lambda: send_event_sms(
                 sms_event, order.customer.phone, _order_sms_context(order), store=store

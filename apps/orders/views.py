@@ -2,6 +2,7 @@ import json
 import logging
 
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth import login as auth_login
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -37,7 +38,7 @@ def _get_own_order(request, code, queryset=None):
 
 def _render_body(request, cart, *, address_form=None, coupon_input="", coupon_error=""):
     context = checkout_service.build_context(request, cart)
-    context["address_form"] = address_form or CheckoutAddressForm(initial=context["address"])
+    context["address_form"] = address_form or CheckoutAddressForm(initial=checkout_service.address_initial(request))
     context["coupon_input"] = coupon_input
     context["coupon_error"] = coupon_error
     return render(request, "orders/partials/checkout_body.html", context)
@@ -53,7 +54,7 @@ def _dynamic_response(request, cart, *, toast_message=None, toast_type="ok", **e
 def checkout_step1(request):
     cart = get_cart(request, create=True)
     context = checkout_service.build_context(request, cart)
-    context["address_form"] = CheckoutAddressForm(initial=context["address"])
+    context["address_form"] = CheckoutAddressForm(initial=checkout_service.address_initial(request))
     context["coupon_input"] = ""
     return render(request, "orders/checkout_step1.html", context)
 
@@ -64,7 +65,7 @@ def _finalize_and_redirect(request, cart, customer):
     except checkout_service.CheckoutError as exc:
         return _dynamic_response(
             request, cart, toast_message=str(exc), toast_type="err",
-            address_form=CheckoutAddressForm(initial=checkout_service.get_address(request)),
+            address_form=CheckoutAddressForm(initial=checkout_service.address_initial(request)),
         )
     except Exception:
         logger.exception("Unexpected error during checkout finalization")
@@ -72,7 +73,7 @@ def _finalize_and_redirect(request, cart, customer):
             request, cart,
             toast_message="در ثبت سفارش مشکلی رخ داد. اطلاعات و سبد خرید شما حفظ شده است. لطفاً دوباره تلاش کنید.",
             toast_type="err",
-            address_form=CheckoutAddressForm(initial=checkout_service.get_address(request)),
+            address_form=CheckoutAddressForm(initial=checkout_service.address_initial(request)),
         )
     response = HttpResponse(status=200)
     response["HX-Redirect"] = reverse("orders:payment-start", args=[order.code])
@@ -100,6 +101,7 @@ def checkout_pay(request):
         )
 
     checkout_service.save_address(request, form.cleaned_data)
+    checkout_service.save_expected_total(request, request.POST.get("expected_total"))
 
     if request.user.is_authenticated and hasattr(request.user, "customer_profile"):
         request.session.pop(CHECKOUT_OTP_SESSION_KEY, None)
@@ -195,7 +197,7 @@ def payment_start(request, code):
     from apps.orders.models import PaymentGatewayConfig
 
     order = _get_own_order(request, code)
-    if order.payment_status != Order.PaymentStatus.PENDING:
+    if order.payment_status != Order.PaymentStatus.PENDING or order.status == Order.Status.CANCELED:
         return redirect("customers:account-order-detail", code=order.code)
 
     store = resolve_store_for_service(request)
@@ -229,7 +231,7 @@ def payment_callback(request, code, status):
     if not settings.PAYMENTS_SIMULATION_ENABLED:
         raise Http404
     order = _get_own_order(request, code)
-    if order.payment_status == Order.PaymentStatus.PENDING:
+    if order.payment_status == Order.PaymentStatus.PENDING and order.status != Order.Status.CANCELED:
         simulate_payment(order, status == "success", store=resolve_store_for_service(request))
     return redirect("orders:payment-result", code=order.code)
 
@@ -343,6 +345,7 @@ def payment_initiate(request, code):
     """
     from apps.orders.models import PaymentAttempt, PaymentGatewayConfig
     from apps.orders.services.gateway_payment_service import (
+        OrderNotPayableError,
         PaymentAlreadyPaidError,
         PaymentConfigError,
         PaymentInitiationError,
@@ -356,6 +359,11 @@ def payment_initiate(request, code):
     # Already paid — go to result
     if order.payment_status == Order.PaymentStatus.PAID:
         return redirect("orders:payment-result", code=order.code)
+    # Canceled orders can never be paid (payment safety guard)
+    if order.status == Order.Status.CANCELED:
+        return render(request, "orders/payment_result.html", {
+            "order": order, "error": "این سفارش لغو شده و قابل پرداخت نیست.",
+        })
 
     # Find active gateway config for this order's gateway code
     # Try to match by slug from the legacy PaymentGateway on the order
@@ -429,6 +437,8 @@ def payment_initiate(request, code):
         )
     except PaymentAlreadyPaidError:
         return redirect("orders:payment-result", code=order.code)
+    except OrderNotPayableError as exc:
+        return render(request, "orders/payment_result.html", {"order": order, "error": str(exc)})
     except (PaymentConfigError, PaymentInitiationError) as exc:
         logger.warning("Payment initiation failed for order %s: %s", order.code, exc)
         return render(request, "orders/payment_result.html", {
@@ -470,6 +480,7 @@ def gateway_callback(request, attempt_id):
 
     from apps.orders.models import PaymentAttempt
     from apps.orders.services.gateway_payment_service import (
+        PaymentAmountMismatch,
         PaymentVerificationFailed,
         process_callback_and_verify,
     )
@@ -498,7 +509,23 @@ def gateway_callback(request, attempt_id):
         )
     except PaymentVerificationFailed as exc:
         logger.info("Payment verification failed for attempt %s: %s", attempt_id, exc)
+        if isinstance(exc, PaymentAmountMismatch):  # پولِ احتمالی جابه‌جا شده؛ مشتری باید بداند
+            messages.warning(request, str(exc))
         # Don't expose error details to the customer — redirect to result
-        pass
+    except Exception:  # noqa: BLE001 — a gateway callback must never end in an uncontrolled 500
+        logger.exception("Unexpected error while processing payment callback for attempt %s", attempt_id)
+        messages.warning(
+            request,
+            "پردازش پرداخت با خطا مواجه شد. اگر مبلغی از حساب شما کسر شده، با پشتیبانی تماس بگیرید؛ پرداخت شما ثبت و پیگیری می‌شود.",
+        )
+    else:
+        reconciliation = getattr(attempt, "reconciliation", None) if attempt.is_successful else None
+        if reconciliation is not None:
+            messages.warning(
+                request,
+                "مبلغ پرداختی با مبلغ سفارش مطابقت نداشت. پرداخت شما ثبت شد و توسط پشتیبانی بررسی می‌شود."
+                if reconciliation.kind == "amount_mismatch" else
+                "پرداخت شما دریافت شد اما سفارش قابل تکمیل نبود. مبلغ توسط پشتیبانی بررسی و در صورت نیاز بازگردانده می‌شود.",
+            )
 
     return redirect("orders:payment-result", code=order.code)

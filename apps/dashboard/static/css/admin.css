@@ -24,7 +24,7 @@
 body[data-theme="dark"]{
   --bg:#0b1020; --card:#141a30; --text:#e6eaf5; --muted:#8f98b3; --border:#232b47;
   --primary-soft:#26274f; --primary-text:#a5b4fc;
-  --green-soft:#0f3a2c; --amber-soft:#3d2f0d; --red-soft:#431d1d; --blue-soft:#16304f;
+  --green-soft:#0f3a2c; --amber-soft:#3d2f0d; --red-soft:#431d1d; --red-ink:#fca5a5; --blue-soft:#16304f;
   --cyan-soft:#0d3a44; --purple-soft:#2f2450;
   --shadow:0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
 }
@@ -164,7 +164,7 @@ body.admin-body{
 .btn svg{width:16px;height:16px}
 .btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary-2));color:#fff;border:0;box-shadow:0 6px 14px rgba(99,80,238,.35)}
 .btn-primary:hover{color:#fff;filter:brightness(1.07)}
-.btn-danger{color:var(--red);border-color:var(--red-soft);background:var(--red-soft);border:0}
+.btn-danger{color:var(--red-ink,#b91c1c);border-color:var(--red-soft);background:var(--red-soft);border:0}
 .btn-sm{padding:6px 11px;font-size:12px;border-radius:9px}
 
 .table-wrap{overflow-x:auto}

@@ -36,7 +36,7 @@
         {% for item in items %}
         <tr>
           <td>{{ forloop.counter|fa_number }}</td>
-          <td>{{ item.product_name }}{% if item.variant_label %} <small style="color:#94a3b8">— {{ item.variant_label }}</small>{% endif %} {% if item.product %}<small style="color:#94a3b8" dir="ltr">({{ item.product.sku }})</small>{% endif %}</td>
+          <td>{{ item.product_name }}{% if item.variant_label %} <small style="color:#94a3b8">— {{ item.variant_label }}</small>{% endif %}{% if item.gift_wrap_selected %} <small style="color:#b45309">🎁 کادوپیچی{% if item.gift_message %} — «{{ item.gift_message }}»{% endif %}</small>{% endif %} {% if item.product %}<small style="color:#94a3b8" dir="ltr">({{ item.product.sku }})</small>{% endif %}</td>
           <td>{{ item.quantity|fa_number }}</td>
           <td>{{ item.unit_price|toman_raw }}</td>
           <td><b>{{ item.line_total|toman_raw }}</b></td>
@@ -50,6 +50,8 @@
         {% if order.product_discount or order.coupon_discount %}
         <div class="tot-row"><span>تخفیف:</span><b style="color:#ef4444">−{{ order.product_discount|add:order.coupon_discount|toman }}</b></div>
         {% endif %}
+        {% if order.gift_wrap_total %}<div class="tot-row"><span>هزینه کادوپیچی:</span><b>{{ order.gift_wrap_total|toman }}</b></div>{% endif %}
+        {% if order.gift_wrap_discount %}<div class="tot-row"><span>تخفیف کادوپیچی (کد تخفیف):</span><b style="color:#ef4444">−{{ order.gift_wrap_discount|toman }}</b></div>{% endif %}
         <div class="tot-row"><span>مالیات بر ارزش افزوده:</span><b>{{ order.tax|toman }}</b></div>
         <div class="tot-row"><span>هزینه ارسال:</span><b>{% if order.shipping_cost %}{{ order.shipping_cost|toman }}{% else %}رایگان{% endif %}</b></div>
         <div class="tot-row grand"><span>مبلغ قابل پرداخت:</span><span style="color:#4f46e5">{{ order.grand_total|toman }}</span></div>

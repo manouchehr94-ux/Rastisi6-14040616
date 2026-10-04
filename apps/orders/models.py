@@ -418,6 +418,14 @@ class Order(TimeStampedModel):
     tax_rounding_policy = models.CharField("سیاستِ گردکردنِ مالیات (اسنپ‌شات)", max_length=20, blank=True, default="")
     shipping_tax = models.DecimalField("مالیاتِ ارسال", max_digits=12, decimal_places=0, default=0)
 
+    # --- کادوپیچی (اسنپ‌شاتِ سطحِ سفارش) — جدا از items_total نگه‌داری می‌شود.
+    # ``gift_wrap_total`` مبلغِ ناخالصِ هزینه‌ی کادوپیچی؛ ``gift_wrap_discount``
+    # سهمی از ``coupon_discount`` که روی کادوپیچی اعمال شده (فقط وقتی کد
+    # ``applies_to_gift_wrap`` داشته باشد).
+    gift_wrap_total = models.DecimalField("هزینه‌ی کادوپیچی", max_digits=12, decimal_places=0, default=0)
+    gift_wrap_discount = models.DecimalField("تخفیفِ اعمال‌شده روی کادوپیچی", max_digits=12, decimal_places=0, default=0)
+    gift_wrap_scope = models.CharField("مبنای محاسبه‌ی کادوپیچی (اسنپ‌شات)", max_length=10, blank=True, default="")
+
     note = models.TextField("توضیحات سفارش", blank=True)
     tracking_code = models.CharField("کد رهگیری مرسوله", max_length=60, blank=True)
 
@@ -431,6 +439,11 @@ class Order(TimeStampedModel):
                 condition=~models.Q(idempotency_key=""),
                 name="uniq_order_idempotency_key_when_set",
             ),
+        ]
+        indexes = [
+            # ارزیابیِ کمپین‌ها: سفارش‌هایِ یک Store در بازه‌ی زمانی / به‌ازایِ هر مشتری
+            models.Index(fields=["store", "created_at"], name="idx_order_store_created"),
+            models.Index(fields=["store", "customer", "created_at"], name="idx_order_store_cust_created"),
         ]
 
     def __str__(self):
@@ -502,6 +515,12 @@ class OrderItem(TimeStampedModel):
         "هزینه‌ی کادوپیچی (اسنپ‌شات)", max_digits=12, decimal_places=0, default=0,
     )
 
+    # اسنپ‌شاتِ تاریخیِ برند/دسته/رنگ/سایز/ویژگی‌ها در لحظه‌ی خرید — منبعِ
+    # حقیقتِ موتورِ قواعدِ کمپین؛ نگاه کنید به ``item_snapshot_service``.
+    attributes_snapshot = models.JSONField("اسنپ‌شاتِ ویژگی‌های کالا", default=dict, blank=True)
+    gift_wrap_option_code = models.CharField("گزینه‌ی کادوپیچی (اسنپ‌شات)", max_length=30, blank=True, default="")
+    gift_message = models.CharField("پیامِ کارت‌هدیه", max_length=200, blank=True, default="")
+
     class Meta:
         verbose_name = "قلم سفارش"
         verbose_name_plural = "اقلام سفارش"
@@ -555,6 +574,18 @@ class Transaction(TimeStampedModel):
     amount = models.DecimalField("مبلغ", max_digits=14, decimal_places=0)
     status = models.CharField("وضعیت", max_length=10, choices=Status.choices, default=Status.PENDING)
     ref_id = models.CharField("شماره ارجاع بانکی", max_length=60, blank=True)
+    # --- تأییدِ دستیِ دریافتِ وجهِ پرداخت در محل (افزودنیِ سازگارِ عقب‌رو؛ ردیف‌هایِ قدیمی: gateway/بدونِ تأییدکننده) ---
+    class Method(models.TextChoices):
+        GATEWAY = "gateway", "درگاه پرداخت"
+        COD_CASH = "cod_cash", "نقدیِ پرداخت در محل"
+        COD_POS = "cod_pos", "کارتخوانِ پرداخت در محل"
+
+    method = models.CharField("روش دریافت", max_length=10, choices=Method.choices, default=Method.GATEWAY)
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="تأییدکننده", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="confirmed_transactions",
+    )
+    confirmed_at = models.DateTimeField("زمانِ تأیید", null=True, blank=True)
 
     class Meta:
         verbose_name = "تراکنش"
@@ -894,6 +925,77 @@ class PaymentAttempt(TimeStampedModel):
         return self.status == self.Status.SUCCEEDED
 
 
+class PaymentReconciliation(TimeStampedModel):
+    """رکوردِ پایدارِ «پولی که درگاه تأیید کرده اما سفارش آن را نپذیرفته».
+
+    وقتی تأییدِ درگاه موفق است ولی سفارش دیگر قابلِ پرداخت نیست (لغوشده، قبلاً
+    پرداخت‌شده، یا خطایِ پردازش)، شواهدِ پرداخت (شناسه‌ها، مبلغ، پاسخِ تأیید) اینجا
+    نگه داشته می‌شود تا هرگز بی‌صدا گم نشود. سفارش **خودکار بازگشایی/پرداخت‌شده/دوباره
+    رزروِ کد** نمی‌شود؛ مدیرِ مجاز آن را دستی (استرداد خارج از سیستم، بازگشایی دستی…)
+    رسیدگی و علامت‌گذاری می‌کند. به‌ازای هر ``PaymentAttempt`` حداکثر یک رکورد (idempotent)."""
+
+    class Kind(models.TextChoices):
+        ORDER_CANCELED = "order_canceled", "سفارش لغو شده بود"
+        ALREADY_PAID = "already_paid", "سفارش قبلاً پرداخت شده بود (پرداخت تکراری)"
+        NOT_PAYABLE = "not_payable", "سفارش در وضعیتِ قابلِ پرداخت نبود"
+        PROCESSING_ERROR = "processing_error", "خطا در پردازشِ پرداختِ تأییدشده"
+        AMOUNT_MISMATCH = "amount_mismatch", "مبلغِ تأییدشده با سفارش مغایرت دارد"
+        VERIFY_AMBIGUOUS = "verify_ambiguous", "نتیجه‌ی تأییدِ درگاه نامشخص (نیازمند بررسی)"
+
+    class EvidenceLevel(models.TextChoices):
+        #: خودِ درگاه پرداختِ موفق را تأیید کرده (پول جابه‌جا شده).
+        CONFIRMED = "confirmed", "تأییدشده توسط درگاه"
+        #: مشتری از درگاه با ادعای موفقیت برگشته ولی درگاه تأیید/رد نکرد — پول «جمع‌آوری‌شده» نیست.
+        SUSPECTED = "suspected", "مشکوک (تأیید نشده)"
+
+    class Status(models.TextChoices):
+        OPEN = "open", "باز"
+        RESOLVED = "resolved", "رسیدگی‌شده"
+
+    class Resolution(models.TextChoices):
+        REFUNDED_OUTSIDE = "refunded_outside", "استردادِ خارج از سیستم انجام شد"
+        ORDER_REINSTATED = "order_reinstated", "سفارش دستی بازگشایی/جایگزین شد"
+        NO_ACTION = "no_action", "نیازی به اقدام نبود"
+        NOT_PAID = "not_paid", "پس از بررسیِ پنلِ درگاه، پرداختی انجام نشده بود"
+        AUTO_VERIFIED = "auto_verified", "بعداً توسط درگاه تأیید و به‌طور عادی اعمال شد (سیستمی)"
+
+    store = models.ForeignKey("stores.Store", verbose_name="فروشگاه", on_delete=models.PROTECT, related_name="payment_reconciliations")
+    order = models.ForeignKey(Order, verbose_name="سفارش", on_delete=models.PROTECT, related_name="payment_reconciliations")
+    attempt = models.OneToOneField(
+        PaymentAttempt, verbose_name="تلاش پرداخت", on_delete=models.PROTECT, related_name="reconciliation",
+    )
+    kind = models.CharField("نوع", max_length=20, choices=Kind.choices)
+    evidence_level = models.CharField(
+        "سطحِ شواهد", max_length=10, choices=EvidenceLevel.choices, default=EvidenceLevel.CONFIRMED,
+    )
+    status = models.CharField("وضعیت", max_length=10, choices=Status.choices, default=Status.OPEN, db_index=True)
+    amount = models.DecimalField("مبلغِ مورد انتظار (سفارش/تلاش)", max_digits=14, decimal_places=0)
+    #: مبلغی که خودِ درگاه گزارش کرد (تومان؛ از ریال تبدیل شده). تهی = درگاه مبلغ را اعلام نکرد.
+    reported_amount = models.DecimalField("مبلغِ گزارش‌شده توسط درگاه (تومان)", max_digits=16, decimal_places=1, null=True, blank=True)
+    gateway_track_id = models.CharField("شناسه‌ی پیگیری درگاه", max_length=100, blank=True, default="")
+    gateway_ref_id = models.CharField("شماره‌ی ارجاع بانکی", max_length=100, blank=True, default="")
+    order_status_at_detection = models.CharField("وضعیتِ سفارش در لحظه‌ی کشف", max_length=15, blank=True, default="")
+    payment_status_at_detection = models.CharField("وضعیتِ پرداختِ سفارش در لحظه‌ی کشف", max_length=15, blank=True, default="")
+    evidence = models.JSONField("شواهدِ تأیید درگاه (بدونِ اطلاعاتِ حساس)", default=dict, blank=True)
+    error_message = models.CharField("خطا (امن)", max_length=300, blank=True, default="")
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="رسیدگی‌کننده", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="resolved_payment_reconciliations",
+    )
+    resolved_at = models.DateTimeField("زمانِ رسیدگی", null=True, blank=True)
+    resolution = models.CharField("نتیجه‌ی رسیدگی", max_length=20, choices=Resolution.choices, blank=True, default="")
+    resolution_note = models.CharField("یادداشتِ رسیدگی", max_length=500, blank=True, default="")
+
+    class Meta:
+        verbose_name = "تطبیقِ پرداخت"
+        verbose_name_plural = "تطبیق‌هایِ پرداخت"
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["store", "status", "-created_at"], name="idx_reconcile_store_status")]
+
+    def __str__(self):
+        return f"{self.get_kind_display()} — {self.order_id} ({self.get_status_display()})"
+
+
 # ===========================================================================
 # Refund domain (Admin Panel Completion Program checkpoint 2 — ADR-33/34)
 # ===========================================================================
@@ -917,6 +1019,10 @@ class Refund(TimeStampedModel):
         SUCCEEDED = "succeeded", "موفق"
         FAILED = "failed", "ناموفق"
         CANCELLED = "cancelled", "لغوشده"
+
+    #: استردادهایی که نهایتاً هرگز اتفاق نمی‌افتند؛ بقیه (حتی در انتظار/تأییدشده) «استردادِ فعال» حساب می‌شوند.
+    #: تنها تعریفِ «استردادِ فعال» — refund_service، موتورِ قواعد و تعریف‌هایِ مشترکِ سفارش از همین می‌خوانند.
+    INACTIVE_STATUSES = ("failed", "cancelled")
 
     class Method(models.TextChoices):
         MANUAL = "manual", "دستی (واریز خارج از سیستم)"
@@ -1000,6 +1106,8 @@ class RefundItem(TimeStampedModel):
     quantity = models.PositiveIntegerField("تعداد")
     amount = models.DecimalField("مبلغ", max_digits=14, decimal_places=0)
     tax_amount = models.DecimalField("مبلغِ مالیاتِ استردادشده", max_digits=14, decimal_places=0, default=0)
+    # سهمِ کادوپیچیِ این قلم (خالص از تخفیفِ کد) که در این استرداد برمی‌گردد.
+    gift_wrap_amount = models.DecimalField("مبلغِ کادوپیچیِ استردادشده", max_digits=14, decimal_places=0, default=0)
 
     class Meta:
         verbose_name = "قلمِ استرداد"
@@ -1167,3 +1275,48 @@ class ReturnItem(TimeStampedModel):
 
     def __str__(self):
         return f"{self.order_item.product_name} × {self.quantity_requested}"
+
+
+class CouponRedemption(TimeStampedModel):
+    """دفترِ استفاده از کدِ تخفیف — هر سفارش حداکثر یک ردیف دارد.
+
+    چرخه‌ی عمر: ``RESERVED`` (در لحظه‌ی ثبتِ سفارش) → ``REDEEMED`` (پرداختِ
+    موفق) → یا ``RELEASED`` (لغوِ سفارش / پرداختِ ناموفق؛ سهمیه به کد
+    برمی‌گردد). ``REFUNDED``: استردادِ کاملِ سفارشِ پرداخت‌شده؛ سهمیه
+    **برنمی‌گردد** (سیاستِ صریح: کدِ یک خریدِ تکمیل‌شده دوباره قابل‌استفاده
+    نیست). ردیف‌هایِ ``RESERVED``/``REDEEMED``/``REFUNDED`` در سقفِ کل و سقفِ
+    هر مشتری شمرده می‌شوند."""
+
+    class Status(models.TextChoices):
+        RESERVED = "reserved", "رزروشده"
+        REDEEMED = "redeemed", "مصرف‌شده"
+        RELEASED = "released", "آزادشده"
+        REFUNDED = "refunded", "مستردشده"
+
+    COUNTED_STATUSES = (Status.RESERVED, Status.REDEEMED, Status.REFUNDED)
+
+    coupon = models.ForeignKey(
+        "cart.Coupon", verbose_name="کد تخفیف", on_delete=models.PROTECT, related_name="redemptions",
+    )
+    order = models.OneToOneField(
+        Order, verbose_name="سفارش", on_delete=models.CASCADE, related_name="coupon_redemption",
+    )
+    customer = models.ForeignKey(
+        "customers.Customer", verbose_name="مشتری", on_delete=models.PROTECT, related_name="coupon_redemptions",
+    )
+    status = models.CharField("وضعیت", max_length=10, choices=Status.choices, default=Status.RESERVED, db_index=True)
+    discount_amount = models.DecimalField("مبلغِ تخفیف", max_digits=12, decimal_places=0, default=0)
+    redeemed_at = models.DateTimeField("زمانِ مصرف", null=True, blank=True)
+    released_at = models.DateTimeField("زمانِ آزادسازی", null=True, blank=True)
+    release_reason = models.CharField("دلیلِ آزادسازی", max_length=40, blank=True, default="")
+
+    class Meta:
+        verbose_name = "استفاده از کد تخفیف"
+        verbose_name_plural = "استفاده‌های کد تخفیف"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["coupon", "customer", "status"], name="idx_redemption_coupon_cust"),
+        ]
+
+    def __str__(self):
+        return f"{self.coupon.code} → {self.order.code} ({self.status})"

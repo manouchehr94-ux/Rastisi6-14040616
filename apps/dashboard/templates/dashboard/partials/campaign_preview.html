@@ -1,0 +1,18 @@
+{% load persian %}
+<div class="card" role="status" aria-live="polite" style="margin:12px 0">
+  <div class="card-head"><h3>پیش‌نمایشِ مشتریانِ مشمول</h3></div>
+  <div class="card-body">
+  {% if error %}
+    <p style="color:var(--red)">{{ error }}</p>
+  {% else %}
+    <p><b>{{ info.count|fa_number }}</b> مشتریِ مشمول{% if info.already_issued %} — از این تعداد <b>{{ info.already_issued|fa_number }}</b> نفر قبلاً دریافت کرده‌اند{% endif %}.
+       <small style="color:var(--muted)">(چیزی صادر یا ارسال نشد)</small></p>
+    {% if info.sample %}
+    <table><thead><tr><th>مشتری</th><th>موبایل</th><th>شهر</th></tr></thead><tbody>
+      {% for c in info.sample %}<tr><td>{{ c.name }}</td><td dir="ltr">{{ c.phone }}</td><td>{{ c.city|default:"—" }}</td></tr>{% endfor %}
+    </tbody></table>
+    {% if info.count > info.sample|length %}<small style="color:var(--muted)">فقط {{ info.sample|length|fa_number }} نمونه‌ی اول نمایش داده شد.</small>{% endif %}
+    {% endif %}
+  {% endif %}
+  </div>
+</div>

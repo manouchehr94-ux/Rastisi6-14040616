@@ -238,7 +238,10 @@ from apps.orders.services.return_service import (
 )
 from apps.sms.events import EVENT_VARIABLES, SmsEvent
 from apps.sms.models import SmsBillingPolicy, SmsPackage, SmsPackagePurchase, SmsTemplate
+from django.utils.functional import SimpleLazyObject
+
 from apps.sms.services import balance_service
+from apps.sms.services.delivery_status_service import get_sms_delivery_status
 from apps.sms.services.sms_service import (
     RetryNotEligibleError,
     SmsTemplateError,
@@ -325,6 +328,7 @@ from .forms import (
     CollectionForm,
     FinanceSettingsForm,
     GiftWrapSettingsForm,
+    OrderExpirySettingsForm,
     MainCategoryForm,
     ProductForm,
     ProductImageAltForm,
@@ -3575,13 +3579,28 @@ def order_detail(request, code):
     context["active_page"] = "orders"
     context["can_manage_refunds"] = membership_has_permission(request.store_membership, REFUND_MANAGE)
     context["can_manage_returns"] = membership_has_permission(request.store_membership, RETURN_MANAGE)
+    from apps.orders.services import cod_payment_service
+    from apps.stores.authorization import ORDER_CONFIRM_COD_PAYMENT
+    import secrets as _secrets
+
+    context["can_confirm_cod"] = (
+        membership_has_permission(request.store_membership, ORDER_CONFIRM_COD_PAYMENT)
+        and cod_payment_service.can_confirm(order)
+    )
+    context["cod_token"] = _secrets.token_hex(16)
+    context["cod_methods"] = cod_payment_service.METHODS and [
+        (m, dict(order.transactions.model.Method.choices)[m]) for m in cod_payment_service.METHODS
+    ]
+    context["payment_transactions"] = order.transactions.filter(status="ok").select_related("confirmed_by")
     return render(request, "dashboard/order_detail.html", context)
 
 
 def _order_detail_context(order):
+    items = list(order.items.select_related("product", "variant"))
     return {
         "order": order,
-        "items": order.items.select_related("product", "variant"),
+        "items": items,
+        "gift_wrap_items": [item for item in items if item.gift_wrap_selected],
         "status_history": order.status_history.select_related("changed_by"),
         "next_status_options": next_status_options(order),
         "is_final": order_is_final(order),
@@ -4122,13 +4141,22 @@ def _settings_context(
         "finance_form": finance_form or FinanceSettingsForm(initial={
             "tax_percent": shop.tax_percent, "free_shipping_threshold": shop.free_shipping_threshold,
         }),
+        "order_expiry_form": OrderExpirySettingsForm(initial={
+            "unpaid_online_order_ttl_minutes": shop.unpaid_online_order_ttl_minutes,
+            "unpaid_online_order_grace_minutes": shop.unpaid_online_order_grace_minutes,
+            "unpaid_expiry_notify_sms": shop.unpaid_expiry_notify_sms,
+        }),
         "gift_wrap_form": gift_wrap_form or GiftWrapSettingsForm(initial={
             "gift_wrap_available": shop.gift_wrap_available, "gift_wrap_price": shop.gift_wrap_price,
+            "gift_wrap_pricing_scope": shop.gift_wrap_pricing_scope, "gift_wrap_title": shop.gift_wrap_title,
+            "gift_wrap_description": shop.gift_wrap_description,
+            "gift_wrap_message_enabled": shop.gift_wrap_message_enabled,
         }),
         "sms_form": sms_form or SmsConnectionForm(initial={
             "sms_enabled": shop.sms_enabled, "sms_backend": shop.sms_backend,
         }),
         "smsrasti_device_token": shop.smsrasti_device_token,
+        "sms_status": SimpleLazyObject(lambda: get_sms_delivery_status(store)),  # lazy: queries only when the SMS section renders
         "sms_balance": balance_service.get_or_create_balance(store=store),
         "sms_billing_policy": SmsBillingPolicy.load(),
         "sms_packages": balance_service.list_active_packages(),
@@ -4335,15 +4363,63 @@ def settings_finance(request):
 @require_POST
 @staff_required
 @permission_required(SETTINGS_MANAGE)
+def settings_order_expiry(request):
+    """مهلتِ پرداختِ سفارش‌هایِ آنلاین — پیش‌فرض ۰ (غیرفعال)؛ فقط سفارش‌هایِ آنلاینِ پرداخت‌نشده، هرگز COD."""
+    form = OrderExpirySettingsForm(request.POST)
+    if form.is_valid():
+        shop = ShopSettings.load(store=request.store)
+        before = shop.unpaid_online_order_ttl_minutes
+        cd = form.cleaned_data
+        shop.unpaid_online_order_ttl_minutes = cd["unpaid_online_order_ttl_minutes"]
+        shop.unpaid_online_order_grace_minutes = cd["unpaid_online_order_grace_minutes"]
+        shop.unpaid_expiry_notify_sms = cd["unpaid_expiry_notify_sms"]
+        shop.save(update_fields=["unpaid_online_order_ttl_minutes", "unpaid_online_order_grace_minutes", "unpaid_expiry_notify_sms", "updated_at"])
+        record_audit_event(
+            store=request.store, actor=request.user, action_code="settings.order_expiry_updated",
+            object_type="ShopSettings", object_id=shop.pk, object_label="انقضای سفارش پرداخت‌نشده",
+            before={"ttl_minutes": before}, after={"ttl_minutes": shop.unpaid_online_order_ttl_minutes,
+                                                   "grace_minutes": shop.unpaid_online_order_grace_minutes},
+        )
+        messages.success(request, "تنظیمات انقضای سفارش ذخیره شد")
+    else:
+        messages.error(request, "؛ ".join(sum((list(v) for v in form.errors.values()), [])) or "مقدار نامعتبر است")
+    return redirect("/admin-portal/settings/?section=finance")
+
+
+@require_POST
+@staff_required
+@permission_required(SETTINGS_MANAGE)
 def settings_gift_wrap(request):
     """کادوپیچی (toranj_gifting: optional_addon_checkbox_updates_total) —
     فعال‌سازی/قیمت‌گذاری در دسترسِ مدیرِ فروشگاه، مستقل از خانواده‌ی بصری."""
-    form = GiftWrapSettingsForm(request.POST)
+    form = GiftWrapSettingsForm(request.POST, request.FILES)
     if form.is_valid():
         shop = ShopSettings.load(store=request.store)
-        shop.gift_wrap_available = form.cleaned_data["gift_wrap_available"]
-        shop.gift_wrap_price = form.cleaned_data["gift_wrap_price"]
-        shop.save(update_fields=["gift_wrap_available", "gift_wrap_price", "updated_at"])
+        cd = form.cleaned_data
+        shop.gift_wrap_available = cd["gift_wrap_available"]
+        shop.gift_wrap_price = cd["gift_wrap_price"]
+        fields = ["gift_wrap_available", "gift_wrap_price", "updated_at"]
+        # فیلدهایِ جدید فقط وقتی اعمال می‌شوند که فرمِ کامل ارسال شده باشد؛ یک POSTِ
+        # قدیمی (فقط فعال/قیمت) عنوان/مبنا/پیام را تغییر نمی‌دهد (سازگاریِ عقب‌رو).
+        if cd.get("gift_wrap_pricing_scope"):
+            shop.gift_wrap_pricing_scope = cd["gift_wrap_pricing_scope"]
+            shop.gift_wrap_title = cd["gift_wrap_title"]
+            shop.gift_wrap_description = cd["gift_wrap_description"]
+            shop.gift_wrap_message_enabled = cd["gift_wrap_message_enabled"]
+            fields += ["gift_wrap_pricing_scope", "gift_wrap_title", "gift_wrap_description", "gift_wrap_message_enabled"]
+        if cd.get("gift_wrap_image"):
+            shop.gift_wrap_image = cd["gift_wrap_image"]
+            fields.append("gift_wrap_image")
+        elif cd.get("remove_gift_wrap_image"):
+            shop.gift_wrap_image = ""
+            fields.append("gift_wrap_image")
+        shop.save(update_fields=fields)
+        record_audit_event(
+            store=request.store, actor=request.user, action_code="settings.gift_wrap_updated",
+            object_type="ShopSettings", object_id=shop.pk, object_label="کادوپیچی",
+            after={"available": shop.gift_wrap_available, "price": str(shop.gift_wrap_price),
+                   "scope": shop.gift_wrap_pricing_scope},
+        )
         messages.success(request, "تنظیمات کادوپیچی ذخیره شد")
         return redirect("/admin-portal/settings/?section=finance")
     context = _settings_context(request, gift_wrap_form=form)
@@ -5957,9 +6033,15 @@ COUPON_FORM_FIELDS = ("code", "type", "value", "label", "min_order", "usage_limi
 @staff_required
 @permission_required(COUPON_VIEW, DISCOUNT_MANAGE)
 def coupon_list(request):
-    coupons = list_coupons(request.store)
+    scope = request.GET.get("scope", "public")
+    coupons = list_coupons(request.store).select_related("customer")
+    if scope == "personal":
+        # کدهای اختصاصیِ مشتریان (کمپین/مناسبت) ممکن است هزاران ردیف باشند ⇒ صفحه‌بندی
+        coupons = Paginator(coupons.filter(customer__isnull=False), 50).get_page(request.GET.get("page"))
+    else:
+        coupons = coupons.filter(customer__isnull=True)
     return render(request, "dashboard/coupon_list.html", {
-        "coupons": coupons, "active_page": "coupons",
+        "coupons": coupons, "scope": scope, "active_page": "coupons",
         "can_manage_coupons": membership_has_permission(request.store_membership, DISCOUNT_MANAGE),
     })
 
@@ -5981,6 +6063,27 @@ def _parse_coupon_form(request):
     fields["usage_limit"] = int(usage_limit) if usage_limit.isdigit() else None
     expires_at_raw = data.get("expires_at", "").strip()
     fields["expires_at"] = expires_at_raw or None
+    starts_at_raw = data.get("starts_at", "").strip()
+    fields["starts_at"] = starts_at_raw or None
+    for key in ("per_customer_limit", "per_customer_period_days", "min_items", "max_items"):
+        raw = data.get(key, "").strip()
+        fields[key] = int(raw) if raw.isdigit() else None
+    for key in ("max_discount", "max_order"):
+        raw = data.get(key, "").strip()
+        try:
+            fields[key] = Decimal(raw) if raw else None
+        except InvalidOperation:
+            fields[key] = None
+    fields["applies_to_gift_wrap"] = data.get("applies_to_gift_wrap") == "on"
+    fields["stacks_with_product_discount"] = data.get("stacks_with_product_discount") == "on"
+    restrictions = {}
+    for key, name in (("category_ids", "category_ids"), ("brand_ids", "brand_ids"),
+                      ("excluded_category_ids", "excluded_category_ids"), ("excluded_brand_ids", "excluded_brand_ids"),
+                      ("payment_gateway_ids", "payment_gateway_ids")):
+        ids = [int(v) for v in data.getlist(name) if v.isdigit()]
+        if ids:
+            restrictions[key] = ids
+    fields["restrictions"] = restrictions
     return fields
 
 
@@ -6003,9 +6106,15 @@ def coupon_form(request, pk=None):
         except CouponError as exc:
             messages.error(request, str(exc))
 
+    from apps.orders.models import PaymentGateway as _Gateway
+
     return render(request, "dashboard/coupon_form.html", {
         "coupon": coupon, "active_page": "coupons", "type_choices": Coupon.Type.choices,
         "field_errors": field_errors,
+        "categories": Category.objects.filter(store=request.store).order_by("name"),
+        "brands": Brand.objects.filter(store=request.store).order_by("name"),
+        "gateways": _Gateway.objects.filter(store=request.store).order_by("name"),
+        "restrictions": coupon.restrictions if coupon else {},
     })
 
 

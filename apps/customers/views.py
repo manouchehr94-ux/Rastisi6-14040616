@@ -13,7 +13,9 @@ from apps.stores.resolution import resolve_store_for_service, resolve_store_for_
 
 from .forms import AddressForm, LoginForm, OtpRequestForm, OtpVerifyForm, ProfileForm, SignupForm
 from .models import Address, Customer, Wishlist
-from .services import auth_service
+from apps.cart.services import coupon_service
+
+from .services import auth_service, profile_service
 
 _OTP_REMEMBER_SESSION_KEY = "customers_otp_remember_me"
 
@@ -135,6 +137,8 @@ def signup_view(request):
                 phone=form.cleaned_data["phone"],
                 password=form.cleaned_data["password"],
                 store=resolve_store_for_service(request),
+                accepts_promotional_sms=form.cleaned_data["accepts_promotional_sms"],
+                accepts_promotional_email=form.cleaned_data["accepts_promotional_email"],
             )
         except auth_service.AuthError as exc:
             form.add_error(None, str(exc))
@@ -250,10 +254,14 @@ def _account_context(request, *, profile_form=None, address_form=None):
         "customer": customer,
         "profile_form": profile_form or ProfileForm(initial={
             "full_name": customer.full_name, "email": customer.email, "city": customer.city,
+            "birth_date": customer.birth_date,
+            "accepts_promotional_sms": customer.accepts_promotional_sms,
+            "accepts_promotional_email": customer.accepts_promotional_email,
         }),
         "address_form": address_form or AddressForm(),
         "orders": Order.objects.filter(customer=customer).select_related("shipping_method").order_by("-created_at"),
         "addresses": customer.addresses.all(),
+        "my_coupons": coupon_service.customer_coupons(resolve_store_for_service(request), customer),
     }
 
 
@@ -268,13 +276,31 @@ def account_profile_update(request):
     customer = request.user.customer_profile
     form = ProfileForm(request.POST)
     if form.is_valid():
+        previous_email = customer.email
         customer.full_name = form.cleaned_data["full_name"]
         customer.email = form.cleaned_data["email"]
         customer.city = form.cleaned_data["city"]
         customer.save(update_fields=["full_name", "email", "city", "updated_at"])
+        # تولدِ خالی هرگز مقدارِ ذخیره‌شده را پاک نمی‌کند (profile_service)
+        profile_service.update_birth_date(customer, form.cleaned_data["birth_date"])
+        if request.POST.get("prefs_submitted"):
+            profile_service.update_communication_preferences(
+                customer, sms=form.cleaned_data["accepts_promotional_sms"],
+                email=form.cleaned_data["accepts_promotional_email"],
+                source="account", store=resolve_store_for_service(request),
+            )
+        if previous_email != customer.email:
+            from apps.notifications.services import business_events
+
+            business_events.account_sensitive_changed(customer, resolve_store_for_service(request), "ایمیل")
+        customer.refresh_from_db()
         response = render(
             request, "customers/partials/account_profile.html",
-            {"customer": customer, "profile_form": ProfileForm(initial=form.cleaned_data)},
+            {"customer": customer, "profile_form": ProfileForm(initial={
+                **form.cleaned_data, "birth_date": customer.birth_date,
+                "accepts_promotional_sms": customer.accepts_promotional_sms,
+                "accepts_promotional_email": customer.accepts_promotional_email,
+            })},
         )
         response["HX-Trigger"] = json.dumps({"toast": {"message": "پروفایل به‌روزرسانی شد", "type": "ok"}})
         return response

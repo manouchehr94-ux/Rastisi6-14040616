@@ -4,7 +4,7 @@ from apps.storefront_builder import media_views as storefront_builder_media_view
 from apps.storefront_builder import r4_views as storefront_builder_r4_views
 from apps.storefront_builder import views as storefront_builder_views
 
-from . import views
+from . import cod_views, engagement_views, payment_reconciliation_views, views
 
 app_name = "dashboard"
 
@@ -180,6 +180,28 @@ urlpatterns = [
     path("settings/industry/update/history/", views.settings_industry_update_history, name="settings-industry-update-history"),
     path("settings/finance/", views.settings_finance, name="settings-finance"),
     path("settings/gift-wrap/", views.settings_gift_wrap, name="settings-gift-wrap"),
+    path("settings/order-expiry/", views.settings_order_expiry, name="settings-order-expiry"),
+    path("settings/gift-wrap/products/", engagement_views.gift_wrap_products, name="gift-wrap-products"),
+    # ---- کمپین‌ها و مناسبت‌ها
+    path("campaigns/", engagement_views.campaign_list, name="campaign-list"),
+    path("campaigns/add/", engagement_views.campaign_form, name="campaign-add"),
+    path("campaigns/<int:pk>/", engagement_views.campaign_detail, name="campaign-detail"),
+    path("campaigns/<int:pk>/edit/", engagement_views.campaign_form, name="campaign-edit"),
+    path("campaigns/<int:pk>/activate/", engagement_views.campaign_activate, name="campaign-activate"),
+    path("campaigns/<int:pk>/pause/", engagement_views.campaign_pause, name="campaign-pause"),
+    path("campaigns/<int:pk>/run/", engagement_views.campaign_run, name="campaign-run"),
+    path("campaigns/<int:pk>/preview/", engagement_views.campaign_preview, name="campaign-preview"),
+    path("campaigns/<int:pk>/delete/", engagement_views.campaign_delete, name="campaign-delete"),
+    # ---- اعلان‌ها
+    path("notifications/", engagement_views.notification_templates, name="notification-templates"),
+    path("notifications/history/", engagement_views.notification_history, name="notification-history"),
+    path("payments/reconciliation/", payment_reconciliation_views.payment_reconciliation_list, name="payment-reconciliations"),
+    path("payments/reconciliation/<int:pk>/resolve/", payment_reconciliation_views.payment_reconciliation_resolve, name="payment-reconciliation-resolve"),
+    path("notifications/history/<int:pk>/retry/", engagement_views.notification_retry, name="notification-retry"),
+    path("notifications/<str:event_key>/", engagement_views.notification_template_edit, name="notification-template-edit"),
+    path("notifications/<str:event_key>/preview/", engagement_views.notification_template_preview, name="notification-template-preview"),
+    path("notifications/<str:event_key>/test/", engagement_views.notification_template_test, name="notification-template-test"),
+    path("settings/gift-wrap/products/<int:pk>/", engagement_views.gift_wrap_product_update, name="gift-wrap-product-update"),
     path("settings/appearance/", views.settings_appearance, name="settings-appearance"),
     path("settings/gateways/<int:pk>/toggle/", views.settings_gateway_toggle, name="settings-gateway-toggle"),
     path("settings/shipping/<int:pk>/toggle/", views.settings_shipping_toggle, name="settings-shipping-toggle"),
@@ -422,6 +444,7 @@ urlpatterns = [
 
     # --- استرداد (Refunds) ---
     path("orders/<str:code>/refund/", views.order_refund_form, name="order-refund"),
+    path("orders/<str:code>/cod-payment/", cod_views.order_confirm_cod_payment, name="order-cod-payment"),
 
     # --- مرجوعی‌ها (Returns) ---
     path("returns/", views.return_list, name="return-list"),

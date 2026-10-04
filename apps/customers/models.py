@@ -18,6 +18,41 @@ class Customer(TimeStampedModel):
     orders_count = models.PositiveIntegerField("تعداد سفارش‌ها", default=0)
     total_spent = models.DecimalField("مجموع خرید (تومان)", max_digits=14, decimal_places=0, default=0)
 
+    # تاریخ تولد — میلادی ذخیره می‌شود (قراردادِ تاریخ‌هایِ پروژه)؛ ورودی/نمایشِ
+    # جلالی در لایه‌ی فرم است (``apps.core.jalali_utils``). اختیاری؛ یک مقدارِ
+    # خالی هرگز تولدِ ذخیره‌شده را پاک نمی‌کند (نگاه کنید به
+    # ``customer_profile_service.update_birth_date``).
+    birth_date = models.DateField("تاریخ تولد", null=True, blank=True)
+    # کلیدِ قابل‌ایندکسِ «ماه*۱۰۰+روزِ جلالی» برایِ جست‌وجوی سریعِ تولدهایِ یک
+    # روز بدونِ پیمایشِ همه‌ی مشتریان — همیشه در ``save`` از ``birth_date`` بازسازی می‌شود.
+    birth_month_day = models.PositiveSmallIntegerField(
+        "ماه/روزِ تولد (جلالی)", null=True, blank=True, db_index=True, editable=False,
+    )
+
+    # ترجیحاتِ ارتباطی — پیام‌هایِ تبلیغاتی (کمپین/تولد/مناسبت) فقط در صورتِ **رضایتِ ثبت‌شده**
+    # ارسال می‌شود؛ پیام‌هایِ تراکنشی/امنیتی (سفارش، پرداخت، OTP…) کاملاً مستقل‌اند.
+    # سیاستِ واحد: ``apps.customers.services.consent_service`` (تنها نقطه‌ی تغییر/ارزیابی).
+    # پیش‌فرض «عدمِ رضایت» است؛ رضایتِ نامعلوم هرگز رضایت حساب نمی‌شود. کانال‌ها مستقل‌اند.
+    class ConsentSource(models.TextChoices):
+        REGISTRATION = "registration", "ثبت‌نام"
+        CHECKOUT = "checkout", "تسویه‌حساب"
+        ACCOUNT = "account", "تنظیماتِ حسابِ مشتری"
+        ADMIN = "admin", "ثبتِ دستیِ مدیر"
+        IMPORT = "import", "ورودِ دسته‌ایِ دارایِ مدرک"
+        LEGACY_UNVERIFIED = "legacy_unverified", "قدیمی — بدونِ مدرکِ رضایت (بی‌اثر شد)"
+        LEGACY_OPT_OUT = "legacy_opt_out", "قدیمی — انصرافِ صریح"
+
+    accepts_promotional_sms = models.BooleanField("دریافتِ پیامکِ تبلیغاتی", default=False)
+    accepts_promotional_email = models.BooleanField("دریافتِ ایمیلِ تبلیغاتی", default=False)
+    promo_sms_consent_source = models.CharField(
+        "منبعِ آخرین تغییرِ رضایتِ پیامکی", max_length=20, choices=ConsentSource.choices, blank=True, default="",
+    )
+    promo_email_consent_source = models.CharField(
+        "منبعِ آخرین تغییرِ رضایتِ ایمیلی", max_length=20, choices=ConsentSource.choices, blank=True, default="",
+    )
+    promo_sms_consent_changed_at = models.DateTimeField("زمانِ آخرین تغییرِ رضایتِ پیامکی", null=True, blank=True)
+    promo_email_consent_changed_at = models.DateTimeField("زمانِ آخرین تغییرِ رضایتِ ایمیلی", null=True, blank=True)
+
     class Meta:
         verbose_name = "مشتری"
         verbose_name_plural = "مشتریان"
@@ -25,6 +60,15 @@ class Customer(TimeStampedModel):
 
     def __str__(self):
         return self.full_name
+
+    def save(self, *args, **kwargs):
+        from apps.core.jalali_utils import birthday_month_day_key
+
+        self.birth_month_day = birthday_month_day_key(self.birth_date)
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and "birth_date" in update_fields:
+            kwargs["update_fields"] = list(set(update_fields) | {"birth_month_day"})
+        super().save(*args, **kwargs)
 
     @property
     def joined_at(self):
@@ -209,7 +253,7 @@ class CustomerSegment(TimeStampedModel):
 class CustomerSegmentRule(TimeStampedModel):
     segment = models.ForeignKey(CustomerSegment, verbose_name="سگمنت", on_delete=models.CASCADE, related_name="rules")
     field = models.CharField("فیلد", max_length=40)
-    operator = models.CharField("عملگر", max_length=20)
+    operator = models.CharField("عملگر", max_length=40)
     value = models.CharField("مقدار", max_length=200, blank=True, default="")
     value2 = models.CharField("مقدارِ دوم (برایِ between)", max_length=200, blank=True, default="")
     position = models.PositiveIntegerField("ترتیب", default=0)

@@ -5,7 +5,9 @@ Store-safe و batch-safe (نگاه کنید به ADR-53).
 (ADR-49)، پس این دستور باید به‌صورتِ دوره‌ای از یک زمان‌بندِ خارجی
 (cron/systemd timer) اجرا شود — این محدودیت اینجا صادقانه ثبت می‌شود."""
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
+
+from apps.core.job_lock import single_instance
 
 from apps.customers.models import CustomerSegment
 from apps.dashboard.services.segment_service import SegmentError, refresh_segment_membership
@@ -29,13 +31,19 @@ class Command(BaseCommand):
                 return
             segments = segments.filter(store=store)
 
-        refreshed, failed = 0, 0
-        for segment in segments.iterator(chunk_size=100):
-            try:
-                refresh_segment_membership(segment)
-                refreshed += 1
-            except SegmentError as exc:
-                failed += 1
-                self.stderr.write(self.style.WARNING(f"سگمنتِ «{segment.name}» ({segment.store.slug}): {exc}"))
+        with single_instance("refresh_customer_segments") as acquired:
+            if not acquired:
+                self.stdout.write("skipped: another refresh_customer_segments is still running")
+                return
+            refreshed, failed = 0, 0
+            for segment in segments.iterator(chunk_size=100):
+                try:
+                    refresh_segment_membership(segment)
+                    refreshed += 1
+                except Exception as exc:  # noqa: BLE001 — یک سگمنت خراب بقیه را متوقف نمی‌کند
+                    failed += 1
+                    self.stderr.write(self.style.WARNING(f"سگمنتِ «{segment.name}» ({segment.store.slug}): {exc}"))
 
-        self.stdout.write(self.style.SUCCESS(f"{refreshed} سگمنت تازه‌سازی شد، {failed} مورد ناموفق."))
+            self.stdout.write(self.style.SUCCESS(f"{refreshed} سگمنت تازه‌سازی شد، {failed} مورد ناموفق."))
+        if failed:
+            raise CommandError(f"{failed} segment(s) failed to refresh")

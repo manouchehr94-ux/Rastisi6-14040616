@@ -134,7 +134,7 @@ def restock_order(*, store, order, actor=None) -> None:
     اقلامی که ``product``شان دیگر وجود ندارد (حذف‌شده، ``SET_NULL``) بی‌صدا
     رد می‌شوند — چیزی برای بازگرداندنِ موجودی به آن باقی نمانده.
     """
-    for item in order.items.select_for_update().select_related("product", "variant"):
+    for item in order.items.select_for_update(of=("self",)).select_related("product", "variant"):
         if item.product_id is None:
             continue
 

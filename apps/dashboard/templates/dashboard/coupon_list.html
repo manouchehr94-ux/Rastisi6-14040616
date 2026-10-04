@@ -13,6 +13,10 @@
   {% endif %}
 </div>
 
+<div style="display:flex;gap:8px;margin-bottom:12px">
+  <a class="btn btn-sm {% if scope != 'personal' %}btn-primary{% endif %}" href="?scope=public">کدهای عمومی</a>
+  <a class="btn btn-sm {% if scope == 'personal' %}btn-primary{% endif %}" href="?scope=personal">کدهای اختصاصیِ مشتریان</a>
+</div>
 {% if coupons %}
 <div class="card">
   <div class="card-head"><h3>کدها ({{ coupons|length }})</h3></div>
@@ -21,7 +25,7 @@
     <tbody>
     {% for coupon in coupons %}
     <tr>
-      <td dir="ltr" style="text-align:right"><b>{{ coupon.code }}</b>{% if coupon.label %}<br><small style="color:var(--muted)">{{ coupon.label }}</small>{% endif %}</td>
+      <td dir="ltr" style="text-align:right"><b>{{ coupon.code }}</b>{% if coupon.customer_id %} <span class="badge b-amber" title="کد اختصاصیِ مشتری">{{ coupon.customer.full_name }}</span>{% endif %}{% if coupon.label %}<br><small style="color:var(--muted)">{{ coupon.label }}</small>{% endif %}</td>
       <td>{{ coupon.get_type_display }}</td>
       <td>{{ coupon.value }}</td>
       <td>{{ coupon.min_order }}</td>
@@ -40,6 +44,12 @@
     </tbody>
   </table></div>
 </div>
+{% if scope == 'personal' and coupons.has_other_pages %}
+<div style="display:flex;gap:8px;margin-top:12px">
+  {% if coupons.has_previous %}<a class="btn btn-sm" href="?scope=personal&page={{ coupons.previous_page_number }}">قبلی</a>{% endif %}
+  {% if coupons.has_next %}<a class="btn btn-sm" href="?scope=personal&page={{ coupons.next_page_number }}">بعدی</a>{% endif %}
+</div>
+{% endif %}
 {% else %}
 <div class="card">
   <div class="empty-state">
