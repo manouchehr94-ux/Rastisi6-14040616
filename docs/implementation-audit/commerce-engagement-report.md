@@ -766,3 +766,29 @@ The task asked for a local worktree `../commerce-engagement-worktree`. This work
 
 **Exact remaining code defects:** none known in the implemented scope. Known non-defects: pre-existing failures on base (above); unused legacy per-store provider columns kept for compatibility; `used_count_drift` on the synthetic staging seed only.
 **Not verified against real services:** Zibal behaviour, platform SMS provider, SmsRasti Android app on a phone, real mail account/domain, a real cron scheduler, a production database, Firefox/WebKit.
+
+---
+
+## 20. Integration into `main` (merge of `origin/main` @ `41c2569` into the feature branch)
+
+**Method.** Backup ref created first; `origin/main` merged (merge commit, both histories kept); conflicts resolved file by file; the same suites were run on the merged tree **and** on a `git archive origin/main` export (baseline = current main, not only the old ancestor `185166a`).
+
+**Single price-confirmation mechanism.** The feature branch's earlier price re-confirmation (`PriceChangedError`, `sync_cart_prices`, §17.7/§17.10) was **superseded by main's CAT-002** (`reprice_cart_items`, `LivePriceChangedError`, `CartMembershipChangedError`, `PriceChangeReviewRequired`, `PRICE_CHANGED_MESSAGE`). Only the CAT-002 path remains; gift-wrap unit price is refreshed inside it, and `expected_total` is a comparison-only guard. Any mention of `sync_cart_prices` earlier in this report is historical.
+
+**Fix found during integration.** Main's CAT-002 cart-lock query (`select_for_update()` + `select_related("variant")`) is rejected by PostgreSQL ("FOR UPDATE cannot be applied to the nullable side of an outer join"), so checkout failed on PostgreSQL on main itself (96 failures on the main baseline under PG). Fixed by `select_for_update(of=("self",))` in `order_service._lock_cart_items_and_resolve_final_prices` and `cart_service.reprice_cart_items`; Product/Variant rows are still locked separately.
+
+**Results (merged vs current main).**
+
+| Suite | Merged | Main baseline |
+|---|---|---|
+| SQLite orders/cart/customers | 798 OK (16 skipped) | 586, 3 pre-existing guest-cart errors |
+| SQLite dashboard | 1506 OK | 1459 OK |
+| SQLite sms/notifications/portal/core/engagement/billing/blog/content/subscriptions/catalog | 2608; 2 failures (portal host routing, unified login) identical to main; 1 error in `content` banner-delete test under heavy parallel load, **passes in isolation and in a full `apps.content` run** | 2395; the same 2 failures |
+| SQLite stores + storefront_builder | 4519; 34 failures/errors, a subset of main's 35 | 4519; 35 |
+| PostgreSQL 16 orders/cart/sms/notifications/engagement/customers/core + dashboard order/settings/segment | 1393; 1 error (`AppearanceRenderingRegressionTests`, pre-existing) | 952 (no engagement); 96 failures/errors from the FOR UPDATE defect |
+
+No failure exists on the merged tree that is not also on main (apart from the load-only content flake above). `makemigrations --check`: no changes; `manage.py check`: OK; migrations conflict-free.
+
+**R4 browser regression — NOT fully verified.** The 17-scenario runner `tools/storefront_builder_r4_qa/run.mjs` needs the full R4 QA fixture (hero slides, media, etc.). With the available ad-hoc fixture it fails 17/17 **identically on main and on the merged tree** (scenario 01, `waitSaved`/preview-dependent steps), so it gives no regression signal. What *was* verified in a real Chromium on both trees: the R4 editor route renders the Design Studio shell, `#r4PreviewFrame` is present and visible, the draft-saved state shows, with no page errors. Operators should run the full runner with the project's own R4 fixture before relying on it.
+
+**Unchanged safety settings.** `SEGMENT_ORDER_DEFINITION=legacy`; unpaid-order TTL `0` (expiry disabled); COD never auto-marked paid; Phone/Platform SMS routing suites pass; no external service activated; no deploy, no production-DB migration.
