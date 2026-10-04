@@ -95,32 +95,47 @@ def _looks_like_email(identifier: str) -> bool:
 
 
 def authenticate_customer_by_identifier(request, *, identifier: str, password: str):
-    """احرازِ هویتِ یکپارچه — شناسه می‌تواند ایمیل یا شماره موبایل باشد
-    (یکپارچه‌سازیِ احرازِ هویت). ``Customer.phone`` یکتاست، اما ``Customer.
-    email`` نه — پس اگر بیش از یک مشتری همان ایمیل را داشته باشد (یا هیچ‌
-    کدام)، این تابع صادقانه ``None`` برمی‌گرداند (ابهام هرگز حدس زده
-    نمی‌شود)، دقیقاً مثلِ شناسه‌ی ناموجود یا رمزِ نادرست — هیچ‌کدام از
-    بیرون قابلِ تشخیص نیست."""
+    """Authenticate a Customer by mobile, email or legacy username + password.
+
+    Every lookup is scoped to Customer: a merchant/platform account without
+    a Customer row cannot sign into the storefront through this service.
+    Ambiguous case-insensitive emails or usernames fail closed.
+    """
     identifier = (identifier or "").strip()
     if not identifier or not password:
         return None
 
+    customer = None
     if _looks_like_email(identifier):
-        matches = list(Customer.objects.select_related("user").filter(email__iexact=identifier)[:2])
-        if len(matches) != 1:
+        matches = list(
+            Customer.objects.select_related("user").filter(email__iexact=identifier)[:2]
+        )
+        if len(matches) > 1:
             return None
-        customer = matches[0]
+        if matches:
+            customer = matches[0]
     else:
         try:
             phone = normalize_iranian_phone(identifier)
         except InvalidPhoneError:
+            phone = None
+        if phone is not None:
+            customer = Customer.objects.select_related("user").filter(phone=phone).first()
+
+    if customer is None:
+        # Seeded/legacy customers can have a real username different from
+        # Customer.phone. Also supports email-shaped User.username when the
+        # optional Customer.email field has never been populated.
+        matches = list(
+            Customer.objects.select_related("user").filter(
+                user__username__iexact=identifier
+            )[:2]
+        )
+        if len(matches) != 1:
             return None
-        customer = Customer.objects.select_related("user").filter(phone=phone).first()
-        if customer is None:
-            return None
+        customer = matches[0]
 
     return authenticate(request, username=customer.user.username, password=password)
-
 
 @transaction.atomic
 def merge_guest_cart(request, customer: Customer) -> None:
