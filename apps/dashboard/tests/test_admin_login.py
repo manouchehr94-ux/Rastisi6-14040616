@@ -9,7 +9,7 @@ login without guessing the store. Real unknown hosts still fail closed.
 from urllib.parse import parse_qs, urlsplit
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from apps.portal.services.handoff_service import decode_admin_return_token
@@ -53,6 +53,7 @@ class AdminLoginRedirectTests(TestCase):
         self.assertIn("rastisi.localhost", response["Location"])
         self.assertEqual(_return_destination(response)[1], "/admin-portal/orders/")
 
+    @override_settings(DEBUG=True)
     def test_ambiguous_localhost_redirects_to_central_login(self):
         Store.objects.create(
             name="Second store", slug="second-admin-login-store",
