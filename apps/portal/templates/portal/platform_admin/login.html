@@ -13,9 +13,9 @@
         {% csrf_token %}
         {% if form.non_field_errors %}<div class="pa-alert pa-alert-error">{{ form.non_field_errors.0 }}</div>{% endif %}
         <div class="pa-field" style="margin-bottom:14px">
-          <label for="id_email">ایمیل</label>
-          {{ form.email }}
-          {% if form.email.errors %}<div class="pa-alert pa-alert-error" style="margin-top:6px;padding:6px 10px">{{ form.email.errors.0 }}</div>{% endif %}
+          <label for="id_identifier">شماره موبایل، نام کاربری یا ایمیل</label>
+          {{ form.identifier }}
+          {% if form.identifier.errors %}<div class="pa-alert pa-alert-error" style="margin-top:6px;padding:6px 10px">{{ form.identifier.errors.0 }}</div>{% endif %}
         </div>
         <div class="pa-field" style="margin-bottom:10px">
           <label for="id_password">رمز عبور</label>
