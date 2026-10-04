@@ -56,6 +56,7 @@
     <div class="pa-menu-title">مدیریت محتوا و زیرساخت</div>
     <nav class="pa-nav">
       <a href="{% url 'portal_platform_admin:industries' %}" class="{% if active_nav == 'industries' %}active{% endif %}">🧱 صنف‌ها و قالب‌ها</a>
+      <a href="{% url 'portal_platform_admin:public-photos' %}" class="{% if active_nav == 'public-photos' %}active{% endif %}">🖼️ تصاویر سایت عمومی</a>
       <a href="{% url 'portal_platform_admin:domains' %}" class="{% if active_nav == 'domains' %}active{% endif %}">🌐 دامنه‌ها</a>
       <a href="{% url 'portal_platform_admin:audit-log' %}" class="{% if active_nav == 'audit' %}active{% endif %}">🛡️ گزارش رخدادها</a>
       <a href="{% url 'portal_platform_admin:configuration' %}" class="{% if active_nav == 'platform-settings' %}active{% endif %}">⚙️ تنظیمات پلتفرم</a>

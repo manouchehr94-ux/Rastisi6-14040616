@@ -760,8 +760,19 @@ def store_end_trial_now(request, store_public_id):
 @require_POST
 @user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
 def store_change_plan(request, store_public_id):
+    """SUB-001 (بازبینیِ مستقلِ معماری، Repair 2): این یک overrideِ اپراتوریِ
+    صریحِ مدیرِ پلتفرم است — نه یک مسیرِ جایگزینِ خریدِ مرچنت — پس بدونِ
+    round-tripِ preview_token (که ذاتاً برایِ محافظتِ خریدِ مرچنتِ 5A طراحی
+    شده بود و قبلاً هم به‌اشتباه به کلیدِ نادرستِ ``preview["preview_token"]``
+    دسترسی پیدا می‌کرد، در حالی‌که ``preview_plan_change`` کلیدِ ``token`` را
+    برمی‌گرداند) مستقیماً از ``execute_platform_admin_plan_override`` عبور
+    می‌کند."""
     from apps.subscriptions.models import PlanVersion
-    from apps.subscriptions.services.plan_change_service import execute_plan_change, preview_plan_change
+    from apps.subscriptions.services.plan_change_service import (
+        PlanChangeError,
+        execute_platform_admin_plan_override,
+    )
+    from apps.subscriptions.services.subscription_service import SubscriptionError
 
     store = get_object_or_404(Store, public_id=store_public_id)
     target_version_id = (request.POST.get("plan_version_id") or "").strip()
@@ -770,14 +781,13 @@ def store_change_plan(request, store_public_id):
         messages.error(request, "نسخه‌ی پلنِ انتخاب‌شده معتبر نیست.")
         return redirect("portal_platform_admin:store-detail", store_public_id)
 
-    preview = preview_plan_change(store, target_version)
     try:
-        execute_plan_change(
-            store, target_version, preview_token=preview["preview_token"], actor=request.user,
+        execute_platform_admin_plan_override(
+            store, target_version, actor=request.user,
             reason=(request.POST.get("reason") or "").strip(),
         )
         messages.success(request, f"پلنِ «{store.name}» به «{target_version.plan.name}» تغییر کرد.")
-    except Exception as exc:  # noqa: BLE001 — نمایشِ خطایِ سرویس به مدیرِ پلتفرم، نه شکستِ بی‌صدا
+    except (PlanChangeError, SubscriptionError) as exc:
         messages.error(request, str(exc))
     return redirect("portal_platform_admin:store-detail", store_public_id)
 
@@ -972,6 +982,13 @@ def plan_form(request, plan_id=None):
         billing_interval = request.POST.get("billing_interval") or "monthly"
         display_order = request.POST.get("display_order") or "0"
         is_recommended = request.POST.get("is_recommended") == "on"
+        # Old API/test POST payloads omit this new field; preserve their old
+        # default. The new form sends the hidden submitted marker explicitly.
+        is_publicly_selectable = (
+            request.POST.get("is_publicly_selectable") == "on"
+            if "public_selectable_submitted" in request.POST
+            else (plan.is_publicly_selectable if plan else True)
+        )
 
         if not name or not code:
             messages.error(request, "نام و کدِ پلن الزامی است.")
@@ -984,6 +1001,7 @@ def plan_form(request, plan_id=None):
                 code=code, name=name, public_title=public_title, description=description,
                 display_order=int(display_order) if display_order.isdigit() else 0,
                 is_recommended=is_recommended,
+                is_publicly_selectable=is_publicly_selectable,
             )
             action_code = "platform_admin.plan_created"
         else:
@@ -992,7 +1010,11 @@ def plan_form(request, plan_id=None):
             plan.description = description
             plan.display_order = int(display_order) if display_order.isdigit() else 0
             plan.is_recommended = is_recommended
-            plan.save(update_fields=["name", "public_title", "description", "display_order", "is_recommended", "updated_at"])
+            plan.is_publicly_selectable = is_publicly_selectable
+            plan.save(update_fields=[
+                "name", "public_title", "description", "display_order",
+                "is_recommended", "is_publicly_selectable", "updated_at",
+            ])
             action_code = "platform_admin.plan_updated"
 
         version = create_plan_version(

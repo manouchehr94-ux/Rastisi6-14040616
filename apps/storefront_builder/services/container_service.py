@@ -88,6 +88,26 @@ LAYOUT_PRESETS: dict[str, tuple[int, ...]] = {
     "quarters": (3, 3, 3, 3),
 }
 
+#: R4 Task 7 (final-review fix, MINOR-7; fifth-reviewer fix, MINOR-2) — the
+#: SAME ratios, in the SAME order, as the legacy editor's own layout picker
+#: already shows (``templates/dashboard/storefront_builder/editor.html``'s
+#: inline layout_key if/elif chain) — just in this codebase's own
+#: Persian-indic-digit convention (see e.g. ``validate_container``'s "بین ۱
+#: تا ۱۲" below) rather than the legacy template's ASCII digits. A second
+#: literal, not a second translation: if the legacy picker's ratios or
+#: order ever change, update both — there is no shared constant to reuse
+#: across a Python dict and a Django template's inline chain.
+LAYOUT_PRESET_LABELS_FA: dict[str, str] = {
+    "single": "۱۰۰٪",
+    "half": "۵۰/۵۰",
+    "quarter_left": "۲۵/۷۵",
+    "quarter_right": "۷۵/۲۵",
+    "third_left": "۳۳/۶۷",
+    "third_right": "۶۷/۳۳",
+    "thirds": "سه‌ستونه",
+    "quarters": "چهارستونه",
+}
+
 CONTAINER_SETTINGS_DEFAULTS = {
     "gap": 14,
     "mobile_mode": "stack",   # stack | same
@@ -846,12 +866,32 @@ def move_block(section: StorefrontSection, target_cell: StorefrontCell, *, at_in
     belong to the same Page as ``section``, and its Container must not be
     locked.  Moving *within* the same Cell (``target_cell.pk == section.cell_id``)
     is accepted as a same-Cell reorder-to-position rather than an error.
+
+    R4 Task 8 (Batch 2, lifecycle-lock parity) — the SOURCE Cell's
+    Container must ALSO not be locked: before this fix, only the target
+    side was checked, so a Block could be moved OUT of a locked Container
+    by targeting any unlocked one — exactly the kind of bypass a "locked =
+    untouchable" guarantee must not have. Resolved with a FRESH query
+    (never ``section.cell``'s possibly-stale cached relation — ``section``
+    is caller-supplied and may have been fetched before a concurrent lock
+    flip), same two-step preference as
+    ``section_structure_service.find_placement_cell`` (new multi-block FK,
+    then the legacy single-block reverse pointer) — inlined here rather
+    than imported, since that module already imports THIS one (importing
+    back would be circular).
     """
     target_cell = StorefrontCell.objects.select_for_update().select_related("container").get(pk=target_cell.pk)
     if target_cell.container.page_id != section.page_id:
         raise ContainerLayoutError("این محتوا متعلق به صفحه دیگری است")
     if target_cell.container.is_locked:
         raise ContainerLayoutError("این چیدمان قفل است — ابتدا قفل آن را باز کنید")
+
+    if section.cell_id is not None:
+        source_cell = StorefrontCell.objects.select_related("container").get(pk=section.cell_id)
+    else:
+        source_cell = StorefrontCell.objects.filter(section=section).select_related("container").first()
+    if source_cell is not None and source_cell.container.is_locked:
+        raise ContainerLayoutError("چیدمانِ فعلیِ این محتوا قفل است — ابتدا قفل آن را باز کنید")
 
     source_cell_id = section.cell_id
     if source_cell_id == target_cell.pk:

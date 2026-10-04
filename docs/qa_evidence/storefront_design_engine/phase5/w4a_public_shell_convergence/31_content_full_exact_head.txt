@@ -1,0 +1,778 @@
+Found 467 test(s).
+Creating test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+Operations to perform:
+  Synchronize unmigrated apps: messages, staticfiles
+  Apply all migrations: admin, auth, billing, blog, cart, catalog, content, contenttypes, core, customers, notifications, orders, portal, sessions, sms, storefront_builder, stores, subscriptions
+Synchronizing apps without migrations:
+  Creating tables...
+    Running deferred SQL...
+Running migrations:
+  Applying contenttypes.0001_initial... OK
+  Applying auth.0001_initial... OK
+  Applying admin.0001_initial... OK
+  Applying admin.0002_logentry_remove_auto_add... OK
+  Applying admin.0003_logentry_add_action_flag_choices... OK
+  Applying contenttypes.0002_remove_content_type_name... OK
+  Applying auth.0002_alter_permission_name_max_length... OK
+  Applying auth.0003_alter_user_email_max_length... OK
+  Applying auth.0004_alter_user_username_opts... OK
+  Applying auth.0005_alter_user_last_login_null... OK
+  Applying auth.0006_require_contenttypes_0002... OK
+  Applying auth.0007_alter_validators_add_error_messages... OK
+  Applying auth.0008_alter_user_username_max_length... OK
+  Applying auth.0009_alter_user_last_name_max_length... OK
+  Applying auth.0010_alter_group_name_max_length... OK
+  Applying auth.0011_update_proxy_permissions... OK
+  Applying auth.0012_alter_user_first_name_max_length... OK
+  Applying stores.0001_initial... OK
+  Applying stores.0002_create_akhlaghi_store... OK
+  Applying stores.0003_store_admin_subdomain_schema... OK
+  Applying stores.0004_backfill_store_admin_subdomain... OK
+  Applying stores.0005_store_admin_subdomain_enforce_not_null... OK
+  Applying subscriptions.0001_initial... OK
+  Applying subscriptions.0002_storesubscription_subscriptionevent_usagerecord_and_more... OK
+  Applying subscriptions.0003_provision_legacy_subscriptions... OK
+  Applying subscriptions.0004_alter_subscriptionevent_event_type... OK
+  Applying billing.0001_initial... OK
+  Applying billing.0002_billingsequence_subscriptioninvoiceline... OK
+  Applying billing.0003_subscriptionpaymentattempt... OK
+  Applying billing.0004_billingwebhookevent... OK
+  Applying billing.0005_subscriptiondunningstate... OK
+  Applying billing.0006_scheduledplanchange... OK
+  Applying billing.0007_subscriptioncreditnote_subscriptionrefund_and_more... OK
+  Applying blog.0001_initial... OK
+  Applying catalog.0001_initial... OK
+  Applying customers.0001_initial... OK
+  Applying cart.0001_initial... OK
+  Applying cart.0002_initial... OK
+  Applying cart.0003_cart_checkout_token... OK
+  Applying cart.0004_coupon_store_scope_schema... OK
+  Applying cart.0005_backfill_coupon_store... OK
+  Applying cart.0006_coupon_store_enforce_not_null... OK
+  Applying cart.0007_cartitem_gift_wrap... OK
+  Applying stores.0006_store_platform_code_schema... OK
+  Applying stores.0007_backfill_store_platform_code... OK
+  Applying stores.0008_store_platform_code_enforce_not_null... OK
+  Applying stores.0009_storedomain_domain_type_and_redirect... OK
+  Applying stores.0010_storedomain_retire_instead_of_redirect... OK
+  Applying stores.0011_store_onboarding_completed_at... OK
+  Applying stores.0012_backfill_store_onboarding_completed_at... OK
+  Applying stores.0013_store_onboarding_stage... OK
+  Applying stores.0014_store_deletion_requested_at_and_more... OK
+  Applying stores.0015_storeownershiptransfer... OK
+  Applying stores.0016_store_integration_connection... OK
+  Applying stores.0017_platform_owner_admin_gap_fill... OK
+  Applying orders.0001_initial... OK
+  Applying orders.0002_order_tracking_code... OK
+  Applying orders.0003_store_scope_orders_schema... OK
+  Applying catalog.0002_initial... OK
+  Applying catalog.0003_productimage_is_cover_productimage_thumbnail... OK
+  Applying catalog.0004_specification_specificationtemplate_and_more... OK
+  Applying catalog.0005_variant_backfill_and_constraints... OK
+  Applying catalog.0006_store_scope_catalog_schema... OK
+  Applying catalog.0007_backfill_catalog_store... OK
+  Applying catalog.0008_store_scope_catalog_enforce_not_null... OK
+  Applying orders.0004_backfill_orders_store... OK
+  Applying orders.0005_store_scope_orders_enforce_not_null... OK
+  Applying orders.0006_payment_gateway_config_and_attempt... OK
+  Applying orders.0007_refund_refunditem_returnrequest_returnitem_and_more... OK
+  Applying catalog.0009_product_logistics_and_seo_fields... OK
+  Applying catalog.0010_product_image_variant... OK
+  Applying catalog.0011_attribute_option_variant_engine... OK
+  Applying catalog.0012_industry_templates_and_category_schema... OK
+  Applying catalog.0013_attributevalue_source_template_value_and_more... OK
+  Applying catalog.0014_stockmovement... OK
+  Applying catalog.0015_stockmovement_return_item_alter_stockmovement_reason_and_more... OK
+  Applying catalog.0016_stockmovement_refund_item_alter_stockmovement_reason_and_more... OK
+  Applying catalog.0017_alter_stockmovement_reason_warehouse_and_more... OK
+  Applying catalog.0018_provision_default_warehouses... OK
+  Applying orders.0008_shippingraterule_shippingzone_taxclass_taxrate_and_more... OK
+  Applying catalog.0019_product_tax_class... OK
+  Applying catalog.0020_alter_stockmovement_reason... OK
+  Applying catalog.0021_brand_description_brand_is_active_brand_name_en... OK
+  Applying catalog.0022_alter_brand_options_brand_country_brand_sort_order_and_more... OK
+  Applying catalog.0023_attributevalue_swatch_image... OK
+  Applying catalog.0024_productimage_caption_productimage_is_360_and_more... OK
+  Applying catalog.0025_attribute_is_image_driving_productimage_option_value... OK
+  Applying catalog.0026_productvariant_price_productvariant_tax_class_and_more... OK
+  Applying catalog.0027_productoption_input_type_productvariant_sales_limit... OK
+  Applying catalog.0028_product_publish_at_product_visibility_and_more... OK
+  Applying catalog.0029_industry_template_sector... OK
+  Applying catalog.0030_industrytemplate_default_section_keys... OK
+  Applying catalog.0031_product_country_of_origin_product_model_code_and_more... OK
+  Applying catalog.0032_producttag_purpose... OK
+  Applying catalog.0033_product_draft_placeholder... OK
+  Applying catalog.0034_alter_productvideo_provider_add_instagram... OK
+  Applying catalog.0035_merchantcollection_merchantcollectionitem_and_more... OK
+  Applying catalog.0036_merchantcollection_source_legacy_product_tag... OK
+  Applying catalog.0037_category_image... OK
+  Applying catalog.0038_productmetafield... OK
+  Applying storefront_builder.0001_initial... OK
+  Applying storefront_builder.0002_storefrontsection_collapsed_in_editor... OK
+  Applying storefront_builder.0003_storefrontlayoutversion_appearance_config... OK
+  Applying content.0001_content_page... OK
+  Applying content.0002_publication_constraint... OK
+  Applying content.0003_homepage_media... OK
+  Applying content.0004_image_size_validators... OK
+  Applying content.0005_social_link... OK
+  Applying content.0006_navigation_menus... OK
+  Applying content.0007_menu_item_protect_menu_fk... OK
+  Applying content.0008_footer_configuration... OK
+  Applying content.0009_footer_phone_validators... OK
+  Applying content.0010_image_content_validator... OK
+  Applying content.0011_store_scope_settings_schema... OK
+  Applying content.0012_backfill_footer_store... OK
+  Applying content.0013_store_scope_settings_enforce_not_null... OK
+  Applying content.0014_storefront_builder_store_scoping... OK
+  Applying content.0015_assign_legacy_content_ownership... OK
+  Applying content.0016_add_collection_destination... OK
+  Applying content.0017_scope_hero_slides_and_banners_to_section... OK
+  Applying content.0018_storyrailitem... OK
+  Applying content.0019_mediaasset... OK
+  Applying content.0020_placement_asset_fks... OK
+  Applying content.0021_backfill_placement_assets... OK
+  Applying content.0022_alter_heroslide_destination_type_and_more... OK
+  Applying content.0023_newslettersubscriber... OK
+  Applying core.0001_initial... OK
+  Applying core.0002_shopsettings_melipayamak_password_and_more... OK
+  Applying core.0003_add_visual_identity_fields... OK
+  Applying core.0004_theme_tokens... OK
+  Applying core.0005_store_scope_settings_schema... OK
+  Applying core.0006_backfill_shopsettings_store... OK
+  Applying core.0007_store_scope_settings_enforce_not_null... OK
+  Applying core.0008_auditlogentry... OK
+  Applying core.0009_shopsettings_default_tax_class_and_more... OK
+  Applying core.0010_exportjob... OK
+  Applying core.0011_importjob_importrowresult_and_more... OK
+  Applying core.0012_shopsettings_kavenegar_api_key_and_more... OK
+  Applying core.0013_shopsettings_smsrasti_device_token_and_more... OK
+  Applying core.0014_private_storage_deconstructible... OK
+  Applying core.0015_shopsettings_tax_setup_confirmed_at... OK
+  Applying core.0016_shopsettings_gift_wrap... OK
+  Applying customers.0002_customerprofile_customernote_customertag_and_more... OK
+  Applying customers.0003_customersegment_customersegmentrule_and_more... OK
+  Applying notifications.0001_initial... OK
+  Applying orders.0009_shipping_free_over_optional_and_cost_check... OK
+  Applying orders.0010_orderitem_gift_wrap... OK
+  Applying portal.0001_initial... OK
+  Applying portal.0002_platform_configuration_and_audit... OK
+  Applying portal.0003_owner_otp_and_phone... OK
+  Applying portal.0004_alter_ownerotpchallenge_purpose... OK
+  Applying portal.0005_platformconfiguration_sms_fields... OK
+  Applying portal.0006_platform_owner_admin_gap_fill... OK
+  Applying portal.0007_platformconfiguration_enamad_verification_meta_tag... OK
+  Applying portal.0008_platformconfiguration_encrypted_zibal_credentials_and_more... OK
+  Applying portal.0009_platformconfiguration_enamad_auth_code_and_more... OK
+  Applying sessions.0001_initial... OK
+  Applying sms.0001_initial... OK
+  Applying sms.0002_otpcode_code_hash... OK
+  Applying sms.0003_smsoutboxitem... OK
+  Applying sms.0004_smslog_store... OK
+  Applying sms.0005_sms_balance_and_packages... OK
+  Applying sms.0006_seed_sms_packages... OK
+  Applying sms.0007_platform_owner_admin_gap_fill... OK
+  Applying sms.0008_sms_control_center... OK
+  Applying storefront_builder.0004_storefrontsection_stable_id... OK
+  Applying storefront_builder.0005_storefrontpage... OK
+  Applying storefront_builder.0006_ensure_pages_for_existing_versions... OK
+  Applying storefront_builder.0007_storefrontsection_page... OK
+  Applying storefront_builder.0008_backfill_section_page... OK
+  Applying storefront_builder.0009_storefrontsection_page_not_null_and_stable_id_scope... OK
+  Applying storefront_builder.0010_remove_storefrontsection_version... OK
+  Applying storefront_builder.0011_seed_default_non_home_sections... OK
+  Applying storefront_builder.0012_universal_block_row_and_lock... OK
+  Applying storefront_builder.0013_storefrontedithistoryentry... OK
+  Applying storefront_builder.0014_storefront_container_cell_foundation... OK
+  Applying storefront_builder.0015_storefrontsection_cell_and_cell_order... OK
+  Applying storefront_builder.0016_storefrontlayoutversion_template_provenance... OK
+  Applying storefront_builder.0017_add_ready_template_baseline_snapshot_and_slot_key... OK
+  Applying storefront_builder.0018_r4_editor_gate_and_edit_revision... OK
+  Applying storefront_builder.0019_page_appearance_overrides... OK
+  Applying storefront_builder.0020_r4_editor_enabled_default_true... OK
+  Applying stores.0018_storedomain_delivery_readiness... OK
+  Applying subscriptions.0005_platforminvoice_platformpaymentattempt_and_more... OK
+  Applying subscriptions.0006_remove_platform_invoice_and_attempt... OK
+  Applying subscriptions.0007_alter_subscriptionevent_event_type... OK
+System check identified no issues (0 silenced).
+test_another_stores_asset_never_leaks (apps.content.tests.test_background_media_resolution.ResolveBackgroundMediaUrlTests.test_another_stores_asset_never_leaks)
+قلبِ تصمیمِ ایمنیِ مستأجر: یک section نباید بتواند به رسانه‌ی ... ok
+test_missing_media_asset_id_returns_none (apps.content.tests.test_background_media_resolution.ResolveBackgroundMediaUrlTests.test_missing_media_asset_id_returns_none) ... ok
+test_non_image_mode_returns_none (apps.content.tests.test_background_media_resolution.ResolveBackgroundMediaUrlTests.test_non_image_mode_returns_none) ... ok
+test_none_background_returns_none (apps.content.tests.test_background_media_resolution.ResolveBackgroundMediaUrlTests.test_none_background_returns_none) ... ok
+test_nonexistent_media_asset_id_returns_none_not_crash (apps.content.tests.test_background_media_resolution.ResolveBackgroundMediaUrlTests.test_nonexistent_media_asset_id_returns_none_not_crash) ... ok
+test_valid_own_store_asset_resolves_to_real_url (apps.content.tests.test_background_media_resolution.ResolveBackgroundMediaUrlTests.test_valid_own_store_asset_resolves_to_real_url) ... ok
+test_anonymous_denied (apps.content.tests.test_content_pages.ContentPageDashboardTests.test_anonymous_denied) ... ok
+test_create_page (apps.content.tests.test_content_pages.ContentPageDashboardTests.test_create_page) ... ok
+test_delete_page (apps.content.tests.test_content_pages.ContentPageDashboardTests.test_delete_page) ... ok
+test_edit_page (apps.content.tests.test_content_pages.ContentPageDashboardTests.test_edit_page) ... ok
+test_page_list_accessible (apps.content.tests.test_content_pages.ContentPageDashboardTests.test_page_list_accessible) ... ok
+test_publish_page (apps.content.tests.test_content_pages.ContentPageDashboardTests.test_publish_page) ... ok
+test_reserved_slug_rejected_in_dashboard (apps.content.tests.test_content_pages.ContentPageDashboardTests.test_reserved_slug_rejected_in_dashboard) ... ok
+test_unpublish_page (apps.content.tests.test_content_pages.ContentPageDashboardTests.test_unpublish_page) ... ok
+test_get_absolute_url (apps.content.tests.test_content_pages.ContentPageModelTests.test_get_absolute_url) ... ok
+test_persian_slug_accepted (apps.content.tests.test_content_pages.ContentPageModelTests.test_persian_slug_accepted) ... ok
+test_reserved_slug_products_rejected (apps.content.tests.test_content_pages.ContentPageModelTests.test_reserved_slug_products_rejected) ... ok
+test_reserved_slug_rejected (apps.content.tests.test_content_pages.ContentPageModelTests.test_reserved_slug_rejected) ... ok
+test_seo_fallback_to_title (apps.content.tests.test_content_pages.ContentPageModelTests.test_seo_fallback_to_title) ... ok
+test_seo_uses_explicit_values (apps.content.tests.test_content_pages.ContentPageModelTests.test_seo_uses_explicit_values) ... ok
+test_slug_uniqueness (apps.content.tests.test_content_pages.ContentPageModelTests.test_slug_uniqueness) ... ok
+test_valid_slug_accepted (apps.content.tests.test_content_pages.ContentPageModelTests.test_valid_slug_accepted) ... ok
+test_draft_page_returns_404 (apps.content.tests.test_content_pages.ContentPageStorefrontViewTests.test_draft_page_returns_404) ... ok
+test_nonexistent_slug_returns_404 (apps.content.tests.test_content_pages.ContentPageStorefrontViewTests.test_nonexistent_slug_returns_404) ... ok
+test_published_page_visible (apps.content.tests.test_content_pages.ContentPageStorefrontViewTests.test_published_page_visible) ... ok
+test_seo_title_in_html (apps.content.tests.test_content_pages.ContentPageStorefrontViewTests.test_seo_title_in_html) ... ok
+test_duplicate_slug_handled_safely (apps.content.tests.test_content_pages.DashboardValidationTests.test_duplicate_slug_handled_safely) ... ok
+test_footer_never_renders_hash_for_managed_pages (apps.content.tests.test_content_pages.FooterIntegrationTests.test_footer_never_renders_hash_for_managed_pages) ... ok
+test_published_page_in_footer (apps.content.tests.test_content_pages.FooterIntegrationTests.test_published_page_in_footer) ... ok
+test_unpublished_page_not_in_footer (apps.content.tests.test_content_pages.FooterIntegrationTests.test_unpublished_page_not_in_footer) ... ok
+test_draft_without_timestamp_allowed (apps.content.tests.test_content_pages.PublicationConstraintTests.test_draft_without_timestamp_allowed)
+Draft page without published_at is valid. ... ok
+test_published_without_timestamp_violates_constraint (apps.content.tests.test_content_pages.PublicationConstraintTests.test_published_without_timestamp_violates_constraint)
+Database rejects published page without published_at. ... ok
+test_meta_description_escapes_dangerous_content (apps.content.tests.test_content_pages.SEOMetaDescriptionTests.test_meta_description_escapes_dangerous_content) ... ok
+test_meta_description_not_rendered_when_empty (apps.content.tests.test_content_pages.SEOMetaDescriptionTests.test_meta_description_not_rendered_when_empty) ... ok
+test_meta_description_rendered_when_configured (apps.content.tests.test_content_pages.SEOMetaDescriptionTests.test_meta_description_rendered_when_configured) ... ok
+test_javascript_href_escaped (apps.content.tests.test_content_pages.XSSSecurityTests.test_javascript_href_escaped) ... ok
+test_onerror_escaped (apps.content.tests.test_content_pages.XSSSecurityTests.test_onerror_escaped) ... ok
+test_script_tag_escaped (apps.content.tests.test_content_pages.XSSSecurityTests.test_script_tag_escaped) ... ok
+test_brand_resolves (apps.content.tests.test_destination.DestinationResolverTests.test_brand_resolves) ... ok
+test_cart_resolves (apps.content.tests.test_destination.DestinationResolverTests.test_cart_resolves) ... ok
+test_category_resolves (apps.content.tests.test_destination.DestinationResolverTests.test_category_resolves) ... ok
+test_deleted_category_returns_none (apps.content.tests.test_destination.DestinationResolverTests.test_deleted_category_returns_none) ... ok
+test_deleted_product_returns_none (apps.content.tests.test_destination.DestinationResolverTests.test_deleted_product_returns_none) ... ok
+test_external_resolves (apps.content.tests.test_destination.DestinationResolverTests.test_external_resolves) ... ok
+test_none_returns_none (apps.content.tests.test_destination.DestinationResolverTests.test_none_returns_none) ... ok
+test_product_resolves (apps.content.tests.test_destination.DestinationResolverTests.test_product_resolves) ... ok
+test_resolver_never_returns_hash (apps.content.tests.test_destination.DestinationResolverTests.test_resolver_never_returns_hash)
+Resolver must never return '#' under any circumstance. ... ok
+test_search_resolves (apps.content.tests.test_destination.DestinationResolverTests.test_search_resolves) ... ok
+test_cross_tenant_brand_rejected (apps.content.tests.test_destination.DestinationStoreOwnershipTests.test_cross_tenant_brand_rejected) ... ok
+test_cross_tenant_category_rejected (apps.content.tests.test_destination.DestinationStoreOwnershipTests.test_cross_tenant_category_rejected) ... ok
+test_cross_tenant_collection_rejected (apps.content.tests.test_destination.DestinationStoreOwnershipTests.test_cross_tenant_collection_rejected) ... ok
+test_cross_tenant_product_rejected (apps.content.tests.test_destination.DestinationStoreOwnershipTests.test_cross_tenant_product_rejected) ... ok
+test_legacy_row_with_no_store_skips_ownership_check (apps.content.tests.test_destination.DestinationStoreOwnershipTests.test_legacy_row_with_no_store_skips_ownership_check)
+رکوردهای قدیمیِ بدونِ Store (Nullable — رفتارِ قبل از سازنده ... ok
+test_menuitem_own_brand_passes (apps.content.tests.test_destination.DestinationStoreOwnershipTests.test_menuitem_own_brand_passes) ... ok
+test_menuitem_ownership_resolved_via_menu_store (apps.content.tests.test_destination.DestinationStoreOwnershipTests.test_menuitem_ownership_resolved_via_menu_store) ... ok
+test_own_brand_passes (apps.content.tests.test_destination.DestinationStoreOwnershipTests.test_own_brand_passes) ... ok
+test_own_collection_passes (apps.content.tests.test_destination.DestinationStoreOwnershipTests.test_own_collection_passes) ... ok
+test_brand_with_brand_passes (apps.content.tests.test_destination.DestinationValidationTests.test_brand_with_brand_passes) ... ok
+test_brand_without_brand_fails (apps.content.tests.test_destination.DestinationValidationTests.test_brand_without_brand_fails) ... ok
+test_cart_with_external_url_fails (apps.content.tests.test_destination.DestinationValidationTests.test_cart_with_external_url_fails) ... ok
+test_cart_with_no_destination_passes (apps.content.tests.test_destination.DestinationValidationTests.test_cart_with_no_destination_passes) ... ok
+test_category_with_category_passes (apps.content.tests.test_destination.DestinationValidationTests.test_category_with_category_passes) ... ok
+test_category_with_product_also_fails (apps.content.tests.test_destination.DestinationValidationTests.test_category_with_product_also_fails) ... ok
+test_category_without_category_fails (apps.content.tests.test_destination.DestinationValidationTests.test_category_without_category_fails) ... ok
+test_data_scheme_rejected (apps.content.tests.test_destination.DestinationValidationTests.test_data_scheme_rejected) ... ok
+test_external_with_http_passes (apps.content.tests.test_destination.DestinationValidationTests.test_external_with_http_passes) ... ok
+test_external_with_https_passes (apps.content.tests.test_destination.DestinationValidationTests.test_external_with_https_passes) ... ok
+test_external_with_internal_fk_fails (apps.content.tests.test_destination.DestinationValidationTests.test_external_with_internal_fk_fails) ... ok
+test_external_without_url_fails (apps.content.tests.test_destination.DestinationValidationTests.test_external_without_url_fails) ... ok
+test_javascript_scheme_rejected (apps.content.tests.test_destination.DestinationValidationTests.test_javascript_scheme_rejected) ... ok
+test_malformed_url_rejected (apps.content.tests.test_destination.DestinationValidationTests.test_malformed_url_rejected) ... ok
+test_none_with_category_fails (apps.content.tests.test_destination.DestinationValidationTests.test_none_with_category_fails) ... ok
+test_none_with_external_url_fails (apps.content.tests.test_destination.DestinationValidationTests.test_none_with_external_url_fails) ... ok
+test_none_with_no_destination_passes (apps.content.tests.test_destination.DestinationValidationTests.test_none_with_no_destination_passes) ... ok
+test_product_with_product_passes (apps.content.tests.test_destination.DestinationValidationTests.test_product_with_product_passes) ... ok
+test_product_without_product_fails (apps.content.tests.test_destination.DestinationValidationTests.test_product_without_product_fails) ... ok
+test_protocol_relative_rejected (apps.content.tests.test_destination.DestinationValidationTests.test_protocol_relative_rejected) ... ok
+test_search_with_category_fails (apps.content.tests.test_destination.DestinationValidationTests.test_search_with_category_fails) ... ok
+test_search_with_no_destination_passes (apps.content.tests.test_destination.DestinationValidationTests.test_search_with_no_destination_passes) ... ok
+test_whitespace_normalized (apps.content.tests.test_destination.DestinationValidationTests.test_whitespace_normalized) ... ok
+test_data_rejected (apps.content.tests.test_destination.ExternalURLValidatorTests.test_data_rejected) ... ok
+test_empty_rejected (apps.content.tests.test_destination.ExternalURLValidatorTests.test_empty_rejected) ... ok
+test_ftp_rejected (apps.content.tests.test_destination.ExternalURLValidatorTests.test_ftp_rejected) ... ok
+test_http_valid (apps.content.tests.test_destination.ExternalURLValidatorTests.test_http_valid) ... ok
+test_https_valid (apps.content.tests.test_destination.ExternalURLValidatorTests.test_https_valid) ... ok
+test_javascript_rejected (apps.content.tests.test_destination.ExternalURLValidatorTests.test_javascript_rejected) ... ok
+test_mailto_valid (apps.content.tests.test_destination.ExternalURLValidatorTests.test_mailto_valid) ... ok
+test_protocol_relative_rejected (apps.content.tests.test_destination.ExternalURLValidatorTests.test_protocol_relative_rejected) ... ok
+test_tel_valid (apps.content.tests.test_destination.ExternalURLValidatorTests.test_tel_valid) ... ok
+test_vbscript_rejected (apps.content.tests.test_destination.ExternalURLValidatorTests.test_vbscript_rejected) ... ok
+test_whitespace_only_rejected (apps.content.tests.test_destination.ExternalURLValidatorTests.test_whitespace_only_rejected) ... ok
+test_configured_text_renders (apps.content.tests.test_footer_config.CopyrightBehaviorTests.test_configured_text_renders) ... ok
+test_empty_text_omits_section (apps.content.tests.test_footer_config.CopyrightBehaviorTests.test_empty_text_omits_section) ... ok
+test_no_auto_generated_fallback (apps.content.tests.test_footer_config.CopyrightBehaviorTests.test_no_auto_generated_fallback) ... ok
+test_text_is_escaped (apps.content.tests.test_footer_config.CopyrightBehaviorTests.test_text_is_escaped) ... ok
+test_anonymous_redirect (apps.content.tests.test_footer_config.DashboardAccessTests.test_anonymous_redirect) ... ok
+test_non_staff_rejected (apps.content.tests.test_footer_config.DashboardAccessTests.test_non_staff_rejected) ... ok
+test_staff_allowed (apps.content.tests.test_footer_config.DashboardAccessTests.test_staff_allowed) ... ok
+test_badge_create (apps.content.tests.test_footer_config.DashboardFooterCRUDTests.test_badge_create) ... ok
+test_badge_delete (apps.content.tests.test_footer_config.DashboardFooterCRUDTests.test_badge_delete) ... ok
+test_badge_edit (apps.content.tests.test_footer_config.DashboardFooterCRUDTests.test_badge_edit) ... ok
+test_badge_toggle (apps.content.tests.test_footer_config.DashboardFooterCRUDTests.test_badge_toggle) ... ok
+test_logo_create (apps.content.tests.test_footer_config.DashboardFooterCRUDTests.test_logo_create) ... ok
+test_logo_delete (apps.content.tests.test_footer_config.DashboardFooterCRUDTests.test_logo_delete) ... ok
+test_logo_edit (apps.content.tests.test_footer_config.DashboardFooterCRUDTests.test_logo_edit) ... ok
+test_logo_toggle (apps.content.tests.test_footer_config.DashboardFooterCRUDTests.test_logo_toggle) ... ok
+test_settings_save (apps.content.tests.test_footer_config.DashboardFooterCRUDTests.test_settings_save) ... ok
+test_badge_list_shows_only_current_store_rows (apps.content.tests.test_footer_config.DashboardFooterCrossStoreIsolationTests.test_badge_list_shows_only_current_store_rows) ... ok
+test_identical_display_order_allowed_across_stores (apps.content.tests.test_footer_config.DashboardFooterCrossStoreIsolationTests.test_identical_display_order_allowed_across_stores) ... ok
+test_identical_titles_allowed_across_stores (apps.content.tests.test_footer_config.DashboardFooterCrossStoreIsolationTests.test_identical_titles_allowed_across_stores) ... ok
+test_payment_logo_list_shows_only_current_store_rows (apps.content.tests.test_footer_config.DashboardFooterCrossStoreIsolationTests.test_payment_logo_list_shows_only_current_store_rows) ... ok
+test_store_a_request_cannot_delete_store_b_badge (apps.content.tests.test_footer_config.DashboardFooterCrossStoreIsolationTests.test_store_a_request_cannot_delete_store_b_badge) ... ok
+test_store_a_request_cannot_delete_store_b_payment_logo (apps.content.tests.test_footer_config.DashboardFooterCrossStoreIsolationTests.test_store_a_request_cannot_delete_store_b_payment_logo) ... ok
+test_store_a_request_cannot_edit_store_b_badge (apps.content.tests.test_footer_config.DashboardFooterCrossStoreIsolationTests.test_store_a_request_cannot_edit_store_b_badge) ... ok
+test_store_a_request_cannot_edit_store_b_payment_logo (apps.content.tests.test_footer_config.DashboardFooterCrossStoreIsolationTests.test_store_a_request_cannot_edit_store_b_payment_logo) ... ok
+test_store_a_request_cannot_toggle_store_b_badge (apps.content.tests.test_footer_config.DashboardFooterCrossStoreIsolationTests.test_store_a_request_cannot_toggle_store_b_badge) ... ok
+test_store_a_request_cannot_toggle_store_b_payment_logo (apps.content.tests.test_footer_config.DashboardFooterCrossStoreIsolationTests.test_store_a_request_cannot_toggle_store_b_payment_logo) ... ok
+test_image_required (apps.content.tests.test_footer_config.FooterPaymentLogoTests.test_image_required) ... ok
+test_ordering (apps.content.tests.test_footer_config.FooterPaymentLogoTests.test_ordering) ... ok
+test_title_required (apps.content.tests.test_footer_config.FooterPaymentLogoTests.test_title_required) ... ok
+test_valid_creation (apps.content.tests.test_footer_config.FooterPaymentLogoTests.test_valid_creation) ... ok
+test_all_disabled_single_query (apps.content.tests.test_footer_config.FooterQueryCountTests.test_all_disabled_single_query)
+All media sections disabled → only settings query. ... ok
+test_badge_count_does_not_increase_queries (apps.content.tests.test_footer_config.FooterQueryCountTests.test_badge_count_does_not_increase_queries) ... ok
+test_badges_enabled_two_queries (apps.content.tests.test_footer_config.FooterQueryCountTests.test_badges_enabled_two_queries) ... ok
+test_both_enabled_three_queries (apps.content.tests.test_footer_config.FooterQueryCountTests.test_both_enabled_three_queries) ... ok
+test_compatibility_mode_costs_one_extra_query_when_store_unresolved (apps.content.tests.test_footer_config.FooterQueryCountTests.test_compatibility_mode_costs_one_extra_query_when_store_unresolved)
+Documents the real, accepted query-count cost of compatibility ... ok
+test_logos_enabled_two_queries (apps.content.tests.test_footer_config.FooterQueryCountTests.test_logos_enabled_two_queries) ... ok
+test_bootstrapped_via_the_data_migration (apps.content.tests.test_footer_config.FooterSettingsCompatibilityModeTests.test_bootstrapped_via_the_data_migration) ... ok
+test_compatibility_mode_fails_closed_when_second_store_exists (apps.content.tests.test_footer_config.FooterSettingsCompatibilityModeTests.test_compatibility_mode_fails_closed_when_second_store_exists) ... ok
+test_load_with_no_store_returns_akhlaghi_when_sole_active_store (apps.content.tests.test_footer_config.FooterSettingsCompatibilityModeTests.test_load_with_no_store_returns_akhlaghi_when_sole_active_store) ... ok
+test_repeated_load_returns_same_row (apps.content.tests.test_footer_config.FooterSettingsCompatibilityModeTests.test_repeated_load_returns_same_row) ... ok
+test_str (apps.content.tests.test_footer_config.FooterSettingsCompatibilityModeTests.test_str) ... ok
+test_load_with_explicit_store_missing_row_raises_domain_error (apps.content.tests.test_footer_config.FooterSettingsExplicitStoreTests.test_load_with_explicit_store_missing_row_raises_domain_error) ... ok
+test_load_with_explicit_store_never_returns_another_stores_row (apps.content.tests.test_footer_config.FooterSettingsExplicitStoreTests.test_load_with_explicit_store_never_returns_another_stores_row) ... ok
+test_load_with_explicit_store_returns_that_stores_row (apps.content.tests.test_footer_config.FooterSettingsExplicitStoreTests.test_load_with_explicit_store_returns_that_stores_row) ... ok
+test_duplicate_footersettings_for_same_store_rejected (apps.content.tests.test_footer_config.FooterSettingsOneToOneConstraintTests.test_duplicate_footersettings_for_same_store_rejected) ... ok
+test_second_store_may_have_its_own_row (apps.content.tests.test_footer_config.FooterSettingsOneToOneConstraintTests.test_second_store_may_have_its_own_row) ... ok
+test_provision_for_creates_a_row_for_a_new_store (apps.content.tests.test_footer_config.FooterSettingsProvisionForTests.test_provision_for_creates_a_row_for_a_new_store) ... ok
+test_provision_for_is_idempotent (apps.content.tests.test_footer_config.FooterSettingsProvisionForTests.test_provision_for_is_idempotent) ... ok
+test_provision_for_never_overwrites_existing_values (apps.content.tests.test_footer_config.FooterSettingsProvisionForTests.test_provision_for_never_overwrites_existing_values) ... ok
+test_blank_url_allowed (apps.content.tests.test_footer_config.FooterTrustBadgeTests.test_blank_url_allowed) ... ok
+test_dangerous_url_rejected (apps.content.tests.test_footer_config.FooterTrustBadgeTests.test_dangerous_url_rejected) ... ok
+test_image_required (apps.content.tests.test_footer_config.FooterTrustBadgeTests.test_image_required) ... ok
+test_ordering (apps.content.tests.test_footer_config.FooterTrustBadgeTests.test_ordering) ... ok
+test_protocol_relative_url_rejected (apps.content.tests.test_footer_config.FooterTrustBadgeTests.test_protocol_relative_url_rejected) ... ok
+test_store_is_required (apps.content.tests.test_footer_config.FooterTrustBadgeTests.test_store_is_required) ... ok
+test_title_required (apps.content.tests.test_footer_config.FooterTrustBadgeTests.test_title_required) ... ok
+test_valid_creation (apps.content.tests.test_footer_config.FooterTrustBadgeTests.test_valid_creation) ... ok
+test_corrupt_png_header_rejected (apps.content.tests.test_footer_config.ImageContentSecurityTests.test_corrupt_png_header_rejected) ... ok
+test_gif_rejected (apps.content.tests.test_footer_config.ImageContentSecurityTests.test_gif_rejected)
+GIF is not in ALLOWED_IMAGE_FORMATS. ... ok
+test_html_named_jpg_rejected (apps.content.tests.test_footer_config.ImageContentSecurityTests.test_html_named_jpg_rejected) ... ok
+test_invalid_create_produces_no_record (apps.content.tests.test_footer_config.ImageContentSecurityTests.test_invalid_create_produces_no_record)
+Invalid image on create → no database row. ... ok
+test_invalid_replacement_preserves_old_value (apps.content.tests.test_footer_config.ImageContentSecurityTests.test_invalid_replacement_preserves_old_value)
+Invalid replacement image → old image field preserved. ... ok
+test_javascript_payload_named_png_rejected (apps.content.tests.test_footer_config.ImageContentSecurityTests.test_javascript_payload_named_png_rejected) ... ok
+test_oversized_valid_image_rejected (apps.content.tests.test_footer_config.ImageContentSecurityTests.test_oversized_valid_image_rejected) ... ok
+test_plain_text_named_png_rejected (apps.content.tests.test_footer_config.ImageContentSecurityTests.test_plain_text_named_png_rejected) ... ok
+test_svg_named_svg_rejected (apps.content.tests.test_footer_config.ImageContentSecurityTests.test_svg_named_svg_rejected) ... ok
+test_svg_renamed_to_png_rejected (apps.content.tests.test_footer_config.ImageContentSecurityTests.test_svg_renamed_to_png_rejected) ... ok
+test_truncated_jpeg_rejected (apps.content.tests.test_footer_config.ImageContentSecurityTests.test_truncated_jpeg_rejected) ... ok
+test_valid_jpeg_accepted (apps.content.tests.test_footer_config.ImageContentSecurityTests.test_valid_jpeg_accepted) ... ok
+test_valid_png_accepted (apps.content.tests.test_footer_config.ImageContentSecurityTests.test_valid_png_accepted) ... ok
+test_valid_webp_accepted (apps.content.tests.test_footer_config.ImageContentSecurityTests.test_valid_webp_accepted) ... ok
+test_alphabetic_rejected (apps.content.tests.test_footer_config.PhoneValidationTests.test_alphabetic_rejected) ... ok
+test_control_chars_rejected (apps.content.tests.test_footer_config.PhoneValidationTests.test_control_chars_rejected) ... ok
+test_empty_allowed (apps.content.tests.test_footer_config.PhoneValidationTests.test_empty_allowed) ... ok
+test_html_rejected (apps.content.tests.test_footer_config.PhoneValidationTests.test_html_rejected) ... ok
+test_spaces_and_parens (apps.content.tests.test_footer_config.PhoneValidationTests.test_spaces_and_parens) ... ok
+test_valid_international (apps.content.tests.test_footer_config.PhoneValidationTests.test_valid_international) ... ok
+test_valid_iranian_number (apps.content.tests.test_footer_config.PhoneValidationTests.test_valid_iranian_number) ... ok
+test_whitespace_trimmed (apps.content.tests.test_footer_config.PhoneValidationTests.test_whitespace_trimmed) ... ok
+test_host_a_renders_store_a_footer (apps.content.tests.test_footer_config.StorefrontFooterHostIsolationTests.test_host_a_renders_store_a_footer) ... ok
+test_host_b_renders_store_b_footer (apps.content.tests.test_footer_config.StorefrontFooterHostIsolationTests.test_host_b_renders_store_b_footer) ... ok
+test_unknown_host_does_not_receive_either_stores_footer (apps.content.tests.test_footer_config.StorefrontFooterHostIsolationTests.test_unknown_host_does_not_receive_either_stores_footer) ... ok
+test_branding_toggle_off (apps.content.tests.test_footer_config.StorefrontFooterRenderTests.test_branding_toggle_off) ... ok
+test_contact_toggle_off (apps.content.tests.test_footer_config.StorefrontFooterRenderTests.test_contact_toggle_off) ... ok
+test_contact_with_email (apps.content.tests.test_footer_config.StorefrontFooterRenderTests.test_contact_with_email) ... ok
+test_contact_with_phone (apps.content.tests.test_footer_config.StorefrontFooterRenderTests.test_contact_with_phone) ... ok
+test_copyright_custom_text (apps.content.tests.test_footer_config.StorefrontFooterRenderTests.test_copyright_custom_text) ... ok
+test_copyright_default_uses_shop_name (apps.content.tests.test_footer_config.StorefrontFooterRenderTests.test_copyright_default_uses_shop_name) ... ok
+test_empty_payment_logos_not_shown (apps.content.tests.test_footer_config.StorefrontFooterRenderTests.test_empty_payment_logos_not_shown) ... ok
+test_empty_trust_badges_not_shown (apps.content.tests.test_footer_config.StorefrontFooterRenderTests.test_empty_trust_badges_not_shown) ... ok
+test_footer_disabled (apps.content.tests.test_footer_config.StorefrontFooterRenderTests.test_footer_disabled) ... ok
+test_footer_enabled (apps.content.tests.test_footer_config.StorefrontFooterRenderTests.test_footer_enabled) ... ok
+test_navigation_toggle_off (apps.content.tests.test_footer_config.StorefrontFooterRenderTests.test_navigation_toggle_off) ... ok
+test_newsletter_toggle_off (apps.content.tests.test_footer_config.StorefrontFooterRenderTests.test_newsletter_toggle_off) ... ok
+test_newsletter_toggle_on (apps.content.tests.test_footer_config.StorefrontFooterRenderTests.test_newsletter_toggle_on) ... ok
+test_no_href_hash_in_footer (apps.content.tests.test_footer_config.StorefrontFooterRenderTests.test_no_href_hash_in_footer)
+فوتر نباید لینک‌های بی‌مقصد (href="#") داشته باشد. ... ok
+test_payment_logos_render (apps.content.tests.test_footer_config.StorefrontFooterRenderTests.test_payment_logos_render) ... ok
+test_social_toggle_off (apps.content.tests.test_footer_config.StorefrontFooterRenderTests.test_social_toggle_off) ... ok
+test_trust_badges_render (apps.content.tests.test_footer_config.StorefrontFooterRenderTests.test_trust_badges_render) ... ok
+test_active_banner_on_homepage (apps.content.tests.test_homepage_media.BannerRenderingTests.test_active_banner_on_homepage) ... ok
+test_banner_description_rendered (apps.content.tests.test_homepage_media.BannerRenderingTests.test_banner_description_rendered) ... ok
+test_inactive_banner_hidden (apps.content.tests.test_homepage_media.BannerRenderingTests.test_inactive_banner_hidden) ... ok
+test_banner_list_accessible (apps.content.tests.test_homepage_media.DashboardBannerCRUDTests.test_banner_list_accessible) ... ok
+test_create_banner (apps.content.tests.test_homepage_media.DashboardBannerCRUDTests.test_create_banner) ... ok
+test_delete_banner_post_only (apps.content.tests.test_homepage_media.DashboardBannerCRUDTests.test_delete_banner_post_only) ... ok
+test_toggle_banner (apps.content.tests.test_homepage_media.DashboardBannerCRUDTests.test_toggle_banner) ... ok
+test_anonymous_denied (apps.content.tests.test_homepage_media.DashboardHeroCRUDTests.test_anonymous_denied) ... ok
+test_create_hero (apps.content.tests.test_homepage_media.DashboardHeroCRUDTests.test_create_hero) ... ok
+test_delete_hero_post_only (apps.content.tests.test_homepage_media.DashboardHeroCRUDTests.test_delete_hero_post_only) ... ok
+test_deprecation_notice_when_builder_published (apps.content.tests.test_homepage_media.DashboardHeroCRUDTests.test_deprecation_notice_when_builder_published) ... ok
+test_hero_list_accessible (apps.content.tests.test_homepage_media.DashboardHeroCRUDTests.test_hero_list_accessible) ... ok
+test_no_deprecation_notice_when_builder_not_published (apps.content.tests.test_homepage_media.DashboardHeroCRUDTests.test_no_deprecation_notice_when_builder_not_published)
+چکپوینتِ بازبینیِ نهایی (بخشِ ۲۳): تا وقتی سازنده بصری برایِ ... ok
+test_toggle_hero (apps.content.tests.test_homepage_media.DashboardHeroCRUDTests.test_toggle_hero) ... ok
+test_all_inactive_banners_omits_section (apps.content.tests.test_homepage_media.EmptyStateTests.test_all_inactive_banners_omits_section)
+All banners inactive → banner section absent. ... ok
+test_all_inactive_hero_omits_section (apps.content.tests.test_homepage_media.EmptyStateTests.test_all_inactive_hero_omits_section)
+All hero slides inactive → hero section absent. ... ok
+test_homepage_works_with_no_managed_content (apps.content.tests.test_homepage_media.EmptyStateTests.test_homepage_works_with_no_managed_content)
+No active hero slides or banners → promotional sections omitted, page loads OK. ... ok
+test_other_homepage_sections_render_without_managed_content (apps.content.tests.test_homepage_media.EmptyStateTests.test_other_homepage_sections_render_without_managed_content)
+Category tiles and other sections remain even without hero/banners. ... ok
+test_button_label_required_when_visible (apps.content.tests.test_homepage_media.HeroSlideModelTests.test_button_label_required_when_visible) ... ok
+test_desktop_image_required (apps.content.tests.test_homepage_media.HeroSlideModelTests.test_desktop_image_required) ... ok
+test_destination_required_when_button_visible (apps.content.tests.test_homepage_media.HeroSlideModelTests.test_destination_required_when_button_visible) ... ok
+test_destination_resolves (apps.content.tests.test_homepage_media.HeroSlideModelTests.test_destination_resolves) ... ok
+test_hidden_button_no_destination_ok (apps.content.tests.test_homepage_media.HeroSlideModelTests.test_hidden_button_no_destination_ok) ... ok
+test_mobile_image_optional (apps.content.tests.test_homepage_media.HeroSlideModelTests.test_mobile_image_optional) ... ok
+test_ordering (apps.content.tests.test_homepage_media.HeroSlideModelTests.test_ordering) ... ok
+test_valid_creation (apps.content.tests.test_homepage_media.HeroSlideModelTests.test_valid_creation) ... ok
+test_active_slide_on_homepage (apps.content.tests.test_homepage_media.HomepageRenderingTests.test_active_slide_on_homepage) ... ok
+test_inactive_slide_hidden (apps.content.tests.test_homepage_media.HomepageRenderingTests.test_inactive_slide_hidden) ... ok
+test_at_limit_accepted (apps.content.tests.test_homepage_media.ImageSizeValidatorTests.test_at_limit_accepted)
+File exactly at 5 MiB passes validation. ... ok
+test_banner_desktop_oversized_rejected (apps.content.tests.test_homepage_media.ImageSizeValidatorTests.test_banner_desktop_oversized_rejected)
+PromotionalBanner with oversized desktop image fails full_clean. ... ok
+test_banner_mobile_oversized_rejected (apps.content.tests.test_homepage_media.ImageSizeValidatorTests.test_banner_mobile_oversized_rejected)
+PromotionalBanner with oversized mobile image fails full_clean. ... ok
+test_hero_desktop_oversized_rejected (apps.content.tests.test_homepage_media.ImageSizeValidatorTests.test_hero_desktop_oversized_rejected)
+HeroSlide with oversized desktop image fails full_clean. ... ok
+test_hero_mobile_oversized_rejected (apps.content.tests.test_homepage_media.ImageSizeValidatorTests.test_hero_mobile_oversized_rejected)
+HeroSlide with oversized mobile image fails full_clean. ... ok
+test_over_limit_rejected (apps.content.tests.test_homepage_media.ImageSizeValidatorTests.test_over_limit_rejected)
+File over 5 MiB is rejected. ... ok
+test_valid_size_hero_passes (apps.content.tests.test_homepage_media.ImageSizeValidatorTests.test_valid_size_hero_passes)
+Normal-size image passes. ... ok
+test_button_label_required_when_visible (apps.content.tests.test_homepage_media.PromotionalBannerModelTests.test_button_label_required_when_visible) ... ok
+test_inactive_not_in_active_queryset (apps.content.tests.test_homepage_media.PromotionalBannerModelTests.test_inactive_not_in_active_queryset) ... ok
+test_valid_creation (apps.content.tests.test_homepage_media.PromotionalBannerModelTests.test_valid_creation) ... ok
+test_child_with_no_destination_rejected (apps.content.tests.test_navigation.DestinationPolicyTests.test_child_with_no_destination_rejected)
+Child item with destination=none → rejected. ... ok
+test_exactly_one_destination_enforced (apps.content.tests.test_navigation.DestinationPolicyTests.test_exactly_one_destination_enforced)
+Multiple destinations still rejected by DestinationMixin validation. ... ok
+test_leaf_with_no_destination_allowed_as_provisional (apps.content.tests.test_navigation.DestinationPolicyTests.test_leaf_with_no_destination_allowed_as_provisional)
+Top-level item with destination=none → allowed (provisional parent, won't render). ... ok
+test_no_href_hash_in_storefront (apps.content.tests.test_navigation.DestinationPolicyTests.test_no_href_hash_in_storefront)
+Storefront must never produce href='#' for menu items. ... ok
+test_non_clickable_parent_renders_as_span (apps.content.tests.test_navigation.DestinationPolicyTests.test_non_clickable_parent_renders_as_span)
+Parent with no URL renders as <span>, not <a href='#'>. ... ok
+test_parent_without_destination_with_children_allowed (apps.content.tests.test_navigation.DestinationPolicyTests.test_parent_without_destination_with_children_allowed)
+Parent (with children) and destination=none → allowed. ... ok
+test_provisional_parent_does_not_render (apps.content.tests.test_navigation.DestinationPolicyTests.test_provisional_parent_does_not_render)
+Top-level with destination=none and no children → does not render. ... ok
+test_footer_child_rendered (apps.content.tests.test_navigation.FooterHierarchyRenderingTests.test_footer_child_rendered)
+Footer children render in nested <ul>. ... ok
+test_footer_inactive_child_hidden (apps.content.tests.test_navigation.FooterHierarchyRenderingTests.test_footer_inactive_child_hidden) ... ok
+test_child_order_deterministic (apps.content.tests.test_navigation.HeaderHierarchyRenderingTests.test_child_order_deterministic) ... ok
+test_destinationless_parent_renders_as_button (apps.content.tests.test_navigation.HeaderHierarchyRenderingTests.test_destinationless_parent_renders_as_button)
+Parent with no URL renders button trigger, not <a href='#'>. ... ok
+test_empty_submenu_not_rendered (apps.content.tests.test_navigation.HeaderHierarchyRenderingTests.test_empty_submenu_not_rendered)
+Parent with no renderable children → not rendered at all. ... ok
+test_inactive_child_hidden (apps.content.tests.test_navigation.HeaderHierarchyRenderingTests.test_inactive_child_hidden) ... ok
+test_inactive_parent_hides_children (apps.content.tests.test_navigation.HeaderHierarchyRenderingTests.test_inactive_parent_hides_children) ... ok
+test_no_href_hash (apps.content.tests.test_navigation.HeaderHierarchyRenderingTests.test_no_href_hash)
+No href='#' anywhere in managed header nav. ... ok
+test_parent_and_child_both_render (apps.content.tests.test_navigation.HeaderHierarchyRenderingTests.test_parent_and_child_both_render) ... ok
+test_parent_with_destination_renders_as_link (apps.content.tests.test_navigation.HeaderHierarchyRenderingTests.test_parent_with_destination_renders_as_link)
+Parent with valid URL renders as clickable <a>. ... ok
+test_title_escaping_in_submenu (apps.content.tests.test_navigation.HeaderHierarchyRenderingTests.test_title_escaping_in_submenu)
+XSS in parent/child titles is escaped. ... ok
+test_anonymous_redirected (apps.content.tests.test_navigation.MenuDashboardAccessTests.test_anonymous_redirected) ... ok
+test_delete_requires_post (apps.content.tests.test_navigation.MenuDashboardAccessTests.test_delete_requires_post) ... ok
+test_item_delete_requires_post (apps.content.tests.test_navigation.MenuDashboardAccessTests.test_item_delete_requires_post) ... ok
+test_item_management_accessible (apps.content.tests.test_navigation.MenuDashboardAccessTests.test_item_management_accessible) ... ok
+test_item_toggle_requires_post (apps.content.tests.test_navigation.MenuDashboardAccessTests.test_item_toggle_requires_post) ... ok
+test_menu_create_accessible (apps.content.tests.test_navigation.MenuDashboardAccessTests.test_menu_create_accessible) ... ok
+test_menu_edit_accessible (apps.content.tests.test_navigation.MenuDashboardAccessTests.test_menu_edit_accessible) ... ok
+test_non_staff_rejected (apps.content.tests.test_navigation.MenuDashboardAccessTests.test_non_staff_rejected) ... ok
+test_staff_allowed (apps.content.tests.test_navigation.MenuDashboardAccessTests.test_staff_allowed) ... ok
+test_toggle_requires_post (apps.content.tests.test_navigation.MenuDashboardAccessTests.test_toggle_requires_post) ... ok
+test_create_item (apps.content.tests.test_navigation.MenuDashboardCRUDTests.test_create_item) ... ok
+test_create_menu (apps.content.tests.test_navigation.MenuDashboardCRUDTests.test_create_menu) ... ok
+test_delete_empty_menu (apps.content.tests.test_navigation.MenuDashboardCRUDTests.test_delete_empty_menu) ... ok
+test_delete_leaf_item (apps.content.tests.test_navigation.MenuDashboardCRUDTests.test_delete_leaf_item) ... ok
+test_duplicate_location_rejected (apps.content.tests.test_navigation.MenuDashboardCRUDTests.test_duplicate_location_rejected) ... ok
+test_edit_item (apps.content.tests.test_navigation.MenuDashboardCRUDTests.test_edit_item) ... ok
+test_edit_menu (apps.content.tests.test_navigation.MenuDashboardCRUDTests.test_edit_menu) ... ok
+test_invalid_destination_rejected (apps.content.tests.test_navigation.MenuDashboardCRUDTests.test_invalid_destination_rejected) ... ok
+test_invalid_parent_rejected (apps.content.tests.test_navigation.MenuDashboardCRUDTests.test_invalid_parent_rejected) ... ok
+test_prevent_deleting_parent_with_children (apps.content.tests.test_navigation.MenuDashboardCRUDTests.test_prevent_deleting_parent_with_children) ... ok
+test_prevent_deleting_populated_menu (apps.content.tests.test_navigation.MenuDashboardCRUDTests.test_prevent_deleting_populated_menu) ... ok
+test_toggle_item (apps.content.tests.test_navigation.MenuDashboardCRUDTests.test_toggle_item) ... ok
+test_toggle_menu (apps.content.tests.test_navigation.MenuDashboardCRUDTests.test_toggle_menu) ... ok
+test_dashboard_deletion_of_populated_menu_blocked (apps.content.tests.test_navigation.MenuDeletionProtectionTests.test_dashboard_deletion_of_populated_menu_blocked)
+Dashboard delete of populated menu → blocked with message. ... ok
+test_empty_menu_deletion_succeeds (apps.content.tests.test_navigation.MenuDeletionProtectionTests.test_empty_menu_deletion_succeeds)
+Empty menu can be deleted. ... ok
+test_items_remain_after_blocked_deletion (apps.content.tests.test_navigation.MenuDeletionProtectionTests.test_items_remain_after_blocked_deletion)
+Items remain intact after blocked menu deletion. ... ok
+test_no_silent_cascade (apps.content.tests.test_navigation.MenuDeletionProtectionTests.test_no_silent_cascade)
+PROTECT prevents cascade — items survive. ... ok
+test_orm_deletion_of_populated_menu_raises_protected (apps.content.tests.test_navigation.MenuDeletionProtectionTests.test_orm_deletion_of_populated_menu_raises_protected)
+Direct ORM deletion of menu with items → ProtectedError. ... ok
+test_destination_validation_reused (apps.content.tests.test_navigation.MenuItemModelTests.test_destination_validation_reused)
+DestinationMixin validation fires — category required when type=category. ... ok
+test_external_url_security (apps.content.tests.test_navigation.MenuItemModelTests.test_external_url_security) ... ok
+test_grandchild_rejected (apps.content.tests.test_navigation.MenuItemModelTests.test_grandchild_rejected) ... ok
+test_item_with_children_cannot_become_child (apps.content.tests.test_navigation.MenuItemModelTests.test_item_with_children_cannot_become_child) ... ok
+test_open_in_new_tab (apps.content.tests.test_navigation.MenuItemModelTests.test_open_in_new_tab) ... ok
+test_parent_protection_on_delete (apps.content.tests.test_navigation.MenuItemModelTests.test_parent_protection_on_delete) ... ok
+test_required_title (apps.content.tests.test_navigation.MenuItemModelTests.test_required_title) ... ok
+test_same_menu_parent_required (apps.content.tests.test_navigation.MenuItemModelTests.test_same_menu_parent_required) ... ok
+test_self_parent_rejected (apps.content.tests.test_navigation.MenuItemModelTests.test_self_parent_rejected) ... ok
+test_stable_ordering (apps.content.tests.test_navigation.MenuItemModelTests.test_stable_ordering) ... ok
+test_valid_child_item (apps.content.tests.test_navigation.MenuItemModelTests.test_valid_child_item) ... ok
+test_valid_top_level_item (apps.content.tests.test_navigation.MenuItemModelTests.test_valid_top_level_item) ... ok
+test_active_default (apps.content.tests.test_navigation.MenuModelTests.test_active_default) ... ok
+test_ordering_by_location (apps.content.tests.test_navigation.MenuModelTests.test_ordering_by_location) ... ok
+test_persian_labels (apps.content.tests.test_navigation.MenuModelTests.test_persian_labels) ... ok
+test_required_title (apps.content.tests.test_navigation.MenuModelTests.test_required_title) ... ok
+test_str_representation (apps.content.tests.test_navigation.MenuModelTests.test_str_representation) ... ok
+test_unique_location (apps.content.tests.test_navigation.MenuModelTests.test_unique_location) ... ok
+test_valid_creation (apps.content.tests.test_navigation.MenuModelTests.test_valid_creation) ... ok
+test_aria_expanded_present (apps.content.tests.test_navigation.NavigationAccessibilityTests.test_aria_expanded_present)
+Trigger has :aria-expanded binding. ... ok
+test_aria_haspopup_present (apps.content.tests.test_navigation.NavigationAccessibilityTests.test_aria_haspopup_present)
+Trigger has aria-haspopup="true". ... ok
+test_escape_handler_present (apps.content.tests.test_navigation.NavigationAccessibilityTests.test_escape_handler_present)
+Rendered markup includes @keydown.escape handler. ... ok
+test_focus_return_ref_present (apps.content.tests.test_navigation.NavigationAccessibilityTests.test_focus_return_ref_present)
+x-ref on trigger is present for focus return. ... ok
+test_parent_link_and_trigger_are_separate (apps.content.tests.test_navigation.NavigationAccessibilityTests.test_parent_link_and_trigger_are_separate)
+Parent with URL: the <a> and <button> are separate elements. ... ok
+test_parent_with_url_trigger_has_submenu_label (apps.content.tests.test_navigation.NavigationAccessibilityTests.test_parent_with_url_trigger_has_submenu_label)
+Parent with URL: trigger has 'باز کردن زیرمنوی ...' label. ... ok
+test_trigger_has_accessible_label (apps.content.tests.test_navigation.NavigationAccessibilityTests.test_trigger_has_accessible_label)
+Trigger button has aria-label for accessibility. ... ok
+test_empty_active_header_no_wrapper (apps.content.tests.test_navigation.NavigationFallbackRemovalTests.test_empty_active_header_no_wrapper)
+Active header menu with no items → no nav links rendered. ... ok
+test_footer_menu_only_inactive_items_no_column (apps.content.tests.test_navigation.NavigationFallbackRemovalTests.test_footer_menu_only_inactive_items_no_column)
+Footer menu with only inactive/unresolvable items → column not rendered. ... ok
+test_inactive_footer_menu_no_column (apps.content.tests.test_navigation.NavigationFallbackRemovalTests.test_inactive_footer_menu_no_column)
+Inactive footer menu → column not rendered. ... ok
+test_inactive_header_menu_no_fallback (apps.content.tests.test_navigation.NavigationFallbackRemovalTests.test_inactive_header_menu_no_fallback)
+Inactive header menu → no nav links at all. ... ok
+test_no_footer_menu_no_column (apps.content.tests.test_navigation.NavigationFallbackRemovalTests.test_no_footer_menu_no_column)
+No footer_1 menu → no column rendered for that location. ... ok
+test_other_non_navigation_content_remains (apps.content.tests.test_navigation.NavigationFallbackRemovalTests.test_other_non_navigation_content_remains)
+Non-navigation elements (newsletter, branding) remain. ... ok
+test_navigation_context_bounded_queries (apps.content.tests.test_navigation.NavigationQueryCountTests.test_navigation_context_bounded_queries)
+Navigation context processor uses at most 2 queries regardless of item count. ... ok
+test_empty_header_no_managed_links (apps.content.tests.test_navigation.NavigationStorefrontTests.test_empty_header_no_managed_links)
+No header menu → no nav links in nav-links-scroll (no hardcoded fallback). ... ok
+test_escaped_item_title (apps.content.tests.test_navigation.NavigationStorefrontTests.test_escaped_item_title) ... ok
+test_external_target_rel_safe (apps.content.tests.test_navigation.NavigationStorefrontTests.test_external_target_rel_safe) ... ok
+test_footer_locations_independent (apps.content.tests.test_navigation.NavigationStorefrontTests.test_footer_locations_independent)
+Footer menus render independently. ... ok
+test_footer_menu_renders (apps.content.tests.test_navigation.NavigationStorefrontTests.test_footer_menu_renders) ... ok
+test_header_menu_renders (apps.content.tests.test_navigation.NavigationStorefrontTests.test_header_menu_renders) ... ok
+test_inactive_item_hidden (apps.content.tests.test_navigation.NavigationStorefrontTests.test_inactive_item_hidden) ... ok
+test_inactive_menu_hidden (apps.content.tests.test_navigation.NavigationStorefrontTests.test_inactive_menu_hidden) ... ok
+test_inactive_parent_hides_child (apps.content.tests.test_navigation.NavigationStorefrontTests.test_inactive_parent_hides_child) ... ok
+test_internal_no_new_tab (apps.content.tests.test_navigation.NavigationStorefrontTests.test_internal_no_new_tab) ... ok
+test_invalid_destination_does_not_crash (apps.content.tests.test_navigation.NavigationStorefrontTests.test_invalid_destination_does_not_crash)
+Item with deleted category → skipped, page doesn't crash. ... ok
+test_no_hardcoded_when_managed_header (apps.content.tests.test_navigation.NavigationStorefrontTests.test_no_hardcoded_when_managed_header)
+When managed header exists, no fallback links appear. ... ok
+test_top_level_ordering (apps.content.tests.test_navigation.NavigationStorefrontTests.test_top_level_ordering) ... ok
+test_destinationless_parent_can_be_created (apps.content.tests.test_navigation.ParentCreationWorkflowTests.test_destinationless_parent_can_be_created)
+Top-level item with destination=none can be created via dashboard. ... ok
+test_no_temporary_destination_required (apps.content.tests.test_navigation.ParentCreationWorkflowTests.test_no_temporary_destination_required)
+Provisional parent does not need a placeholder destination. ... ok
+test_provisional_does_not_render_without_children (apps.content.tests.test_navigation.ParentCreationWorkflowTests.test_provisional_does_not_render_without_children)
+Provisional parent without children does not appear on storefront. ... ok
+test_provisional_renders_after_child_added (apps.content.tests.test_navigation.ParentCreationWorkflowTests.test_provisional_renders_after_child_added)
+After adding a child, provisional parent renders in storefront. ... ok
+test_get_not_allowed (apps.content.tests.test_newsletter.NewsletterSubscribeViewTests.test_get_not_allowed) ... ok
+test_invalid_email_shows_error_without_creating_row (apps.content.tests.test_newsletter.NewsletterSubscribeViewTests.test_invalid_email_shows_error_without_creating_row) ... ok
+test_rate_limit_blocks_excessive_attempts (apps.content.tests.test_newsletter.NewsletterSubscribeViewTests.test_rate_limit_blocks_excessive_attempts) ... ok
+test_valid_post_subscribes_and_shows_success (apps.content.tests.test_newsletter.NewsletterSubscribeViewTests.test_valid_post_subscribes_and_shows_success) ... ok
+test_same_email_allowed_across_different_stores (apps.content.tests.test_newsletter.NewsletterSubscriberModelTests.test_same_email_allowed_across_different_stores) ... ok
+test_unique_per_store (apps.content.tests.test_newsletter.NewsletterSubscriberModelTests.test_unique_per_store) ... ok
+test_email_normalized_case_and_whitespace (apps.content.tests.test_newsletter.SubscribeToNewsletterServiceTests.test_email_normalized_case_and_whitespace) ... ok
+test_empty_email_rejected (apps.content.tests.test_newsletter.SubscribeToNewsletterServiceTests.test_empty_email_rejected) ... ok
+test_malformed_email_rejected (apps.content.tests.test_newsletter.SubscribeToNewsletterServiceTests.test_malformed_email_rejected) ... ok
+test_resubscribe_is_idempotent_not_an_error (apps.content.tests.test_newsletter.SubscribeToNewsletterServiceTests.test_resubscribe_is_idempotent_not_an_error) ... ok
+test_valid_email_creates_subscriber (apps.content.tests.test_newsletter.SubscribeToNewsletterServiceTests.test_valid_email_creates_subscriber) ... ok
+test_page_renders_without_published_layout (apps.content.tests.test_page_shell_convergence.CmsPageShellConvergenceFallbackTests.test_page_renders_without_published_layout) ... ok
+test_body_and_title_preserved (apps.content.tests.test_page_shell_convergence.CmsPageShellConvergenceTwoStoreTests.test_body_and_title_preserved) ... ok
+test_canonical_shell_stylesheet_linked (apps.content.tests.test_page_shell_convergence.CmsPageShellConvergenceTwoStoreTests.test_canonical_shell_stylesheet_linked) ... ok
+test_canonical_shell_templates_present_on_published_page (apps.content.tests.test_page_shell_convergence.CmsPageShellConvergenceTwoStoreTests.test_canonical_shell_templates_present_on_published_page) ... ok
+test_draft_page_returns_404 (apps.content.tests.test_page_shell_convergence.CmsPageShellConvergenceTwoStoreTests.test_draft_page_returns_404) ... ok
+test_no_noindex_added (apps.content.tests.test_page_shell_convergence.CmsPageShellConvergenceTwoStoreTests.test_no_noindex_added) ... ok
+test_seo_title_and_description_preserved (apps.content.tests.test_page_shell_convergence.CmsPageShellConvergenceTwoStoreTests.test_seo_title_and_description_preserved) ... ok
+test_shell_isolation_between_stores (apps.content.tests.test_page_shell_convergence.CmsPageShellConvergenceTwoStoreTests.test_shell_isolation_between_stores) ... ok
+test_store_a_page_404s_on_store_b_host (apps.content.tests.test_page_shell_convergence.CmsPageShellConvergenceTwoStoreTests.test_store_a_page_404s_on_store_b_host) ... ok
+test_other_store_json_background_does_not_reference_this_asset (apps.content.tests.test_phase2_media_reachability.CrossStoreIsolationReachabilityTests.test_other_store_json_background_does_not_reference_this_asset)
+An asset in store A, with NO reference in store A, is unreferenced ... ok
+test_other_store_recovery_snapshot_does_not_reference_this_asset (apps.content.tests.test_phase2_media_reachability.CrossStoreIsolationReachabilityTests.test_other_store_recovery_snapshot_does_not_reference_this_asset)
+Same isolation for recovery snapshots — store B's edit-history and ... ok
+test_same_store_snapshot_still_references_after_isolation_setup (apps.content.tests.test_phase2_media_reachability.CrossStoreIsolationReachabilityTests.test_same_store_snapshot_still_references_after_isolation_setup)
+Control: within the OWN store the snapshot reference IS seen — so ... ok
+test_asset_with_no_references_is_not_reachable (apps.content.tests.test_phase2_media_reachability.GenuinelyUnreferencedAssetTests.test_asset_with_no_references_is_not_reachable) ... ok
+test_json_only_referenced_asset_on_draft_is_reachable (apps.content.tests.test_phase2_media_reachability.JsonOnlyBackgroundReferenceReachabilityTests.test_json_only_referenced_asset_on_draft_is_reachable)
+DESIRED (currently RED): an asset referenced only through a Draft ... ok
+test_json_only_referenced_asset_on_published_is_reachable (apps.content.tests.test_phase2_media_reachability.JsonOnlyBackgroundReferenceReachabilityTests.test_json_only_referenced_asset_on_published_is_reachable)
+DESIRED (currently RED): same, but the JSON reference lives on a ... ok
+test_edit_history_snapshot_only_referenced_asset_is_reachable (apps.content.tests.test_phase2_media_reachability.SnapshotOnlyReferenceReachabilityTests.test_edit_history_snapshot_only_referenced_asset_is_reachable)
+DESIRED (currently RED): an asset id captured inside an edit ... ok
+test_template_baseline_snapshot_only_referenced_asset_is_reachable (apps.content.tests.test_phase2_media_reachability.SnapshotOnlyReferenceReachabilityTests.test_template_baseline_snapshot_only_referenced_asset_is_reachable)
+DESIRED (currently RED): an asset id captured inside a version's ... ok
+test_matching_integer_under_unrelated_key_does_not_reference (apps.content.tests.test_phase2_media_reachability.UnrelatedIntegerDoesNotOverReachTests.test_matching_integer_under_unrelated_key_does_not_reference) ... ok
+test_gate_must_not_delete_json_only_referenced_asset (apps.content.tests.test_phase2_media_reachability.UnsafeDeletionConsequenceTests.test_gate_must_not_delete_json_only_referenced_asset) ... ok
+test_add_page_accessible (apps.content.tests.test_social_links.SocialLinkDashboardAccessTests.test_add_page_accessible) ... ok
+test_anonymous_redirected (apps.content.tests.test_social_links.SocialLinkDashboardAccessTests.test_anonymous_redirected) ... ok
+test_csrf_required (apps.content.tests.test_social_links.SocialLinkDashboardAccessTests.test_csrf_required)
+CSRF enforcement is consistent with Django middleware defaults. ... [2026-09-16 19:12:13,417] WARNING django.security.csrf: Forbidden (CSRF cookie not set.): /admin-portal/social-links/1/delete/
+ok
+test_delete_requires_post (apps.content.tests.test_social_links.SocialLinkDashboardAccessTests.test_delete_requires_post) ... ok
+test_edit_page_accessible (apps.content.tests.test_social_links.SocialLinkDashboardAccessTests.test_edit_page_accessible) ... ok
+test_list_page_accessible (apps.content.tests.test_social_links.SocialLinkDashboardAccessTests.test_list_page_accessible) ... ok
+test_non_staff_rejected (apps.content.tests.test_social_links.SocialLinkDashboardAccessTests.test_non_staff_rejected) ... ok
+test_staff_allowed (apps.content.tests.test_social_links.SocialLinkDashboardAccessTests.test_staff_allowed) ... ok
+test_toggle_requires_post (apps.content.tests.test_social_links.SocialLinkDashboardAccessTests.test_toggle_requires_post) ... ok
+test_activate (apps.content.tests.test_social_links.SocialLinkDashboardCRUDTests.test_activate) ... ok
+test_create (apps.content.tests.test_social_links.SocialLinkDashboardCRUDTests.test_create) ... ok
+test_deactivate (apps.content.tests.test_social_links.SocialLinkDashboardCRUDTests.test_deactivate) ... ok
+test_delete (apps.content.tests.test_social_links.SocialLinkDashboardCRUDTests.test_delete) ... ok
+test_display_order_saved (apps.content.tests.test_social_links.SocialLinkDashboardCRUDTests.test_display_order_saved) ... ok
+test_edit (apps.content.tests.test_social_links.SocialLinkDashboardCRUDTests.test_edit) ... ok
+test_footer_visibility_saved (apps.content.tests.test_social_links.SocialLinkDashboardCRUDTests.test_footer_visibility_saved) ... ok
+test_header_visibility_saved (apps.content.tests.test_social_links.SocialLinkDashboardCRUDTests.test_header_visibility_saved) ... ok
+test_invalid_edit_preserves_record (apps.content.tests.test_social_links.SocialLinkDashboardCRUDTests.test_invalid_edit_preserves_record) ... ok
+test_invalid_url_rejected (apps.content.tests.test_social_links.SocialLinkDashboardCRUDTests.test_invalid_url_rejected) ... ok
+test_all_standard_platforms_normalize (apps.content.tests.test_social_links.SocialLinkIconCoherenceTests.test_all_standard_platforms_normalize)
+Every non-CUSTOM platform normalizes icon_name to its mapping. ... ok
+test_custom_platform_invalid_icon_normalized_on_save (apps.content.tests.test_social_links.SocialLinkIconCoherenceTests.test_custom_platform_invalid_icon_normalized_on_save)
+Custom with invalid icon_name (bypassing clean) → normalized to 'link'. ... ok
+test_custom_platform_invalid_icon_rejected (apps.content.tests.test_social_links.SocialLinkIconCoherenceTests.test_custom_platform_invalid_icon_rejected)
+Custom platform with arbitrary HTML as icon → rejected by full_clean. ... ok
+test_custom_platform_uses_link_icon (apps.content.tests.test_social_links.SocialLinkIconCoherenceTests.test_custom_platform_uses_link_icon)
+Custom platform with no icon → defaults to 'link'. ... ok
+test_custom_platform_valid_icon_accepted (apps.content.tests.test_social_links.SocialLinkIconCoherenceTests.test_custom_platform_valid_icon_accepted)
+Custom platform with valid icon_name 'telegram' → kept. ... ok
+test_dashboard_does_not_expose_icon_input (apps.content.tests.test_social_links.SocialLinkIconCoherenceTests.test_dashboard_does_not_expose_icon_input)
+Dashboard form template does not have an icon_name input. ... ok
+test_effective_icon_custom_invalid_falls_back (apps.content.tests.test_social_links.SocialLinkIconCoherenceTests.test_effective_icon_custom_invalid_falls_back)
+effective_icon_name for CUSTOM with invalid icon → 'link'. ... ok
+test_effective_icon_custom_uses_stored_valid (apps.content.tests.test_social_links.SocialLinkIconCoherenceTests.test_effective_icon_custom_uses_stored_valid)
+effective_icon_name for CUSTOM uses stored valid icon_name. ... ok
+test_effective_icon_standard_ignores_stored_value (apps.content.tests.test_social_links.SocialLinkIconCoherenceTests.test_effective_icon_standard_ignores_stored_value)
+effective_icon_name for standard platform ignores stored icon_name. ... ok
+test_no_raw_markup_in_icon_name (apps.content.tests.test_social_links.SocialLinkIconCoherenceTests.test_no_raw_markup_in_icon_name)
+Template tags, CSS classes, JS cannot be stored as icon_name for standard. ... ok
+test_standard_platform_conflicting_icon_normalized (apps.content.tests.test_social_links.SocialLinkIconCoherenceTests.test_standard_platform_conflicting_icon_normalized)
+Instagram with icon_name='youtube' → normalized to 'instagram' on save. ... ok
+test_standard_platform_derives_correct_icon (apps.content.tests.test_social_links.SocialLinkIconCoherenceTests.test_standard_platform_derives_correct_icon)
+Instagram platform → icon_name normalized to 'instagram' on save. ... ok
+test_all_platforms_have_icons (apps.content.tests.test_social_links.SocialLinkModelTests.test_all_platforms_have_icons) ... ok
+test_custom_platform (apps.content.tests.test_social_links.SocialLinkModelTests.test_custom_platform) ... ok
+test_data_scheme_rejected (apps.content.tests.test_social_links.SocialLinkModelTests.test_data_scheme_rejected) ... ok
+test_effective_icon_from_platform (apps.content.tests.test_social_links.SocialLinkModelTests.test_effective_icon_from_platform) ... ok
+test_http_accepted (apps.content.tests.test_social_links.SocialLinkModelTests.test_http_accepted) ... ok
+test_https_accepted (apps.content.tests.test_social_links.SocialLinkModelTests.test_https_accepted) ... ok
+test_icon_mapping_safety_invalid (apps.content.tests.test_social_links.SocialLinkModelTests.test_icon_mapping_safety_invalid) ... ok
+test_icon_mapping_safety_valid (apps.content.tests.test_social_links.SocialLinkModelTests.test_icon_mapping_safety_valid) ... ok
+test_javascript_rejected (apps.content.tests.test_social_links.SocialLinkModelTests.test_javascript_rejected) ... ok
+test_malformed_url_rejected (apps.content.tests.test_social_links.SocialLinkModelTests.test_malformed_url_rejected) ... ok
+test_ordering_tiebreaker_by_id (apps.content.tests.test_social_links.SocialLinkModelTests.test_ordering_tiebreaker_by_id) ... ok
+test_persian_platform_labels (apps.content.tests.test_social_links.SocialLinkModelTests.test_persian_platform_labels) ... ok
+test_protocol_relative_rejected (apps.content.tests.test_social_links.SocialLinkModelTests.test_protocol_relative_rejected) ... ok
+test_stable_ordering (apps.content.tests.test_social_links.SocialLinkModelTests.test_stable_ordering) ... ok
+test_str_representation (apps.content.tests.test_social_links.SocialLinkModelTests.test_str_representation) ... ok
+test_title_required (apps.content.tests.test_social_links.SocialLinkModelTests.test_title_required) ... ok
+test_url_required (apps.content.tests.test_social_links.SocialLinkModelTests.test_url_required) ... ok
+test_valid_creation (apps.content.tests.test_social_links.SocialLinkModelTests.test_valid_creation) ... ok
+test_vbscript_rejected (apps.content.tests.test_social_links.SocialLinkModelTests.test_vbscript_rejected) ... ok
+test_active_footer_link_renders (apps.content.tests.test_social_links.SocialLinkStorefrontTests.test_active_footer_link_renders) ... ok
+test_active_footer_link_renders_wrapper (apps.content.tests.test_social_links.SocialLinkStorefrontTests.test_active_footer_link_renders_wrapper)
+At least one active footer link → .socials div renders. ... ok
+test_correct_ordering (apps.content.tests.test_social_links.SocialLinkStorefrontTests.test_correct_ordering) ... ok
+test_empty_state_omits_wrapper (apps.content.tests.test_social_links.SocialLinkStorefrontTests.test_empty_state_omits_wrapper)
+No active social links → .socials div must not render at all. ... ok
+test_footer_only_link_renders_in_footer (apps.content.tests.test_social_links.SocialLinkStorefrontTests.test_footer_only_link_renders_in_footer) ... ok
+test_header_only_absent_from_footer (apps.content.tests.test_social_links.SocialLinkStorefrontTests.test_header_only_absent_from_footer) ... ok
+test_inactive_link_hidden (apps.content.tests.test_social_links.SocialLinkStorefrontTests.test_inactive_link_hidden) ... ok
+test_no_hardcoded_fallback (apps.content.tests.test_social_links.SocialLinkStorefrontTests.test_no_hardcoded_fallback)
+No social links → no hardcoded href='#' social links appear. ... ok
+test_only_header_links_omits_footer_wrapper (apps.content.tests.test_social_links.SocialLinkStorefrontTests.test_only_header_links_omits_footer_wrapper)
+Only header-visible links exist → no footer .socials div. ... ok
+test_only_inactive_links_omits_wrapper (apps.content.tests.test_social_links.SocialLinkStorefrontTests.test_only_inactive_links_omits_wrapper)
+Only inactive links exist → .socials div must not render. ... ok
+test_safe_target_and_rel (apps.content.tests.test_social_links.SocialLinkStorefrontTests.test_safe_target_and_rel) ... ok
+test_title_escaped (apps.content.tests.test_social_links.SocialLinkStorefrontTests.test_title_escaped) ... ok
+test_data_rejected (apps.content.tests.test_social_links.SocialURLValidatorTests.test_data_rejected) ... ok
+test_empty_rejected (apps.content.tests.test_social_links.SocialURLValidatorTests.test_empty_rejected) ... ok
+test_ftp_rejected (apps.content.tests.test_social_links.SocialURLValidatorTests.test_ftp_rejected) ... ok
+test_http_valid (apps.content.tests.test_social_links.SocialURLValidatorTests.test_http_valid) ... ok
+test_https_valid (apps.content.tests.test_social_links.SocialURLValidatorTests.test_https_valid) ... ok
+test_javascript_rejected (apps.content.tests.test_social_links.SocialURLValidatorTests.test_javascript_rejected) ... ok
+test_mailto_rejected (apps.content.tests.test_social_links.SocialURLValidatorTests.test_mailto_rejected)
+Social links must be http/https only, not mailto. ... ok
+test_protocol_relative_rejected (apps.content.tests.test_social_links.SocialURLValidatorTests.test_protocol_relative_rejected) ... ok
+test_vbscript_rejected (apps.content.tests.test_social_links.SocialURLValidatorTests.test_vbscript_rejected) ... ok
+test_whitespace_only_rejected (apps.content.tests.test_social_links.SocialURLValidatorTests.test_whitespace_only_rejected) ... ok
+test_banner_delete_removes_files_after_commit (apps.content.tests.test_homepage_media.TransactionSafeFileLifecycleTests.test_banner_delete_removes_files_after_commit)
+Deleting a banner removes its files via on_commit. ... ok
+test_failed_validation_preserves_existing_banner_image (apps.content.tests.test_homepage_media.TransactionSafeFileLifecycleTests.test_failed_validation_preserves_existing_banner_image)
+If validation fails on banner edit, existing desktop image is preserved. ... ok
+test_failed_validation_preserves_existing_hero_image (apps.content.tests.test_homepage_media.TransactionSafeFileLifecycleTests.test_failed_validation_preserves_existing_hero_image)
+If validation fails on edit, existing desktop image is preserved. ... ok
+test_hero_delete_removes_files_after_commit (apps.content.tests.test_homepage_media.TransactionSafeFileLifecycleTests.test_hero_delete_removes_files_after_commit)
+Deleting a hero removes its files via on_commit. ... ok
+test_base_html_includes_the_shared_drawer_partial (apps.content.tests.test_mobile_nav_drawer.DrawerIsSharedBySingleOwnerAcrossHeaderShellsTests.test_base_html_includes_the_shared_drawer_partial) ... ok
+test_canonical_storefront_shell_wires_the_drawer (apps.content.tests.test_mobile_nav_drawer.DrawerIsSharedBySingleOwnerAcrossHeaderShellsTests.test_canonical_storefront_shell_wires_the_drawer) ... ok
+test_drawer_is_extracted_into_a_single_shared_partial (apps.content.tests.test_mobile_nav_drawer.DrawerIsSharedBySingleOwnerAcrossHeaderShellsTests.test_drawer_is_extracted_into_a_single_shared_partial) ... ok
+test_base_html_include_passes_live_storefront_context_to_the_drawer (apps.content.tests.test_mobile_nav_drawer.LegacyBaseHtmlDrawerSearchIsLiveTests.test_base_html_include_passes_live_storefront_context_to_the_drawer) ... ok
+test_drawer_partial_with_live_flag_renders_a_live_get_form_to_catalog (apps.content.tests.test_mobile_nav_drawer.LegacyBaseHtmlDrawerSearchIsLiveTests.test_drawer_partial_with_live_flag_renders_a_live_get_form_to_catalog) ... ok
+test_drawer_partial_without_live_flag_renders_the_disabled_preview_branch (apps.content.tests.test_mobile_nav_drawer.LegacyBaseHtmlDrawerSearchIsLiveTests.test_drawer_partial_without_live_flag_renders_the_disabled_preview_branch) ... ok
+test_canonical_search_partial_still_owns_the_q_param_and_endpoint (apps.content.tests.test_mobile_nav_drawer.MobileDrawerSearchAffordanceTests.test_canonical_search_partial_still_owns_the_q_param_and_endpoint) ... ok
+test_drawer_does_not_hand_roll_a_second_search_form (apps.content.tests.test_mobile_nav_drawer.MobileDrawerSearchAffordanceTests.test_drawer_does_not_hand_roll_a_second_search_form) ... ok
+test_drawer_includes_the_canonical_shared_search_partial (apps.content.tests.test_mobile_nav_drawer.MobileDrawerSearchAffordanceTests.test_drawer_includes_the_canonical_shared_search_partial) ... ok
+test_drawer_search_appears_before_the_navigation_list (apps.content.tests.test_mobile_nav_drawer.MobileDrawerSearchAffordanceTests.test_drawer_search_appears_before_the_navigation_list) ... ok
+test_drawer_search_is_inside_the_dialog_not_a_second_overlay (apps.content.tests.test_mobile_nav_drawer.MobileDrawerSearchAffordanceTests.test_drawer_search_is_inside_the_dialog_not_a_second_overlay) ... ok
+test_drawer_search_preserves_task5_nav_authority (apps.content.tests.test_mobile_nav_drawer.MobileDrawerSearchAffordanceTests.test_drawer_search_preserves_task5_nav_authority) ... ok
+test_drawer_search_uses_a_unique_field_id (apps.content.tests.test_mobile_nav_drawer.MobileDrawerSearchAffordanceTests.test_drawer_search_uses_a_unique_field_id) ... ok
+test_burger_exposes_accessible_expanded_state_and_controls_drawer (apps.content.tests.test_mobile_nav_drawer.MobileNavDrawerTests.test_burger_exposes_accessible_expanded_state_and_controls_drawer) ... ok
+test_desktop_nav_still_present_unchanged (apps.content.tests.test_mobile_nav_drawer.MobileNavDrawerTests.test_desktop_nav_still_present_unchanged) ... ok
+test_drawer_consumes_canonical_nav_mobile_with_header_fallback (apps.content.tests.test_mobile_nav_drawer.MobileNavDrawerTests.test_drawer_consumes_canonical_nav_mobile_with_header_fallback) ... ok
+test_drawer_css_is_offcanvas_and_rtl_safe (apps.content.tests.test_mobile_nav_drawer.MobileNavDrawerTests.test_drawer_css_is_offcanvas_and_rtl_safe) ... ok
+test_drawer_element_exists_with_dialog_semantics (apps.content.tests.test_mobile_nav_drawer.MobileNavDrawerTests.test_drawer_element_exists_with_dialog_semantics) ... ok
+test_drawer_has_explicit_close_control_and_backdrop (apps.content.tests.test_mobile_nav_drawer.MobileNavDrawerTests.test_drawer_has_explicit_close_control_and_backdrop) ... ok
+test_base_html_loads_the_overlay_primitive_before_alpine (apps.content.tests.test_mobile_nav_drawer.SharedOverlayPrimitiveTests.test_base_html_loads_the_overlay_primitive_before_alpine) ... ok
+test_overlay_primitive_file_exists_and_registers_alpine_data (apps.content.tests.test_mobile_nav_drawer.SharedOverlayPrimitiveTests.test_overlay_primitive_file_exists_and_registers_alpine_data) ... ok
+test_overlay_primitive_owns_only_generic_mechanics (apps.content.tests.test_mobile_nav_drawer.SharedOverlayPrimitiveTests.test_overlay_primitive_owns_only_generic_mechanics) ... ok
+test_0037_depends_on_existing_0036 (apps.content.tests.test_migration_graph.CatalogNewMigrationsTest.test_0037_depends_on_existing_0036) ... ok
+test_0038_depends_on_existing_0037 (apps.content.tests.test_migration_graph.CatalogNewMigrationsTest.test_0038_depends_on_existing_0037) ... ok
+test_all_dependency_files_exist (apps.content.tests.test_migration_graph.StoryRailMigrationDependencyTest.test_all_dependency_files_exist)
+Every declared dependency must point to an existing migration file. ... ok
+test_all_required_fields_present (apps.content.tests.test_migration_graph.StoryRailMigrationDependencyTest.test_all_required_fields_present)
+All expected StoryRailItem fields exist in the migration. ... ok
+test_catalog_dependency_for_destination_fks (apps.content.tests.test_migration_graph.StoryRailMigrationDependencyTest.test_catalog_dependency_for_destination_fks)
+Migration must depend on catalog app (for Product/Category/Brand/Collection FKs). ... ok
+test_content_previous_migration_dependency (apps.content.tests.test_migration_graph.StoryRailMigrationDependencyTest.test_content_previous_migration_dependency)
+The migration must depend on content.0017 (its predecessor). ... ok
+test_correct_storefront_builder_dependency (apps.content.tests.test_migration_graph.StoryRailMigrationDependencyTest.test_correct_storefront_builder_dependency)
+The migration must depend on storefront_builder.0003 (latest real migration). ... ok
+test_field_name_is_open_in_new_tab (apps.content.tests.test_migration_graph.StoryRailMigrationDependencyTest.test_field_name_is_open_in_new_tab)
+Field must be named 'open_in_new_tab' (not 'destination_open_new_tab'). ... ok
+test_invalid_dependency_not_present (apps.content.tests.test_migration_graph.StoryRailMigrationDependencyTest.test_invalid_dependency_not_present)
+The broken dependency must NOT appear in the migration source. ... ok
+test_migration_file_exists (apps.content.tests.test_migration_graph.StoryRailMigrationDependencyTest.test_migration_file_exists)
+0018_storyrailitem.py exists. ... ok
+test_no_billing_app_dependency (apps.content.tests.test_migration_graph.StoryRailMigrationDependencyTest.test_no_billing_app_dependency)
+content.0018 must not depend on the billing app. ... ok
+test_no_page_destination_type (apps.content.tests.test_migration_graph.StoryRailMigrationDependencyTest.test_no_page_destination_type)
+DestinationType does not include 'page' — must not appear in choices. ... ok
+test_no_wrong_field_names (apps.content.tests.test_migration_graph.StoryRailMigrationDependencyTest.test_no_wrong_field_names)
+Wrong field names must not appear. ... ok
+test_storyrailitem_in_operations (apps.content.tests.test_migration_graph.StoryRailMigrationDependencyTest.test_storyrailitem_in_operations)
+StoryRailItem CreateModel must be present in operations. ... ok
+test_uses_charfield_for_external_url (apps.content.tests.test_migration_graph.StoryRailMigrationDependencyTest.test_uses_charfield_for_external_url)
+destination_external_url must be CharField (not URLField) matching DestinationMixin. ... ok
+
+----------------------------------------------------------------------
+Ran 467 tests in 65.454s
+
+OK
+Destroying test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+[real_exit_code=0]

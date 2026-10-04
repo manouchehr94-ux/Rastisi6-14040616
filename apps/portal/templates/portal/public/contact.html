@@ -1,10 +1,92 @@
 {% extends "portal/public/base_public.html" %}
-{% block title %}تماس با ما | راستیسی{% endblock %}
-{% block meta_description %}<meta name="description" content="برای پرسش، پشتیبانی یا همکاری با تیم راستیسی پیام خود را ارسال کنید.">{% endblock %}
+{% block title %}تماس با ما | راستی‌سی{% endblock %}
+{% block meta_description %}<meta name="description" content="برای پرسش درباره محصول، تعرفه، راه‌اندازی یا همکاری با راستی‌سی پیام بفرستید.">{% endblock %}
+
 {% block content %}
-<section class="r-page-hero"><div class="r-wrap r-page-hero-grid"><div><span class="r-overline">تماس</span><h1 class="r-h1">برای یک سؤال واقعی، یک مسیر روشن داشته باش.</h1></div><div><p class="r-lead">اگر درباره شروع فروشگاه، امکانات یا همکاری سؤال دارید، پیام خود را ارسال کنید.</p></div></div></section>
-<section class="r-section" style="padding-top:22px"><div class="r-wrap"><div class="r-contact-shell">
-  <aside class="r-contact-side"><span class="r-overline" style="color:#9fd0c8">ارتباط با راستیسی</span><h2 class="r-h2">از سؤال تا تصمیم، شفاف صحبت کنیم.</h2><p class="r-lead">این فرم برای پرسش‌های عمومی، راهنمایی و ارتباط با تیم راستیسی در نظر گرفته شده است.</p><div class="r-contact-points"><div class="r-contact-point"><b>پرسش درباره محصول</b><span>امکانات، صنوف و مسیر ساخت فروشگاه</span></div><div class="r-contact-point"><b>راهنمایی شروع</b><span>ثبت‌نام، پلن و مراحل اولیه</span></div><div class="r-contact-point"><b>همکاری</b><span>موضوع همکاری را در فرم توضیح دهید.</span></div></div></aside>
-  <div class="r-contact-form"><form method="post" novalidate>{% csrf_token %}{% if form.non_field_errors %}<div class="p-alert p-alert-error">{{ form.non_field_errors.0 }}</div>{% endif %}<div class="p-field"><label for="id_full_name">نام</label>{{ form.full_name }}{% if form.full_name.errors %}<div class="p-error">{{ form.full_name.errors.0 }}</div>{% endif %}</div><div class="p-field"><label for="id_email">ایمیل</label>{{ form.email }}{% if form.email.errors %}<div class="p-error">{{ form.email.errors.0 }}</div>{% endif %}</div><div class="p-field"><label for="id_subject">موضوع</label>{{ form.subject }}</div><div class="p-field"><label for="id_message">پیام</label>{{ form.message }}{% if form.message.errors %}<div class="p-error">{{ form.message.errors.0 }}</div>{% endif %}</div>{% include "portal/public/_turnstile.html" with turnstile_action="contact" %}<button type="submit" class="r-btn r-btn-primary r-form-submit">ارسال پیام</button></form></div>
-</div></div></section>
+<section class="rs-page-hero">
+  <div class="rs-container">
+    <div class="rs-breadcrumbs"><a href="{% url 'portal:home' %}">راستی‌سی</a><span>/</span><span>تماس با ما</span></div>
+    <div class="rs-page-hero-row">
+      <div>
+        <div class="rs-eyebrow">تماس با راستی‌سی</div>
+        <h1>از یک سؤال<br>شروع کنیم.</h1>
+        <p>درباره محصول، تعرفه یا نیاز فروشگاهتان بنویسید تا گفت‌وگو از جای درستی شروع شود.</p>
+      </div>
+      <span class="rs-page-count">05</span>
+    </div>
+  </div>
+</section>
+
+<section class="rs-kinetic-band" aria-label="موضوعات تماس">
+  <div class="rs-kinetic-track" aria-hidden="true">
+    <span>شناخت محصول</span><span>تعرفه و اشتراک</span><span>راهنمایی استفاده</span><span>همکاری</span><span>نیاز فروشگاه</span>
+    <span>شناخت محصول</span><span>تعرفه و اشتراک</span><span>راهنمایی استفاده</span><span>همکاری</span><span>نیاز فروشگاه</span>
+  </div>
+</section>
+
+<section class="rs-page-section rs-container">
+  <div class="rs-contact">
+    <aside class="rs-contact-aside">
+      <div class="rs-eyebrow">موضوع گفت‌وگو</div>
+      <h2>چه چیزی در ذهن دارید؟</h2>
+      <p>پرسش‌های پیش از شروع، نیازهای فروشگاه و موضوع همکاری هرکدام مسیر خودشان را دارند. موضوع را در فرم روشن بنویسید.</p>
+
+      <div class="rs-contact-topics">
+        <div class="rs-contact-topic"><b>شناخت محصول</b><span>امکانات، طراحی، صنوف و مسیر راه‌اندازی</span></div>
+        <div class="rs-contact-topic"><b>تعرفه و اشتراک</b><span>پلن‌ها، دوره پرداخت و شرایط شروع</span></div>
+        <div class="rs-contact-topic"><b>راهنمایی استفاده</b><span>ورود، حساب مالک و مسیرهای عمومی محصول</span></div>
+        <div class="rs-contact-topic"><b>همکاری</b><span>موضوع همکاری را با جزئیات در پیام توضیح دهید</span></div>
+      </div>
+
+      <div class="rs-contact-note">شماره، ایمیل یا نشانی رسمی در این صفحه حدس زده نمی‌شود. اگر اطلاعات تماس عمومی رسمی برای پلتفرم تعریف شود، باید از یک منبع تأییدشده به این بخش اضافه شود.</div>
+      <p><a class="rs-link" href="{% url 'portal:help' %}">شاید پاسخ در پرسش‌های متداول باشد</a></p>
+    </aside>
+
+    <div class="rs-form">
+      <h2>پیامتان را بنویسید.</h2>
+      <p class="rs-form-intro">این فرم به جریان واقعی ثبت پیام پروژه متصل است و اعتبارسنجی و کنترل‌های امنیتی موجود را حفظ می‌کند.</p>
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="p-alert p-alert-error">{{ form.non_field_errors.0 }}</div>{% endif %}
+
+        <div class="p-field">
+          <label for="id_full_name">نام</label>
+          {{ form.full_name }}
+          {% if form.full_name.errors %}<div class="p-error">{{ form.full_name.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="p-field">
+          <label for="id_email">ایمیل</label>
+          {{ form.email }}
+          {% if form.email.errors %}<div class="p-error">{{ form.email.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="p-field">
+          <label for="id_subject">موضوع</label>
+          {{ form.subject }}
+          {% if form.subject.errors %}<div class="p-error">{{ form.subject.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="p-field">
+          <label for="id_message">پیام</label>
+          {{ form.message }}
+          {% if form.message.errors %}<div class="p-error">{{ form.message.errors.0 }}</div>{% endif %}
+        </div>
+
+        {% include "portal/public/_turnstile.html" with turnstile_action="contact" %}
+        <button type="submit" class="rs-btn rs-btn-primary">ارسال پیام</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="rs-contact-process">
+    <div class="rs-section-head">
+      <div><div class="rs-eyebrow">بعد از ارسال پیام</div><h2 class="rs-title">موضوع روشن‌تر باشد،<br>گفت‌وگو سریع‌تر شروع می‌شود.</h2></div>
+      <div><p class="rs-lead">فرم را با مسئله‌ای که دارید کامل کنید؛ اطلاعات تماس رسمی فقط از منابع تأییدشده در سایت نمایش داده می‌شود و چیزی به‌صورت فرضی اضافه نمی‌کنیم.</p></div>
+    </div>
+    <div class="rs-flow">
+      <article class="rs-flow-step"><span>01</span><h3>موضوع را مشخص کنید</h3><p>بگویید سؤال درباره محصول، تعرفه، راه‌اندازی یا همکاری است.</p></article>
+      <article class="rs-flow-step"><span>02</span><h3>نیاز را توضیح دهید</h3><p>هرچه زمینه روشن‌تر باشد، پاسخ می‌تواند دقیق‌تر باشد.</p></article>
+      <article class="rs-flow-step"><span>03</span><h3>پیام ثبت می‌شود</h3><p>فرم از مسیر واقعی ثبت پیام همین پروژه استفاده می‌کند.</p></article>
+      <article class="rs-flow-step"><span>04</span><h3>گفت‌وگو ادامه پیدا می‌کند</h3><p>پاسخ از کانال ارتباطی واقعی و تأییدشدهٔ پلتفرم پیگیری می‌شود.</p></article>
+    </div>
+  </div>
+</section>
 {% endblock %}

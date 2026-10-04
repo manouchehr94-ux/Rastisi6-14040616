@@ -98,6 +98,12 @@ A8_ADVERTISED_COMPONENTS_BY_FAMILY = {
         "bottom_nav.minimal_icons.v1",
         "bottom_nav.wide_cart.v1",
     ),
+    # P5-W2 — Ready Templates advertise (and use) only the Theme no-op:
+    # occasion themes are merchant-selected and independent of the template
+    # catalog, so no Ready Template auto-assigns an occasion. The occasion
+    # components still live in the central registry via the theme_catalog
+    # adapter; they are simply not part of the A8 recipe coverage surface.
+    "theme": ("theme.none.v1",),
 }
 
 A8_ADVERTISED_COMPONENT_KEYS = frozenset(

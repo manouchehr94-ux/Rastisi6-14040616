@@ -208,38 +208,162 @@ def _collection_url(store, pk, MerchantCollection):
 # site instead of hidden in signal-dispatch order.
 
 
-def delete_media_asset_if_unreferenced(asset) -> bool:
-    """اگر ``asset`` دیگر توسط هیچ Placementی (در هیچ نسخه‌ای — Published،
-    Draft یا بایگانی‌شده) ارجاع نمی‌شود، خودِ ردیف را (و فایلِ فیزیکی‌اش را،
-    فقط پس از commitِ موفقِ تراکنش) حذف می‌کند و ``True`` برمی‌گرداند.
+# ---------------------------------------------------------------- MED-001 — RETENTION-FIRST policy (binding architect decision)
+#
+# BINDING POLICY (MED-001, architect decision — supersedes the earlier
+# "delete-if-unreferenced" contract that shipped in the first MED-001
+# repair): for the reusable-Storefront-media family (HeroSlide,
+# PromotionalBanner, StoryRailItem, MediaAsset, section-background
+# MediaAsset references, history/baseline-recoverable media), ONLINE /
+# REQUEST-TIME code must NEVER automatically destroy either:
+#
+#   1. the physical storage bytes, OR
+#   2. an unreferenced ``MediaAsset`` metadata row
+#
+# merely because current reachability happens to be zero at the instant of
+# the check. This is deliberately conservative: a small storage/metadata
+# leak (an orphaned file, an orphaned ``MediaAsset`` row) is an ACCEPTABLE
+# cost for this P0; destroying bytes or rows that are, or could become
+# again, legitimately referenced (via a concurrent write, an Undo/Redo, a
+# restored version, a revived background/history/baseline snapshot) is
+# NOT acceptable — that would be actual, irreversible data loss.
+#
+# WHY: the concurrency investigation for this P0 proved that a
+# check-then-storage.delete design (even one that re-checks safety inside
+# the ``transaction.on_commit`` callback, immediately before the physical
+# delete) still has a real, provable attach-vs-delete TOCTOU race — a
+# concurrent transaction can commit a brand-new reference (a new
+# ``MediaAsset`` alias row, a revived Placement via Undo/Redo, a clone via
+# Draft/Restore, a background-JSON write) to the exact same physical path
+# in the narrow window between the safety re-check and the actual
+# ``storage.delete()`` call, because ``storage.delete()`` is not a
+# database operation and cannot be made atomic with any DB-side lock/check
+# without either (a) making the physical delete happen while a DB lock is
+# still held — which would require deleting bytes BEFORE the deciding
+# transaction commits, directly violating the separately-required
+# "physical delete only after successful commit" rule — or (b) a
+# fully-serialized, schema-backed lock-identity/GC architecture that is
+# explicitly out of scope for this P0 (deferred to a later, separately
+# designed task; see the module-level note at the bottom of this section).
+#
+# THE FIX FOR THIS P0: remove the destructive side entirely from online
+# mutation paths. If nothing here ever deletes bytes or rows, there is no
+# window in which a concurrent writer can lose a race against a delete —
+# there is no delete to race against. This is a genuine, provable
+# elimination of the race for this P0, not a narrowing of it.
+#
+# ``delete_media_asset_if_unreferenced`` and ``cleanup_reusable_media_file``
+# remain the ONE canonical retention/cleanup authority for this media
+# family — every call site that used to reach for a raw ``storage.delete``
+# still funnels through these two functions, unchanged in shape/signature,
+# so there is exactly one place this policy is enforced. Their *contract*
+# changes (no more destructive action for this reusable-media family);
+# their *names* are kept as-is (renaming across the whole codebase is out
+# of scope for this narrow P0) but are now retention-first by design.
+#
+# FUTURE WORK (explicitly NOT designed or implemented here): durable,
+# serialized reusable-media garbage collection (e.g. a deferred/tombstoned
+# sweep, a persistent path-identity lock row, or a PostgreSQL advisory-
+# lock-backed reclaim job) is deferred to a separate, later-architected
+# task. Nothing below should be read as a design for that future task.
 
-    اگر هنوز حداقل یک Placement به آن ارجاع می‌دهد، **هیچ کاری نمی‌کند** و
-    ``False`` برمی‌گرداند — قانونِ حیاتیِ Phase 0.5: هرگز فایلِ فیزیکیِ
-    زیرِ یک asset را حذف نکن اگر Placementِ دیگری (مثلاً نسخه‌ی Published)
-    هنوز به همان ردیف اشاره می‌کند.
 
-    ``asset`` می‌تواند ``None`` باشد (مثلاً وقتی Placementِ حذف‌شده هنوز از
-    قبل از Phase 0.5 است و هیچ FKِ assetای نداشت) — در این حالت بی‌صدا
-    ``False`` برمی‌گرداند؛ فراخوان مسئولِ رفتارِ fallback (حذفِ مستقیمِ
-    فایلِ قدیمی از طریقِ نامِ فایل) است، نه این تابع."""
-    if asset is None:
-        return False
-    if asset.is_referenced():
-        return False
+def _reusable_media_placement_models():
+    """MED-001 — هر مدل/فیلدِ ImageFieldِ قدیمیِ (legacy) رسانه‌ی
+    قابل‌استفاده‌ی‌مجددِ Storefront که می‌تواند مستقیماً به یک مسیرِ فیزیکیِ
+    فایل اشاره کند (نه از طریقِ ``MediaAsset``). این فهرست دقیقاً همانِ
+    خانواده‌ی «رسانه‌ی قابل‌استفاده‌ی‌مجددِ Storefront»یِ MED-001 است —
+    ``ProductImage``یِ کاتالوگ عمداً اینجا نیست (چرخه‌ی‌حیاتِ کاملاً جداست).
+    باقی مانده صرفاً برایِ مستندسازیِ خانواده‌یِ MED-001 — دیگر توسطِ
+    مسیرِ retention-first زیر خوانده نمی‌شود (نگاه کنید به یادداشتِ
+    Retention-First بالا)."""
+    from .models import HeroSlide, PromotionalBanner, StoryRailItem
+
+    return (
+        (HeroSlide, ("desktop_image", "mobile_image")),
+        (PromotionalBanner, ("desktop_image", "mobile_image")),
+        (StoryRailItem, ("image",)),
+    )
+
+
+def cleanup_reusable_media_file(file_name, storage, *, exclude_asset_pk=None) -> None:
+    """MED-001 (Retention-First، تصمیمِ معمار — جانشینِ صریحِ نسخه‌ی قبلی):
+    این تابع دیگر **هیچ حذفِ فیزیکی‌ای برایِ خانواده‌یِ رسانه‌یِ
+    قابل‌استفاده‌ی‌مجددِ Storefront انجام نمی‌دهد**. عمداً یک no-op کانونیِ
+    نگه‌داری (retention boundary) است — نه حذف شده، نه ساده‌سازی‌شده به
+    هیچ‌کاری، بلکه صریحاً نگه داشته شده تا هر فراخوانِ قبلی/آینده‌ای که
+    قبلاً به اینجا مسیریابی می‌شد همچنان از طریقِ همینِ یک مرجعِ کانونیک
+    عبور کند — بدونِ اینکه لازم باشد فراخوان‌کننده‌ها را حذف/جایگزین کرد.
+
+    چرا: بررسیِ هم‌زمانیِ MED-001 ثابت کرد که یک الگویِ check-then-delete —
+    حتی اگر بازبینیِ ایمنی داخلِ callbackِ ``transaction.on_commit`` اجرا
+    شود — بازهم یک پنجره‌یِ واقعیِ TOCTOU بینِ «تصمیمِ ایمن‌بودن» و خودِ
+    ``storage.delete()`` باقی می‌گذارد، چون ``storage.delete()`` یک عملیاتِ
+    دیتابیسی نیست و نمی‌تواند با هیچ قفلِ سمتِ دیتابیس اتمیک شود بدونِ
+    اینکه یا حذفِ فیزیکی را پیش از commit ببرد (که قانونِ «حذفِ فیزیکی
+    فقط پس از commitِ موفق» را نقض می‌کند) یا یک معماریِ کاملاً جدیدِ
+    schema-backed بسازد (که خارج از حیطه‌یِ همینِ P0 است).
+
+    راه‌حلِ این P0: حذفِ کاملِ سمتِ مخربِ مسیرهایِ آنلاین. اگر هیچ‌جا هیچ‌وقت
+    بایتی حذف نشود، هیچ پنجره‌ای برایِ رقابتِ نویسنده‌یِ هم‌زمان با یک حذف
+    وجود ندارد — چون اصلاً حذفی نیست که با آن رقابت شود.
+
+    ``transaction.on_commit`` عمداً همچنان فراخوانی می‌شود (نه حذف شده) —
+    اگر در آینده این نقطه‌ی نگه‌داری جایگزینِ یک معماریِ GCِ سریالایز/
+    durable شود، ساختارِ callbackِ post-commit همینجا از قبل آماده است؛
+    فعلاً آن callback عمداً کاری نمی‌کند."""
+    if not file_name or storage is None:
+        return
 
     from django.db import transaction
 
-    file_name = asset.image.name if asset.image else None
-    storage = asset.image.storage if asset.image else None
-    asset.delete()
+    def _cleanup():
+        # MED-001 Retention-First: عمداً بدونِ storage.delete — نگاه کنید
+        # به یادداشتِ کانونیِ Retention-First در بالایِ همین بخش از فایل.
+        return None
 
-    if file_name and storage:
-        def _cleanup():
-            if storage.exists(file_name):
-                storage.delete(file_name)
+    transaction.on_commit(_cleanup)
 
-        transaction.on_commit(_cleanup)
-    return True
+
+def delete_media_asset_if_unreferenced(asset) -> bool:
+    """MED-001 (Retention-First، تصمیمِ معمار — جانشینِ صریحِ نسخه‌ی قبلی):
+    نامِ این تابع تاریخی و اکنون تاحدی گمراه‌کننده است («delete»)، اما
+    عمداً در این P0 بازنامگذاری نشده (بازنامگذاریِ سراسریِ آن در کلِ کدبیس
+    خارج از حیطه‌یِ این ترمیمِ محدود است). قراردادِ *رفتاریِ* آن اکنون
+    کاملاً نگه‌دارنده (retention-first) است:
+
+    * ``asset is None`` → no-op امن، ``False``.
+    * ``asset`` هنوز ارجاع‌شده (``asset.is_referenced()`` True) → نگه‌داشته
+      می‌شود، ``False``.
+    * ``asset`` اکنون بدون‌ارجاعِ قابلِ‌استفاده‌ی‌مجدد است → **بازهم نگه‌
+      داشته می‌شود** (نه ردیفِ ``MediaAsset``اش حذف می‌شود، نه فایلِ
+      فیزیکیِ زیرِ آن)، ``False``.
+
+    این تابع دیگر **هرگز** ``asset.delete()`` صدا نمی‌زند و **هرگز** بایتِ
+    فیزیکی را حذف نمی‌کند — برایِ هر دو حالت.
+
+    چرا نگه‌داشتنِ خودِ ردیفِ متادیتا هم لازم است (نه صرفاً بایت‌ها): پس‌
+    زمینه‌ی JSON، Undo/Redo، تاریخچه، baselineِ قالب، یا یک نوشتنِ هم‌زمانِ
+    دیگر می‌توانند به‌طورِ کاملاً مجاز idِ همینِ ``MediaAsset`` را نگه دارند
+    یا دوباره زنده کنند (نگاه کنید به بررسیِ هم‌زمانیِ MED-001، بخشِ
+    «نقشه‌یِ authorityهایِ ایجادِ ارجاع» — Undo/Redo مستقیماً یک Placementِ
+    تازه با همانِ FKِ قدیمی می‌سازد). حذفِ خودِ ردیفِ متادیتا، حتی اگر بایتِ
+    فیزیکی زنده بماند، یک ریسکِ مسابقه‌یِ *ارجاعِ شکسته*‌یِ جداگانه می‌سازد
+    (یک FK به یک ردیفِ حذف‌شده). پس صفرِ فعلیِ reachability هرگز اختیارِ
+    کافی برایِ حذفِ ردیفِ ``MediaAsset`` در کدِ آنلاین/runtime نیست — هم
+    ردیف و هم فایل، هر دو، نگه داشته می‌شوند.
+
+    P0ِ همگام‌سازی: تضمینِ TOCTOU با حذفِ کاملِ سمتِ مخربِ این مسیرهایِ
+    آنلاین به‌دست می‌آید، نه با ادعایِ یک قفلِ check-and-delete اتمیک —
+    نگاه کنید به یادداشتِ کانونیِ Retention-First در بالایِ همین بخش."""
+    if asset is None:
+        return False
+    # MED-001 Retention-First: صرفِ خوانشِ is_referenced() اینجا دیگر برایِ
+    # هیچ اقدامِ مخربی استفاده نمی‌شود — فقط برایِ گزارش‌دهیِ صادقانه‌یِ
+    # بازگشتی (``False`` در هر دو حالت، اما مستندسازی/لاگ‌گذاریِ آینده
+    # می‌تواند این تفکیک را حفظ کند بدونِ اینکه رفتار عوض شود).
+    asset.is_referenced()
+    return False
 
 
 class NewsletterSubscribeError(ValueError):

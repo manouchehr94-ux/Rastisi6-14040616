@@ -688,6 +688,101 @@
     </div>
   </form>
 
+  {% elif section.section_key == "trust_features" %}
+  {{ section.settings.items|json_script:"tf-initial-items" }}
+  <form class="sfb-v3-section-form" data-sfb-autosave="true" method="post" action="{% url 'dashboard:storefront-builder-section-settings' section.pk %}" hx-boost="false"
+        x-data="itemRepeaterForm(JSON.parse(document.getElementById('tf-initial-items').textContent), {icon:'', title:'', subtitle:''})">
+    {% csrf_token %}
+    <p style="color:var(--muted);font-size:12.5px;margin:0 0 12px">فهرست خالی یعنی ۴ آیتمِ پیش‌فرضِ همیشگی بدون تغییر نمایش داده می‌شود.</p>
+    <template x-for="(row, index) in rows" :key="index">
+      <div style="border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px">
+        <div class="form-group">
+          <label>آیکون (اموجی، اختیاری)</label>
+          <input type="text" name="tf_icon" class="form-input" x-model="row.icon" maxlength="8">
+        </div>
+        <div class="form-group">
+          <label>عنوان (الزامی)</label>
+          <input type="text" name="tf_title" class="form-input" x-model="row.title" maxlength="40">
+        </div>
+        <div class="form-group">
+          <label>زیرعنوان (اختیاری)</label>
+          <input type="text" name="tf_subtitle" class="form-input" x-model="row.subtitle" maxlength="40">
+        </div>
+        <div style="display:flex;gap:6px">
+          <button type="button" class="btn btn-sm" @click="moveUp(index)" :disabled="index === 0">▲</button>
+          <button type="button" class="btn btn-sm" @click="moveDown(index)" :disabled="index === rows.length - 1">▼</button>
+          <button type="button" class="btn btn-sm btn-danger" @click="removeRow(index)">حذف این آیتم</button>
+        </div>
+      </div>
+    </template>
+    <button type="button" class="btn btn-sm" @click="addRow()">+ افزودن آیتم</button>
+
+    {% include "dashboard/storefront_builder/partials/section_responsive_fields.html" %}
+
+    <div class="sfb-form-actions" style="display:flex;gap:10px;margin-top:16px">
+      <button type="submit" class="btn btn-primary">ذخیره تنظیمات</button>
+      <button type="button" class="btn" @click="$dispatch('close-settings-drawer')">انصراف</button>
+    </div>
+  </form>
+
+  {% elif section.section_key == "amazing_offers" %}
+  <form class="sfb-v3-section-form" data-sfb-autosave="true" method="post" action="{% url 'dashboard:storefront-builder-section-settings' section.pk %}" hx-boost="false">
+    {% csrf_token %}
+    <div class="form-group">
+      <label for="id_ao_title">عنوان بخش (اختیاری)</label>
+      <input type="text" name="title" id="id_ao_title" class="form-input" maxlength="60" value="{{ section.settings.title|default:'' }}">
+      {% if section.template_slot_key %}
+      <form method="post" action="{% url 'dashboard:storefront-builder-section-field-reset' section.pk %}" style="margin-top:6px"
+            onsubmit="return confirm('عنوانِ این بخش به مقدارِ اولیه‌یِ قالب بازنشانی می‌شود. ادامه می‌دهید؟')">
+        {% csrf_token %}<input type="hidden" name="field" value="title">
+        <button type="submit" class="btn btn-ghost btn-sm sfb-reset-field-btn">⟲ بازنشانی عنوان به قالب</button>
+      </form>
+      {% endif %}
+    </div>
+    <div class="form-group">
+      <label for="id_ao_item_limit">تعداد پیشنهادها (۱ تا ۴)</label>
+      <input type="number" name="item_limit" id="id_ao_item_limit" class="form-input" min="1" max="4" value="{{ section.settings.item_limit|default:1 }}">
+    </div>
+    <div class="form-group">
+      <label for="id_ao_deadline">مدتِ زمان‌شمار (ساعت، ۱ تا ۱۶۸)</label>
+      <input type="number" name="deadline_hours" id="id_ao_deadline" class="form-input" min="1" max="168" value="{{ section.settings.deadline_hours|default:8 }}">
+    </div>
+
+    {% include "dashboard/storefront_builder/partials/section_responsive_fields.html" %}
+
+    <div class="sfb-form-actions" style="display:flex;gap:10px;margin-top:16px">
+      <button type="submit" class="btn btn-primary">ذخیره تنظیمات</button>
+      <button type="button" class="btn" @click="$dispatch('close-settings-drawer')">انصراف</button>
+    </div>
+  </form>
+
+  {% elif section.section_key == "blog_posts" %}
+  <form class="sfb-v3-section-form" data-sfb-autosave="true" method="post" action="{% url 'dashboard:storefront-builder-section-settings' section.pk %}" hx-boost="false">
+    {% csrf_token %}
+    <div class="form-group">
+      <label for="id_bp_title">عنوان بخش (اختیاری)</label>
+      <input type="text" name="title" id="id_bp_title" class="form-input" maxlength="60" value="{{ section.settings.title|default:'' }}">
+      {% if section.template_slot_key %}
+      <form method="post" action="{% url 'dashboard:storefront-builder-section-field-reset' section.pk %}" style="margin-top:6px"
+            onsubmit="return confirm('عنوانِ این بخش به مقدارِ اولیه‌یِ قالب بازنشانی می‌شود. ادامه می‌دهید؟')">
+        {% csrf_token %}<input type="hidden" name="field" value="title">
+        <button type="submit" class="btn btn-ghost btn-sm sfb-reset-field-btn">⟲ بازنشانی عنوان به قالب</button>
+      </form>
+      {% endif %}
+    </div>
+    <div class="form-group">
+      <label for="id_bp_item_limit">تعداد مطالب (۳ تا ۶)</label>
+      <input type="number" name="item_limit" id="id_bp_item_limit" class="form-input" min="3" max="6" value="{{ section.settings.item_limit|default:5 }}">
+    </div>
+
+    {% include "dashboard/storefront_builder/partials/section_responsive_fields.html" %}
+
+    <div class="sfb-form-actions" style="display:flex;gap:10px;margin-top:16px">
+      <button type="submit" class="btn btn-primary">ذخیره تنظیمات</button>
+      <button type="button" class="btn" @click="$dispatch('close-settings-drawer')">انصراف</button>
+    </div>
+  </form>
+
   {% elif section.section_key == "single_banner" or section.section_key == "multi_banner" %}
   <a href="{% url 'dashboard:storefront-builder-section-media-list' pk=section.pk kind='banners' %}" class="btn btn-primary" style="width:100%;margin-bottom:14px;text-align:center;display:block">مدیریت بنرها ({{ section.banners.count }})</a>
   <form class="sfb-v3-section-form" data-sfb-autosave="true" method="post" action="{% url 'dashboard:storefront-builder-section-settings' section.pk %}" hx-boost="false">

@@ -296,6 +296,14 @@ def _rebuild_home_composition(draft) -> None:
         "Golden Home entries must not carry container_settings — "
         "_rebuild_home_composition does not write StorefrontContainer.settings."
     )
+    assert all(
+        not section_registry.get_definition(entry.section_key).hidden_from_library
+        for entry in entries
+    ), (
+        "Golden Home entries must not include a hidden_from_library section "
+        "(e.g. announcement_bar, superseded by the header notification bar — "
+        "see preset_service._build_sections_for_page's identical gate)."
+    )
 
     rows = []
     for order, entry in enumerate(entries):

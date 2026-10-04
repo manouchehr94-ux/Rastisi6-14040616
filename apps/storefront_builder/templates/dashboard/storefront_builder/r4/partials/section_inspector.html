@@ -1,3 +1,4 @@
+{% load storefront_builder_extras %}
 <div class="r4-inspector-panel" data-r4-section-inspector data-r4-section-id="{{ section.pk }}">
   <header class="r4-inspector-header">
     <strong class="r4-inspector-title">{{ definition.label_fa }}</strong>
@@ -5,6 +6,26 @@
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
     </button>
   </header>
+
+  {% if media_manage_url %}
+  {% comment %}
+  Phase 5 Task 4 (remediation R1a) — R4-NATIVE media editing embedded inline.
+  Reuses the canonical media manager body (media_views models/CRUD/authority)
+  via htmx; never a passive target="_blank" out-link workflow, never a second
+  media system.
+  {% endcomment %}
+  {% comment %}
+  hx-headers on the manager container is INHERITED by every descendant htmx
+  request, so add/edit/toggle/delete/move all carry the explicit R4-inline
+  marker (HX-R4-Inline) — the media_views endpoints use THIS, never HX-Request
+  alone, to decide inline vs legacy context. The drag-reorder htmx.ajax call
+  passes it explicitly too (see section_media_list_body.html).
+  {% endcomment %}
+  <div class="r4-inspector-media" data-r4-media-manager hx-headers='{"HX-R4-Inline": "1"}'>
+    <div class="r4-inspector-media-heading">مدیریت {{ media_label_plural }}</div>
+    {% include "dashboard/storefront_builder/partials/section_media_manager_body.html" with config=media_config items=media_items kind=media_kind %}
+  </div>
+  {% endif %}
 
   <div class="r4-inspector-tabs" role="tablist">
     <button type="button" class="r4-inspector-tab" role="tab" data-r4-tab="basic" aria-selected="true">تنظیمات اصلی</button>
@@ -14,13 +35,13 @@
   <div class="r4-inspector-body">
     <section class="r4-inspector-panel-fields" role="tabpanel" data-r4-tab-panel="basic">
       {% for field in basic_fields %}
-        {% include "dashboard/storefront_builder/r4/partials/settings_field.html" with field=field %}
+        {% include "dashboard/storefront_builder/r4/partials/settings_field.html" with field=field current_field_value=field_values|dictget:field.key %}
       {% endfor %}
     </section>
 
     <section class="r4-inspector-panel-fields" role="tabpanel" data-r4-tab-panel="advanced" hidden>
       {% for field in advanced_fields %}
-        {% include "dashboard/storefront_builder/r4/partials/settings_field.html" with field=field %}
+        {% include "dashboard/storefront_builder/r4/partials/settings_field.html" with field=field current_field_value=field_values|dictget:field.key %}
       {% endfor %}
     </section>
   </div>

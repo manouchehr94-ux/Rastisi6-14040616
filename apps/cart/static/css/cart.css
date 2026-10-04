@@ -53,3 +53,17 @@
   .co-grid{grid-template-columns:1fr}
   .col-sum{position:static}
 }
+
+
+/* P5-W1 — Free-Shipping Goal (presentation only; all values precomputed by
+   apps/cart/services/pricing.py::cart_totals). RTL-safe (logical properties).
+   The progress width is set inline from the server-computed, already-clamped
+   free_shipping_goal_progress_percent — the template performs no arithmetic. */
+.fsg{margin-top:14px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--violet-softer,#f3effc)}
+.fsg--success{display:flex;align-items:center;gap:8px;border-color:var(--green,#16a34a);background:color-mix(in srgb,var(--green,#16a34a) 8%,transparent)}
+.fsg--success .fsg-ic{font-size:16px;line-height:1}
+.fsg--success .fsg-msg{font-size:13px;font-weight:800;color:var(--green,#16a34a)}
+.fsg--goal .fsg-msg{font-size:12.5px;font-weight:700;color:#4b4560;margin-bottom:8px}
+.fsg-track{position:relative;height:8px;border-radius:6px;background:#e6e0f5;overflow:hidden}
+.fsg-fill{display:block;height:100%;max-width:100%;border-radius:6px;background:var(--violet,#7c3aed);transition:width .3s ease}
+@media (prefers-reduced-motion: reduce){.fsg-fill{transition:none}}

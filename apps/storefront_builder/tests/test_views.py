@@ -32,6 +32,22 @@ class StorefrontBuilderViewsTestCase(TestCase):
         )
         self.client = Client(HTTP_HOST=HOST)
         self.client.login(username="sfb_owner", password="pass12345")
+        # Pre-Task-10 CORRECTIVE closure (Item 2, second legacy retirement
+        # pass) — editor.html's own composition/settings/toggle-lock/reset/
+        # Appearance-Header-Footer body now renders ONLY for a Store pinned
+        # back to the legacy editor (``r4_editor_enabled=False``); a Store
+        # on the live default (True) sees the new minimal compatibility
+        # surface instead (see editor.html's own top-of-file comment).
+        # Every test below this point was written against — and still
+        # genuinely exercises — the FULL legacy editor body: that body must
+        # keep working correctly for a Store that really is pinned back, so
+        # this fixture pins every test in this file (and every file that
+        # imports this base case) to that still-required code path, rather
+        # than the now-separate minimal-surface behavior EditorAccessTests
+        # and R4EditorMinimalCompatibilitySurfaceTests below test directly.
+        layout = svc.get_or_create_layout(self.store)
+        layout.r4_editor_enabled = False
+        layout.save(update_fields=["r4_editor_enabled"])
 
 
 class EditorAccessTests(StorefrontBuilderViewsTestCase):
@@ -48,6 +64,56 @@ class EditorAccessTests(StorefrontBuilderViewsTestCase):
         self.assertContains(resp, "sfb-add-section-category")
         # نوارِ اعلانِ section نباید در کتابخانه ظاهر شود (چکپوینتِ ۹)
         self.assertNotContains(resp, 'section_key": "announcement_bar"')
+
+    def test_r4_editor_link_hidden_when_gate_explicitly_disabled(self):
+        # Pre-Task-10 remediation (R4 live cutover) —
+        # StorefrontLayout.r4_editor_enabled now defaults True (R4 is the
+        # canonical merchant editor); the flag is a non-blocking
+        # compatibility mechanism only, for a Store explicitly pinned back
+        # to the legacy editor. The legacy editor must not offer a link
+        # into a route that would 404 for such a Store. (The base setUp
+        # above already pins this Store to False — this test re-asserts it
+        # explicitly since it is the whole point being tested.)
+        layout = svc.get_or_create_layout(self.store)
+        layout.r4_editor_enabled = False
+        layout.save(update_fields=["r4_editor_enabled"])
+        resp = self.client.get(reverse("dashboard:storefront-builder-editor"))
+        self.assertNotContains(resp, "ادیتور جدید (R4)")
+
+    def test_r4_editor_link_shown_by_default(self):
+        # Pre-Task-10 remediation (R4 live cutover) — the default is now
+        # enabled, so a Store that never touched the flag sees R4's own
+        # link/CTA (and the dashboard nav itself, per base_admin.html, now
+        # routes straight to R4 rather than needing this link at all).
+        # Pre-Task-10 CORRECTIVE closure (Item 2) — the base setUp pins this
+        # whole file's Store to r4_editor_enabled=False so every OTHER test
+        # here keeps exercising the still-required full legacy body; this
+        # one test explicitly restores the real model default (True) to
+        # verify what a Store that never touched the flag actually sees:
+        # the new minimal compatibility surface (editor.html's ``{% if
+        # layout.r4_editor_enabled %}`` branch), not the retired full body.
+        layout = svc.get_or_create_layout(self.store)
+        layout.r4_editor_enabled = True
+        layout.save(update_fields=["r4_editor_enabled"])
+        resp = self.client.get(reverse("dashboard:storefront-builder-editor"))
+        self.assertContains(resp, "ادیتور جدید (R4)")
+        self.assertContains(resp, reverse("dashboard:storefront-builder-r4-editor"))
+        # The retirement itself: none of the duplicate full-editor surfaces
+        # (composition/settings Alpine SPA, R3 modal, section library) may
+        # render for a Store on the live R4 default.
+        self.assertNotContains(resp, "sfb-add-section-category")
+        self.assertNotContains(resp, "storefrontEditor()")
+        self.assertNotContains(resp, "sfbR3Modal")
+
+    def test_publish_form_carries_the_current_edit_revision(self):
+        """R4 Task 8 (Batch 2, lifecycle-hardening) — ``storefront_publish``'s
+        stale-aware path already existed but was unreachable in practice:
+        the real toolbar form never sent ``base_revision``, so a stale
+        legacy publish always silently "succeeded" as a bare publish
+        instead. Confirms the form now actually carries the token."""
+        draft = svc.get_or_create_draft(self.store)
+        resp = self.client.get(reverse("dashboard:storefront-builder-editor"))
+        self.assertContains(resp, f'name="base_revision" value="{draft.edit_revision}"')
 
     def test_anonymous_denied(self):
         self.client.logout()
@@ -617,6 +683,83 @@ class LockSectionTests(StorefrontBuilderViewsTestCase):
         self.assertEqual(a.order, 0)
         self.assertEqual(b.order, 1)
 
+    def test_section_in_locked_container_cannot_be_removed(self):
+        """R4 Task 8 (Batch 2, lifecycle-lock parity) — a Container's own
+        lock must ALSO protect the Sections placed in it, not just each
+        Section's own ``is_locked`` flag (already covered by
+        ``test_locked_section_cannot_be_removed`` above). Matches
+        ``section_structure_service.remove_section``'s own
+        ``container_locked`` guard, which this legacy view previously had
+        no equivalent of."""
+        from apps.storefront_builder.services import container_service
+
+        page = self.draft.get_page(StorefrontPage.PageType.HOME)
+        section = StorefrontSection.objects.create(page=page, section_key="rich_text", order=0)
+        container = container_service.create_empty_container(page, "single")
+        cell = container.cells.order_by("order", "id").first()
+        container_service.place_section(cell, section)
+        container.is_locked = True
+        container.save(update_fields=["is_locked"])
+
+        self.client.post(reverse("dashboard:storefront-builder-section-remove", args=[section.pk]))
+        self.assertTrue(StorefrontSection.objects.filter(pk=section.pk).exists())
+
+    def test_section_in_unlocked_container_still_removable(self):
+        from apps.storefront_builder.services import container_service
+
+        page = self.draft.get_page(StorefrontPage.PageType.HOME)
+        section = StorefrontSection.objects.create(page=page, section_key="rich_text", order=0)
+        container = container_service.create_empty_container(page, "single")
+        cell = container.cells.order_by("order", "id").first()
+        container_service.place_section(cell, section)
+
+        self.client.post(reverse("dashboard:storefront-builder-section-remove", args=[section.pk]))
+        self.assertFalse(StorefrontSection.objects.filter(pk=section.pk).exists())
+
+    def test_section_in_locked_container_cannot_be_moved(self):
+        """Same lock-parity gap as removal above, for
+        ``section_structure_service.move_section``'s own
+        ``container_locked``/``target_container_locked`` guards."""
+        from apps.storefront_builder.services import container_service
+
+        page = self.draft.get_page(StorefrontPage.PageType.HOME)
+        a = StorefrontSection.objects.create(page=page, section_key="rich_text", order=0)
+        b = StorefrontSection.objects.create(page=page, section_key="image_text", order=1)
+        container_a = container_service.create_empty_container(page, "single")
+        container_service.place_section(container_a.cells.order_by("order", "id").first(), a)
+        container_b = container_service.create_empty_container(page, "single")
+        container_service.place_section(container_b.cells.order_by("order", "id").first(), b)
+        container_a.is_locked = True
+        container_a.save(update_fields=["is_locked"])
+
+        self.client.post(reverse("dashboard:storefront-builder-section-move", args=[a.pk]), {"direction": "down"})
+        a.refresh_from_db()
+        b.refresh_from_db()
+        self.assertEqual(a.order, 0)
+        self.assertEqual(b.order, 1)
+
+    def test_moving_a_neighbor_whose_container_is_locked_is_blocked(self):
+        """Same lock-parity gap as above, for the SWAP TARGET's container —
+        mirrors ``test_moving_a_neighbor_into_a_locked_section_is_blocked``
+        above, with a locked Container instead of a locked Section."""
+        from apps.storefront_builder.services import container_service
+
+        page = self.draft.get_page(StorefrontPage.PageType.HOME)
+        a = StorefrontSection.objects.create(page=page, section_key="rich_text", order=0)
+        b = StorefrontSection.objects.create(page=page, section_key="image_text", order=1)
+        container_a = container_service.create_empty_container(page, "single")
+        container_service.place_section(container_a.cells.order_by("order", "id").first(), a)
+        container_b = container_service.create_empty_container(page, "single")
+        container_service.place_section(container_b.cells.order_by("order", "id").first(), b)
+        container_b.is_locked = True
+        container_b.save(update_fields=["is_locked"])
+
+        self.client.post(reverse("dashboard:storefront-builder-section-move", args=[a.pk]), {"direction": "down"})
+        a.refresh_from_db()
+        b.refresh_from_db()
+        self.assertEqual(a.order, 0)
+        self.assertEqual(b.order, 1)
+
     def test_locked_section_cannot_be_moved_via_bulk_reorder(self):
         """Phase 1 correction: قفل باید مسیرِ جایگزینِ بازچینیِ دسته‌ای
         (drag-and-drop) را هم رد کند، نه فقط دکمه‌هایِ بالا/پایین."""
@@ -1147,11 +1290,16 @@ class ProductSectionSettingsFormTests(StorefrontBuilderViewsTestCase):
         self.section.refresh_from_db()
         self.assertEqual(self.section.settings["data_source"], "newest")  # unchanged
 
-    def test_cross_store_collection_rejected_by_data_service_not_crash(self):
-        """انتخابِ یک کالکشنِ متعلق به فروشگاهِ دیگر (مثلاً با دستکاریِ
-        فرم) نباید کرش کند — در سطحِ section_registry هر source_id مثبت
-        پذیرفته می‌شود (بدونِ چکِ مالکیت)؛ مالکیت در section_data_service
-        در زمانِ رندر چک می‌شود، نه اینجا."""
+    def test_cross_store_collection_rejected_before_persisting(self):
+        """Phase 4 (Task 2) — انتخابِ یک کالکشنِ متعلق به فروشگاهِ دیگر
+        (مثلاً با دستکاریِ فرم) نباید کرش کند و دیگر نباید بی‌صدا ذخیره
+        هم بشود: پیش از این چکپوینت، section_registry هر source_id مثبت
+        را می‌پذیرفت (بدونِ چکِ مالکیت) و فقط section_data_service در
+        زمانِ رندر (نه در زمانِ نوشتن) مالکیت را چک می‌کرد. Task 2 همان
+        چکِ مالکیتِ مشترک (ResourceSource-محور) را به این مسیر هم اضافه
+        کرد — دقیقاً همان رفتاری که category_grid/`data_source=category`
+        از قبل داشت، اکنون برایِ `data_source=collection` هم برقرار
+        است."""
         other_store = Store.objects.create(
             name="فروشگاه دیگر تنظیمات", slug="ps-settings-other-store", admin_subdomain="ps-settings-other-store",
         )
@@ -1161,9 +1309,10 @@ class ProductSectionSettingsFormTests(StorefrontBuilderViewsTestCase):
             "data_source": "collection", "source_id": str(other_collection.pk), "item_limit": "8",
             "display_mode": "carousel",
         })
-        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "متعلق به این فروشگاه نیست")
         self.section.refresh_from_db()
-        self.assertEqual(self.section.settings["source_id"], other_collection.pk)
+        self.assertEqual(self.section.settings["data_source"], "newest")  # unchanged
 
     def test_duplicate_then_independent_edit_does_not_affect_original(self):
         """سناریوی «دو نمونه‌ی مستقلِ product_section» (Playwright B) از
@@ -1260,16 +1409,35 @@ class PublishDiscardRestoreViewTests(StorefrontBuilderViewsTestCase):
         layout = svc.get_or_create_layout(self.store)
         self.assertTrue(layout.uses_visual_storefront_layout)
 
-    def test_discard_redirects(self):
-        svc.get_or_create_draft(self.store)
-        resp = self.client.post(reverse("dashboard:storefront-builder-discard"))
-        # fetch_redirect_response=False: the editor page itself lazily
-        # re-creates a draft (get_or_create_draft) — following the redirect
-        # here would create a fresh draft as a side effect and defeat the
-        # "draft was actually discarded" assertion below.
-        self.assertRedirects(resp, reverse("dashboard:storefront-builder-editor"), fetch_redirect_response=False)
+    def test_publish_with_matching_base_revision_succeeds(self):
+        """R4 Task 8 (Batch 2) — end-to-end proof that the now-wired
+        ``base_revision`` form field (see ``test_publish_form_carries_the_
+        current_edit_revision`` above) actually reaches the already-correct
+        stale-aware server path, exactly as the real toolbar form now
+        submits it."""
+        draft = svc.get_or_create_draft(self.store)
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-publish"),
+            {"base_revision": str(draft.edit_revision)},
+        )
+        self.assertRedirects(resp, reverse("dashboard:storefront-builder-editor"))
         layout = svc.get_or_create_layout(self.store)
-        self.assertIsNone(layout.draft_version_id)
+        self.assertTrue(layout.uses_visual_storefront_layout)
+
+    def test_publish_with_stale_base_revision_is_rejected(self):
+        draft = svc.get_or_create_draft(self.store)
+        draft.edit_revision += 1
+        draft.save(update_fields=["edit_revision"])
+        stale_revision = draft.edit_revision - 1
+
+        resp = self.client.post(
+            reverse("dashboard:storefront-builder-publish"),
+            {"base_revision": str(stale_revision)},
+        )
+        self.assertRedirects(resp, reverse("dashboard:storefront-builder-editor"))
+        layout = svc.get_or_create_layout(self.store)
+        self.assertFalse(layout.uses_visual_storefront_layout)
+        self.assertTrue(StorefrontLayoutVersion.objects.filter(pk=draft.pk, status=StorefrontLayoutVersion.Status.DRAFT).exists())
 
     def test_history_lists_versions(self):
         svc.get_or_create_draft(self.store)
@@ -1833,6 +2001,80 @@ class NewSectionTypesSettingsFormTests(StorefrontBuilderViewsTestCase):
         self.client.post(reverse("dashboard:storefront-builder-section-add"), {"section_key": "newsletter"})
         self.assertEqual(self.draft.sections.filter(section_key="newsletter").count(), 1)
 
+    def test_trust_features_settings_form_saves_items(self):
+        section = StorefrontSection.objects.create(
+            version=self.draft, section_key="trust_features", order=1,
+            settings={"items": [{"icon": "old", "title": "قدیمی", "subtitle": ""}]},
+        )
+        resp = self.client.post(reverse("dashboard:storefront-builder-section-settings", args=[section.pk]), {
+            "tf_icon": ["🚚", "🔒"],
+            "tf_title": ["ارسال رایگان", "پرداخت امن"],
+            "tf_subtitle": ["تا ۲۴ ساعت", ""],
+        })
+        self.assertEqual(resp.status_code, 302)
+        section.refresh_from_db()
+        self.assertEqual(section.settings["items"], [
+            {"icon": "🚚", "title": "ارسال رایگان", "subtitle": "تا ۲۴ ساعت"},
+            {"icon": "🔒", "title": "پرداخت امن", "subtitle": ""},
+        ])
+
+    def test_amazing_offers_settings_form_saves_fields(self):
+        section = StorefrontSection.objects.create(
+            version=self.draft, section_key="amazing_offers", order=1,
+            settings={"title": "قدیمی", "item_limit": 1, "deadline_hours": 8},
+        )
+        resp = self.client.post(reverse("dashboard:storefront-builder-section-settings", args=[section.pk]), {
+            "title": "پیشنهاد شگفت‌انگیز", "item_limit": "3", "deadline_hours": "24",
+        })
+        self.assertEqual(resp.status_code, 302)
+        section.refresh_from_db()
+        self.assertEqual(section.settings["title"], "پیشنهاد شگفت‌انگیز")
+        self.assertEqual(section.settings["item_limit"], 3)
+        self.assertEqual(section.settings["deadline_hours"], 24)
+
+    def test_amazing_offers_settings_form_does_not_wipe_card_block(self):
+        """Phase 4 (Task 6, Group F correction) — ``amazing_offers``'s own
+        dedicated legacy-form branch (added by an earlier Finding-2 fix)
+        renders no ``card_*`` controls at all; before this fix, Saving that
+        form unconditionally overwrote the whole ``card`` block back to
+        every field's off/default value (a destructive Save, exactly the
+        class of bug Finding 2 was meant to close). Absence of
+        ``card_style`` in this exact POST must now preserve the stored
+        block untouched."""
+        section = StorefrontSection.objects.create(
+            version=self.draft, section_key="amazing_offers", order=1,
+            settings={
+                "title": "قدیمی", "item_limit": 1, "deadline_hours": 8,
+                "card": {
+                    "show_brand": True, "show_price": True, "show_badge": True,
+                    "show_wishlist": True, "show_quick_add": True, "show_rating": True,
+                    "card_border": True, "image_ratio": "square",
+                    "quick_add_reveal": "hover_slide", "card_style": "minimal",
+                },
+            },
+        )
+        resp = self.client.post(reverse("dashboard:storefront-builder-section-settings", args=[section.pk]), {
+            "title": "پیشنهاد شگفت‌انگیز", "item_limit": "3", "deadline_hours": "24",
+        })
+        self.assertEqual(resp.status_code, 302)
+        section.refresh_from_db()
+        self.assertEqual(section.settings["card"]["card_style"], "minimal")
+        self.assertTrue(section.settings["card"]["show_brand"])
+        self.assertTrue(section.settings["card"]["show_badge"])
+
+    def test_blog_posts_settings_form_saves_fields(self):
+        section = StorefrontSection.objects.create(
+            version=self.draft, section_key="blog_posts", order=1,
+            settings={"title": "قدیمی", "item_limit": 5},
+        )
+        resp = self.client.post(reverse("dashboard:storefront-builder-section-settings", args=[section.pk]), {
+            "title": "آخرین مطالب وبلاگ", "item_limit": "6",
+        })
+        self.assertEqual(resp.status_code, 302)
+        section.refresh_from_db()
+        self.assertEqual(section.settings["title"], "آخرین مطالب وبلاگ")
+        self.assertEqual(section.settings["item_limit"], 6)
+
 
 class PageSwitchingTests(StorefrontBuilderViewsTestCase):
     """Phase 2 (سازنده‌ی تک‌صفحه‌ای): ادیتور اکنون رویِ هر شش نوعِ صفحه
@@ -2038,6 +2280,195 @@ class ProductDetailContextAwareSectionsPreviewTests(StorefrontBuilderViewsTestCa
         self.assertContains(resp, "توضیحاتِ کاملِ کالای پیش‌نمایش")
         self.assertContains(resp, "مشخصات فنی")
 
+    # ---- Phase 5 Task 5 (PDT) — accessible desktop tabs + mobile accordion ----
+    def _one_product_description(self):
+        # product_description is max_instances=1; ensure exactly one for a
+        # deterministic single-section assertion (the page may be pre-seeded).
+        StorefrontSection.objects.filter(page=self.pd_page, section_key="product_description").delete()
+        return StorefrontSection.objects.create(page=self.pd_page, section_key="product_description", order=0)
+
+    def test_product_description_panels_are_accessible_tablist(self):
+        self._one_product_description()
+        resp = self._preview()
+        content = resp.content.decode()
+        # ARIA tab semantics present.
+        self.assertIn('role="tablist"', content)
+        self.assertEqual(content.count('role="tab"'), 3)
+        self.assertEqual(content.count('role="tabpanel"'), 3)
+        self.assertIn('aria-selected="true"', content)
+        self.assertIn("aria-controls=", content)
+        self.assertIn("aria-labelledby=", content)
+        # Real focusable buttons (not clickable div/span).
+        self.assertNotIn("<div class=\"t\"", content)
+
+    def test_product_description_panel_ids_are_deterministic_and_unique(self):
+        self._one_product_description()
+        resp = self._preview()
+        content = resp.content.decode()
+        import re
+        panel_ids = re.findall(r'id="(pdp-panel-[^"]+)"', content)
+        tab_ids = re.findall(r'id="(pdp-tab-[^"]+)"', content)
+        self.assertEqual(len(panel_ids), 3)
+        self.assertEqual(len(tab_ids), 3)
+        # unique
+        self.assertEqual(len(set(panel_ids)), 3)
+        self.assertEqual(len(set(tab_ids)), 3)
+        # deterministic: namespaced by the product pk so multiple PDPs never collide
+        self.assertTrue(all(str(self.product.pk) in pid for pid in panel_ids))
+
+    def test_product_description_all_three_panes_reachable_no_js(self):
+        # Progressive enhancement: every panel's content is present in the DOM
+        # (not removed) so a no-JS client still reaches all content.
+        self._one_product_description()
+        resp = self._preview()
+        content = resp.content.decode()
+        self.assertIn("توضیحاتِ کاملِ کالای پیش‌نمایش", content)  # desc
+        self.assertIn("مشخصات فنی", content)  # spec tab label
+        self.assertIn("نظرات کاربران", content)  # review tab label
+        # Keyboard handler wired (arrow-key roving).
+        self.assertIn("ArrowRight", content)
+        self.assertIn("ArrowLeft", content)
+
+    def test_product_description_source_owner_unchanged(self):
+        # The content still comes from the canonical PDP context (no second
+        # data source): the desc/spec/review data owners are unchanged.
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        tmpl = Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/templates/storefront_builder/sections/product_description.html",
+        ).read_text(encoding="utf-8")
+        self.assertIn("spec_variant_summary", tmpl)
+        self.assertIn("approved_reviews", tmpl)
+        self.assertIn("product.description", tmpl)
+
+    # ---- PDT remediation: REAL mobile accordion structure --------------
+
+    def _pdp_tmpl(self):
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        return Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/templates/storefront_builder/sections/product_description.html",
+        ).read_text(encoding="utf-8")
+
+    def test_markup_is_accordion_native_each_header_immediately_before_its_panel(self):
+        # A REAL accordion (not stacked tabs): every header button is
+        # IMMEDIATELY followed by its OWN panel in source order, so on mobile
+        # each control sits directly above its content. Verify the three
+        # header→panel pairs appear in this exact interleaved order.
+        self._one_product_description()
+        content = self._preview().content.decode()
+        pid = self.product.pk
+        order = []
+        for token in (
+            f'id="pdp-tab-desc-{pid}"', f'id="pdp-panel-desc-{pid}"',
+            f'id="pdp-tab-spec-{pid}"', f'id="pdp-panel-spec-{pid}"',
+            f'id="pdp-tab-review-{pid}"', f'id="pdp-panel-review-{pid}"',
+        ):
+            idx = content.find(token)
+            self.assertNotEqual(idx, -1, f"missing {token}")
+            order.append(idx)
+        # Strictly increasing => header, panel, header, panel, header, panel.
+        self.assertEqual(order, sorted(order),
+                         "headers and panels must interleave (accordion-native), not group")
+        # There is NO separate tabline wrapper grouping the headers away from
+        # their panels (the old stacked-tabs structure).
+        self.assertNotIn('class="tabline"', content)
+
+    def test_headers_expose_accordion_aria_expanded_state(self):
+        self._one_product_description()
+        content = self._preview().content.decode()
+        # Accordion semantics: each header conveys expanded/collapsed. The
+        # first (open) header is expanded; a dynamic binding keeps it in sync.
+        self.assertIn('aria-expanded="true"', content)
+        self.assertIn('aria-expanded="false"', content)
+        self.assertIn(":aria-expanded=", content)
+
+    def test_single_content_dom_no_duplicate_panels(self):
+        # ONE canonical content DOM shared by tabs + accordion: each panel id
+        # appears exactly once (no separate mobile copy of the content).
+        self._one_product_description()
+        content = self._preview().content.decode()
+        for key in ("desc", "spec", "review"):
+            self.assertEqual(
+                content.count(f'id="pdp-panel-{key}-{self.product.pk}"'), 1,
+                f"panel {key} must appear exactly once (no mobile duplicate)",
+            )
+
+    def test_accordion_css_resets_order_to_natural_flow_on_mobile(self):
+        # The mobile breakpoint restores natural document flow (order:0 on the
+        # panels) so each panel renders directly after its own header — the
+        # structural proof the mobile layout is a real accordion, not the
+        # desktop "all headers then one panel" tab row.
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        css = Path(
+            dj_settings.BASE_DIR, "apps/catalog/static/css/product_detail.css",
+        ).read_text(encoding="utf-8")
+        self.assertIn("@media(max-width:680px)", css)
+        # Desktop uses order to lift headers into a row; mobile drops that row.
+        self.assertIn("order:0", css)
+        self.assertIn(".pdp-tabs::after{display:none}", css)
+
+    def test_persian_copy_has_correct_zwnj(self):
+        # The rewrite must not regress Persian ZWNJ/spelling.
+        tmpl = self._pdp_tmpl()
+        self.assertIn("دسته\u200cبندی", tmpl)   # not the broken "دستهبندی"
+        self.assertNotIn("دستهبندی", tmpl)
+        self.assertIn("می\u200cدهد", tmpl)       # not the broken "میدهد"
+        self.assertNotIn("میدهد", tmpl)
+
+    def test_no_js_panels_are_visible_by_default(self):
+        # PROGRESSIVE ENHANCEMENT regression: without JavaScript every PDP
+        # panel (description/spec/reviews) MUST stay reachable. The panels carry
+        # BOTH classes `tabpane pdp-tab-panel` and have NO static `active`
+        # class (Alpine adds it), so a bare `.tabpane{display:none}` rule at
+        # equal-or-higher specificity would hide ALL content with JS off. Assert
+        # the CSS keeps `.pdp-tab-panel` visible by default (the no-JS state)
+        # and only hides panels when JS-driven `x-show`/state applies.
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        raw = Path(
+            dj_settings.BASE_DIR, "apps/catalog/static/css/product_detail.css",
+        ).read_text(encoding="utf-8")
+        # Strip CSS comments so we assert against REAL rules, not documentation.
+        css = re.sub(r"/\*.*?\*/", "", raw, flags=re.S)
+        compact = css.replace(" ", "")
+        # There must be NO unconditional `.tabpane{display:none}` rule that would
+        # override the default-visible `.pdp-tab-panel` (equal specificity, so
+        # source order + the shared selector both matter).
+        self.assertNotIn(".tabpane{display:none}", compact)
+        self.assertNotRegex(
+            css, r"\.tabpane\s*\{[^}]*display\s*:\s*none",
+            "blanket `.tabpane{display:none}` hides all PDP content with JS off",
+        )
+        # The panels are visible by default via the shared class.
+        self.assertIn(".pdp-tab-panel{display:block}", compact)
+
+    def test_no_js_panels_template_has_no_static_hidden_state(self):
+        # The template must not stamp a static hiding attribute/class on the
+        # panels (only Alpine x-show should hide them once JS runs). x-cloak on
+        # the panels is fine (it only hides until Alpine boots and is scoped by
+        # the [x-cloak] rule), but there must be no static `hidden`/`display:none`.
+        tmpl = self._pdp_tmpl()
+        # No inline display:none and no static hidden attribute on the panels.
+        self.assertNotIn("style=\"display:none", tmpl)
+        self.assertNotRegex(tmpl, r'pdp-tab-panel"[^>]*\shidden\b')
+
+    def test_empty_optional_sections_still_render_valid_accordion(self):
+        # A product with NO description / NO reviews still renders all three
+        # accessible header→panel pairs (empty content is a valid state).
+        self._one_product_description()
+        self.product.description = ""
+        self.product.save(update_fields=["description"])
+        self.product.reviews.all().delete()
+        content = self._preview().content.decode()
+        self.assertEqual(content.count('role="tab"'), 3)
+        self.assertEqual(content.count('role="tabpanel"'), 3)
+        self.assertIn("توضیحاتی برای این کالا ثبت نشده است.", content)
+
     def test_related_products_reaches_rendered_html_when_related_exist(self):
         from datetime import timedelta
         from decimal import Decimal
@@ -2070,12 +2501,203 @@ class ProductDetailContextAwareSectionsPreviewTests(StorefrontBuilderViewsTestCa
 
     def test_context_aware_sections_absent_on_other_page_tabs(self):
         """این چهار section فقط با ``?page=product_detail`` دیده می‌شوند —
-        اگر همان section (با دستکاریِ مستقیم) رویِ صفحه‌ی دیگری بنشیند،
+        اگر همان section (با دستکاریِ مستقیم) رویِ صفحه‌ی دیگری بنشیند,
         Preview آن صفحه هرگز آن را رندر نمی‌کند (چون اصلاً section آن
         صفحه نیست)."""
         StorefrontSection.objects.create(page=self.pd_page, section_key="product_main", order=0)
         resp = self.client.get(reverse("dashboard:storefront-builder-preview"), {"page": "cart"})
         self.assertNotContains(resp, "کالای پیش‌نمایشِ رندرشده")
+
+    # ---- Phase 5 Task 8 (SATC) — mobile Sticky Add-to-Cart -------------
+    # SATC is PRESENTATION inside the existing canonical Add-to-Cart form:
+    # one form, one submitted quantity owner, one cart:add flow. These tests
+    # assert that architecture (ONE CONCEPT = ONE CANONICAL OWNER), not
+    # fragile visual formatting.
+
+    def _pdp_main_tmpl(self):
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        return Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/templates/storefront_builder/sections/product_main.html",
+        ).read_text(encoding="utf-8")
+
+    def _one_product_main(self):
+        # product_main is removable=False / max_instances=1 on a real PDP; the
+        # product_detail page is pre-seeded with one. Ensure EXACTLY one for a
+        # deterministic single-purchase-form assertion (mirrors the canonical
+        # runtime invariant — never two product_main on one PDP).
+        StorefrontSection.objects.filter(page=self.pd_page, section_key="product_main").delete()
+        return StorefrontSection.objects.create(page=self.pd_page, section_key="product_main", order=0)
+
+    def test_satc_rendered_by_canonical_product_main(self):
+        # The sticky Add-to-Cart surface is emitted by the canonical
+        # product_main section (not a new section / not a separate renderer).
+        self._one_product_main()
+        content = self._preview().content.decode()
+        self.assertIn("pdp-satc", content)
+
+    def test_satc_submits_the_same_canonical_form_no_second_form(self):
+        # SATC lives PHYSICALLY INSIDE the one canonical Add-to-Cart form (the
+        # approved preferred design). Because it is position:fixed it does not
+        # disturb layout, and being a plain type="submit" of THAT form it reuses
+        # the existing variant_id + quantity + the single cart:add pipeline with
+        # NO `form=` coupling and NO second form. Assert: exactly ONE cart:add
+        # form on the page, the .pdp-satc block is inside it, and there is no
+        # `form=` attribute wiring on the sticky button.
+        self._one_product_main()
+        content = self._preview().content.decode()
+        import re
+        # exactly ONE canonical purchase pipeline: one form posting to cart:add.
+        # (The page has other unrelated forms — search / review / login — but
+        # there must be only a single hx-post to the cart-add endpoint.)
+        cart_forms = re.findall(r'<form\b[^>]*hx-post="[^"]*/cart/add/[^"]*"[^>]*>', content)
+        self.assertEqual(len(cart_forms), 1, "exactly one canonical cart:add form (no second purchase form)")
+        # The .pdp-satc block sits INSIDE that form: it appears between the
+        # cart:add <form ...> open tag and the next </form>.
+        form_open = content.index(cart_forms[0])
+        form_close = content.index("</form>", form_open)
+        satc_at = content.find("pdp-satc", form_open)
+        self.assertTrue(
+            0 <= satc_at < form_close,
+            "SATC must be physically inside the canonical Add-to-Cart form",
+        )
+        # No `form=` coupling was introduced (simpler inside-form design).
+        self.assertNotIn("pdp-buy-form-", content, "no deterministic-form-id coupling needed")
+        self.assertNotRegex(content, r'class="[^"]*pdp-satc-btn[^"]*"[^>]*\sform=', "sticky button uses no form= attr")
+
+    def test_satc_has_no_second_quantity_owner(self):
+        # SATC must NOT introduce its own quantity input/selector — the single
+        # submitted quantity owner remains the existing stepper input.
+        self._one_product_main()
+        content = self._preview().content.decode()
+        # exactly one quantity input in the whole rendered product_main
+        self.assertEqual(content.count('name="quantity"'), 1, "one and only one submitted quantity owner")
+
+    def test_normal_pdp_cta_still_present_alongside_satc(self):
+        # SATC is additive: the normal in-flow Add-to-Cart CTA remains. There
+        # are exactly TWO Add-to-Cart submit surfaces — the canonical in-flow
+        # CTA (.pdp-actions .btn-primary) and the sticky one (.pdp-satc-btn) —
+        # both submitting the SAME form (proven by the single-form test above).
+        self._one_product_main()
+        content = self._preview().content.decode()
+        self.assertIn("افزودن به سبد خرید", content)
+        # in-flow CTA still present
+        self.assertIn('class="pdp-actions"', content)
+        # sticky CTA present and is the additive second submit surface
+        self.assertIn("pdp-satc-btn", content)
+
+    def test_satc_reuses_canonical_purchasability_state_no_second_calc(self):
+        # The sticky button binds to the SAME Alpine getters as the main CTA
+        # (canAddToCart / needsSelection / displayStock) — no second stock or
+        # purchasability calculation. Template-level proof: within the SATC
+        # block, disabled/label bindings reference the canonical getters.
+        tmpl = self._pdp_main_tmpl()
+        satc_start = tmpl.find("pdp-satc")
+        self.assertNotEqual(satc_start, -1, "SATC block must exist in product_main")
+        satc_block = tmpl[satc_start:satc_start + 1200]
+        self.assertIn("canAddToCart", satc_block)
+        self.assertIn("needsSelection", satc_block)
+        # SATC introduces no new Alpine component (no second x-data with its own
+        # product/variant/quantity state) inside the sticky block.
+        self.assertNotIn("x-data", satc_block)
+
+    def test_satc_is_mobile_only_and_below_overlays_in_css(self):
+        # SATC presentation is mobile-only and layered BELOW the canonical
+        # overlays (login modal z-index:100, drawer 110/120, quick view
+        # 1000/1001) and does not cover the bottom nav. Verify via the
+        # canonical PDP CSS owner.
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        css = Path(dj_settings.BASE_DIR, "apps/catalog/static/css/product_detail.css").read_text(encoding="utf-8")
+        self.assertIn(".pdp-satc", css)
+        # mobile-only: the sticky rule lives under a max-width media query and
+        # is hidden by default on desktop.
+        self.assertRegex(css, r"@media\s*\(max-width:\s*680px\)")
+        # safe-area aware (consumes env(safe-area-inset-bottom)).
+        self.assertIn("safe-area-inset-bottom", css)
+        # bottom offset derives from the canonical bottom-nav clearance token,
+        # not a hard-coded magic number.
+        self.assertIn("--gmn-clearance", css)
+        # No-obscuration repair: the WHOLE-PDP page container (not just
+        # product_main, which is the FIRST section) reserves real bottom space
+        # (nav clearance + SATC height) so the genuine final PDP content clears
+        # the fixed SATC. The reserve is on the end-of-page owner and derives
+        # from canonical geometry, not a random per-template value.
+        self.assertRegex(css, r"\.wrap\.pdp-page:has\(\.pdp-satc\)\s*\{[^}]*padding-bottom:calc\(")
+        self.assertIn("--satc-height", css)
+
+    def test_bottom_nav_owner_exposes_presentation_clearance_token(self):
+        # The canonical mobile bottom-nav CSS owner exposes a presentation-only
+        # geometry token that SATC (and anything else) can consume, instead of
+        # per-template offsets. One canonical geometry owner.
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        css = Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/static/css/storefront_builder.css",
+        ).read_text(encoding="utf-8")
+        self.assertIn("--gmn-clearance", css)
+
+    def test_clearance_is_per_variant_and_safe_area_when_nav_absent(self):
+        # --gmn-clearance is NOT a single global constant. Its no-nav/default
+        # value is the device safe area alone (so SATC never floats ~88px up for
+        # a nav that isn't there, yet still clears the home indicator), and each
+        # registered nav variant publishes its OWN geometry off the nav identity
+        # class. One canonical geometry source distinguishing every active
+        # variant AND the hidden/absent case.
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        css = Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/static/css/storefront_builder.css",
+        ).read_text(encoding="utf-8")
+        # default (absent) is the safe area alone — never a bare 0px.
+        self.assertRegex(css, r":root\s*\{\s*--gmn-clearance:\s*env\(safe-area-inset-bottom")
+        self.assertNotRegex(css, r":root\s*\{\s*--gmn-clearance:\s*0px\s*\}")
+        # every registered variant has its own clearance rule keyed off identity
+        for variant in [
+            "four_item", "five_item", "raised_cart", "floating_dock",
+            "glass_dock", "minimal_icons", "wide_cart",
+        ]:
+            self.assertIn(f":has(.gmn--{variant})", css,
+                          f"missing canonical clearance for nav variant {variant}")
+        # a generic .gmn rule covers default/luxury (which reuse default geometry)
+        self.assertRegex(css, r":root:has\(\.gmn\)\s*\{\s*--gmn-clearance:")
+
+    def test_no_nav_clearance_includes_device_safe_area(self):
+        # No-nav safe-area contract: the canonical no-nav/default
+        # --gmn-clearance MUST include env(safe-area-inset-bottom) and must NOT
+        # be a bare 0px — otherwise, with no bottom nav, a bottom-anchored SATC
+        # would sit flush at bottom:0 and be clipped by the iPhone home
+        # indicator. Desktop Chromium resolves the inset to 0, so this contract
+        # test (not a pixel measurement) guards against regression.
+        from pathlib import Path
+        from django.conf import settings as dj_settings
+        css = Path(
+            dj_settings.BASE_DIR,
+            "apps/storefront_builder/static/css/storefront_builder.css",
+        ).read_text(encoding="utf-8")
+        import re
+        m = re.search(r":root\s*\{\s*--gmn-clearance:\s*([^}]*?)\s*\}", css)
+        self.assertIsNotNone(m, "canonical :root --gmn-clearance declaration must exist")
+        no_nav_value = m.group(1).strip()
+        self.assertIn("env(safe-area-inset-bottom", no_nav_value,
+                      "no-nav --gmn-clearance must clear the device safe area")
+        self.assertNotEqual(no_nav_value, "0px",
+                            "no-nav --gmn-clearance must not be a bare 0px")
+        # Every active variant clearance also includes the safe area exactly
+        # once (calc(<n>px + env(safe-area-inset-bottom,0px))) — never doubled.
+        for variant in ["four_item", "five_item", "raised_cart", "floating_dock",
+                        "glass_dock", "minimal_icons", "wide_cart"]:
+            vm = re.search(
+                r":root:has\(\.gmn--" + variant + r"\)\s*\{\s*--gmn-clearance:\s*([^}]*?)\s*\}",
+                css,
+            )
+            self.assertIsNotNone(vm, f"missing clearance rule for {variant}")
+            val = vm.group(1)
+            self.assertEqual(val.count("env(safe-area-inset-bottom"), 1,
+                             f"{variant} must count the safe area exactly once")
 
 
 class ProductListingContextAwareSectionPreviewTests(StorefrontBuilderViewsTestCase):

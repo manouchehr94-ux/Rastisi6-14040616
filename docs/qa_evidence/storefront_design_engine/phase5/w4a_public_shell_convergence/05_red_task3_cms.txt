@@ -1,0 +1,25 @@
+Found 8 test(s).
+Creating test database for alias 'default'...
+System check identified no issues (0 silenced).
+..F...F.
+======================================================================
+FAIL: test_canonical_shell_templates_present_on_published_page (apps.content.tests.test_page_shell_convergence.CmsPageShellConvergenceTwoStoreTests.test_canonical_shell_templates_present_on_published_page)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/content/tests/test_page_shell_convergence.py", line 74, in test_canonical_shell_templates_present_on_published_page
+    self.assertIn("storefront_shell.html", template_names)
+AssertionError: 'storefront_shell.html' not found in ['content/page_detail.html', 'base.html', 'partials/mobile_nav_drawer.html', 'storefront_builder/partials/global_header/_shared/search_form.html', 'storefront_builder/partials/global_header/_shared/icon.html', 'storefront_builder/shared/storefront_attribution.html', 'customers/partials/auth_forms.html', 'customers/partials/otp_login_body.html']
+
+======================================================================
+FAIL: test_shell_isolation_between_stores (apps.content.tests.test_page_shell_convergence.CmsPageShellConvergenceTwoStoreTests.test_shell_isolation_between_stores)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/Rastisi6-14040616/apps/content/tests/test_page_shell_convergence.py", line 112, in test_shell_isolation_between_stores
+    self.assertIn("storefront_builder/partials/global_header/editorial_row.html", template_names_a)
+AssertionError: 'storefront_builder/partials/global_header/editorial_row.html' not found in ['content/page_detail.html', 'base.html', 'partials/mobile_nav_drawer.html', 'storefront_builder/partials/global_header/_shared/search_form.html', 'storefront_builder/partials/global_header/_shared/icon.html', 'storefront_builder/shared/storefront_attribution.html', 'customers/partials/auth_forms.html', 'customers/partials/otp_login_body.html']
+
+----------------------------------------------------------------------
+Ran 8 tests in 1.606s
+
+FAILED (failures=2)
+Destroying test database for alias 'default'...

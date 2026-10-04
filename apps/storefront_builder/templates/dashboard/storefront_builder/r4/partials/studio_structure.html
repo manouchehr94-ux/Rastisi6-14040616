@@ -1,0 +1,156 @@
+{% load storefront_builder_extras persian %}
+{% comment %}
+RastiSi Design Studio — Structure panel (reference: RastiSi_Design_Studio.html,
+"صفحه / ساختار و محتوا"). Real read projection only: the canonical
+Container -> Cell -> Section order from section_structure_service, the real
+section registry labels/flags and the real per-Container layout presets. Every
+control keeps the existing R4 ``data-r4-structure-*`` hooks, so the ONE existing
+structure listener in r4_editor.js performs each mutation (never a second
+sender). This whole element is re-fetched by R4 after structural mutations.
+{% endcomment %}
+<div class="panel-scroll" data-rs-structure-scroll>
+  <div class="section-label"><span>{% for value, label in page_types %}{% if value == page_type %}{{ label }}{% endif %}{% endfor %}</span><span class="pill" data-rs-section-count>{{ structure_items|length|fa_number }} بخش</span></div>
+
+  <div class="common-region">{% rs_icon "header" %} سربرگ فروشگاه <button type="button" data-rastisi-action="global" data-rs-global-focus="header" aria-label="تنظیم ظاهر مشترک سربرگ">{% rs_icon "sliders" %}</button></div>
+
+  {% if not structure_items %}
+  <div class="empty">این صفحه هنوز بخشی ندارد. یک بخش تازه اضافه کنید.</div>
+  {% endif %}
+
+  <div class="outline-tree">
+    {% for item in structure_items %}
+    <div class="tree-row {% if not item.is_active %}disabled{% endif %}" data-r4-structure-row data-r4-structure-section-id="{{ item.id }}"
+         data-rs-section-label="{{ item.label }}" data-rs-section-locked="{{ item.is_locked|yesno:'true,false' }}" data-rs-section-active="{{ item.is_active|yesno:'true,false' }}"
+         data-rs-section-duplicable="{{ item.duplicable|yesno:'true,false' }}" data-rs-section-removable="{{ item.removable|yesno:'true,false' }}"
+         data-rs-section-baseline="{{ item.has_baseline|yesno:'true,false' }}" data-rs-position="{{ forloop.counter }}">
+      <button type="button" class="r4-structure-label" data-rastisi-action="select-section" data-id="{{ item.id }}">
+        <span class="tree-symbol">{% rs_section_icon item.section_key %}</span>
+        <span class="tree-copy"><strong>{{ item.label }}</strong><small>جایگاه {{ forloop.counter|fa_number }}{% if item.is_locked %} · قفل‌شده{% endif %}{% if not item.is_active %} · پنهان{% endif %}</small></span>
+      </button>
+      <button type="button" class="r4-structure-label" data-rastisi-action="select-section" data-id="{{ item.id }}" aria-label="تنظیمات {{ item.label }}">{% if item.is_locked %}{% rs_icon "lock" %}{% else %}{% rs_icon "dots" %}{% endif %}</button>
+    </div>
+    {% endfor %}
+  </div>
+
+  <button type="button" data-rastisi-action="add-section" class="full add-block">{% rs_icon "plus" %}افزودن یک بخش تازه</button>
+
+  {% comment %}
+  Real per-Container composition (layout preset + container settings). The
+  reference shows one outline; every Container keeps its own real controls
+  here, in one disclosure, wired to the existing data-r4-structure-* hooks.
+  {% endcomment %}
+  {% regroup structure_items by container_id as container_groups %}
+  <details class="rs-more rs-rows">
+    <summary>{% rs_icon "grid" %}<span>چیدمان ردیف‌ها</span><span class="pill">{{ container_groups|length|fa_number }} ردیف</span></summary>
+    <div class="rs-more-body">
+      {% for group in container_groups %}{% with item=group.list.0 %}{% if item.container_id %}
+      <div class="rs-container-group" data-r4-structure-container-row data-r4-structure-container-id="{{ item.container_id }}">
+        <div class="outline-header">
+          <span>ردیف {{ forloop.counter|fa_number }} · {% for member in group.list %}{{ member.label }}{% if not forloop.last %}، {% endif %}{% endfor %}{% if item.container_is_locked %} · قفل‌شده{% endif %}</span>
+          <label><span class="visually-hidden">چیدمان ردیف {{ forloop.counter }}</span>
+            <select class="r4-structure-layout-select" data-r4-structure-layout-select aria-label="چیدمان ردیف {{ forloop.counter }}" {% if item.container_is_locked %}disabled{% endif %}>
+              {% for preset_key, preset_label in container_layout_presets %}
+              <option value="{{ preset_key }}" {% if preset_key == item.container_layout_key %}selected{% endif %}>{{ preset_label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        <details class="rs-container-settings">
+          <summary>{% rs_icon "sliders" %}<span>تنظیمات این ردیف</span></summary>
+          <div class="rs-container-settings-body">
+            <label class="field"><span>فاصله بین خانه‌ها</span>
+              <input type="number" min="0" max="64" class="r4-structure-container-settings-input" data-r4-container-settings-field="gap" value="{{ item.container_settings.gap }}" {% if item.container_is_locked %}disabled{% endif %}></label>
+            <label class="field"><span>نمایش در موبایل</span>
+              <select class="r4-structure-container-settings-input" data-r4-container-settings-field="mobile_mode" {% if item.container_is_locked %}disabled{% endif %}>
+                <option value="stack" {% if item.container_settings.mobile_mode == "stack" %}selected{% endif %}>پشت‌سرهم در موبایل</option>
+                <option value="same" {% if item.container_settings.mobile_mode == "same" %}selected{% endif %}>همان چیدمان در موبایل</option>
+              </select></label>
+            <label class="field"><span>تراز عمودی</span>
+              <select class="r4-structure-container-settings-input" data-r4-container-settings-field="vertical_align" {% if item.container_is_locked %}disabled{% endif %}>
+                <option value="start" {% if item.container_settings.vertical_align == "start" %}selected{% endif %}>بالا</option>
+                <option value="center" {% if item.container_settings.vertical_align == "center" %}selected{% endif %}>وسط</option>
+                <option value="end" {% if item.container_settings.vertical_align == "end" %}selected{% endif %}>پایین</option>
+              </select></label>
+            <label class="field"><span>ارتفاع خانه‌ها</span>
+              <select class="r4-structure-container-settings-input" data-r4-container-settings-field="height_mode" {% if item.container_is_locked %}disabled{% endif %}>
+                <option value="natural" {% if item.container_settings.height_mode == "natural" %}selected{% endif %}>ارتفاع طبیعی</option>
+                <option value="equal" {% if item.container_settings.height_mode == "equal" %}selected{% endif %}>ارتفاع برابر</option>
+              </select></label>
+            <div class="field" data-r4-container-background><span>پس‌زمینه ردیف</span>
+              <div class="rs-inline-fields">
+                <select data-r4-container-background-field="background_mode" {% if item.container_is_locked %}disabled{% endif %} aria-label="نوع پس‌زمینه">
+                  <option value="transparent" {% if item.container_settings.background_mode == "transparent" %}selected{% endif %}>بدون پس‌زمینه اختصاصی</option>
+                  <option value="color" {% if item.container_settings.background_mode == "color" %}selected{% endif %}>رنگ ساده</option>
+                  <option value="pattern" {% if item.container_settings.background_mode == "pattern" %}selected{% endif %}>رنگ + الگوی ظریف</option>
+                </select>
+                <input type="color" data-r4-container-background-field="background_color" value="{{ item.container_settings.background_color|default:'#F53247' }}" aria-label="رنگ پس‌زمینه" {% if item.container_is_locked %}disabled{% endif %}>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+      {% endif %}{% endwith %}{% endfor %}
+    </div>
+  </details>
+
+  {% if empty_cells %}
+  <div class="rs-empty-cells">
+    <div class="section-label"><span>خانه‌های خالی</span><span class="pill">{{ empty_cells|length|fa_number }}</span></div>
+    {% for empty_cell in empty_cells %}
+    <div class="rs-empty-cell" data-r4-structure-empty-cell data-r4-structure-cell-id="{{ empty_cell.cell_id }}">
+      <label class="visually-hidden" for="rsEmptyCell{{ empty_cell.cell_id }}">افزودن بخش به این خانه</label>
+      <select id="rsEmptyCell{{ empty_cell.cell_id }}" data-r4-structure-empty-cell-select>
+        <option value="">افزودن بخش به این خانهٔ خالی…</option>
+        {% for group in structure_library %}
+        <optgroup label="{{ group.category }}">
+          {% for entry in group.items %}<option value="{{ entry.key }}">{{ entry.label }}</option>{% endfor %}
+        </optgroup>
+        {% endfor %}
+      </select>
+      <button type="button" class="outline" data-r4-structure-empty-cell-add>{% rs_icon "plus" %}افزودن</button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="common-region">{% rs_icon "footer" %} پایین صفحه <button type="button" data-rastisi-action="global" data-rs-global-focus="footer" aria-label="تنظیم ظاهر مشترک پایین صفحه">{% rs_icon "sliders" %}</button></div>
+
+  {% if page_has_baseline %}
+  <button type="button" id="r4ResetPageButton" class="full quiet small">{% rs_icon "refresh" %}بازنشانی این صفحه به ترکیب قالب</button>
+  {% endif %}
+
+  {% comment %}
+  Add-section chooser (reference «چه چیزی به این صفحه اضافه کنیم؟» dialog).
+  Server-rendered from the SAME page-legal structure_library + Showcase facade;
+  r4_studio.js only shows it in the workspace dialog. Its controls keep the
+  existing R4 hooks, so r4_editor.js performs the one section.add mutation.
+  {% endcomment %}
+  <template data-rs-add-section-template>
+    <div class="rs-add-section" data-r4-add-section>
+      {% if showcase_choices %}
+      <details class="r4-showcase" data-r4-showcase open>
+        <summary class="section-label"><span>ویترین فروشگاه</span><span class="pill">پیشنهادی</span></summary>
+        <div class="demo-grid rs-showcase-grid" role="group" aria-label="ویترین فروشگاه">
+          {% for choice in showcase_choices %}
+          <button type="button" class="r4-showcase-choice" data-r4-showcase-choice data-section-key="{{ choice.section_key }}">{% if choice.content_type == "products" %}{% rs_icon "grid" %}{% elif choice.content_type == "categories" %}{% rs_icon "layers" %}{% elif choice.content_type == "collections" %}{% rs_icon "card" %}{% else %}{% rs_icon "tag" %}{% endif %}<span class="rs-choice-copy"><strong>{{ choice.label }}</strong>{% if choice.description %}<small>{{ choice.description }}</small>{% endif %}</span></button>
+          {% endfor %}
+        </div>
+      </details>
+      <div class="section-divider"></div>
+      {% endif %}
+      <label class="field" for="r4StructureAddSelect"><span>همهٔ بخش‌های مجاز این صفحه</span>
+        <select id="r4StructureAddSelect">
+          <option value="">یک بخش انتخاب کنید…</option>
+          {% for group in structure_library %}
+          <optgroup label="{{ group.category }}">
+            {% for entry in group.items %}<option value="{{ entry.key }}">{{ entry.label }}</option>{% endfor %}
+          </optgroup>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="button" id="r4StructureAddButton" class="primary full">{% rs_icon "plus" %}افزودن به انتهای صفحه</button>
+    </div>
+  </template>
+
+  <div class="template-nudge"><h3>از یک ایدهٔ آماده شروع کنید</h3><p>{{ studio.template_cards|length|fa_number }} قالب آماده؛ محتوای شما حفظ می‌شود.</p><button type="button" data-rastisi-action="templates">{% rs_icon "arrow" %}گشتن میان قالب‌ها</button></div>
+</div>

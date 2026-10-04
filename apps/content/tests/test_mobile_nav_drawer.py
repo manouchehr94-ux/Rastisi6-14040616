@@ -1,0 +1,286 @@
+"""Phase 5 Task 5 (MDR) — accessible mobile navigation drawer + the shared
+storefront overlay-mechanics primitive.
+
+Source-contract tests (same style as
+apps/storefront_builder/tests/test_u2a_global_header_system.py): the drawer
+lives in the canonical public base layout and consumes the canonical
+Menu/NAV_MOBILE authority (NO second menu source), and the reusable overlay
+primitive owns ONLY generic mechanics (open/close/escape/backdrop/focus-trap/
+focus-return/scroll-lock) with no domain data.
+"""
+from pathlib import Path
+
+from django.conf import settings
+from django.test import SimpleTestCase
+
+_BASE_HTML = Path(settings.BASE_DIR, "templates", "base.html")
+_DRAWER_PARTIAL = Path(settings.BASE_DIR, "templates", "partials", "mobile_nav_drawer.html")
+_SHELL_HEADER = Path(
+    settings.BASE_DIR, "apps", "storefront_builder", "templates",
+    "storefront_builder", "partials", "page_shell_header.html",
+)
+_OVERLAY_JS = Path(settings.BASE_DIR, "apps", "core", "static", "js", "storefront_overlay.js")
+_LAYOUT_CSS = Path(settings.BASE_DIR, "apps", "core", "static", "css", "layout.css")
+
+
+class SharedOverlayPrimitiveTests(SimpleTestCase):
+    def test_overlay_primitive_file_exists_and_registers_alpine_data(self):
+        self.assertTrue(_OVERLAY_JS.exists(), "shared overlay primitive JS is missing")
+        src = _OVERLAY_JS.read_text(encoding="utf-8")
+        self.assertIn("alpine:init", src)
+        self.assertIn("Alpine.data('sfbOverlay'", src)
+
+    def test_overlay_primitive_owns_only_generic_mechanics(self):
+        src = _OVERLAY_JS.read_text(encoding="utf-8")
+        # Generic overlay mechanics present.
+        self.assertIn("open", src)
+        self.assertIn("close", src)
+        self.assertIn("Escape", src)  # escape handling
+        self.assertIn("focus", src.lower())  # focus containment/return
+        self.assertIn("overflow", src.lower())  # body scroll lock
+        # NO domain data leaked into the generic primitive.
+        for banned in ("cart", "product", "price", "menu", "nav_", "quantity"):
+            self.assertNotIn(banned, src.lower(), f"overlay primitive must not own {banned}")
+
+    def test_base_html_loads_the_overlay_primitive_before_alpine(self):
+        src = _BASE_HTML.read_text(encoding="utf-8")
+        self.assertIn("storefront_overlay.js", src)
+        overlay_pos = src.index("storefront_overlay.js")
+        alpine_pos = src.index("alpine.min.js")
+        self.assertLess(overlay_pos, alpine_pos, "overlay JS must load before Alpine so alpine:init sees it")
+
+
+class MobileNavDrawerTests(SimpleTestCase):
+    def setUp(self):
+        # The drawer now lives in a shared partial included by base.html; the
+        # burger + body-scope wiring stay in base.html. Assert against both.
+        self.base = _BASE_HTML.read_text(encoding="utf-8")
+        self.drawer = _DRAWER_PARTIAL.read_text(encoding="utf-8")
+        self.src = self.base + "\n" + self.drawer
+
+    def test_burger_exposes_accessible_expanded_state_and_controls_drawer(self):
+        self.assertIn("aria-expanded", self.base)
+        self.assertIn("aria-controls=\"mobile-nav-drawer\"", self.base)
+
+    def test_drawer_element_exists_with_dialog_semantics(self):
+        self.assertIn('id="mobile-nav-drawer"', self.src)
+        self.assertIn('role="dialog"', self.src)
+        self.assertIn('aria-modal="true"', self.src)
+        # Reuses the shared overlay primitive (not a bespoke open/close copy).
+        self.assertIn("sfbOverlay", self.src)
+
+    def test_drawer_has_explicit_close_control_and_backdrop(self):
+        drawer_start = self.src.index('id="mobile-nav-drawer"')
+        drawer_chunk = self.src[drawer_start - 400:drawer_start + 2000]
+        self.assertIn("backdrop", drawer_chunk.lower())
+        # An explicit close button with an accessible label.
+        self.assertIn("بستن", drawer_chunk)
+
+    def test_drawer_consumes_canonical_nav_mobile_with_header_fallback(self):
+        drawer_start = self.src.index('id="mobile-nav-drawer"')
+        drawer_chunk = self.src[drawer_start:drawer_start + 2500]
+        # Canonical menu authority — NAV_MOBILE (falling back to NAV_HEADER).
+        self.assertIn("NAV_MOBILE", drawer_chunk)
+        self.assertIn("NAV_HEADER", drawer_chunk)
+        # It must NOT query a second menu source or hard-code menu items.
+        self.assertNotIn("Menu.objects", drawer_chunk)
+
+    def test_desktop_nav_still_present_unchanged(self):
+        # The existing desktop <nav class="nav"> is preserved (not removed).
+        self.assertIn('<nav class="nav"', self.src)
+
+    def test_drawer_css_is_offcanvas_and_rtl_safe(self):
+        css = _LAYOUT_CSS.read_text(encoding="utf-8")
+        self.assertIn("mobile-nav-drawer", css)
+        # RTL-safe: uses logical inset properties, not hard-coded left/right geometry.
+        self.assertTrue(
+            "inset-inline" in css or "inset-block" in css,
+            "drawer should use logical CSS properties for RTL safety",
+        )
+
+
+class DrawerIsSharedBySingleOwnerAcrossHeaderShellsTests(SimpleTestCase):
+    """The live public storefront overrides ``{% block header %}`` with the
+    canonical ``page_shell_header.html`` shell, so the drawer MUST render
+    there too — but as ONE shared implementation, not a second copy."""
+
+    def test_drawer_is_extracted_into_a_single_shared_partial(self):
+        self.assertTrue(_DRAWER_PARTIAL.exists(), "shared drawer partial is missing")
+        src = _DRAWER_PARTIAL.read_text(encoding="utf-8")
+        self.assertIn('id="mobile-nav-drawer"', src)
+        self.assertIn("sfbOverlay", src)
+        # Consumes the canonical menu authority, never a second source.
+        self.assertIn("NAV_MOBILE", src)
+        self.assertIn("NAV_HEADER", src)
+        self.assertNotIn("Menu.objects", src)
+
+    def test_base_html_includes_the_shared_drawer_partial(self):
+        src = _BASE_HTML.read_text(encoding="utf-8")
+        self.assertIn("partials/mobile_nav_drawer.html", src)
+        # The drawer markup is no longer inlined/duplicated in base.html.
+        self.assertNotIn('id="mobile-nav-drawer"', src)
+
+    def test_canonical_storefront_shell_wires_the_drawer(self):
+        src = _SHELL_HEADER.read_text(encoding="utf-8")
+        # The canonical shell burger opens the accessible drawer (not just the
+        # legacy desktop-nav toggle) and exposes aria-controls.
+        self.assertIn('aria-controls="mobile-nav-drawer"', src)
+        self.assertIn("mobileDrawerOpen", src)
+        # And it reuses the SAME shared partial (single owner, no second copy).
+        self.assertIn("partials/mobile_nav_drawer.html", src)
+
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 Task 7 (Browse hardening) — Gap #1: mobile search discoverability.
+#
+# Discovery proved that on the ``legacy_default`` header the desktop/header
+# ``.search`` bar is hidden at <=680px and the shared mobile drawer (which is
+# the mobile entry point for that shell) had NO search affordance — so a phone
+# shopper had no discoverable way to start a product search. The bounded repair
+# adds the CANONICAL shared search partial into the SAME drawer, posting to the
+# EXISTING ``catalog:product-list`` endpoint (no new route/backend/form
+# authority, no second drawer). Same source-contract test style as above.
+# ---------------------------------------------------------------------------
+
+_SHARED_SEARCH_PARTIAL = Path(
+    settings.BASE_DIR, "apps", "storefront_builder", "templates",
+    "storefront_builder", "partials", "global_header", "_shared", "search_form.html",
+)
+
+
+class MobileDrawerSearchAffordanceTests(SimpleTestCase):
+    """Task 7 Gap #1 — the shared mobile drawer must offer a discoverable,
+    accessible search that reuses the canonical search partial + endpoint."""
+
+    def setUp(self):
+        self.drawer = _DRAWER_PARTIAL.read_text(encoding="utf-8")
+
+    def test_drawer_includes_the_canonical_shared_search_partial(self):
+        # Reuse, do not re-author: the drawer must {% include %} the ONE
+        # canonical accessible search form partial, not hand-roll its own.
+        self.assertIn(
+            "storefront_builder/partials/global_header/_shared/search_form.html",
+            self.drawer,
+            "mobile drawer must reuse the canonical shared search_form partial",
+        )
+
+    def test_drawer_search_uses_a_unique_field_id(self):
+        # Prevent duplicate DOM ids with the header search input on the same
+        # page (the header search also uses the shared partial / gh-search-input).
+        self.assertIn("mobile-drawer-search-input", self.drawer)
+        # The default header field id must not be what the drawer passes.
+        self.assertNotIn('field_id="gh-search-input"', self.drawer)
+
+    def test_drawer_does_not_hand_roll_a_second_search_form(self):
+        # No bespoke search form copy inside the drawer — the q param / action /
+        # label / icon all come from the shared partial. The endpoint's {% url %}
+        # tag and the <form>'s action/name=q must NOT be authored in the drawer
+        # itself (prose mentioning the route name in a comment is fine).
+        self.assertNotIn("action=\"/products", self.drawer)
+        self.assertNotIn("{% url 'catalog:product-list' %}", self.drawer)
+        self.assertNotIn("{% url \"catalog:product-list\" %}", self.drawer)
+        self.assertNotIn('name="q"', self.drawer,
+                         "the q input lives in the shared partial, not inlined in the drawer")
+
+    def test_drawer_search_appears_before_the_navigation_list(self):
+        # UX: search sits near the top of the drawer (after the head), before
+        # the nav list, so it is the first affordance a shopper reaches.
+        search_pos = self.drawer.index("_shared/search_form.html")
+        nav_list_pos = self.drawer.index("mobile-nav-drawer__list")
+        self.assertLess(search_pos, nav_list_pos,
+                        "drawer search should render before the navigation list")
+
+    def test_drawer_search_is_inside_the_dialog_not_a_second_overlay(self):
+        # The search is CONTENT inside the existing dialog, not a new overlay:
+        # it appears after the drawer opens (#mobile-nav-drawer / role=dialog)
+        # and there is still exactly one dialog in the partial.
+        self.assertEqual(self.drawer.count('role="dialog"'), 1,
+                         "the drawer must remain a single dialog (no second overlay)")
+        dialog_pos = self.drawer.index('id="mobile-nav-drawer"')
+        search_pos = self.drawer.index("_shared/search_form.html")
+        self.assertGreater(search_pos, dialog_pos,
+                           "search must live inside the existing drawer dialog")
+
+    def test_canonical_search_partial_still_owns_the_q_param_and_endpoint(self):
+        # Defense-in-depth: prove the shared partial (the single authority the
+        # drawer now includes) resolves the catalog listing route + q input,
+        # so no new route/backend is introduced by this repair.
+        partial = _SHARED_SEARCH_PARTIAL.read_text(encoding="utf-8")
+        self.assertIn("catalog:product-list", partial)
+        self.assertIn('name="q"', partial)
+        self.assertIn('role="search"', partial)
+
+    def test_drawer_search_preserves_task5_nav_authority(self):
+        # Adding search must not remove/replace the canonical NAV authority.
+        self.assertIn("NAV_MOBILE", self.drawer)
+        self.assertIn("NAV_HEADER", self.drawer)
+        self.assertNotIn("Menu.objects", self.drawer)
+
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 Task 7 — final-review remediation: legacy base.html live-search
+# context. The canonical search partial renders its REAL GET form only when
+# ``is_live_storefront`` is truthy; otherwise it renders the disabled Builder
+# Preview branch. The universal shell passes ``is_live_storefront=True`` when it
+# includes the header variant, but the ``uses_universal_shell == False`` public
+# FALLBACK renders base.html's own header + drawer via ``{{ block.super }}``,
+# and base.html included the drawer WITHOUT that flag — so on the real legacy
+# public path the drawer search silently rendered its disabled preview form
+# (no context processor supplies the flag). This is a RENDERED-template
+# regression test of that exact fallback, not a source-string assertion.
+# ---------------------------------------------------------------------------
+from django.template.loader import render_to_string  # noqa: E402
+from django.test import SimpleTestCase as _SimpleTestCase  # noqa: E402
+
+
+class LegacyBaseHtmlDrawerSearchIsLiveTests(_SimpleTestCase):
+    """The public legacy base.html fallback must render a LIVE (enabled) drawer
+    search form, not the disabled Builder Preview branch.
+
+    Rendered-template proof at two levels:
+      1) the drawer partial's LIVE branch is gated on ``is_live_storefront``
+         (rendering it WITHOUT the flag — exactly what base.html did before this
+         fix — yields the disabled preview form; WITH the flag it is live); and
+      2) base.html's own drawer ``{% include %}`` passes ``is_live_storefront=True``
+         so the ``uses_universal_shell == False`` public fallback path is live.
+    """
+
+    _DRAWER_TEMPLATE = "partials/mobile_nav_drawer.html"
+
+    # The drawer consumes the canonical NAV authority; supply it (empty) so the
+    # partial renders under the test project's strict template settings. The
+    # search branch under test is independent of the nav menu content.
+    _DRAWER_CTX = {"NAV_HEADER": None, "NAV_MOBILE": None}
+
+    def test_drawer_partial_without_live_flag_renders_the_disabled_preview_branch(self):
+        # This reproduces the pre-fix defect: base.html included the drawer with
+        # NO is_live_storefront, and no context processor supplies it, so the
+        # shared search partial fell through to its disabled preview branch.
+        html = render_to_string(self._DRAWER_TEMPLATE, dict(self._DRAWER_CTX))
+        self.assertIn('id="mobile-drawer-search-input-preview"', html)
+        self.assertIn("disabled", html)
+        self.assertIn('onsubmit="return false"', html)
+
+    def test_drawer_partial_with_live_flag_renders_a_live_get_form_to_catalog(self):
+        html = render_to_string(self._DRAWER_TEMPLATE, {**self._DRAWER_CTX, "is_live_storefront": True})
+        # Live branch: a real role=search GET form to the catalog listing route,
+        # with an ENABLED name=q input and no preview no-op handler.
+        self.assertIn('role="search"', html)
+        self.assertIn("/products/", html)  # reverse('catalog:product-list')
+        self.assertIn('name="q"', html)
+        self.assertIn('id="mobile-drawer-search-input"', html)
+        self.assertNotIn('onsubmit="return false"', html)
+        # The enabled input must not be the disabled preview input.
+        self.assertNotIn('id="mobile-drawer-search-input-preview"', html)
+
+    def test_base_html_include_passes_live_storefront_context_to_the_drawer(self):
+        # The minimal canonical fix: base.html's drawer include must pass the
+        # live-storefront context so the public legacy fallback renders the live
+        # search form (the universal shell already passes it in its own include).
+        base = _BASE_HTML.read_text(encoding="utf-8")
+        include_line = next(
+            (ln for ln in base.splitlines() if "partials/mobile_nav_drawer.html" in ln), "")
+        self.assertIn("is_live_storefront=True", include_line,
+                      "base.html must pass is_live_storefront=True to the shared drawer include")

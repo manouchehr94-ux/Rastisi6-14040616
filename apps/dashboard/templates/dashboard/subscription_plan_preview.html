@@ -4,6 +4,31 @@
 {% block page_sub %}از «{{ preview.current_plan.public_title|default:preview.current_plan.name }}» به «{{ preview.target_plan.public_title|default:preview.target_plan.name }}»{% endblock %}
 {% block content %}
 
+{% if preview.is_upgrade %}
+<div class="card" style="margin-bottom:16px;border:1px solid #cfe3ff">
+  <div class="card-head"><b>این تغییر نیازمندِ پرداخت است</b></div>
+  <div style="padding:14px 18px">
+    <p style="margin-bottom:0">
+      این یک ارتقاست — مبلغِ {{ preview.payable_amount }} {{ preview.target_version.currency }} یک
+      فاکتورِ «تغییرِ پلن» ایجاد می‌شود. پلنِ شما فقط <b>پس از تکمیلِ پرداختِ همین فاکتور</b> به
+      «{{ preview.target_plan.public_title|default:preview.target_plan.name }}» تغییر می‌کند؛ این درخواست به‌تنهایی
+      هیچ Entitlementی را عوض نمی‌کند.
+    </p>
+  </div>
+</div>
+{% else %}
+<div class="card" style="margin-bottom:16px;border:1px solid #d7ead2">
+  <div class="card-head"><b>این تغییر نیازِ پرداخت ندارد</b></div>
+  <div style="padding:14px 18px">
+    <p style="margin-bottom:0">
+      این یک تنزل/تغییرِ هم‌قیمت است — هیچ مبلغی از شما گرفته نمی‌شود. تغییرِ پلن برایِ
+      <b>دوره‌ی صورتحسابِ بعد</b> زمان‌بندی می‌شود؛ تا آن زمان اشتراکِ فعلی و Entitlementهایِ آن
+      دست‌نخورده و کاملاً قابلِ‌استفاده باقی می‌مانند.
+    </p>
+  </div>
+</div>
+{% endif %}
+
 {% if preview.has_downgrade_risk %}
 <div class="card" style="margin-bottom:16px;border:1px solid #f5c2c2">
   <div class="card-head" style="color:#9b1c1c"><b>هشدارِ تنزل</b></div>
@@ -51,7 +76,11 @@
     {% csrf_token %}
     <input type="hidden" name="version_id" value="{{ preview.target_version.pk }}">
     <input type="hidden" name="preview_token" value="{{ preview.token }}">
-    <button type="submit" class="btn btn-primary">تأیید و تغییرِ پلن</button>
+    {% if preview.is_upgrade %}
+    <button type="submit" class="btn btn-primary">ایجادِ فاکتور و ادامه به پرداخت</button>
+    {% else %}
+    <button type="submit" class="btn btn-primary">تأیید و زمان‌بندیِ تغییرِ پلن</button>
+    {% endif %}
   </form>
   <a class="btn" href="{% url 'dashboard:subscription-plans' %}">انصراف</a>
 </div>

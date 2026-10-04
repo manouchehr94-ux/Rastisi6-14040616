@@ -1,0 +1,11 @@
+{
+  "template_key": "green_workshop",
+  "version": "2",
+  "content_hash": "2b7c9b09859d057883f9e288b328161ace15d8206a7634660b6d16b577d043b1",
+  "preview_input_fingerprint": "f0b5b838f3bb6476a730bc12b490f0bdcd45b1163c8892d671d979a3363b8662",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}

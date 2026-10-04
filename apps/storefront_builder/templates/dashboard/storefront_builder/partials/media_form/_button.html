@@ -1,0 +1,11 @@
+{# Media form field group — call-to-action button. Shared by the legacy linear form and the R4 modal's "محتوا" tab. #}
+<div class="form-group">
+  <label style="display:flex;align-items:center;gap:6px;font-weight:normal">
+    <input type="checkbox" name="show_button" {% if item.show_button %}checked{% endif %}>
+    نمایش دکمه
+  </label>
+</div>
+<div class="form-group">
+  <label for="id_button_label">متن دکمه</label>
+  <input type="text" name="button_label" id="id_button_label" class="form-input" maxlength="60" value="{{ item.button_label|default:'' }}">
+</div>

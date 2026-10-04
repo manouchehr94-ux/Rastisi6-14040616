@@ -364,6 +364,26 @@ class MoveBlockTests(Phase2BTestCase):
         with self.assertRaises(container_service.ContainerLayoutError):
             container_service.move_block(section, foreign_cell)
 
+    def test_move_block_rejects_locked_source_container(self):
+        """R4 Task 8 (Batch 2, lifecycle-lock parity) — before this fix,
+        ``move_block`` only checked the TARGET Cell's Container lock; a
+        Block could be moved OUT of a locked source Container by simply
+        targeting an unlocked one. The source side must be checked too."""
+        section = self._section()
+        source_container = container_service.create_empty_container(self.page, "single")
+        source_cell = source_container.cells.get()
+        container_service.add_block(source_cell, section)
+        source_container.is_locked = True
+        source_container.save(update_fields=["is_locked"])
+
+        target_container = container_service.create_empty_container(self.page, "single")
+        target_cell = target_container.cells.get()
+
+        with self.assertRaises(container_service.ContainerLayoutError):
+            container_service.move_block(section, target_cell)
+        section.refresh_from_db()
+        self.assertEqual(section.cell_id, source_cell.pk)
+
     def test_move_block_within_same_cell_is_a_reorder(self):
         first = self._section(0)
         second = self._section(1)

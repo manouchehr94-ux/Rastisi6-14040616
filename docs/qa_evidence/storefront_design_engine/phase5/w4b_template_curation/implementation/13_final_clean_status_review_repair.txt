@@ -1,0 +1,33 @@
+$ git rev-parse HEAD
+57b07a2da630a4ba8dd2349e794b68afacac7ca1
+
+$ git status --short
+(status exit=0)
+
+$ git diff --check
+EXIT=0
+
+$ git diff --cached --check
+EXIT=0
+
+$ /usr/bin/python3 --version
+Python 3.11.15
+
+$ /usr/bin/python3 -c "import django; print(django.get_version())"
+5.2.17
+
+$ /usr/bin/python3 manage.py check --settings=shop_core.settings
+System check identified no issues (0 silenced).
+EXIT=0
+
+$ /usr/bin/python3 manage.py makemigrations --check --dry-run --settings=shop_core.settings
+No changes detected
+EXIT=0
+
+Captured to a temporary path outside the repository
+(/tmp/w4b_final_clean_review_repair.txt) BEFORE this file existed, and
+`git status --short` was explicitly verified empty at that moment --
+avoiding the self-contradiction in the superseded
+11_final_clean_status_evidence.txt (which captured its own untracked-file
+line). This file was then written into the repository, verbatim, from
+that already-verified-clean capture, and is the ONLY file in this commit.

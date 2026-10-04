@@ -1,0 +1,15 @@
+$ /usr/bin/python3 manage.py check --settings=shop_core.settings
+System check identified no issues (0 silenced).
+EXIT=0
+
+$ /usr/bin/python3 manage.py makemigrations --check --dry-run --settings=shop_core.settings
+No changes detected
+EXIT=0
+
+$ git diff --check
+EXIT=0
+
+$ git diff --cached --check
+EXIT=0
+
+Migrations created by W4B: 0 (confirmed).

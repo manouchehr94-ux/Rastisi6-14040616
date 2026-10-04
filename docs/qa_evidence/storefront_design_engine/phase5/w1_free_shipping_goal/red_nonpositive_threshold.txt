@@ -1,0 +1,33 @@
+Creating test database for alias 'default'...
+FFF
+======================================================================
+FAIL: test_zero_threshold_empty_cart_progress_is_zero (apps.cart.tests.test_pricing.FreeShippingGoalTests.test_zero_threshold_empty_cart_progress_is_zero)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/projects/sandbox/Rastisi6-14040616/apps/cart/tests/test_pricing.py", line 477, in test_zero_threshold_empty_cart_progress_is_zero
+    self.assertEqual(t["free_shipping_goal_progress_percent"], 0)
+AssertionError: 100 != 0
+
+======================================================================
+FAIL: test_zero_threshold_physical_cart_progress_is_zero (apps.cart.tests.test_pricing.FreeShippingGoalTests.test_zero_threshold_physical_cart_progress_is_zero)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/projects/sandbox/Rastisi6-14040616/apps/cart/tests/test_pricing.py", line 485, in test_zero_threshold_physical_cart_progress_is_zero
+    self.assertEqual(t["free_shipping_goal_progress_percent"], 0)
+AssertionError: 100 != 0
+
+======================================================================
+FAIL: test_negative_threshold_progress_is_zero (apps.cart.tests.test_pricing.FreeShippingGoalTests.test_negative_threshold_progress_is_zero)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/projects/sandbox/Rastisi6-14040616/apps/cart/tests/test_pricing.py", line 493, in test_negative_threshold_progress_is_zero
+    self.assertEqual(t["free_shipping_goal_progress_percent"], 0)
+AssertionError: 100 != 0
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.020s
+
+FAILED (failures=3)
+Destroying test database for alias 'default'...
+Found 3 test(s).
+System check identified no issues (0 silenced).

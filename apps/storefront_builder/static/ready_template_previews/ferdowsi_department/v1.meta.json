@@ -1,0 +1,11 @@
+{
+  "template_key": "ferdowsi_department",
+  "version": "1",
+  "content_hash": "ce8abea993ffe7019878ce88127185c939d8763794c58b83cb991da16e445b86",
+  "preview_input_fingerprint": "9b50c625521c0940b01066e443eb33243d5677482a4d9952e2dc173b07585b73",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}

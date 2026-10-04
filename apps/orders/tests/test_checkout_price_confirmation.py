@@ -21,7 +21,8 @@ from apps.customers.models import Address, Customer
 from apps.orders.models import Order, PaymentAttempt, PaymentGateway, PaymentGatewayConfig, ShippingMethod
 from apps.orders.services import refund_service
 from apps.orders.services.gateway_payment_service import initiate_payment
-from apps.orders.services.order_service import PriceChangedError, create_order_from_cart
+from apps.orders.services.checkout_service import PRICE_CHANGED_MESSAGE
+from apps.orders.services.order_service import LivePriceChangedError, create_order_from_cart
 from apps.stores.models import Store
 
 User = get_user_model()
@@ -111,7 +112,7 @@ class PriceChangeRequiresReconfirmationTests(PriceConfirmationBase):
         self.assertNotIn("HX-Redirect", response.headers)
         self.assertEqual(self.orders().count(), 0)
         toast = json.loads(response["HX-Trigger"])["toast"]["message"]
-        self.assertIn("مبلغِ جدید", toast)
+        self.assertEqual(toast, PRICE_CHANGED_MESSAGE)  # one mechanism (CAT-002): same message for every kind of drift
         refreshed = self.displayed_total()
         self.assertEqual(refreshed, new_total)
         self.assertEqual(CartItem.objects.filter(cart__customer=self.customer).count(), 1)  # سبد دست‌نخورده
@@ -233,9 +234,8 @@ class ServiceLevelPolicyTests(PriceConfirmationBase):
         cart, address = self.make_cart()
         stock = Product.objects.get(pk=self.product.pk).stock
         Product.objects.filter(pk=self.product.pk).update(price=Decimal("300000"))
-        with self.assertRaises(PriceChangedError) as ctx:
+        with self.assertRaises(LivePriceChangedError):
             self.create(cart, address, expected_total=Decimal("245000"))
-        self.assertEqual((ctx.exception.expected, ctx.exception.actual), (Decimal("245000"), Decimal("345000")))
         self.assertEqual(Order.objects.count(), 0)
         self.assertEqual(Product.objects.get(pk=self.product.pk).stock, stock)
 
@@ -244,7 +244,7 @@ class ServiceLevelPolicyTests(PriceConfirmationBase):
         cart, address = self.make_cart()
         shown = self.create_preview_total(cart, coupon)
         Coupon.objects.filter(pk=coupon.pk).update(expires_at=timezone.now() - timedelta(minutes=1))
-        with self.assertRaises((PriceChangedError, ValueError)):
+        with self.assertRaises(ValueError):
             self.create(cart, address, coupon=Coupon.objects.get(pk=coupon.pk), expected_total=shown)
         self.assertEqual(Order.objects.count(), 0)
 

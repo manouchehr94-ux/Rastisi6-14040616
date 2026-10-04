@@ -4,7 +4,7 @@
 ویو یا تمپلیت تکرار شود؛ همیشه از طریق این توابع خالص انجام شوند.
 """
 
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
 
 from apps.cart.models import Coupon
@@ -98,36 +98,6 @@ def build_coupon_lines(items, coupon: Coupon | None) -> list[coupon_rules.Coupon
     ]
 
 
-def sync_cart_prices(items, *, store, products=None, variants=None) -> list[dict]:
-    """اسنپ‌شاتِ قیمتِ اقلامِ سبد را با قیمتِ **معتبرِ فعلی** (کالا/تنوع/کادوپیچی) هم‌گام می‌کند.
-
-    ``CartItem.unit_price`` فقط یک اسنپ‌شاتِ زمانِ افزودن است و هرگز مبنای مبلغِ پرداخت نیست مگر پس از این
-    همگام‌سازی؛ تنها منبعِ قیمت ``resolve_effective_price`` (و ``resolve_gift_wrap_selection``) است.
-    ``products``/``variants``: نسخه‌هایِ قفل‌شده (در ساختِ سفارش) تا همان مقدارِ زیرِ قفل خوانده شود.
-    → فهرستِ تغییرها ``[{"item", "field", "old", "new"}]`` (خالی = بدونِ تغییر)."""
-    from apps.catalog.services.pricing_service import resolve_effective_price
-
-    changes = []
-    for item in items:
-        product = (products or {}).get(item.product_id, item.product)
-        variant = (variants or {}).get(item.variant_id, item.variant) if item.variant_id else None
-        fields = []
-        live = resolve_effective_price(product, variant)
-        if live != item.unit_price:
-            changes.append({"item": item.pk, "field": "unit_price", "old": item.unit_price, "new": live})
-            item.unit_price = live
-            fields.append("unit_price")
-        if item.gift_wrap_selected:
-            allowed, wrap_price = gift_wrap_service.resolve_gift_wrap_selection(store, requested=True, product=product)
-            if allowed and wrap_price != item.gift_wrap_unit_price:
-                changes.append({"item": item.pk, "field": "gift_wrap_unit_price", "old": item.gift_wrap_unit_price, "new": wrap_price})
-                item.gift_wrap_unit_price = wrap_price
-                fields.append("gift_wrap_unit_price")
-        if fields:
-            item.save(update_fields=fields + ["updated_at"])
-    return changes
-
-
 def cart_totals(
     cart, *, store, coupon: Coupon | None = None, shipping_method=None,
     province: str = "", city: str = "", postal_code: str = "",
@@ -198,8 +168,40 @@ def cart_totals(
 
     after_coupon = items_total - coupon_item_discount
 
-    free_by_threshold = items_total >= _free_shipping_threshold(store)
+    # ارسالِ رایگان — همان محاسبه‌ی قبلی، فقط آستانه یک‌بار خوانده می‌شود و
+    # بازاستفاده می‌شود (P5-W1: منبعِ آستانه دوباره در view/template خوانده
+    # نمی‌شود).
+    free_shipping_threshold = _free_shipping_threshold(store)
+    free_by_threshold = items_total >= free_shipping_threshold
     free_shipping = free_by_threshold or free_shipping_by_coupon
+
+    # P5-W1 — «هدفِ ارسالِ رایگان»: مقادیرِ آماده‌یِ نمایش که *همین‌جا* (منبعِ
+    # کانونیِ قیمت‌گذاری) محاسبه می‌شوند؛ view/render_service/template/JS هیچ
+    # محاسبه‌ای انجام نمی‌دهند. مبلغِ واجدِ مقایسه همان ``items_total`` کانونی
+    # است. «باقی‌مانده» هرگز منفی نمی‌شود و «درصدِ پیشرفت» در بازه‌ی [۰،۱۰۰]
+    # مقیّد می‌شود. «applicable» فقط وقتی درست است که سبد حداقل یک کالای
+    # فیزیکیِ نیازمندِ ارسال داشته باشد — از همان مرجعِ کانونیِ
+    # ``shipping_service.cart_requires_shipping(items)`` (بدونِ قاعده‌ی
+    # جداگانه). سبدِ کاملاً دیجیتال هدفِ ارسالِ فیزیکی را نمایش نمی‌دهد.
+    free_shipping_goal_applicable = shipping_service.cart_requires_shipping(items)
+    free_shipping_goal_remaining = max(Decimal("0"), free_shipping_threshold - items_total)
+    # درصدِ پیشرفت — «۱۰۰٪» فقط و فقط برایِ حالتِ *رسیدن به آستانه* رزرو شده
+    # است. یک سبدِ زیرِ آستانه (باقی‌مانده > ۰) هرگز نباید نوارِ پُر (۱۰۰٪) نشان
+    # دهد؛ برایِ همین در حالتِ زیرِ آستانه به‌جایِ گِردکردن (که ۴۹۹۰۰۰/۵۰۰۰۰۰ =
+    # ۹۹٫۸٪ را به ۱۰۰ می‌رساند) به سمتِ پایین trunc می‌شود (ROUND_DOWN) و
+    # سقفِ ۹۹ اعمال می‌گردد.
+    if free_shipping_threshold <= 0 or items_total <= 0:
+        # آستانه‌ی غیرقابل‌استفاده (صفر/منفی) یا سبدِ خالی: هرگز ۱۰۰٪ نمی‌شود —
+        # این شرط *پیش از* free_by_threshold می‌آید چون برایِ آستانه‌ی صفر،
+        # ``items_total >= 0`` مقدارِ free_by_threshold را True می‌کند ولی
+        # قراردادِ نمایش می‌گوید آستانه‌ی ناموجود = ۰٪.
+        free_shipping_goal_progress_percent = 0
+    elif free_by_threshold:
+        free_shipping_goal_progress_percent = 100
+    else:
+        free_shipping_goal_progress_percent = min(
+            99, int((items_total * 100 / free_shipping_threshold).to_integral_value(rounding=ROUND_DOWN))
+        )
 
     shipping_zone = None
     shipping_rate_rule = None
@@ -262,6 +264,13 @@ def cart_totals(
         "shipping_zone": shipping_zone,
         "shipping_rate_rule": shipping_rate_rule,
         "free_shipping": free_shipping,
+        # P5-W1 — presentation-ready Free-Shipping Goal state (all computed here).
+        "free_shipping_threshold": free_shipping_threshold,
+        "free_shipping_by_threshold": free_by_threshold,
+        "free_shipping_by_coupon": free_shipping_by_coupon,
+        "free_shipping_goal_applicable": free_shipping_goal_applicable,
+        "free_shipping_goal_remaining": free_shipping_goal_remaining,
+        "free_shipping_goal_progress_percent": free_shipping_goal_progress_percent,
         "tax": tax,
         "shipping_tax": shipping_tax,
         "tax_lines": tax_result["lines"],

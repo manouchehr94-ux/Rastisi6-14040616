@@ -1,0 +1,12 @@
+=== node --check tools/storefront_builder_r4_qa/run.mjs ===
+OK (exit 0)
+
+=== manage.py check ===
+System check identified no issues (0 silenced).
+
+=== manage.py makemigrations --check --dry-run ===
+No changes detected
+
+=== git diff --check (staged+unstaged at time of this run) ===
+OK (no whitespace errors)
+OK (no whitespace errors, staged)

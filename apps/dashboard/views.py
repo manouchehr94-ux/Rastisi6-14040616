@@ -4890,7 +4890,9 @@ def _uses_visual_storefront_layout(store) -> bool:
 @permission_required(CONTENT_MANAGE)
 def hero_list(request):
     store = _resolve_dashboard_store(request)
-    slides = HeroSlide.objects.filter(store=store).order_by("display_order", "id")
+    # Legacy screen: store-wide slides only. Section-scoped rows belong to a
+    # Draft/Published layout version and are managed through the R4 media manager.
+    slides = HeroSlide.objects.filter(store=store, section__isnull=True).order_by("display_order", "id")
     return render(request, "dashboard/hero_list.html", {
         "slides": slides, "active_page": "homepage",
         "storefront_builder_active": _uses_visual_storefront_layout(store),
@@ -4900,11 +4902,9 @@ def hero_list(request):
 @staff_required
 @permission_required(CONTENT_MANAGE)
 def hero_form(request, pk=None):
-    from django.db import transaction
-
     from apps.catalog.models import Brand, Category
     store = _resolve_dashboard_store(request)
-    slide = get_object_or_404(HeroSlide, pk=pk, store=store) if pk else None
+    slide = get_object_or_404(HeroSlide, pk=pk, store=store, section__isnull=True) if pk else None
 
     if request.method == "POST":
         obj = slide or HeroSlide(store=store)
@@ -4943,7 +4943,20 @@ def hero_form(request, pk=None):
             obj.full_clean()
             obj.save()
 
-            # Schedule old file cleanup after successful commit
+            # MED-001 (Retention-First, architect decision): legacy
+            # Dashboard hero replacement never had — and still does not
+            # have — unilateral authority to physically delete reusable
+            # media bytes. Old desktop/mobile filenames that actually
+            # changed are routed through the one canonical content/media
+            # retention authority (``cleanup_reusable_media_file``), which
+            # is now a deliberate retention no-op for this reusable-media
+            # family (no ``storage.delete`` is ever performed here) — see
+            # the Retention-First policy note in ``apps.content.services``.
+            # The old asset/file is intentionally left in place; a small
+            # storage leak is an accepted cost of eliminating the
+            # attach-vs-delete TOCTOU race for this P0.
+            from apps.content.services import cleanup_reusable_media_file
+
             storage = HeroSlide.desktop_image.field.storage
             new_desktop_name = obj.desktop_image.name if obj.desktop_image else None
             new_mobile_name = obj.mobile_image.name if obj.mobile_image else None
@@ -4954,10 +4967,8 @@ def hero_form(request, pk=None):
             if old_mobile_name and old_mobile_name != new_mobile_name:
                 files_to_delete.append(old_mobile_name)
 
-            if files_to_delete:
-                transaction.on_commit(lambda: [
-                    storage.delete(f) for f in files_to_delete if storage.exists(f)
-                ])
+            for old_name in files_to_delete:
+                cleanup_reusable_media_file(old_name, storage)
 
             messages.success(request, f"اسلاید «{obj.title or obj.pk}» ذخیره شد")
             return redirect("dashboard:hero-list")
@@ -4975,24 +4986,23 @@ def hero_form(request, pk=None):
 @staff_required
 @permission_required(CONTENT_MANAGE)
 def hero_delete(request, pk):
-    from django.db import transaction
-
     store = _resolve_dashboard_store(request)
-    slide = get_object_or_404(HeroSlide, pk=pk, store=store)
+    slide = get_object_or_404(HeroSlide, pk=pk, store=store, section__isnull=True)
     desktop_name = slide.desktop_image.name if slide.desktop_image else None
     mobile_name = slide.mobile_image.name if slide.mobile_image else None
     storage = slide.desktop_image.storage
 
     slide.delete()
 
-    # Delete owned files only after successful DB commit
-    def _cleanup():
-        if desktop_name and storage.exists(desktop_name):
-            storage.delete(desktop_name)
-        if mobile_name and storage.exists(mobile_name):
-            storage.delete(mobile_name)
+    # MED-001 (Retention-First, architect decision): the legacy Dashboard
+    # delete route may delete its own HeroSlide row, but never physically
+    # deletes reusable media bytes — routed through the canonical
+    # retention authority (``cleanup_reusable_media_file``), which
+    # intentionally performs no ``storage.delete`` for this media family.
+    from apps.content.services import cleanup_reusable_media_file
 
-    transaction.on_commit(_cleanup)
+    cleanup_reusable_media_file(desktop_name, storage)
+    cleanup_reusable_media_file(mobile_name, storage)
     messages.success(request, "اسلاید حذف شد")
     return redirect("dashboard:hero-list")
 
@@ -5002,7 +5012,7 @@ def hero_delete(request, pk):
 @permission_required(CONTENT_MANAGE)
 def hero_toggle(request, pk):
     store = _resolve_dashboard_store(request)
-    slide = get_object_or_404(HeroSlide, pk=pk, store=store)
+    slide = get_object_or_404(HeroSlide, pk=pk, store=store, section__isnull=True)
     slide.is_active = not slide.is_active
     slide.save(update_fields=["is_active", "updated_at"])
     state = "فعال" if slide.is_active else "غیرفعال"
@@ -5014,7 +5024,8 @@ def hero_toggle(request, pk):
 @permission_required(CONTENT_MANAGE)
 def banner_list(request):
     store = _resolve_dashboard_store(request)
-    banners = PromotionalBanner.objects.filter(store=store).order_by("display_order", "id")
+    # Legacy screen: store-wide banners only (section-scoped rows are R4-managed).
+    banners = PromotionalBanner.objects.filter(store=store, section__isnull=True).order_by("display_order", "id")
     return render(request, "dashboard/banner_list.html", {
         "banners": banners, "active_page": "homepage",
         "storefront_builder_active": _uses_visual_storefront_layout(store),
@@ -5024,11 +5035,9 @@ def banner_list(request):
 @staff_required
 @permission_required(CONTENT_MANAGE)
 def banner_form(request, pk=None):
-    from django.db import transaction
-
     from apps.catalog.models import Brand, Category
     store = _resolve_dashboard_store(request)
-    banner = get_object_or_404(PromotionalBanner, pk=pk, store=store) if pk else None
+    banner = get_object_or_404(PromotionalBanner, pk=pk, store=store, section__isnull=True) if pk else None
 
     if request.method == "POST":
         obj = banner or PromotionalBanner(store=store)
@@ -5065,7 +5074,14 @@ def banner_form(request, pk=None):
             obj.full_clean()
             obj.save()
 
-            # Schedule old file cleanup after successful commit
+            # MED-001 (Retention-First, architect decision): same policy as
+            # hero_form above — route old-filename cleanup through the
+            # canonical content/media retention authority, which
+            # intentionally performs no ``storage.delete`` for this media
+            # family (a small storage leak is accepted to eliminate the
+            # attach-vs-delete TOCTOU race).
+            from apps.content.services import cleanup_reusable_media_file
+
             storage = PromotionalBanner.desktop_image.field.storage
             new_desktop_name = obj.desktop_image.name if obj.desktop_image else None
             new_mobile_name = obj.mobile_image.name if obj.mobile_image else None
@@ -5076,10 +5092,8 @@ def banner_form(request, pk=None):
             if old_mobile_name and old_mobile_name != new_mobile_name:
                 files_to_delete.append(old_mobile_name)
 
-            if files_to_delete:
-                transaction.on_commit(lambda: [
-                    storage.delete(f) for f in files_to_delete if storage.exists(f)
-                ])
+            for old_name in files_to_delete:
+                cleanup_reusable_media_file(old_name, storage)
 
             messages.success(request, f"بنر «{obj.title or obj.pk}» ذخیره شد")
             return redirect("dashboard:banner-list")
@@ -5097,24 +5111,20 @@ def banner_form(request, pk=None):
 @staff_required
 @permission_required(CONTENT_MANAGE)
 def banner_delete(request, pk):
-    from django.db import transaction
-
     store = _resolve_dashboard_store(request)
-    banner = get_object_or_404(PromotionalBanner, pk=pk, store=store)
+    banner = get_object_or_404(PromotionalBanner, pk=pk, store=store, section__isnull=True)
     desktop_name = banner.desktop_image.name if banner.desktop_image else None
     mobile_name = banner.mobile_image.name if banner.mobile_image else None
     storage = banner.desktop_image.storage
 
     banner.delete()
 
-    # Delete owned files only after successful DB commit
-    def _cleanup():
-        if desktop_name and storage.exists(desktop_name):
-            storage.delete(desktop_name)
-        if mobile_name and storage.exists(mobile_name):
-            storage.delete(mobile_name)
+    # MED-001 (Retention-First, architect decision): same policy as
+    # hero_delete above.
+    from apps.content.services import cleanup_reusable_media_file
 
-    transaction.on_commit(_cleanup)
+    cleanup_reusable_media_file(desktop_name, storage)
+    cleanup_reusable_media_file(mobile_name, storage)
     messages.success(request, "بنر حذف شد")
     return redirect("dashboard:banner-list")
 
@@ -5124,7 +5134,7 @@ def banner_delete(request, pk):
 @permission_required(CONTENT_MANAGE)
 def banner_toggle(request, pk):
     store = _resolve_dashboard_store(request)
-    banner = get_object_or_404(PromotionalBanner, pk=pk, store=store)
+    banner = get_object_or_404(PromotionalBanner, pk=pk, store=store, section__isnull=True)
     banner.is_active = not banner.is_active
     banner.save(update_fields=["is_active", "updated_at"])
     state = "فعال" if banner.is_active else "غیرفعال"
@@ -7492,12 +7502,22 @@ def _resolve_selectable_version_or_404(store, version_id):
 @staff_required
 @permission_required(SUBSCRIPTION_CHANGE)
 def subscription_plan_preview(request):
+    """SUB-001: از پیش‌نمایشِ کانونیِ صورتحساب‌محورِ
+    ``plan_change_billing_service.preview`` عبور می‌کند (نه صرفاً 5Aِ
+    entitlement-only) تا قالب بتواند صادقانه نشان دهد که آیا این تغییر
+    ارتقاست (نیازمندِ پرداخت) یا تنزل/هم‌قیمت (زمان‌بندی‌شده، بدونِ پرداخت)."""
+    from apps.billing.services import plan_change_billing_service as pcb
+    from apps.subscriptions.services import entitlement_service as ent
     from apps.subscriptions.services import plan_change_service as pcs
 
     store = _resolve_dashboard_store(request)
     target_version = _resolve_selectable_version_or_404(store, request.POST.get("version_id", ""))
+    current_subscription = ent.get_current_subscription(store)
+    if current_subscription is None:
+        messages.error(request, "این فروشگاه اشتراکِ جاری ندارد؛ تغییرِ پلن ممکن نیست.")
+        return redirect("dashboard:subscription-plans")
     try:
-        preview = pcs.preview_plan_change(store, target_version)
+        preview = pcb.preview(current_subscription, target_version)
     except pcs.PlanChangeError as exc:
         messages.error(request, str(exc))
         return redirect("dashboard:subscription-plans")
@@ -7511,21 +7531,53 @@ def subscription_plan_preview(request):
 @staff_required
 @permission_required(SUBSCRIPTION_CHANGE)
 def subscription_plan_execute(request):
+    """SUB-001: مرچنت هرگز نمی‌تواند مستقیماً ``subscription_service.
+    change_plan_version`` را صدا بزند — این ویو حالا از همان مسیرِ
+    صورتحساب‌محورِ کانونیک عبور می‌کند که خریدِ اشتراکِ پرتال هم از آن
+    استفاده می‌کند (``plan_change_billing_service.start_plan_change``):
+
+    * **ارتقا** یک فاکتورِ ``PLAN_CHANGE`` می‌سازد و مرچنت را به همان صفحه‌ی
+      فاکتورِ Billing UIِ موجود (``dashboard:billing-invoice-detail``)
+      می‌فرستد؛ نسخه‌ی پلن فقط پس از تأییدِ *واقعیِ* پرداخت
+      (``confirmation_service``) تغییر می‌کند — نه با این درخواست.
+    * **تنزل/قیمتِ برابر** بدونِ نیازِ پرداخت زمان‌بندی می‌شود
+      (``ScheduledPlanChange``) و در دوره‌ی بعد اعمال می‌شود.
+
+    محافظتِ پیش‌نمایشِ کهنه و انتخابِ فقط از میانِ نسخه‌هایِ قابلِ‌انتخابِ عمومی
+    (``_resolve_selectable_version_or_404``) بدونِ تغییر باقی می‌ماند."""
+    from apps.billing.services import plan_change_billing_service as pcb
+    from apps.subscriptions.services import entitlement_service as ent
     from apps.subscriptions.services import plan_change_service as pcs
 
     store = _resolve_dashboard_store(request)
     target_version = _resolve_selectable_version_or_404(store, request.POST.get("version_id", ""))
     token = request.POST.get("preview_token", "")
+
+    current_subscription = ent.get_current_subscription(store)
+    if current_subscription is None:
+        messages.error(request, "این فروشگاه اشتراکِ جاری ندارد؛ تغییرِ پلن ممکن نیست.")
+        return redirect("dashboard:subscription-plans")
+
     try:
-        pcs.execute_plan_change(store, target_version, preview_token=token, actor=request.user)
-        messages.success(request, "پلنِ اشتراکِ شما با موفقیت تغییر کرد.")
+        kind, result = pcb.start_plan_change(
+            current_subscription, target_version, preview_token=token, actor=request.user,
+        )
     except pcs.StalePreviewError as exc:
         messages.error(request, str(exc))
         return redirect("dashboard:subscription-plans")
-    except pcs.PlanChangeError as exc:
+    except (pcs.PlanChangeError, pcb.PlanChangeBillingError) as exc:
         messages.error(request, str(exc))
         return redirect("dashboard:subscription-plans")
-    return redirect("dashboard:subscription-overview")
+
+    if kind == "scheduled":
+        messages.success(request, "تغییرِ پلن برایِ دوره‌ی بعد زمان‌بندی شد؛ اشتراکِ فعلی تا آن زمان بدونِ تغییر باقی می‌ماند.")
+        return redirect("dashboard:subscription-overview")
+
+    # ارتقا: سندِ مالی (فاکتورِ تغییرِ پلن) ساخته/بازیابی شد؛ مرچنت را به همان
+    # صفحه‌ی فاکتورِ Billing UIِ موجود می‌فرستیم تا از طریقِ ``dashboard:
+    # billing-pay`` پرداخت کند — هیچ رابطِ پرداختِ دومی ساخته نمی‌شود.
+    messages.success(request, "فاکتورِ تغییرِ پلن ایجاد شد؛ پلن پس از تکمیلِ پرداخت فعال می‌شود.")
+    return redirect("dashboard:billing-invoice-detail", pk=result.pk)
 
 
 @staff_required

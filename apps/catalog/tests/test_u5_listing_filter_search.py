@@ -138,3 +138,63 @@ class CollectionIndexPaginationTests(TestCase):
         second_page = self.client.get(reverse("catalog:collection-index"), {"page": 2})
         self.assertEqual(second_page.status_code, 200)
         self.assertEqual(len(second_page.context["collections"]), 1)
+
+
+class HtmxFragmentCardSettingsPropagationTests(TestCase):
+    """Phase 4 (Task 3E) — the Listing/Search HTMX filter/pagination
+    fragment (``catalog/partials/product_list_results.html``) returned
+    before the canonical context builder ran, so it never received the
+    merchant's ``product_listing`` section card-style override — a real
+    context-propagation gap, not a parallel renderer (both paths now share
+    the exact same ``build_universal_storefront_context`` call)."""
+
+    def setUp(self):
+        from apps.storefront_builder.models import StorefrontPage, StorefrontSection
+        from apps.storefront_builder.services import layout_service
+
+        self.store = _akhlaghi()
+        vendor = Vendor.objects.create(store=self.store, name="فروشنده سه‌ای", slug="task3e-vendor")
+        category = Category.objects.create(store=self.store, name="دسته سه‌ای", slug="task3e-cat")
+        Product.objects.create(
+            store=self.store, vendor=vendor, category=category, name="کالای سه‌ای",
+            slug="task3e-product", sku="TASK3E-SKU-1", price=Decimal("50000"), stock=5,
+        )
+
+        draft = layout_service.get_or_create_draft(self.store)
+        listing_page = draft.get_page(StorefrontPage.PageType.LISTING)
+        listing_section = listing_page.sections.get(section_key="product_listing")
+        listing_section.settings = {"card": {"card_style": "compact"}}
+        listing_section.save(update_fields=["settings"])
+        layout_service.publish(self.store)
+
+    def test_full_page_load_applies_the_card_override(self):
+        response = self.client.get(reverse("catalog:product-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "style-compact")
+
+    def test_htmx_fragment_also_applies_the_card_override(self):
+        response = self.client.get(reverse("catalog:product-list"), HTTP_HX_REQUEST="true")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "style-compact")
+        # Genuinely the fragment template, not the full page (sanity check
+        # that this test exercises the actual HTMX code path).
+        template_names = [t.name for t in response.templates if t.name]
+        self.assertIn("catalog/partials/product_list_results.html", template_names)
+        self.assertNotIn("catalog/product_list.html", template_names)
+
+    def test_htmx_search_fragment_also_applies_the_card_override(self):
+        from apps.storefront_builder.models import StorefrontPage
+        from apps.storefront_builder.services import layout_service
+
+        draft = layout_service.get_or_create_draft(self.store)
+        search_page = draft.get_page(StorefrontPage.PageType.SEARCH)
+        search_section = search_page.sections.get(section_key="product_listing")
+        search_section.settings = {"card": {"card_style": "compact"}}
+        search_section.save(update_fields=["settings"])
+        layout_service.publish(self.store)
+
+        response = self.client.get(
+            reverse("catalog:product-list"), {"q": "سه‌ای"}, HTTP_HX_REQUEST="true",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "style-compact")

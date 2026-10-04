@@ -64,6 +64,30 @@ class PresetServiceTestCase(TestCase):
         self.preset = lpr.get_layout_preset("dense_catalog")
 
 
+class HiddenFromLibrarySectionsNeverBuiltByPresetTests(PresetServiceTestCase):
+    """Task 9 — ``_build_sections_for_page`` must honor the same
+    ``hidden_from_library`` gate ``section_structure_service.add_section``/
+    ``duplicate_section`` already enforce. Four real A8 recipes
+    (``premium_leather``, ``street_drop``, ``racer_tech``,
+    ``anniversary_mosaic``) still carry a ``ticker`` component token that maps
+    to ``announcement_bar`` (hidden from the library, superseded by the
+    header's own notification bar) — applying any of them must not create an
+    ``announcement_bar`` section, since one would double-render the strip the
+    header already shows."""
+
+    def test_ticker_bearing_a8_recipes_never_create_announcement_bar_section(self):
+        for key in ("premium_leather", "street_drop", "racer_tech", "anniversary_mosaic"):
+            preset = lpr.get_layout_preset(key)
+            draft = svc.get_or_create_draft(self.store)
+            preset_service.apply_preset(draft, preset)
+            self.assertFalse(
+                StorefrontSection.objects.filter(
+                    page__version=draft, section_key="announcement_bar",
+                ).exists(),
+                f"preset {key!r} must not build a hidden_from_library announcement_bar section",
+            )
+
+
 class ValidationRejectionTests(PresetServiceTestCase):
     """۴، ۵، ۶ — appearance/header/footerِ نامعتبر باید رد شوند، نه بی‌صدا اصلاح."""
 
@@ -499,6 +523,12 @@ class StaleColorOverridesClearedOnApplyTests(PresetServiceTestCase):
         self.assertFalse(config.get("color_overrides_customized", False))
 
     def test_dashboard_color_save_view_flags_a_genuine_override_as_customized(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         svc.get_or_create_draft(self.store, user=self.staff)
         response = self.admin_client.post(
             reverse("dashboard:storefront-builder-appearance"),
@@ -510,6 +540,12 @@ class StaleColorOverridesClearedOnApplyTests(PresetServiceTestCase):
         self.assertEqual(draft.appearance_config.get("color_overrides", {}).get("primary"), "#112233")
 
     def test_dashboard_reset_all_overrides_clears_the_customized_flag(self):
+        # P5-W5A: this test exercises a legacy Class-A route, which now
+        # fails closed under r4_editor_enabled=True (binding policy) --
+        # pin explicitly, matching the rollback-editor scenario being tested.
+        _w5a_layout = svc.get_or_create_layout(self.store)
+        _w5a_layout.r4_editor_enabled = False
+        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         draft = svc.get_or_create_draft(self.store, user=self.staff)
         draft.appearance_config = {
             **draft.effective_appearance_config(),

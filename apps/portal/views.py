@@ -23,7 +23,21 @@ from apps.subscriptions.models import Plan, PlanVersion, StoreSubscription
 from apps.subscriptions.services import entitlement_service as ent
 from apps.subscriptions.services import plan_change_service
 
-from .decorators import owner_required
+from apps.stores.authorization import (
+    BILLING_PAYMENT_MANAGE,
+    DOMAIN_MANAGE,
+    SETTINGS_MANAGE,
+    STAFF_MANAGE,
+    STORE_DELETE,
+    SUBSCRIPTION_CHANGE,
+)
+
+from .decorators import (
+    owner_required,
+    portal_action_allowed,
+    portal_actions_allowed,
+    portal_permission_denied,
+)
 from .forms import (
     ContactForm,
     CreateStoreForm,
@@ -83,6 +97,14 @@ def features(request):
     return render(request, "portal/public/features.html")
 
 
+def design(request):
+    return render(request, "portal/public/design.html")
+
+
+def about(request):
+    return render(request, "portal/public/about.html")
+
+
 def supported_industries(request):
     """صفحه‌ی عمومیِ «صنوفِ پشتیبانی‌شده» — بخشِ ۶. تمامِ کارت‌ها از رکوردهایِ
     واقعیِ ``IndustryTemplate`` خوانده می‌شوند (تکِ منبعِ حقیقتِ کاتالوگِ
@@ -138,6 +160,8 @@ def platform_sitemap_xml(request):
     entries = [
         {"loc": request.build_absolute_uri(reverse("portal:home")), "priority": "1.0", "lastmod": None},
         {"loc": request.build_absolute_uri(reverse("portal:features")), "priority": "0.8", "lastmod": None},
+        {"loc": request.build_absolute_uri(reverse("portal:design")), "priority": "0.8", "lastmod": None},
+        {"loc": request.build_absolute_uri(reverse("portal:about")), "priority": "0.6", "lastmod": None},
         {"loc": request.build_absolute_uri(reverse("portal:supported-industries")), "priority": "0.8", "lastmod": None},
         {"loc": request.build_absolute_uri(reverse("portal:plans")), "priority": "0.9", "lastmod": None},
         {"loc": request.build_absolute_uri(reverse("portal:help")), "priority": "0.6", "lastmod": None},
@@ -666,6 +690,11 @@ def onboarding_identity(request, store_public_id):
     shop_settings = ShopSettings.load(store=store)
 
     if request.method == "POST":
+        # AUTH-001: mutating store identity/ShopSettings requires the canonical
+        # SETTINGS_MANAGE action permission — the same gate the Merchant Admin
+        # ``settings_appearance`` view uses — not merely an ACTIVE membership.
+        if not portal_action_allowed(request, store, SETTINGS_MANAGE):
+            return portal_permission_denied(request)
         form = OnboardingIdentityForm(request.POST)
         if form.is_valid():
             data = form.cleaned_data
@@ -703,6 +732,17 @@ def onboarding_industry(request, store_public_id):
     store = _get_owned_store_or_404(request, store_public_id)
     installation = StoreIndustryInstallation.objects.select_related("industry_template").filter(store=store).first()
     templates = provisioning_service.latest_offerable_industry_templates()
+
+    if request.method == "POST":
+        # AUTH-001: EVERY mutating POST path through this step (installing a
+        # template, skipping, or — when a template is already installed —
+        # advancing the onboarding stage) requires the canonical
+        # SETTINGS_MANAGE permission, checked once before any persistent
+        # mutation, regardless of whether an installation already exists.
+        # This is the same gate the Merchant Admin ``settings_industry_install``
+        # view uses.
+        if not portal_action_allowed(request, store, SETTINGS_MANAGE):
+            return portal_permission_denied(request)
 
     if request.method == "POST" and installation is None:
         action = request.POST.get("action")
@@ -743,6 +783,11 @@ def onboarding_branding(request, store_public_id):
     shop_settings = ShopSettings.load(store=store)
 
     if request.method == "POST":
+        # AUTH-001: mutating branding (ShopSettings.logo) or advancing the
+        # onboarding stage requires the canonical SETTINGS_MANAGE permission —
+        # the same gate the Merchant Admin ``settings_appearance`` view uses.
+        if not portal_action_allowed(request, store, SETTINGS_MANAGE):
+            return portal_permission_denied(request)
         if request.POST.get("action") == "skip":
             _advance_onboarding_stage(store, completed=Store.OnboardingStage.BRANDING)
             return redirect("portal:onboarding-review", store_public_id=store.public_id)
@@ -784,6 +829,11 @@ def onboarding_review(request, store_public_id):
     trial_domain = store.domains.filter(is_primary=True).first()
 
     if request.method == "POST":
+        # AUTH-001: publishing the store (completing onboarding) is a
+        # store-level configuration mutation and requires the canonical
+        # SETTINGS_MANAGE permission, not merely an ACTIVE membership.
+        if not portal_action_allowed(request, store, SETTINGS_MANAGE):
+            return portal_permission_denied(request)
         store.onboarding_completed_at = timezone.now()
         store.onboarding_stage = Store.OnboardingStage.DONE
         store.save(update_fields=["onboarding_completed_at", "onboarding_stage", "updated_at"])
@@ -871,7 +921,12 @@ def _start_purchase(request, *, store, plan_version):
         kind, result = plan_change_billing_service.start_plan_change(
             current, plan_version, preview_token=token, actor=request.user,
         )
-    except plan_change_service.PlanChangeError as exc:
+    except (plan_change_service.PlanChangeError, plan_change_billing_service.PlanChangeBillingError) as exc:
+        # SUB-001 Repair 3: ``start_plan_change`` now also raises
+        # ``PlanChangeBillingError`` when a competing, unresolved
+        # PLAN_CHANGE invoice already exists for this subscription (the
+        # financial invariant added in this repair) — this is a normal,
+        # user-facing rejection, not a 500.
         messages.error(request, str(exc))
         return redirect("portal:billing-plans", store_public_id=store.public_id)
 
@@ -897,6 +952,13 @@ def billing_checkout(request, store_public_id, plan_version_id):
     بخواهد (Section 10) و این نشست هنوز آن را برایِ همین Store تأیید
     نکرده باشد، که در آن صورت ابتدا به مرحله‌ی تأییدِ کد هدایت می‌شود."""
     store = _get_owned_store_or_404(request, store_public_id)
+    # AUTH-001: reaching the subscription-purchase mutation requires the
+    # canonical plan-change decision permission AND the billing-payment
+    # authority — checked BEFORE any Step-Up challenge, invoice, scheduled
+    # plan-change, or payment attempt. Step-Up (identity re-proof) is an
+    # additional layer, never a substitute for action authorization.
+    if not portal_actions_allowed(request, store, SUBSCRIPTION_CHANGE, BILLING_PAYMENT_MANAGE):
+        return portal_permission_denied(request)
     plan_version = get_object_or_404(PlanVersion, pk=plan_version_id, status=PlanVersion.Status.PUBLISHED)
 
     target = str(store.public_id)
@@ -928,6 +990,11 @@ def billing_step_up_verify(request, store_public_id):
     چالشی که خودِ ``billing_checkout`` در همین نشست ایجاد کرده معنا دارد —
     شناسه‌ی نسخه‌ی پلن از session خوانده می‌شود، نه از ورودیِ کاربر."""
     store = _get_owned_store_or_404(request, store_public_id)
+    # AUTH-001: re-check action authorization on the Step-Up continuation —
+    # a user who lost (or never had) the permission must not complete the
+    # purchase merely by proving identity, even if a challenge exists.
+    if not portal_actions_allowed(request, store, SUBSCRIPTION_CHANGE, BILLING_PAYMENT_MANAGE):
+        return portal_permission_denied(request)
     pending = step_up_service.pending_challenge(request)
     if not pending or pending.get("target") != str(store.public_id):
         return redirect("portal:billing-plans", store_public_id=store.public_id)
@@ -985,6 +1052,11 @@ def claim_handle(request, store_public_id):
     )
 
     if request.method == "POST" and can_claim:
+        # AUTH-001: claiming the permanent handle mutates Store-scoped domain
+        # state and requires the canonical DOMAIN_MANAGE permission — checked
+        # before any Step-Up challenge or handle_service mutation.
+        if not portal_action_allowed(request, store, DOMAIN_MANAGE):
+            return portal_permission_denied(request)
         label = (request.POST.get("label") or "").strip()
         target = str(store.public_id)
         if step_up_service.is_step_up_required(_STEP_UP_ACTION_HANDLE_CLAIM) and not step_up_service.is_verified(
@@ -1026,6 +1098,9 @@ def claim_handle(request, store_public_id):
 @owner_required
 def claim_handle_step_up(request, store_public_id):
     store = _get_owned_store_or_404(request, store_public_id)
+    # AUTH-001: re-check action authorization on the Step-Up continuation.
+    if not portal_action_allowed(request, store, DOMAIN_MANAGE):
+        return portal_permission_denied(request)
     pending = step_up_service.pending_challenge(request)
     if not pending or pending.get("target") != str(store.public_id):
         return redirect("portal:claim-handle", store_public_id=store.public_id)
@@ -1079,6 +1154,10 @@ def custom_domains(request, store_public_id):
     store = _get_owned_store_or_404(request, store_public_id)
 
     if request.method == "POST" and request.POST.get("action") == "add":
+        # AUTH-001: adding a custom domain mutates Store-scoped domain state
+        # and requires the canonical DOMAIN_MANAGE permission.
+        if not portal_action_allowed(request, store, DOMAIN_MANAGE):
+            return portal_permission_denied(request)
         hostname = (request.POST.get("hostname") or "").strip()
         try:
             domain_verification_service.request_custom_domain(store=store, hostname=hostname, actor=request.user)
@@ -1119,6 +1198,9 @@ def _custom_domain_typo_suggestion(*, store, hostname: str):
 @require_POST
 def custom_domain_begin_verify(request, store_public_id, domain_id):
     store = _get_owned_store_or_404(request, store_public_id)
+    # AUTH-001: DNS verification mutates domain verification state — DOMAIN_MANAGE.
+    if not portal_action_allowed(request, store, DOMAIN_MANAGE):
+        return portal_permission_denied(request)
     domain = get_object_or_404(StoreDomain, pk=domain_id, store=store)
     try:
         domain_verification_service.begin_dns_verification(domain=domain, actor=request.user)
@@ -1133,6 +1215,9 @@ def custom_domain_begin_verify(request, store_public_id, domain_id):
 @require_POST
 def custom_domain_check(request, store_public_id, domain_id):
     store = _get_owned_store_or_404(request, store_public_id)
+    # AUTH-001: persisting DNS-verification result mutates domain state — DOMAIN_MANAGE.
+    if not portal_action_allowed(request, store, DOMAIN_MANAGE):
+        return portal_permission_denied(request)
     domain = get_object_or_404(StoreDomain, pk=domain_id, store=store)
     try:
         verified = domain_verification_service.check_dns_verification(domain=domain, actor=request.user)
@@ -1151,6 +1236,9 @@ def custom_domain_check(request, store_public_id, domain_id):
 def custom_domain_final_check(request, store_public_id, domain_id):
     """Run and persist the real A/CNAME + HTTPS readiness checks."""
     store = _get_owned_store_or_404(request, store_public_id)
+    # AUTH-001: refreshing/persisting readiness mutates domain state — DOMAIN_MANAGE.
+    if not portal_action_allowed(request, store, DOMAIN_MANAGE):
+        return portal_permission_denied(request)
     domain = get_object_or_404(StoreDomain, pk=domain_id, store=store)
     try:
         result = domain_verification_service.refresh_custom_domain_readiness(
@@ -1190,6 +1278,10 @@ def custom_domain_activate(request, store_public_id, domain_id):
     (Section 10، action=``custom_domain_activate``)، دقیقاً مثلِ الگویِ
     خریدِ اشتراک/ثبتِ نامِ دائمی."""
     store = _get_owned_store_or_404(request, store_public_id)
+    # AUTH-001: activating a custom domain requires DOMAIN_MANAGE — checked
+    # before any Step-Up challenge or activation mutation.
+    if not portal_action_allowed(request, store, DOMAIN_MANAGE):
+        return portal_permission_denied(request)
     domain = get_object_or_404(StoreDomain, pk=domain_id, store=store)
     target = str(store.public_id)
 
@@ -1224,6 +1316,9 @@ def custom_domain_activate(request, store_public_id, domain_id):
 @owner_required
 def custom_domain_activate_step_up(request, store_public_id):
     store = _get_owned_store_or_404(request, store_public_id)
+    # AUTH-001: re-check action authorization on the Step-Up continuation.
+    if not portal_action_allowed(request, store, DOMAIN_MANAGE):
+        return portal_permission_denied(request)
     pending = step_up_service.pending_challenge(request)
     if not pending or pending.get("target") != str(store.public_id):
         return redirect("portal:custom-domains", store_public_id=store.public_id)
@@ -1261,6 +1356,11 @@ def request_store_deletion(request, store_public_id):
     store = _get_owned_store_or_404(request, store_public_id)
 
     if request.method == "POST":
+        # AUTH-001: requesting store deletion requires the canonical
+        # STORE_DELETE permission (Owner-only) — checked before any Step-Up
+        # challenge or deletion_service mutation.
+        if not portal_action_allowed(request, store, STORE_DELETE):
+            return portal_permission_denied(request)
         typed_confirmation = (request.POST.get("typed_confirmation") or "").strip()
         target = str(store.public_id)
         if step_up_service.is_step_up_required(_STEP_UP_ACTION_STORE_DELETE) and not step_up_service.is_verified(
@@ -1296,6 +1396,10 @@ def request_store_deletion(request, store_public_id):
 @owner_required
 def store_deletion_step_up(request, store_public_id):
     store = _get_owned_store_or_404(request, store_public_id)
+    # AUTH-001: re-check action authorization on the Step-Up continuation —
+    # identity re-proof must never complete a deletion the role cannot perform.
+    if not portal_action_allowed(request, store, STORE_DELETE):
+        return portal_permission_denied(request)
     pending = step_up_service.pending_challenge(request)
     if not pending or pending.get("target") != str(store.public_id):
         return redirect("portal:request-store-deletion", store_public_id=store.public_id)
@@ -1324,6 +1428,10 @@ def cancel_store_deletion(request, store_public_id):
     """لغوِ درخواستِ حذف — یک اقدامِ ایمن است (بازگرداندن، نه ایجادِ خطر)،
     پس نیازِ تأییدِ گام‌دومِ OTP ندارد."""
     store = _get_owned_store_or_404(request, store_public_id)
+    # AUTH-001: cancelling a deletion request mutates the store's deletion
+    # lifecycle state and is part of the STORE_DELETE authorization surface.
+    if not portal_action_allowed(request, store, STORE_DELETE):
+        return portal_permission_denied(request)
     try:
         deletion_service.cancel_deletion(store=store, actor=request.user)
     except deletion_service.DeletionError as exc:
@@ -1347,6 +1455,13 @@ def initiate_ownership_transfer(request, store_public_id):
     pending_transfer = store.ownership_transfers.filter(status=StoreOwnershipTransfer.Status.PENDING).first()
 
     if request.method == "POST" and pending_transfer is None:
+        # AUTH-001: initiating an ownership transfer controls StoreMembership
+        # OWNER truth and requires the canonical STAFF_MANAGE permission
+        # (Owner-only) — checked before any Step-Up challenge or transfer
+        # mutation. The ownership_transfer_service.initiate_transfer business
+        # invariant (OWNER-membership validation) is preserved unchanged.
+        if not portal_action_allowed(request, store, STAFF_MANAGE):
+            return portal_permission_denied(request)
         target_phone_raw = (request.POST.get("target_phone") or "").strip()
         try:
             target_phone = normalize_iranian_phone(target_phone_raw)
@@ -1392,6 +1507,10 @@ def initiate_ownership_transfer(request, store_public_id):
 @owner_required
 def ownership_transfer_step_up(request, store_public_id):
     store = _get_owned_store_or_404(request, store_public_id)
+    # AUTH-001: re-check action authorization on the Step-Up continuation —
+    # identity re-proof must never complete a transfer the role cannot perform.
+    if not portal_action_allowed(request, store, STAFF_MANAGE):
+        return portal_permission_denied(request)
     pending = step_up_service.pending_challenge(request)
     if not pending or pending.get("target") != str(store.public_id):
         return redirect("portal:initiate-ownership-transfer", store_public_id=store.public_id)
@@ -1418,6 +1537,10 @@ def ownership_transfer_step_up(request, store_public_id):
 @require_POST
 def cancel_ownership_transfer(request, store_public_id):
     store = _get_owned_store_or_404(request, store_public_id)
+    # AUTH-001: cancelling a pending transfer is part of the ownership-
+    # transfer authorization surface and requires STAFF_MANAGE.
+    if not portal_action_allowed(request, store, STAFF_MANAGE):
+        return portal_permission_denied(request)
     transfer = store.ownership_transfers.filter(status=StoreOwnershipTransfer.Status.PENDING).first()
     if transfer is None:
         messages.error(request, "انتقالِ در-انتظاری برایِ لغو وجود ندارد.")

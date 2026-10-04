@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import platform_admin_views as views
+from . import platform_admin_photo_views as photo_views
 
 app_name = "portal_platform_admin"
 
@@ -28,6 +29,11 @@ urlpatterns = [
     path("users/<int:user_id>/activate/", views.user_activate, name="user-activate"),
     path("users/<int:user_id>/suspend/", views.user_suspend, name="user-suspend"),
     path("users/<int:user_id>/add-note/", views.user_add_note, name="user-add-note"),
+
+    # --- عکس‌های سایت عمومی (فقط مدیر پلتفرم) ---
+    path("public-photos/", photo_views.public_photos, name="public-photos"),
+    path("public-photos/<slug:slot>/", photo_views.public_photo_edit, name="public-photo-edit"),
+    path("public-photos/<slug:slot>/reset/", photo_views.public_photo_reset, name="public-photo-reset"),
 
     # --- پلن‌های اشتراک ---
     path("plans/", views.plans, name="plans"),

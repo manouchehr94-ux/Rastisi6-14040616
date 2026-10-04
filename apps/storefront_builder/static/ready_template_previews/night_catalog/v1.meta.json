@@ -1,0 +1,11 @@
+{
+  "template_key": "night_catalog",
+  "version": "1",
+  "content_hash": "4ef91ed833be623f23760dd707d91307f54debec29d3e3d4fa94febce8f2eb5d",
+  "preview_input_fingerprint": "26688103196f4e207b4649b825576de3454640affb4eb66bf8f14314b75c5a03",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}

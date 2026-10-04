@@ -1,0 +1,26 @@
+PASS — 1. R4 Builder opens — http://w5b-qa.rastisi.localhost:8765/admin-portal/storefront-builder/r4/
+PASS — 2. Global Design panel opens
+PASS — 3. "ناوبری پایین موبایل" label present
+PASS — 4. Selector options match the registry EXACTLY (9/9, no missing, no unexpected) — {"expectedCount":9,"actualCount":9,"missing":[],"unexpected":[],"actual":["hidden","luxury_floating_cart","four_item","five_item","raised_cart","floating_dock","glass_dock","minimal_icons","wide_cart"]}
+PASS — 5. footer.update mutation accepted (200, ok, revision advanced) — {"status":200,"ok":true,"new_revision":1}
+PASS — 6. Save completes (Undo becomes enabled after reload)
+PASS — 7. Preview switched to a REAL mobile viewport (window.innerWidth <= 680 inside the Draft Preview document) — data-r4-device=mobile, draftPreview.innerWidth=390
+PASS — 8a. DRAFT MOBILE NAV MARKUP — {"markupPresent":true,"computedVisible":true,"nonzeroBounds":true,"itemCount":4,"display":"block","box":{"x":589,"y":648,"width":370,"height":64}}
+PASS — 8b. DRAFT MOBILE NAV COMPUTED VISIBILITY — display=block
+PASS — 8c. DRAFT MOBILE NAV NONZERO BOUNDS — {"x":589,"y":648,"width":370,"height":64}
+PASS — 8d. Draft Preview renders the expected nav items (>= 3) — itemCount=4
+PASS — 9. Footer variant preserved (exact before === after, not merely non-empty) — {"footerVariantBefore":"legacy_default","footerVariantAfter":"legacy_default"}
+PASS — 11. Undo restores the previous (hidden) Bottom Nav — no [data-mobile-nav] element at all
+PASS — 13. Redo restores the changed Bottom Nav (markup + computed visibility + nonzero bounds) — {"markupPresent":true,"computedVisible":true,"nonzeroBounds":true,"itemCount":4,"display":"block","box":{"x":419,"y":648,"width":370,"height":64}}
+PASS — 14. Public storefront unchanged before Publish (no Bottom Nav rendered yet) — status=200
+PASS — 15. Publish clicked and editor reloaded
+PASS — 16a. PUBLIC MOBILE VIEWPORT (window.innerWidth <= 680) — publicPage.innerWidth=390
+PASS — 16b. PUBLIC MOBILE NAV MARKUP AFTER PUBLISH — {"markupPresent":true,"computedVisible":true,"nonzeroBounds":true,"itemCount":4,"display":"block","box":{"x":10,"y":772,"width":370,"height":64}}
+PASS — 16c. PUBLIC MOBILE NAV COMPUTED VISIBILITY — display=block
+PASS — 16d. PUBLIC MOBILE NAV NONZERO BOUNDS — {"x":10,"y":772,"width":370,"height":64}
+PASS — 16e. Public renders the expected nav items (>= 3) — itemCount=4, status=200
+PASS — 17. Fresh Draft (hidden default) at a REAL mobile viewport shows no Bottom Nav markup at all — innerWidth=390, absent=true
+  [console.error] Failed to load resource: the server responded with a status of 409 (Conflict)
+PASS — 18. Stale mutation rejected (409) — {"capturedRevision":0,"advanceResult":{"status":200,"body":{"ok":true,"new_revision":1,"mutation_type":"footer.update"}},"staleResult":{"status":409,"body":{"ok":false,"code":"stale_revision","current_revision":1}}}
+
+23/23 PASS

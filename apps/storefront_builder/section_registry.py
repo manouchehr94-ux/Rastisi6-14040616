@@ -22,12 +22,24 @@ from typing import Callable
 
 from . import resource_source as resource_source_module
 from .settings_schema import (
+    CARD_STYLE_EXPLICIT_OVERRIDE_KEY,
     VARIANT_EXPLICIT_OVERRIDE_KEY,
     SettingsField,
     SettingsSchema,
     validate_appearance_overrides,
 )
 from .variant_contract import VariantDefinition, validate_variant_selection, validate_variants
+
+#: Task 6 (final-review fix, C1/I1) — every internal, server-owned
+#: explicit-local-override marker ``_with_appearance_overrides`` must carry
+#: through an UNRELATED settings save, never just the first one it happens
+#: to be paired with. A tuple, not a single hardcoded key, so a future
+#: marker (mirroring this same "presence is not intent" pattern) only needs
+#: to be added here, not to a second bespoke carry-forward implementation.
+_TRUSTED_APPEARANCE_OVERRIDE_MARKER_KEYS = (
+    VARIANT_EXPLICIT_OVERRIDE_KEY,
+    CARD_STYLE_EXPLICIT_OVERRIDE_KEY,
+)
 
 #: شش نوعِ صفحه — دقیقاً همان رشته‌های ``StorefrontPage.PageType.values``
 #: (``apps/storefront_builder/models.py``)، اینجا به‌شکلِ ثابتِ رشته‌ای
@@ -766,7 +778,9 @@ def default_destination_settings() -> dict:
 #: destination/responsive/motion/card/layout/background/spacing/...) so
 #: every outer wrapper's own key-stripping still runs on a dict that
 #: already carries only legacy-shaped keys.
-_RESOURCE_SOURCE_AWARE_SECTION_KEYS = frozenset({"product_section", "brand_carousel", "collection_tiles"})
+_RESOURCE_SOURCE_AWARE_SECTION_KEYS = frozenset({
+    "product_section", "brand_carousel", "collection_tiles", "category_grid",
+})
 
 
 def _with_resource_source(section_key: str, validate_fn, default_fn):
@@ -787,6 +801,7 @@ def _with_resource_source(section_key: str, validate_fn, default_fn):
         "product_section": ProductSectionSettingsError,
         "brand_carousel": BrandCarouselSettingsError,
         "collection_tiles": CollectionTilesSettingsError,
+        "category_grid": CategoryGridSettingsError,
     }[section_key]
 
     def wrapped_validate(raw: dict) -> dict:
@@ -1123,6 +1138,37 @@ def _with_background(section_key: str, validate_fn, default_fn):
     return wrapped_validate, wrapped_default
 
 
+def _with_background_schema_field(section_key: str, schema):
+    """Phase 5 Task 4 (remediation R1b) — the R4-Inspector counterpart of
+    ``_with_background`` above.
+
+    ``_with_background`` already wraps every ``BACKGROUND_AWARE_SECTION_KEYS``
+    section's ``validate_settings``/``default_settings`` to carry a
+    ``background`` block. This projects the matching MERCHANT-FACING control
+    onto the section's ``SettingsSchema`` — a single generic ``background``
+    ``SettingsField`` (rendered by the one shared ``settings_field.html``
+    renderer, saved through the existing ``section.update_settings`` mutation)
+    — for EVERY schema-enabled background-aware section, uniformly. This is the
+    single canonical source of the field: it is never hand-added to individual
+    schema constants, so there is no per-section duplication.
+
+    No-op (returns the schema unchanged) when the section is not
+    background-aware or has no schema (``None``) — the 8 context/media-only
+    background-aware families have no schema to attach to, a documented,
+    out-of-Task-4-scope exception. Idempotent: never appends a second
+    ``background`` field if one is somehow already declared."""
+    if schema is None or section_key not in BACKGROUND_AWARE_SECTION_KEYS:
+        return schema
+    if schema.get_field("background") is not None:
+        return schema
+    background_field = SettingsField(
+        "background", "پس‌زمینه این بخش", "background", "advanced",
+        default=default_background_settings(),
+        widget_hint="background_picker",
+    )
+    return dataclasses.replace(schema, fields=(*schema.fields, background_field))
+
+
 #: بخشِ ۸ مشخصات: «Basic Mode: Small/Normal/Large» + «Advanced Mode: Padding
 #: Top/Bottom, Margin Top/Bottom». enum بستهٔ حالتِ ساده — Advanced اختیاری
 #: و فقط اگر تاجر صریحاً واردش شود مقدار می‌گیرد (``None`` یعنی «از حالتِ
@@ -1200,6 +1246,25 @@ def _with_spacing(section_key: str, validate_fn, default_fn):
 #: R4 Task 7 — Phase 1 slice: only ``hero_banner`` gets a local typography
 #: override. An explicit allowlist, not a default-for-all-types — the same
 #: pattern as ``DESTINATION_AWARE_SECTION_KEYS``/``MOTION_AWARE_SECTION_KEYS``.
+#:
+#: Task 6 (final-review fix, C1/I1) — every ``product_view``/``card``
+#: TEMPORARY-ADAPTER family carrier needs the SAME allowlist membership as
+#: hero_banner/brand_carousel/collection_tiles (unioned in via
+#: ``CARD_AWARE_SECTION_KEYS``, which already includes ``product_section``
+#: — listing it again here would be redundant), or its own explicit-local
+#: marker (``variant_explicit`` for ``product_section``,
+#: ``card_style_explicit`` for every ``CARD_AWARE_SECTION_KEYS`` member) is
+#: silently dropped by ``validate_settings`` on the very next unrelated
+#: save — reproduced empirically by the independent Task-6 reviewer for
+#: both.
+#:
+#: Membership here is only half the contract: every member must ALSO have
+#: ``preserve_unmanaged=True`` on its ``SettingsSchema`` (all current
+#: members do) — that is what lets ``clean_schema_patch`` carry the
+#: undeclared ``appearance_overrides`` key into the merged patch the R4
+#: mutation path validates; a future member with ``preserve_unmanaged=False``
+#: would silently lose its marker on the R4 path before
+#: ``_with_appearance_overrides`` below ever ran.
 APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS = frozenset({
     "hero_banner",
     # Phase 3 (V01) — brand_carousel joins the allowlist so its validator
@@ -1212,7 +1277,7 @@ APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS = frozenset({
     # Phase 3 Task 6 -- Collection proves the same server-owned
     # explicit-local-variant preservation contract for tile_style.
     "collection_tiles",
-})
+} | CARD_AWARE_SECTION_KEYS)
 
 
 def _with_appearance_overrides(section_key: str, validate_fn, default_fn):
@@ -1240,34 +1305,38 @@ def _with_appearance_overrides(section_key: str, validate_fn, default_fn):
         appearance_overrides_raw = raw.get("appearance_overrides")
         base_raw = {k: v for k, v in raw.items() if k != "appearance_overrides"}
         cleaned = validate_fn(base_raw)
-        # Phase 3 (V01) — carry through an already-present, TRUSTED
-        # explicit-local-variant marker. ``variant_explicit`` is NOT part of
-        # the client-writable ``appearance_overrides`` typography contract
-        # (``validate_appearance_overrides`` still rejects it as unknown), so
-        # it is extracted here BEFORE that validator runs and re-attached only
-        # when the INPUT settings already carried a ``True`` boolean for it.
-        # This preserves the marker across an ordinary non-variant edit (a
-        # merged dict already holding the trusted persisted marker) on BOTH
-        # the R4 schema-patch bridge and the legacy validate_settings path,
-        # while never letting a client manufacture the marker: a non-boolean
-        # or ``False``/absent value is simply not carried, and a historically
-        # unmarked section stays unmarked.
-        preserved_marker = False
+        # Phase 3 (V01) / Task 6 (final-review fix, C1/I1) — carry through
+        # every already-present, TRUSTED explicit-local-override marker
+        # (``_TRUSTED_APPEARANCE_OVERRIDE_MARKER_KEYS`` — currently
+        # ``variant_explicit`` and ``card_style_explicit``). Neither is part
+        # of the client-writable ``appearance_overrides`` typography contract
+        # (``validate_appearance_overrides`` still rejects them as unknown),
+        # so each is extracted here BEFORE that validator runs and
+        # re-attached only when the INPUT settings already carried a
+        # ``True`` boolean for it. This preserves a marker across an
+        # ordinary UNRELATED edit (a merged dict already holding the trusted
+        # persisted marker) on BOTH the R4 schema-patch bridge and the
+        # legacy validate_settings path, while never letting a client
+        # manufacture a marker: a non-boolean or ``False``/absent value is
+        # simply not carried, and a historically unmarked section stays
+        # unmarked.
+        preserved_markers = {}
         if isinstance(appearance_overrides_raw, dict):
-            existing = appearance_overrides_raw.get(VARIANT_EXPLICIT_OVERRIDE_KEY)
-            preserved_marker = existing is True
+            for marker_key in _TRUSTED_APPEARANCE_OVERRIDE_MARKER_KEYS:
+                if appearance_overrides_raw.get(marker_key) is True:
+                    preserved_markers[marker_key] = True
         if appearance_overrides_raw is not None:
             cleaned_overrides = validate_appearance_overrides(
                 {k: v for k, v in appearance_overrides_raw.items()
-                 if k != VARIANT_EXPLICIT_OVERRIDE_KEY}
+                 if k not in _TRUSTED_APPEARANCE_OVERRIDE_MARKER_KEYS}
                 if isinstance(appearance_overrides_raw, dict)
                 else appearance_overrides_raw
             )
             if cleaned_overrides:
                 cleaned["appearance_overrides"] = cleaned_overrides
-        if preserved_marker:
+        if preserved_markers:
             overrides = dict(cleaned.get("appearance_overrides") or {})
-            overrides[VARIANT_EXPLICIT_OVERRIDE_KEY] = True
+            overrides.update(preserved_markers)
             cleaned["appearance_overrides"] = overrides
         return cleaned
 
@@ -1419,6 +1488,16 @@ _SLIDER_DEFAULT_INTERVAL_MS = 4500
 #: reuse choice already made for every other slider-level field.
 HERO_STYLE_CHOICES = ("overlay", "split", "beauty_editorial", "chocolate_carousel", "atelier_triptych", "luxury_showcase")
 
+#: Phase 5 Task 5 (STRANS) — the CLOSED enum of between-slide transition styles
+#: for the shared hero/image slider. ``cut`` is the historical, byte-identical
+#: hard-cut behavior (an existing store with no explicit ``transition`` keeps
+#: rendering exactly as before). ``fade``/``slide`` are the only added motion
+#: styles — never a free-text animation value, never arbitrary CSS/JS. A
+#: transition style is orthogonal to ``hero_style`` (which is structural layout,
+#: not motion). ``prefers-reduced-motion: reduce`` collapses fade/slide to an
+#: effectively instant cut at the CSS layer without changing slide state.
+SLIDER_TRANSITION_CHOICES = ("cut", "fade", "slide")
+
 
 def _validate_slider_settings(raw: dict) -> dict:
     """قراردادِ تنظیماتِ سطحِ اسلایدر (نه تک‌تکِ اسلایدها — آن‌ها روی خودِ
@@ -1464,10 +1543,19 @@ def _validate_slider_settings(raw: dict) -> dict:
     if hero_style not in HERO_STYLE_CHOICES:
         hero_style = "overlay"
 
+    # Phase 5 Task 5 (STRANS) — between-slide transition style. Same closed-enum
+    # coercion discipline as ``hero_style``/``text_position``: an unknown/legacy/
+    # non-string value never round-trips into storage and falls back to the
+    # historical ``cut`` (hard cut), so existing stores are byte-identical.
+    transition = raw.get("transition", "cut")
+    if transition not in SLIDER_TRANSITION_CHOICES:
+        transition = "cut"
+
     return {
         "autoplay": autoplay, "interval_ms": interval_ms,
         "show_arrows": show_arrows, "show_dots": show_dots, "loop": loop,
         "text_position": text_position, "hero_style": hero_style,
+        "transition": transition,
     }
 
 
@@ -1481,6 +1569,8 @@ def default_slider_settings() -> dict:
         # an existing store with no ``hero_style`` written keeps rendering
         # byte-identically via this default.
         "hero_style": "overlay",
+        # ``cut`` = the historical hard-cut behavior (Task 5 STRANS).
+        "transition": "cut",
     }
 
 
@@ -1525,10 +1615,73 @@ HERO_BANNER_SCHEMA = SettingsSchema(fields=(
         default="end",
         choices=(("start", "ابتدا"), ("center", "وسط"), ("end", "انتها")),
     ),
+    # Phase 5 Task 5 (STRANS) — between-slide transition style (closed enum).
+    SettingsField(
+        "transition", "جلوه‌ی جابه‌جایی اسلاید", "choice", "advanced",
+        default="cut",
+        choices=(("cut", "بدون جلوه (برش)"), ("fade", "محو تدریجی"), ("slide", "لغزش")),
+    ),
     SettingsField(
         "appearance_overrides", "تایپوگرافی این بخش", "appearance_override", "advanced",
         default={},
         widget_hint="typography_override",
+    ),
+    # Phase 5 Task 4B/4-remediation: the generic ``background`` picker field is
+    # NOT hand-added here. It is projected CANONICALLY onto every schema-enabled
+    # BACKGROUND_AWARE section by ``_with_background_schema_field`` in
+    # ``_finalize_registry`` (mirroring the ``_with_background`` validator
+    # wrapper), so there is exactly one source of the field, applied uniformly —
+    # no per-section duplication.
+))
+
+
+#: R4 Task 6 — same declarative counterpart for ``image_slider``, which
+#: shares ``_validate_slider_settings``/``default_slider_settings`` with
+#: ``hero_banner`` but has no registered variants, so ``hero_style`` is
+#: deliberately omitted here (that field only has a rendered control on
+#: ``hero_banner``'s settings form). The validator still always returns a
+#: ``hero_style`` key for ``image_slider`` too — that key simply survives
+#: as an unmanaged, unused value, exactly as it already does today.
+#: ``appearance_overrides`` is ALSO deliberately omitted — Task 7 exposed
+#: that Inspector field on ``hero_banner`` only (see
+#: ``HeroSchemaFieldTests`` in ``test_r4_appearance_overrides.py``, which
+#: explicitly asserts ``image_slider`` does not get it); the underlying
+#: ``_with_appearance_overrides`` wrapper still applies to every section's
+#: legacy validator regardless, so this omission only affects Inspector
+#: field exposure, not the actual override capability.
+IMAGE_SLIDER_SCHEMA = SettingsSchema(fields=(
+    SettingsField(
+        "autoplay", "پخش خودکار", "boolean", "basic",
+        default=True,
+    ),
+    SettingsField(
+        "interval_ms", "فاصله اسلاید", "integer", "advanced",
+        default=_SLIDER_DEFAULT_INTERVAL_MS,
+        min_value=_SLIDER_MIN_INTERVAL_MS,
+        max_value=_SLIDER_MAX_INTERVAL_MS,
+    ),
+    SettingsField(
+        "show_arrows", "نمایش فلش‌ها", "boolean", "advanced",
+        default=True,
+    ),
+    SettingsField(
+        "show_dots", "نمایش نقاط", "boolean", "advanced",
+        default=True,
+    ),
+    SettingsField(
+        "loop", "تکرار", "boolean", "advanced",
+        default=True,
+    ),
+    SettingsField(
+        "text_position", "جای متن", "choice", "advanced",
+        default="end",
+        choices=(("start", "ابتدا"), ("center", "وسط"), ("end", "انتها")),
+    ),
+    # Phase 5 Task 5 (STRANS) — same closed-enum transition field as hero_banner.
+    SettingsField(
+        "transition", "جلوه‌ی جابه‌جایی اسلاید", "choice", "advanced",
+        default="cut",
+        choices=(("cut", "بدون جلوه (برش)"), ("fade", "محو تدریجی"), ("slide", "لغزش")),
     ),
 ))
 
@@ -1578,6 +1731,32 @@ def default_category_grid_settings() -> dict:
     return {"title": "", "display_mode": "grid", "category_ids": [], "item_limit": 12}
 
 
+#: Task 6 — the declarative Inspector-facing schema for "گرید دسته‌بندی".
+#: Exactly analogous to COLLECTION_TILES_SCHEMA: ``category_ids`` is NOT
+#: schema-registered directly — it is a compatibility persistence detail
+#: hidden behind the typed ``source`` field (see ``_with_resource_source``
+#: below, now covering ``category_grid`` too). ``display_mode`` is the
+#: variant marker (all 11 CATEGORY_GRID_DISPLAY_MODES, matching the
+#: registered ``variants=`` tuple below verbatim — no narrowing).
+CATEGORY_GRID_SCHEMA = SettingsSchema(fields=(
+    SettingsField("title", "عنوان بخش", "text", "basic", default="", max_length=_MAX_SECTION_TITLE_LENGTH),
+    SettingsField(
+        "source", "منبع دسته‌بندی‌ها", "resource_source", "basic",
+        default=resource_source_module.serialize_resource_source(
+            resource_source_module.ResourceSource(kind="category", mode="auto", auto_rule="all_active"),
+        ),
+    ),
+    SettingsField(
+        "display_mode", "نوع نمایش", "choice", "basic", default="grid",
+        choices=tuple((x, x) for x in CATEGORY_GRID_DISPLAY_MODES),
+    ),
+    SettingsField(
+        "item_limit", "حداکثر تعداد", "integer", "advanced",
+        default=12, min_value=2, max_value=12,
+    ),
+))
+
+
 #: Phase 3 (Universal Storefront — V5 Golden Homepage) — ``trust_features``
 #: تا پیش از این چکپوینت یک بلوکِ کاملاً ثابتِ ۴ آیتمی بود (هیچ کلیدی از
 #: ``settings`` خوانده نمی‌شد)، پس واقعاً «تنظیم‌پذیر» نبود — یک شکافِ
@@ -1621,6 +1800,26 @@ def default_trust_features_settings() -> dict:
     return {"items": []}
 
 
+#: R4 Task 6 (Group D) — the first real user of the new ``repeater`` field
+#: type. Only shape/length cleaning happens at this layer (icon/title/
+#: subtitle max lengths, item-count cap) — the legacy validator above
+#: stays the sole authority for the "title required" business rule (an
+#: item with a blank title is accepted by the schema but still rejected
+#: by ``validate_trust_features_settings`` afterward, exactly as today).
+TRUST_FEATURES_SCHEMA = SettingsSchema(fields=(
+    SettingsField(
+        "items", "ردیف‌های اعتماد", "repeater", "basic",
+        default=[],
+        min_value=0, max_value=_MAX_TRUST_FEATURE_ITEMS,
+        repeater_item_fields=(
+            SettingsField("icon", "آیکون", "text", "basic", default="", max_length=_MAX_TRUST_FEATURE_ICON_LENGTH),
+            SettingsField("title", "عنوان", "text", "basic", default="", max_length=_MAX_TRUST_FEATURE_TEXT_LENGTH),
+            SettingsField("subtitle", "زیرعنوان", "text", "basic", default="", max_length=_MAX_TRUST_FEATURE_TEXT_LENGTH),
+        ),
+    ),
+))
+
+
 #: Phase 3 (Universal Storefront — V5 Golden Homepage) — ``amazing_offers``
 #: تا پیش از این چکپوینت همیشه دقیقاً یک محصول نمایش می‌داد (تنظیمات اصلاً
 #: خوانده نمی‌شد) — «Product Spotlight» یِ V5 چند پیشنهادِ هم‌زمان لازم دارد.
@@ -1660,6 +1859,23 @@ def default_amazing_offers_settings() -> dict:
     return {"item_limit": _DEFAULT_AMAZING_OFFER_ITEMS, "deadline_hours": _DEFAULT_AMAZING_OFFER_HOURS, "title": ""}
 
 
+#: R4 Task 6 (Group D) — declarative counterpart of
+#: ``validate_amazing_offers_settings``.
+AMAZING_OFFERS_SCHEMA = SettingsSchema(fields=(
+    SettingsField("title", "عنوان بخش", "text", "basic", default="", max_length=_MAX_SECTION_TITLE_LENGTH),
+    SettingsField(
+        "item_limit", "حداکثر تعداد پیشنهاد", "integer", "basic",
+        default=_DEFAULT_AMAZING_OFFER_ITEMS,
+        min_value=_MIN_AMAZING_OFFER_ITEMS, max_value=_MAX_AMAZING_OFFER_ITEMS,
+    ),
+    SettingsField(
+        "deadline_hours", "مدت زمان‌شمار (ساعت)", "integer", "advanced",
+        default=_DEFAULT_AMAZING_OFFER_HOURS,
+        min_value=_MIN_AMAZING_OFFER_HOURS, max_value=_MAX_AMAZING_OFFER_HOURS,
+    ),
+))
+
+
 #: Phase 3 (Universal Storefront — V5 Golden Homepage) — بلوکِ کاملاً
 #: جدید «مطالب وبلاگ» (طبقِ نقشه‌ی V5→Universal Block، ردیفِ «Blog»: نه
 #: هیچ بلوکِ موجودی این نقش را پوشش می‌دهد، نه توجیهی برایِ بیش‌سازی
@@ -1694,6 +1910,20 @@ def validate_blog_posts_settings(raw: dict) -> dict:
 
 def default_blog_posts_settings() -> dict:
     return {"item_limit": _DEFAULT_BLOG_POST_ITEMS, "title": ""}
+
+
+#: R4 Task 6 (Group C) — minimal declarative counterpart of
+#: ``validate_blog_posts_settings``, following the same one-field-plus-
+#: bounded-integer pattern already used by ``RICH_TEXT_SCHEMA``/
+#: ``CATEGORY_GRID_SCHEMA``.
+BLOG_POSTS_SCHEMA = SettingsSchema(fields=(
+    SettingsField("title", "عنوان بخش", "text", "basic", default="", max_length=_MAX_SECTION_TITLE_LENGTH),
+    SettingsField(
+        "item_limit", "تعداد مطالب", "integer", "advanced",
+        default=_DEFAULT_BLOG_POST_ITEMS,
+        min_value=_MIN_BLOG_POST_ITEMS, max_value=_MAX_BLOG_POST_ITEMS,
+    ),
+))
 
 
 class BrandCarouselSettingsError(ValueError):
@@ -1846,6 +2076,24 @@ def default_quick_links_settings() -> dict:
     return {"title": "", "menu_id": None}
 
 
+#: Pre-Task-10 corrective closure — ``menu_id`` IS now declared: R4 Task 6
+#: (Group D) originally left it legacy-form-managed because none of the
+#: then-existing Inspector field types fit an FK-into-Menu picker. The
+#: independent-review corrective pass classified that as a genuine R4
+#: field-parity gap (not an acceptable certification shortcut) rather than
+#: a QA-harness concern, so a new ``menu_picker`` field type was added to
+#: ``settings_schema``'s closed field-type vocabulary (never a second Menu
+#: model/authority — it is an FK into the exact same Store-scoped Menu the
+#: legacy settings form's own dropdown already uses; see
+#: ``r4_views.py``'s ``storefront_r4_section_inspector``, which projects
+#: the Store's own Menus into the Inspector context the same way it already
+#: projects a resource_source's dynamic summary).
+QUICK_LINKS_SCHEMA = SettingsSchema(fields=(
+    SettingsField("title", "عنوان بخش", "text", "basic", default="", max_length=_MAX_SECTION_TITLE_LENGTH),
+    SettingsField("menu_id", "منو", "menu_picker", "basic", default=None),
+))
+
+
 class FaqSettingsError(ValueError):
     """شکلِ خامِ تنظیماتِ «سوالات متداول» نامعتبر است."""
 
@@ -1880,6 +2128,23 @@ def _validate_faq_settings(raw: dict) -> dict:
 
 def default_faq_settings() -> dict:
     return {"title": "سوالات متداول", "items": []}
+
+
+#: R4 Task 6 (Group D) — legacy validator above stays the authority for
+#: "an item missing question or answer is silently dropped" — the schema
+#: layer only cleans shape/length.
+FAQ_SCHEMA = SettingsSchema(fields=(
+    SettingsField("title", "عنوان بخش", "text", "basic", default="سوالات متداول", max_length=_MAX_SECTION_TITLE_LENGTH),
+    SettingsField(
+        "items", "سوالات", "repeater", "basic",
+        default=[],
+        min_value=0, max_value=_MAX_FAQ_ITEMS,
+        repeater_item_fields=(
+            SettingsField("question", "سوال", "text", "basic", default="", max_length=_MAX_FAQ_QUESTION_LENGTH),
+            SettingsField("answer", "پاسخ", "text", "basic", default="", max_length=_MAX_FAQ_ANSWER_LENGTH),
+        ),
+    ),
+))
 
 
 class TestimonialsSettingsError(ValueError):
@@ -1917,6 +2182,24 @@ def default_testimonials_settings() -> dict:
     return {"title": "نظرات مشتریان", "items": []}
 
 
+#: R4 Task 6 (Group D) — same shape/length-only cleaning; the legacy
+#: validator above stays the authority for dropping an item missing a
+#: name or quote.
+TESTIMONIALS_SCHEMA = SettingsSchema(fields=(
+    SettingsField("title", "عنوان بخش", "text", "basic", default="نظرات مشتریان", max_length=_MAX_SECTION_TITLE_LENGTH),
+    SettingsField(
+        "items", "نظرات", "repeater", "basic",
+        default=[],
+        min_value=0, max_value=_MAX_TESTIMONIAL_ITEMS,
+        repeater_item_fields=(
+            SettingsField("name", "نام", "text", "basic", default="", max_length=_MAX_TESTIMONIAL_NAME_LENGTH),
+            SettingsField("quote", "متن نظر", "text", "basic", default="", max_length=_MAX_TESTIMONIAL_QUOTE_LENGTH),
+            SettingsField("role", "نقش/شهر", "text", "advanced", default="", max_length=_MAX_TESTIMONIAL_ROLE_LENGTH),
+        ),
+    ),
+))
+
+
 class VideoSectionSettingsError(ValueError):
     """شکلِ خامِ تنظیماتِ «بخشِ ویدیو» نامعتبر است."""
 
@@ -1950,6 +2233,19 @@ def default_video_section_settings() -> dict:
     return {"title": "", "video_url": "", "caption": ""}
 
 
+#: R4 Task 6 (Group D) — ``video_url`` has no dedicated Inspector field
+#: type (there is no ``url`` entry in ``ALLOWED_FIELD_TYPES``), so it is
+#: declared as ``text`` here — the schema layer only cleans shape/length,
+#: exactly as it does for every other field; the real provider/URL
+#: validation in ``_validate_video_section_settings`` above still runs
+#: afterward and still rejects an unrecognized URL, unchanged.
+VIDEO_SECTION_SCHEMA = SettingsSchema(fields=(
+    SettingsField("title", "عنوان بخش", "text", "basic", default="", max_length=_MAX_SECTION_TITLE_LENGTH),
+    SettingsField("video_url", "آدرس ویدیو", "text", "basic", default=""),
+    SettingsField("caption", "زیرنویس", "text", "advanced", default="", max_length=_MAX_VIDEO_CAPTION_LENGTH),
+))
+
+
 class NewsletterSettingsError(ValueError):
     """شکلِ خامِ تنظیماتِ «خبرنامه» نامعتبر است."""
 
@@ -1977,6 +2273,36 @@ def default_newsletter_settings() -> dict:
     return {"title": "عضویت در خبرنامه", "subtitle": "", "button_label": "عضویت"}
 
 
+#: R4 Task 6 (Group D) — declarative counterpart of
+#: ``_validate_newsletter_settings``.
+NEWSLETTER_SCHEMA = SettingsSchema(fields=(
+    SettingsField("title", "عنوان بخش", "text", "basic", default="عضویت در خبرنامه", max_length=_MAX_NEWSLETTER_TITLE_LENGTH),
+    SettingsField("subtitle", "زیرعنوان", "text", "basic", default="", max_length=_MAX_NEWSLETTER_SUBTITLE_LENGTH),
+    SettingsField("button_label", "متن دکمه", "text", "advanced", default="عضویت", max_length=_MAX_NEWSLETTER_BUTTON_LABEL_LENGTH),
+))
+
+
+#: R4 Task 6 (Group C) — declarative counterpart of
+#: ``_validate_image_text_settings``. ``image_url`` is deliberately NOT
+#: declared here: the Inspector has no "media" field-type widget yet
+#: (``_INSPECTOR_SUPPORTED_FIELD_TYPES`` in ``r4_views.py`` covers text/
+#: rich_text/integer/boolean/choice/appearance_override/resource_source
+#: only), so it stays managed exclusively through the legacy form's
+#: existing image-URL input, preserved as an unmanaged key.
+IMAGE_TEXT_SCHEMA = SettingsSchema(fields=(
+    SettingsField("title", "عنوان", "text", "basic", default="", max_length=_MAX_IMAGE_TEXT_TITLE_LENGTH),
+    SettingsField(
+        "body_html", "متن", "rich_text", "basic",
+        default="", max_length=_MAX_RICH_TEXT_LENGTH,
+        widget_hint="merchant_rich_text",
+    ),
+    SettingsField(
+        "image_position", "جای تصویر", "choice", "advanced",
+        default="right", choices=(("right", "سمت راست"), ("left", "سمت چپ")),
+    ),
+))
+
+
 def _validate_image_text_settings(raw: dict) -> dict:
     if not isinstance(raw, dict):
         raise ValueError("تنظیمات باید یک شیء JSON باشد")
@@ -1996,18 +2322,215 @@ def _validate_image_text_settings(raw: dict) -> dict:
     return {"title": title, "body_html": body_html, "image_url": image_url, "image_position": position}
 
 
+#: Task 6 (Group B) — "simple auto-source catalog families, no
+#: independent selector needed beyond the existing implicit query"
+#: (``newest_products``/``best_sellers``/``discounted_products``). Their
+#: render-time context builders (``_newest_products_context`` etc. in
+#: ``render_service.py``) hardcode a slice limit and never read
+#: ``section.settings`` at all today; the only merchant-facing knob Group
+#: B's disposition calls for is that count, so each gets a minimal
+#: single-field validator/schema — bounds match ``product_section``'s own
+#: ``item_limit`` (2-24), and each default equals its own current
+#: hardcoded slice so an untouched section renders byte-identically.
+_MIN_AUTO_SOURCE_PRODUCT_ITEMS = _PRODUCT_SECTION_MIN_LIMIT
+_MAX_AUTO_SOURCE_PRODUCT_ITEMS = _PRODUCT_SECTION_MAX_LIMIT
+_DEFAULT_NEWEST_PRODUCTS_ITEMS = 8
+_DEFAULT_BEST_SELLERS_ITEMS = 8
+_DEFAULT_DISCOUNTED_PRODUCTS_ITEMS = 6
+
+
+class AutoSourceProductSettingsError(ValueError):
+    """شکلِ خامِ تنظیماتِ خانواده‌یِ محصولاتِ auto-source (جدیدترین/پرفروش/تخفیف‌دار) نامعتبر است."""
+
+
+def _validate_auto_source_product_settings(raw: dict, default_item_limit: int) -> dict:
+    if not isinstance(raw, dict):
+        raise AutoSourceProductSettingsError("تنظیمات باید یک شیء JSON باشد")
+    try:
+        item_limit = int(raw.get("item_limit", default_item_limit))
+    except (TypeError, ValueError):
+        raise AutoSourceProductSettingsError("تعدادِ محصولات باید عدد باشد") from None
+    item_limit = max(_MIN_AUTO_SOURCE_PRODUCT_ITEMS, min(_MAX_AUTO_SOURCE_PRODUCT_ITEMS, item_limit))
+    return {"item_limit": item_limit}
+
+
+def _validate_newest_products_settings(raw: dict) -> dict:
+    return _validate_auto_source_product_settings(raw, _DEFAULT_NEWEST_PRODUCTS_ITEMS)
+
+
+def default_newest_products_settings() -> dict:
+    return {"item_limit": _DEFAULT_NEWEST_PRODUCTS_ITEMS}
+
+
+def _validate_best_sellers_settings(raw: dict) -> dict:
+    return _validate_auto_source_product_settings(raw, _DEFAULT_BEST_SELLERS_ITEMS)
+
+
+def default_best_sellers_settings() -> dict:
+    return {"item_limit": _DEFAULT_BEST_SELLERS_ITEMS}
+
+
+def _validate_discounted_products_settings(raw: dict) -> dict:
+    return _validate_auto_source_product_settings(raw, _DEFAULT_DISCOUNTED_PRODUCTS_ITEMS)
+
+
+def default_discounted_products_settings() -> dict:
+    return {"item_limit": _DEFAULT_DISCOUNTED_PRODUCTS_ITEMS}
+
+
+def _auto_source_product_schema(label_fa: str, default_item_limit: int) -> "SettingsSchema":
+    return SettingsSchema(fields=(
+        SettingsField(
+            "item_limit", label_fa, "integer", "basic",
+            default=default_item_limit,
+            min_value=_MIN_AUTO_SOURCE_PRODUCT_ITEMS, max_value=_MAX_AUTO_SOURCE_PRODUCT_ITEMS,
+        ),
+    ))
+
+
+NEWEST_PRODUCTS_SCHEMA = _auto_source_product_schema("تعداد محصولات", _DEFAULT_NEWEST_PRODUCTS_ITEMS)
+BEST_SELLERS_SCHEMA = _auto_source_product_schema("تعداد محصولات", _DEFAULT_BEST_SELLERS_ITEMS)
+DISCOUNTED_PRODUCTS_SCHEMA = _auto_source_product_schema("تعداد محصولات", _DEFAULT_DISCOUNTED_PRODUCTS_ITEMS)
+
+
+#: Task 6 (Group B) — ``promo_cards`` shares the same disposition
+#: (auto-source, no independent selector) but its render context
+#: (``_category_context_for_promo_cards``) sources active Store
+#: categories, not products, and renders them through the exact same
+#: ``.tiles``/``.tile`` markup as ``category_grid``'s ``grid``/
+#: ``carousel`` modes (see the Task 5 review note above) — so its bounds
+#: mirror ``CATEGORY_GRID_SCHEMA``'s own ``item_limit`` (2-12), not the
+#: product families' wider 2-24.
+_MIN_PROMO_CARDS_ITEMS = 2
+_MAX_PROMO_CARDS_ITEMS = 12
+_DEFAULT_PROMO_CARDS_ITEMS = 4
+
+
+class PromoCardsSettingsError(ValueError):
+    """شکلِ خامِ تنظیماتِ «کارت‌های تبلیغاتی» نامعتبر است."""
+
+
+def _validate_promo_cards_settings(raw: dict) -> dict:
+    if not isinstance(raw, dict):
+        raise PromoCardsSettingsError("تنظیمات باید یک شیء JSON باشد")
+    try:
+        item_limit = int(raw.get("item_limit", _DEFAULT_PROMO_CARDS_ITEMS))
+    except (TypeError, ValueError):
+        raise PromoCardsSettingsError("تعدادِ کارت‌ها باید عدد باشد") from None
+    item_limit = max(_MIN_PROMO_CARDS_ITEMS, min(_MAX_PROMO_CARDS_ITEMS, item_limit))
+    return {"item_limit": item_limit}
+
+
+def default_promo_cards_settings() -> dict:
+    return {"item_limit": _DEFAULT_PROMO_CARDS_ITEMS}
+
+
+PROMO_CARDS_SCHEMA = SettingsSchema(fields=(
+    SettingsField(
+        "item_limit", "تعداد کارت‌ها", "integer", "basic",
+        default=_DEFAULT_PROMO_CARDS_ITEMS,
+        min_value=_MIN_PROMO_CARDS_ITEMS, max_value=_MAX_PROMO_CARDS_ITEMS,
+    ),
+))
+
+
 # ---------------------------------------------------------------- ثبت انواع بخش
 
-#: U1A (R1 §9) — تنها چهار مقداری که تا امروز در کدِ کدبیس (فقط از
-#: طریقِ preset ``v5_golden_homepage``) برایِ ``multi_banner.settings.layout_variant``
-#: نوشته شده‌اند؛ دقیقاً همان چهار کلاسِ CSSای که واقعاً وجود دارند
-#: (``apps/catalog/static/css/home.css``). **این ثابت صرفاً مستندسازی
-#: است — در ``validate_settings`` خوانده/اعمال نمی‌شود** (نگاه کنید به
-#: کامنتِ توضیحیِ کنارِ تعریفِ ``multi_banner`` پایین). چون فرمِ ادیتور
-#: هیچ کنترلی برایِ این کلید ندارد، این فهرست تنها *مسیرِ نوشتنِ شناخته‌شده*
-#: را می‌پوشاند، نه لزوماً هر دیتایِ واقعاً ذخیره‌شده در تولید — پس هنوز
-#: enum بسته‌ی رسمی نیست.
+#: Task 6 (Group C) — the U1A finding above (R1 §9) is now RESOLVED into
+#: a real closed enum: a fresh full-codebase re-enumeration (every
+#: ``layout_preset_registry.py`` preset, every fixture/migration/test —
+#: there is still no merchant-facing form control for this key at all)
+#: found exactly these six values ever persisted for
+#: ``multi_banner.settings.layout_variant``, matching exactly the six
+#: ``.promo-grid--*``/``.banner-section--*`` CSS classes that actually
+#: exist in ``storefront_builder.css`` (the stale "only four" count
+#: predates the ``atelier-duo``/``atelier-wide`` additions). An absent or
+#: unrecognized value coerces to ``""`` (the historical "no override"
+#: state — Django's ``|default:'default'`` template filter treats an
+#: empty string exactly like an absent key, so this is byte-identical to
+#: today's un-set behaviour, never a new "promo-4" default).
 MULTI_BANNER_KNOWN_LAYOUT_VARIANTS = ("promo-4", "wide-single", "mini-4", "strip", "atelier-duo", "atelier-wide")
+#: Merchant-facing names for the closed enum above (display only; the stored
+#: value stays the enum key).
+MULTI_BANNER_LAYOUT_VARIANT_LABELS_FA = {
+    "promo-4": "چهار بنر تبلیغاتی",
+    "wide-single": "یک بنر عریض",
+    "mini-4": "چهار بنر کوچک",
+    "strip": "نوار باریک",
+    "atelier-duo": "دو قاب آتلیه",
+    "atelier-wide": "قاب عریض آتلیه",
+}
+
+
+class MultiBannerSettingsError(ValueError):
+    """شکلِ خامِ تنظیماتِ «ردیف چند بنری» نامعتبر است."""
+
+
+_MIN_MULTI_BANNER_OFFSET = 0
+_MAX_MULTI_BANNER_OFFSET = 50
+_MIN_MULTI_BANNER_ITEMS = 1
+_MAX_MULTI_BANNER_ITEMS = 24
+
+
+def _validate_multi_banner_settings(raw: dict) -> dict:
+    """دقیقاً همان clampهایی که ``_multi_banner_context`` (render_service)
+    از قبل به‌شکلِ دفاعی در زمانِ رندر اعمال می‌کند — اینجا فقط همان
+    قرارداد در زمانِ نوشتن هم رسمی می‌شود. ``item_limit`` غایب/خالی یعنی
+    «همه‌ی بنرها» (رفتارِ تاریخیِ سکشن‌هایی که هرگز این کلید را لمس
+    نکرده‌اند) — این معنا حفظ می‌شود، نه به یک عددِ پیش‌فرض تبدیل می‌شود."""
+    if not isinstance(raw, dict):
+        raise MultiBannerSettingsError("تنظیمات باید یک شیء JSON باشد")
+
+    try:
+        offset = max(_MIN_MULTI_BANNER_OFFSET, min(_MAX_MULTI_BANNER_OFFSET, int(raw.get("offset", 0))))
+    except (TypeError, ValueError):
+        offset = 0
+
+    raw_limit = raw.get("item_limit")
+    if raw_limit in (None, ""):
+        item_limit = None
+    else:
+        try:
+            item_limit = max(_MIN_MULTI_BANNER_ITEMS, min(_MAX_MULTI_BANNER_ITEMS, int(raw_limit)))
+        except (TypeError, ValueError):
+            item_limit = _MAX_MULTI_BANNER_ITEMS
+
+    layout_variant = raw.get("layout_variant", "")
+    if layout_variant not in MULTI_BANNER_KNOWN_LAYOUT_VARIANTS:
+        layout_variant = ""
+
+    return {"item_limit": item_limit, "offset": offset, "layout_variant": layout_variant}
+
+
+def default_multi_banner_settings() -> dict:
+    return {"item_limit": None, "offset": 0, "layout_variant": ""}
+
+
+#: R4 Task 6 (Group C) — declarative counterpart of
+#: ``_validate_multi_banner_settings``. ``item_limit``'s schema-metadata
+#: ``default`` (24) is a display placeholder for the Inspector widget
+#: only — it is independent of ``default_multi_banner_settings()`` above,
+#: which keeps returning ``None`` (unlimited) for a genuinely new
+#: section, exactly as documented there.
+MULTI_BANNER_SCHEMA = SettingsSchema(fields=(
+    SettingsField(
+        "layout_variant", "قالبِ نمایش", "choice", "basic",
+        default="",
+        choices=(("", "پیش‌فرض (بدون قالبِ خاص)"),) + tuple(
+            (x, MULTI_BANNER_LAYOUT_VARIANT_LABELS_FA[x]) for x in MULTI_BANNER_KNOWN_LAYOUT_VARIANTS
+        ),
+    ),
+    SettingsField(
+        "item_limit", "حداکثر تعداد بنر", "integer", "advanced",
+        default=_MAX_MULTI_BANNER_ITEMS,
+        min_value=_MIN_MULTI_BANNER_ITEMS, max_value=_MAX_MULTI_BANNER_ITEMS,
+    ),
+    SettingsField(
+        "offset", "شروع از بنرِ چندم", "integer", "advanced",
+        default=0,
+        min_value=_MIN_MULTI_BANNER_OFFSET, max_value=_MAX_MULTI_BANNER_OFFSET,
+    ),
+))
 
 #: ترتیبِ نمایشِ گروه‌هایِ کتابخانه‌ی «افزودن بخش جدید» (چکپوینتِ ۱۰) —
 #: پنج گروهِ کسب‌وکاریِ ثابت، نه اصطلاحِ فنی؛ ``category_fa`` هر
@@ -2097,43 +2620,47 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         template_name="storefront_builder/sections/image_slider.html",
         validate_settings=_validate_slider_settings, default_settings=default_slider_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="تصاویر و تبلیغات",
+        settings_schema=IMAGE_SLIDER_SCHEMA,
     ),
     "single_banner": SectionDefinition(
         key="single_banner", label_fa="بنر تکی", icon="image",
         template_name="storefront_builder/sections/single_banner.html",
+        # Task 6 (Group C) disposition: FIXED/STATIC, deliberately. Its
+        # render context (``_single_banner_context``) reads only the
+        # section-scoped ``PromotionalBanner`` pool (via the existing
+        # media CRUD — see "بنرهای همین بخش" in the settings-drawer
+        # shortcuts) and ignores ``section.settings`` entirely — it always
+        # shows exactly the first active banner. There is no field for a
+        # schema to declare; ``_passthrough_dict``/``_empty_defaults``
+        # stay exactly as they are, now as an explicit, verified
+        # disposition rather than an unclassified placeholder.
         validate_settings=_passthrough_dict, default_settings=_empty_defaults,
         duplicable=True, removable=True, category_fa="تصاویر و تبلیغات",
     ),
     "multi_banner": SectionDefinition(
         key="multi_banner", label_fa="ردیف چند بنری", icon="layout-grid",
         template_name="storefront_builder/sections/multi_banner.html",
-        # U1A finding (R1 §9, characterization only — validate_settings is
-        # DELIBERATELY left as _passthrough_dict, unchanged): the template
-        # reads a raw ``layout_variant`` key that this validator never
-        # checks. The complete write-path enumeration across the repo
-        # (layout_preset_registry.py, tests, fixtures, migrations, seed
-        # commands) found exactly four values ever persisted — all via the
-        # single ``v5_golden_homepage`` preset — matching the only four CSS
-        # classes that actually exist for it
-        # (apps/catalog/static/css/home.css: .promo-grid--promo-4/
-        # wide-single/mini-4/strip). The merchant-facing settings form has
-        # no control for this key at all (section_settings_form.html),
-        # meaning today's *known* write path is fully enumerable — but
-        # ``_passthrough_dict`` accepts any dict shape, so a value written
-        # outside that one known path cannot be ruled out from source alone.
-        # Per R1 §9's explicit rule ("If the complete compatibility-safe
-        # closed set cannot be proven, DO NOT narrow accepted values"),
-        # this constant is informational-only and is NOT read by
-        # ``validate_settings`` — narrowing is deferred to U1B, after the
-        # live data itself (not just the code paths) can be inspected.
-        validate_settings=_passthrough_dict, default_settings=_empty_defaults,
+        # Task 6 (Group C) — the U1A finding above is now resolved: see
+        # ``_validate_multi_banner_settings``/``MULTI_BANNER_SCHEMA``.
+        # ``has_settings_form`` is deliberately left unset (the legacy
+        # drawer stays unreachable, exactly as before) — adding it would
+        # also need a real POST-parsing branch in
+        # ``storefront_section_settings``, since the legacy view's
+        # destructive ``else: raw = {}`` fallback would otherwise wipe
+        # these fields on Save (the same class of bug Task 6 Group D fixed
+        # for trust_features/amazing_offers/blog_posts); the new R4
+        # Inspector path does not depend on ``has_settings_form`` at all,
+        # so it is unlocked here with zero legacy-path risk.
+        validate_settings=_validate_multi_banner_settings, default_settings=default_multi_banner_settings,
         duplicable=True, removable=True, category_fa="تصاویر و تبلیغات",
+        settings_schema=MULTI_BANNER_SCHEMA,
     ),
     "category_grid": SectionDefinition(
         key="category_grid", label_fa="گرید دسته‌بندی", icon="grid",
         template_name="storefront_builder/sections/category_grid.html",
         validate_settings=_validate_category_grid_settings, default_settings=default_category_grid_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="کشف و خرید",
+        settings_schema=CATEGORY_GRID_SCHEMA,
         # U1A — نگاشتِ الگویِ A (همان template، شاخه‌زنیِ CSS رویِ همان
         # کلیدِ enum بستهٔ از‌قبل‌موجود ``display_mode``؛ نگاه کنید به
         # CATEGORY_GRID_DISPLAY_MODES بالا و category_grid.html) روی
@@ -2175,26 +2702,30 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     "newest_products": SectionDefinition(
         key="newest_products", label_fa="جدیدترین محصولات", icon="sparkles",
         template_name="storefront_builder/sections/newest_products.html",
-        validate_settings=_passthrough_dict, default_settings=_empty_defaults,
+        validate_settings=_validate_newest_products_settings, default_settings=default_newest_products_settings,
         duplicable=True, removable=True, category_fa="محصولات",
+        settings_schema=NEWEST_PRODUCTS_SCHEMA,
     ),
     "best_sellers": SectionDefinition(
         key="best_sellers", label_fa="پرفروش‌ترین‌ها", icon="trending-up",
         template_name="storefront_builder/sections/best_sellers.html",
-        validate_settings=_passthrough_dict, default_settings=_empty_defaults,
+        validate_settings=_validate_best_sellers_settings, default_settings=default_best_sellers_settings,
         duplicable=True, removable=True, category_fa="محصولات",
+        settings_schema=BEST_SELLERS_SCHEMA,
     ),
     "discounted_products": SectionDefinition(
         key="discounted_products", label_fa="محصولات تخفیف‌دار", icon="percent",
         template_name="storefront_builder/sections/discounted_products.html",
-        validate_settings=_passthrough_dict, default_settings=_empty_defaults,
+        validate_settings=_validate_discounted_products_settings, default_settings=default_discounted_products_settings,
         duplicable=True, removable=True, category_fa="محصولات",
+        settings_schema=DISCOUNTED_PRODUCTS_SCHEMA,
     ),
     "amazing_offers": SectionDefinition(
         key="amazing_offers", label_fa="پیشنهادهای شگفت‌انگیز", icon="zap",
         template_name="storefront_builder/sections/amazing_offers.html",
         validate_settings=validate_amazing_offers_settings, default_settings=default_amazing_offers_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="محصولات",
+        settings_schema=AMAZING_OFFERS_SCHEMA,
     ),
     "brand_carousel": SectionDefinition(
         key="brand_carousel", label_fa="کاروسل برندها", icon="award",
@@ -2215,8 +2746,9 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     "promo_cards": SectionDefinition(
         key="promo_cards", label_fa="کارت‌های تبلیغاتی", icon="layout",
         template_name="storefront_builder/sections/promo_cards.html",
-        validate_settings=_passthrough_dict, default_settings=_empty_defaults,
+        validate_settings=_validate_promo_cards_settings, default_settings=default_promo_cards_settings,
         duplicable=True, removable=True, category_fa="تصاویر و تبلیغات",
+        settings_schema=PROMO_CARDS_SCHEMA,
     ),
     "rich_text": SectionDefinition(
         key="rich_text", label_fa="متن", icon="text",
@@ -2241,12 +2773,14 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
             VariantDefinition(key="left", label_fa="تصویر سمت چپ"),
         ),
         default_variant="right", variant_setting_key="image_position",
+        settings_schema=IMAGE_TEXT_SCHEMA,
     ),
     "blog_posts": SectionDefinition(
         key="blog_posts", label_fa="مطالب وبلاگ", icon="newspaper",
         template_name="storefront_builder/sections/blog_posts.html",
         validate_settings=validate_blog_posts_settings, default_settings=default_blog_posts_settings,
         max_instances=1, duplicable=False, removable=True, has_settings_form=True, category_fa="محتوا",
+        settings_schema=BLOG_POSTS_SCHEMA,
     ),
     "product_section": SectionDefinition(
         key="product_section", label_fa="بخش محصولات", icon="shopping-bag",
@@ -2298,6 +2832,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         template_name="storefront_builder/sections/trust_features.html",
         validate_settings=validate_trust_features_settings, default_settings=default_trust_features_settings,
         max_instances=1, duplicable=False, removable=True, has_settings_form=True, category_fa="ساختار",
+        settings_schema=TRUST_FEATURES_SCHEMA,
     ),
     # -------------------------------------------------- چکپوینتِ ۱۲: بخش‌های جدید
     "collection_tiles": SectionDefinition(
@@ -2319,24 +2854,28 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         template_name="storefront_builder/sections/quick_links.html",
         validate_settings=_validate_quick_links_settings, default_settings=default_quick_links_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="کشف و خرید",
+        settings_schema=QUICK_LINKS_SCHEMA,
     ),
     "faq": SectionDefinition(
         key="faq", label_fa="سوالات متداول", icon="help-circle",
         template_name="storefront_builder/sections/faq.html",
         validate_settings=_validate_faq_settings, default_settings=default_faq_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="محتوا",
+        settings_schema=FAQ_SCHEMA,
     ),
     "testimonials": SectionDefinition(
         key="testimonials", label_fa="نظرات مشتریان", icon="message-circle",
         template_name="storefront_builder/sections/testimonials.html",
         validate_settings=_validate_testimonials_settings, default_settings=default_testimonials_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="محتوا",
+        settings_schema=TESTIMONIALS_SCHEMA,
     ),
     "video_section": SectionDefinition(
         key="video_section", label_fa="بخش ویدیو", icon="play-circle",
         template_name="storefront_builder/sections/video_section.html",
         validate_settings=_validate_video_section_settings, default_settings=default_video_section_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="محتوا",
+        settings_schema=VIDEO_SECTION_SCHEMA,
     ),
     # -------------------------------------------------- Story Rail (بخشِ مشترکِ اختیاری)
     "story_rail": SectionDefinition(
@@ -2353,6 +2892,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         # یک بلوکِ ثبتِ ایمیلِ سراسری کافی‌ست — مثلِ trust_features/
         # story_rail، تکرارِ آن (دو فرمِ مستقل روی یک صفحه) گیج‌کننده است.
         max_instances=1, duplicable=False, removable=True, has_settings_form=True, category_fa="محتوا",
+        settings_schema=NEWSLETTER_SCHEMA,
     ),
     # -------------------------------------------------- Phase 5: بخش‌های context-aware صفحه محصول
     # هر چهار نوعِ زیر فقط رویِ product_detail قابل‌افزودن‌اند (page_types)
@@ -2537,9 +3077,15 @@ def _finalize_registry(base: dict[str, SectionDefinition]) -> dict[str, SectionD
         validate_fn, default_fn = _with_spacing(key, validate_fn, default_fn)
         validate_fn, default_fn = _with_appearance_overrides(key, validate_fn, default_fn)
         validate_fn = _with_variant_validation(definition, validate_fn)
+        # Phase 5 Task 4 (remediation R1b) — project the generic background
+        # picker field onto the schema for every schema-enabled background-aware
+        # section, the single canonical source (mirrors the _with_background
+        # validator wrapper applied above).
+        projected_schema = _with_background_schema_field(key, definition.settings_schema)
         finalized[key] = dataclasses.replace(
             definition, validate_settings=validate_fn, default_settings=default_fn, has_settings_form=True,
             capabilities=definition.capabilities | _derived_capabilities(key),
+            settings_schema=projected_schema,
         )
     return finalized
 

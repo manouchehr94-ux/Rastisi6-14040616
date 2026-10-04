@@ -15,6 +15,8 @@
     </div>
     <div class="pa-field" style="margin-top:12px"><label>توضیحات</label><textarea class="pa-input" name="description" rows="2">{{ plan.description|default:"" }}</textarea></div>
     <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px"><input type="checkbox" name="is_recommended" {% if plan.is_recommended %}checked{% endif %}> پیشنهادی</label>
+    <input type="hidden" name="public_selectable_submitted" value="1">
+    <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px"><input type="checkbox" name="is_publicly_selectable" {% if not plan or plan.is_publicly_selectable %}checked{% endif %}> نمایش در صفحه عمومی تعرفه‌ها (بعد از انتشار نسخه)</label>
   </div></div>
 
   <div class="pa-card"><div class="pa-cardhead"><h3>نسخه‌ی پیش‌نویسِ تازه</h3></div><div class="pa-cardbody">

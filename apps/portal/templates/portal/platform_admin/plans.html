@@ -10,7 +10,7 @@
 {% for plan in plans %}
 <div class="pa-card">
   <div class="pa-cardhead">
-    <h3>{{ plan.name }} {% if not plan.is_active %}<span class="pa-badge pa-off">غیرفعال</span>{% endif %}{% if plan.is_recommended %}<span class="pa-badge pa-info">پیشنهادی</span>{% endif %}</h3>
+    <h3>{{ plan.name }} {% if not plan.is_active %}<span class="pa-badge pa-off">غیرفعال</span>{% endif %}{% if plan.is_recommended %}<span class="pa-badge pa-info">پیشنهادی</span>{% endif %}{% if not plan.is_publicly_selectable %}<span class="pa-badge pa-off">پنهان از صفحه عمومی</span>{% endif %}</h3>
     <div style="display:flex;gap:8px">
       <a class="pa-btn pa-small" href="{% url 'portal_platform_admin:plan-edit' plan.pk %}">افزودنِ نسخه/ویرایش</a>
       <form method="post" action="{% url 'portal_platform_admin:plan-archive' plan.pk %}">

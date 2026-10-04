@@ -1,3 +1,4 @@
+{% load storefront_builder_extras %}
 {% comment %}
 Generic, schema-driven field control — branches only on field.field_type,
 never on section.section_key or a specific section-type name. New schema
@@ -6,6 +7,14 @@ the R4 Inspector's Phase 0 renderer allowlist (r4_views.py); this partial
 must never silently fall back to a plain text input for an unsupported type.
 {% endcomment %}
 <div class="r4-field r4-field--{{ field.field_type }}" data-r4-field-row data-r4-field-key="{{ field.key }}" data-r4-field-type="{{ field.field_type }}">
+  {% comment %}
+  Phase 5 Task 4A — generic scope indicator. Every control the Section
+  Inspector renders affects ONLY the selected section, so the marker is
+  emitted once here, in the ONE shared field renderer, for every field type —
+  never by branching on a concrete section type. The storefront-wide
+  counterpart lives on the Global Design rendering path.
+  {% endcomment %}
+  <span class="r4-field-scope" data-r4-scope="section">فقط این بخش</span>
   <label class="r4-field-label" for="r4Field-{{ field.key }}">{{ field.label }}</label>
 
   {% if field.field_type == "text" %}
@@ -53,6 +62,25 @@ must never silently fall back to a plain text input for an unsupported type.
     <option value="{{ value }}">{{ label }}</option>
     {% endfor %}
   </select>
+
+  {% elif field.field_type == "menu_picker" %}
+  {# Pre-Task-10 corrective closure — an FK picker into the Store-scoped   #}
+  {# Menu/MenuItem navigation infrastructure (menu_choices, computed by    #}
+  {# r4_views.py the same way resource_source_summary is), never a second  #}
+  {# Menu authority. Hydrated by the same generic hydrateFieldValues()     #}
+  {# path every other scalar control uses (no dedicated JS listener).      #}
+  <select id="r4Field-{{ field.key }}"
+          class="r4-control"
+          data-r4-field-key="{{ field.key }}"
+          data-r4-field-type="menu_picker">
+    <option value="">— بدون منو —</option>
+    {% for menu in menu_choices %}
+    <option value="{{ menu.pk }}">{{ menu.title }} ({{ menu.get_location_display }})</option>
+    {% endfor %}
+  </select>
+  {% if not menu_choices %}
+  <p class="r4-field-sublabel">هنوز هیچ منویی نساخته‌اید — از «منوها» در پنل مدیریت یک منو بسازید.</p>
+  {% endif %}
 
   {% elif field.field_type == "appearance_override" %}
   {# Compound widget — represents ONE schema field (an object), never a  #}
@@ -106,6 +134,130 @@ must never silently fall back to a plain text input for an unsupported type.
     </div>
     {% endif %}
     <button type="button" class="r4-resource-source-open" data-r4-resource-picker-open>انتخاب / ویرایش</button>
+  </div>
+
+  {% elif field.field_type == "repeater" %}
+  {# R4 Task 6 (Group D) — a compound field like appearance_override: one  #}
+  {# schema key, a list-of-objects value, rendered server-side from the    #}
+  {# CURRENT value (no Alpine reactive array — plain DOM, exactly like      #}
+  {# appearance_override's own plain controls) so add/remove/reorder are   #}
+  {# ordinary DOM operations (clone the hidden <template> row, remove a    #}
+  {# row element, swap two adjacent row elements) done by the dedicated    #}
+  {# r4_editor.js listener below, which re-reads every remaining row's     #}
+  {# inputs on any such change and sends ONE compound patch — never a      #}
+  {# global function, so this partial has no dependency on the legacy      #}
+  {# editor page's itemRepeaterForm().                                     #}
+  <div class="r4-repeater"
+       id="r4Field-{{ field.key }}"
+       data-r4-field-key="{{ field.key }}"
+       data-r4-field-type="repeater"
+       {% if field.max_value %}data-r4-repeater-max-items="{{ field.max_value }}"{% endif %}>
+    <div data-r4-repeater-rows>
+      {% for row in current_field_value %}
+      <div class="r4-repeater-row" data-r4-repeater-row>
+        {% for item_field in field.repeater_item_fields %}
+        <div class="r4-repeater-subfield">
+          <label class="r4-field-sublabel">{{ item_field.label }}</label>
+          {% if item_field.field_type == "boolean" %}
+          <input type="checkbox" class="r4-switch" data-r4-repeater-subfield="{{ item_field.key }}" {% if row|dictget:item_field.key %}checked{% endif %}>
+          {% elif item_field.field_type == "choice" %}
+          <select class="r4-control" data-r4-repeater-subfield="{{ item_field.key }}">
+            {% for value, label in item_field.choices %}
+            <option value="{{ value }}" {% if row|dictget:item_field.key == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          {% else %}
+          <input type="text" class="r4-control" data-r4-repeater-subfield="{{ item_field.key }}" {% if item_field.max_length %}maxlength="{{ item_field.max_length }}"{% endif %} value="{{ row|dictget:item_field.key }}">
+          {% endif %}
+        </div>
+        {% endfor %}
+        <div class="r4-repeater-row-actions">
+          <button type="button" data-r4-repeater-move-up aria-label="انتقال به بالا">↑</button>
+          <button type="button" data-r4-repeater-move-down aria-label="انتقال به پایین">↓</button>
+          <button type="button" class="danger" data-r4-repeater-remove aria-label="حذف">×</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <template data-r4-repeater-row-template>
+      <div class="r4-repeater-row" data-r4-repeater-row>
+        {% for item_field in field.repeater_item_fields %}
+        <div class="r4-repeater-subfield">
+          <label class="r4-field-sublabel">{{ item_field.label }}</label>
+          {% if item_field.field_type == "boolean" %}
+          <input type="checkbox" class="r4-switch" data-r4-repeater-subfield="{{ item_field.key }}">
+          {% elif item_field.field_type == "choice" %}
+          <select class="r4-control" data-r4-repeater-subfield="{{ item_field.key }}">
+            {% for value, label in item_field.choices %}
+            <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+          {% else %}
+          <input type="text" class="r4-control" data-r4-repeater-subfield="{{ item_field.key }}" {% if item_field.max_length %}maxlength="{{ item_field.max_length }}"{% endif %}>
+          {% endif %}
+        </div>
+        {% endfor %}
+        <div class="r4-repeater-row-actions">
+          <button type="button" data-r4-repeater-move-up aria-label="انتقال به بالا">↑</button>
+          <button type="button" data-r4-repeater-move-down aria-label="انتقال به پایین">↓</button>
+          <button type="button" class="danger" data-r4-repeater-remove aria-label="حذف">×</button>
+        </div>
+      </div>
+    </template>
+    <button type="button" class="r4-repeater-add" data-r4-repeater-add>+ افزودن ردیف</button>
+  </div>
+
+  {% elif field.field_type == "background" %}
+  {% comment %}
+  Phase 5 Task 4B — a real in-R4 background/media picker, a compound widget
+  like appearance_override/repeater: ONE schema key ("background"), an object
+  value {mode,color,pattern_slug,palette_role,media_asset_id}. Nested controls
+  intentionally carry NO data-r4-field-key so the generic scalar change
+  handler never mistakes them for the field; a dedicated r4_editor.js listener
+  reads all of them and sends ONE compound section.update_settings patch
+  through the existing mutation queue. The media options come from the shared
+  Media Library (Store-scoped MediaAsset) and patterns from the existing
+  registry — never a second media/upload system, never a raw URL/JSON input.
+  {% endcomment %}
+  <div class="r4-background-picker"
+       id="r4Field-{{ field.key }}"
+       data-r4-field-key="{{ field.key }}"
+       data-r4-field-type="background">
+    <label class="r4-field-sublabel">نوع پس‌زمینه</label>
+    <select class="r4-control" data-r4-background-mode>
+      {% for value, label in background_context.mode_choices %}
+      <option value="{{ value }}" {% if current_field_value.mode == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+
+    <label class="r4-field-sublabel">رنگ دلخواه</label>
+    <input type="color" class="r4-control" data-r4-background-color value="{{ current_field_value.color|default:'#ffffff' }}">
+
+    <label class="r4-field-sublabel">طیف پالت</label>
+    <select class="r4-control" data-r4-background-palette-role>
+      {% for value, label in background_context.palette_role_choices %}
+      <option value="{{ value }}" {% if current_field_value.palette_role == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+
+    <label class="r4-field-sublabel">الگو</label>
+    <select class="r4-control" data-r4-background-pattern>
+      <option value="">— بدون الگو —</option>
+      {% for slug, pattern_label in background_context.patterns.items %}
+      <option value="{{ slug }}" {% if current_field_value.pattern_slug == slug %}selected{% endif %}>{{ pattern_label }}</option>
+      {% endfor %}
+    </select>
+
+    <label class="r4-field-sublabel">تصویر پس‌زمینه</label>
+    <select class="r4-control" data-r4-background-media>
+      <option value="">— بدون تصویر —</option>
+      {% for asset in background_context.media_assets %}
+      <option value="{{ asset.pk }}" {% if current_field_value.media_asset_id == asset.pk %}selected{% endif %}>{{ asset }}</option>
+      {% endfor %}
+    </select>
+    {% if not background_context.media_assets %}
+    <p class="r4-field-sublabel">هنوز تصویری در کتابخانه رسانه ندارید — از بخش رسانه‌ها یک تصویر بارگذاری کنید.</p>
+    {% endif %}
   </div>
   {% endif %}
 </div>

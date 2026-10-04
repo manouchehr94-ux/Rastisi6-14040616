@@ -1,0 +1,389 @@
+=== focused W4C suite ===
+Found 136 test(s).
+Creating test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+Operations to perform:
+  Synchronize unmigrated apps: messages, staticfiles
+  Apply all migrations: admin, auth, billing, blog, cart, catalog, content, contenttypes, core, customers, notifications, orders, portal, sessions, sms, storefront_builder, stores, subscriptions
+Synchronizing apps without migrations:
+  Creating tables...
+    Running deferred SQL...
+Running migrations:
+  Applying contenttypes.0001_initial... OK
+  Applying auth.0001_initial... OK
+  Applying admin.0001_initial... OK
+  Applying admin.0002_logentry_remove_auto_add... OK
+  Applying admin.0003_logentry_add_action_flag_choices... OK
+  Applying contenttypes.0002_remove_content_type_name... OK
+  Applying auth.0002_alter_permission_name_max_length... OK
+  Applying auth.0003_alter_user_email_max_length... OK
+  Applying auth.0004_alter_user_username_opts... OK
+  Applying auth.0005_alter_user_last_login_null... OK
+  Applying auth.0006_require_contenttypes_0002... OK
+  Applying auth.0007_alter_validators_add_error_messages... OK
+  Applying auth.0008_alter_user_username_max_length... OK
+  Applying auth.0009_alter_user_last_name_max_length... OK
+  Applying auth.0010_alter_group_name_max_length... OK
+  Applying auth.0011_update_proxy_permissions... OK
+  Applying auth.0012_alter_user_first_name_max_length... OK
+  Applying stores.0001_initial... OK
+  Applying stores.0002_create_akhlaghi_store... OK
+  Applying stores.0003_store_admin_subdomain_schema... OK
+  Applying stores.0004_backfill_store_admin_subdomain... OK
+  Applying stores.0005_store_admin_subdomain_enforce_not_null... OK
+  Applying subscriptions.0001_initial... OK
+  Applying subscriptions.0002_storesubscription_subscriptionevent_usagerecord_and_more... OK
+  Applying subscriptions.0003_provision_legacy_subscriptions... OK
+  Applying subscriptions.0004_alter_subscriptionevent_event_type... OK
+  Applying billing.0001_initial... OK
+  Applying billing.0002_billingsequence_subscriptioninvoiceline... OK
+  Applying billing.0003_subscriptionpaymentattempt... OK
+  Applying billing.0004_billingwebhookevent... OK
+  Applying billing.0005_subscriptiondunningstate... OK
+  Applying billing.0006_scheduledplanchange... OK
+  Applying billing.0007_subscriptioncreditnote_subscriptionrefund_and_more... OK
+  Applying blog.0001_initial... OK
+  Applying catalog.0001_initial... OK
+  Applying customers.0001_initial... OK
+  Applying cart.0001_initial... OK
+  Applying cart.0002_initial... OK
+  Applying cart.0003_cart_checkout_token... OK
+  Applying cart.0004_coupon_store_scope_schema... OK
+  Applying cart.0005_backfill_coupon_store... OK
+  Applying cart.0006_coupon_store_enforce_not_null... OK
+  Applying cart.0007_cartitem_gift_wrap... OK
+  Applying stores.0006_store_platform_code_schema... OK
+  Applying stores.0007_backfill_store_platform_code... OK
+  Applying stores.0008_store_platform_code_enforce_not_null... OK
+  Applying stores.0009_storedomain_domain_type_and_redirect... OK
+  Applying stores.0010_storedomain_retire_instead_of_redirect... OK
+  Applying stores.0011_store_onboarding_completed_at... OK
+  Applying stores.0012_backfill_store_onboarding_completed_at... OK
+  Applying stores.0013_store_onboarding_stage... OK
+  Applying stores.0014_store_deletion_requested_at_and_more... OK
+  Applying stores.0015_storeownershiptransfer... OK
+  Applying stores.0016_store_integration_connection... OK
+  Applying stores.0017_platform_owner_admin_gap_fill... OK
+  Applying orders.0001_initial... OK
+  Applying orders.0002_order_tracking_code... OK
+  Applying orders.0003_store_scope_orders_schema... OK
+  Applying catalog.0002_initial... OK
+  Applying catalog.0003_productimage_is_cover_productimage_thumbnail... OK
+  Applying catalog.0004_specification_specificationtemplate_and_more... OK
+  Applying catalog.0005_variant_backfill_and_constraints... OK
+  Applying catalog.0006_store_scope_catalog_schema... OK
+  Applying catalog.0007_backfill_catalog_store... OK
+  Applying catalog.0008_store_scope_catalog_enforce_not_null... OK
+  Applying orders.0004_backfill_orders_store... OK
+  Applying orders.0005_store_scope_orders_enforce_not_null... OK
+  Applying orders.0006_payment_gateway_config_and_attempt... OK
+  Applying orders.0007_refund_refunditem_returnrequest_returnitem_and_more... OK
+  Applying catalog.0009_product_logistics_and_seo_fields... OK
+  Applying catalog.0010_product_image_variant... OK
+  Applying catalog.0011_attribute_option_variant_engine... OK
+  Applying catalog.0012_industry_templates_and_category_schema... OK
+  Applying catalog.0013_attributevalue_source_template_value_and_more... OK
+  Applying catalog.0014_stockmovement... OK
+  Applying catalog.0015_stockmovement_return_item_alter_stockmovement_reason_and_more... OK
+  Applying catalog.0016_stockmovement_refund_item_alter_stockmovement_reason_and_more... OK
+  Applying catalog.0017_alter_stockmovement_reason_warehouse_and_more... OK
+  Applying catalog.0018_provision_default_warehouses... OK
+  Applying orders.0008_shippingraterule_shippingzone_taxclass_taxrate_and_more... OK
+  Applying catalog.0019_product_tax_class... OK
+  Applying catalog.0020_alter_stockmovement_reason... OK
+  Applying catalog.0021_brand_description_brand_is_active_brand_name_en... OK
+  Applying catalog.0022_alter_brand_options_brand_country_brand_sort_order_and_more... OK
+  Applying catalog.0023_attributevalue_swatch_image... OK
+  Applying catalog.0024_productimage_caption_productimage_is_360_and_more... OK
+  Applying catalog.0025_attribute_is_image_driving_productimage_option_value... OK
+  Applying catalog.0026_productvariant_price_productvariant_tax_class_and_more... OK
+  Applying catalog.0027_productoption_input_type_productvariant_sales_limit... OK
+  Applying catalog.0028_product_publish_at_product_visibility_and_more... OK
+  Applying catalog.0029_industry_template_sector... OK
+  Applying catalog.0030_industrytemplate_default_section_keys... OK
+  Applying catalog.0031_product_country_of_origin_product_model_code_and_more... OK
+  Applying catalog.0032_producttag_purpose... OK
+  Applying catalog.0033_product_draft_placeholder... OK
+  Applying catalog.0034_alter_productvideo_provider_add_instagram... OK
+  Applying catalog.0035_merchantcollection_merchantcollectionitem_and_more... OK
+  Applying catalog.0036_merchantcollection_source_legacy_product_tag... OK
+  Applying catalog.0037_category_image... OK
+  Applying catalog.0038_productmetafield... OK
+  Applying storefront_builder.0001_initial... OK
+  Applying storefront_builder.0002_storefrontsection_collapsed_in_editor... OK
+  Applying storefront_builder.0003_storefrontlayoutversion_appearance_config... OK
+  Applying content.0001_content_page... OK
+  Applying content.0002_publication_constraint... OK
+  Applying content.0003_homepage_media... OK
+  Applying content.0004_image_size_validators... OK
+  Applying content.0005_social_link... OK
+  Applying content.0006_navigation_menus... OK
+  Applying content.0007_menu_item_protect_menu_fk... OK
+  Applying content.0008_footer_configuration... OK
+  Applying content.0009_footer_phone_validators... OK
+  Applying content.0010_image_content_validator... OK
+  Applying content.0011_store_scope_settings_schema... OK
+  Applying content.0012_backfill_footer_store... OK
+  Applying content.0013_store_scope_settings_enforce_not_null... OK
+  Applying content.0014_storefront_builder_store_scoping... OK
+  Applying content.0015_assign_legacy_content_ownership... OK
+  Applying content.0016_add_collection_destination... OK
+  Applying content.0017_scope_hero_slides_and_banners_to_section... OK
+  Applying content.0018_storyrailitem... OK
+  Applying content.0019_mediaasset... OK
+  Applying content.0020_placement_asset_fks... OK
+  Applying content.0021_backfill_placement_assets... OK
+  Applying content.0022_alter_heroslide_destination_type_and_more... OK
+  Applying content.0023_newslettersubscriber... OK
+  Applying core.0001_initial... OK
+  Applying core.0002_shopsettings_melipayamak_password_and_more... OK
+  Applying core.0003_add_visual_identity_fields... OK
+  Applying core.0004_theme_tokens... OK
+  Applying core.0005_store_scope_settings_schema... OK
+  Applying core.0006_backfill_shopsettings_store... OK
+  Applying core.0007_store_scope_settings_enforce_not_null... OK
+  Applying core.0008_auditlogentry... OK
+  Applying core.0009_shopsettings_default_tax_class_and_more... OK
+  Applying core.0010_exportjob... OK
+  Applying core.0011_importjob_importrowresult_and_more... OK
+  Applying core.0012_shopsettings_kavenegar_api_key_and_more... OK
+  Applying core.0013_shopsettings_smsrasti_device_token_and_more... OK
+  Applying core.0014_private_storage_deconstructible... OK
+  Applying core.0015_shopsettings_tax_setup_confirmed_at... OK
+  Applying core.0016_shopsettings_gift_wrap... OK
+  Applying customers.0002_customerprofile_customernote_customertag_and_more... OK
+  Applying customers.0003_customersegment_customersegmentrule_and_more... OK
+  Applying notifications.0001_initial... OK
+  Applying orders.0009_shipping_free_over_optional_and_cost_check... OK
+  Applying orders.0010_orderitem_gift_wrap... OK
+  Applying portal.0001_initial... OK
+  Applying portal.0002_platform_configuration_and_audit... OK
+  Applying portal.0003_owner_otp_and_phone... OK
+  Applying portal.0004_alter_ownerotpchallenge_purpose... OK
+  Applying portal.0005_platformconfiguration_sms_fields... OK
+  Applying portal.0006_platform_owner_admin_gap_fill... OK
+  Applying portal.0007_platformconfiguration_enamad_verification_meta_tag... OK
+  Applying portal.0008_platformconfiguration_encrypted_zibal_credentials_and_more... OK
+  Applying portal.0009_platformconfiguration_enamad_auth_code_and_more... OK
+  Applying sessions.0001_initial... OK
+  Applying sms.0001_initial... OK
+  Applying sms.0002_otpcode_code_hash... OK
+  Applying sms.0003_smsoutboxitem... OK
+  Applying sms.0004_smslog_store... OK
+  Applying sms.0005_sms_balance_and_packages... OK
+  Applying sms.0006_seed_sms_packages... OK
+  Applying sms.0007_platform_owner_admin_gap_fill... OK
+  Applying sms.0008_sms_control_center... OK
+  Applying storefront_builder.0004_storefrontsection_stable_id... OK
+  Applying storefront_builder.0005_storefrontpage... OK
+  Applying storefront_builder.0006_ensure_pages_for_existing_versions... OK
+  Applying storefront_builder.0007_storefrontsection_page... OK
+  Applying storefront_builder.0008_backfill_section_page... OK
+  Applying storefront_builder.0009_storefrontsection_page_not_null_and_stable_id_scope... OK
+  Applying storefront_builder.0010_remove_storefrontsection_version... OK
+  Applying storefront_builder.0011_seed_default_non_home_sections... OK
+  Applying storefront_builder.0012_universal_block_row_and_lock... OK
+  Applying storefront_builder.0013_storefrontedithistoryentry... OK
+  Applying storefront_builder.0014_storefront_container_cell_foundation... OK
+  Applying storefront_builder.0015_storefrontsection_cell_and_cell_order... OK
+  Applying storefront_builder.0016_storefrontlayoutversion_template_provenance... OK
+  Applying storefront_builder.0017_add_ready_template_baseline_snapshot_and_slot_key... OK
+  Applying storefront_builder.0018_r4_editor_gate_and_edit_revision... OK
+  Applying storefront_builder.0019_page_appearance_overrides... OK
+  Applying storefront_builder.0020_r4_editor_enabled_default_true... OK
+  Applying stores.0018_storedomain_delivery_readiness... OK
+  Applying subscriptions.0005_platforminvoice_platformpaymentattempt_and_more... OK
+  Applying subscriptions.0006_remove_platform_invoice_and_attempt... OK
+  Applying subscriptions.0007_alter_subscriptionevent_event_type... OK
+System check identified no issues (0 silenced).
+test_81_mobile_nav_accessible_name_alone_is_insufficient (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAccessibilityCriticalContractTests.test_81_mobile_nav_accessible_name_alone_is_insufficient) ... ok
+test_82_product_card_accessibility_checked (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAccessibilityCriticalContractTests.test_82_product_card_accessibility_checked) ... ok
+test_83_pdp_control_accessibility_checked (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAccessibilityCriticalContractTests.test_83_pdp_control_accessibility_checked) ... ok
+test_84_cart_control_accessibility_checked (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAccessibilityCriticalContractTests.test_84_cart_control_accessibility_checked) ... ok
+test_01_add_arguments_accepts_w4c_all50_flag (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAll50CertificationHarnessTests.test_01_add_arguments_accepts_w4c_all50_flag) ... ok
+test_02_add_arguments_accepts_only_as_comma_list (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAll50CertificationHarnessTests.test_02_add_arguments_accepts_only_as_comma_list) ... ok
+test_03_w4c_all50_calls_w4c_fixture_never_legacy_sandbox (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAll50CertificationHarnessTests.test_03_w4c_all50_calls_w4c_fixture_never_legacy_sandbox) ... Safety DB backup: /home/user/RastiSi4_r4_qa_backups/storefront-builder-r4-qa-20260917-153925.sqlite3 (sha256=b6a19ff166032701582fca22f0c56342a6ec57d7cf6f452dac6d94eba97aa73f)
+W4C all-50 browser certification
+Local database restored — pre=b6a19ff166032701582fca22f0c56342a6ec57d7cf6f452dac6d94eba97aa73f post=b6a19ff166032701582fca22f0c56342a6ec57d7cf6f452dac6d94eba97aa73f match=True
+ok
+test_04_build_w4c_fixture_returns_live_50_template_list (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAll50CertificationHarnessTests.test_04_build_w4c_fixture_returns_live_50_template_list) ... ok
+test_05_apply_and_verify_published_is_state_based_not_registry_based (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAll50CertificationHarnessTests.test_05_apply_and_verify_published_is_state_based_not_registry_based) ... ok
+test_06_manifest_public_url_uses_customer_facing_host (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAll50CertificationHarnessTests.test_06_manifest_public_url_uses_customer_facing_host) ... ok
+test_07_manifest_resolver_host_matches_public_url_host (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAll50CertificationHarnessTests.test_07_manifest_resolver_host_matches_public_url_host) ... ok
+test_08_ordinary_manifest_unchanged_by_w4c_kwarg_default (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAll50CertificationHarnessTests.test_08_ordinary_manifest_unchanged_by_w4c_kwarg_default) ... ok
+test_09_w4c_cell_manifests_never_carry_a_session_key (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAll50CertificationHarnessTests.test_09_w4c_cell_manifests_never_carry_a_session_key) ... ok
+test_10_aggregator_rejects_incomplete_total (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAll50CertificationHarnessTests.test_10_aggregator_rejects_incomplete_total) ... ok
+test_11_aggregator_rejects_nonempty_missing_cells (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAll50CertificationHarnessTests.test_11_aggregator_rejects_nonempty_missing_cells) ... ok
+test_12_aggregator_never_silently_clears_duplicate_cells (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAll50CertificationHarnessTests.test_12_aggregator_never_silently_clears_duplicate_cells) ... ok
+test_13_hero_none_templates_computed_live_not_hardcoded (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAll50CertificationHarnessTests.test_13_hero_none_templates_computed_live_not_hardcoded) ... ok
+test_14_tier1_occasion_cycle_matches_deterministic_spec_order (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAll50CertificationHarnessTests.test_14_tier1_occasion_cycle_matches_deterministic_spec_order) ... ok
+test_14b_pdp_fixture_product_must_have_in_stock_variant (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAll50CertificationHarnessTests.test_14b_pdp_fixture_product_must_have_in_stock_variant)
+The PDP/Cart cells exercise real quantity-adjustment and ... ok
+test_14c_pdp_fixture_rejects_product_with_any_out_of_stock_variant (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAll50CertificationHarnessTests.test_14c_pdp_fixture_rejects_product_with_any_out_of_stock_variant)
+storefront_variant_service picks the DEFAULT variant as ... ok
+test_15_theme_cleanup_failure_halts_run_immediately_and_blocks (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAll50CertificationHarnessTests.test_15_theme_cleanup_failure_halts_run_immediately_and_blocks) ... ok
+test_16_base_result_home_screenshots_reference_staging_paths_only (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CAll50CertificationHarnessTests.test_16_base_result_home_screenshots_reference_staging_paths_only) ... ok
+test_55_hero_check_is_positional_not_broad_text_selector (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CBrowserContractSourceTests.test_55_hero_check_is_positional_not_broad_text_selector) ... ok
+test_56_home_result_requires_rsec_and_cards_for_pass (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CBrowserContractSourceTests.test_56_home_result_requires_rsec_and_cards_for_pass) ... ok
+test_57_listing_requires_real_product_link_resolution (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CBrowserContractSourceTests.test_57_listing_requires_real_product_link_resolution) ... ok
+test_58_pdp_requires_gallery_price_stock_variant_quantity_addtocart (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CBrowserContractSourceTests.test_58_pdp_requires_gallery_price_stock_variant_quantity_addtocart) ... ok
+test_59_cart_requires_item_quantity_remove_totals_checkout (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CBrowserContractSourceTests.test_59_cart_requires_item_quantity_remove_totals_checkout) ... ok
+test_60_theme_cell_checks_rendered_dom_identity (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CBrowserContractSourceTests.test_60_theme_cell_checks_rendered_dom_identity) ... ok
+test_61_bottom_nav_is_a_pass_fail_contract (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CBrowserContractSourceTests.test_61_bottom_nav_is_a_pass_fail_contract) ... ok
+test_62_listing_resolves_relative_href_before_requesting_it (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CBrowserContractSourceTests.test_62_listing_resolves_relative_href_before_requesting_it) ... ok
+test_63_theme_identity_compares_against_raw_occasion_key (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CBrowserContractSourceTests.test_63_theme_identity_compares_against_raw_occasion_key) ... ok
+test_64_cart_add_runs_inside_the_page_never_context_request (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CBrowserContractSourceTests.test_64_cart_add_runs_inside_the_page_never_context_request) ... ok
+test_92_fresh_matrix_records_branch_head_sha (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CCampaignProvenanceTests.test_92_fresh_matrix_records_branch_head_sha) ... ok
+test_93_fresh_matrix_records_run_started_at (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CCampaignProvenanceTests.test_93_fresh_matrix_records_run_started_at) ... ok
+test_94_dirty_worktree_rejected_at_fresh_campaign_start (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CCampaignProvenanceTests.test_94_dirty_worktree_rejected_at_fresh_campaign_start) ... ok
+test_95_resume_under_matching_head_proceeds (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CCampaignProvenanceTests.test_95_resume_under_matching_head_proceeds) ... ok
+test_96_resume_under_different_head_rejected (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CCampaignProvenanceTests.test_96_resume_under_different_head_rejected) ... ok
+test_97_run_finished_at_recorded_only_when_campaign_truly_completes (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CCampaignProvenanceTests.test_97_run_finished_at_recorded_only_when_campaign_truly_completes) ... ok
+test_17_base_batch_invocation_and_cell_cardinality (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CControlFlowCardinalityTests.test_17_base_batch_invocation_and_cell_cardinality) ... ok
+test_18_theme_batch_invocation_cardinality (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CControlFlowCardinalityTests.test_18_theme_batch_invocation_cardinality) ... ok
+test_19_invocation_count_differs_deliberately_from_cell_count (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CControlFlowCardinalityTests.test_19_invocation_count_differs_deliberately_from_cell_count) ... ok
+test_20_w4c_functions_never_call_process_exit (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CControlFlowCardinalityTests.test_20_w4c_functions_never_call_process_exit) ... ok
+test_21_non_w4c_manifest_still_carries_session_cookie (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CControlFlowCardinalityTests.test_21_non_w4c_manifest_still_carries_session_cookie) ... ok
+test_22_w4c_run_never_opens_legacy_result_file (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CControlFlowCardinalityTests.test_22_w4c_run_never_opens_legacy_result_file) ... ok
+test_23_overall_pass_requires_all_five_aggregate_conditions (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CControlFlowCardinalityTests.test_23_overall_pass_requires_all_five_aggregate_conditions) ... ok
+test_24_apply_and_verify_published_raises_command_error_not_attribute_error (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CControlFlowCardinalityTests.test_24_apply_and_verify_published_raises_command_error_not_attribute_error) ... ok
+test_25_two_invocations_merge_into_one_matrix_and_schema_mismatch_rejected (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CControlFlowCardinalityTests.test_25_two_invocations_merge_into_one_matrix_and_schema_mismatch_rejected) ... ok
+test_26_base_and_theme_result_paths_never_collide (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CControlFlowCardinalityTests.test_26_base_and_theme_result_paths_never_collide) ... ok
+test_85_representative_screenshot_path_is_deterministic (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CEvidenceCaptureContractTests.test_85_representative_screenshot_path_is_deterministic) ... ok
+test_86_failure_screenshot_path_is_deterministic (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CEvidenceCaptureContractTests.test_86_failure_screenshot_path_is_deterministic) ... ok
+test_87_theme_screenshot_path_is_deterministic (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CEvidenceCaptureContractTests.test_87_theme_screenshot_path_is_deterministic) ... ok
+test_88_base_manifest_threads_representative_and_failure_paths_for_non_home_cells (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CEvidenceCaptureContractTests.test_88_base_manifest_threads_representative_and_failure_paths_for_non_home_cells) ... ok
+test_89_theme_manifest_threads_screenshot_path (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CEvidenceCaptureContractTests.test_89_theme_manifest_threads_screenshot_path) ... ok
+test_90_required_theme_fields_include_screenshot (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CEvidenceCaptureContractTests.test_90_required_theme_fields_include_screenshot) ... ok
+test_91_screenshot_write_failure_forces_blocked_not_null (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CEvidenceCaptureContractTests.test_91_screenshot_write_failure_forces_blocked_not_null)
+5E -- source-grep guard: a required screenshot write must be ... ok
+test_75_listing_checks_sort_filter_pagination_where_rendered (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CListingCartBehaviorContractTests.test_75_listing_checks_sort_filter_pagination_where_rendered) ... ok
+test_76_cart_remove_presence_alone_is_insufficient (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CListingCartBehaviorContractTests.test_76_cart_remove_presence_alone_is_insufficient) ... ok
+test_77_cart_requires_real_remove_effect (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CListingCartBehaviorContractTests.test_77_cart_requires_real_remove_effect) ... ok
+test_78_cart_requires_free_shipping_goal_contract (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CListingCartBehaviorContractTests.test_78_cart_requires_free_shipping_goal_contract) ... ok
+test_79_free_shipping_state_computed_in_python_not_recomputed_in_js (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CListingCartBehaviorContractTests.test_79_free_shipping_state_computed_in_python_not_recomputed_in_js)
+Never a second pricing engine in JS -- the expected state must be ... ok
+test_80_fixture_exposes_expected_free_shipping_state (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CListingCartBehaviorContractTests.test_80_fixture_exposes_expected_free_shipping_state) ... seed_ready_template_fashion_demo با موفقیت اجرا شد:
+  Store: rasti-mode-demo (admin_subdomain=rasti-mode-demo)
+  دسته‌بندی: 13
+  برند: 6
+  کالا: 50
+  تنوع: 206 (روی 41 کالا)
+  تصویرِ کالا: 150
+  کالکشن: 6
+  Hero: 4  Banner: 6  Story: 10
+  Ready Template: هیچ‌کدام (بدونِ --ready-template)
+ok
+test_32_only_subset_with_incomplete_campaign_reports_batch_complete (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CPartialBatchStatusTests.test_32_only_subset_with_incomplete_campaign_reports_batch_complete) ... ok
+test_33_only_subset_never_raises_for_incomplete_total (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CPartialBatchStatusTests.test_33_only_subset_never_raises_for_incomplete_total) ... ok
+test_34_full_run_with_incomplete_matrix_raises_command_error (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CPartialBatchStatusTests.test_34_full_run_with_incomplete_matrix_raises_command_error) ... ok
+test_35_final_batch_auto_closes_campaign_without_finalize_flag (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CPartialBatchStatusTests.test_35_final_batch_auto_closes_campaign_without_finalize_flag) ... ok
+test_36_theme_cleanup_failure_raises_even_in_only_partial_batch (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CPartialBatchStatusTests.test_36_theme_cleanup_failure_raises_even_in_only_partial_batch) ... ok
+test_37_earlier_batch_fail_cell_survives_later_unrelated_batch (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CPartialBatchStatusTests.test_37_earlier_batch_fail_cell_survives_later_unrelated_batch) ... ok
+test_69_pdp_variant_presence_alone_is_insufficient (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CPdpInteractionContractTests.test_69_pdp_variant_presence_alone_is_insufficient)
+The old gate (`variantControls > 0`) proved a control EXISTS, never ... ok
+test_70_pdp_requires_real_variant_transition (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CPdpInteractionContractTests.test_70_pdp_requires_real_variant_transition) ... ok
+test_71_pdp_add_to_cart_presence_alone_is_insufficient (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CPdpInteractionContractTests.test_71_pdp_add_to_cart_presence_alone_is_insufficient) ... ok
+test_72_pdp_requires_real_add_to_cart_effect (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CPdpInteractionContractTests.test_72_pdp_requires_real_add_to_cart_effect) ... ok
+test_73_pdp_requires_real_navigation (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CPdpInteractionContractTests.test_73_pdp_requires_real_navigation) ... ok
+test_74_pdp_fixture_has_enough_variants_for_a_transition (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CPdpInteractionContractTests.test_74_pdp_fixture_has_enough_variants_for_a_transition)
+2A -- the deterministic fixture product must have at least 2 ... seed_ready_template_fashion_demo با موفقیت اجرا شد:
+  Store: rasti-mode-demo (admin_subdomain=rasti-mode-demo)
+  دسته‌بندی: 13
+  برند: 6
+  کالا: 50
+  تنوع: 206 (روی 41 کالا)
+  تصویرِ کالا: 150
+  کالکشن: 6
+  Hero: 4  Banner: 6  Story: 10
+  Ready Template: هیچ‌کدام (بدونِ --ready-template)
+ok
+test_65_listing_request_failure_gates_pass (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CRequestFailureGateTests.test_65_listing_request_failure_gates_pass) ... ok
+test_66_pdp_request_failure_gates_pass (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CRequestFailureGateTests.test_66_pdp_request_failure_gates_pass) ... ok
+test_67_cart_request_failure_gates_pass (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CRequestFailureGateTests.test_67_cart_request_failure_gates_pass) ... ok
+test_68_theme_request_failure_gates_pass (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CRequestFailureGateTests.test_68_theme_request_failure_gates_pass) ... ok
+test_38_run_token_is_generated_and_distinct_per_invocation (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CResultFreshnessTests.test_38_run_token_is_generated_and_distinct_per_invocation) ... ok
+test_39_stale_pass_file_survives_node_crash_is_rejected (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CResultFreshnessTests.test_39_stale_pass_file_survives_node_crash_is_rejected) ... ok
+test_40_run_token_mismatch_rejected (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CResultFreshnessTests.test_40_run_token_mismatch_rejected) ... ok
+test_41_wrong_template_identity_rejected (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CResultFreshnessTests.test_41_wrong_template_identity_rejected) ... ok
+test_42_malformed_json_rejected (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CResultFreshnessTests.test_42_malformed_json_rejected) ... ok
+test_43_missing_result_field_rejected (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CResultFreshnessTests.test_43_missing_result_field_rejected) ... ok
+test_44_unknown_result_enum_rejected (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CResultFreshnessTests.test_44_unknown_result_enum_rejected) ... ok
+test_45_nonzero_exit_with_no_result_is_blocked (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CResultFreshnessTests.test_45_nonzero_exit_with_no_result_is_blocked) ... ok
+test_46_nonzero_exit_with_valid_fresh_fail_result_is_merged_as_fail (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CResultFreshnessTests.test_46_nonzero_exit_with_valid_fresh_fail_result_is_merged_as_fail) ... ok
+test_47_nonzero_exit_but_all_pass_result_is_inconsistent_blocked (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CResultFreshnessTests.test_47_nonzero_exit_but_all_pass_result_is_inconsistent_blocked) ... ok
+test_48_missing_base_cells_helper_reports_only_unrecorded (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CResumeAndMergeTests.test_48_missing_base_cells_helper_reports_only_unrecorded) ... ok
+test_49_fully_recorded_template_skips_node_entirely (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CResumeAndMergeTests.test_49_fully_recorded_template_skips_node_entirely) ... ok
+test_50_partial_resume_requests_only_missing_cells_in_manifest (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CResumeAndMergeTests.test_50_partial_resume_requests_only_missing_cells_in_manifest) ... ok
+test_51_merge_refuses_to_overwrite_a_terminal_cell (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CResumeAndMergeTests.test_51_merge_refuses_to_overwrite_a_terminal_cell) ... ok
+test_51b_merge_refuses_to_overwrite_a_terminal_fail_cell_with_pass (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CResumeAndMergeTests.test_51b_merge_refuses_to_overwrite_a_terminal_fail_cell_with_pass) ... ok
+test_52_recovered_state_event_recorded_on_theme_drift (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CResumeAndMergeTests.test_52_recovered_state_event_recorded_on_theme_drift) ... ok
+test_53_cleanup_verified_true_only_after_real_cleanup_success (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CThemeCleanupOrderingTests.test_53_cleanup_verified_true_only_after_real_cleanup_success) ... ok
+test_54_cleanup_failure_prevents_any_merge (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CThemeCleanupOrderingTests.test_54_cleanup_failure_prevents_any_merge) ... ok
+test_27_non_tier2_only_selection_produces_zero_tier2_cells (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CTier2FilterTests.test_27_non_tier2_only_selection_produces_zero_tier2_cells) ... ok
+test_28_warm_boutique_only_produces_27_tier2_cells_all_warm_boutique (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CTier2FilterTests.test_28_warm_boutique_only_produces_27_tier2_cells_all_warm_boutique) ... ok
+test_29_beauty_dew_only_produces_27_tier2_cells_all_beauty_dew (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CTier2FilterTests.test_29_beauty_dew_only_produces_27_tier2_cells_all_beauty_dew) ... ok
+test_30_full_campaign_still_produces_exactly_54_tier2_cells (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CTier2FilterTests.test_30_full_campaign_still_produces_exactly_54_tier2_cells) ... ok
+test_31_unrelated_only_batch_never_touches_other_keys_tier2_evidence (apps.storefront_builder.tests.test_w4c_all50_certification_harness.W4CTier2FilterTests.test_31_unrelated_only_batch_never_touches_other_keys_tier2_evidence) ... ok
+test_capture_command_errors_clearly_when_demo_store_missing (apps.storefront_builder.tests.test_ready_template_real_previews.CaptureCommandSafetyTests.test_capture_command_errors_clearly_when_demo_store_missing) ... ok
+test_capture_command_exposes_no_store_targeting_argument (apps.storefront_builder.tests.test_ready_template_real_previews.CaptureCommandSafetyTests.test_capture_command_exposes_no_store_targeting_argument) ... ok
+test_capture_command_hardcodes_the_demo_store_slug (apps.storefront_builder.tests.test_ready_template_real_previews.CaptureCommandSafetyTests.test_capture_command_hardcodes_the_demo_store_slug) ... ok
+test_every_committed_screenshot_belongs_to_an_official_template (apps.storefront_builder.tests.test_ready_template_real_previews.CommittedScreenshotIntegrityTests.test_every_committed_screenshot_belongs_to_an_official_template) ... ok
+test_every_committed_screenshot_has_a_meta_sidecar_from_rasti_mode_demo (apps.storefront_builder.tests.test_ready_template_real_previews.CommittedScreenshotIntegrityTests.test_every_committed_screenshot_has_a_meta_sidecar_from_rasti_mode_demo) ... skipped 'no current-version real screenshots committed yet'
+test_every_official_template_resolves_its_committed_screenshot_as_fresh (apps.storefront_builder.tests.test_ready_template_real_previews.CommittedScreenshotIntegrityTests.test_every_official_template_resolves_its_committed_screenshot_as_fresh) ... skipped 'not all current versions of the original 8 are captured yet'
+test_every_card_renders_either_a_real_screenshot_or_the_svg_fallback (apps.storefront_builder.tests.test_ready_template_real_previews.GalleryRealScreenshotIntegrationTests.test_every_card_renders_either_a_real_screenshot_or_the_svg_fallback) ... ok
+test_gallery_get_never_calls_apply_preset_with_screenshots_present (apps.storefront_builder.tests.test_ready_template_real_previews.GalleryRealScreenshotIntegrationTests.test_gallery_get_never_calls_apply_preset_with_screenshots_present) ... ok
+test_gallery_get_still_creates_no_version_history_with_real_screenshots_present (apps.storefront_builder.tests.test_ready_template_real_previews.GalleryRealScreenshotIntegrationTests.test_gallery_get_still_creates_no_version_history_with_real_screenshots_present)
+Re-proves Batch 3's Test G under the new code path. ... ok
+test_gallery_page_never_imports_or_calls_playwright (apps.storefront_builder.tests.test_ready_template_real_previews.GalleryRealScreenshotIntegrationTests.test_gallery_page_never_imports_or_calls_playwright)
+The whole request path (view + both preview-resolution ... ok
+test_screenshot_image_can_be_opened_larger_via_a_plain_non_mutating_link (apps.storefront_builder.tests.test_ready_template_real_previews.GalleryRealScreenshotIntegrationTests.test_screenshot_image_can_be_opened_larger_via_a_plain_non_mutating_link)
+Mission Step 30: 'preview may open larger non-mutating view' — ... ok
+test_a_same_template_version_but_changed_media_manifest_is_stale (apps.storefront_builder.tests.test_ready_template_real_previews.PreviewInputFingerprintTests.test_a_same_template_version_but_changed_media_manifest_is_stale) ... ok
+test_b_same_template_version_but_changed_demo_catalog_content_is_stale (apps.storefront_builder.tests.test_ready_template_real_previews.PreviewInputFingerprintTests.test_b_same_template_version_but_changed_demo_catalog_content_is_stale) ... ok
+test_c_unchanged_inputs_resolve_normally (apps.storefront_builder.tests.test_ready_template_real_previews.PreviewInputFingerprintTests.test_c_unchanged_inputs_resolve_normally) ... ok
+test_d_another_templates_screenshot_cannot_satisfy_the_current_template (apps.storefront_builder.tests.test_ready_template_real_previews.PreviewInputFingerprintTests.test_d_another_templates_screenshot_cannot_satisfy_the_current_template) ... ok
+test_e_stale_screenshot_falls_back_safely_to_the_svg_schematic (apps.storefront_builder.tests.test_ready_template_real_previews.PreviewInputFingerprintTests.test_e_stale_screenshot_falls_back_safely_to_the_svg_schematic)
+See ``GalleryRealScreenshotIntegrationTests.test_every_card_renders_either_a_real_screenshot_or_the_svg_fallback`` ... ok
+test_content_hash_changes_when_a_screenshot_visible_field_changes (apps.storefront_builder.tests.test_ready_template_real_previews.RealScreenshotResolverTests.test_content_hash_changes_when_a_screenshot_visible_field_changes) ... ok
+test_content_hash_is_stable_across_repeated_calls (apps.storefront_builder.tests.test_ready_template_real_previews.RealScreenshotResolverTests.test_content_hash_is_stable_across_repeated_calls) ... ok
+test_f_resolve_real_screenshot_never_imports_playwright (apps.storefront_builder.tests.test_ready_template_real_previews.RealScreenshotResolverTests.test_f_resolve_real_screenshot_never_imports_playwright)
+Structural proof of the no-browser-launch contract (Step 23) — ... ok
+test_matching_content_hash_resolves_the_expected_relpath (apps.storefront_builder.tests.test_ready_template_real_previews.RealScreenshotResolverTests.test_matching_content_hash_resolves_the_expected_relpath) ... ok
+test_missing_screenshot_falls_back_to_none (apps.storefront_builder.tests.test_ready_template_real_previews.RealScreenshotResolverTests.test_missing_screenshot_falls_back_to_none) ... ok
+test_original_eight_remain_a_subset_of_the_official_catalog (apps.storefront_builder.tests.test_ready_template_real_previews.RealScreenshotResolverTests.test_original_eight_remain_a_subset_of_the_official_catalog) ... ok
+test_screenshot_relpath_shape_matches_the_mission_spec (apps.storefront_builder.tests.test_ready_template_real_previews.RealScreenshotResolverTests.test_screenshot_relpath_shape_matches_the_mission_spec) ... ok
+test_stale_content_hash_is_rejected_not_silently_served (apps.storefront_builder.tests.test_ready_template_real_previews.RealScreenshotResolverTests.test_stale_content_hash_is_rejected_not_silently_served)
+Mission Step 24: 'do NOT silently show an old version ... ok
+test_10_warm_boutique_historical_preview_cannot_satisfy_v3 (apps.storefront_builder.tests.test_ready_template_real_previews.VersionedPreviewIdentityTests.test_10_warm_boutique_historical_preview_cannot_satisfy_v3) ... ok
+test_1_registry_version_2_resolves_the_v2_preview_path (apps.storefront_builder.tests.test_ready_template_real_previews.VersionedPreviewIdentityTests.test_1_registry_version_2_resolves_the_v2_preview_path) ... ok
+test_2_metadata_version_equals_registry_version_for_every_committed_template (apps.storefront_builder.tests.test_ready_template_real_previews.VersionedPreviewIdentityTests.test_2_metadata_version_equals_registry_version_for_every_committed_template) ... skipped 'no real screenshots committed yet'
+test_3_a_v1_file_on_disk_is_stale_and_ignored_once_the_registry_is_v2 (apps.storefront_builder.tests.test_ready_template_real_previews.VersionedPreviewIdentityTests.test_3_a_v1_file_on_disk_is_stale_and_ignored_once_the_registry_is_v2)
+Even if an old v1.webp/v1.meta.json physically exists (kept for ... ok
+test_4_missing_v2_falls_back_safely_to_the_svg_schematic (apps.storefront_builder.tests.test_ready_template_real_previews.VersionedPreviewIdentityTests.test_4_missing_v2_falls_back_safely_to_the_svg_schematic) ... ok
+test_5_current_v2_resolves_normally_when_actually_captured (apps.storefront_builder.tests.test_ready_template_real_previews.VersionedPreviewIdentityTests.test_5_current_v2_resolves_normally_when_actually_captured) ... ok
+test_6_capture_command_source_derives_version_from_the_preset_not_a_constant (apps.storefront_builder.tests.test_ready_template_real_previews.VersionedPreviewIdentityTests.test_6_capture_command_source_derives_version_from_the_preset_not_a_constant) ... ok
+test_9_only_reference_overhauled_templates_move_beyond_v1 (apps.storefront_builder.tests.test_ready_template_real_previews.VersionedPreviewIdentityTests.test_9_only_reference_overhauled_templates_move_beyond_v1) ... ok
+test_browser_runner_covers_actions_layout_errors_and_destructive_controls (apps.storefront_builder.tests.test_qa_harness_contract.StorefrontBuilderQAHarnessContractTests.test_browser_runner_covers_actions_layout_errors_and_destructive_controls) ... ok
+test_every_registry_definition_is_either_hidden_or_in_a_page_library (apps.storefront_builder.tests.test_qa_harness_contract.StorefrontBuilderQAHarnessContractTests.test_every_registry_definition_is_either_hidden_or_in_a_page_library) ... ok
+test_r4_runner_and_command_support_phase3_viewports (apps.storefront_builder.tests.test_qa_harness_contract.StorefrontBuilderQAHarnessContractTests.test_r4_runner_and_command_support_phase3_viewports)
+Phase 3 harness additions are opt-in and additive: the R4 runner ... ok
+test_r4_runner_and_command_support_task7_matrix_additions (apps.storefront_builder.tests.test_qa_harness_contract.StorefrontBuilderQAHarnessContractTests.test_r4_runner_and_command_support_task7_matrix_additions)
+Task 7 harness additions are opt-in (phase3-only) and additive: ... ok
+
+----------------------------------------------------------------------
+Ran 136 tests in 68.939s
+
+OK (skipped=3)
+Destroying test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+
+=== node --check ===
+OK
+
+=== manage.py check ===
+System check identified no issues (0 silenced).
+
+=== makemigrations --check --dry-run ===
+No changes detected
+
+=== git diff --check ===
+OK

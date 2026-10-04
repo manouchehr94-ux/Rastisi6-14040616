@@ -1,0 +1,323 @@
+{
+  "_meta": {
+    "schema_version": "w4c-matrix-v1",
+    "certified_base_sha": "3a4fe9070584655548bae5a9bb574f3415bbf580",
+    "total_cells_expected": 704,
+    "duplicate_cells": [],
+    "recovered_state_events": [
+      {
+        "at": "2026-09-17T14:34:02.166843",
+        "event": "published Template drift repaired for editorial_jewelry v3"
+      }
+    ]
+  },
+  "templates": {
+    "editorial_jewelry": {
+      "key": "editorial_jewelry",
+      "version": "3",
+      "page_classes": {
+        "home": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 5,
+            "expected_rsec_count": 5,
+            "product_cards_present": true,
+            "hero_expected": true,
+            "hero_result": "PASS",
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "mobile_nav_opener": "n/a"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/w4c_smoke_campaign/screenshots/home/editorial_jewelry_home_desktop.jpg",
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 5,
+            "expected_rsec_count": 5,
+            "product_cards_present": true,
+            "hero_expected": true,
+            "hero_result": "PASS",
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "mobile_nav_opener": "n/a"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 5,
+            "expected_rsec_count": 5,
+            "product_cards_present": true,
+            "hero_expected": true,
+            "hero_result": "PASS",
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "mobile_nav_opener": "n/a"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": "/tmp/w4c_smoke_campaign/screenshots/home/editorial_jewelry_home_mobile.jpg",
+            "result": "PASS"
+          }
+        },
+        "listing": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": true,
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "search_input": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": true,
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "search_input": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": true,
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "search_input": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          }
+        },
+        "pdp": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "gallery_image_count": 3,
+            "accessibility_checks": {
+              "variant_controls": "PASS",
+              "quantity_control": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "gallery_image_count": 3,
+            "accessibility_checks": {
+              "variant_controls": "PASS",
+              "quantity_control": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "gallery_image_count": 3,
+            "accessibility_checks": {
+              "variant_controls": "PASS",
+              "quantity_control": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          }
+        },
+        "cart": {
+          "desktop": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "remove_control": "PASS",
+              "quantity_control": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "tablet": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "none",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "remove_control": "PASS",
+              "quantity_control": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          },
+          "mobile": {
+            "http_status": 200,
+            "rtl": true,
+            "overflow": false,
+            "header_count": 1,
+            "footer_count": 1,
+            "bottom_nav_present": true,
+            "bottom_nav_display": "block",
+            "rsec_count": 0,
+            "expected_rsec_count": 0,
+            "product_cards_present": false,
+            "dead_href_count": 0,
+            "accessibility_checks": {
+              "remove_control": "PASS",
+              "quantity_control": "PASS"
+            },
+            "console_errors": [],
+            "page_errors": [],
+            "failed_requests": [],
+            "screenshot": null,
+            "result": "PASS"
+          }
+        }
+      },
+      "theme": {
+        "tier1_cell": {
+          "occasion": "nowruz",
+          "intensity": "balanced",
+          "viewport": "desktop",
+          "run_token": "baf7be5e18d060766993c75b8ccbf2af",
+          "key": "editorial_jewelry",
+          "tier": "tier1",
+          "http_status": 200,
+          "rtl": true,
+          "overflow": false,
+          "rendered_theme": {
+            "theme": "nowruz",
+            "tone": "festive",
+            "intensity": "balanced",
+            "motif": "spring_blossom",
+            "accent": "#1FA67A"
+          },
+          "console_errors": [],
+          "page_errors": [],
+          "failed_requests": [],
+          "result": "PASS",
+          "cleanup_verified": true
+        },
+        "tier2_cells": {}
+      }
+    }
+  }
+}

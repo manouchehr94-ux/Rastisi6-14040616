@@ -1,6 +1,15 @@
 {% extends "portal/public/base_public.html" %}
-{% block title %}صفحه پیدا نشد | راستیسی{% endblock %}
+{% block title %}صفحه پیدا نشد | راستی‌سی{% endblock %}
 {% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+
 {% block content %}
-<section class="r-system-state"><div class="r-wrap"><div class="r-system-code">۴۰۴</div><h1 class="r-h2">این صفحه اینجا نیست.</h1><p class="r-lead">ممکن است آدرس تغییر کرده باشد، صفحه حذف شده باشد یا لینک را اشتباه وارد کرده باشید.</p><div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap"><a class="r-btn r-btn-primary" href="{% url 'portal:home' %}">بازگشت به صفحه اصلی</a><a class="r-btn r-btn-secondary" href="{% url 'portal:help' %}">راهنما</a></div></div></section>
+<section class="r-system-state">
+  <div class="r-system-code" aria-hidden="true">۴۰۴</div>
+  <h1 class="r-h2">این صفحه اینجا نیست.</h1>
+  <p class="r-lead">ممکن است آدرس تغییر کرده باشد، صفحه حذف شده باشد یا لینک را اشتباه وارد کرده باشید.</p>
+  <div class="r-system-actions">
+    <a class="rs-btn rs-btn-primary" href="{% url 'portal:home' %}">بازگشت به صفحه اصلی</a>
+    <a class="rs-btn rs-btn-outline" href="{% url 'portal:help' %}">پرسش‌های متداول</a>
+  </div>
+</section>
 {% endblock %}

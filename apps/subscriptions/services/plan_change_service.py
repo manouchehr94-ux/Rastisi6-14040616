@@ -1,15 +1,30 @@
-"""پیش‌نمایش و اجرایِ تغییرِ پلن برایِ Merchant Admin (ADR-70/71/72).
+"""پیش‌نمایشِ تغییرِ پلن + overrideِ فوریِ مدیرِ پلتفرم (ADR-70/71/72، SUB-001).
 
-تغییرِ پلن یک عملِ دومرحله‌ای است: (۱) پیش‌نمایش که تفاوتِ قابلیت‌ها و
-هشدارهایِ تنزل (متریک‌هایی که مصرفِ فعلی از سقفِ پلنِ هدف بیشتر است) را نشان
-می‌دهد و یک «توکنِ پیش‌نمایش» تولید می‌کند؛ (۲) اجرا که فقط اگر توکن با
-وضعیتِ فعلیِ اشتراک هم‌خوان باشد انجام می‌شود — در غیر این صورت پیش‌نمایش
-کهنه شده (اشتراک بینِ پیش‌نمایش و اجرا تغییر کرده) و اجرا رد می‌شود تا کاربر
-تصمیمی بر اساسِ داده‌ی قدیمی نگیرد.
+این ماژول عمداً **فقط** دو نقطه‌ی ورودیِ در-معرض-استفاده دارد:
 
-در Checkpoint 5A هیچ پولی جابه‌جا نمی‌شود (ADR-72) — تغییرِ پلن فقط
-Entitlementها را عوض می‌کند. جمع‌آوریِ پرداختِ آنلاین کارِ Checkpoint 5B است.
-"""
+* ``preview_plan_change`` — تفاوتِ Entitlementها/هشدارهایِ تنزل را بینِ
+  پلنِ فعلی و یک نسخه‌ی هدف محاسبه می‌کند و یک «توکنِ پیش‌نمایش» تولید
+  می‌کند (اثرانگشتِ وضعیتِ فعلیِ اشتراک + نسخه‌ی هدف). این تابع صرفاً
+  خوانشی است و هیچ‌چیزی را تغییر/اجرا نمی‌کند — نه پیش‌نمایشِ Merchant
+  Admin و نه پیش‌نمایشِ Portal.
+* ``execute_platform_admin_plan_override`` — مرزِ صریحِ overrideِ اپراتوریِ
+  مدیرِ پلتفرم: بدونِ preview_token، بدونِ فاکتور/پرداخت، نسخه‌ی پلنِ
+  اشتراکِ جاری را بلافاصله عوض می‌کند (فقط برایِ ``is_authenticated and
+  is_staff and is_superuser``).
+
+اختیارِ *اجرایِ* تغییرِ پلنِ مرچنت (پرداختی/زمان‌بندی‌شده) اینجا نیست —
+``apps.billing.services.plan_change_billing_service.start_plan_change``
+همان مرجعِ کانونیک است (ارتقا → فاکتورِ ``PLAN_CHANGE``؛ تنزل/برابر →
+``ScheduledPlanChange``؛ ناوردایِ «حداکثر یک تصمیمِ حل‌نشده به‌ازایِ هر
+اشتراک» را هم همانجا برقرار می‌کند). تابعِ عمومیِ قدیمیِ
+``execute_plan_change`` (preview_token → تغییرِ فوریِ بدونِ صورتحساب) کاملاً
+حذف شده است و **هیچ جایگزینِ دیگری برایِ آن در این فایل ساخته نشده**.
+
+پرایمیتیوِ سطحِ‌پایینِ واقعیِ تغییرِ ``plan_version`` هم اینجا نیست — همه‌ی
+مسیرها (پرداخت/تمدید/override/اجرایِ مرچنت) از
+``apps.subscriptions.services.subscription_service.change_plan_version``
+عبور می‌کنند؛ این ماژول (``plan_change_service``) هرگز آن پرایمیتیو را
+دوباره پیاده‌سازی نمی‌کند، فقط از آن استفاده می‌کند."""
 
 import hashlib
 
@@ -108,24 +123,128 @@ def preview_plan_change(store, target_version) -> dict:
     }
 
 
-def execute_plan_change(store, target_version, *, preview_token, actor=None, reason="", idempotency_key=""):
-    """تغییرِ پلن را اجرا می‌کند — فقط اگر ``preview_token`` با وضعیتِ فعلیِ
-    اشتراک هم‌خوان باشد. اگر اشتراک از زمانِ پیش‌نمایش تغییر کرده باشد
-    ``StalePreviewError`` می‌اندازد (محافظت در برابرِ پیش‌نمایشِ کهنه).
+def execute_platform_admin_plan_override(store, target_version, *, actor, reason="", idempotency_key=""):
+    """SUB-001 (بازبینیِ مستقلِ معماری، Repair 2) — مرزِ صریحِ overrideِ
+    اپراتوریِ مدیرِ پلتفرم: نسخه‌ی پلنِ اشتراکِ جاریِ ``store`` را بلافاصله و
+    بدونِ فاکتور/پرداخت عوض می‌کند (بدونِ preview_token — این یک تصمیمِ
+    مستقلِ عملیاتیِ مدیرِ پلتفرم است، نه یک خریدِ مرچنت که نیازمندِ محافظتِ
+    پیش‌نمایشِ کهنه‌ی 5A باشد).
 
-    هیچ پولی جابه‌جا نمی‌شود (ADR-72)."""
-    subscription = ent.get_current_subscription(store)
-    if subscription is None:
-        raise PlanChangeError("این فروشگاه اشتراکِ جاری ندارد؛ تغییرِ پلن ممکن نیست.")
-    if target_version.status != PlanVersion.Status.PUBLISHED:
-        raise PlanChangeError("فقط نسخه‌ی «منتشرشده» را می‌توان انتخاب کرد.")
-    expected = _preview_token(subscription, target_version)
-    if not preview_token or preview_token != expected:
-        raise StalePreviewError(
-            "این پیش‌نمایش دیگر معتبر نیست (اشتراکِ شما تغییر کرده)؛ لطفاً دوباره پیش‌نمایش بگیرید."
+    این تابع مستقیماً از همان پرایمیتیوِ سطحِ‌پایینِ چرخه‌ی‌حیاتی که تأییدِ
+    پرداخت/تمدید هم از آن عبور می‌کنند صدا می‌زند
+    (``subscription_service.change_plan_version``) — یک موتورِ صورتحسابِ
+    دوم یا یک انشعابِ منطقیِ تازه ساخته نمی‌شود. (SUB-001 Repair 3: تابعِ
+    عمومیِ قدیمیِ ``execute_plan_change`` — که preview_token را بررسی
+    می‌کرد و سپس بلافاصله بدونِ صورتحساب تغییرِ پلن می‌داد — کاملاً حذف
+    شده است؛ هیچ نقطه‌ی ورودِ تولیدیِ دیگری با همین معنا
+    («preview_token معتبرِ مرچنت → تغییرِ فوریِ بدونِ صورتحساب») در این
+    فایل باقی نمانده.)
+
+    ایمنی (Master Architecture Ledger — «امتیازاتِ پلتفرم» یک دامنه‌یِ
+    امنیتیِ کاملاً جدا از «مجوزدهیِ Store-scopedِ مرچنت» است، نه یک نقشِ
+    StoreMembership تازه):
+
+    * ``actor`` الزامی است و باید دقیقاً همان معیارِ سه‌بخشیِ کانونیکِ
+      ``apps.portal.platform_admin_views._is_platform_staff`` را برآورده
+      کند: ``is_authenticated and is_staff and is_superuser`` (SUB-001،
+      بازبینیِ مستقلِ معماری، Repair 3 — نسخه‌ی قبلی فقط
+      ``is_authenticated and is_superuser`` را بررسی می‌کرد، ضعیف‌تر از
+      مرزِ کانونیکِ Platform Admin و ناهم‌خوان با مستندسازیِ خودش). این
+      تابع عمداً خودِ ``_is_platform_staff`` را import نمی‌کند —
+      ``apps.portal.platform_admin_views`` در سطحِ ماژول از
+      ``apps.subscriptions`` وارد می‌کند، پس importِ برعکس از این‌جا به
+      آن ویو یک import cycle می‌سازد؛ به‌جایش همان سه‌شرط مستقیماً اینجا
+      هم بررسی می‌شود (نه یک رجیستریِ مجوزِ دومی — صرفاً تکرارِ همان
+      معیارِ Django staff/superuser).
+    * نسخه‌ی پلنِ هدف باید «منتشرشده» باشد.
+    * اشتراکِ جاری باید وجود داشته باشد.
+    * SUB-001 Repair 3 — قبل از هرگونه تغییرِ فوری، اگر یک فاکتورِ
+      ``PLAN_CHANGE`` هنوز قابلِ‌پرداخت برایِ همینِ اشتراک وجود داشته باشد،
+      override رد می‌شود (``PlanChangeError``): یک تصمیمِ مالیِ حل‌نشده
+      نباید توسطِ یک overrideِ اپراتوریِ بی‌ارتباط با پرداخت، بی‌اثر/کهنه
+      شود. مدیرِ پلتفرم باید ابتدا آن فاکتور را از طریقِ چرخه‌ی کانونیکِ
+      صورتحساب (مثلاً ``invoice_service.void_invoice``) حل کند.
+    * SUB-001 Repair 4 (تصمیمِ معمار — ناوردایِ تصمیمِ واحد) — اگر فاکتورِ
+      قابلِ‌پرداختی وجود نداشته باشد اما یک ``ScheduledPlanChange``
+      (تنزل/برابرِ زمان‌بندی‌شده‌یِ حل‌نشده) برایِ همینِ اشتراک موجود باشد،
+      این override — که خودش یک تصمیمِ *اجراشده*‌یِ فوریِ اپراتوری است، نه
+      صرفِ پیش‌نمایش — آن تنزلِ زمان‌بندی‌شده را جانشین/حذف می‌کند (از
+      طریقِ همان کمکِ کانونیکِ
+      ``plan_change_billing_service.supersede_scheduled_plan_change`` —
+      با ثبتِ حسابرسیِ ``billing.plan_change_schedule_superseded``) پیش
+      از اجرایِ فوریِ overrideِ خودش؛ در غیرِاین‌صورت آن تنزلِ زمان‌بندی‌شده
+      پشتِ overrideِ اپراتوری باقی می‌ماند و در تمدیدِ بعدی بی‌صدا آن را
+      برمی‌گرداند.
+    * ``StoreMembership``/``ROLE_PERMISSIONS``یِ مرچنت — از جمله
+      ``SUBSCRIPTION_CHANGE`` — هرگز دسترسی به این override نمی‌دهد؛ این
+      تابع صراحتاً یک override اپراتوری است، نه یک مسیرِ جایگزینِ خریدِ
+      مرچنت.
+
+    ترتیبِ قفل (SUB-001 Repair 3/4، بازبینیِ ترتیبِ قفل): این تابع، همانندِ
+    ``plan_change_billing_service.start_plan_change``، ابتدا
+    ``StoreSubscription`` جاری را با ``select_for_update`` قفل می‌کند —
+    پیش از هر بررسیِ فاکتورِ رقیب یا تنزلِ زمان‌بندی‌شده. سپس بررسیِ وجودِ
+    فاکتورِ رقیبِ قابلِ‌پرداخت یک خوانشِ *بدونِ قفل* رویِ
+    ``SubscriptionInvoice`` است (نه ``select_for_update``) — تنها سازنده‌ی
+    فاکتورهایِ ``PLAN_CHANGE`` (``start_plan_change``) خودش پیش از
+    ساختن، همینِ ردیفِ اشتراک را قفل می‌کند، پس نگه‌داشتنِ همین قفل کافی
+    است تا هیچ ``start_plan_change``ی هم‌زمان نتواند وسطِ ساختنِ فاکتور
+    باشد — بدونِ نیاز به قفلِ اضافی رویِ فاکتور. جانشینیِ
+    ``ScheduledPlanChange`` (وقتی فاکتورِ رقیبی نیست) پس از آن، همچنان
+    زیرِ همان قفلِ اشتراک، اتفاق می‌افتد و خودش صرفاً همان ردیفِ
+    ``OneToOneField(subscription)``ی ``ScheduledPlanChange`` را قفل
+    می‌کند — نه هیچ ردیفِ ``SubscriptionInvoice``ای. این هرگز ترتیبِ قفلِ
+    ``confirm_payment`` (Attempt→Invoice→Subscription) را معکوس نمی‌کند،
+    چون هرگز منتظرِ قفلِ Invoice/Attempt نمی‌ماند — فقط می‌خواند/قفلِ
+    Scheduled می‌گیرد."""
+    if (
+        actor is None
+        or not getattr(actor, "is_authenticated", False)
+        or not getattr(actor, "is_staff", False)
+        or not getattr(actor, "is_superuser", False)
+    ):
+        raise PlanChangeError("این عملیات فقط برایِ مدیرِ پلتفرمِ احرازشده (staff + superuser) مجاز است.")
+    from django.db import transaction as _transaction
+
+    from apps.subscriptions.models import StoreSubscription
+
+    with _transaction.atomic():
+        locked_subscription = (
+            StoreSubscription.objects.select_for_update()
+            .filter(store=store, is_current=True)
+            .first()
         )
-    updated = svc.change_plan_version(
-        subscription, target_version, actor=actor, reason=reason, idempotency_key=idempotency_key,
-    )
+        if locked_subscription is None:
+            raise PlanChangeError("این فروشگاه اشتراکِ جاری ندارد؛ تغییرِ پلن ممکن نیست.")
+        if target_version.status != PlanVersion.Status.PUBLISHED:
+            raise PlanChangeError("فقط نسخه‌ی «منتشرشده» را می‌توان انتخاب کرد.")
+
+        from apps.billing.models import SubscriptionInvoice
+
+        if SubscriptionInvoice.objects.filter(
+            subscription=locked_subscription, kind=SubscriptionInvoice.Kind.PLAN_CHANGE,
+            status__in=SubscriptionInvoice.PAYABLE_STATUSES,
+        ).exists():
+            raise PlanChangeError(
+                "یک فاکتورِ تغییرِ پلنِ حل‌نشده برایِ این فروشگاه وجود دارد؛ "
+                "پیش از overrideِ فوری، آن فاکتور را باطل یا حل کنید."
+            )
+
+        # SUB-001 Repair 4 (ناوردایِ تصمیمِ واحد): هیچ فاکتورِ رقیبی نیست —
+        # اما اگر یک تنزلِ زمان‌بندی‌شده وجود داشته باشد، این overrideِ
+        # فوریِ *اجراشده* آن را جانشین می‌کند (با ثبتِ حسابرسی) تا پشتِ
+        # overrideِ اپراتوری باقی نمانَد و در تمدیدِ بعدی بی‌صدا آن را
+        # برنگرداند.
+        from apps.billing.services import plan_change_billing_service as pcb
+
+        pcb.supersede_scheduled_plan_change(
+            locked_subscription, actor=actor,
+            reason="overrideِ فوریِ مدیرِ پلتفرم جایِ تنزلِ زمان‌بندی‌شده را گرفت",
+            replacement_intent=f"platform_admin_override:{target_version.pk}",
+        )
+
+        updated = svc.change_plan_version(
+            locked_subscription, target_version, actor=actor, reason=reason, idempotency_key=idempotency_key,
+        )
     ent.clear_entitlement_cache()
     return updated

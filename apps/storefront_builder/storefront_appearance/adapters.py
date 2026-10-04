@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from .. import appearance_registry, global_region_registry, section_registry
+from .. import theme_catalog
 from ..services import container_service
 from ..variant_contract import get_variant
 from .contracts import ComponentDefinition, InvalidStoreAppearanceContract
@@ -66,12 +67,44 @@ _A8_PRODUCT_VIEW_ALIASES = (
     ("featured_wall", "catalog_product_wall", "featured_row"),
 )
 
+#: Merchant-facing names of the A8 product-view aliases above (this registry
+#: is their only definition, so their label lives here too).
+_A8_PRODUCT_VIEW_LABELS_FA = {
+    "standard_grid": "شبکهٔ استاندارد",
+    "carousel": "کاروسل",
+    "dense_grid": "شبکهٔ فشرده",
+    "editorial_grid": "شبکهٔ تحریریه‌ای",
+    "catalog_list": "فهرست کاتالوگی",
+    "bento": "بنتو",
+    "featured_wall": "دیوار ویژه",
+}
+
 _A8_CARD_STYLES = (
     "standard", "marketplace_price", "editorial_minimal", "retail_row",
     "luxury_dark", "soft_capsule", "beauty_glass", "paper_frame",
     "price_first", "portrait_round", "catalog_index", "shipping_label",
     "shelf_editorial", "technical_spec", "tech_neon", "bold_outline",
 )
+
+#: Merchant-facing names of the A8 card styles above.
+_A8_CARD_STYLE_LABELS_FA = {
+    "standard": "استاندارد",
+    "marketplace_price": "قیمت‌محور بازارگاهی",
+    "editorial_minimal": "مینیمال تحریریه‌ای",
+    "retail_row": "ردیفی فروشگاهی",
+    "luxury_dark": "لوکس تیره",
+    "soft_capsule": "کپسولی نرم",
+    "beauty_glass": "شیشه‌ای زیبایی",
+    "paper_frame": "قاب کاغذی",
+    "price_first": "قیمت در صدر",
+    "portrait_round": "پرترهٔ گرد",
+    "catalog_index": "فهرست کاتالوگی",
+    "shipping_label": "برچسب ارسال",
+    "shelf_editorial": "قفسهٔ تحریریه‌ای",
+    "technical_spec": "مشخصات فنی",
+    "tech_neon": "نئون دیجیتال",
+    "bold_outline": "خط‌دور پررنگ",
+}
 
 
 def _component(
@@ -203,7 +236,7 @@ def build_existing_component_definitions() -> tuple[ComponentDefinition, ...]:
             _component(
                 key=f"product_view.{identity}.v1",
                 family_key="product_view",
-                label_fa=f"نمای محصولات {identity}",
+                label_fa=f"نمای محصولات {_A8_PRODUCT_VIEW_LABELS_FA.get(identity, identity)}",
                 registry_reference=f"section_variant:{section_key}:{variant_key}",
             )
         )
@@ -229,7 +262,7 @@ def build_existing_component_definitions() -> tuple[ComponentDefinition, ...]:
             _component(
                 key=f"card.{style}.v1",
                 family_key="card",
-                label_fa=f"کارت {style}",
+                label_fa=f"کارت {_A8_CARD_STYLE_LABELS_FA.get(style, style)}",
                 registry_reference=f"card_style:{style}",
             )
         )
@@ -275,6 +308,21 @@ def build_existing_component_definitions() -> tuple[ComponentDefinition, ...]:
             default_identity="hidden",
         )
     )
+
+    # P5-W2 — Theme (occasion/seasonal) components. The occasion identities,
+    # labels and presentation metadata live ONLY in ``theme_catalog``; this
+    # adapter merely projects each catalog entry into a ComponentDefinition
+    # whose symbolic ``theme_overlay:<occasion-key>`` reference resolves back
+    # against that same catalog. No occasion data is duplicated here.
+    for occasion in theme_catalog.list_theme_occasions():
+        definitions.append(
+            _component(
+                key=occasion.component_key,
+                family_key="theme",
+                label_fa=occasion.label_fa,
+                registry_reference=occasion.registry_reference,
+            )
+        )
     return tuple(definitions)
 
 
@@ -305,6 +353,11 @@ def resolve_registry_reference(reference: str):
     elif len(parts) == 2 and parts[0] == "badge_treatment":
         if parts[1] in section_registry.BADGE_TREATMENT_CHOICES:
             resolved = parts[1]
+    elif len(parts) == 2 and parts[0] == "theme_overlay":
+        # Resolve the bounded symbolic Theme reference against the single
+        # canonical ``theme_catalog``. Unknown occasion keys fail closed.
+        if theme_catalog.has_occasion(parts[1]):
+            resolved = theme_catalog.get_theme_occasion(parts[1])
     elif len(parts) == 3 and parts[0] == "virtual":
         token = (parts[1], parts[2])
         if token in _VIRTUAL_COMPONENTS:

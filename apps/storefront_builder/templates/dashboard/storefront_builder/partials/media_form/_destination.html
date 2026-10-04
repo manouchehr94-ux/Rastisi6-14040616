@@ -1,0 +1,67 @@
+{% comment %}
+Media form field group — destination controls. Shared by the legacy <details>
+block and the R4 modal's "لینک و مقصد" tab. Every sibling control stays in the
+DOM (x-show only hides); media_views._apply_destination_fields reads only the
+selected type's value (D-003).
+{% endcomment %}
+  <div class="form-group">
+    <label>لینک به</label>
+    <select name="destination_type" class="form-select" x-model="type">
+      <option value="none">بدون لینک</option>
+      <option value="category">دسته‌بندی</option>
+      <option value="brand">برند</option>
+      <option value="collection">کالکشن</option>
+      <option value="product">محصول</option>
+      <option value="search">صفحه جستجو</option>
+      <option value="cart">سبد خرید</option>
+      <option value="external">آدرس خارجی</option>
+    </select>
+  </div>
+  <div class="form-group" x-show="type === 'category'" x-cloak>
+    <label>انتخاب دسته‌بندی</label>
+    <select name="destination_category" class="form-select">
+      <option value="">— انتخاب کنید —</option>
+      {% for category in categories %}
+      <option value="{{ category.pk }}" {% if item.destination_type == "category" and item.destination_category_id == category.pk %}selected{% endif %}>{{ category.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-group" x-show="type === 'brand'" x-cloak>
+    <label>انتخاب برند</label>
+    <select name="destination_brand" class="form-select">
+      <option value="">— انتخاب کنید —</option>
+      {% for brand in brands %}
+      <option value="{{ brand.pk }}" {% if item.destination_type == "brand" and item.destination_brand_id == brand.pk %}selected{% endif %}>{{ brand.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-group" x-show="type === 'collection'" x-cloak>
+    <label>انتخاب کالکشن</label>
+    <select name="destination_collection" class="form-select">
+      <option value="">— انتخاب کنید —</option>
+      {% for collection in collections %}
+      <option value="{{ collection.pk }}" {% if item.destination_type == "collection" and item.destination_collection_id == collection.pk %}selected{% endif %}>{{ collection.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-group" x-show="type === 'product'" x-cloak>
+    <label>جست‌وجوی محصول</label>
+    <input type="text" class="form-input" autocomplete="off" placeholder="نام یا کد کالا را تایپ کنید..."
+           hx-get="{% url 'dashboard:storefront-builder-section-product-search' section.pk %}"
+           hx-vals='{"mode": "destination"}'
+           hx-trigger="keyup changed delay:300ms" hx-target="next .dest-product-results" hx-swap="innerHTML" name="q_dest_product">
+    <div class="dest-product-results"></div>
+    <input type="hidden" name="destination_product" :value="productId">
+    <p x-show="productId" style="font-size:12.5px;margin:6px 0 0">محصولِ انتخاب‌شده: <strong x-text="productName"></strong></p>
+  </div>
+  <div class="form-group" x-show="type === 'external'" x-cloak>
+    <label>آدرس خارجی</label>
+    <input type="url" name="destination_external_url" class="form-input" dir="ltr"
+           value="{% if item.destination_type == 'external' %}{{ item.destination_external_url|default:'' }}{% endif %}" placeholder="https://...">
+  </div>
+  <div class="form-group" x-show="type !== 'none'" x-cloak>
+    <label style="display:flex;align-items:center;gap:6px;font-weight:normal">
+      <input type="checkbox" name="open_in_new_tab" {% if item.open_in_new_tab %}checked{% endif %}>
+      باز شدن در تب جدید
+    </label>
+  </div>

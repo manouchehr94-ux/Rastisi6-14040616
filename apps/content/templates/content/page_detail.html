@@ -1,10 +1,12 @@
-{% extends "base.html" %}
+{% extends "storefront_shell.html" %}
+{% load static %}
 
 {% block title %}{{ page.effective_seo_title }} | {{ SHOP_NAME }}{% endblock %}
 
 {% block meta_description %}{% if page.effective_seo_description %}<meta name="description" content="{{ page.effective_seo_description }}">{% endif %}{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/storefront_builder.css' %}">
 <style>
 .page-content{max-width:800px;margin:40px auto;padding:0 18px}
 .page-content h1{font-size:24px;font-weight:900;margin-bottom:16px}

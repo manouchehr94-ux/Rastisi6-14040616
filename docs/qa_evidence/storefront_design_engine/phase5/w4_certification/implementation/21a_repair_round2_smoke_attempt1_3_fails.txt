@@ -1,0 +1,14 @@
+Safety DB backup: /home/user/RastiSi4_r4_qa_backups/storefront-builder-r4-qa-20260917-154125.sqlite3 (sha256=d008ecf54d4ad8e73c0aa44a443d1ceeb87f958a0d5c4097b7d831dea1b6efad)
+seed_ready_template_fashion_demo با موفقیت اجرا شد:
+  Store: rasti-mode-demo (admin_subdomain=rasti-mode-demo)
+  دسته‌بندی: 13
+  برند: 6
+  کالا: 50
+  تنوع: 206 (روی 41 کالا)
+  تصویرِ کالا: 0
+  کالکشن: 6
+  Hero: 0  Banner: 0  Story: 0
+  Ready Template: هیچ‌کدام (بدونِ --ready-template)
+W4C all-50 browser certification
+Local database restored — pre=d008ecf54d4ad8e73c0aa44a443d1ceeb87f958a0d5c4097b7d831dea1b6efad post=d008ecf54d4ad8e73c0aa44a443d1ceeb87f958a0d5c4097b7d831dea1b6efad match=True
+W4C BATCH COMPLETE -- CAMPAIGN INCOMPLETE -- selected_keys=editorial_jewelry, cells_recorded_this_run=13, cumulative_total_cells_recorded=13/704, cumulative_missing=691, cumulative_fail_count=3, cumulative_blocked_count=0

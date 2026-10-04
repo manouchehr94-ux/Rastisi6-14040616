@@ -1,0 +1,98 @@
+{% load storefront_builder_extras %}
+{% comment %}
+Phase 5 Task 4 (remediation R1a) — body-only media add/edit form, shared by
+the full-page legacy screen (section_media_form.html includes this) AND the
+R4 Inspector's inline media manager (loaded via HX-Request). Same canonical
+media_views form view / persistence; no second form. When embedded in R4 the
+form submits via htmx back into the inline manager container so the merchant
+never leaves R4; the full-page host submits normally.
+
+The `destinationPicker()` Alpine factory this form's `x-data` below needs is
+declared exactly once, in static/storefront_builder/destination_picker.js,
+loaded as a normal page script by both of this partial's real hosts
+(r4/editor.html and section_media_form.html) — never inline here, since a
+<script> embedded in this fragment never executes when the R4 Inspector
+inserts it via innerHTML/htmx (per the DOM spec).
+
+R4 heavy-editor modal — when ``inline_media`` (the explicit R4-inline marker)
+this SAME form is mounted inside the Design Studio's ``media-editor`` dialog
+(r4_studio.js) as four presentation-only tabs (محتوا / تصاویر / لینک و مقصد /
+وضعیت). It is still ONE <form id="r4MediaForm"> and ONE Save (the dialog
+footer's submit button is tied to it via ``form=``): every panel stays in the
+DOM (x-show only hides), so switching tabs never drops a value, and the
+server-side contract (media_views) is unchanged. The field groups live in
+media_form/_*.html and are shared with the legacy linear layout below, so
+there is no second copy of any field. The legacy full page (no marker) keeps
+its original linear layout.
+{% endcomment %}
+{% if inline_media %}
+<div class="r4-media-form" x-data="mediaFormTabs('{{ error_tab|default:"content" }}')">
+  {% include "dashboard/storefront_builder/partials/media_form/_defaults_notice.html" %}
+  <div class="r4-media-errors" role="alert" data-r4-media-errors {% if not form_errors %}hidden{% endif %}>
+    {% if form_errors %}<strong>ذخیره انجام نشد:</strong>
+    <ul>{% for message in form_errors %}<li>{{ message }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+  <div class="r4-media-tabs" role="tablist" aria-label="بخش‌های فرم" @keydown="onKey($event)">
+    <button type="button" role="tab" id="r4MediaTab-content" aria-controls="r4MediaPanel-content" :aria-selected="tab === 'content'" :tabindex="tab === 'content' ? 0 : -1" :class="{ 'is-active': tab === 'content' }" @click="tab = 'content'">محتوا{% if "content" in error_tabs %} <span class="r4-media-tab-flag" role="img" aria-label="دارای خطا">●</span>{% endif %}</button>
+    <button type="button" role="tab" id="r4MediaTab-media" aria-controls="r4MediaPanel-media" :aria-selected="tab === 'media'" :tabindex="tab === 'media' ? 0 : -1" :class="{ 'is-active': tab === 'media' }" @click="tab = 'media'">تصاویر{% if "media" in error_tabs %} <span class="r4-media-tab-flag" role="img" aria-label="دارای خطا">●</span>{% endif %}</button>
+    <button type="button" role="tab" id="r4MediaTab-destination" aria-controls="r4MediaPanel-destination" :aria-selected="tab === 'destination'" :tabindex="tab === 'destination' ? 0 : -1" :class="{ 'is-active': tab === 'destination' }" @click="tab = 'destination'">لینک و مقصد{% if "destination" in error_tabs %} <span class="r4-media-tab-flag" role="img" aria-label="دارای خطا">●</span>{% endif %}</button>
+    <button type="button" role="tab" id="r4MediaTab-status" aria-controls="r4MediaPanel-status" :aria-selected="tab === 'status'" :tabindex="tab === 'status' ? 0 : -1" :class="{ 'is-active': tab === 'status' }" @click="tab = 'status'">وضعیت{% if "status" in error_tabs %} <span class="r4-media-tab-flag" role="img" aria-label="دارای خطا">●</span>{% endif %}</button>
+  </div>
+
+  {# novalidate: server-side validation stays authoritative — a hidden invalid control (e.g. an external URL on an inactive tab) must never silently block Save. #}
+  <form method="post" enctype="multipart/form-data" id="r4MediaForm" novalidate
+        {% if item.pk %}hx-post="{% url 'dashboard:storefront-builder-section-media-edit' pk=section.pk kind=kind item_pk=item.pk %}"{% else %}hx-post="{% url 'dashboard:storefront-builder-section-media-add' pk=section.pk kind=kind %}"{% endif %}
+        hx-target="#r4MediaModalSlot" hx-swap="innerHTML" hx-encoding="multipart/form-data"
+        hx-headers='{"HX-R4-Inline": "1"}' hx-disabled-elt="#r4MediaSave"
+        x-data="destinationPicker(
+          '{{ item.destination_type|default:"none"|escapejs }}',
+          {% if item.destination_type == "category" %}{{ item.destination_category_id|default_if_none:"null" }}{% elif item.destination_type == "product" %}{{ item.destination_product_id|default_if_none:"null" }}{% elif item.destination_type == "brand" %}{{ item.destination_brand_id|default_if_none:"null" }}{% elif item.destination_type == "collection" %}{{ item.destination_collection_id|default_if_none:"null" }}{% else %}null{% endif %},
+          '{% if item.destination_type == "product" %}{{ item.destination_product.name|default:""|escapejs }}{% endif %}')">
+    {% csrf_token %}
+    <div role="tabpanel" id="r4MediaPanel-content" aria-labelledby="r4MediaTab-content" data-r4-media-panel="content" x-show="tab === 'content'" x-cloak>
+      {% include "dashboard/storefront_builder/partials/media_form/_text.html" %}
+      {% include "dashboard/storefront_builder/partials/media_form/_button.html" %}
+    </div>
+    <div role="tabpanel" id="r4MediaPanel-media" aria-labelledby="r4MediaTab-media" data-r4-media-panel="media" x-show="tab === 'media'" x-cloak>
+      {% include "dashboard/storefront_builder/partials/media_form/_files.html" %}
+    </div>
+    <div role="tabpanel" id="r4MediaPanel-destination" aria-labelledby="r4MediaTab-destination" data-r4-media-panel="destination" x-show="tab === 'destination'" x-cloak>
+      {% include "dashboard/storefront_builder/partials/media_form/_destination.html" %}
+    </div>
+    <div role="tabpanel" id="r4MediaPanel-status" aria-labelledby="r4MediaTab-status" data-r4-media-panel="status" x-show="tab === 'status'" x-cloak>
+      {% include "dashboard/storefront_builder/partials/media_form/_status.html" %}
+    </div>
+  </form>
+</div>
+{% else %}
+<div class="panel" style="max-width:640px">
+  <a href="{% url 'dashboard:storefront-builder-section-media-list' pk=section.pk kind=kind %}"
+     class="btn btn-sm" style="margin-bottom:16px;display:inline-block">← بازگشت به {{ config.label_plural }}</a>
+
+  {% include "dashboard/storefront_builder/partials/media_form/_defaults_notice.html" %}
+  <form method="post" enctype="multipart/form-data"
+        x-data="destinationPicker(
+          '{{ item.destination_type|default:"none"|escapejs }}',
+          {% if item.destination_type == "category" %}{{ item.destination_category_id|default_if_none:"null" }}{% elif item.destination_type == "product" %}{{ item.destination_product_id|default_if_none:"null" }}{% elif item.destination_type == "brand" %}{{ item.destination_brand_id|default_if_none:"null" }}{% elif item.destination_type == "collection" %}{{ item.destination_collection_id|default_if_none:"null" }}{% else %}null{% endif %},
+          '{% if item.destination_type == "product" %}{{ item.destination_product.name|default:""|escapejs }}{% endif %}')">
+    {% csrf_token %}
+    {% include "dashboard/storefront_builder/partials/media_form/_text.html" %}
+    {% include "dashboard/storefront_builder/partials/media_form/_files.html" %}
+    {% include "dashboard/storefront_builder/partials/media_form/_button.html" %}
+
+    <details style="margin-top:6px" {% if item.destination_type and item.destination_type != "none" %}open{% endif %}>
+      <summary style="cursor:pointer;font-size:13px;color:var(--muted)">لینک مقصد (وقتی روی تصویر/دکمه کلیک شود)</summary>
+      <div style="margin-top:10px">
+        {% include "dashboard/storefront_builder/partials/media_form/_destination.html" %}
+      </div>
+    </details>
+
+    <div style="margin-top:10px">{% include "dashboard/storefront_builder/partials/media_form/_status.html" %}</div>
+
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button type="submit" class="btn btn-primary">ذخیره</button>
+      <a href="{% url 'dashboard:storefront-builder-section-media-list' pk=section.pk kind=kind %}" class="btn">انصراف</a>
+    </div>
+  </form>
+</div>
+{% endif %}

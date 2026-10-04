@@ -21,7 +21,7 @@ may opt into ``"sidebar_dense"`` too; nothing here names a Store/template.
       <div class="plp-toolbar plp-toolbar-promo">
         <span id="plpLoading" class="htmx-indicator plp-loading">⏳ در حال بارگذاری...</span>
         <span class="plp-sort-label">مرتب‌سازی بر اساس:</span>
-        <select class="plp-sort-select" name="sort">
+        <select class="plp-sort-select" name="sort" aria-label="مرتب‌سازی">
           {% for key, opt in sort_options.items %}
           <option value="{{ key }}" {% if sort_key == key %}selected{% endif %}>{{ opt.1 }}</option>
           {% endfor %}
@@ -37,12 +37,12 @@ may opt into ``"sidebar_dense"`` too; nothing here names a Store/template.
 
         <h3>جستجو</h3>
         <div class="plp-fg">
-          <input class="plp-inp" type="text" name="q" placeholder="نام کالا، برند یا دسته..." value="{{ query }}">
+          <input class="plp-inp" type="text" name="q" placeholder="نام کالا، برند یا دسته..." value="{{ query }}" aria-label="جستجوی محصولات">
         </div>
 
         <h3>دسته‌بندی</h3>
         <div class="plp-fg">
-          <select class="plp-inp" name="category">
+          <select class="plp-inp" name="category" aria-label="دسته‌بندی">
             <option value="">همه دسته‌ها</option>
             {% for cat in filter_categories %}
             <optgroup label="{{ cat.icon }} {{ cat.name }}">
@@ -57,7 +57,7 @@ may opt into ``"sidebar_dense"`` too; nothing here names a Store/template.
 
         <h3>برند</h3>
         <div class="plp-fg">
-          <select class="plp-inp" name="brand">
+          <select class="plp-inp" name="brand" aria-label="برند">
             <option value="">همه برندها</option>
             {% for b in brands %}
             <option value="{{ b.slug }}" {% if selected_brand == b.slug %}selected{% endif %}>{{ b.name }}</option>
@@ -67,8 +67,8 @@ may opt into ``"sidebar_dense"`` too; nothing here names a Store/template.
 
         <h3>محدوده قیمت</h3>
         <div class="plp-price-row">
-          <input class="plp-inp" type="number" name="min_price" placeholder="از" min="0" value="{{ min_price }}">
-          <input class="plp-inp" type="number" name="max_price" placeholder="تا" min="0" value="{{ max_price }}">
+          <input class="plp-inp" type="number" name="min_price" placeholder="از" min="0" value="{{ min_price }}" aria-label="حداقل قیمت">
+          <input class="plp-inp" type="number" name="max_price" placeholder="تا" min="0" value="{{ max_price }}" aria-label="حداکثر قیمت">
         </div>
 
         <label class="plp-check">
@@ -100,12 +100,12 @@ may opt into ``"sidebar_dense"`` too; nothing here names a Store/template.
             hx-push-url="true" hx-trigger="submit, change" hx-indicator="#plpLoading">
         <h3>جستجو</h3>
         <div class="plp-fg">
-          <input class="plp-inp" type="text" name="q" placeholder="نام کالا، برند یا دسته..." value="{{ query }}">
+          <input class="plp-inp" type="text" name="q" placeholder="نام کالا، برند یا دسته..." value="{{ query }}" aria-label="جستجوی محصولات">
         </div>
 
         <h3>دسته‌بندی</h3>
         <div class="plp-fg">
-          <select class="plp-inp" name="category">
+          <select class="plp-inp" name="category" aria-label="دسته‌بندی">
             <option value="">همه دسته‌ها</option>
             {% for cat in filter_categories %}
             <optgroup label="{{ cat.icon }} {{ cat.name }}">
@@ -120,7 +120,7 @@ may opt into ``"sidebar_dense"`` too; nothing here names a Store/template.
 
         <h3>برند</h3>
         <div class="plp-fg">
-          <select class="plp-inp" name="brand">
+          <select class="plp-inp" name="brand" aria-label="برند">
             <option value="">همه برندها</option>
             {% for b in brands %}
             <option value="{{ b.slug }}" {% if selected_brand == b.slug %}selected{% endif %}>{{ b.name }}</option>
@@ -130,8 +130,8 @@ may opt into ``"sidebar_dense"`` too; nothing here names a Store/template.
 
         <h3>بازه‌ی قیمت (تومان)</h3>
         <div class="plp-price-row">
-          <input class="plp-inp" type="number" name="min_price" placeholder="از" min="0" value="{{ min_price }}">
-          <input class="plp-inp" type="number" name="max_price" placeholder="تا" min="0" value="{{ max_price }}">
+          <input class="plp-inp" type="number" name="min_price" placeholder="از" min="0" value="{{ min_price }}" aria-label="حداقل قیمت">
+          <input class="plp-inp" type="number" name="max_price" placeholder="تا" min="0" value="{{ max_price }}" aria-label="حداکثر قیمت">
         </div>
 
         <label class="plp-check">
@@ -146,7 +146,7 @@ may opt into ``"sidebar_dense"`` too; nothing here names a Store/template.
 
         <h3>مرتب‌سازی</h3>
         <div class="plp-fg">
-          <select class="plp-inp" name="sort">
+          <select class="plp-inp" name="sort" aria-label="مرتب‌سازی">
             {% for key, opt in sort_options.items %}
             <option value="{{ key }}" {% if sort_key == key %}selected{% endif %}>{{ opt.1 }}</option>
             {% endfor %}
