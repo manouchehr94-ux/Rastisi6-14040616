@@ -267,8 +267,15 @@ class PermissionAwareNavigationTests(PermissionEnforcementTestCase):
     def test_analyst_does_not_see_settings_nav(self):
         self._login(self.analyst)
         response = self.client.get(reverse("dashboard:dashboard"))
-        self.assertNotContains(response, 'data-section="settings"')
         self.assertContains(response, 'data-section="products"')
+        # The analyst keeps read-only settings screens (shipping, tax, usage…) but never the
+        # general-settings, team or SMS tabs they cannot open.
+        shipping = self.client.get(reverse("dashboard:shipping-setup"))
+        self.assertEqual(shipping.status_code, 200)
+        for tab in ("settings-general", "settings-finance", "sms", "staff"):
+            self.assertNotContains(shipping, f'data-tab="{tab}"')
+        self.assertContains(shipping, 'data-tab="shipping"')
+        self.assertEqual(self.client.get(reverse("dashboard:settings")).status_code, 403)
 
     def test_catalog_manager_does_not_see_customers_or_content_nav(self):
         self._login(self.catalog_manager)
