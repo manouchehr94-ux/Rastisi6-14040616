@@ -274,7 +274,7 @@ class MandatoryCampaignTests(MandatoryBase):
         self.assertEqual(coupon.store, self.store)
 
         # اعلان‌ها در صف، حاویِ همان کد، فقط برایِ برنده
-        rows = NotificationOutbox.objects.filter(event_key="coupon.issued")
+        rows = NotificationOutbox.objects.filter(event_key="campaign.offer_percent")
         self.assertEqual({r.channel for r in rows}, {"sms", "email"})
         self.assertTrue(all(r.customer == winner and coupon.code in r.body for r in rows))
         self.assertTrue(all(r.metadata["issuance_id"] == issuance.pk for r in rows))
@@ -288,7 +288,7 @@ class MandatoryCampaignTests(MandatoryBase):
         self.assertEqual((run2.issued, run2.skipped_existing), (0, 1))
         self.assertEqual(CampaignIssuance.objects.count(), 1)
         self.assertEqual(Coupon.objects.filter(store=self.store, code__startswith="MEHR-").count(), 1)
-        self.assertEqual(NotificationOutbox.objects.filter(event_key="coupon.issued").count(), 2)
+        self.assertEqual(NotificationOutbox.objects.filter(event_key="campaign.offer_percent").count(), 2)
 
         # بازخرید: ۳۰٪ با سقفِ ۴ میلیون روی سبدِ ۲۰ میلیونی
         from apps.cart.services.pricing import cart_totals
@@ -324,7 +324,7 @@ class MandatoryCampaignTests(MandatoryBase):
         cs.execute_campaign(campaign)
         issuance = CampaignIssuance.objects.get()
         self.assertEqual(issuance.coupon.customer, c)  # در حسابِ مشتری ذخیره شد
-        rows = NotificationOutbox.objects.filter(event_key="coupon.issued")
+        rows = NotificationOutbox.objects.filter(event_key="campaign.offer_percent")
         self.assertTrue(all(r.status == "skipped" and r.skip_reason == "no_promotional_consent" for r in rows))
         deliver_pending()
         self.assertFalse([m for m in mail.outbox if issuance.coupon.code in m.body])
@@ -418,7 +418,7 @@ class DeliveryValidityTests(MandatoryBase):
         self.assertIsNotNone(coupon.delivery_anchored_at)
         self.assertAlmostEqual((coupon.expires_at - coupon.delivery_anchored_at).total_seconds(), 10 * 86400, delta=1)
         anchored = coupon.delivery_anchored_at
-        NotificationOutbox.objects.filter(event_key="coupon.issued", channel="sms").update(status="pending", attempts=0)
+        NotificationOutbox.objects.filter(event_key="campaign.offer_percent", channel="sms").update(status="pending", attempts=0)
         deliver_pending()
         coupon.refresh_from_db()
         self.assertEqual(coupon.delivery_anchored_at, anchored)  # فقط اولین تحویل

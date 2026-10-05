@@ -149,13 +149,38 @@ def resolve_candidates(campaign: Campaign, today: dt.date) -> dict[int, str]:
     return {}
 
 
+NO_OFFSET_KINDS = frozenset({K.ORDER_MILESTONE, K.SPENDING_MILESTONE, K.REACTIVATION})
+
+
 def notification_event_key(campaign: Campaign) -> str:
+    """رویدادِ اعلانِ این کمپین. پیامِ هر ترکیبِ «زمان‌بندی × نوعِ هدیه» قالبِ مستقلِ پلتفرم دارد:
+    پیامِ «فقط تبریک» هرگز وعده‌یِ هدیه/کد نمی‌دهد و پیامِ پیش/پس از مناسبت با زمانِ واقعیِ
+    صدورِ پاداش سازگار است."""
+    has_gift = campaign.reward_type == Campaign.Reward.COUPON
     if campaign.trigger_type != Campaign.Trigger.OCCASION:
-        return "coupon.issued" if campaign.reward_type == Campaign.Reward.COUPON else "reward.issued"
-    if campaign.occasion_kind == K.BIRTHDAY:
-        if campaign.occasion_offset_days < 0:
-            return "occasion.birthday_before"
-        if campaign.occasion_offset_days == 0:
-            return "occasion.birthday"
-        return "occasion.birthday_after"
-    return "occasion.generic"
+        if not has_gift:
+            return "campaign.announce"
+        return {
+            "percent": "campaign.offer_percent", "fixed": "campaign.offer_fixed",
+        }.get(campaign.coupon_type, "campaign.offer_free_ship")
+    # نقطه‌ی عطف/بازگشت با «برقرارشدنِ شرط» اجرا می‌شوند و offset در resolve_candidates بی‌اثر است ⇒ پیام همیشه «همان روز»
+    offset = 0 if campaign.occasion_kind in NO_OFFSET_KINDS else campaign.occasion_offset_days
+    timing = "before" if offset < 0 else "after" if offset > 0 else "on"
+    family = "birthday" if campaign.occasion_kind == K.BIRTHDAY else "generic"
+    return _OCCASION_EVENT_KEYS[(family, timing, has_gift)]
+
+
+_OCCASION_EVENT_KEYS = {
+    ("birthday", "before", True): "occasion.birthday_before",
+    ("birthday", "on", True): "occasion.birthday",
+    ("birthday", "after", True): "occasion.birthday_after",
+    ("birthday", "before", False): "occasion.birthday_before_greeting",
+    ("birthday", "on", False): "occasion.birthday_greeting",
+    ("birthday", "after", False): "occasion.birthday_after_greeting",
+    ("generic", "before", True): "occasion.generic_before",
+    ("generic", "on", True): "occasion.generic",
+    ("generic", "after", True): "occasion.generic_after",
+    ("generic", "before", False): "occasion.generic_before_greeting",
+    ("generic", "on", False): "occasion.generic_greeting",
+    ("generic", "after", False): "occasion.generic_after_greeting",
+}

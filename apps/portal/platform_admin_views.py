@@ -400,7 +400,11 @@ def sms_template_edit(request, event_key):
                     record_platform_attempt(event_key=template.event_key, recipient=phone, message=sample, result=result, protect_body=True)
                 else:
                     sample = template.body
-                    samples = {"customer_name": "کاربر آزمایشی", "shop_name": "فروشگاه آزمایشی", "order_code": "TEST-1", "amount": "100000", "tracking_code": "TRACK-1"}
+                    samples = {
+                        "customer_name": "کاربر آزمایشی", "shop_name": "فروشگاه آزمایشی", "order_code": "TEST-1", "amount": "100000",
+                        "tracking_code": "TRACK-1", "discount_code": "GIFT-AB12CD34", "discount_amount": "۱۵٪",
+                        "discount_expires_at": "۱۴۰۵/۰۹/۳۰", "campaign_name": "کمپین نمونه", "occasion_name": "تولد شما", "days_left": "۳",
+                    }
                     for key, value in samples.items():
                         sample = sample.replace("{" + key + "}", value)
                     # تست باید دقیقاً مسیر واقعی Production را امتحان کند: اگر

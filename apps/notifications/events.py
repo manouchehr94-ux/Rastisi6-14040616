@@ -62,6 +62,10 @@ OCCASION_VARS = {
     **DISCOUNT_VARS,
     "occasion_name": "نام مناسبت",
 }
+# رویدادهایِ «فقط تبریک» عمداً متغیرِ هدیه/کد ندارند: پیامِ بدونِ هدیه هرگز وعده‌یِ کد یا تخفیف نمی‌دهد.
+GREETING_VARS = {**CUSTOMER_VARS}
+OCCASION_GREETING_VARS = {**CUSTOMER_VARS, "occasion_name": "نام مناسبت"}
+CAMPAIGN_OFFER_VARS = {**DISCOUNT_VARS}
 
 
 @dataclass(frozen=True)
@@ -78,6 +82,10 @@ class EventDef:
     email_enabled_default: bool = True
     #: اگر مقدار داشته باشد، پیامکِ این رویداد از مسیرِ قدیمیِ apps.sms ارسال می‌شود.
     legacy_sms_event: str = ""
+    #: اگر مقدار داشته باشد، «متنِ پیامکِ» این رویداد فقط در اختیارِ پلتفرم است (ردیفِ سراسریِ
+    #: ``SmsTemplate`` با این کلید)؛ ارسال همچنان از همین سیستمِ اعلان (outbox) انجام می‌شود و
+    #: هیچ قالبِ فروشگاه/override ای برایِ پیامکِ آن اعمال نمی‌شود.
+    platform_sms_event: str = ""
     sample: dict = field(default_factory=dict)
     #: رویدادِ کارکنان: علاوه بر مالک، همه‌ی اعضایِ فعالِ دارایِ این مجوز هم گیرنده‌اند (مثلاً کارکنانِ مالی).
     staff_permission: str = ""
@@ -199,7 +207,7 @@ _register(
     ),
     EventDef(
         "coupon.expiring", "یادآوری نزدیک‌شدن انقضای کد", PROMOTIONAL, {**DISCOUNT_VARS, "days_left": "روزهای باقی‌مانده"},
-        default_sms="{customer_name} عزیز، کد تخفیف {discount_code} شما {days_left} روز دیگر منقضی می‌شود. {store_name}",
+        platform_sms_event="camp_expiry_reminder",
         default_email_subject="کد تخفیف شما به‌زودی منقضی می‌شود",
         default_email_body="{customer_name} عزیز،\nکد تخفیف {discount_code} تا {discount_expires_at} ({days_left} روز دیگر) معتبر است.",
     ),
@@ -226,29 +234,104 @@ _register(
         default_email_body="{customer_name} عزیز،\n{reward_description}",
     ),
     # ------------------------------------------------------------------ مناسبت‌ها
+    # پیامکِ این رویدادها پلتفرم‌محور است (``platform_sms_event``)؛ ایمیل‌ها همچنان قالبِ قابل‌ویرایشِ فروشگاه‌اند.
     EventDef(
-        "occasion.birthday_before", "یادآوری پیش از تولد", PROMOTIONAL, OCCASION_VARS,
-        default_sms="{customer_name} عزیز، تولدتان نزدیک است! {store_name} هدیه‌ای برایتان دارد.",
+        "occasion.birthday_before", "تولد · پیش از روز تولد (با هدیه)", PROMOTIONAL, OCCASION_VARS,
+        platform_sms_event="occ_birthday_before",
         default_email_subject="تولدتان نزدیک است 🎂",
-        default_email_body="{customer_name} عزیز،\nتولدتان نزدیک است و {store_name} هدیه‌ای برای شما آماده کرده است.",
+        default_email_body="{customer_name} عزیز،\nتولدتان نزدیک است و {store_name} هدیه‌ای برای شما آماده کرده است.\nکد هدیه شما: {discount_code}\nمقدار تخفیف: {discount_amount}\nاعتبار تا: {discount_expires_at}",
     ),
     EventDef(
-        "occasion.birthday", "تبریک تولد", PROMOTIONAL, OCCASION_VARS,
-        default_sms="{customer_name} عزیز، تولدتان مبارک! کد هدیه شما: {discount_code} ({discount_amount}) تا {discount_expires_at} — {store_name}",
+        "occasion.birthday", "تولد · روز تولد (با هدیه)", PROMOTIONAL, OCCASION_VARS,
+        platform_sms_event="occ_birthday_on",
         default_email_subject="تولدتان مبارک 🎉",
         default_email_body="{customer_name} عزیز،\nتولدتان مبارک!\nکد هدیه شما: {discount_code}\nمقدار تخفیف: {discount_amount}\nاعتبار تا: {discount_expires_at}",
     ),
     EventDef(
-        "occasion.birthday_after", "پیام پس از تولد", PROMOTIONAL, OCCASION_VARS,
-        default_sms="{customer_name} عزیز، امیدواریم تولد خوبی داشتید! {store_name}",
-        default_email_subject="امیدواریم تولد خوبی داشته باشید",
-        default_email_body="{customer_name} عزیز،\nامیدواریم تولد خوبی داشته باشید. هدیه‌ی شما: {discount_code} تا {discount_expires_at}",
+        "occasion.birthday_after", "تولد · پس از روز تولد (با هدیه)", PROMOTIONAL, OCCASION_VARS,
+        platform_sms_event="occ_birthday_after",
+        default_email_subject="هدیه تولد شما از {store_name}",
+        default_email_body="{customer_name} عزیز،\nامیدواریم تولد خوبی داشته باشید. هدیه‌ی شما: {discount_code} ({discount_amount}) تا {discount_expires_at}",
     ),
     EventDef(
-        "occasion.generic", "مناسبت‌های دیگر (سالگرد، نقاط عطف، تعطیلات، مناسبت اختصاصی)", PROMOTIONAL, OCCASION_VARS,
-        default_sms="{customer_name} عزیز، {occasion_name}! کد هدیه شما: {discount_code} ({discount_amount}) تا {discount_expires_at} — {store_name}",
+        "occasion.birthday_before_greeting", "تولد · پیش از روز تولد (فقط تبریک)", PROMOTIONAL, GREETING_VARS,
+        platform_sms_event="occ_birthday_before_nogift",
+        default_email_subject="تولدتان نزدیک است 🎂",
+        default_email_body="{customer_name} عزیز،\nتولدتان نزدیک است و {store_name} برایتان روزی پر از شادی آرزو می‌کند.",
+    ),
+    EventDef(
+        "occasion.birthday_greeting", "تولد · روز تولد (فقط تبریک)", PROMOTIONAL, GREETING_VARS,
+        platform_sms_event="occ_birthday_on_nogift",
+        default_email_subject="تولدتان مبارک 🎉",
+        default_email_body="{customer_name} عزیز،\nتولدتان مبارک! {store_name} برایتان سالی سرشار از شادی آرزو می‌کند.",
+    ),
+    EventDef(
+        "occasion.birthday_after_greeting", "تولد · پس از روز تولد (فقط تبریک)", PROMOTIONAL, GREETING_VARS,
+        platform_sms_event="occ_birthday_after_nogift",
+        default_email_subject="امیدواریم تولد خوبی داشته باشید",
+        default_email_body="{customer_name} عزیز،\nامیدواریم تولد خوبی داشته باشید. {store_name}",
+    ),
+    EventDef(
+        "occasion.generic_before", "سایر مناسبت‌ها · پیش از مناسبت (با هدیه)", PROMOTIONAL, OCCASION_VARS,
+        platform_sms_event="occ_generic_before",
+        default_email_subject="«{occasion_name}» نزدیک است — هدیه‌ای از {store_name}",
+        default_email_body="{customer_name} عزیز،\n«{occasion_name}» نزدیک است.\nکد هدیه شما: {discount_code}\nمقدار تخفیف: {discount_amount}\nاعتبار تا: {discount_expires_at}",
+    ),
+    EventDef(
+        "occasion.generic", "سایر مناسبت‌ها · روز مناسبت (با هدیه)", PROMOTIONAL, OCCASION_VARS,
+        platform_sms_event="occ_generic_on",
         default_email_subject="{occasion_name} — هدیه‌ای از {store_name}",
         default_email_body="{customer_name} عزیز،\n{occasion_name}!\nکد هدیه شما: {discount_code}\nمقدار تخفیف: {discount_amount}\nاعتبار تا: {discount_expires_at}",
+    ),
+    EventDef(
+        "occasion.generic_after", "سایر مناسبت‌ها · پس از مناسبت (با هدیه)", PROMOTIONAL, OCCASION_VARS,
+        platform_sms_event="occ_generic_after",
+        default_email_subject="هدیه‌ای از {store_name} برای «{occasion_name}»",
+        default_email_body="{customer_name} عزیز،\nامیدواریم «{occasion_name}» برایتان خوش گذشته باشد.\nکد هدیه شما: {discount_code}\nمقدار تخفیف: {discount_amount}\nاعتبار تا: {discount_expires_at}",
+    ),
+    EventDef(
+        "occasion.generic_before_greeting", "سایر مناسبت‌ها · پیش از مناسبت (فقط تبریک)", PROMOTIONAL, OCCASION_GREETING_VARS,
+        platform_sms_event="occ_generic_before_nogift",
+        default_email_subject="«{occasion_name}» نزدیک است",
+        default_email_body="{customer_name} عزیز،\n«{occasion_name}» نزدیک است و {store_name} به یاد شماست.",
+    ),
+    EventDef(
+        "occasion.generic_greeting", "سایر مناسبت‌ها · روز مناسبت (فقط تبریک)", PROMOTIONAL, OCCASION_GREETING_VARS,
+        platform_sms_event="occ_generic_on_nogift",
+        default_email_subject="{occasion_name} — پیامی از {store_name}",
+        default_email_body="{customer_name} عزیز،\nبه مناسبت «{occasion_name}» {store_name} به یاد شماست و برایتان روزی خوب آرزو می‌کند.",
+    ),
+    EventDef(
+        "occasion.generic_after_greeting", "سایر مناسبت‌ها · پس از مناسبت (فقط تبریک)", PROMOTIONAL, OCCASION_GREETING_VARS,
+        platform_sms_event="occ_generic_after_nogift",
+        default_email_subject="پیامی از {store_name}",
+        default_email_body="{customer_name} عزیز،\nامیدواریم «{occasion_name}» برایتان خوش گذشته باشد. {store_name}",
+    ),
+    # ------------------------------------------------------------------ کمپین‌های تخفیف
+    EventDef(
+        "campaign.offer_percent", "کمپین تخفیف · تخفیف درصدی", PROMOTIONAL, CAMPAIGN_OFFER_VARS,
+        platform_sms_event="camp_offer_percent",
+        default_email_subject="«{campaign_name}» — {discount_amount} تخفیف برای شما",
+        default_email_body="{customer_name} عزیز،\n«{campaign_name}» در {store_name}\nکد تخفیف شما: {discount_code}\nمقدار تخفیف: {discount_amount}\nاعتبار تا: {discount_expires_at}",
+    ),
+    EventDef(
+        "campaign.offer_fixed", "کمپین تخفیف · تخفیف مبلغی", PROMOTIONAL, CAMPAIGN_OFFER_VARS,
+        platform_sms_event="camp_offer_fixed",
+        default_email_subject="«{campaign_name}» — {discount_amount} تخفیف برای شما",
+        default_email_body="{customer_name} عزیز،\n«{campaign_name}» در {store_name}\nکد تخفیف شما: {discount_code}\nمقدار تخفیف: {discount_amount}\nاعتبار تا: {discount_expires_at}",
+    ),
+    EventDef(
+        "campaign.offer_free_ship", "کمپین تخفیف · ارسال رایگان", PROMOTIONAL, CAMPAIGN_OFFER_VARS,
+        platform_sms_event="camp_offer_free_ship",
+        default_email_subject="«{campaign_name}» — ارسال رایگان برای شما",
+        default_email_body="{customer_name} عزیز،\n«{campaign_name}» در {store_name}\nکد ارسال رایگان شما: {discount_code}\nاعتبار تا: {discount_expires_at}",
+    ),
+    EventDef(
+        "campaign.announce", "کمپین تخفیف · اطلاع‌رسانی بدون کد", PROMOTIONAL,
+        {**CUSTOMER_VARS, "campaign_name": "نام کمپین"},
+        platform_sms_event="camp_announce",
+        default_email_subject="«{campaign_name}» در {store_name} آغاز شد",
+        default_email_body="{customer_name} عزیز،\n«{campaign_name}» در {store_name} آغاز شد. برای دیدن جزئیات به حساب کاربری‌تان سر بزنید.",
     ),
     # ------------------------------------------------------------------ داخلی / کارکنان
     EventDef(

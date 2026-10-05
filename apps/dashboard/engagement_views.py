@@ -12,6 +12,7 @@ from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from apps.catalog.models import Product
@@ -85,10 +86,10 @@ def gift_wrap_product_update(request, pk):
 import json  # noqa: E402
 
 from django.db.models import Count  # noqa: E402
-from django.http import Http404  # noqa: E402
+from django.http import Http404, JsonResponse  # noqa: E402
 
 from apps.engagement.models import Campaign, CampaignIssuance, CampaignRun  # noqa: E402
-from apps.engagement.services import campaign_service, ui_schema  # noqa: E402
+from apps.engagement.services import campaign_service, simple_setup, ui_schema  # noqa: E402
 from apps.orders.models import CouponRedemption  # noqa: E402
 from apps.stores.authorization import COUPON_VIEW, DISCOUNT_MANAGE  # noqa: E402
 
@@ -122,14 +123,75 @@ def campaign_list(request):
     })
 
 
+MONTHS = ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"]
+VALIDITY_DAYS = (3, 7, 14, 30, 90)
+
+
+def _wizard_sources(store, schema=None) -> dict:
+    """گزینه‌هایِ «مخاطبِ خاص» — فقط از دادهٔ همین فروشگاه."""
+    from apps.customers.models import Address, Customer
+    from apps.engagement.services import rule_data
+
+    schema = schema or ui_schema.build_schema(store)
+    ids = rule_data.store_customer_ids(store)
+    # همان منبعی که قاعده‌ی «شهرِ مشتری» ارزیابی می‌کند: آدرسِ پیش‌فرض، و در نبودِ آن شهرِ پروفایل
+    cities = sorted(
+        {c.strip() for c in Customer.objects.filter(pk__in=ids).exclude(city="").values_list("city", flat=True).distinct()[:500]}
+        | {c.strip() for c in Address.objects.filter(customer_id__in=ids).exclude(city="").values_list("city", flat=True).distinct()[:500]}
+    )
+    sources = schema["sources"]
+    return {
+        "city": [[c, c] for c in cities],
+        "category": sources["categories"], "tag": sources["tags"], "segment": sources["segments"],
+    }
+
+
 def _form_context(request, form, campaign):
     schema = ui_schema.build_schema(request.store)
+    trigger = form["trigger_type"].value() or ("occasion" if request.GET.get("kind") == "occasions" else "manual")
+    is_occasion = trigger == "occasion"
+    days = {str(d) for d in VALIDITY_DAYS}
+    current_days = str(form["code_valid_days"].value() or "")
+    shop_sms_enabled = _sms_globally_enabled(request.store)
+    sources = _wizard_sources(request.store, schema)
+    try:
+        offset_value = int(form["occasion_offset_days"].value() or 0)
+    except (TypeError, ValueError):
+        offset_value = 0
+    custom_offset = offset_value if offset_value not in (0, -3, 1) else None
     return {
         "form": form, "campaign": campaign, "schema_json": schema,
-        "active_page": "occasions" if (campaign and campaign.trigger_type == "occasion") or request.GET.get("kind") == "occasions" else "campaigns",
-        "errors_text": [],
-        "months": [(i, n) for i, n in enumerate(
-            ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"], start=1)],
+        "active_page": "occasions" if is_occasion else "campaigns",
+        "is_occasion": is_occasion, "errors_text": [],
+        "months": list(enumerate(MONTHS, start=1)),
+        "validity_days": [(d, f"{d} روز") for d in VALIDITY_DAYS] + ([(int(current_days), f"{current_days} روز (مقدار قبلی)")] if current_days and current_days not in days else []),
+        "extra_groups": [
+            (kind, label, sources[kind]) for kind, label in (
+                ("city", "شهرها"), ("category", "دسته‌ها"), ("tag", "برچسب‌ها"), ("segment", "گروه‌هایِ مشتری"),
+            )
+        ],
+        "selected_extra": {str(v) for v in (form["audience_extra_values"].value() or [])},
+        "custom_offset": custom_offset, "custom_offset_abs": abs(custom_offset) if custom_offset is not None else None,
+        "wizard_config": {
+            "mode": "occasion" if is_occasion else "campaign", "previewUrl": reverse("dashboard:campaign-sms-preview"),
+            "smsSettingsUrl": "/admin-portal/settings/?section=sms", "shopSmsEnabled": shop_sms_enabled,
+        },
+        "shop_sms_enabled": shop_sms_enabled,
+        "audience_is_custom": (form["audience_kind"].value() == "custom"),
+        "has_fixed_expiry": bool(form["code_expires_at"].value()),
+    }
+
+
+def _form_initial_for_new(kind):
+    occasion = kind == "occasions"
+    return {
+        "trigger_type": "occasion" if occasion else "manual", "rule_scope": "aggregate",
+        "period_mode": "none", "amount_basis": "net_total", "reward_type": "coupon", "coupon_type": "percent",
+        "coupon_value": 15, "code_valid_days": 7, "personalized": True, "channels": [], "channels_explicit": True,
+        "valid_payment_statuses": ["paid"], "per_customer_limit": 1, "occasion_offset_days": 0,
+        "occasion_kind": "birthday" if occasion else "", "rules_json": "{}", "audience_kind": "all",
+        "audience_extra_kind": "", "occ_days": 90, "occ_n": 3, "occ_amount": 5000000, "occ_month": 1, "occ_day": 1,
+        "name": "هدیه تولد مشتریان" if occasion else "",
     }
 
 
@@ -145,32 +207,73 @@ def campaign_form(request, pk=None):
         form = CampaignForm(request.POST)
         if form.is_valid():
             target = campaign or Campaign(store=request.store, created_by=request.user)
-            form.apply_to(target)
             try:
+                form.apply_to(target)
                 campaign_service.save_campaign(target, actor=request.user)
-            except campaign_service.CampaignError as exc:
+            except (simple_setup.AudienceError, campaign_service.CampaignError) as exc:
                 form.add_error(None, str(exc))
             else:
                 problems = campaign_service.validate_campaign(target)
                 if problems:
-                    messages.warning(request, "ذخیره شد، اما برایِ فعال‌سازی باید این موارد رفع شود: " + "؛ ".join(problems))
+                    messages.warning(request, "پیش‌نویس ذخیره شد، اما برایِ فعال‌سازی باید این موارد رفع شود: " + "؛ ".join(problems))
                 else:
-                    messages.success(request, f"کمپین «{target.name}» ذخیره شد")
+                    messages.success(request, f"«{target.name}» به‌صورتِ پیش‌نویس ذخیره شد؛ پس از بررسی آن را فعال کنید")
                 return redirect("dashboard:campaign-detail", pk=target.pk)
     else:
         if campaign:
             form = CampaignForm(initial=CampaignForm.initial_from(campaign))
         else:
-            kind = request.GET.get("kind")
-            form = CampaignForm(initial={
-                "trigger_type": "occasion" if kind == "occasions" else "manual", "rule_scope": "aggregate",
-                "period_mode": "none", "amount_basis": "net_total", "reward_type": "coupon", "coupon_type": "percent",
-                "personalized": True, "channels": ["sms", "email"], "valid_payment_statuses": ["paid"], "per_customer_limit": 1,
-                "total_redemption_limit": 1, "occasion_offset_days": 0, "rules_json": "{}",
-            })
+            form = CampaignForm(initial=_form_initial_for_new(request.GET.get("kind")))
     context = _form_context(request, form, campaign)
     context["editable"] = editable
     return render(request, "dashboard/campaign_form.html", context)
+
+
+def _lenient(form, name):
+    """مقدارِ یک فیلد از POST؛ اگر نامعتبر بود ``None`` (پیش‌نمایش نباید با ورودیِ نیمه‌کاره بشکند)."""
+    field = form.fields[name]
+    try:
+        return field.clean(field.widget.value_from_datadict(form.data, form.files, form.add_prefix(name)))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _campaign_from_post(request) -> Campaign:
+    """کمپینِ ذخیره‌نشده (فقط حافظه) از ورودیِ نیمه‌کاره‌یِ فرم، برایِ پیش‌نمایشِ پیام."""
+    form = CampaignForm(request.POST)
+    trigger = _lenient(form, "trigger_type") or "manual"
+    campaign = Campaign(
+        store=request.store, name=(_lenient(form, "name") or "").strip() or "پیشنهاد جدید", trigger_type=trigger,
+        reward_type=_lenient(form, "reward_type") or Campaign.Reward.COUPON, coupon_type=_lenient(form, "coupon_type") or "percent",
+        coupon_value=Decimal(_lenient(form, "coupon_value") or 0),
+        coupon_max_discount=Decimal(_lenient(form, "coupon_max_discount")) if _lenient(form, "coupon_max_discount") else None,
+        code_valid_days=_lenient(form, "code_valid_days"), code_prefix=(_lenient(form, "code_prefix") or "").strip().upper(),
+        validity_from_delivery=bool(_lenient(form, "validity_from_delivery")),
+        occasion_offset_days=_lenient(form, "occasion_offset_days") or 0,
+    )
+    code_expires = _lenient(form, "code_expires_at")
+    if code_expires:
+        campaign.code_expires_at = CampaignForm._end_of_day(code_expires)
+    if trigger == Campaign.Trigger.OCCASION:
+        campaign.occasion_kind = _lenient(form, "occasion_kind") or Campaign.Occasion.BIRTHDAY
+        campaign.occasion_params = {
+            "n": _lenient(form, "occ_n"), "amount": _lenient(form, "occ_amount"),
+        }
+    return campaign
+
+
+@require_POST
+@staff_required
+@permission_required(DISCOUNT_MANAGE)
+def campaign_sms_preview(request):
+    """پیش‌نمایشِ فقط‌خواندنیِ پیامکِ این پیشنهاد (برایِ مرحله‌ی «اطلاع‌رسانی»). چیزی ذخیره/ارسال/صادر نمی‌شود."""
+    campaign = _campaign_from_post(request)
+    result = campaign_service.preview_message(campaign, channel="sms")
+    return JsonResponse({
+        "text": result["text"], "parts": result["parts"], "label": result["event_label"], "variables": result["variables"],
+        "template_active": result["enabled"], "incomplete": bool(result["missing"]),
+        "store_sms_enabled": _sms_globally_enabled(request.store),
+    })
 
 
 @staff_required
@@ -302,6 +405,7 @@ def notification_templates(request):
         rows.append({
             "event": event, "category": notif_events.CATEGORY_LABELS[event.category],
             "sms": sms, "email": email, "legacy_sms": bool(event.legacy_sms_event),
+            "platform_sms": bool(event.platform_sms_event),
         })
     return render(request, "dashboard/notification_templates.html", {
         "rows": rows, "active_page": "notifications", "sms_globally_enabled": _sms_globally_enabled(request.store),
@@ -338,7 +442,9 @@ def notification_template_edit(request, event_key):
         action = request.POST.get("action", "save")
         if action == "reset":
             channel = request.POST.get("channel")
-            if channel == "sms" and event.legacy_sms_event and not membership_has_permission(
+            if channel == "sms" and event.platform_sms_event:
+                messages.error(request, "متنِ این پیامک را راستی‌سی مدیریت می‌کند و قابلِ بازنشانی نیست.")
+            elif channel == "sms" and event.legacy_sms_event and not membership_has_permission(
                     request.store_membership, SMS_SETTINGS_MANAGE):
                 messages.error(request, "برایِ بازگشتِ قالبِ پیامک دسترسیِ «تنظیماتِ پیامک» لازم است.")
             elif channel in notif_events.CHANNELS:
@@ -348,6 +454,8 @@ def notification_template_edit(request, event_key):
         saved = False
         can_legacy = membership_has_permission(request.store_membership, SMS_SETTINGS_MANAGE)
         for channel in notif_events.CHANNELS:
+            if channel == "sms" and event.platform_sms_event:
+                continue  # متنِ پیامکِ کمپین/مناسبت فقط در اختیارِ پلتفرم است؛ ورودیِ فروشنده کاملاً نادیده گرفته می‌شود
             if channel == "sms" and event.legacy_sms_event and not can_legacy:
                 if request.POST.get("sms_body") is not None and request.POST.get("sms_body") != \
                         template_service.get_template(store, event_key, "sms")["body"]:
@@ -373,6 +481,8 @@ def notification_template_edit(request, event_key):
     templates = {ch: template_service.get_template(store, event_key, ch) for ch in notif_events.CHANNELS}
     if request.method == "POST":  # ورودیِ کاربر را در خطا حفظ کن
         for channel in notif_events.CHANNELS:
+            if channel == "sms" and event.platform_sms_event:
+                continue
             templates[channel] = {**templates[channel], "body": request.POST.get(f"{channel}_body", templates[channel]["body"]),
                                   "enabled": request.POST.get(f"{channel}_enabled") == "on"}
         templates["email"]["subject"] = request.POST.get("email_subject", templates["email"]["subject"])

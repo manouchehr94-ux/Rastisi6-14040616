@@ -1,114 +1,229 @@
 {% extends "dashboard/base_admin.html" %}
 {% load static persian %}
-{% block title %}{% if campaign %}ویرایش کمپین{% else %}کمپین جدید{% endif %} | پنل مدیریت{% endblock %}
-{% block page_title %}{% if campaign %}ویرایش «{{ campaign.name }}»{% else %}{% if request.GET.kind == 'occasions' %}مناسبتِ جدید{% else %}کمپینِ جدید{% endif %}{% endif %}{% endblock %}
-{% block page_sub %}قواعد، پاداش، محدودیت‌ها و اطلاع‌رسانی را تعریف کنید — بدونِ کدنویسی{% endblock %}
+{% block title %}{% if campaign %}ویرایش پیشنهاد{% elif is_occasion %}مناسبتِ جدید{% else %}کمپینِ جدید{% endif %} | پنل مدیریت{% endblock %}
+{% block page_title %}{% if campaign %}ویرایش «{{ campaign.name }}»{% elif is_occasion %}مناسبتِ جدید{% else %}کمپینِ جدید{% endif %}{% endblock %}
+{% block page_sub %}چند انتخابِ ساده؛ تنظیماتِ تخصصی در بخش‌هایِ «پیشرفته» (اختیاری) قرار دارند{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/campaign_wizard.css' %}">{% endblock %}
 {% block content %}
 {% if not editable %}<div class="card" role="alert" style="border:2px solid #f59e0b"><div class="card-body">کمپینِ فعال قابلِ ویرایش نیست؛ ابتدا آن را متوقف کنید.</div></div>{% else %}
-<form method="post" class="form-card" novalidate x-data="{ trigger: '{{ form.trigger_type.value|default:'manual' }}', period: '{{ form.period_mode.value|default:'none' }}', reward: '{{ form.reward_type.value|default:'coupon' }}', occ: '{{ form.occasion_kind.value|default:'' }}' }">
-  {% csrf_token %}
-  {% if form.non_field_errors %}<div class="card" role="alert" style="border:2px solid var(--red,#dc2626);margin-bottom:12px"><div class="card-body">{% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}</div></div>{% endif %}
-
-  <fieldset class="card" style="margin-bottom:14px"><legend class="card-head" style="padding:10px 18px"><b>۱. مشخصات</b></legend><div class="card-body">
-    {% include "dashboard/partials/field.html" with f=form.name %}
-    {% include "dashboard/partials/field.html" with f=form.description %}
-    <div class="field-group"><label class="field-label" for="id_trigger_type">نوعِ اجرا</label>
-      <select name="trigger_type" id="id_trigger_type" class="inp" x-model="trigger">
-        {% for value, label in form.trigger_type.field.choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-      </select>
-      <small style="color:var(--muted)">دستی: با دکمه‌ی «اجرا» · زمان‌بندی‌شده: job دوره‌ای · رویداد: پس از هر پرداختِ موفق برایِ همان مشتری · مناسبت: تولد/سالگرد/…</small>
+<div class="cw" id="cw-root" dir="rtl" data-mode="{% if is_occasion %}occasion{% else %}campaign{% endif %}">
+  <div class="cw-intro">
+    <div>
+      <div class="cw-eyebrow">ساختن یک پیشنهاد جذاب، در چند دقیقه</div>
+      <h1>{% if campaign %}ویرایش «{{ campaign.name }}»{% elif is_occasion %}یک مناسبت جدید بسازیم 🎉{% else %}یک کمپین جذاب بسازیم 🎯{% endif %}</h1>
+      <p>{% if is_occasion %}برای مشتری‌هایت هدیه‌ای تعریف کن که در زمان مناسب به دستشان برسد.{% else %}در چند قدم یک پیشنهاد جذاب برای مشتری‌های دلخواهت آماده کن.{% endif %}</p>
     </div>
-  </div></fieldset>
-
-  <fieldset class="card" style="margin-bottom:14px" x-show="trigger === 'occasion'" x-cloak><legend class="card-head" style="padding:10px 18px"><b>مناسبت</b></legend><div class="card-body">
-    <div class="field-group"><label class="field-label" for="id_occasion_kind">نوعِ مناسبت</label>
-      <select name="occasion_kind" id="id_occasion_kind" class="inp" x-model="occ">
-        {% for value, label in form.occasion_kind.field.choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-      </select>{% for err in form.occasion_kind.errors %}<div class="coup-err" role="alert">{{ err }}</div>{% endfor %}</div>
-    {% include "dashboard/partials/field.html" with f=form.occasion_name help="در پیام‌ها به‌صورتِ {occasion_name} نمایش داده می‌شود." %}
-    {% include "dashboard/partials/field.html" with f=form.occasion_offset_days help="منفی = پیش از مناسبت (مثلاً -3 = سه روز قبل)، ۰ = همان روز، مثبت = پس از آن." %}
-    <div x-show="occ === 'order_milestone'">{% include "dashboard/partials/field.html" with f=form.occ_n %}</div>
-    <div x-show="occ === 'spending_milestone'">{% include "dashboard/partials/field.html" with f=form.occ_amount %}</div>
-    <div x-show="occ === 'reactivation'">{% include "dashboard/partials/field.html" with f=form.occ_days %}</div>
-    <div x-show="occ === 'holiday'">{% include "dashboard/partials/field.html" with f=form.occ_month help="ماه شمسی ۱ تا ۱۲" %}{% include "dashboard/partials/field.html" with f=form.occ_day %}</div>
-    <div x-show="occ === 'custom_date'">{% include "dashboard/partials/field.html" with f=form.occ_date %}</div>
-    <small style="color:var(--muted)">سیاستِ تولدِ ۳۰ اسفند در سالِ غیرکبیسه: ۲۹ اسفند. پاداشِ هر مناسبتِ سالانه در هر سالِ شمسی فقط یک‌بار صادر می‌شود.</small>
-  </div></fieldset>
-
-  <fieldset class="card" style="margin-bottom:14px"><legend class="card-head" style="padding:10px 18px"><b>۲. بازه‌ی خرید و دامنه‌ی ارزیابی</b></legend><div class="card-body">
-    <div class="field-group"><label class="field-label" for="id_period_mode">بازه‌ی خرید</label>
-      <select name="period_mode" id="id_period_mode" class="inp" x-model="period">
-        {% for value, label in form.period_mode.field.choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-      </select></div>
-    <div x-show="period === 'jalali_months'" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
-      {% include "dashboard/partials/field.html" with f=form.period_jalali_year %}
-      <div class="field-group"><label class="field-label" for="id_period_start_month">از ماه</label>
-        <select name="period_start_month" id="id_period_start_month" class="inp"><option value="">—</option>{% for n, name in months %}<option value="{{ n }}" {% if form.period_start_month.value|stringformat:"s" == n|stringformat:"s" %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></div>
-      <div class="field-group"><label class="field-label" for="id_period_end_month">تا ماه (کاملِ ماه شاملِ بازه است)</label>
-        <select name="period_end_month" id="id_period_end_month" class="inp"><option value="">—</option>{% for n, name in months %}<option value="{{ n }}" {% if form.period_end_month.value|stringformat:"s" == n|stringformat:"s" %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></div>
+    {% if not campaign %}
+    <div class="cw-mode-tabs" role="group" aria-label="نوع پیشنهاد">
+      <a class="cw-mode-btn {% if is_occasion %}cw-active{% endif %}" href="{% url 'dashboard:campaign-add' %}?kind=occasions" {% if is_occasion %}aria-current="page"{% endif %}>🎂 مناسبت خودکار</a>
+      <a class="cw-mode-btn {% if not is_occasion %}cw-active{% endif %}" href="{% url 'dashboard:campaign-add' %}?kind=campaigns" {% if not is_occasion %}aria-current="page"{% endif %}>🎯 کمپین تخفیف</a>
     </div>
-    <div x-show="period === 'dates'" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
-      {% include "dashboard/partials/field.html" with f=form.period_start_date %}
-      {% include "dashboard/partials/field.html" with f=form.period_end_date %}
-    </div>
-    <small style="color:var(--muted)">بازه به‌وقتِ منطقه‌ی زمانیِ فروشگاه و شاملِ کلِ روزِ اول تا پایانِ روزِ آخر است.</small>
-    {% include "dashboard/partials/field.html" with f=form.rule_scope %}
-    {% include "dashboard/partials/field.html" with f=form.amount_basis %}
-    <div class="field-group"><label class="field-label">وضعیت‌هایِ پرداختِ «معتبر» برایِ محاسبه‌ی فاکتورها</label>{{ form.valid_payment_statuses }}<small style="color:var(--muted)">سفارش‌هایِ لغوشده همیشه حذف می‌شوند.</small></div>
-  </div></fieldset>
-
-  <fieldset class="card" style="margin-bottom:14px"><legend class="card-head" style="padding:10px 18px"><b>۳. قواعدِ شمول</b></legend><div class="card-body">
-    <p style="font-size:12.5px;color:var(--muted)">گروه‌ها را با «و/یا» و شرط‌هایِ مشتری، سفارش و کالا بسازید. خالی = همه‌ی مشتریانِ فروشگاه.</p>
-    <div id="rule-builder" aria-label="سازنده‌ی قواعد"></div>
-    <input type="hidden" name="rules_json" id="id_rules_json" value="{{ form.rules_json.value|default:'{}' }}">
-    {% for err in form.rules_json.errors %}<div class="coup-err" role="alert">{{ err }}</div>{% endfor %}
-  </div></fieldset>
-
-  <fieldset class="card" style="margin-bottom:14px"><legend class="card-head" style="padding:10px 18px"><b>۴. پاداش</b></legend><div class="card-body">
-    <div class="field-group"><label class="field-label" for="id_reward_type">پاداش</label>
-      <select name="reward_type" id="id_reward_type" class="inp" x-model="reward">
-        {% for value, label in form.reward_type.field.choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-      </select></div>
-    <div x-show="reward === 'coupon'">
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
-        {% include "dashboard/partials/field.html" with f=form.coupon_type %}
-        {% include "dashboard/partials/field.html" with f=form.coupon_value help="درصد (۱–۱۰۰) یا مبلغ به تومان" %}
-        {% include "dashboard/partials/field.html" with f=form.coupon_max_discount help="سقفِ مبلغِ تخفیف برایِ تخفیفِ درصدی (تومان)" %}
-        {% include "dashboard/partials/field.html" with f=form.coupon_min_order %}
-        {% include "dashboard/partials/field.html" with f=form.code_prefix %}
-        {% include "dashboard/partials/field.html" with f=form.code_starts_at help="تاریخِ فعال‌سازیِ کد (خالی = از لحظه‌ی صدور)" %}
-        {% include "dashboard/partials/field.html" with f=form.code_expires_at help="انقضایِ ثابت؛ یا مدتِ اعتبار پس از صدور:" %}
-        {% include "dashboard/partials/field.html" with f=form.code_valid_days %}
-        {% include "dashboard/partials/field.html" with f=form.total_redemption_limit help="سقفِ کلِ استفاده از هر کد" %}
-        {% include "dashboard/partials/field.html" with f=form.per_customer_limit %}
-        {% include "dashboard/partials/field.html" with f=form.per_customer_period_days help="مثلاً سقفِ ۱ بار در هر ۳۰ روز؛ خالی = در کلِ عمرِ کد" %}
-        {% include "dashboard/partials/field.html" with f=form.max_issuances help="حداکثر تعدادِ کدِ قابلِ صدور؛ پس از آن کمپین «تکمیل‌شده» می‌شود." %}
-      </div>
-      <label style="display:block;margin:6px 0"><input type="checkbox" name="personalized" {% if form.personalized.value %}checked{% endif %}> کدِ اختصاصیِ هر مشتری (فقط خودِ او می‌تواند استفاده کند)</label>
-      <label style="display:block;margin:6px 0"><input type="checkbox" name="validity_from_delivery" {% if form.validity_from_delivery.value %}checked{% endif %}> اعتبارِ کد (مدتِ روز) از لحظه‌ی تحویلِ موفقِ اعلان حساب شود، نه از صدور</label>
-      <label style="display:block;margin:6px 0"><input type="checkbox" name="coupon_applies_to_gift_wrap" {% if form.coupon_applies_to_gift_wrap.value %}checked{% endif %}> تخفیف روی هزینه‌ی کادوپیچی هم اعمال شود</label>
-    </div>
-  </div></fieldset>
-
-  <fieldset class="card" style="margin-bottom:14px"><legend class="card-head" style="padding:10px 18px"><b>۵. اطلاع‌رسانی</b></legend><div class="card-body">
-    <div class="field-group"><label class="field-label">کانال‌ها</label>{{ form.channels }}<small style="color:var(--muted)">پیام‌هایِ تبلیغاتی فقط برایِ مشتریانِ موافق ارسال می‌شود. خالی = همه‌ی کانال‌هایِ فعالِ قالبِ رویداد.</small></div>
-    {% include "dashboard/partials/field.html" with f=form.custom_sms_body help="اختیاری؛ جایگزینِ قالبِ پیش‌فرض برایِ همین کمپین. متغیرها: {customer_name} {store_name} {discount_code} {discount_amount} {discount_expires_at} {campaign_name} {occasion_name}" %}
-    {% include "dashboard/partials/field.html" with f=form.custom_email_subject %}
-    {% include "dashboard/partials/field.html" with f=form.custom_email_body %}
-    {% include "dashboard/partials/field.html" with f=form.reminder_days_before_expiry help="چند روز مانده به انقضا یادآوری ارسال شود (اختیاری)" %}
-  </div></fieldset>
-
-  <fieldset class="card" style="margin-bottom:14px"><legend class="card-head" style="padding:10px 18px"><b>۶. زمانِ فعالیت</b></legend><div class="card-body" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
-    {% include "dashboard/partials/field.html" with f=form.active_from help="خالی = بلافاصله پس از فعال‌سازی" %}
-    {% include "dashboard/partials/field.html" with f=form.active_until help="پس از این تاریخ کمپین «منقضی» می‌شود" %}
-  </div></fieldset>
-
-  <div class="btn-row">
-    <button type="submit" class="btn btn-primary">ذخیره</button>
-    <a class="btn btn-secondary" href="{% if campaign %}{% url 'dashboard:campaign-detail' campaign.pk %}{% else %}{% url 'dashboard:campaign-list' %}{% endif %}">انصراف</a>
+    {% endif %}
   </div>
-</form>
+
+  {% if form.errors %}
+  <div class="cw-errors" role="alert" id="cw-error-summary">
+    <b>ذخیره انجام نشد؛ لطفاً این موارد را اصلاح کن:</b>
+    {% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}
+    {% for field in form %}{% for e in field.errors %}<div>{{ field.label }}: {{ e }}</div>{% endfor %}{% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="cw-content-grid">
+    <div class="cw-editor">
+      <nav class="cw-steps" aria-label="مراحل ساخت پیشنهاد">
+        <button type="button" class="cw-step-pill cw-current" data-go="1"><span class="cw-num">۱</span><span>{% if is_occasion %}مناسبت{% else %}مخاطبان{% endif %}</span></button><span class="cw-step-line"></span>
+        <button type="button" class="cw-step-pill" data-go="2"><span class="cw-num">۲</span><span>هدیه</span></button><span class="cw-step-line"></span>
+        <button type="button" class="cw-step-pill" data-go="3"><span class="cw-num">۳</span><span>اطلاع‌رسانی</span></button>
+      </nav>
+
+      <form method="post" id="cw-form" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="trigger_type" value="{{ form.trigger_type.value|default:'manual' }}">
+        <input type="hidden" name="audience_kind" value="{{ form.audience_kind.value|default:'all' }}">
+        <input type="hidden" name="occasion_kind" value="{{ form.occasion_kind.value|default:'' }}">
+        <input type="hidden" name="reward_type" value="{{ form.reward_type.value|default:'coupon' }}">
+        <input type="hidden" name="coupon_type" value="{{ form.coupon_type.value|default:'percent' }}">
+        <input type="hidden" name="occasion_offset_days" value="{{ form.occasion_offset_days.value|default:'0' }}">
+        <input type="hidden" name="channels_explicit" value="1">
+        <input type="hidden" name="rules_json" id="id_rules_json" value="{{ form.rules_json.value|default:'{}' }}">
+        <input type="hidden" name="occasion_name" value="{{ form.occasion_name.value|default:'' }}">
+        {% if is_occasion %}{# فیلدهایی که در حالتِ مناسبت نمایش داده نمی‌شوند، هنگامِ ویرایش دست‌نخورده حفظ می‌شوند #}
+        <input type="hidden" name="active_from" value="{{ form.active_from.value|default:'' }}">
+        <input type="hidden" name="period_mode" value="{{ form.period_mode.value|default:'none' }}">
+        <input type="hidden" name="period_jalali_year" value="{{ form.period_jalali_year.value|default:'' }}">
+        <input type="hidden" name="period_start_month" value="{{ form.period_start_month.value|default:'' }}">
+        <input type="hidden" name="period_end_month" value="{{ form.period_end_month.value|default:'' }}">
+        <input type="hidden" name="period_start_date" value="{{ form.period_start_date.value|default:'' }}">
+        <input type="hidden" name="period_end_date" value="{{ form.period_end_date.value|default:'' }}">
+        <input type="hidden" name="rule_scope" value="{{ form.rule_scope.value|default:'aggregate' }}">
+        <input type="hidden" name="amount_basis" value="{{ form.amount_basis.value|default:'net_total' }}">
+        {% for v in form.valid_payment_statuses.value %}<input type="hidden" name="valid_payment_statuses" value="{{ v }}">{% endfor %}
+        {% endif %}
+
+        <!-- ================= مرحله ۱ ================= -->
+        <section class="cw-panel" id="cw-step1" data-step="1" aria-labelledby="cw-h1">
+          <span class="cw-section-count">مرحله ۱ از ۳</span>
+          <h2 id="cw-h1">{% if is_occasion %}به چه مناسبتی هدیه بدهیم؟{% else %}این پیشنهاد برای چه کسانی است؟{% endif %}</h2>
+          <p class="cw-lead">{% if is_occasion %}یکی را انتخاب کن؛ بقیه تنظیمات فقط در صورت نیاز نمایش داده می‌شوند.{% else %}مخاطب را با یک انتخاب ساده مشخص کن؛ بدون ساختن قواعد پیچیده.{% endif %}</p>
+          <div class="cw-field"><label class="cw-field-label" for="id_name">اسم این پیشنهاد چیست؟</label><input id="id_name" name="name" class="cw-text-input" value="{{ form.name.value|default:'' }}" maxlength="150" placeholder="{% if is_occasion %}مثلاً هدیه تولد مشتریان{% else %}مثلاً جشن تخفیف پاییزی{% endif %}"><div class="cw-error" id="cw-name-error">یک نام کوتاه برای پیشنهاد وارد کن.</div>{% include "dashboard/partials/cw_errors.html" with f=form.name %}</div>
+
+          {% if is_occasion %}
+          <div class="cw-mini-heading">مناسبت را انتخاب کن</div>
+          <div class="cw-choice-grid">
+            <button type="button" class="cw-choice" data-field="occasion_kind" data-value="birthday" aria-pressed="false"><span class="cw-choice-icon">🎂</span><span><b>تولد مشتری</b><small>سالانه در روز تولد</small></span><span class="cw-tick"></span></button>
+            <button type="button" class="cw-choice" data-field="occasion_kind" data-value="registration_anniversary" aria-pressed="false"><span class="cw-choice-icon">🎊</span><span><b>سالگرد عضویت</b><small>سالگرد ثبت‌نام در فروشگاه</small></span><span class="cw-tick"></span></button>
+            <button type="button" class="cw-choice" data-field="occasion_kind" data-value="first_purchase_anniversary" aria-pressed="false"><span class="cw-choice-icon">🛍️</span><span><b>سالگرد اولین خرید</b><small>قدردانی از اولین خرید</small></span><span class="cw-tick"></span></button>
+            <button type="button" class="cw-choice" data-field="occasion_kind" data-value="reactivation" aria-pressed="false"><span class="cw-choice-icon">💜</span><span><b>مشتری که برنگشته</b><small>دعوت دوباره به خرید</small></span><span class="cw-tick"></span></button>
+          </div>
+          <button type="button" class="cw-extra-toggle" id="cw-more-occ-btn" aria-expanded="false">+ دیدن مناسبت‌های دیگر</button>
+          <div class="cw-choice-grid cw-hidden" id="cw-more-occ" style="margin-top:9px">
+            <button type="button" class="cw-choice" data-field="occasion_kind" data-value="order_milestone" aria-pressed="false"><span class="cw-choice-icon">🏆</span><span><b>تعداد خرید</b><small>مثلاً به مناسبت خرید سوم</small></span><span class="cw-tick"></span></button>
+            <button type="button" class="cw-choice" data-field="occasion_kind" data-value="spending_milestone" aria-pressed="false"><span class="cw-choice-icon">✨</span><span><b>مجموع خرید</b><small>رسیدن به مبلغ دلخواه</small></span><span class="cw-tick"></span></button>
+            <button type="button" class="cw-choice" data-field="occasion_kind" data-value="holiday" aria-pressed="false"><span class="cw-choice-icon">🌸</span><span><b>روز ویژه سال</b><small>مثل نوروز یا روز مادر</small></span><span class="cw-tick"></span></button>
+            <button type="button" class="cw-choice" data-field="occasion_kind" data-value="custom_date" aria-pressed="false"><span class="cw-choice-icon">📅</span><span><b>تاریخ دلخواه</b><small>یک تاریخ مشخص شمسی</small></span><span class="cw-tick"></span></button>
+          </div>
+          {% include "dashboard/partials/cw_errors.html" with f=form.occasion_kind %}
+          <div class="cw-conditional cw-hidden" id="cw-occ-params">
+            <div class="cw-field cw-hidden" data-show-field="occasion_kind" data-show-values="reactivation"><label class="cw-field-label" for="id_occ_days">اگر چند روز از آخرین خریدش گذشته باشد؟</label><div class="cw-field-row"><input class="cw-text-input cw-date-input" id="id_occ_days" name="occ_days" inputmode="numeric" value="{{ form.occ_days.value|default:'90' }}"><div class="cw-muted-note" style="margin:0">مثلاً ۹۰ روز یعنی سه ماه از آخرین خرید مشتری گذشته است.</div></div>{% include "dashboard/partials/cw_errors.html" with f=form.occ_days %}</div>
+            <div class="cw-field cw-hidden" data-show-field="occasion_kind" data-show-values="order_milestone"><label class="cw-field-label" for="id_occ_n">بعد از چندمین خرید هدیه بگیرد؟</label><input class="cw-text-input cw-date-input" id="id_occ_n" name="occ_n" inputmode="numeric" value="{{ form.occ_n.value|default:'3' }}">{% include "dashboard/partials/cw_errors.html" with f=form.occ_n %}</div>
+            <div class="cw-field cw-hidden" data-show-field="occasion_kind" data-show-values="spending_milestone"><label class="cw-field-label" for="id_occ_amount">پس از مجموع چه مبلغی هدیه بگیرد؟ (تومان)</label><input class="cw-text-input cw-date-input" id="id_occ_amount" name="occ_amount" inputmode="numeric" value="{{ form.occ_amount.value|default:'5000000' }}">{% include "dashboard/partials/cw_errors.html" with f=form.occ_amount %}</div>
+            <div class="cw-field cw-hidden" data-show-field="occasion_kind" data-show-values="holiday"><label class="cw-field-label" for="id_occ_month">روز و ماه شمسی این مناسبت</label><div class="cw-field-row"><select class="cw-select-input" id="id_occ_month" name="occ_month" aria-label="ماه مناسبت">{% for n, month in months %}<option value="{{ n }}" {% if form.occ_month.value|stringformat:"s" == n|stringformat:"s" %}selected{% endif %}>{{ month }}</option>{% endfor %}</select><input class="cw-text-input cw-date-input" id="id_occ_day" name="occ_day" inputmode="numeric" value="{{ form.occ_day.value|default:'1' }}" aria-label="روز ماه" placeholder="روز"></div>{% include "dashboard/partials/cw_errors.html" with f=form.occ_month %}{% include "dashboard/partials/cw_errors.html" with f=form.occ_day %}</div>
+            <div class="cw-field cw-hidden" data-show-field="occasion_kind" data-show-values="custom_date"><label class="cw-field-label" for="id_occ_date">تاریخ مشخص مناسبت (شمسی)</label><input class="cw-text-input cw-date-input" id="id_occ_date" name="occ_date" value="{{ form.occ_date.value|default:'' }}" placeholder="۱۴۰۵/۰۸/۱۵" inputmode="numeric"><div class="cw-field-help">این گزینه یک تاریخ مشخص است؛ برای تکرار سالانه، «روز ویژه سال» را انتخاب کن.</div>{% include "dashboard/partials/cw_errors.html" with f=form.occ_date %}</div>
+          </div>
+          {% if audience_is_custom %}<div class="cw-muted-note"><span class="cw-text-icon">🔧</span><span>این مناسبت قواعدِ مخاطبِ سفارشیِ قبلی دارد؛ همان قواعد بدون تغییر حفظ می‌شوند.</span></div>{% endif %}
+          <div class="cw-muted-note"><span class="cw-text-icon">✓</span><span>نیازی نیست مشتری‌ها را دستی انتخاب کنی؛ سیستم فقط مشتریان واجد شرایط همین فروشگاه را بررسی می‌کند.</span></div>
+
+          {% else %}
+          <div class="cw-mini-heading">این پیشنهاد برای چه کسانی باشد؟</div>
+          <div class="cw-choice-grid">
+            <button type="button" class="cw-choice" data-field="audience_kind" data-value="all" aria-pressed="false"><span class="cw-choice-icon">👥</span><span><b>همه مشتری‌ها</b><small>بدون محدودیت خرید قبلی</small></span><span class="cw-tick"></span></button>
+            <button type="button" class="cw-choice" data-field="audience_kind" data-value="new" aria-pressed="false"><span class="cw-choice-icon">👋</span><span><b>مشتری‌های جدید</b><small>ثبت‌نام در ۳۰ روز اخیر</small></span><span class="cw-tick"></span></button>
+            <button type="button" class="cw-choice" data-field="audience_kind" data-value="loyal" aria-pressed="false"><span class="cw-choice-icon">💎</span><span><b>مشتری‌های وفادار</b><small>حداقل ۳ خرید پرداخت‌شده</small></span><span class="cw-tick"></span></button>
+            <button type="button" class="cw-choice" data-field="audience_kind" data-value="dormant" aria-pressed="false"><span class="cw-choice-icon">💌</span><span><b>مشتری‌های غیرفعال</b><small>۹۰ روز از آخرین خریدشان گذشته</small></span><span class="cw-tick"></span></button>
+            {% if audience_is_custom %}<button type="button" class="cw-choice" data-field="audience_kind" data-value="custom" aria-pressed="false"><span class="cw-choice-icon">🔧</span><span><b>قواعد سفارشی (قبلی)</b><small>همان شرط‌هایی که قبلاً ساخته‌ای</small></span><span class="cw-tick"></span></button>{% endif %}
+          </div>
+          <details class="cw-advanced" {% if form.audience_extra_kind.value %}open{% endif %}><summary>مخاطب خاص می‌خواهم (اختیاری)</summary><div class="cw-advanced-body">
+            <div class="cw-field"><label class="cw-field-label" for="id_audience_extra_kind">فقط از میان گروهِ انتخاب‌شده، چه کسانی؟</label>
+              <select class="cw-select-input" id="id_audience_extra_kind" name="audience_extra_kind">
+                <option value="" {% if not form.audience_extra_kind.value %}selected{% endif %}>همان گروه انتخاب‌شده بالا</option>
+                <option value="city" {% if form.audience_extra_kind.value == 'city' %}selected{% endif %}>فقط مشتری‌های یک شهر</option>
+                <option value="category" {% if form.audience_extra_kind.value == 'category' %}selected{% endif %}>خریداران یک دسته کالا</option>
+                <option value="tag" {% if form.audience_extra_kind.value == 'tag' %}selected{% endif %}>افراد دارای یک برچسب</option>
+                <option value="segment" {% if form.audience_extra_kind.value == 'segment' %}selected{% endif %}>اعضای یک گروه مشتری</option>
+              </select></div>
+            {% for kind, label, options in extra_groups %}
+            <div class="cw-field cw-hidden" data-show-field="audience_extra_kind" data-show-values="{{ kind }}" data-disable-hidden="1">
+              <div class="cw-field-label">{{ label }}</div>
+              {% if options %}<div class="cw-chip-list">{% for opt in options %}<label class="cw-chip"><input type="checkbox" name="audience_extra_values" value="{{ opt.0 }}" {% if opt.0|stringformat:"s" in selected_extra %}checked{% endif %}> {{ opt.1 }}</label>{% endfor %}</div>
+              {% else %}<div class="cw-field-help">هنوز موردی برای این گزینه در فروشگاهت ثبت نشده است.</div>{% endif %}
+            </div>
+            {% endfor %}
+            {% include "dashboard/partials/cw_errors.html" with f=form.audience_extra_values %}
+            <details class="cw-adv-block" {% if audience_is_custom or form.period_mode.value != 'none' %}open{% endif %}><summary>شرط‌های ترکیبی، بازه خرید و مبنای محاسبه (پیشرفته)</summary>
+              <label class="cw-check-inline"><input type="checkbox" id="cw-use-custom" {% if audience_is_custom %}checked{% endif %}> <span>از شرط‌هایِ زیر به‌جایِ گزینه‌هایِ ساده استفاده کن<small>سازنده‌ی کاملِ قواعد: و/یا، کالا، سفارش، مشتری و … (تنظیمات پیشین بدونِ تغییر کار می‌کنند)</small></span></label>
+              <div id="rule-builder" aria-label="سازنده‌ی قواعد"></div>
+              {% include "dashboard/partials/cw_errors.html" with f=form.rules_json %}
+              <div class="cw-hline"></div>
+              <div class="cw-field"><label class="cw-field-label" for="id_period_mode">بازه‌ی خرید</label>
+                <select name="period_mode" id="id_period_mode" class="cw-select-input">{% for value, label in form.period_mode.field.choices %}<option value="{{ value }}" {% if form.period_mode.value == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+              <div class="cw-field-row">
+                <div class="cw-field"><label class="cw-field-label" for="id_period_jalali_year">سالِ شمسی</label><input class="cw-text-input cw-date-input" id="id_period_jalali_year" name="period_jalali_year" value="{{ form.period_jalali_year.value|default:'' }}" inputmode="numeric"></div>
+                <div class="cw-field"><label class="cw-field-label" for="id_period_start_month">از ماه</label><select class="cw-select-input" name="period_start_month" id="id_period_start_month"><option value="">—</option>{% for n, name in months %}<option value="{{ n }}" {% if form.period_start_month.value|stringformat:"s" == n|stringformat:"s" %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></div>
+              </div>
+              <div class="cw-field-row">
+                <div class="cw-field"><label class="cw-field-label" for="id_period_end_month">تا ماه</label><select class="cw-select-input" name="period_end_month" id="id_period_end_month"><option value="">—</option>{% for n, name in months %}<option value="{{ n }}" {% if form.period_end_month.value|stringformat:"s" == n|stringformat:"s" %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></div>
+                <div class="cw-field"><label class="cw-field-label" for="id_period_start_date">از تاریخ (برای بازه تاریخ)</label><input class="cw-text-input cw-date-input" id="id_period_start_date" name="period_start_date" value="{{ form.period_start_date.value|default:'' }}" placeholder="۱۴۰۵/۰۷/۰۱"></div>
+              </div>
+              <div class="cw-field"><label class="cw-field-label" for="id_period_end_date">تا تاریخ (برای بازه تاریخ)</label><input class="cw-text-input cw-date-input" id="id_period_end_date" name="period_end_date" value="{{ form.period_end_date.value|default:'' }}" placeholder="۱۴۰۵/۰۷/۳۰">{% include "dashboard/partials/cw_errors.html" with f=form.period_start_date %}{% include "dashboard/partials/cw_errors.html" with f=form.period_end_date %}{% include "dashboard/partials/cw_errors.html" with f=form.period_jalali_year %}</div>
+              <div class="cw-field-row">
+                <div class="cw-field"><label class="cw-field-label" for="id_rule_scope">دامنه‌ی ارزیابی</label><select class="cw-select-input" name="rule_scope" id="id_rule_scope">{% for value, label in form.rule_scope.field.choices %}<option value="{{ value }}" {% if form.rule_scope.value == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+                <div class="cw-field"><label class="cw-field-label" for="id_amount_basis">مبنای مبلغ</label><select class="cw-select-input" name="amount_basis" id="id_amount_basis">{% for value, label in form.amount_basis.field.choices %}<option value="{{ value }}" {% if form.amount_basis.value == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+              </div>
+              <div class="cw-field"><div class="cw-field-label">وضعیت‌هایِ پرداختِ «معتبر»</div><div class="cw-chip-list">{% for value, label in form.valid_payment_statuses.field.choices %}<label class="cw-chip"><input type="checkbox" name="valid_payment_statuses" value="{{ value }}" {% if value in form.valid_payment_statuses.value %}checked{% endif %}> {{ label }}</label>{% endfor %}</div><div class="cw-field-help">سفارش‌هایِ لغوشده همیشه حذف می‌شوند.</div></div>
+            </details>
+          </div></details>
+          <div class="cw-muted-note"><span class="cw-text-icon">✓</span><span>پس از ذخیره‌ی پیش‌نویس، در صفحه‌ی پیشنهاد می‌توانی با دکمه‌ی «پیش‌نمایش مشتریان واجد شرایط» تعدادِ واقعی را ببینی؛ تا آن زمان کدی صادر نمی‌شود.</span></div>
+          {% endif %}
+          <div class="cw-panel-actions"><span style="color:#9ba0ad;font-size:10.5px">سؤال ۱ از ۳</span><button class="cw-btn cw-primary" type="button" data-next="2">مرحله بعد <span aria-hidden="true">←</span></button></div>
+        </section>
+
+        <!-- ================= مرحله ۲ ================= -->
+        <section class="cw-panel cw-hidden" id="cw-step2" data-step="2" aria-labelledby="cw-h2">
+          <span class="cw-section-count">مرحله ۲ از ۳</span><h2 id="cw-h2">چه هدیه‌ای بدهیم؟</h2><p class="cw-lead">فقط نوع و مقدار هدیه را انتخاب کن. تنظیمات رایج از قبل آماده‌اند.</p>
+          <div class="cw-choice-grid">
+            <button type="button" class="cw-choice" data-reward="percent" aria-pressed="false"><span class="cw-choice-icon">٪</span><span><b>تخفیف درصدی</b><small>مثلاً ۱۵ درصد تخفیف</small></span><span class="cw-tick"></span></button>
+            <button type="button" class="cw-choice" data-reward="fixed" aria-pressed="false"><span class="cw-choice-icon">◈</span><span><b>تخفیف مبلغی</b><small>مثلاً ۱۰۰ هزار تومان</small></span><span class="cw-tick"></span></button>
+            <button type="button" class="cw-choice" data-reward="free_ship" aria-pressed="false"><span class="cw-choice-icon">🚚</span><span><b>ارسال رایگان</b><small>بدون پرداخت هزینه ارسال</small></span><span class="cw-tick"></span></button>
+            <button type="button" class="cw-choice" data-reward="none" aria-pressed="false"><span class="cw-choice-icon">💬</span><span><b>فقط پیام تبریک</b><small>بدون کد تخفیف</small></span><span class="cw-tick"></span></button>
+          </div>
+          <div class="cw-conditional" id="cw-reward-details">
+            <div class="cw-field" id="cw-amount-block"><label class="cw-field-label" id="cw-amount-label" for="id_coupon_value">چند درصد تخفیف بدهیم؟</label><div style="position:relative"><input id="id_coupon_value" name="coupon_value" class="cw-text-input cw-date-input" style="padding-left:76px" inputmode="numeric" value="{{ form.coupon_value.value|default:'' }}"><span id="cw-amount-unit" style="position:absolute;left:12px;top:9px;color:#8589a0;font-size:11px">درصد</span></div><div class="cw-error" id="cw-amount-error">مقدار تخفیف معتبر نیست.</div>{% include "dashboard/partials/cw_errors.html" with f=form.coupon_value %}</div>
+            <div class="cw-field" id="cw-validity-block"><label class="cw-field-label" for="id_code_valid_days">مشتری چند روز فرصت استفاده داشته باشد؟</label><select class="cw-select-input" id="id_code_valid_days" name="code_valid_days">{% if not form.code_valid_days.value and campaign %}<option value="" selected>{% if has_fixed_expiry %}طبق تاریخ انقضای ثابتِ قبلی{% else %}— مدتِ اعتبار را انتخاب کن —{% endif %}</option>{% endif %}{% for d, label in validity_days %}<option value="{{ d }}" {% if form.code_valid_days.value|stringformat:"s" == d|stringformat:"s" %}selected{% elif not form.code_valid_days.value and not campaign and d == 7 %}selected{% endif %}>{{ label }}{% if d == 7 %} (پیشنهادی){% endif %}</option>{% endfor %}</select><div class="cw-field-help">برای هر مشتری، مدت اعتبار کد از زمان صدور محاسبه می‌شود.</div>{% include "dashboard/partials/cw_errors.html" with f=form.code_valid_days %}</div>
+          </div>
+          <details class="cw-advanced" id="cw-advanced-reward"><summary>تنظیمات بیشتر هدیه (اختیاری)</summary><div class="cw-advanced-body">
+            <div class="cw-field-row"><div class="cw-field"><label class="cw-field-label" for="id_coupon_min_order">حداقل مبلغ سفارش (تومان)</label><input class="cw-text-input cw-date-input" id="id_coupon_min_order" name="coupon_min_order" inputmode="numeric" value="{% if form.coupon_min_order.value %}{{ form.coupon_min_order.value }}{% endif %}" placeholder="بدون محدودیت">{% include "dashboard/partials/cw_errors.html" with f=form.coupon_min_order %}</div><div class="cw-field" id="cw-max-discount-block"><label class="cw-field-label" for="id_coupon_max_discount">سقف مبلغ تخفیف (تومان)</label><input class="cw-text-input cw-date-input" id="id_coupon_max_discount" name="coupon_max_discount" inputmode="numeric" value="{{ form.coupon_max_discount.value|default:'' }}" placeholder="بدون سقف">{% include "dashboard/partials/cw_errors.html" with f=form.coupon_max_discount %}</div></div>
+            <div class="cw-field-row"><div class="cw-field"><label class="cw-field-label" for="id_max_issuances">حداکثر تعداد هدیه</label><input class="cw-text-input cw-date-input" id="id_max_issuances" name="max_issuances" inputmode="numeric" value="{{ form.max_issuances.value|default:'' }}" placeholder="بدون سقف">{% include "dashboard/partials/cw_errors.html" with f=form.max_issuances %}</div><div class="cw-field"><label class="cw-field-label" for="id_code_prefix">شروع کد تخفیف (اختیاری)</label><input class="cw-text-input" id="id_code_prefix" name="code_prefix" maxlength="12" value="{{ form.code_prefix.value|default:'' }}" placeholder="مثلاً TAVALOD" dir="ltr"></div></div>
+            <label class="cw-check-row" style="margin-bottom:0"><span><strong>برای هر مشتری کد اختصاصی بساز</strong><small>پیشنهادی؛ هر فرد فقط از کد خودش استفاده می‌کند.</small></span><input class="cw-switch" type="checkbox" name="personalized" id="id_personalized" {% if form.personalized.value %}checked{% endif %}></label>
+            <details class="cw-adv-block"><summary>محدودیت‌ها و زمان‌بندیِ دقیق‌ترِ کد (پیشرفته)</summary>
+              <div class="cw-field-row"><div class="cw-field"><label class="cw-field-label" for="id_per_customer_limit">سقف استفاده برای هر مشتری</label><input class="cw-text-input cw-date-input" id="id_per_customer_limit" name="per_customer_limit" inputmode="numeric" value="{{ form.per_customer_limit.value|default:'' }}">{% include "dashboard/partials/cw_errors.html" with f=form.per_customer_limit %}</div><div class="cw-field"><label class="cw-field-label" for="id_total_redemption_limit">سقف کل استفاده از هر کد</label><input class="cw-text-input cw-date-input" id="id_total_redemption_limit" name="total_redemption_limit" inputmode="numeric" value="{{ form.total_redemption_limit.value|default:'' }}" placeholder="بدون سقف">{% include "dashboard/partials/cw_errors.html" with f=form.total_redemption_limit %}</div></div>
+              <div class="cw-field"><label class="cw-field-label" for="id_per_customer_period_days">پنجره‌ی سقفِ هر مشتری (روز)</label><input class="cw-text-input cw-date-input" id="id_per_customer_period_days" name="per_customer_period_days" inputmode="numeric" value="{{ form.per_customer_period_days.value|default:'' }}" placeholder="در کل عمر کد">{% include "dashboard/partials/cw_errors.html" with f=form.per_customer_period_days %}</div>
+              <div class="cw-field-row"><div class="cw-field"><label class="cw-field-label" for="id_code_starts_at">فعال‌سازی کد (شمسی)</label><input class="cw-text-input cw-date-input" id="id_code_starts_at" name="code_starts_at" value="{{ form.code_starts_at.value|default:'' }}" placeholder="از لحظه صدور">{% include "dashboard/partials/cw_errors.html" with f=form.code_starts_at %}</div><div class="cw-field"><label class="cw-field-label" for="id_code_expires_at">انقضای ثابت کد (شمسی)</label><input class="cw-text-input cw-date-input" id="id_code_expires_at" name="code_expires_at" value="{{ form.code_expires_at.value|default:'' }}" placeholder="بر اساس مدت اعتبار">{% include "dashboard/partials/cw_errors.html" with f=form.code_expires_at %}</div></div>
+              <label class="cw-check-inline"><input type="checkbox" name="coupon_applies_to_gift_wrap" {% if form.coupon_applies_to_gift_wrap.value %}checked{% endif %}> <span>تخفیف روی هزینه‌ی کادوپیچی هم اعمال شود</span></label>
+              <label class="cw-check-inline"><input type="checkbox" name="validity_from_delivery" {% if form.validity_from_delivery.value %}checked{% endif %}> <span>مدت اعتبار از لحظه‌ی تحویلِ موفقِ پیام حساب شود، نه از صدور<small>با این گزینه تاریخِ درج‌شده در پیام موقت است.</small></span></label>
+            </details>
+          </div></details>
+          <div class="cw-panel-actions"><button type="button" class="cw-btn cw-secondary" data-go="1">→ برگشت</button><button type="button" class="cw-btn cw-primary" data-next="3">مرحله بعد <span aria-hidden="true">←</span></button></div>
+        </section>
+
+        <!-- ================= مرحله ۳ ================= -->
+        <section class="cw-panel cw-hidden" id="cw-step3" data-step="3" aria-labelledby="cw-h3"><span class="cw-section-count">مرحله ۳ از ۳</span><h2 id="cw-h3">چطور به مشتری خبر بدهیم؟</h2><p class="cw-lead">ارسال پیام اختیاری است؛ پیامک و ایمیل تنها در صورت رضایت مشتری و اتصال سرویس ارسال می‌شوند.</p>
+          <label class="cw-check-row cw-fixed"><span><strong>نمایش هدیه در حساب مشتری</strong><small id="cw-account-help">در صورت صدور پاداش، کد در حساب مشتری قرار می‌گیرد.</small></span><span class="cw-status">خودکار ✓</span></label>
+          <label class="cw-check-row"><span><strong>ارسال پیامک</strong><small>با متن آماده راستی‌سی و فقط برای مشتریان دارای رضایت</small></span><input class="cw-switch" type="checkbox" name="channels" value="sms" id="cw-notify-sms" {% if 'sms' in form.channels.value %}checked{% endif %}></label>
+          <label class="cw-check-row"><span><strong>ارسال ایمیل</strong><small>در صورت داشتن ایمیل، رضایت و سرویس فعال</small></span><input class="cw-switch" type="checkbox" name="channels" value="email" id="cw-notify-email" {% if 'email' in form.channels.value %}checked{% endif %}></label>
+          <div class="cw-sms-preview cw-is-off" id="cw-sms-preview" aria-labelledby="cw-sms-title">
+            <div class="cw-sms-head"><div><b id="cw-sms-title">پیامکی که مشتری دریافت می‌کند</b><small id="cw-sms-template-name">قالب: —</small></div><span class="cw-lock-badge">🔒 فقط‌خواندنی</span></div>
+            <div class="cw-phone"><div class="cw-bubble" id="cw-sms-bubble" role="note" aria-label="پیش‌نمایش فقط‌خواندنی متن پیامک">در حال آماده‌سازی پیش‌نمایش…</div><div class="cw-bubble-meta">نام مشتری نمونه است؛ نام فروشگاه، مقدار هدیه و مهلت استفاده از تنظیمات واقعی همین پیشنهاد ساخته می‌شود.</div></div>
+            <div class="cw-sms-vars" id="cw-sms-vars"></div>
+            <div class="cw-sms-state cw-off" id="cw-sms-state"></div>
+            <div class="cw-sms-lock-note"><span>🔒</span><span>متن این پیامک را تیم راستی‌سی تنظیم و تأیید می‌کند و فروشنده نمی‌تواند آن را تغییر دهد. روش ارسال (گوشی SmsRasti یا سامانه مرکزی) از «تنظیمات پیامک فروشگاه» انتخاب می‌شود و روی متن پیام اثری ندارد.</span></div>
+          </div>
+          <div class="cw-hline"></div><div class="cw-mini-heading" id="cw-timing-heading">{% if is_occasion %}این هدیه چه زمانی داده شود؟{% else %}این کمپین چه زمانی اجرا شود؟{% endif %}</div>
+          {% if is_occasion %}
+          <div id="cw-occasion-timing">
+          <div class="cw-hidden" data-show-field="occasion_kind" data-show-values="reactivation,order_milestone,spending_milestone"><div class="cw-muted-note" style="margin:0"><span class="cw-text-icon">⏱</span><span>این مناسبت به‌محض برقرارشدنِ شرطِ انتخابی بررسی می‌شود؛ زمانِ دیگری (روز قبل/بعد) برایش معنا ندارد.</span></div></div>
+          <div data-show-field="occasion_kind" data-show-values="birthday,registration_anniversary,first_purchase_anniversary,holiday,custom_date">
+<div class="cw-segment" id="cw-offset-options">
+            <button class="cw-seg-btn" type="button" data-offset="0" aria-pressed="false">همان روز (پیشنهادی)</button>
+            <button class="cw-seg-btn" type="button" data-offset="-3" aria-pressed="false">۳ روز قبل</button>
+            <button class="cw-seg-btn" type="button" data-offset="1" aria-pressed="false">۱ روز بعد</button>
+            {% if custom_offset is not None %}<button class="cw-seg-btn" type="button" data-offset="{{ custom_offset }}" aria-pressed="false">{% if custom_offset < 0 %}{{ custom_offset_abs|fa_number }} روز قبل (قبلی){% else %}{{ custom_offset|fa_number }} روز بعد (قبلی){% endif %}</button>{% endif %}
+          </div><div class="cw-field-help">برای تولد و سالگرد، هر مشتری فقط در چرخه مربوط به خودش پاداش می‌گیرد؛ ارسال تکراری نداریم. پیامِ روزهای قبل و بعد با زمانِ واقعیِ صدورِ هدیه هماهنگ است.</div>{% include "dashboard/partials/cw_errors.html" with f=form.occasion_offset_days %}</div>
+          </div>
+          {% else %}
+          <div id="cw-campaign-timing"><div class="cw-segment" id="cw-timing-options">
+            <button class="cw-seg-btn" type="button" data-timing="manual" aria-pressed="false">خودم اجرا می‌کنم</button>
+            <button class="cw-seg-btn" type="button" data-timing="scheduled" aria-pressed="false">در یک تاریخ مشخص</button>
+            <button class="cw-seg-btn" type="button" data-timing="event" aria-pressed="false">پس از خرید موفق</button>
+          </div><div class="cw-conditional cw-hidden" id="cw-scheduled-box"><label class="cw-field-label" for="id_active_from">تاریخ شروع (شمسی)</label><input class="cw-text-input cw-date-input" id="id_active_from" name="active_from" placeholder="۱۴۰۵/۰۸/۱۵" inputmode="numeric" value="{{ form.active_from.value|default:'' }}">{% include "dashboard/partials/cw_errors.html" with f=form.active_from %}</div><div class="cw-field-help">کمپین ابتدا به‌صورت پیش‌نویس ساخته می‌شود و اجرای واقعی پس از بررسی و فعال‌سازی خواهد بود.</div></div>
+          {% endif %}
+          <details class="cw-advanced"><summary>تنظیمات پیشرفته فعالیت</summary><div class="cw-advanced-body"><div class="cw-field-row"><div class="cw-field"><label class="cw-field-label" for="id_active_until">پایان فعالیت (شمسی، اختیاری)</label><input class="cw-text-input cw-date-input" id="id_active_until" name="active_until" placeholder="بدون تاریخ پایان" inputmode="numeric" value="{{ form.active_until.value|default:'' }}">{% include "dashboard/partials/cw_errors.html" with f=form.active_until %}</div><div class="cw-field"><label class="cw-field-label" for="id_reminder_days_before_expiry">یادآوری چند روز مانده به انقضا؟</label><input class="cw-text-input cw-date-input" id="id_reminder_days_before_expiry" name="reminder_days_before_expiry" placeholder="بدون یادآوری" inputmode="numeric" value="{{ form.reminder_days_before_expiry.value|default:'' }}">{% include "dashboard/partials/cw_errors.html" with f=form.reminder_days_before_expiry %}</div></div>
+            <div class="cw-field"><label class="cw-field-label" for="id_description">توضیحِ داخلی (اختیاری، فقط برای خودت)</label><textarea class="cw-textarea-input" id="id_description" name="description" rows="2">{{ form.description.value|default:'' }}</textarea></div></div></details>
+          <div class="cw-panel-actions"><button type="button" class="cw-btn cw-secondary" data-go="2">→ برگشت</button><button type="button" class="cw-btn cw-primary" id="cw-view-review">پیش‌نمایش نهایی <span aria-hidden="true">←</span></button></div>
+        </section>
+
+        <!-- ================= مرور نهایی ================= -->
+        <div class="cw-overlay" id="cw-review-overlay" role="dialog" aria-modal="true" aria-labelledby="cw-review-title"><div class="cw-modal"><div class="cw-modal-icon">✓</div><h2 id="cw-review-title">این پیشنهاد را می‌خواستی؟</h2><p class="cw-lead">قبل از ذخیره، همه چیز به زبان ساده نمایش داده می‌شود.</p><ul class="cw-review" id="cw-review-list"></ul><div class="cw-modal-notice">پیشنهاد به‌صورت <b>پیش‌نویس</b> ذخیره می‌شود؛ تا زمانی که آن را فعال نکنی هیچ کد تخفیفی صادر و هیچ پیامی ارسال نمی‌شود.</div><div class="cw-modal-actions"><button type="submit" class="cw-btn cw-primary" id="cw-save">✓ ذخیره به‌عنوان پیش‌نویس</button><button type="button" class="cw-btn cw-secondary" id="cw-close-review">بازگشت و ویرایش</button></div></div></div>
+      </form>
+    </div>
+
+    <aside class="cw-summary-wrap" aria-label="خلاصه زنده پیشنهاد"><div class="cw-summary"><div class="cw-summary-top"><span class="cw-summary-title">خلاصه پیشنهاد شما</span><span class="cw-tiny-tag">{% if campaign %}{{ campaign.get_status_display }}{% else %}پیش‌نویس{% endif %}</span></div><div class="cw-preview-hero"><small id="cw-sum-category">{% if is_occasion %}مناسبت خودکار{% else %}کمپین تخفیف{% endif %}</small><strong id="cw-sum-hero">—</strong></div><div class="cw-summary-row"><label id="cw-sum-audience-label">{% if is_occasion %}چه مناسبتی؟{% else %}مخاطبان{% endif %}</label><span id="cw-sum-audience">—</span></div><div class="cw-summary-row"><label>هدیه</label><span id="cw-sum-reward">—</span></div><div class="cw-summary-row"><label>زمان اجرا</label><span id="cw-sum-time">—</span></div><div class="cw-summary-row"><label>اطلاع‌رسانی</label><span id="cw-sum-notify">—</span></div><div class="cw-summary-foot"><span>🔒</span><span>این فقط خلاصه‌ی تنظیمات شماست؛ تعداد مشتریان و امکان ارسال واقعی پس از ذخیره و بررسی محاسبه می‌شود.</span></div></div><div class="cw-tip"><b>✨ چه چیزی ساده‌تر شده؟</b><p>به‌جای پرکردن ده‌ها فیلد، یک پیشنهاد آماده می‌سازی. متن پیامک هم آماده است و فقط ارسالش را روشن یا خاموش می‌کنی.</p></div></aside>
+  </div>
+  <div class="cw-toast" id="cw-toast" role="status" aria-live="polite"></div>
+</div>
+
 {{ schema_json|json_script:"rule-schema" }}
+{{ wizard_config|json_script:"cw-config" }}
 {% endif %}
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/rule_builder.js' %}" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/rule_builder.js' %}" defer></script><script src="{% static 'js/campaign_wizard.js' %}" defer></script>{% endblock %}

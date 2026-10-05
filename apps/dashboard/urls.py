@@ -185,6 +185,7 @@ urlpatterns = [
     # ---- کمپین‌ها و مناسبت‌ها
     path("campaigns/", engagement_views.campaign_list, name="campaign-list"),
     path("campaigns/add/", engagement_views.campaign_form, name="campaign-add"),
+    path("campaigns/sms-preview/", engagement_views.campaign_sms_preview, name="campaign-sms-preview"),
     path("campaigns/<int:pk>/", engagement_views.campaign_detail, name="campaign-detail"),
     path("campaigns/<int:pk>/edit/", engagement_views.campaign_form, name="campaign-edit"),
     path("campaigns/<int:pk>/activate/", engagement_views.campaign_activate, name="campaign-activate"),

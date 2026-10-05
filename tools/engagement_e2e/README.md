@@ -24,3 +24,11 @@ python tools/engagement_e2e/accessibility_e2e.py              # 67 checks: 3 vie
 Engines: Chromium always. Firefox/WebKit run automatically when installed (`PLAYWRIGHT_BROWSERS_PATH`) and are reported as
 `NOT RUN` otherwise — they are **not** claimed as passed. Report: `/tmp/e2e/a11y_report.json`.
 Templates are cached by `runserver --noreload`: re-run `reset.sh` after editing a template.
+
+## Note: simplified campaign/occasion form
+
+`/admin-portal/campaigns/add/` is now the 3-step simple wizard (`cw-*` classes). The nested AND/OR rule builder
+lives inside **«مخاطب خاص می‌خواهم» → «شرط‌های ترکیبی… (پیشرفته)»** and must be enabled with the
+`#cw-use-custom` checkbox. `rule_builder_e2e.py`, `workflow_e2e.py` and `accessibility_e2e.py` were written for the
+old single-page form and have **not** been updated/run against the wizard (they need the Postgres staging DB above).
+Browser coverage of the wizard is in `apps/dashboard/tests/test_campaign_wizard_browser.py` (opt-in: `CW_BROWSER_TESTS=1 python manage.py test apps.dashboard.tests.test_campaign_wizard_browser`, run it on its own — a LiveServer flush collides with `serialized_rollback` live tests in the same process).

@@ -104,15 +104,18 @@ class BirthdayTests(OccasionBase):
 
     def test_before_and_after_birthday_messages(self):
         self.customer_with_order("م", email="x@example.com", birth_date=jd(1370, 5, 5))
+        # custom_sms_body قدیمی هرگز ارسال نمی‌شود: متنِ پیامک فقط از قالبِ پلتفرم می‌آید
         before = self.occ(Campaign.Occasion.BIRTHDAY, offset=-3, reward=Campaign.Reward.NONE, name="پیش از تولد",
-                          custom_sms_body="{customer_name} عزیز، ۳ روز تا تولدت مانده!")
+                          custom_sms_body="{customer_name} عزیز، ۳ روز تا تولدت مانده!", channels=["sms", "email"],
+                          channels_explicit=True)
         after = self.occ(Campaign.Occasion.BIRTHDAY, offset=2, reward=Campaign.Reward.NONE, name="پس از تولد")
         self.assertEqual(self.go(before, jd(1405, 5, 2)).issued, 1)
         self.assertEqual(self.go(before, jd(1405, 5, 3)).issued, 0)
         self.assertEqual(self.go(after, jd(1405, 5, 7)).issued, 1)
-        sms = NotificationOutbox.objects.get(event_key="occasion.birthday_before", channel="sms")
-        self.assertEqual(sms.body, "م عزیز، ۳ روز تا تولدت مانده!")
-        self.assertTrue(NotificationOutbox.objects.filter(event_key="occasion.birthday_after").exists())
+        sms = NotificationOutbox.objects.get(event_key="occasion.birthday_before_greeting", channel="sms")
+        self.assertNotIn("۳ روز تا تولدت مانده", sms.body)
+        self.assertIn("تولدتان نزدیک است", sms.body)
+        self.assertTrue(NotificationOutbox.objects.filter(event_key="occasion.birthday_after_greeting").exists())
         self.assertFalse(Coupon.objects.filter(code__startswith="BDAY-").exists())
 
     def test_year_boundary_before_birthday_uses_occasion_year_as_cycle(self):
