@@ -43,8 +43,8 @@ class DashboardViewTests(TestCase):
     def test_dashboard_shows_all_nine_sidebar_sections(self):
         response = self.client.get(reverse("dashboard:dashboard"))
         for label in [
-            "داشبورد", "کالاها", "گروه‌بندی کالاها", "سفارشات", "فاکتورها",
-            "مشتری‌ها", "پرداخت‌ها", "گزارش‌های حرفه‌ای", "تنظیمات",
+            "داشبورد", "سفارش‌ها", "کالاها", "فاکتورها و مالی", "مشتریان",
+            "بازاریابی", "فروشگاه", "گزارش‌ها", "تنظیمات",
         ]:
             self.assertContains(response, label)
 
@@ -55,21 +55,22 @@ class DashboardViewTests(TestCase):
 
 
 class CollapsibleSidebarTests(TestCase):
-    """چک‌های ساختاریِ سایدبار جمع‌شونده — گروه‌بندی، مخفی‌شدنِ بج‌های صفر،
-    و درِ کشویی موبایل (بازطراحیِ سایدبار)."""
+    """چک‌های ساختاریِ سایدبارِ تخت (دو سطحی) — نُه حوزه‌ی کاری بدون آکاردئون،
+    مخفی‌شدنِ بج‌های صفر، و درِ کشویی موبایل."""
 
     def setUp(self):
         self.staff = User.objects.create_user(username="09121121003", password="pass12345", is_staff=True)
         _grant_akhlaghi_membership(self.staff)
         self.client.login(username="09121121003", password="pass12345")
 
-    def test_sidebar_groups_render_with_data_group_and_collapse_markup(self):
+    def test_sidebar_is_flat_with_nine_sections_and_no_accordion(self):
         response = self.client.get(reverse("dashboard:dashboard"))
-        for group_key in ["sales", "products", "shipping", "appearance", "finance", "reports", "management"]:
-            self.assertContains(response, f'data-group="{group_key}"')
-        self.assertContains(response, "nav-group-head")
-        self.assertContains(response, "nav-group-body")
-        self.assertContains(response, "x-show=\"groups.sales\"")
+        for section_key in ["dashboard", "orders", "products", "finance", "customers",
+                            "marketing", "store", "reports", "settings"]:
+            self.assertContains(response, f'data-section="{section_key}"')
+        for legacy in ("nav-group-head", "nav-group-body", "sidebarNav", 'data-group='):
+            self.assertNotContains(response, legacy)
+        self.assertEqual(response.content.decode().count('data-section="'), 9)
 
     def test_zero_badges_are_not_rendered(self):
         # فروشگاهِ akhlaghi در fixture پایه هیچ محصول/سفارشِ در انتظاری ندارد.
@@ -89,7 +90,7 @@ class CollapsibleSidebarTests(TestCase):
             sku="SKU-SB1", price=Decimal("100000"),
         )
         response = self.client.get(reverse("dashboard:product-list"))
-        self.assertContains(response, '<span class="badge-nav">1</span>')
+        self.assertContains(response, '<span class="badge-nav">1</span>')  # on the «همه کالاها» tab
 
     def test_nav_badges_shown_on_non_dashboard_pages_too(self):
         # قبلاً nav_product_count/nav_pending_order_count فقط در ویوِ خودِ

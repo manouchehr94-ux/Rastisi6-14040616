@@ -1,4 +1,4 @@
-{% load static %}<!DOCTYPE html>
+{% load static dashboard_nav %}<!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -9,38 +9,8 @@
 <link rel="stylesheet" href="{% static 'css/admin_v2.css' %}">
 {% block extra_css %}{% endblock %}
 <script>
-// باید پیش از بارگذاریِ Alpine (که defer است) تعریف شود تا x-data="sidebarNav()"
-// بتواند آن را در لحظه‌ی مقداردهی پیدا کند.
-function sidebarNav() {
-  return {
-    groups: {
-      // V2 keeps domains visible; server permissions remain authoritative.
-      sales: true, products: true, shipping: true, appearance: true,
-      finance: true, reports: true, management: true,
-    },
-    init() {
-      // فقط گروهِ حاوی صفحه‌ی فعلاً فعال باز است — تشخیص از روی همان
-      // کلاس «active»ای که سرور قبلاً روی nav-item درست رندر کرده، بدون
-      // نیاز به هیچ نگاشتِ صفحه↔گروهِ دوباره در سمتِ کلاینت.
-      const activeItem = this.$el.querySelector(".nav-item.active");
-      const activeGroupEl = activeItem ? activeItem.closest("[data-group]") : null;
-      if (activeGroupEl) {
-        this.groups[activeGroupEl.dataset.group] = true;
-      }
-      const savedScroll = parseInt(localStorage.getItem("adminSidebarScroll") || "0", 10);
-      this.$nextTick(() => { this.$el.scrollTop = savedScroll; });
-    },
-    toggle(key) {
-      const wasOpen = this.groups[key];
-      Object.keys(this.groups).forEach((k) => { this.groups[k] = false; });
-      this.groups[key] = !wasOpen;
-    },
-    onScroll() {
-      localStorage.setItem("adminSidebarScroll", this.$el.scrollTop);
-    },
-  };
-}
-
+// توابعِ زیر باید پیش از بارگذاریِ Alpine (که defer است) تعریف شوند تا x-data
+// بتواند آن‌ها را در لحظه‌ی مقداردهی پیدا کند.
 // ویرایشگرِ متنِ غنیِ توضیحاتِ کالا (CKEditor5 Classic Build، بارگذاری‌شده در
 // پایینِ همین صفحه). $refs.source تکست‌اریایِ اصلی (name="description") است —
 // CKEditor آن را جایگزین می‌کند اما خودِ عنصر در فرم می‌ماند؛ محتوا با هر
@@ -145,322 +115,8 @@ ClassicEditor فراخوانی می‌شود و بی‌سروصدا (بدون خ
       <div class="logo">{{ SHOP_NAME|slice:":1" }}</div>
       <div><b>{{ SHOP_NAME }}</b><span>پنل مدیریت فروشگاه</span></div>
     </div>
-    <nav class="nav" x-data="sidebarNav()" x-init="init()" @scroll.debounce.150ms="onScroll()">
-      <a class="nav-item{% if active_page == 'dashboard' %} active{% endif %}" data-page="dashboard" href="{% url 'dashboard:dashboard' %}">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
-        داشبورد
-      </a>
-
-      {% if can_view_orders or can_view_customers or can_view_returns or can_view_coupons %}
-      <div class="nav-group" data-group="sales">
-        <button type="button" class="nav-group-head" @click="toggle('sales')" :aria-expanded="groups.sales.toString()">
-          <span class="nav-group-icon">🧾</span>
-          <span class="nav-group-label">فروش و مشتریان</span>
-          <svg class="nav-group-chevron" :class="{ open: groups.sales }" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-        </button>
-        <div class="nav-group-body" x-show="groups.sales" x-cloak>
-          {% if can_view_orders %}
-          <a class="nav-item{% if active_page == 'orders' %} active{% endif %}" data-page="orders" href="{% url 'dashboard:order-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 01-8 0"/></svg>
-            سفارشات
-            {% if nav_pending_order_count %}<span class="badge-nav">{{ nav_pending_order_count }}</span>{% endif %}
-          </a>
-          <a class="nav-item{% if active_page == 'invoices' %} active{% endif %}" data-page="invoices" href="{% url 'dashboard:invoice-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6M9 9h1"/></svg>
-            فاکتورها
-          </a>
-          {% endif %}
-          {% if can_view_customers %}
-          <a class="nav-item{% if active_page == 'customers' %} active{% endif %}" data-page="customers" href="{% url 'dashboard:customer-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
-            مشتری‌ها
-          </a>
-          {% endif %}
-          {% if can_view_returns %}
-          <a class="nav-item{% if active_page == 'returns' %} active{% endif %}" data-page="returns" href="{% url 'dashboard:return-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 109-9"/><path d="M3 4v8h8"/></svg>
-            مرجوعی‌ها
-          </a>
-          {% endif %}
-          {% if can_view_coupons %}
-          <a class="nav-item{% if active_page == 'coupons' %} active{% endif %}" data-page="coupons" href="{% url 'dashboard:coupon-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41L12 22l-9-9 8.59-8.59A2 2 0 0113 4h6a2 2 0 012 2v6a2 2 0 01-.41 1.41z"/><circle cx="16" cy="8" r="1.5"/></svg>
-            کدهای تخفیف
-          </a>
-          <a class="nav-item{% if active_page == 'campaigns' %} active{% endif %}" data-page="campaigns" href="{% url 'dashboard:campaign-list' %}?kind=campaigns">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
-            کمپین‌های تخفیف
-          </a>
-          <a class="nav-item{% if active_page == 'occasions' %} active{% endif %}" data-page="occasions" href="{% url 'dashboard:campaign-list' %}?kind=occasions">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13M3 12h18M12 8c-2-4-6-3-5 0 .6 1.700 3 1 5 0zm0 0c2-4 6-3 5 0-.6 1.700-3 1-5 0z"/></svg>
-            مناسبت‌ها و هدیه‌ها
-          </a>
-          {% endif %}
-        </div>
-      </div>
-      {% endif %}
-
-      {% if can_view_products or can_manage_categories or can_manage_brands or can_manage_attributes or can_manage_inventory or can_view_warehouses or can_view_reservations or can_view_transfers %}
-      <div class="nav-group" data-group="products">
-        <button type="button" class="nav-group-head" @click="toggle('products')" :aria-expanded="groups.products.toString()">
-          <span class="nav-group-icon">📦</span>
-          <span class="nav-group-label">کالاها و موجودی</span>
-          <svg class="nav-group-chevron" :class="{ open: groups.products }" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-        </button>
-        <div class="nav-group-body" x-show="groups.products" x-cloak>
-          {% if can_view_products %}
-          <a class="nav-item{% if active_page == 'products' %} active{% endif %}" data-page="products" href="{% url 'dashboard:product-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7l-8-4-8 4v10l8 4 8-4V7z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg>
-            کالاها
-            {% if nav_product_count %}<span class="badge-nav">{{ nav_product_count }}</span>{% endif %}
-          </a>
-          {% endif %}
-          {% if can_manage_categories %}
-          <a class="nav-item{% if active_page == 'categories' %} active{% endif %}" data-page="categories" href="{% url 'dashboard:category-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6M13 6h8M13 18h8M13 12h8"/></svg>
-            گروه‌بندی کالاها
-          </a>
-          {% endif %}
-          {% if can_manage_brands %}
-          <a class="nav-item{% if active_page == 'brands' %} active{% endif %}" data-page="brands" href="{% url 'dashboard:brand-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 6 6 1-4.5 4.5L17.5 20 12 17l-5.5 3 1-6.5L3 9l6-1z"/></svg>
-            برندها
-          </a>
-          {% endif %}
-          {% if can_manage_attributes %}
-          <a class="nav-item{% if active_page == 'attributes' %} active{% endif %}" data-page="attributes" href="{% url 'dashboard:attribute-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41L12 22l-9-9 8.59-8.59A2 2 0 0113 4h6a2 2 0 012 2v6a2 2 0 01-.41 1.41z"/><circle cx="16" cy="8" r="1.5"/></svg>
-            ویژگی‌ها
-          </a>
-          {% endif %}
-          {% if can_manage_inventory %}
-          <a class="nav-item{% if active_page == 'inventory' %} active{% endif %}" data-page="inventory" href="{% url 'dashboard:inventory-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8V6a2 2 0 00-2-2H5a2 2 0 00-2 2v2"/><path d="M3 8l9 5 9-5M3 8v10a2 2 0 002 2h14a2 2 0 002-2V8"/></svg>
-            دفتر موجودی
-          </a>
-          {% endif %}
-          {% if can_view_warehouses %}
-          <a class="nav-item{% if active_page == 'warehouses' %} active{% endif %}" data-page="warehouses" href="{% url 'dashboard:warehouse-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M9 22V12h6v10"/></svg>
-            انبارها
-          </a>
-          {% endif %}
-          {% if can_view_reservations %}
-          <a class="nav-item{% if active_page == 'reservations' %} active{% endif %}" data-page="reservations" href="{% url 'dashboard:reservation-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-            رزروهای موجودی
-          </a>
-          {% endif %}
-          {% if can_view_transfers %}
-          <a class="nav-item{% if active_page == 'transfers' %} active{% endif %}" data-page="transfers" href="{% url 'dashboard:transfer-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3l4 4-4 4M20 7H8M8 21l-4-4 4-4M4 17h12"/></svg>
-            انتقالِ انبار
-          </a>
-          {% endif %}
-        </div>
-      </div>
-      {% endif %}
-
-      {% if can_view_shipping_settings or can_view_tax_settings %}
-      <div class="nav-group" data-group="shipping">
-        <button type="button" class="nav-group-head" @click="toggle('shipping')" :aria-expanded="groups.shipping.toString()">
-          <span class="nav-group-icon">🚚</span>
-          <span class="nav-group-label">ارسال و مالیات</span>
-          <svg class="nav-group-chevron" :class="{ open: groups.shipping }" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-        </button>
-        <div class="nav-group-body" x-show="groups.shipping" x-cloak>
-          {% if can_view_shipping_settings %}
-          <a class="nav-item{% if active_page == 'shipping' %} active{% endif %}" data-page="shipping" href="{% url 'dashboard:shipping-setup' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-            ارسال
-          </a>
-          {% endif %}
-          {% if can_view_tax_settings %}
-          <a class="nav-item{% if active_page == 'tax' %} active{% endif %}" data-page="tax" href="{% url 'dashboard:tax-settings' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2H4a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M9 2v7h7"/><path d="M9 15h6M9 18h4"/></svg>
-            مالیات
-          </a>
-          {% endif %}
-        </div>
-      </div>
-      {% endif %}
-
-      {% if can_manage_content or can_manage_storefront_layout or can_manage_collections %}
-      <div class="nav-group" data-group="appearance">
-        <button type="button" class="nav-group-head" @click="toggle('appearance')" :aria-expanded="groups.appearance.toString()">
-          <span class="nav-group-icon">🎨</span>
-          <span class="nav-group-label">فروشگاه</span>
-          <svg class="nav-group-chevron" :class="{ open: groups.appearance }" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-        </button>
-        <div class="nav-group-body" x-show="groups.appearance" x-cloak>
-          {% if can_manage_storefront_layout %}
-          <a class="nav-item{% if active_page == 'storefront_builder' %} active{% endif %}" data-page="storefront_appearance" data-admin-v2-priority="2" href="{% url 'dashboard:storefront-builder-r4-editor' %}?panel=appearance">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2a10 10 0 100 20 4 4 0 010-8 4 4 0 000-8 10 10 0 000-4z"/></svg>
-            ظاهر و طراحی
-          </a>
-          <a class="nav-item{% if active_page == 'storefront_builder' %} active{% endif %}" data-page="storefront_builder" href="{% url 'dashboard:storefront-builder-templates' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-            قالب‌های آماده
-          </a>
-          <a class="nav-item{% if active_page == 'storefront_builder' %} active{% endif %}" data-page="storefront_builder" data-admin-v2-priority="1" href="{% url 'dashboard:storefront-builder-r4-editor' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-            سازنده فروشگاه
-          </a>
-          <a class="nav-item" data-page="storefront_builder" href="{% url 'dashboard:storefront-builder-editor' %}" style="font-size:.85em;opacity:.75">
-            ادیتور قدیمی (تنظیمات پیشرفته)
-          </a>
-          {% endif %}
-          {% if can_manage_collections %}
-          <a class="nav-item{% if active_page == 'collections' %} active{% endif %}" data-page="collections" href="{% url 'dashboard:collection-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16V8z"/><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"/></svg>
-            کالکشن‌ها
-          </a>
-          {% endif %}
-          {% if can_manage_content %}
-          <a class="nav-item{% if active_page == 'pages' %} active{% endif %}" data-page="content" data-admin-v2-priority="3" href="{% url 'dashboard:page-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></svg>
-            محتوا
-          </a>
-          <a class="nav-item{% if active_page == 'homepage' %} active{% endif %}" data-page="homepage" href="{% url 'dashboard:hero-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-            صفحه اصلی
-          </a>
-          <a class="nav-item{% if active_page == 'menus' %} active{% endif %}" data-page="menus" href="{% url 'dashboard:menu-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h12M3 18h18"/></svg>
-            مدیریت منوها
-          </a>
-          <a class="nav-item{% if active_page == 'footer' %} active{% endif %}" data-page="footer" href="{% url 'dashboard:footer-settings' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="17" width="20" height="5" rx="1"/><path d="M4 12h16M4 7h16"/></svg>
-            تنظیمات فوتر
-          </a>
-          <a class="nav-item{% if active_page == 'social_links' %} active{% endif %}" data-page="social_links" href="{% url 'dashboard:social-link-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>
-            شبکه‌های اجتماعی
-          </a>
-          {% endif %}
-        </div>
-      </div>
-      {% endif %}
-
-      {% if can_view_orders or can_view_billing %}
-      <div class="nav-group" data-group="finance">
-        <button type="button" class="nav-group-head" @click="toggle('finance')" :aria-expanded="groups.finance.toString()">
-          <span class="nav-group-icon">💰</span>
-          <span class="nav-group-label">مالی</span>
-          <svg class="nav-group-chevron" :class="{ open: groups.finance }" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-        </button>
-        <div class="nav-group-body" x-show="groups.finance" x-cloak>
-          {% if can_view_orders %}
-          <a class="nav-item{% if active_page == 'payments' %} active{% endif %}" data-page="payments" href="{% url 'dashboard:payment-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg>
-            پرداخت‌ها
-          </a>
-          <a class="nav-item{% if active_page == 'payment-reconciliations' %} active{% endif %}" data-page="payment-reconciliations" href="{% url 'dashboard:payment-reconciliations' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg>
-            تطبیق پرداخت‌ها
-          </a>
-          {% endif %}
-          {% if can_manage_settings %}
-          <a class="nav-item{% if active_page == 'settings' and request.GET.section == 'finance' %} active{% endif %}" data-page="finance-settings" href="{% url 'dashboard:settings' %}?section=finance">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-            مالی
-          </a>
-          {% endif %}
-          {% if can_view_billing %}
-          <a class="nav-item{% if active_page == 'billing' %} active{% endif %}" data-page="billing" href="{% url 'dashboard:billing-overview' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2z"/><path d="M2 10h20M6 15h4"/></svg>
-            فاکتورها و پرداخت
-          </a>
-          {% endif %}
-        </div>
-      </div>
-      {% endif %}
-
-      {% if can_view_reports or can_view_audit_log or can_view_exports or can_view_imports or can_view_segments %}
-      <div class="nav-group" data-group="reports">
-        <button type="button" class="nav-group-head" @click="toggle('reports')" :aria-expanded="groups.reports.toString()">
-          <span class="nav-group-icon">📊</span>
-          <span class="nav-group-label">گزارش‌ها</span>
-          <svg class="nav-group-chevron" :class="{ open: groups.reports }" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-        </button>
-        <div class="nav-group-body" x-show="groups.reports" x-cloak>
-          {% if can_view_reports %}
-          <a class="nav-item{% if active_page == 'reports' %} active{% endif %}" data-page="reports" href="{% url 'dashboard:report-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
-            گزارش‌های حرفه‌ای
-          </a>
-          {% endif %}
-          {% if can_view_audit_log %}
-          <a class="nav-item{% if active_page == 'audit-log' %} active{% endif %}" data-page="audit-log" href="{% url 'dashboard:audit-log-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6M9 9h1"/></svg>
-            گزارش رخدادها
-          </a>
-          {% endif %}
-          {% if can_view_imports %}
-          <a class="nav-item{% if active_page == 'imports' %} active{% endif %}" data-page="imports" href="{% url 'dashboard:import-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5-5 5 5"/><path d="M12 4v12"/></svg>
-            وارداتِ داده‌ها
-          </a>
-          {% endif %}
-          {% if can_view_exports %}
-          <a class="nav-item{% if active_page == 'exports' %} active{% endif %}" data-page="exports" href="{% url 'dashboard:export-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-            صادراتِ داده‌ها
-          </a>
-          {% endif %}
-          {% if can_view_segments %}
-          <a class="nav-item{% if active_page == 'segments' %} active{% endif %}" data-page="segments" href="{% url 'dashboard:segment-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 014-4h6a4 4 0 014 4v2"/><circle cx="17" cy="7" r="3" opacity="0.5"/></svg>
-            سگمنت‌هایِ مشتری
-          </a>
-          {% endif %}
-        </div>
-      </div>
-      {% endif %}
-
-      {% if can_manage_staff or can_view_subscription or can_view_usage or can_manage_settings %}
-      <div class="nav-group" data-group="management">
-        <button type="button" class="nav-group-head" @click="toggle('management')" :aria-expanded="groups.management.toString()">
-          <span class="nav-group-icon">🏬</span>
-          <span class="nav-group-label">مدیریت</span>
-          <svg class="nav-group-chevron" :class="{ open: groups.management }" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-        </button>
-        <div class="nav-group-body" x-show="groups.management" x-cloak>
-          {% if can_manage_staff %}
-          <a class="nav-item{% if active_page == 'staff' %} active{% endif %}" data-page="staff" href="{% url 'dashboard:staff-list' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
-            اعضای تیم
-          </a>
-          {% endif %}
-          {% if can_view_subscription %}
-          <a class="nav-item{% if active_page == 'subscription' %} active{% endif %}" data-page="subscription" href="{% url 'dashboard:subscription-overview' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
-            اشتراک
-          </a>
-          {% endif %}
-          {% if can_view_usage %}
-          <a class="nav-item{% if active_page == 'usage' %} active{% endif %}" data-page="usage" href="{% url 'dashboard:usage-overview' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
-            مصرف و سقف‌ها
-          </a>
-          {% endif %}
-          {% if can_manage_settings %}
-          <a class="nav-item{% if active_page == 'notifications' %} active{% endif %}" data-page="notifications" href="{% url 'dashboard:notification-templates' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v13H5.200L4 18.500z"/><path d="M8 9h8M8 13h5"/></svg>
-            اعلان‌های پیامکی و ایمیلی
-          </a>
-          <a class="nav-item" data-page="gift-wrap" href="{% url 'dashboard:gift-wrap-products' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13M3 13h18"/></svg>
-            کادوپیچی کالاها
-          </a>
-          <a class="nav-item{% if active_page == 'settings' and request.GET.section != 'finance' %} active{% endif %}" data-page="settings" href="{% url 'dashboard:settings' %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h0a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51h0a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v0a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-            تنظیمات
-          </a>
-          {% endif %}
-        </div>
-      </div>
-      {% endif %}
+    <nav class="nav" aria-label="ناوبری اصلی">
+      {% admin_sidebar_nav %}
     </nav>
     <div class="sidebar-foot">
       {% if RASTISI_PORTAL_URL %}
@@ -515,6 +171,8 @@ ClassicEditor فراخوانی می‌شود و بی‌سروصدا (بدون خ
       {% endif %}
     </header>
 
+    {% admin_section_tabs %}
+
     <main class="content">
       {% if subscription_banner_warning %}
       <div class="alert {% if subscription_banner_blocks_growth %}alert-error{% else %}alert-warning{% endif %}" role="alert"
@@ -533,38 +191,11 @@ ClassicEditor فراخوانی می‌شود و بی‌سروصدا (بدون خ
 </div>
 
 
-<!-- Admin V2 global command palette. Every result points at an existing
-     permission-aware RastiSi screen; no parallel CRUD is introduced. -->
+<!-- Admin V2 global command palette. The index is generated from
+     apps/dashboard/navigation.py (same permission-aware IA as the sidebar and
+     section tabs): every result points at an existing screen, no parallel CRUD. -->
 <div id="adminV2CommandIndex" aria-hidden="true">
-  <a data-search-item data-title="نمای کلی" data-path="داشبورد" data-keywords="خانه داشبورد فروش امروز سفارش امروز" data-icon="⌂" href="{% url 'dashboard:dashboard' %}"></a>
-  {% if can_view_orders %}<a data-search-item data-title="سفارش‌ها" data-path="فروش ← سفارش‌ها" data-keywords="سفارش سفارشات سفارش جدید پردازش" data-icon="▣" href="{% url 'dashboard:order-list' %}"></a>{% endif %}
-  {% if can_view_products %}<a data-search-item data-title="کالاها" data-path="کالاها ← همه کالاها" data-keywords="کالا محصول محصولات ویرایش محصول" data-icon="□" href="{% url 'dashboard:product-list' %}"></a>{% endif %}
-  {% if can_manage_categories %}<a data-search-item data-title="دسته‌بندی‌ها" data-path="کالاها ← دسته‌بندی‌ها" data-keywords="دسته دسته بندی دسته‌بندی category" data-icon="⌘" href="{% url 'dashboard:category-list' %}"></a>{% endif %}
-  {% if can_manage_brands %}<a data-search-item data-title="برندها" data-path="کالاها ← برندها" data-keywords="برند مارک brand" data-icon="B" href="{% url 'dashboard:brand-list' %}"></a>{% endif %}
-  {% if can_manage_inventory %}<a data-search-item data-title="انبار و موجودی" data-path="کالاها ← موجودی" data-keywords="انبار موجودی stock inventory" data-icon="▤" href="{% url 'dashboard:inventory-list' %}"></a>{% endif %}
-  {% if can_view_customers %}<a data-search-item data-title="مشتریان" data-path="فروش ← مشتریان" data-keywords="مشتری مشتریان customer" data-icon="♙" href="{% url 'dashboard:customer-list' %}"></a>{% endif %}
-  {% if can_view_shipping_settings %}<a data-search-item data-title="ارسال" data-path="ارسال و مالیات ← ارسال" data-keywords="ارسال پست روش ارسال shipping" data-icon="⇢" href="{% url 'dashboard:shipping-setup' %}"></a>{% endif %}
-  {% if can_view_coupons %}<a data-search-item data-title="کمپین‌ها" data-path="فروش ← کمپین‌های تخفیف" data-keywords="کمپین تخفیف هوشمند campaign" data-icon="◎" href="{% url 'dashboard:campaign-list' %}?kind=campaigns"></a><a data-search-item data-title="مناسبت‌ها" data-path="فروش ← مناسبت‌ها" data-keywords="تولد مناسبت هدیه سالگرد birthday occasion" data-icon="🎂" href="{% url 'dashboard:campaign-list' %}?kind=occasions"></a>{% endif %}
-  {% if can_view_coupons %}<a data-search-item data-title="تخفیف‌ها" data-path="فروش ← کدهای تخفیف" data-keywords="تخفیف کوپن جشنواره coupon" data-icon="%" href="{% url 'dashboard:coupon-list' %}"></a>{% endif %}
-  {% if can_manage_storefront_layout %}
-  <a data-search-item data-title="سازنده فروشگاه" data-path="فروشگاه ← سازنده فروشگاه" data-keywords="سازنده storefront builder طراحی صفحه سکشن section هیرو" data-icon="✦" href="{% url 'dashboard:storefront-builder-r4-editor' %}"></a>
-  <a data-search-item data-title="ظاهر و طراحی" data-path="فروشگاه ← ظاهر و طراحی" data-keywords="ظاهر رنگ پالت فونت قالب استایل appearance palette" data-icon="◉" href="{% url 'dashboard:storefront-builder-r4-editor' %}?panel=appearance"></a>
-  <a data-search-item data-title="لوگو" data-path="ظاهر و طراحی ← هدر ← لوگو" data-keywords="لوگو آرم نشان فروشگاه logo header" data-icon="R" href="{% url 'dashboard:storefront-builder-r4-editor' %}?panel=header&focus=logo"></a>
-  <a data-search-item data-title="هدر فروشگاه" data-path="ظاهر و طراحی ← هدر" data-keywords="هدر سربرگ جستجو سبد حساب کاربری header" data-icon="⌃" href="{% url 'dashboard:storefront-builder-r4-editor' %}?panel=header"></a>
-  <a data-search-item data-title="فوتر فروشگاه" data-path="ظاهر و طراحی ← فوتر" data-keywords="فوتر پایین صفحه شبکه اجتماعی footer" data-icon="⌄" href="{% url 'dashboard:storefront-builder-r4-editor' %}?panel=footer"></a>
-  <a data-search-item data-title="قالب‌های آماده" data-path="ظاهر و طراحی ← قالب" data-keywords="قالب تم template ready" data-icon="▦" href="{% url 'dashboard:storefront-builder-templates' %}"></a>
-  {% endif %}
-  {% if can_manage_collections %}<a data-search-item data-title="کالکشن‌ها" data-path="فروشگاه ← کالکشن‌ها" data-keywords="کالکشن مجموعه محصولات collection" data-icon="◇" href="{% url 'dashboard:collection-list' %}"></a>{% endif %}
-  {% if can_manage_content %}
-  <a data-search-item data-title="محتوا" data-path="فروشگاه ← محتوا" data-keywords="محتوا صفحه صفحات بلاگ content" data-icon="▤" href="{% url 'dashboard:page-list' %}"></a>
-  <a data-search-item data-title="منوها" data-path="فروشگاه ← محتوا ← منوها" data-keywords="منو مگامنو navigation" data-icon="☰" href="{% url 'dashboard:menu-list' %}"></a>
-  {% endif %}
-  {% if can_manage_settings %}
-  <a data-search-item data-title="تنظیمات فروشگاه" data-path="مدیریت ← تنظیمات" data-keywords="تنظیمات دامنه پرداخت مالیات اعلان کاربران settings" data-icon="⚙" href="{% url 'dashboard:settings' %}"></a>
-  <a data-search-item data-title="پیامک‌ها" data-path="تنظیمات ← پیامک" data-keywords="پیامک sms اس ام اس اتصال پیامک پنل پیامکی قالب پیامک ارسال آزمایشی" data-icon="✉" href="{% url 'dashboard:settings-sms-connection' %}"></a>
-  <a data-search-item data-title="گزارش پیامک‌ها" data-path="تنظیمات ← پیامک ← گزارش ارسال" data-keywords="پیامک sms گزارش لاگ پیامک ارسال شده ناموفق retry" data-icon="≡" href="{% url 'dashboard:sms-log-list' %}"></a>
-  <a data-search-item data-title="صندوق خروجی پیامک" data-path="تنظیمات ← پیامک ← صندوق خروجی" data-keywords="پیامک sms صندوق خروجی صف ارسال outbox" data-icon="⇢" href="{% url 'dashboard:sms-outbox-list' %}"></a>
-  {% endif %}
+  {% admin_command_index %}
 </div>
 <div id="adminV2CommandPalette" class="admin-v2-command-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-label="جستجو در پنل">
   <div class="admin-v2-command">

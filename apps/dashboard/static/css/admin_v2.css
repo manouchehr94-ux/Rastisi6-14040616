@@ -32,28 +32,13 @@ body.admin-v2-body .brand .logo{
 body.admin-v2-body .brand b{font-size:17px;letter-spacing:-.2px}
 body.admin-v2-body .brand span{color:#767e92;font-size:11px;margin-top:2px;display:block}
 
-body.admin-v2-body .nav{padding:8px 12px 18px}
-body.admin-v2-body .nav-group{margin:10px 0 0}
-body.admin-v2-body .nav-group-head{
-  cursor:default;pointer-events:none;padding:12px 10px 6px;border-radius:0;
-  color:#626b80;font-size:10.5px;font-weight:800;letter-spacing:.35px;
-  text-transform:none;
-}
-body.admin-v2-body .nav-group-head:hover{background:transparent;color:#626b80}
-body.admin-v2-body .nav-group-icon{display:none}
-body.admin-v2-body .nav-group-chevron{display:none}
-body.admin-v2-body .nav-group-body{padding:0;margin:0;display:flex !important;gap:2px}
-body.admin-v2-body .nav-group-body[style*="display: none"]{display:flex !important}
-body.admin-v2-body .nav-group-body .nav-item,
+/* Level-1 navigation: nine flat, compact work-area links (no accordions). */
+body.admin-v2-body .nav{padding:10px 12px 18px;display:flex;flex-direction:column;gap:3px}
 body.admin-v2-body .nav > .nav-item{
-  min-height:42px;padding:9px 12px;border-radius:11px;color:#aeb4c3;
-  font-size:13px;font-weight:600;border:0;
+  min-height:44px;padding:9px 12px;border-radius:11px;color:#aeb4c3;
+  font-size:14px;font-weight:600;border:0;gap:12px;
 }
-body.admin-v2-body .nav-group-body .nav-item{padding-right:12px}
-body.admin-v2-body .nav-group[data-group="appearance"] .nav-group-body .nav-item[data-admin-v2-priority="1"]{order:-30}
-body.admin-v2-body .nav-group[data-group="appearance"] .nav-group-body .nav-item[data-admin-v2-priority="2"]{order:-29}
-body.admin-v2-body .nav-group[data-group="appearance"] .nav-group-body .nav-item[data-admin-v2-priority="3"]{order:-28;margin-bottom:5px}
-body.admin-v2-body .nav-group[data-group="appearance"] .nav-group-body .nav-item[data-admin-v2-priority]{color:#d8dbea;background:rgba(255,255,255,.025)}
+body.admin-v2-body .nav-item-label{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body.admin-v2-body .nav-item:hover{background:var(--admin-v2-sidebar-hover);color:#fff}
 body.admin-v2-body .nav-item.active{
   background:#242a3d;color:#fff;box-shadow:none;position:relative;
@@ -64,6 +49,7 @@ body.admin-v2-body .nav-item.active::before{
 }
 body.admin-v2-body .nav-item svg{width:18px;height:18px;color:#9299aa}
 body.admin-v2-body .nav-item.active svg{color:#cfc5ff}
+body.admin-v2-body .nav-item .badge-nav{margin-right:0;margin-left:0}
 body.admin-v2-body .sidebar-foot{padding:12px;border-top:1px solid rgba(255,255,255,.055)}
 body.admin-v2-body .sidebar-foot .card-mini{background:var(--admin-v2-sidebar-raised);border:1px solid rgba(255,255,255,.055)}
 
@@ -95,11 +81,44 @@ body.admin-v2-body .card{border-color:#e9ebf2;box-shadow:0 1px 2px rgba(16,24,40
 .admin-v2-page-actions:empty{display:none}
 .admin-v2-page-actions + .icon-btn{margin-right:0}
 
+
+/* Level-2 navigation: section tabs under the page header. */
+.admin-section-tabs{
+  position:sticky;top:76px;z-index:30;display:flex;align-items:stretch;gap:18px;
+  padding:0 32px;background:var(--admin-v2-surface,var(--card));
+  border-bottom:1px solid var(--admin-v2-line,var(--border));
+}
+body[data-theme="dark"] .admin-section-tabs{background:var(--card);border-bottom-color:var(--border)}
+.admin-section-name{
+  flex:none;align-self:center;padding-left:18px;font-size:12px;font-weight:800;color:var(--muted);
+  border-left:1px solid var(--admin-v2-line,var(--border));line-height:1.2;
+}
+.admin-section-tablist{
+  display:flex;gap:2px;margin:0;padding:0;list-style:none;min-width:0;
+  overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;
+}
+.admin-section-tablist::-webkit-scrollbar{display:none}
+.admin-section-tablist li{flex:none;list-style:none}
+.admin-section-tab{
+  display:flex;align-items:center;gap:6px;min-height:48px;padding:0 14px;white-space:nowrap;
+  font-size:13px;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;
+  transition:color .15s,border-color .15s,background .15s;
+}
+.admin-section-tab:hover{color:var(--text);background:color-mix(in srgb,var(--primary) 5%,transparent)}
+.admin-section-tab.active{color:var(--primary-text);border-bottom-color:var(--primary);font-weight:800}
+.admin-section-tab:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;border-radius:6px}
+.admin-section-tab .badge-nav{
+  background:var(--primary-soft);color:var(--primary-text);font-size:10.5px;font-weight:700;
+  padding:0 7px;border-radius:20px;line-height:1.7;
+}
+@media (prefers-reduced-motion:reduce){.admin-section-tab{transition:none}}
+
 /* Settings and other inner tabs stay visible at the top of their page. */
 body.admin-v2-body .settings-nav{
   position:sticky;top:76px;z-index:20;background:color-mix(in srgb,var(--bg) 94%,transparent);
   backdrop-filter:blur(10px);padding:10px 0 12px;margin-top:-8px;
 }
+body.admin-v2-body .main:has(.admin-section-tabs) .settings-nav{top:124px}
 body.admin-v2-body .settings-nav-item{border-radius:10px;background:transparent;border-color:transparent;padding:9px 14px}
 body.admin-v2-body .settings-nav-item:hover{background:var(--card);border-color:var(--border)}
 body.admin-v2-body .settings-nav-item.active{background:var(--primary-soft);color:var(--primary-text);border-color:transparent;box-shadow:inset 0 -2px 0 var(--primary)}
@@ -138,6 +157,7 @@ body[data-theme="dark"] .admin-v2-command{background:#161c31;border-color:#2a335
 body.admin-v2-embedded .sidebar,
 body.admin-v2-embedded .sidebar-backdrop,
 body.admin-v2-embedded .topbar,
+body.admin-v2-embedded .admin-section-tabs,
 body.admin-v2-embedded .sidebar-foot{display:none !important}
 body.admin-v2-embedded .main{margin:0 !important;min-height:100vh}
 body.admin-v2-embedded .content{max-width:none;padding:24px 28px 48px}
@@ -158,4 +178,8 @@ body.admin-v2-embedded .settings-nav{top:0}
   body.admin-v2-body .search-box .admin-v2-kbd{display:none}
   body.admin-v2-body .content{padding:20px 14px 54px}
   body.admin-v2-body .settings-nav{top:68px;margin-inline:-14px;padding-inline:14px}
+  body.admin-v2-body .main:has(.admin-section-tabs) .settings-nav{top:116px}
+  .admin-section-tabs{top:68px;padding:0 6px;gap:0}
+  .admin-section-name{display:none}
+  .admin-section-tab{min-height:46px;padding:0 12px}
 }

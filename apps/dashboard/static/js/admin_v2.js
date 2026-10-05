@@ -50,27 +50,26 @@
   }
 
   function collectNavigationItems() {
+    // Sidebar sections and section tabs are already in the generated
+    // palette index (data-palette-skip), so only harvest what it lacks.
     const selectors = [
       '.sidebar a.nav-item[href]',
       '.sidebar a[href][data-page]',
+      '.admin-section-tabs a[href]',
       '.settings-nav a[href]',
       '[data-admin-v2-searchable][href]'
     ];
     const nodes = Array.from(document.querySelectorAll(selectors.join(',')));
     return nodes
       .filter((node) => !node.closest('#adminV2CommandIndex'))
+      .filter((node) => !node.hasAttribute('data-palette-skip'))
       .filter((node) => {
         const href = node.getAttribute('href') || '';
         return href && href !== '#' && !href.toLowerCase().startsWith('javascript:');
       })
       .map((node) => {
-        const group = node.closest('.nav-group');
-        let groupLabel = '';
-        if (group) {
-          const label = group.querySelector('.nav-group-label, .nav-label');
-          if (label) groupLabel = label.textContent.trim();
-        }
-        return makeItem(node, groupLabel ? groupLabel + ' ← پنل مدیریت' : 'پنل مدیریت');
+        const inSettings = node.closest('.settings-nav');
+        return makeItem(node, inSettings ? 'تنظیمات ← بخش‌های تنظیمات' : 'پنل مدیریت');
       });
   }
 
@@ -82,7 +81,8 @@
     const merged = explicit.concat(collectNavigationItems());
     const seen = new Set();
     return merged.filter((item) => {
-      const key = normalize(item.href) + '|' + item.normalizedTitle;
+      // One entry per destination; the generated index comes first and wins.
+      const key = normalize(item.href);
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -216,8 +216,19 @@
     };
   }
 
+  // On narrow screens the tab strip scrolls horizontally; make sure the
+  // active tab is not hidden off-screen when the page loads.
+  function initSectionTabs() {
+    const active = document.querySelector('.admin-section-tab.active');
+    const strip = document.querySelector('.admin-section-tablist');
+    if (!active || !strip || strip.scrollWidth <= strip.clientWidth) return;
+    // scrollIntoView handles RTL scroll origins; block:'nearest' never moves the page.
+    active.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }
+
   function boot() {
     initEmbeddedMode();
+    initSectionTabs();
     initCommandPalette();
   }
 
