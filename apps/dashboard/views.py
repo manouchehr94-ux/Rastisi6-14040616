@@ -195,7 +195,7 @@ from apps.catalog.services.variant_service import (
 from apps.core.color_utils import safe_hex
 from apps.core.utils import normalize_digits
 from apps.core.models import ExportJob, ImportJob, ImportRowResult, ShopSettings
-from apps.core.services.xlsx_utils import XLSX_CONTENT_TYPE
+from apps.core.services.xlsx_utils import XLSX_CONTENT_TYPE, safe_download_filename
 from apps.core.theme_presets import THEME_PRESETS, matching_preset_key
 from apps.customers.models import (
     Customer,
@@ -6449,7 +6449,9 @@ def import_download_source(request, pk):
     extension = "xlsx" if job.source_file.name.lower().endswith(".xlsx") else "csv"
     return FileResponse(
         job.source_file.open("rb"), as_attachment=True,
-        filename=f"{job.import_type}-source-{job.pk}.{extension}",
+        filename=safe_download_filename(
+            job.original_filename, extension, f"{job.import_type}-source-{job.pk}",
+        ),
         content_type=XLSX_CONTENT_TYPE if extension == "xlsx" else "text/csv",
     )
 

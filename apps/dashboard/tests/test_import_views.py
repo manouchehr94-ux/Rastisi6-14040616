@@ -158,7 +158,7 @@ class ErrorReportTests(ImportViewTestCase):
         self.assertEqual(response.status_code, 200)
         # a legacy CSV upload is downloaded as CSV (never forced to another format)
         self.assertEqual(response["Content-Type"], "text/csv")
-        self.assertIn(f"products-source-{job.pk}.csv", response["Content-Disposition"])
+        self.assertIn('filename="products.csv"', response["Content-Disposition"])
 
 
 INTERNAL_TERMS = (
@@ -423,8 +423,65 @@ class XlsxUploadFlowTests(ImportViewTestCase):
         self.assertTrue(job.source_file.name.endswith(".xlsx"))
         response = self.client.get(reverse("dashboard:import-download-source", args=[job.pk]))
         self.assertEqual(response["Content-Type"], XLSX_MIME)
-        self.assertIn(f"products-source-{job.pk}.xlsx", response["Content-Disposition"])
+        self.assertIn('filename="my-products.xlsx"', response["Content-Disposition"])
         self.assertEqual(b"".join(response.streaming_content), content)
+
+    def _source_response(self, original_filename, *, content=None):
+        content = content or make_xlsx(self.XLSX_HEADERS, [self._good()])
+        self.client.post(reverse("dashboard:import-upload"), {
+            "import_type": "products", "mode": "create_only",
+            "file": SimpleUploadedFile("upload.xlsx", content, content_type=XLSX_MIME),
+        })
+        job = ImportJob.objects.get(store=self.store)
+        # the stored private path is untouched; only the display name varies
+        stored_name = job.source_file.name
+        ImportJob.objects.filter(pk=job.pk).update(original_filename=original_filename)
+        response = self.client.get(reverse("dashboard:import-download-source", args=[job.pk]))
+        job.refresh_from_db()
+        self.assertEqual(job.source_file.name, stored_name)
+        return job, response
+
+    def test_source_download_keeps_persian_original_filename(self):
+        from urllib.parse import quote
+        job, response = self._source_response("محصولات پاییز ۱۴۰۴.xlsx")
+        self.assertEqual(response["Content-Type"], XLSX_MIME)
+        disposition = response["Content-Disposition"]
+        self.assertTrue(disposition.startswith("attachment;"))
+        self.assertIn("filename*=utf-8''" + quote("محصولات پاییز ۱۴۰۴.xlsx"), disposition)
+
+    def test_source_download_keeps_english_original_filename_and_lowercases_extension(self):
+        job, response = self._source_response("Spring Catalog v2.XLSX")
+        self.assertIn('filename="Spring Catalog v2.xlsx"', response["Content-Disposition"])
+        self.assertEqual(response["Content-Type"], XLSX_MIME)
+
+    def test_source_download_neutralises_path_like_and_header_injection_names(self):
+        hostile = {
+            "../../etc/passwd.xlsx": 'filename="passwd.xlsx"',
+            "..\\..\\windows\\system32\\evil.xlsx": 'filename="evil.xlsx"',
+            "/abs/path/report.xlsx": 'filename="report.xlsx"',
+            'bad"name;x.xlsx': 'filename="badnamex.xlsx"',
+        }
+        for original, expected in hostile.items():
+            with self.subTest(original=original):
+                job, response = self._source_response(original)
+                disposition = response["Content-Disposition"]
+                self.assertIn(expected, disposition)
+                self.assertNotIn("..", disposition)
+                self.assertNotIn("/", disposition.split("filename", 1)[1])
+                self.assertEqual(response["Content-Type"], XLSX_MIME)
+                ImportJob.objects.all().delete()
+
+    def test_source_download_strips_crlf_and_falls_back_when_name_is_unusable(self):
+        job, response = self._source_response("evil\r\nSet-Cookie: x=1.xlsx")
+        self.assertNotIn("\r", response["Content-Disposition"])
+        self.assertNotIn("\n", response["Content-Disposition"])
+        self.assertNotIn("Set-Cookie", [k for k, _ in response.items() if k != "Content-Disposition"])
+        ImportJob.objects.all().delete()
+        job, response = self._source_response("..")
+        self.assertIn(f'filename="products-source-{job.pk}.xlsx"', response["Content-Disposition"])
+        ImportJob.objects.all().delete()
+        job, response = self._source_response("")
+        self.assertIn(f'filename="products-source-{job.pk}.xlsx"', response["Content-Disposition"])
 
     def test_error_report_is_available_after_preview_and_after_execution(self):
         self._post([self._good(), ["XU-BAD", "", "فعال", "", "", "1", ""]])

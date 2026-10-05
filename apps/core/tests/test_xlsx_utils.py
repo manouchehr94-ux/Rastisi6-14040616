@@ -14,7 +14,7 @@ from django.test import SimpleTestCase
 from openpyxl import Workbook, load_workbook
 
 from apps.core.services import xlsx_utils
-from apps.core.services.xlsx_utils import Column, XlsxUploadError
+from apps.core.services.xlsx_utils import Column, XlsxUploadError, safe_download_filename
 
 XLSX_MIME = xlsx_utils.XLSX_CONTENT_TYPE
 
@@ -240,3 +240,26 @@ class ReaderTests(SimpleTestCase):
     def test_corrupt_workbook_raises_a_readable_error(self):
         with self.assertRaises(xlsx_utils.XlsxReadError):
             self._read(b"not a workbook")
+
+
+class SafeDownloadFilenameTests(SimpleTestCase):
+    def test_keeps_persian_and_english_basenames(self):
+        self.assertEqual(safe_download_filename("محصولات پاییز.xlsx", "xlsx", "f"), "محصولات پاییز.xlsx")
+        self.assertEqual(safe_download_filename("Spring v2.XLSX", "xlsx", "f"), "Spring v2.xlsx")
+        self.assertEqual(safe_download_filename("old.csv", "csv", "f"), "old.csv")
+
+    def test_adds_the_real_extension_when_missing_or_different(self):
+        self.assertEqual(safe_download_filename("catalog", "xlsx", "f"), "catalog.xlsx")
+        self.assertEqual(safe_download_filename("catalog.v2", "xlsx", "f"), "catalog.v2.xlsx")
+
+    def test_drops_directories_control_chars_and_reserved_characters(self):
+        self.assertEqual(safe_download_filename("../../etc/passwd.xlsx", "xlsx", "f"), "passwd.xlsx")
+        self.assertEqual(safe_download_filename("C:\\temp\\a.xlsx", "xlsx", "f"), "a.xlsx")
+        self.assertEqual(safe_download_filename("a\r\nb\x00c.xlsx", "xlsx", "f"), "abc.xlsx")
+        self.assertEqual(safe_download_filename('x"y;z<>.xlsx', "xlsx", "f"), "xyz.xlsx")
+        self.assertEqual(safe_download_filename("\u202egpj.xlsx", "xlsx", "f"), "gpj.xlsx")
+
+    def test_falls_back_and_limits_length(self):
+        for bad in ("", "..", "...xlsx", " . ", "/"):
+            self.assertEqual(safe_download_filename(bad, "xlsx", "fallback-1"), "fallback-1.xlsx", bad)
+        self.assertLessEqual(len(safe_download_filename("a" * 500 + ".xlsx", "xlsx", "f")), 125)

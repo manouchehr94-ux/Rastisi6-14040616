@@ -23,6 +23,7 @@ from __future__ import annotations
 import io
 import math
 import re
+import unicodedata
 import zipfile
 from copy import copy
 from dataclasses import dataclass, field
@@ -373,6 +374,34 @@ def upload_extension(name: str) -> str:
     lowered = (name or "").lower().strip()
     dot = lowered.rfind(".")
     return lowered[dot:] if dot != -1 else ""
+
+
+_FILENAME_FORBIDDEN = re.compile(r'[\x00-\x1f\x7f<>:"|?*;\\/‎‏‪-‮⁦-⁩]')
+_FILENAME_MAX_STEM = 120
+
+
+def safe_download_filename(original: str, extension: str, fallback_stem: str) -> str:
+    """The merchant's original upload name, made safe for ``Content-Disposition``.
+
+    Keeps the base name (Persian or Latin) and always ends with ``.<extension>`` (the
+    real format of the stored file, lower-cased). Directory parts, control characters
+    (incl. CR/LF), quotes, bidi overrides and other reserved characters are dropped; a
+    name that ends up empty falls back to ``fallback_stem``.
+    """
+    extension = extension.lower().lstrip(".")
+    name = unicodedata.normalize("NFC", str(original or ""))
+    name = name.replace("\\", "/").rsplit("/", 1)[-1]  # basename only: no path traversal
+    stem, dot, ext = name.rpartition(".")
+    if not dot:
+        stem = name
+    elif ext.lower() != extension:
+        stem = name  # unrelated/other suffix: keep it as part of the name
+    stem = _FILENAME_FORBIDDEN.sub("", stem)
+    stem = re.sub(r"\s+", " ", stem).strip(" .")
+    stem = stem[:_FILENAME_MAX_STEM].strip(" .")
+    if not stem:
+        stem = fallback_stem
+    return f"{stem}.{extension}"
 
 
 def validate_import_upload(uploaded_file) -> str:
