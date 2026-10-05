@@ -81,12 +81,14 @@ class DashboardNavRoutesToR4Tests(StorefrontBuilderViewsTestCase):
         r4_url = reverse("dashboard:storefront-builder-r4-editor")
         legacy_url = reverse("dashboard:storefront-builder-editor")
         content = response.content.decode()
-        self.assertIn(f'data-admin-v2-priority="1" href="{r4_url}"', content)
-        self.assertIn(f'data-admin-v2-priority="2" href="{r4_url}?panel=appearance"', content)
+        # Two-level admin navigation: the «فروشگاه» section's «سازنده فروشگاه» and
+        # «ظاهر و طراحی» tabs both point at the R4 editor.
+        self.assertIn(f'data-tab="builder" href="{r4_url}"', content)
+        self.assertIn(f'data-tab="appearance" href="{r4_url}?panel=appearance"', content)
         # The legacy editor is still reachable (compatibility escape hatch
         # for the field-parity gap documented in
         # docs/qa_evidence/.../pre_task10_r4_cutover.md), just no longer
-        # the priority-1/2 nav target.
+        # the primary nav target (it stays in the command palette).
         self.assertIn(legacy_url, content)
 
 
