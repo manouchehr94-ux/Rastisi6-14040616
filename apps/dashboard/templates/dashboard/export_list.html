@@ -1,7 +1,7 @@
 {% extends "dashboard/base_admin.html" %}
 {% block title %}صادراتِ داده‌ها | پنل مدیریت{% endblock %}
 {% block page_title %}صادراتِ داده‌ها{% endblock %}
-{% block page_sub %}فایل‌های CSVِ تولیدشده — هر فایل حداکثر تا {{ export_types|length }} نوع، و پس از چند روز به‌صورتِ خودکار منقضی می‌شود{% endblock %}
+{% block page_sub %}فایل‌هایِ اکسل (xlsx) تولیدشده از اطلاعاتِ فروشگاه — مستقیم در اکسل باز می‌شوند و پس از چند روز به‌صورتِ خودکار منقضی می‌شوند{% endblock %}
 {% block content %}
 <div class="card" style="margin-bottom:16px">
   <div class="card-head"><b>ساختِ صادراتِ تازه</b></div>
@@ -12,7 +12,7 @@
       <option value="{{ value }}">{{ label }}</option>
       {% endfor %}
     </select>
-    <button type="submit" class="btn btn-primary">ساختِ CSV</button>
+    <button type="submit" class="btn btn-primary">ساختِ فایلِ اکسل</button>
   </form>
 </div>
 

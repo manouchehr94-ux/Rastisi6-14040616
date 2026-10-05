@@ -343,7 +343,9 @@ def export_job_upload_path(instance, filename: str) -> str:
     مستقیماً وارد مسیرِ دیسک نشود (محافظت در برابر Path Traversal — نگاه
     کنید به ADR-52). فایل‌ها زیرِ ``exports/<store_id>/`` جدا می‌شوند تا
     حتی در سطحِ فایل‌سیستم هم داده‌ی دو Store در یک پوشه مخلوط نشود."""
-    ext = "csv"
+    # خروجی‌هایِ تازه همیشه XLSX‌اند؛ فایل‌هایِ CSVِ قدیمی با همان مسیرِ خود
+    # ذخیره‌شده‌اند و دست‌نخورده می‌مانند.
+    ext = "xlsx"
     return f"exports/{instance.store_id}/{uuid.uuid4().hex}.{ext}"
 
 
@@ -416,12 +418,16 @@ class ExportJob(models.Model):
 def import_job_upload_path(instance, filename: str) -> str:
     """مسیرِ ذخیره‌ی فایلِ منبعِ یک ``ImportJob`` را می‌سازد — دقیقاً همان
     استدلالِ ``export_job_upload_path``: نامِ فایلِ اصلی هرگز در مسیرِ دیسک
-    استفاده نمی‌شود (محافظت در برابرِ Path Traversal، نگاه کنید به ADR-62)."""
-    return f"imports/{instance.store_id}/{uuid.uuid4().hex}.csv"
+    استفاده نمی‌شود (محافظت در برابرِ Path Traversal، نگاه کنید به ADR-62).
+    فقط *پسوندِ* فایل (از یک فهرستِ سفید: xlsx/csv) حفظ می‌شود تا فایلِ منبع در
+    قالبِ اصلیِ خودش دانلود شود."""
+    extension = "xlsx" if (filename or "").lower().endswith(".xlsx") else "csv"
+    return f"imports/{instance.store_id}/{uuid.uuid4().hex}.{extension}"
 
 
 def import_error_report_upload_path(instance, filename: str) -> str:
-    return f"imports/{instance.store_id}/errors/{uuid.uuid4().hex}.csv"
+    extension = "xlsx" if (filename or "").lower().endswith(".xlsx") else "csv"
+    return f"imports/{instance.store_id}/errors/{uuid.uuid4().hex}.{extension}"
 
 
 class ImportJob(models.Model):

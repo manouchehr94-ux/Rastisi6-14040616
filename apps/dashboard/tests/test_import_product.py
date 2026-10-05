@@ -315,3 +315,276 @@ class BoundedQueryTests(ProductImportTestCase):
         # 18-row difference times a per-reference cost — a per-cell lookup
         # of 3 references (brand/category/tax) would add ~54 queries.
         self.assertLess(len(ctx_large.captured_queries) - len(ctx_small.captured_queries), 18)
+
+
+# ============================================================ XLSX (primary format)
+
+from apps.catalog.models import Brand as _Brand  # noqa: E402
+from apps.dashboard.services import import_xlsx  # noqa: E402
+from apps.dashboard.tests.xlsx_helpers import (  # noqa: E402
+    open_workbook,
+    read_job_file,
+    sheet_values,
+    xlsx_upload,
+)
+
+XLSX_PRODUCT_HEADERS = [
+    "شناسه کالا", "SKU", "نام کالا *", "وضعیت", "برند", "دسته‌بندی *", "قیمت (تومان) *", "موجودی",
+    "بارکد", "وزن (گرم)", "نیاز به ارسال", "دسته مالیاتی", "عنوان سئو", "توضیحات سئو",
+]
+
+
+class XlsxProductImportTests(ProductImportTestCase):
+    def _xjob(self, rows, *, headers=None, mode=ImportJob.Mode.UPSERT, **upload_kwargs):
+        return import_service.create_import_job(
+            self.store, import_type=ImportJob.ImportType.PRODUCTS,
+            uploaded_file=xlsx_upload(headers or XLSX_PRODUCT_HEADERS, rows, name="products.xlsx", **upload_kwargs),
+            mode=mode, requested_by=self.actor,
+        )
+
+    def _row(self, **overrides):
+        base = {
+            "id": None, "sku": "XL-1", "name": "تیشرت نخی", "status": "فعال", "brand": "برند",
+            "category": "دسته > زیردسته", "price": "۱۵۰۰۰۰", "stock": 8, "barcode": "6260000000011",
+            "weight": 250, "shipping": "بله", "tax": "عمومی", "seo_title": "عنوان", "seo_desc": "توضیح",
+        }
+        base.update(overrides)
+        return list(base.values())
+
+    def test_source_file_is_stored_as_xlsx(self):
+        job = self._xjob([self._row()])
+        self.assertTrue(job.source_file.name.endswith(".xlsx"))
+        self.assertEqual(import_service.job_source_format(job), "xlsx")
+        self.assertEqual(read_job_file(job.source_file)[:2], b"PK")
+
+    def test_persian_values_preview_then_execute(self):
+        job = self._xjob([self._row()])
+        import_service.run_preview(job, actor=self.actor)
+        job.refresh_from_db()
+        self.assertEqual(job.status, ImportJob.Status.PREVIEW_READY)
+        self.assertEqual((job.total_rows, job.valid_rows, job.invalid_rows), (1, 1, 0))
+        self.assertFalse(Product.objects.filter(store=self.store, sku="XL-1").exists())
+        result = job.row_results.get()
+        self.assertEqual(result.row_number, 2)  # Excel row number (header is row 1)
+        self.assertEqual(result.normalized_data_summary, {"action": "create"})
+        self.assertEqual(import_service.job_preview_summary(job)["will_create"], 1)
+
+        import_service.run_execution(job, actor=self.actor)
+        job.refresh_from_db()
+        self.assertEqual(job.status, ImportJob.Status.COMPLETED)
+        product = Product.objects.get(store=self.store, sku="XL-1")
+        self.assertEqual(product.name, "تیشرت نخی")
+        self.assertEqual(product.status, Product.Status.ACTIVE)
+        self.assertEqual(product.brand, self.brand)
+        self.assertEqual(product.category, self.leaf)
+        self.assertEqual(product.tax_class, self.tax_class)
+        self.assertEqual(product.price, Decimal("150000"))
+        self.assertEqual(product.stock, 8)
+        self.assertEqual(product.weight_grams, 250)
+        self.assertEqual(product.barcode, "6260000000011")
+        self.assertTrue(StockMovement.objects.filter(product=product, delta=8).exists())
+
+    def test_persian_digits_and_thousands_separators_normalize(self):
+        rows = [
+            self._row(sku="N-1", price="۱٬۲۰۰٬۰۰۰", stock="۱۲"),
+            self._row(sku="N-2", price="1,500,000", stock=12.0, name="دوم"),
+            self._row(sku="N-3", price=99000.0, stock="٣", name="سوم"),
+        ]
+        job = self._xjob(rows)
+        import_service.run_execution(job, actor=self.actor)
+        job.refresh_from_db()
+        self.assertEqual(job.created_rows, 3, list(job.row_results.values_list("errors", flat=True)))
+        self.assertEqual(Product.objects.get(sku="N-1").price, Decimal("1200000"))
+        self.assertEqual(Product.objects.get(sku="N-1").stock, 12)
+        self.assertEqual(Product.objects.get(sku="N-2").price, Decimal("1500000"))
+        self.assertEqual(Product.objects.get(sku="N-3").price, Decimal("99000"))
+        self.assertEqual(Product.objects.get(sku="N-3").stock, 3)
+
+    def test_status_accepts_persian_label_or_internal_code(self):
+        rows = [
+            self._row(sku="S-1", status="غیرفعال", name="الف"),
+            self._row(sku="S-2", status="پیش‌نویس", name="ب"),
+            self._row(sku="S-3", status="draft", name="پ"),
+        ]
+        import_service.run_execution(self._xjob(rows), actor=self.actor)
+        self.assertEqual(Product.objects.get(sku="S-1").status, Product.Status.INACTIVE)
+        self.assertEqual(Product.objects.get(sku="S-2").status, Product.Status.DRAFT)
+        self.assertEqual(Product.objects.get(sku="S-3").status, Product.Status.DRAFT)
+
+    def test_blank_tax_class_keeps_existing_but_explicit_clear_removes_it(self):
+        product = Product.objects.create(
+            store=self.store, vendor=self.vendor, category=self.leaf, name="موجود", slug="exist-xl", sku="EX-1",
+            price=Decimal("1000"), stock=0, tax_class=self.tax_class,
+        )
+        keep = self._row(sku="EX-1", name="", category="", price=2000, stock=None, tax="", brand="",
+                         status="", shipping="", barcode="", weight=None, seo_title="", seo_desc="")
+        job = self._xjob([keep], mode=ImportJob.Mode.UPDATE_ONLY)
+        import_service.run_execution(job, actor=self.actor)
+        product.refresh_from_db()
+        self.assertEqual(product.price, Decimal("2000"))
+        self.assertEqual(product.tax_class, self.tax_class, "blank cell must mean 'leave unchanged'")
+
+        clear = {**dict(zip(range(14), keep))}
+        clear_row = list(keep)
+        clear_row[11] = import_xlsx.CLEAR_TAX_LABEL
+        job = self._xjob([clear_row], mode=ImportJob.Mode.UPDATE_ONLY)
+        import_service.run_execution(job, actor=self.actor)
+        product.refresh_from_db()
+        self.assertIsNone(product.tax_class)
+        del clear
+
+    def test_errors_carry_excel_row_numbers_and_merchant_column_names(self):
+        rows = [
+            self._row(sku="OK-1"),
+            self._row(sku="BAD-1", brand="برندِ ناموجود", category="مسیر > نادرست", price="abc", status="نامعلوم"),
+            self._row(sku="BAD-2", name="", price=-5),
+        ]
+        job = self._xjob(rows)
+        import_service.run_preview(job, actor=self.actor)
+        job.refresh_from_db()
+        self.assertEqual((job.valid_rows, job.invalid_rows), (1, 2))
+        bad1, bad2 = job.row_results.filter(status="invalid").order_by("row_number")
+        self.assertEqual((bad1.row_number, bad2.row_number), (3, 4))
+        columns = {d["column"] for d in import_xlsx.describe_errors("products", bad1.errors)}
+        self.assertTrue({"برند", "دسته‌بندی", "قیمت", "وضعیت"} <= columns, columns)
+        columns2 = {d["column"] for d in import_xlsx.describe_errors("products", bad2.errors)}
+        self.assertIn("نام کالا", columns2)
+        self.assertIn("قیمت", columns2)
+        shown = " ".join(d["message"] for d in import_xlsx.describe_errors("products", bad2.errors))
+        for internal in ("category_code", "brand_code", "«name»", "«price»", "tax_class_code"):
+            self.assertNotIn(internal, shown)
+        self.assertFalse(Product.objects.filter(store=self.store, sku__startswith="BAD").exists())
+
+    def test_create_only_message_uses_merchant_mode_name(self):
+        Product.objects.create(
+            store=self.store, vendor=self.vendor, category=self.leaf, name="قبلی", slug="dup-xl", sku="DUP-1",
+            price=Decimal("1"), stock=0,
+        )
+        job = self._xjob([self._row(sku="DUP-1")], mode=ImportJob.Mode.CREATE_ONLY)
+        import_service.run_preview(job, actor=self.actor)
+        text = " ".join(d["message"] for d in import_xlsx.describe_errors("products", job.row_results.get().errors))
+        self.assertIn("افزودن موارد جدید", text)
+        self.assertNotIn("فقط ایجاد", text)
+
+    def test_ambiguous_brand_name_is_reported_not_guessed(self):
+        _Brand.objects.create(store=self.store, name="برند", slug="brand-imp-dup")
+        job = self._xjob([self._row()])
+        import_service.run_preview(job, actor=self.actor)
+        job.refresh_from_db()
+        self.assertEqual(job.invalid_rows, 1)
+        self.assertIn("مبهم", " ".join(job.row_results.get().errors))
+
+    def test_category_leaf_name_accepted_when_unique_and_ambiguous_names_rejected(self):
+        job = self._xjob([self._row(category="زیردسته")])
+        import_service.run_preview(job, actor=self.actor)
+        self.assertEqual(job.row_results.get().status, "valid")
+        other_parent = Category.objects.create(store=self.store, name="دیگر", slug="other-parent-imp")
+        Category.objects.create(store=self.store, name="زیردسته", slug="leaf-imp-2", parent=other_parent)
+        job2 = self._xjob([self._row(category="زیردسته"), self._row(sku="XL-2", category="دیگر > زیردسته")])
+        import_service.run_preview(job2, actor=self.actor)
+        first, second = job2.row_results.order_by("row_number")
+        self.assertEqual(first.status, "invalid")
+        self.assertIn("مبهم", " ".join(first.errors))
+        self.assertEqual(second.status, "valid")
+
+    def test_formula_cells_are_rejected_not_executed(self):
+        for evil in ("=1+1", "=HYPERLINK(\"http://x\",\"y\")", "=cmd|' /C calc'!A0"):
+            job = self._xjob([self._row(sku="F-1", name=evil)])
+            import_service.run_preview(job, actor=self.actor)
+            result = job.row_results.get()
+            self.assertEqual(result.status, "invalid", evil)
+            self.assertIn("فرمول", " ".join(result.errors))
+            self.assertEqual(import_xlsx.describe_errors("products", result.errors)[0]["column"], "نام کالا")
+            job = self._xjob([self._row(sku="F-2", price=evil)])
+            import_service.run_execution(job, actor=self.actor)
+            self.assertFalse(Product.objects.filter(store=self.store, sku__in=["F-1", "F-2"]).exists())
+
+    def test_literal_text_starting_with_equals_is_data_not_formula(self):
+        # A quote-prefixed / text cell is a string, not a formula; it is imported as plain text.
+        from openpyxl import Workbook
+        import io as _io
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "داده‌ها"
+        ws.append(XLSX_PRODUCT_HEADERS)
+        ws.append(self._row(sku="LIT-1", name="x"))
+        cell = ws["C2"]
+        cell.value = "=نام"
+        cell.data_type = "s"
+        cell.quotePrefix = True
+        buf = _io.BytesIO()
+        wb.save(buf)
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        job = import_service.create_import_job(
+            self.store, import_type=ImportJob.ImportType.PRODUCTS,
+            uploaded_file=SimpleUploadedFile("p.xlsx", buf.getvalue()), mode=ImportJob.Mode.UPSERT, requested_by=self.actor,
+        )
+        import_service.run_execution(job, actor=self.actor)
+        self.assertEqual(Product.objects.get(sku="LIT-1").name, "=نام")
+
+    def test_unknown_columns_are_ignored_with_a_warning(self):
+        headers = XLSX_PRODUCT_HEADERS + ["ستون ناشناس"]
+        job = self._xjob([self._row() + ["x"]], headers=headers)
+        import_service.run_preview(job, actor=self.actor)
+        result = job.row_results.get()
+        self.assertEqual(result.status, "valid")
+        self.assertIn("ستون ناشناس", " ".join(result.warnings))
+
+    def test_file_without_recognised_columns_is_rejected(self):
+        job = self._xjob([["a", "b"]], headers=["foo", "bar"])
+        with self.assertRaises(import_service.ImportServiceError):
+            import_service.run_preview(job, actor=self.actor)
+
+    def test_legacy_internal_headers_inside_xlsx_still_work(self):
+        headers = ["sku", "name", "status", "brand_code", "category_code", "price", "stock"]
+        job = self._xjob([["LEG-1", "قدیمی", "active", "brand-imp", "leaf-imp", 5000, 1]], headers=headers)
+        import_service.run_execution(job, actor=self.actor)
+        self.assertEqual(Product.objects.get(sku="LEG-1").category, self.leaf)
+
+    def test_blank_rows_are_skipped_but_excel_row_numbers_are_kept(self):
+        job = self._xjob([self._row(sku="R-1"), [None] * 14, self._row(sku="R-2", name="دوم")])
+        import_service.run_preview(job, actor=self.actor)
+        self.assertEqual(list(job.row_results.order_by("row_number").values_list("row_number", flat=True)), [2, 4])
+
+    def test_data_sheet_is_preferred_over_guide_sheet(self):
+        job = self._xjob([self._row(sku="SH-1")], extra_sheets={"راهنما": [["نام", "توضیح"], ["x", "y"]]})
+        import_service.run_execution(job, actor=self.actor)
+        self.assertTrue(Product.objects.filter(sku="SH-1").exists())
+
+    def test_error_report_is_xlsx_with_original_values_and_highlights(self):
+        rows = [self._row(sku="OK-9"), self._row(sku="ERR-1", brand="نامعلوم", price="۱۰")]
+        job = self._xjob(rows)
+        import_service.run_preview(job, actor=self.actor)
+        job.refresh_from_db()
+        self.assertTrue(job.error_report_file.name.endswith(".xlsx"))
+        wb = open_workbook(read_job_file(job.error_report_file))
+        self.assertEqual(wb.sheetnames, ["خطاها", "راهنما"])
+        ws = wb["خطاها"]
+        rows_out = sheet_values(ws)
+        self.assertEqual(rows_out[0][:4], ["ردیف در اکسل", "وضعیت", "خطاها", "هشدارها"])
+        self.assertEqual(rows_out[1][0], 3)
+        self.assertEqual(rows_out[1][1], "نامعتبر")
+        self.assertIn("برند", rows_out[1][2])
+        self.assertIn("ERR-1", rows_out[1])  # the original SKU
+        self.assertIn("نامعلوم", rows_out[1])  # the original (wrong) brand text
+        # the failing column's original cell is highlighted
+        brand_col = rows_out[0].index("برند") + 1
+        self.assertEqual(ws.cell(row=2, column=brand_col).fill.start_color.rgb[-6:], "FBE3E3")
+        self.assertTrue(ws.sheet_view.rightToLeft)
+
+    def test_other_stores_reference_data_is_not_resolvable(self):
+        other = Store.objects.create(name="دیگر", slug="xl-other-store")
+        other_root = Category.objects.create(store=other, name="بیگانه", slug="foreign-root")
+        Category.objects.create(store=other, name="برگ", slug="foreign-leaf", parent=other_root)
+        job = self._xjob([self._row(category="بیگانه > برگ")])
+        import_service.run_preview(job, actor=self.actor)
+        self.assertEqual(job.row_results.get().status, "invalid")
+
+    def test_idempotent_replay_is_still_blocked(self):
+        job = self._xjob([self._row()])
+        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportServiceError):
+            import_service.run_execution(job, actor=self.actor)
+        self.assertEqual(Product.objects.filter(sku="XL-1").count(), 1)

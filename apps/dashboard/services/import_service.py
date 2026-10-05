@@ -1,4 +1,6 @@
-"""موتورِ واردات CSV (Import) — کالا/تنوع/موجودی — checkpoint 4B.
+"""موتورِ واردات (Import) — کالا/تنوع/موجودی — checkpoint 4B. فایلِ اصلی XLSX
+است (``import_xlsx``: هدرها/مقدارهایِ فارسی ← کلیدهایِ داخلیِ همین ماژول)؛ CSV
+برایِ سازگاری با فایل‌هایِ قدیمی همچنان پذیرفته می‌شود.
 
 نگاه کنید به ADR-55 (چرخه‌ی عمرِ Job)، ADR-56 (اتمیکیِ دسته‌ای)، ADR-57
 (تشخیصِ هویتِ پایدار)، ADR-58 (یکپارچگیِ سرویسِ کالا)، ADR-59 (تنوع و
@@ -25,13 +27,15 @@ from apps.catalog.services.inventory_service import (
 from apps.catalog.services.variant_engine_service import VariantEngineError, generate_variants, set_default_variant
 from apps.core.models import ImportJob, ImportRowResult
 from apps.core.services.audit_service import record_audit_event
+from apps.core.services import xlsx_utils
 from apps.core.services.csv_utils import (
+    CsvRowLimitExceededError,
+    CsvUploadError,
     normalize_import_text,
     parse_import_bool,
     parse_import_decimal,
     parse_import_int,
     read_csv_rows_bounded,
-    validate_csv_upload,
 )
 from apps.core.utils import normalization_key
 from apps.dashboard.services.catalog_admin_service import default_vendor, generate_unique_slug
@@ -640,6 +644,7 @@ def _execute_variant_batch(store, batch, *, mode, cache, actor, dry_run: bool) -
             outcomes.append(outcome)
             continue
         if dry_run:
+            outcome.normalized_data_summary = {"action": "update" if existing_variant is not None else "create"}
             outcomes.append(outcome)
             continue
         try:
@@ -826,6 +831,7 @@ def _execute_inventory_batch(store, batch, *, mode, cache, actor, dry_run: bool)
             outcomes.append(outcome)
             continue
         if dry_run:
+            outcome.normalized_data_summary = {"action": "update"}
             outcomes.append(outcome)
             continue
         try:
@@ -849,6 +855,14 @@ def _execute_inventory_batch(store, batch, *, mode, cache, actor, dry_run: bool)
 
 # ================================================================== موتورِ اجرایِ عمومی
 
+
+def _row_identifier(row: dict, number: int) -> str:
+    for key in ("variant_sku", "product_sku", "sku", "product_id", "variant_id"):
+        value = normalize_import_text(row.get(key))
+        if value:
+            return value
+    return f"row-{number}"
+
 def _chunked(sequence: list, size: int):
     for start in range(0, len(sequence), size):
         yield sequence[start:start + size]
@@ -865,6 +879,7 @@ def _execute_product_batch(store, batch, *, mode, cache, actor, dry_run: bool) -
             outcomes.append(outcome)
             continue
         if dry_run:
+            outcome.normalized_data_summary = {"action": "update" if existing_product is not None else "create"}
             outcomes.append(outcome)
             continue
         # بودجه‌ی ساختِ کالا (§16): اگر این ردیف یک کالایِ تازه می‌سازد و
@@ -939,13 +954,30 @@ def run_import(job: ImportJob, rows: list[dict], *, actor, batch_size: int = DEF
         from apps.subscriptions.services.enforcement import product_creation_budget
 
         cache["_product_create_budget"] = product_creation_budget(job.store)
-    numbered_rows = list(enumerate(rows, start=1))
+    # ردیف‌هایِ XLSX شماره‌ی واقعیِ ردیفِ اکسل را دارند (``__row_number__``)؛ ردیف‌هایِ
+    # CSV همان شماره‌ی ترتیبی. ردیفی که خواندنِ فایل از پیش ردش کرده (مثلاً سلولِ
+    # فرمولی) هرگز به اعتبارسنج نمی‌رسد.
+    numbered_rows, pre_rejected = [], []
+    for index, row in enumerate(rows, start=1):
+        number = row.get("__row_number__") or index
+        if row.get("__errors__"):
+            pre_rejected.append(RowOutcome(
+                row_number=number, source_identifier=_row_identifier(row, number),
+                status=ImportRowResult.RowStatus.INVALID, errors=list(row["__errors__"]),
+                warnings=list(row.get("__warnings__", [])),
+            ))
+        else:
+            numbered_rows.append((number, row))
 
-    all_outcomes: list[RowOutcome] = []
+    all_outcomes: list[RowOutcome] = list(pre_rejected)
     for batch in _chunked(numbered_rows, batch_size):
-        all_outcomes.extend(
-            execute_batch(job.store, batch, mode=job.mode, cache=cache, actor=actor, dry_run=job.dry_run)
-        )
+        batch_outcomes = execute_batch(job.store, batch, mode=job.mode, cache=cache, actor=actor, dry_run=job.dry_run)
+        warnings_by_number = {n: r["__warnings__"] for n, r in batch if r.get("__warnings__")}
+        for outcome in batch_outcomes:
+            if outcome.row_number in warnings_by_number:
+                outcome.warnings = list(warnings_by_number[outcome.row_number]) + list(outcome.warnings)
+        all_outcomes.extend(batch_outcomes)
+    all_outcomes.sort(key=lambda o: o.row_number)
 
     ImportRowResult.objects.filter(import_job=job).delete()
     ImportRowResult.objects.bulk_create([
@@ -1011,11 +1043,10 @@ def run_import(job: ImportJob, rows: list[dict], *, actor, batch_size: int = DEF
 # ================================================================== چرخه‌ی عمرِ Job (آپلود/پیش‌نمایش/اجرا)
 
 def create_import_job(store, *, import_type: str, uploaded_file, mode: str, requested_by, idempotency_key: str = "") -> ImportJob:
-    """یک ``ImportJob`` تازه می‌سازد و فایلِ CSV را در ذخیره‌سازیِ خصوصی
-    می‌نویسد — نگاه کنید به ADR-62. هرگز چیزی از فایل نمی‌خواند/پردازش
-    نمی‌کند (آن کارِ ``run_preview``ست)."""
-    from apps.core.services.csv_utils import CsvUploadError
-
+    """یک ``ImportJob`` تازه می‌سازد و فایلِ آپلودی (xlsx یا csv) را در
+    ذخیره‌سازیِ خصوصی و *در قالبِ اصلیِ خودش* می‌نویسد — نگاه کنید به ADR-62.
+    هرگز چیزی از فایل نمی‌خواند/پردازش نمی‌کند (آن کارِ ``run_preview``ست)؛ فقط
+    ساختارِ امنِ فایل را بررسی می‌کند (پسوند/حجم/ZIP/ماکرو)."""
     if import_type not in ImportJob.ImportType.values:
         raise ImportServiceError(f"نوعِ واردات «{import_type}» نامعتبر است.")
     if mode not in ImportJob.Mode.values:
@@ -1026,8 +1057,8 @@ def create_import_job(store, *, import_type: str, uploaded_file, mode: str, requ
 
     enforce_import_allowed(store)
     try:
-        validate_csv_upload(uploaded_file)
-    except CsvUploadError as exc:
+        extension = xlsx_utils.validate_import_upload(uploaded_file)
+    except (xlsx_utils.XlsxUploadError, CsvUploadError) as exc:
         # به یک خطایِ سطحِ Job تبدیل می‌شود تا فراخوان فقط یک نوع استثنا را
         # مدیریت کند (پیام همان است، برایِ نمایشِ مستقیم به کاربر امن).
         raise ImportServiceError(str(exc)) from exc
@@ -1039,22 +1070,38 @@ def create_import_job(store, *, import_type: str, uploaded_file, mode: str, requ
         status=ImportJob.Status.UPLOADED, requested_by=requested_by, mode=mode,
         dry_run=True, idempotency_key=idempotency_key,
     )
-    job.source_file.save(f"{import_type}-{job.pk}.csv", uploaded_file, save=True)
+    job.source_file.save(f"{import_type}-{job.pk}{extension}", uploaded_file, save=True)
     record_audit_event(
         store=store, actor=requested_by, action_code="import.uploaded",
         object_type="ImportJob", object_id=str(job.pk), object_label=job.original_filename,
-        metadata={"import_type": import_type, "mode": mode},
+        metadata={"import_type": import_type, "mode": mode, "format": extension.lstrip(".")},
     )
     return job
 
 
+def job_source_format(job: ImportJob) -> str:
+    """قالبِ واقعیِ فایلِ منبع (``xlsx`` یا ``csv``) از روی پسوندِ ذخیره‌شده."""
+    return "xlsx" if (job.source_file.name or "").lower().endswith(".xlsx") else "csv"
+
+
 def read_job_rows(job: ImportJob) -> list[dict]:
-    """محتوایِ فایلِ منبعِ Job را به فهرستی از دیکشنری‌هایِ نرمال‌شده تبدیل
-    می‌کند — همان تابعِ ``read_csv_rows_bounded`` که آپلود/پیش‌نمایش/اجرا هر
-    سه از آن استفاده می‌کنند (بدونِ منطقِ موازیِ دوم)."""
+    """محتوایِ فایلِ منبعِ Job را به فهرستی از دیکشنری‌هایِ نرمال‌شده (با کلیدهایِ
+    داخلی) تبدیل می‌کند — آپلود/پیش‌نمایش/اجرا هر سه از همین تابع می‌خوانند
+    (بدونِ منطقِ موازیِ دوم). XLSX از لایه‌ی نگاشتِ ``import_xlsx`` می‌گذرد؛ CSV
+    مثلِ قبل مستقیم خوانده می‌شود."""
     job.source_file.open("rb")
     try:
-        return list(read_csv_rows_bounded(job.source_file))
+        if job_source_format(job) == "xlsx":
+            from apps.dashboard.services import import_xlsx
+
+            try:
+                return import_xlsx.parse_xlsx_import(job.source_file, job.import_type, job.store).rows
+            except (xlsx_utils.XlsxReadError, xlsx_utils.XlsxRowLimitExceededError) as exc:
+                raise ImportServiceError(str(exc)) from exc
+        try:
+            return list(read_csv_rows_bounded(job.source_file))
+        except (CsvUploadError, CsvRowLimitExceededError) as exc:
+            raise ImportServiceError(str(exc)) from exc
     finally:
         job.source_file.close()
 
@@ -1066,7 +1113,9 @@ def run_preview(job: ImportJob, *, actor) -> ImportJob:
         raise ImportServiceError("این Job دیگر قابلِ پیش‌نمایش نیست.")
     job.dry_run = True
     rows = read_job_rows(job)
-    return run_import(job, rows, actor=actor)
+    job = run_import(job, rows, actor=actor)
+    _generate_error_report(job)  # پیش از اجرا هم می‌شود ردیف‌هایِ مشکل‌دار را اصلاح کرد
+    return job
 
 
 def run_execution(job: ImportJob, *, actor) -> ImportJob:
@@ -1105,8 +1154,8 @@ def run_execution(job: ImportJob, *, actor) -> ImportJob:
 # ================================================================== گزارشِ خطا و قالب‌ها
 
 def build_template_csv(import_type: str) -> str:
-    """محتوایِ یک فایلِ قالبِ CSV (فقط سطرِ هدر) را برایِ یک نوعِ واردات
-    برمی‌گرداند — از همان ``IMPORT_COLUMNS`` که اعتبارسنجی هم می‌خواند."""
+    """قالبِ CSVِ قدیمی (فقط هدرِ ستون‌هایِ داخلی) — فقط برایِ سازگاریِ عقب‌رو
+    نگه داشته شده؛ قالبِ اصلی ``build_template_xlsx`` است."""
     import io
 
     from apps.core.services.csv_utils import write_csv_rows
@@ -1119,36 +1168,57 @@ def build_template_csv(import_type: str) -> str:
     return buffer.getvalue()
 
 
-def _generate_error_report(job: ImportJob) -> None:
-    """یک فایلِ گزارشِ خطایِ CSVِ خصوصی می‌سازد که فقط ردیف‌هایِ نامعتبر/
-    ناموفق را شامل می‌شود — از ``write_csv_rows`` عبور می‌کند (محافظتِ تزریقِ
-    فرمول، ADR-51). اگر هیچ ردیفِ مشکل‌داری نباشد، فایلی ساخته نمی‌شود."""
-    import io
+def build_template_xlsx(store, import_type: str) -> bytes:
+    """قالبِ راهنمادارِ XLSX در بافتِ همین Store (فهرست‌هایِ برند/دسته‌بندی/انبار/...)."""
+    from apps.dashboard.services import import_xlsx
 
+    if import_type not in IMPORT_COLUMNS:
+        raise ImportServiceError(f"نوعِ واردات «{import_type}» نامعتبر است.")
+    return import_xlsx.build_template_xlsx(import_type, store)
+
+
+def _generate_error_report(job: ImportJob) -> None:
+    """گزارشِ خطایِ XLSXِ خصوصی (فقط ردیف‌هایِ نامعتبر/ناموفق) با مقدارهایِ
+    اصلیِ همان ردیف‌ها. همه‌ی مقدارها از ``xlsx_utils.set_text`` می‌گذرند (بدونِ
+    فرمول، ADR-51). اگر هیچ ردیفِ مشکل‌داری نباشد، فایلی ساخته نمی‌شود و
+    گزارشِ قدیمی پاک می‌شود."""
     from django.core.files.base import ContentFile
 
-    from apps.core.services.csv_utils import write_csv_rows
+    from apps.dashboard.services import import_xlsx
 
-    error_rows = job.row_results.filter(
+    error_rows = list(job.row_results.filter(
         status__in=[ImportRowResult.RowStatus.INVALID, ImportRowResult.RowStatus.FAILED]
-    ).order_by("row_number")
-    if not error_rows.exists():
+    ).order_by("row_number"))
+    if not error_rows:
         return
 
-    header = ["row_number", "source_identifier", "status", "errors", "warnings"]
+    try:
+        source = read_job_rows(job)
+    except ImportServiceError:
+        source = []
+    source_rows = {}
+    for index, row in enumerate(source, start=1):
+        number = row.get("__row_number__") or index
+        if "__raw__" not in row:  # CSV: سرستون‌ها همان کلیدهایِ فایل‌اند
+            row = {**row, "__raw__": [(k, v or "") for k, v in row.items() if not str(k).startswith("__")]}
+        source_rows[number] = row
 
-    def rows():
-        for r in error_rows.iterator(chunk_size=500):
-            yield [
-                r.row_number, r.source_identifier, r.status,
-                " | ".join(r.errors), " | ".join(r.warnings),
-            ]
+    content = import_xlsx.build_error_report_xlsx(job, error_rows, source_rows, job.import_type)
+    if job.error_report_file:
+        job.error_report_file.delete(save=False)
+    job.error_report_file.save(f"errors-{job.pk}.xlsx", ContentFile(content), save=True)
 
-    buffer = io.StringIO()
-    write_csv_rows(buffer, header=header, rows=rows())
-    job.error_report_file.save(
-        f"errors-{job.pk}.csv", ContentFile(buffer.getvalue().encode("utf-8")), save=True,
-    )
+
+def job_preview_summary(job: ImportJob) -> dict:
+    """شمارنده‌هایِ پیش‌نمایش برایِ UI: کل، ساخته‌می‌شوند، بروزرسانی‌می‌شوند، نامعتبر، هشدار."""
+    rows = job.row_results.all()
+    will_create = rows.filter(normalized_data_summary__action="create").count()
+    will_update = rows.filter(normalized_data_summary__action="update").count()
+    with_warnings = sum(1 for warnings in rows.values_list("warnings", flat=True) if warnings)
+    return {
+        "total": job.total_rows, "will_create": will_create, "will_update": will_update,
+        "invalid": job.invalid_rows + job.failed_rows, "warnings": with_warnings,
+    }
 
 
 IMPORT_FILE_RETENTION_DAYS = 30

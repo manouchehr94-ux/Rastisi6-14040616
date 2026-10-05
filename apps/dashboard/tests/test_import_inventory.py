@@ -274,3 +274,131 @@ class TenantIsolationTests(InventoryImportTestCase):
         self.assertEqual(job.invalid_rows, 1)
         self.foreign_product.refresh_from_db()
         self.assertEqual(self.foreign_product.stock, 0)
+
+
+# ============================================================ XLSX (primary format)
+
+from apps.catalog.models import Warehouse as _Warehouse  # noqa: E402
+from apps.dashboard.services import import_xlsx  # noqa: E402
+from apps.dashboard.tests.xlsx_helpers import xlsx_upload  # noqa: E402
+
+XLSX_INV_HEADERS = [
+    "انبار *", "شناسه کالا", "SKU کالا", "شناسه تنوع", "SKU تنوع", "نوع عملیات *", "مقدار *", "دلیل", "توضیح",
+]
+OP_SET = "تنظیم موجودی نهایی"
+OP_ADJUST = "افزایش/کاهش موجودی"
+
+
+class XlsxInventoryImportTests(InventoryImportTestCase):
+    def _xjob(self, rows, *, headers=None):
+        return import_service.create_import_job(
+            self.store, import_type=ImportJob.ImportType.INVENTORY,
+            uploaded_file=xlsx_upload(headers or XLSX_INV_HEADERS, rows, name="inventory.xlsx"),
+            mode=ImportJob.Mode.UPSERT, requested_by=self.actor,
+        )
+
+    def _row(self, op, qty, *, sku="SKU-IIMP-1", warehouse=None, reason="شمارش", note=""):
+        return [warehouse or self.warehouse.name, None, sku, None, None, op, qty, reason, note]
+
+    def test_set_final_inventory_vs_increase_decrease(self):
+        # set → exactly the entered number
+        job = self._xjob([self._row(OP_SET, 10)])
+        import_service.run_preview(job, actor=self.actor)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 0, "preview must not change stock")
+        self.assertEqual(job.row_results.get().normalized_data_summary, {"action": "update"})
+        import_service.run_execution(job, actor=self.actor)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 10)
+        # adjust +5 → 15, adjust -3 → 12 (negative decreases)
+        job = self._xjob([self._row(OP_ADJUST, 5), self._row(OP_ADJUST, -3)])
+        import_service.run_execution(job, actor=self.actor)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 12)
+        # set again → exactly 4, regardless of the current 12
+        import_service.run_execution(self._xjob([self._row(OP_SET, 4)]), actor=self.actor)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 4)
+
+    def test_persian_digits_negative_numbers_and_warehouse_name(self):
+        import_service.run_execution(self._xjob([self._row(OP_SET, "۲۰")]), actor=self.actor)
+        job = self._xjob([self._row(OP_ADJUST, "-۵")])
+        import_service.run_execution(job, actor=self.actor)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 15)
+        movement = StockMovement.objects.filter(product=self.product).order_by("-pk").first()
+        self.assertEqual(movement.delta, -5)
+        self.assertEqual(movement.reason, StockMovement.Reason.IMPORT_ADJUSTMENT)
+        self.assertIn("شمارش", movement.note)
+
+    def test_operation_must_be_chosen_explicitly(self):
+        job = self._xjob([self._row("", 5)])
+        import_service.run_preview(job, actor=self.actor)
+        result = job.row_results.get()
+        self.assertEqual(result.status, "invalid")
+        shown = import_xlsx.describe_errors("inventory", result.errors)
+        self.assertIn("نوعِ عملیات", shown[0]["message"])
+
+    def test_operation_synonyms_and_internal_codes_are_understood(self):
+        rows = [self._row("set_on_hand", 6), self._row("تنظیم موجودی", 7), self._row("adjustment", 1), self._row("افزایش/کاهش", 1)]
+        job = self._xjob(rows)
+        import_service.run_execution(job, actor=self.actor)
+        job.refresh_from_db()
+        self.assertEqual(job.failed_rows + job.invalid_rows, 0, list(job.row_results.values_list("errors", flat=True)))
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 9)
+
+    def test_unknown_operation_and_warehouse_use_merchant_wording(self):
+        job = self._xjob([self._row("چیز دیگر", 1), self._row(OP_SET, 1, warehouse="انبار ناموجود")])
+        import_service.run_preview(job, actor=self.actor)
+        first, second = job.row_results.order_by("row_number")
+        self.assertEqual((first.row_number, second.row_number), (2, 3))
+        d1 = import_xlsx.describe_errors("inventory", first.errors)[0]
+        d2 = import_xlsx.describe_errors("inventory", second.errors)[0]
+        self.assertEqual(d1["column"], "نوع عملیات")
+        self.assertIn("تنظیم موجودی نهایی", d1["message"])
+        self.assertNotIn("set_on_hand", d1["message"])
+        self.assertEqual(d2["column"], "انبار")
+        self.assertNotIn("warehouse_code", d2["message"])
+
+    def test_negative_final_inventory_is_rejected_with_merchant_wording(self):
+        job = self._xjob([self._row(OP_SET, -2)])
+        import_service.run_preview(job, actor=self.actor)
+        detail = import_xlsx.describe_errors("inventory", job.row_results.get().errors)[0]
+        self.assertIn("تنظیم موجودی نهایی", detail["message"])
+        self.assertEqual(detail["column"], "مقدار")
+
+    def test_reservation_safety_still_applies_to_xlsx_rows(self):
+        import_service.run_execution(self._xjob([self._row(OP_SET, 10)]), actor=self.actor)
+        InventoryReservation.objects.create(
+            store=self.store, product=self.product, variant=None, quantity=7,
+            status=InventoryReservation.Status.ACTIVE,
+        )
+        job = self._xjob([self._row(OP_ADJUST, -5), self._row(OP_SET, 3), self._row(OP_SET, 7)])
+        import_service.run_execution(job, actor=self.actor)
+        job.refresh_from_db()
+        self.assertEqual(job.failed_rows, 2)
+        self.assertEqual(job.updated_rows, 1)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 7)
+
+    def test_duplicate_warehouse_names_are_ambiguous(self):
+        _Warehouse.objects.create(store=self.store, name=self.warehouse.name, code="dup-wh-xl")
+        job = self._xjob([self._row(OP_SET, 1)])
+        import_service.run_preview(job, actor=self.actor)
+        self.assertIn("مبهم", " ".join(job.row_results.get().errors))
+
+    def test_other_stores_warehouse_is_not_resolvable(self):
+        other = Store.objects.create(name="دیگر", slug="xl-inv-other")
+        _Warehouse.objects.create(store=other, name="انبارِ بیگانه", code="foreign-wh-xl")
+        job = self._xjob([self._row(OP_SET, 1, warehouse="انبارِ بیگانه")])
+        import_service.run_preview(job, actor=self.actor)
+        self.assertEqual(job.row_results.get().status, "invalid")
+
+    def test_formula_in_quantity_is_rejected(self):
+        job = self._xjob([self._row(OP_SET, "=5+5")])
+        import_service.run_execution(job, actor=self.actor)
+        job.refresh_from_db()
+        self.assertEqual(job.invalid_rows, 1)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 0)

@@ -2,12 +2,12 @@
 {% load persian %}
 {% block title %}واردات داده‌ها | پنل مدیریت{% endblock %}
 {% block page_title %}واردات داده‌ها{% endblock %}
-{% block page_sub %}واردات کالا، تنوع و موجودی از فایل CSV — با پیش‌نمایشِ آزمایشی پیش از اجرا{% endblock %}
+{% block page_sub %}واردات کالا، تنوع و موجودی از فایل اکسل — با پیش‌نمایش پیش از اجرا{% endblock %}
 {% block content %}
 <div class="page-header">
-  <div><p class="page-desc">هر واردات ابتدا به‌صورتِ پیش‌نمایشِ آزمایشی (Dry Run) بررسی می‌شود؛ هیچ داده‌ای تا وقتی صراحتاً «اجرا» را تأیید نکنید تغییر نمی‌کند.</p></div>
+  <div><p class="page-desc">هر واردات ابتدا به‌صورتِ پیش‌نمایش بررسی می‌شود؛ هیچ داده‌ای تا وقتی صراحتاً «تأییدِ اجرایِ واقعی» را نزنید تغییر نمی‌کند.</p></div>
   {% if can_manage_imports %}
-  <a href="{% url 'dashboard:import-upload' %}" class="btn btn-primary">واردات تازه</a>
+  <a href="{% url 'dashboard:import-upload' %}" class="btn btn-primary">واردات از اکسل</a>
   {% endif %}
 </div>
 
@@ -20,8 +20,8 @@
     <tbody>
     {% for job in jobs %}
       <tr>
-        <td>{{ job.get_import_type_display }}</td>
-        <td>{{ job.get_mode_display }}</td>
+        <td>{{ job.get_import_type_display }} <small style="color:var(--muted)">({{ job.source_format|upper }})</small></td>
+        <td>{{ job.mode_label }}</td>
         <td>
           {% if job.status == "completed" %}<span class="badge b-green">تکمیل‌شده</span>
           {% elif job.status == "completed_with_errors" %}<span class="badge b-amber">با خطا</span>
