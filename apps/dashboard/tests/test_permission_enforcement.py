@@ -253,29 +253,38 @@ class PermissionAwareNavigationTests(PermissionEnforcementTestCase):
     def test_owner_sees_every_nav_section(self):
         self._login(self.owner)
         response = self.client.get(reverse("dashboard:dashboard"))
-        for label in ("کالاها", "گروه‌بندی کالاها", "سفارشات", "مشتری‌ها", "گزارش‌های حرفه‌ای", "تنظیمات"):
-            self.assertContains(response, label)
+        for section in ("orders", "products", "finance", "customers", "marketing", "store", "reports", "settings"):
+            self.assertContains(response, f'data-section="{section}"')
 
     def test_content_editor_does_not_see_product_or_order_nav(self):
         self._login(self.content_editor)
         response = self.client.get(reverse("dashboard:dashboard"))
-        self.assertNotContains(response, 'data-page="products"')
-        self.assertNotContains(response, 'data-page="orders"')
-        self.assertNotContains(response, 'data-page="settings"')
-        self.assertContains(response, 'data-page="homepage"')
+        self.assertNotContains(response, 'data-section="products"')
+        self.assertNotContains(response, 'data-section="orders"')
+        self.assertNotContains(response, 'data-section="settings"')
+        self.assertContains(response, 'data-section="store"')
 
     def test_analyst_does_not_see_settings_nav(self):
         self._login(self.analyst)
         response = self.client.get(reverse("dashboard:dashboard"))
-        self.assertNotContains(response, 'data-page="settings"')
-        self.assertContains(response, 'data-page="products"')
+        self.assertContains(response, 'data-section="products"')
+        # The analyst keeps read-only settings screens (shipping, tax, usage…) but never the
+        # general-settings, team or SMS tabs they cannot open.
+        shipping = self.client.get(reverse("dashboard:shipping-setup"))
+        self.assertEqual(shipping.status_code, 200)
+        for tab in ("settings-general", "settings-finance", "sms", "staff"):
+            self.assertNotContains(shipping, f'data-tab="{tab}"')
+        self.assertContains(shipping, 'data-tab="shipping"')
+        self.assertEqual(self.client.get(reverse("dashboard:settings")).status_code, 403)
 
     def test_catalog_manager_does_not_see_customers_or_content_nav(self):
         self._login(self.catalog_manager)
         response = self.client.get(reverse("dashboard:dashboard"))
-        self.assertNotContains(response, 'data-page="customers"')
-        self.assertNotContains(response, 'data-page="homepage"')
-        self.assertContains(response, 'data-page="categories"')
+        self.assertNotContains(response, 'data-section="customers"')
+        self.assertNotContains(response, 'data-section="store"')
+        # …but the catalog area they own still exposes its categories tab.
+        response = self.client.get(reverse("dashboard:product-list"))
+        self.assertContains(response, 'data-tab="categories"')
 
 
 class SuperuserAndNoMembershipPermissionTests(PermissionEnforcementTestCase):

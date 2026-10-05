@@ -1,0 +1,3 @@
+{% comment %}Command-palette (Ctrl + K) destinations, generated from the same permission-filtered information architecture as the sidebar and tabs.{% endcomment %}
+{% for item in items %}<a data-search-item data-title="{{ item.title }}" data-path="{{ item.path }}" data-keywords="{{ item.keywords }}" data-icon="{{ item.icon }}" href="{{ item.href }}"></a>
+{% endfor %}

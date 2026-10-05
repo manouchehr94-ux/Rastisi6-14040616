@@ -1,0 +1,13 @@
+{% comment %}Level-2 navigation: the related screens of the current section. Shown only when the section has more than one permitted screen. Tabs are real links to the existing list screens — no CRUD is duplicated here.{% endcomment %}
+{% if nav.show_tabs %}
+<nav class="admin-section-tabs" aria-label="بخش‌های {{ nav.active_section.label }}">
+  <span class="admin-section-name" aria-hidden="true">{{ nav.active_section.label }}</span>
+  <ul class="admin-section-tablist">
+    {% for tab in nav.active_section.tabs %}
+    <li>
+      <a class="admin-section-tab{% if tab.active %} active{% endif %}" data-palette-skip data-tab="{{ tab.key }}" href="{{ tab.href }}"{% if tab.active %} aria-current="page"{% endif %}>{{ tab.label }}{% if tab.badge %} <span class="badge-nav">{{ tab.badge }}</span>{% endif %}</a>
+    </li>
+    {% endfor %}
+  </ul>
+</nav>
+{% endif %}

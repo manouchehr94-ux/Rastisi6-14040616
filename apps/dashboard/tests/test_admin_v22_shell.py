@@ -24,31 +24,42 @@ class AdminV22ShellContractTests(SimpleTestCase):
         self.assertIn('id="adminV2CommandPalette"', base)
         self.assertIn('{% block page_actions %}{% endblock %}', base)
 
-    def test_storefront_primary_navigation_is_prioritized(self):
+    def test_shell_uses_generated_two_level_navigation(self):
         base = self._read("apps/dashboard/templates/dashboard/base_admin.html")
-        self.assertIn('data-admin-v2-priority="1"', base)
-        self.assertIn('data-admin-v2-priority="2"', base)
-        self.assertIn('data-admin-v2-priority="3"', base)
-        self.assertIn("سازنده فروشگاه", base)
-        self.assertIn("ظاهر و طراحی", base)
-        self.assertIn("محتوا", base)
+        for tag in ("{% admin_sidebar_nav %}", "{% admin_section_tabs %}", "{% admin_command_index %}"):
+            self.assertIn(tag, base)
+        self.assertNotIn("nav-group", base)
+        self.assertNotIn("sidebarNav", base)
+
+    def test_storefront_destinations_live_in_the_store_section(self):
+        from apps.dashboard import navigation
+
+        store = next(section for section in navigation.SECTIONS if section.key == "store")
+        labels = [tab.label for tab in store.tabs]
+        for label in ("ظاهر و طراحی", "سازنده فروشگاه", "قالب‌های آماده", "کالکشن‌ها", "محتوا",
+                      "صفحه اصلی", "منوها", "فوتر", "شبکه‌های اجتماعی"):
+            self.assertIn(label, labels)
 
     def test_command_search_exposes_deep_merchant_destinations(self):
-        base = self._read("apps/dashboard/templates/dashboard/base_admin.html")
-        for term in ("لوگو", "سازنده فروشگاه", "کالاها", "دسته‌بندی‌ها"):
-            self.assertIn(term, base)
-        self.assertIn("panel=header", base)
-        self.assertIn("panel=appearance", base)
+        from apps.dashboard import navigation
+
+        flags = {key: True for key in (
+            "can_manage_storefront_layout", "can_view_products", "can_manage_categories",
+            "can_manage_settings",
+        )}
+        titles = {item.title for item in navigation.build_palette(flags)}
+        for term in ("لوگو", "سازنده فروشگاه", "همه کالاها", "دسته‌بندی‌ها", "پیامک", "گزارش پیامک‌ها"):
+            self.assertIn(term, titles)
+        hrefs = " ".join(item.href for item in navigation.build_palette(flags))
+        self.assertIn("panel=header", hrefs)
+        self.assertIn("panel=appearance", hrefs)
 
     def test_command_search_includes_sms_and_harvests_visible_navigation(self):
-        base = self._read("apps/dashboard/templates/dashboard/base_admin.html")
         js = self._read("apps/dashboard/static/js/admin_v2.js")
-        for route_name in ("settings-sms-connection", "sms-log-list", "sms-outbox-list"):
-            self.assertIn(route_name, base)
-        self.assertIn("پیامک", base)
         self.assertIn("collectNavigationItems", js)
         self.assertIn("rankItems", js)
         self.assertIn(".sidebar a.nav-item[href]", js)
+        self.assertIn(".admin-section-tabs a[href]", js)
 
     def test_dashboard_setup_checklist_contract_is_preserved(self):
         dashboard = self._read("apps/dashboard/templates/dashboard/dashboard.html")
