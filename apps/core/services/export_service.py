@@ -1,4 +1,4 @@
-"""سرویسِ صادراتِ اکسل (XLSX) — پنج نوع صادرات (کالا/تنوع/موجودی/مشتری/سفارش)،
+"""سرویسِ صادراتِ اکسل (XLSX) — پنج نوعِ خروج (کالا/تنوع/موجودی/مشتری/سفارش)،
 همه Store-scoped. نگاه کنید به ADR-52 در ``SAAS_DOMAIN_DECISIONS.md`` و
 ``docs/design/XLSX_IMPORT_EXPORT_V1.md``.
 
@@ -7,21 +7,20 @@
 «راهنما». هر مقدارِ متنی از ``xlsx_utils.set_text`` عبور می‌کند، پس هرگز
 فرمول نمی‌شود (ADR-51).
 
-این کدبیس هیچ صفِ کارِ پس‌زمینه‌ای ندارد؛ بنابراین ``run_export`` کل کار را
-همگام و در همان درخواست انجام می‌دهد — وضعیت‌هایِ ``pending``/``processing``/
-``completed`` بیشتر برایِ تاریخچه/UI معنا دارند تا یک صفِ واقعی."""
+«خروج اطلاعات» مستقیم است: ``generate_export`` فایل را همگام می‌سازد و بایت‌هایش را
+به ویو برمی‌گرداند تا در همان پاسخِ HTTP به‌صورتِ ضمیمه ارسال شود. هیچ فایلی در
+``private_storage`` ذخیره نمی‌شود و دانلودِ بعدی وجود ندارد. ``ExportJob`` فقط
+فرادادهٔ حسابرسی (نوع، تعدادِ ردیف، زمان، وضعیت) است. جزئیات: ``docs/design/DATA_TRANSFER_SAFETY_V1.md``.
+"""
 
 from dataclasses import dataclass, field
 
-from django.core.files.base import ContentFile
 from django.db.models import Count, Max, Q, Sum
 from django.utils import timezone
 
 from apps.core.models import AuditLogEntry, ExportJob
 from apps.core.services.audit_service import record_audit_event
 from apps.core.services.xlsx_utils import Column, new_workbook, workbook_to_bytes, write_info_sheet, write_table_sheet
-
-EXPORT_RETENTION_DAYS = 7
 
 
 class ExportError(Exception):
@@ -34,7 +33,7 @@ class ExportSpec:
     columns: list
     rows: object  # iterable of row lists, aligned with ``columns``
     guide_intro: list = field(default_factory=list)
-    empty_message: str = "هیچ رکوردی با این صادرات مطابقت نداشت؛ فروشگاه شما هنوز موردی برای این بخش ندارد."
+    empty_message: str = "هیچ رکوردی برایِ این خروجِ اطلاعات پیدا نشد؛ فروشگاه شما هنوز موردی برای این بخش ندارد."
 
 
 def _yes_no(value) -> str:
@@ -74,7 +73,7 @@ def _products_spec(store, filters):
 
     columns = [
         Column("نام کالا", width=34, wrap=True, note="نامی که مشتری در فروشگاه می‌بیند."),
-        Column("SKU", width=16, text_format=True, note="کدِ کالا برایِ شناسایی و واردات."),
+        Column("SKU", width=16, text_format=True, note="کدِ کالا برایِ شناسایی و ورودِ اطلاعات."),
         Column("وضعیت", width=12, note="فعال، غیرفعال یا پیش‌نویس."),
         Column("برند", width=16),
         Column("دسته‌بندی", width=30, wrap=True, note="مسیرِ کاملِ دسته‌بندی؛ مثلاً «پوشاک > مردانه»."),
@@ -88,7 +87,7 @@ def _products_spec(store, filters):
         Column("توضیحات سئو", width=38, wrap=True, note="توضیحِ کوتاهی که زیرِ عنوان در گوگل نشان داده می‌شود."),
         Column("تاریخ ایجاد", "datetime"),
         Column("آخرین بروزرسانی", "datetime"),
-        Column("شناسه کالا", "id", tier="tech", note="شناسه‌ی داخلی؛ برایِ ردیابی و واردات."),
+        Column("شناسه کالا", "id", tier="tech", note="شناسه‌ی داخلی؛ برایِ ردیابی و ورودِ اطلاعات."),
         Column("نشانی صفحه (اسلاگ)", width=26, tier="tech", note="بخشی از آدرسِ صفحه‌ی کالا در فروشگاه."),
     ]
 
@@ -107,7 +106,7 @@ def _products_spec(store, filters):
 
     return ExportSpec("کالاها", columns, rows(), guide_intro=[
         "هر ردیف یک کالاست. ستون‌هایِ خاکستری (شناسه و نشانیِ صفحه) فقط برایِ ردیابی‌اند.",
-        "برایِ ویرایشِ گروهیِ کالاها می‌توانید همین فایل را ویرایش کنید و از بخشِ «واردات داده» دوباره بارگذاری کنید.",
+        "برایِ ویرایشِ گروهیِ کالاها می‌توانید همین فایل را ویرایش کنید و از بخشِ «ورود اطلاعات» دوباره بارگذاری کنید.",
     ])
 
 
@@ -210,7 +209,7 @@ def _inventory_spec(store, filters):
     return ExportSpec("موجودی انبار", columns, rows(), guide_intro=[
         "هر ردیف موجودیِ یک کالا (یا تنوعِ آن) در یک انبار است.",
         "«رزرو شده» و «موجودی قابل فروش» برایِ کلِ فروشگاه حساب می‌شوند، نه فقط انبارِ همان ردیف.",
-        "برایِ تغییرِ موجودی از بخشِ «واردات داده ← موجودی انبار» استفاده کنید؛ تغییرِ عددِ این فایل به‌تنهایی اثری ندارد.",
+        "برایِ تغییرِ موجودی از بخشِ «ورود اطلاعات ← موجودی انبار» استفاده کنید؛ تغییرِ عددِ این فایل به‌تنهایی اثری ندارد.",
     ], empty_message="هنوز موجودیِ ثبت‌شده‌ای در انبارهایِ این فروشگاه وجود ندارد.")
 
 
@@ -337,7 +336,7 @@ def build_export_workbook(store, export_type: str, filters: dict | None = None):
     """کارپوشه‌ی (Workbook) یک صادرات را می‌سازد و ``(workbook, row_count)`` برمی‌گرداند."""
     spec = _EXPORT_SPEC_BUILDERS[export_type](store, filters)
     label = dict(ExportJob.ExportType.choices)[export_type]
-    wb = new_workbook(f"صادراتِ {label} — {store.name}")
+    wb = new_workbook(f"خروجِ اطلاعات: {label} — {store.name}")
     data_sheet = wb.active
     data_sheet.title = spec.sheet_title
     row_count = write_table_sheet(data_sheet, spec.columns, spec.rows, empty_message=spec.empty_message)
@@ -352,7 +351,7 @@ def build_export_workbook(store, export_type: str, filters: dict | None = None):
             ("تعداد ردیف‌ها", row_count),
         ],
         paragraphs=[
-            "این فایل از بخشِ «صادراتِ داده‌ها» در راستی‌سی ساخته شده است و اطلاعاتِ همین فروشگاه را در لحظه‌ی تهیه نشان می‌دهد.",
+            "این فایل از بخشِ «خروج اطلاعات» در راستی‌سی ساخته شده است و اطلاعاتِ همین فروشگاه را در لحظه‌ی تهیه نشان می‌دهد.",
             *spec.guide_intro,
             "ستون‌هایِ سبزِ تیره اطلاعاتِ اصلی‌اند و ستون‌هایِ خاکستری (در انتها) شناسه‌هایِ فنی‌اند که فقط برایِ ردیابی لازم می‌شوند.",
         ],
@@ -362,14 +361,30 @@ def build_export_workbook(store, export_type: str, filters: dict | None = None):
     return wb, row_count
 
 
-def run_export(store, export_type: str, *, requested_by, filters: dict | None = None) -> ExportJob:
-    """یک ``ExportJob`` می‌سازد و بلافاصله (همگام) اجرا می‌کند. هرگز رخدادِ
-    این عملیات را بدون ثبت در گزارشِ رخدادها رها نمی‌کند، چه موفق چه ناموفق."""
-    if export_type not in _EXPORT_SPEC_BUILDERS:
-        raise ExportError(f"نوعِ صادراتِ «{export_type}» پشتیبانی نمی‌شود.")
+@dataclass
+class ExportResult:
+    """خروجیِ یک «خروجِ مستقیم»: بایت‌هایِ XLSX فقط برایِ همین پاسخِ HTTP‌اند و هیچ‌جا
+    ذخیره نمی‌شوند؛ ``job`` فقط فرادادهٔ سبکِ (نوع/تعداد ردیف/زمان) است."""
 
-    # گیتِ قابلیتِ صادرات + سقفِ ماهانه (checkpoint 5A، §16). صادرات خواندنی
-    # است، پس به وضعیتِ محدودشده بند نیست — فقط قابلیت و سقفِ دوره‌ای.
+    content: bytes
+    filename: str
+    row_count: int
+    job: ExportJob
+
+
+def generate_export(store, export_type: str, *, requested_by, filters: dict | None = None) -> ExportResult:
+    """فایلِ اکسلِ یک خروج را همگام می‌سازد و بایت‌هایش را برمی‌گرداند — *هیچ فایلی
+    ذخیره نمی‌شود* (نه در ``private_storage`` و نه جایِ دیگر) و هیچ دانلودِ بعدی
+    وجود ندارد.
+
+    کنترل‌هایِ قبلی حفظ شده‌اند: گیتِ قابلیتِ خروج و سقفِ ماهانه *پیش از* ساخت
+    بررسی می‌شوند؛ سهمیه فقط پس از ساختِ موفقِ فایل مصرف می‌شود (شکست مصرف
+    نمی‌کند)؛ و هر تلاش، چه موفق و چه ناموفق، در گزارشِ رخدادها ثبت می‌شود.
+    ``ExportJob`` فقط فرادادهٔ حسابرسی است: ``file`` همیشه خالی و ``expires_at``
+    بدونِ مقدار می‌ماند (چیزی برایِ نگه‌داری/انقضا وجود ندارد)."""
+    if export_type not in _EXPORT_SPEC_BUILDERS:
+        raise ExportError(f"نوعِ خروجِ «{export_type}» پشتیبانی نمی‌شود.")
+
     from apps.subscriptions.services.enforcement import check_export_budget, enforce_export_allowed
 
     enforce_export_allowed(store)
@@ -377,30 +392,11 @@ def run_export(store, export_type: str, *, requested_by, filters: dict | None = 
 
     job = ExportJob.objects.create(
         store=store, export_type=export_type, status=ExportJob.Status.PROCESSING,
-        requested_by=requested_by, filters=filters or {},
-        started_at=timezone.now(),
-        expires_at=timezone.now() + timezone.timedelta(days=EXPORT_RETENTION_DAYS),
+        requested_by=requested_by, filters=filters or {}, started_at=timezone.now(),
     )
-
     try:
         workbook, row_count = build_export_workbook(store, export_type, filters)
-        job.file.save(f"{export_type}.xlsx", ContentFile(workbook_to_bytes(workbook)), save=False)
-        job.row_count = row_count
-        job.status = ExportJob.Status.COMPLETED
-        job.completed_at = timezone.now()
-        job.save(update_fields=["file", "row_count", "status", "completed_at"])
-        # مصرفِ صادراتِ ماهانه فقط پس از تکمیلِ موفق ثبت می‌شود (صادراتِ ناموفق
-        # سهمیه مصرف نمی‌کند). هر فراخوانِ ``run_export`` یک Jobِ تازه است، پس
-        # «تلاشِ دوباره» یک واحدِ تازه است، نه دوباره‌شماریِ همان Job.
-        from apps.subscriptions.services.enforcement import consume_export
-
-        consume_export(store)
-        record_audit_event(
-            store=store, actor=requested_by, action_code="export.completed",
-            object_type="ExportJob", object_id=str(job.pk),
-            object_label=f"صادراتِ {job.get_export_type_display()} — {row_count} ردیف",
-            after={"export_type": export_type, "row_count": row_count, "filters": filters or {}, "format": "xlsx"},
-        )
+        content = workbook_to_bytes(workbook)
     except Exception as exc:
         job.status = ExportJob.Status.FAILED
         job.error_message = str(exc)
@@ -409,11 +405,30 @@ def run_export(store, export_type: str, *, requested_by, filters: dict | None = 
         record_audit_event(
             store=store, actor=requested_by, action_code="export.failed",
             object_type="ExportJob", object_id=str(job.pk),
-            object_label=f"صادراتِ {job.get_export_type_display()} ناموفق",
+            object_label=f"خروجِ {job.get_export_type_display()} ناموفق",
             metadata={"error": str(exc)}, result=AuditLogEntry.ResultStatus.FAILURE,
         )
         raise
-    return job
+
+    job.row_count = row_count
+    job.status = ExportJob.Status.COMPLETED
+    job.completed_at = timezone.now()
+    job.save(update_fields=["row_count", "status", "completed_at"])
+    # سهمیه‌ی ماهانه فقط پس از ساخته شدنِ موفقِ فایل مصرف می‌شود.
+    from apps.subscriptions.services.enforcement import consume_export
+
+    consume_export(store)
+    record_audit_event(
+        store=store, actor=requested_by, action_code="export.completed",
+        object_type="ExportJob", object_id=str(job.pk),
+        object_label=f"خروجِ {job.get_export_type_display()} — {row_count} ردیف",
+        after={
+            "export_type": export_type, "row_count": row_count, "filters": filters or {},
+            "format": "xlsx", "delivery": "direct_download", "retained": False,
+        },
+    )
+    filename = f"rastisi-{export_type}-{timezone.localdate().isoformat()}.xlsx"
+    return ExportResult(content=content, filename=filename, row_count=row_count, job=job)
 
 
 def mark_expired_jobs(store=None, *, now=None):

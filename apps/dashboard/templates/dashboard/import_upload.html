@@ -1,7 +1,7 @@
 {% extends "dashboard/base_admin.html" %}
-{% block title %}واردات از اکسل | پنل مدیریت{% endblock %}
-{% block page_title %}واردات داده‌ها از اکسل{% endblock %}
-{% block page_sub %}قالبِ اکسل را بگیرید، پر کنید و بارگذاری کنید — پیش از هر تغییر، یک پیش‌نمایش می‌بینید{% endblock %}
+{% block title %}ورود اطلاعات از اکسل | پنل مدیریت{% endblock %}
+{% block page_title %}ورود اطلاعات از اکسل{% endblock %}
+{% block page_sub %}قالبِ اکسل را بگیرید، پر کنید و بارگذاری کنید — همه‌ی ردیف‌ها پیش از هر تغییر بررسی می‌شوند{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -31,28 +31,29 @@
 .imp-cols li.is-required{background:var(--amber-soft);border-color:transparent;font-weight:700}
 .imp-submit{display:flex;flex-wrap:wrap;align-items:center;gap:14px}
 .imp-callout{margin:0;padding:12px 14px;border-radius:12px;background:var(--blue-soft);font-size:12.5px;line-height:1.9}
+.imp-callout-safe{margin-top:12px;background:var(--green-soft)}
 </style>
 {% endblock %}
 
 {% block content %}
-<div style="margin-bottom:14px"><a class="btn btn-sm" href="{% url 'dashboard:import-list' %}">→ بازگشت به فهرستِ واردات</a></div>
+<div style="margin-bottom:14px"><a class="btn btn-sm" href="{% url 'dashboard:import-list' %}">→ بازگشت به فهرستِ ورودِ اطلاعات</a></div>
 
-<ol class="imp-steps" aria-label="مراحلِ واردات">
-  <li class="is-now">انتخابِ نوعِ داده</li>
+<ol class="imp-steps" aria-label="مراحلِ ورودِ اطلاعات">
+  <li class="is-now">انتخابِ نوعِ اطلاعات</li>
   <li class="is-now">دانلودِ قالبِ اکسل</li>
   <li class="is-now">تکمیلِ فایل</li>
   <li class="is-now">بارگذاریِ فایل</li>
-  <li class="is-later">پیش‌نمایش و بررسیِ خطاها</li>
-  <li class="is-later">تأییدِ اجرایِ واقعی</li>
+  <li class="is-later">بررسیِ کاملِ فایل (پیش‌نمایش)</li>
+  <li class="is-later">تأیید و اعمال (فقط اگر خطایی نباشد)</li>
 </ol>
 
 <form method="post" action="{% url 'dashboard:import-upload' %}" enctype="multipart/form-data" data-import-form>
   {% csrf_token %}
   <div class="card">
     <div class="imp-section">
-      <h3>۱) چه چیزی را وارد می‌کنید؟</h3>
-      <p class="imp-hint">نوعِ داده را انتخاب کنید. برایِ هر نوع، قالبِ اکسلِ مخصوصِ همین فروشگاه (با منوهایِ کشوییِ برند، دسته‌بندی، انبار و ...) آماده است.</p>
-      <div class="imp-choices" role="radiogroup" aria-label="نوعِ داده">
+      <h3>۱) چه اطلاعاتی را وارد می‌کنید؟</h3>
+      <p class="imp-hint">نوعِ اطلاعات را انتخاب کنید. برایِ هر نوع، قالبِ اکسلِ مخصوصِ همین فروشگاه (با منوهایِ کشوییِ برند، دسته‌بندی، انبار و ...) آماده است.</p>
+      <div class="imp-choices" role="radiogroup" aria-label="نوعِ اطلاعات">
         {% for spec in import_type_specs %}
         <label class="imp-choice">
           <input type="radio" name="import_type" value="{{ spec.value }}" data-uses-mode="{{ spec.uses_mode|yesno:'1,0' }}" {% if spec.value == default_import_type %}checked{% endif %}>
@@ -93,19 +94,20 @@
       </div>
     </div>
     <div class="imp-section" data-inventory-note hidden>
-      <p class="imp-callout">در واردات موجودی، نوعِ عملیات را در خودِ فایل و برایِ هر ردیف مشخص می‌کنید («تنظیم موجودی نهایی» یا «افزایش/کاهش موجودی»)، پس نیازی به انتخابِ حالتِ اجرا نیست.</p>
+      <p class="imp-callout">در ورودِ موجودی، نوعِ عملیات را در خودِ فایل و برایِ هر ردیف مشخص می‌کنید («تنظیم موجودی نهایی» یا «افزایش/کاهش موجودی»)، پس نیازی به انتخابِ حالتِ اجرا نیست.</p>
       <input type="hidden" name="mode" value="{{ default_mode }}" disabled data-inventory-mode>
     </div>
 
     <div class="imp-section">
       <h3>۴) فایلِ تکمیل‌شده را بارگذاری کنید</h3>
       <p class="imp-hint">فایلِ اکسل (xlsx) تا ۱۰ مگابایت و ۲۰٬۰۰۰ ردیف. فایل‌هایِ CSVِ قدیمی هم پذیرفته می‌شوند، امّا استفاده از قالبِ اکسل پیشنهاد می‌شود.</p>
+      <p class="imp-callout imp-callout-safe">بارگذاری فایل هیچ تغییری ایجاد نمی‌کند. ابتدا همه ردیف‌ها بررسی می‌شوند. فقط اگر <b>هیچ</b> ردیفی خطا نداشته باشد می‌توانید ورود اطلاعات را تأیید کنید.</p>
       <input class="imp-file" type="file" name="file" accept=".xlsx,.csv" required aria-label="فایلِ اکسل">
     </div>
 
     <div class="imp-section imp-submit">
-      <button type="submit" class="btn btn-primary">بررسیِ فایل و ساختِ پیش‌نمایش</button>
-      <span style="color:var(--muted);font-size:12.5px">تا وقتی در مرحله‌ی بعد «اجرایِ واقعی» را تأیید نکنید، هیچ داده‌ای تغییر نمی‌کند.</span>
+      <button type="submit" class="btn btn-primary">بارگذاری و بررسیِ فایل</button>
+      <span style="color:var(--muted);font-size:12.5px">تا وقتی در مرحله‌ی بعد صراحتاً تأیید نکنید، هیچ اطلاعاتی در فروشگاه تغییر نمی‌کند.</span>
     </div>
   </div>
 </form>

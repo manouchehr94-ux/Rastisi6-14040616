@@ -319,9 +319,13 @@ class UploadPageTests(ImportViewTestCase):
         response = self.client.get(reverse("dashboard:import-upload"))
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
-        for step in ("انتخابِ نوعِ داده", "دانلودِ قالبِ اکسل", "تکمیلِ فایل", "بارگذاریِ فایل",
-                     "پیش‌نمایش و بررسیِ خطاها", "تأییدِ اجرایِ واقعی"):
+        for step in ("انتخابِ نوعِ اطلاعات", "دانلودِ قالبِ اکسل", "تکمیلِ فایل", "بارگذاریِ فایل",
+                     "بررسیِ کاملِ فایل", "تأیید و اعمال"):
             self.assertIn(step, html)
+        self.assertIn("بارگذاری فایل هیچ تغییری ایجاد نمی‌کند. ابتدا همه ردیف‌ها بررسی می‌شوند.", html)
+        self.assertIn("ورود اطلاعات از اکسل", html)
+        for old in ("واردات داده", "واردات از اکسل", "تأییدِ اجرایِ واقعی"):
+            self.assertNotIn(old, html)
         for term in INTERNAL_TERMS + ("product_id", "requires_shipping"):
             self.assertNotIn(term, html)
         self.assertNotIn("فایلِ CSV", html)
@@ -371,10 +375,14 @@ class XlsxUploadFlowTests(ImportViewTestCase):
         self.assertFalse(Product.objects.filter(sku="XU-1").exists())
 
         detail = self.client.get(reverse("dashboard:import-detail", args=[job.pk]))
-        self.assertContains(detail, "تأییدِ اجرایِ واقعی")
+        self.assertContains(detail, "تأیید اجرای واقعی")
+        self.assertContains(detail, "فایل با موفقیت بررسی شد. همه ردیف‌ها معتبرند و آماده اجرا هستند.")
+        self.assertContains(detail, "با تأیید، اطلاعاتِ فروشگاه تغییر می‌کند")
         self.assertContains(detail, "ساخته می‌شود")
         self.assertContains(detail, "ردیف در اکسل")
-        self.assertEqual(detail.context["summary"], {"total": 1, "will_create": 1, "will_update": 0, "invalid": 0, "warnings": 0})
+        self.assertEqual(detail.context["summary"], {
+            "total": 1, "will_create": 1, "will_update": 0, "invalid": 0, "warnings": 0, "blockers": [],
+        })
 
         self.client.post(reverse("dashboard:import-execute", args=[job.pk]))
         job.refresh_from_db()

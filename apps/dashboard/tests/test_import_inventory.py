@@ -51,10 +51,13 @@ class InventoryImportTestCase(TestCase):
         self.warehouse = Warehouse.objects.filter(store=self.store, is_default=True).first()
 
     def _job(self, csv_text, *, mode=ImportJob.Mode.UPSERT, idempotency_key=""):
-        return import_service.create_import_job(
+        job = import_service.create_import_job(
             self.store, import_type=ImportJob.ImportType.INVENTORY, uploaded_file=_csv_upload(csv_text),
             mode=mode, requested_by=self.actor, idempotency_key=idempotency_key,
         )
+        # execution requires a completed preview (UPLOADED jobs are never executable)
+        import_service.run_preview(job, actor=self.actor)
+        return job
 
 
 class AdjustmentTests(InventoryImportTestCase):
@@ -103,7 +106,8 @@ class SetOnHandTests(InventoryImportTestCase):
     def test_negative_set_on_hand_rejected(self):
         csv_text = INV_HEADER + f"{self.warehouse.code},,SKU-IIMP-1,,,set_on_hand,-3,,\n"
         job = self._job(csv_text)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
@@ -141,7 +145,8 @@ class VariantInventoryTests(InventoryImportTestCase):
         )
         csv_text = INV_HEADER + f"{self.warehouse.code},,SKU-IIMP-2,,VAR-IIMP-1,adjustment,1,,\n"
         job = self._job(csv_text)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
@@ -190,35 +195,40 @@ class ValidationTests(InventoryImportTestCase):
     def test_missing_warehouse_rejected(self):
         csv_text = INV_HEADER + ",,SKU-IIMP-1,,,adjustment,5,,\n"
         job = self._job(csv_text)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
     def test_unknown_warehouse_rejected(self):
         csv_text = INV_HEADER + "no-such-wh,,SKU-IIMP-1,,,adjustment,5,,\n"
         job = self._job(csv_text)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
     def test_missing_product_rejected(self):
         csv_text = INV_HEADER + f"{self.warehouse.code},,,,,adjustment,5,,\n"
         job = self._job(csv_text)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
     def test_invalid_mode_rejected(self):
         csv_text = INV_HEADER + f"{self.warehouse.code},,SKU-IIMP-1,,,teleport,5,,\n"
         job = self._job(csv_text)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
     def test_non_numeric_quantity_rejected(self):
         csv_text = INV_HEADER + f"{self.warehouse.code},,SKU-IIMP-1,,,adjustment,abc,,\n"
         job = self._job(csv_text)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
@@ -262,14 +272,16 @@ class TenantIsolationTests(InventoryImportTestCase):
     def test_foreign_warehouse_rejected(self):
         csv_text = INV_HEADER + f"foreign-wh-iimp,,SKU-IIMP-1,,,adjustment,5,,\n"
         job = self._job(csv_text)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
     def test_foreign_product_id_rejected(self):
         csv_text = INV_HEADER + f"{self.warehouse.code},{self.foreign_product.pk},,,,adjustment,5,,\n"
         job = self._job(csv_text)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
         self.foreign_product.refresh_from_db()
@@ -291,11 +303,14 @@ OP_ADJUST = "افزایش/کاهش موجودی"
 
 class XlsxInventoryImportTests(InventoryImportTestCase):
     def _xjob(self, rows, *, headers=None):
-        return import_service.create_import_job(
+        job = import_service.create_import_job(
             self.store, import_type=ImportJob.ImportType.INVENTORY,
             uploaded_file=xlsx_upload(headers or XLSX_INV_HEADERS, rows, name="inventory.xlsx"),
             mode=ImportJob.Mode.UPSERT, requested_by=self.actor,
         )
+        # execution requires a completed preview (UPLOADED jobs are never executable)
+        import_service.run_preview(job, actor=self.actor)
+        return job
 
     def _row(self, op, qty, *, sku="SKU-IIMP-1", warehouse=None, reason="شمارش", note=""):
         return [warehouse or self.warehouse.name, None, sku, None, None, op, qty, reason, note]
@@ -374,13 +389,18 @@ class XlsxInventoryImportTests(InventoryImportTestCase):
             store=self.store, product=self.product, variant=None, quantity=7,
             status=InventoryReservation.Status.ACTIVE,
         )
+        movements_before = StockMovement.objects.filter(store=self.store).count()
         job = self._xjob([self._row(OP_ADJUST, -5), self._row(OP_SET, 3), self._row(OP_SET, 7)])
         import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
-        self.assertEqual(job.failed_rows, 2)
-        self.assertEqual(job.updated_rows, 1)
+        # reservation safety is enforced at apply time: the offending rows fail and,
+        # because import is all-or-nothing, the valid row (set to 7) is rolled back too.
+        self.assertEqual(job.status, ImportJob.Status.FAILED)
+        self.assertGreaterEqual(job.failed_rows, 1)
+        self.assertEqual(job.updated_rows, 0)
         self.product.refresh_from_db()
-        self.assertEqual(self.product.stock, 7)
+        self.assertEqual(self.product.stock, 10)
+        self.assertEqual(StockMovement.objects.filter(store=self.store).count(), movements_before)
 
     def test_duplicate_warehouse_names_are_ambiguous(self):
         _Warehouse.objects.create(store=self.store, name=self.warehouse.name, code="dup-wh-xl")
@@ -397,7 +417,8 @@ class XlsxInventoryImportTests(InventoryImportTestCase):
 
     def test_formula_in_quantity_is_rejected(self):
         job = self._xjob([self._row(OP_SET, "=5+5")])
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
         self.product.refresh_from_db()

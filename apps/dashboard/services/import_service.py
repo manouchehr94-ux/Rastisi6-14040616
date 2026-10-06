@@ -12,6 +12,7 @@
 ``_validate_inventory_row`` هیچ‌گاه دو نسخه ندارند؛ فقط پارامترِ
 ``dry_run`` تعیین می‌کند که آیا در انتها چیزی در دیتابیس نوشته شود یا نه."""
 
+import logging
 from dataclasses import dataclass, field as dataclass_field
 
 from django.db import transaction
@@ -25,7 +26,7 @@ from apps.catalog.services.inventory_service import (
     adjust_warehouse_stock,
 )
 from apps.catalog.services.variant_engine_service import VariantEngineError, generate_variants, set_default_variant
-from apps.core.models import ImportJob, ImportRowResult
+from apps.core.models import AuditLogEntry, ImportJob, ImportRowResult
 from apps.core.services.audit_service import record_audit_event
 from apps.core.services import xlsx_utils
 from apps.core.services.csv_utils import (
@@ -40,6 +41,8 @@ from apps.core.services.csv_utils import (
 from apps.core.utils import normalization_key
 from apps.dashboard.services.catalog_admin_service import default_vendor, generate_unique_slug
 from apps.orders.models import TaxClass
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_BATCH_SIZE = 100
 MAX_VARIANT_OPTION_AXES = 3
@@ -396,6 +399,12 @@ def _variant_lookup_cache(store, rows: list[dict]) -> dict:
         "existing_variants_by_combination": existing_variants_by_combination,
         "legacy_products": legacy_products,
         "regenerated_product_ids": set(),
+        # ترکیب‌هایی که پیش از شروعِ این اجرا وجود داشتند. ``generate_variants``
+        # همه‌ی ترکیب‌هایِ یک کالا را یک‌جا می‌سازد؛ ترکیب‌هایی که فقط در اثرِ همین
+        # اجرا ساخته شده‌اند برایِ ردیف‌هایِ فایل «تازه» حساب می‌شوند، نه «موجود».
+        "initial_combinations": {
+            pk: set(by_key) for pk, by_key in existing_variants_by_combination.items()
+        },
     }
 
 
@@ -505,6 +514,7 @@ def _validate_variant_row(row_number: int, row: dict, *, store, mode: str, cache
 
     pairs, pair_errors = [], []
     combination_key = ""
+    generated_by_run = False
     if not errors and product is not None:
         pairs, pair_errors = _resolve_variant_option_pairs(product, row, cache=cache)
         errors.extend(pair_errors)
@@ -512,8 +522,10 @@ def _validate_variant_row(row_number: int, row: dict, *, store, mode: str, cache
             combination_key = _combination_key_for_pairs(pairs)
             if existing_variant is None:
                 existing_variant = cache["existing_variants_by_combination"].get(product.pk, {}).get(combination_key)
+                if existing_variant is not None and combination_key not in cache["initial_combinations"].get(product.pk, set()):
+                    generated_by_run = True
 
-    is_update = existing_variant is not None
+    is_update = existing_variant is not None and not generated_by_run
     if mode == ImportJob.Mode.CREATE_ONLY and is_update:
         errors.append("این ردیف با تنوعِ موجود مطابقت دارد؛ حالتِ «فقط ایجاد» آن را رد می‌کند.")
     if mode == ImportJob.Mode.UPDATE_ONLY and not is_update:
@@ -573,6 +585,7 @@ def _validate_variant_row(row_number: int, row: dict, *, store, mode: str, cache
         "sku": variant_sku, "barcode": normalize_import_text(row.get("barcode")),
         "extra_price": extra_price, "compare_at_price": compare_at_price, "cost": cost,
         "stock": stock, "weight_grams": weight_grams, "is_active": is_active, "is_default": is_default,
+        "generated_by_run": generated_by_run,
     }
     outcome = RowOutcome(
         row_number=row_number, source_identifier=source_identifier,
@@ -602,7 +615,8 @@ def _apply_variant_row(*, store, normalized: dict, existing_variant, cache: dict
             raise VariantEngineError("این ترکیب پس از بازتولیدِ تنوع‌ها هم ساخته نشد.")
         is_create = True
     else:
-        is_create = False
+        # ترکیبی که در اثرِ ردیفِ قبلیِ همین فایل ساخته شده، برایِ این ردیف «تازه» است.
+        is_create = bool(normalized.get("generated_by_run"))
 
     if normalized["sku"]:
         variant.sku = normalized["sku"]
@@ -930,33 +944,11 @@ _BATCH_EXECUTORS = {
 }
 
 
-def run_import(job: ImportJob, rows: list[dict], *, actor, batch_size: int = DEFAULT_BATCH_SIZE) -> ImportJob:
-    """موتورِ عمومیِ پیش‌نمایش/اجرا — برایِ هر سه نوعِ واردات یکسان است
-    (checkpoint 4B §16). ``job.dry_run`` تعیین می‌کند پیش‌نمایش است یا اجرا؛
-    ``job.status`` بر همان اساس تنظیم می‌شود. هر batch در تراکنشِ اتمیکِ
-    خودش اجرا می‌شود — شکستِ یک batch سایرِ batchهایِ موفق را برنمی‌گرداند
-    (ADR-56)."""
-    if job.import_type not in _BATCH_EXECUTORS:
-        raise ImportServiceError(f"نوعِ واردات «{job.import_type}» پشتیبانی نمی‌شود.")
-    build_cache, execute_batch = _BATCH_EXECUTORS[job.import_type]
-
-    job.status = ImportJob.Status.VALIDATING if job.dry_run else ImportJob.Status.PROCESSING
-    job.started_at = timezone.now()
-    job.save(update_fields=["status", "started_at"])
-
-    cache = build_cache(job.store, rows)
-    # بودجه‌ی ساختِ کالا برایِ اجرا (نه پیش‌نمایش) در کش گذاشته می‌شود تا
-    # واردات نتواند سقفِ عددیِ کالا را دور بزند (§16). ردیف‌هایِ به‌روزرسانی
-    # بی‌اثر از این بودجه عبور می‌کنند؛ فقط ساختِ کالایِ تازه شمرده می‌شود.
-    # تنوع‌ها از مسیرِ ``generate_variants`` (که خودش گیت دارد) عبور می‌کنند و
-    # موجودی هرگز رکوردِ تازه نمی‌سازد، پس فقط واردات کالا بودجه لازم دارد.
-    if not job.dry_run and job.import_type == ImportJob.ImportType.PRODUCTS:
-        from apps.subscriptions.services.enforcement import product_creation_budget
-
-        cache["_product_create_budget"] = product_creation_budget(job.store)
-    # ردیف‌هایِ XLSX شماره‌ی واقعیِ ردیفِ اکسل را دارند (``__row_number__``)؛ ردیف‌هایِ
-    # CSV همان شماره‌ی ترتیبی. ردیفی که خواندنِ فایل از پیش ردش کرده (مثلاً سلولِ
-    # فرمولی) هرگز به اعتبارسنج نمی‌رسد.
+def _plan_rows(rows: list[dict]):
+    """ردیف‌ها را به ``(شماره‌ی ردیف, ردیف)`` تبدیل می‌کند. ردیف‌هایِ XLSX شماره‌ی
+    واقعیِ ردیفِ اکسل را دارند (``__row_number__``)؛ ردیف‌هایِ CSV همان شماره‌ی
+    ترتیبی. ردیفی که خواندنِ فایل از پیش ردش کرده (مثلاً سلولِ فرمولی) هرگز به
+    اعتبارسنج نمی‌رسد و یک ردیفِ نامعتبر می‌شود."""
     numbered_rows, pre_rejected = [], []
     for index, row in enumerate(rows, start=1):
         number = row.get("__row_number__") or index
@@ -968,17 +960,64 @@ def run_import(job: ImportJob, rows: list[dict], *, actor, batch_size: int = DEF
             ))
         else:
             numbered_rows.append((number, row))
+    return numbered_rows, pre_rejected
 
-    all_outcomes: list[RowOutcome] = list(pre_rejected)
+
+_PROBLEM_STATUSES = (ImportRowResult.RowStatus.INVALID, ImportRowResult.RowStatus.FAILED)
+
+
+def _run_batches(job, numbered_rows, cache, *, dry_run: bool, actor, batch_size: int, stop_on_problem: bool = False):
+    """ردیف‌ها را دسته‌دسته اجرا می‌کند. با ``stop_on_problem`` پس از نخستین دسته‌ای که
+    ردیفِ نامعتبر/ناموفق دارد متوقف می‌شود (در اجرایِ واقعی، کلِ تراکنش در هر
+    صورت برگردانده می‌شود، پس ادامه دادن بی‌فایده است)."""
+    _build_cache, execute_batch = _BATCH_EXECUTORS[job.import_type]
+    outcomes: list[RowOutcome] = []
     for batch in _chunked(numbered_rows, batch_size):
-        batch_outcomes = execute_batch(job.store, batch, mode=job.mode, cache=cache, actor=actor, dry_run=job.dry_run)
+        batch_outcomes = execute_batch(job.store, batch, mode=job.mode, cache=cache, actor=actor, dry_run=dry_run)
         warnings_by_number = {n: r["__warnings__"] for n, r in batch if r.get("__warnings__")}
         for outcome in batch_outcomes:
             if outcome.row_number in warnings_by_number:
                 outcome.warnings = list(warnings_by_number[outcome.row_number]) + list(outcome.warnings)
-        all_outcomes.extend(batch_outcomes)
-    all_outcomes.sort(key=lambda o: o.row_number)
+        outcomes.extend(batch_outcomes)
+        if stop_on_problem and any(o.status in _PROBLEM_STATUSES for o in batch_outcomes):
+            break
+    return outcomes
 
+
+def _validate_all(job: ImportJob, rows: list[dict], *, actor, batch_size: int = DEFAULT_BATCH_SIZE):
+    """اعتبارسنجیِ کاملِ همه‌ی ردیف‌ها در برابرِ وضعیتِ *فعلیِ* Store، بدونِ نوشتنِ
+    هیچ داده‌ی کسب‌وکاری (dry-run). برایِ پیش‌نمایش و نیز بازبینیِ لحظه‌یِ اجرا از
+    همین تابع استفاده می‌شود. ``(outcomes, پیامِ سقفِ پلن)`` برمی‌گرداند — پیامِ
+    سقف وقتی پُر می‌شود که تعدادِ کالایِ تازه از بودجه‌ی پلن بیشتر باشد (کلِ فایل
+    مسدود می‌شود، نه فقط ردیف‌هایِ آخر)."""
+    if job.import_type not in _BATCH_EXECUTORS:
+        raise ImportServiceError(f"نوعِ اطلاعاتِ «{job.import_type}» پشتیبانی نمی‌شود.")
+    build_cache, _execute = _BATCH_EXECUTORS[job.import_type]
+    cache = build_cache(job.store, rows)
+    numbered_rows, pre_rejected = _plan_rows(rows)
+    outcomes = list(pre_rejected) + _run_batches(
+        job, numbered_rows, cache, dry_run=True, actor=actor, batch_size=batch_size,
+    )
+    outcomes.sort(key=lambda o: o.row_number)
+
+    limit_message = ""
+    if job.import_type == ImportJob.ImportType.PRODUCTS:
+        from apps.subscriptions.services.enforcement import product_creation_budget
+
+        budget = product_creation_budget(job.store)
+        creates = sum(1 for o in outcomes if o.normalized_data_summary.get("action") == "create")
+        if budget is not None and creates > budget:
+            limit_message = (
+                f"این فایل {creates} کالایِ تازه می‌سازد، امّا پلنِ فعلیِ شما فقط جایِ {budget} کالایِ دیگر دارد. "
+                "فایل را کوچک‌تر کنید یا پلن را ارتقا دهید."
+            )
+    return outcomes, limit_message
+
+
+def _store_outcomes(job: ImportJob, outcomes: list[RowOutcome]) -> None:
+    """نتیجه‌ی ردیف‌ها و شمارنده‌هایِ Job را ذخیره می‌کند (وضعیت و پیامِ Job را
+    فراخوان تعیین می‌کند)."""
+    outcomes = sorted(outcomes, key=lambda o: o.row_number)
     ImportRowResult.objects.filter(import_job=job).delete()
     ImportRowResult.objects.bulk_create([
         ImportRowResult(
@@ -987,55 +1026,60 @@ def run_import(job: ImportJob, rows: list[dict], *, actor, batch_size: int = DEF
             target_object_type=o.target_object_type, target_object_id=o.target_object_id,
             normalized_data_summary=o.normalized_data_summary,
         )
-        for o in all_outcomes
+        for o in outcomes
     ])
-
-    counts = {status: 0 for status in (
-        ImportRowResult.RowStatus.VALID, ImportRowResult.RowStatus.INVALID,
-        ImportRowResult.RowStatus.CREATED, ImportRowResult.RowStatus.UPDATED,
-        ImportRowResult.RowStatus.SKIPPED, ImportRowResult.RowStatus.FAILED,
-    )}
-    for o in all_outcomes:
+    counts: dict[str, int] = {}
+    for o in outcomes:
         counts[o.status] = counts.get(o.status, 0) + 1
+    RS = ImportRowResult.RowStatus
+    job.total_rows = len(outcomes)
+    job.valid_rows = counts.get(RS.VALID, 0)
+    job.invalid_rows = counts.get(RS.INVALID, 0)
+    job.created_rows = counts.get(RS.CREATED, 0)
+    job.updated_rows = counts.get(RS.UPDATED, 0)
+    job.skipped_rows = counts.get(RS.SKIPPED, 0)
+    job.failed_rows = counts.get(RS.FAILED, 0)
 
-    job.total_rows = len(all_outcomes)
-    job.valid_rows = counts[ImportRowResult.RowStatus.VALID]
-    job.invalid_rows = counts[ImportRowResult.RowStatus.INVALID]
-    job.created_rows = counts[ImportRowResult.RowStatus.CREATED]
-    job.updated_rows = counts[ImportRowResult.RowStatus.UPDATED]
-    job.skipped_rows = counts[ImportRowResult.RowStatus.SKIPPED]
-    job.failed_rows = counts[ImportRowResult.RowStatus.FAILED]
+
+_JOB_COUNTER_FIELDS = [
+    "total_rows", "valid_rows", "invalid_rows", "created_rows", "updated_rows",
+    "skipped_rows", "failed_rows", "completed_at", "status", "error_summary", "dry_run",
+]
+
+
+def _audit_counts(job: ImportJob) -> dict:
+    return {
+        "total_rows": job.total_rows, "valid_rows": job.valid_rows, "invalid_rows": job.invalid_rows,
+        "created_rows": job.created_rows, "updated_rows": job.updated_rows,
+        "skipped_rows": job.skipped_rows, "failed_rows": job.failed_rows, "status": job.status,
+    }
+
+
+def _save_preview(job: ImportJob, outcomes: list[RowOutcome], limit_message: str) -> None:
+    """نتیجه‌ی یک اعتبارسنجیِ بدونِ تغییر را به‌عنوانِ «پیش‌نمایشِ آماده» ذخیره می‌کند."""
+    _store_outcomes(job, outcomes)
+    job.dry_run = True
+    job.status = ImportJob.Status.PREVIEW_READY
+    job.error_summary = limit_message
     job.completed_at = timezone.now()
+    job.save(update_fields=_JOB_COUNTER_FIELDS)
 
-    if job.dry_run:
-        job.status = ImportJob.Status.PREVIEW_READY
-    elif job.total_rows == 0:
-        job.status = ImportJob.Status.FAILED
-        job.error_summary = "فایل هیچ ردیفی نداشت."
-    elif job.failed_rows == 0 and job.invalid_rows == 0:
-        job.status = ImportJob.Status.COMPLETED
-    elif job.created_rows == 0 and job.updated_rows == 0:
-        job.status = ImportJob.Status.FAILED
-        job.error_summary = f"{job.invalid_rows} ردیفِ نامعتبر، {job.failed_rows} ردیفِ ناموفق."
-    else:
-        job.status = ImportJob.Status.COMPLETED_WITH_ERRORS
-        job.error_summary = f"{job.invalid_rows} ردیفِ نامعتبر، {job.failed_rows} ردیفِ ناموفق."
 
-    job.save(update_fields=[
-        "total_rows", "valid_rows", "invalid_rows", "created_rows", "updated_rows",
-        "skipped_rows", "failed_rows", "completed_at", "status", "error_summary",
-    ])
-
-    action_code = "import.preview_completed" if job.dry_run else "import.execution_completed"
+def build_preview(job: ImportJob, rows: list[dict], *, actor, batch_size: int = DEFAULT_BATCH_SIZE) -> ImportJob:
+    """پیش‌نمایش (dry-run): همه‌ی ردیف‌ها بررسی می‌شوند و هیچ داده‌ی کسب‌وکاری
+    نوشته نمی‌شود. وجودِ ردیفِ نامعتبر مانعِ ساختِ پیش‌نمایش نیست — امّا
+    ``job_execution_blockers`` جلویِ اجرا را می‌گیرد."""
+    job.dry_run = True
+    job.status = ImportJob.Status.VALIDATING
+    job.started_at = timezone.now()
+    job.save(update_fields=["status", "started_at", "dry_run"])
+    outcomes, limit_message = _validate_all(job, rows, actor=actor, batch_size=batch_size)
+    _save_preview(job, outcomes, limit_message)
     record_audit_event(
-        store=job.store, actor=actor, action_code=action_code,
+        store=job.store, actor=actor, action_code="import.preview_completed",
         object_type="ImportJob", object_id=str(job.pk),
         object_label=f"{job.get_import_type_display()} — {job.total_rows} ردیف",
-        after={
-            "total_rows": job.total_rows, "valid_rows": job.valid_rows, "invalid_rows": job.invalid_rows,
-            "created_rows": job.created_rows, "updated_rows": job.updated_rows,
-            "skipped_rows": job.skipped_rows, "failed_rows": job.failed_rows, "status": job.status,
-        },
+        after=_audit_counts(job),
     )
     return job
 
@@ -1048,7 +1092,7 @@ def create_import_job(store, *, import_type: str, uploaded_file, mode: str, requ
     هرگز چیزی از فایل نمی‌خواند/پردازش نمی‌کند (آن کارِ ``run_preview``ست)؛ فقط
     ساختارِ امنِ فایل را بررسی می‌کند (پسوند/حجم/ZIP/ماکرو)."""
     if import_type not in ImportJob.ImportType.values:
-        raise ImportServiceError(f"نوعِ واردات «{import_type}» نامعتبر است.")
+        raise ImportServiceError(f"نوعِ اطلاعاتِ «{import_type}» نامعتبر است.")
     if mode not in ImportJob.Mode.values:
         raise ImportServiceError(f"حالتِ «{mode}» نامعتبر است.")
     # گیتِ قابلیتِ واردات (checkpoint 5A، §16) — اگر پلن واردات ندارد، حتی
@@ -1063,7 +1107,7 @@ def create_import_job(store, *, import_type: str, uploaded_file, mode: str, requ
         # مدیریت کند (پیام همان است، برایِ نمایشِ مستقیم به کاربر امن).
         raise ImportServiceError(str(exc)) from exc
     if idempotency_key and ImportJob.objects.filter(store=store, idempotency_key=idempotency_key).exists():
-        raise ImportServiceError("این کلیدِ یکتا قبلاً برایِ یک واردات دیگر استفاده شده است.")
+        raise ImportServiceError("این کلیدِ یکتا قبلاً برایِ یک ورودِ اطلاعاتِ دیگر استفاده شده است.")
 
     job = ImportJob.objects.create(
         store=store, import_type=import_type, original_filename=(uploaded_file.name or "")[:255],
@@ -1110,25 +1154,154 @@ def run_preview(job: ImportJob, *, actor) -> ImportJob:
     """پیش‌نمایشِ (dry-run) یک Job — هرگز چیزی در دیتابیسِ کاتالوگ/موجودی
     نمی‌نویسد؛ فقط ``ImportRowResult``هایِ پیش‌نمایش را می‌سازد."""
     if job.status not in (ImportJob.Status.UPLOADED, ImportJob.Status.PREVIEW_READY):
-        raise ImportServiceError("این Job دیگر قابلِ پیش‌نمایش نیست.")
-    job.dry_run = True
+        raise ImportServiceError("این ورودِ اطلاعات دیگر قابلِ پیش‌نمایش نیست.")
     rows = read_job_rows(job)
-    job = run_import(job, rows, actor=actor)
+    job = build_preview(job, rows, actor=actor)
     _generate_error_report(job)  # پیش از اجرا هم می‌شود ردیف‌هایِ مشکل‌دار را اصلاح کرد
     return job
 
 
-def run_execution(job: ImportJob, *, actor) -> ImportJob:
-    """اجرایِ واقعیِ یک Job — نگاه کنید به ADR-61: یک Jobِ قبلاً
-    تکمیل‌شده (هر یک از ``ImportJob.FINAL_STATUSES``) هرگز دوباره اجرا
-    نمی‌شود، حتی اگر این تابع دوباره صدا زده شود (idempotent replay-safe)."""
-    if job.status in ImportJob.FINAL_STATUSES:
-        raise ImportServiceError("این Job قبلاً به پایان رسیده — دوباره اجرا نمی‌شود.")
+class ImportExecutionBlocked(ImportServiceError):
+    """اجرایِ واقعی پیش از هر تغییر متوقف شد (خطایِ اعتبارسنجی/سقفِ پلن). هیچ
+    داده‌ی کسب‌وکاری تغییر نکرده و Job با یک پیش‌نمایشِ تازه به حالتِ
+    ``preview_ready`` برگشته است."""
+
+
+class _RollbackImport(Exception):
+    """درونی: بدنه‌ی تراکنشِ اجرا را برایِ برگرداندنِ کامل متوقف می‌کند."""
+
+    def __init__(self, outcomes):
+        super().__init__("import rolled back")
+        self.outcomes = outcomes
+
+
+def job_execution_blockers(job: ImportJob) -> list[str]:
+    """دلیل‌هایی (متنِ فارسی) که اجرایِ واقعیِ این Job را مسدود می‌کنند؛ فهرستِ
+    خالی یعنی فایل قابلِ اجراست. هشدارها (``warnings``) هرگز مانع نیستند."""
+    if job.status != ImportJob.Status.PREVIEW_READY:
+        return ["این ورودِ اطلاعات در وضعیتِ قابلِ اجرا نیست."]
+    reasons = []
+    if job.total_rows == 0:
+        reasons.append("فایل هیچ ردیفی نداشت.")
+    problem_rows = job.invalid_rows + job.failed_rows
+    if problem_rows:
+        reasons.append(f"{problem_rows} ردیف خطا دارد.")
+    if job.error_summary:
+        reasons.append(job.error_summary)
+    return reasons
+
+
+def _reject_execution(job, outcomes, limit_message, *, previous, actor, reason: str):
+    """پیش‌نمایشِ تازه را ذخیره می‌کند، Job را به ``preview_ready`` برمی‌گرداند و
+    ``ImportExecutionBlocked`` می‌اندازد. هیچ داده‌ی کسب‌وکاری تغییر نکرده است."""
+    _save_preview(job, outcomes, limit_message)
+    _generate_error_report(job)
+    problem_rows = job.invalid_rows + job.failed_rows
+    previous_was_clean = previous["total"] > 0 and previous["invalid"] == 0 and not previous.get("limit")
+    if limit_message:
+        message = f"{limit_message} هیچ تغییری روی فروشگاه اعمال نشد."
+    elif job.total_rows == 0:
+        message = "فایل هیچ ردیفی نداشت. هیچ تغییری اعمال نشد."
+    elif reason == "concurrent":
+        message = "هم‌زمان با اجرا، اطلاعاتِ فروشگاه تغییر کرد. هیچ تغییری اعمال نشد؛ پیش‌نمایشِ تازه را بررسی و دوباره تأیید کنید."
+    elif previous_was_clean:
+        message = (
+            f"اطلاعاتِ فروشگاه از زمانِ پیش‌نمایش تغییر کرده و اکنون {problem_rows} ردیف خطا دارد. "
+            "هیچ تغییری اعمال نشد؛ پیش‌نمایشِ تازه را بررسی کنید."
+        )
+    else:
+        message = f"این فایل قابلِ اجرا نیست؛ {problem_rows or 'برخی'} ردیف خطا دارد. هیچ تغییری اعمال نشد."
+    record_audit_event(
+        store=job.store, actor=actor, action_code="import.execution_rejected",
+        object_type="ImportJob", object_id=str(job.pk),
+        object_label=f"{job.get_import_type_display()} — اجرا رد شد",
+        before={"preview": previous}, after=_audit_counts(job),
+        metadata={"reason": reason, "problem_rows": problem_rows, "limit": bool(limit_message)},
+        result=AuditLogEntry.ResultStatus.FAILURE,
+    )
+    raise ImportExecutionBlocked(message)
+
+
+def _apply_all(job, rows, *, actor, batch_size):
+    """بدنه‌ی تراکنشِ اجرا: همه‌ی ردیف‌ها را اعمال می‌کند؛ اگر حتی یک ردیف
+    نامعتبر/ناموفق باشد ``_RollbackImport`` می‌اندازد تا تراکنشِ بیرونی کلِ
+    تغییراتِ این واردات را برگرداند."""
+    build_cache, _execute = _BATCH_EXECUTORS[job.import_type]
+    cache = build_cache(job.store, rows)
+    if job.import_type == ImportJob.ImportType.PRODUCTS:
+        from apps.subscriptions.services.enforcement import product_creation_budget
+
+        cache["_product_create_budget"] = product_creation_budget(job.store)
+    numbered_rows, pre_rejected = _plan_rows(rows)
+    if pre_rejected:
+        raise _RollbackImport(pre_rejected)
+    outcomes = _run_batches(
+        job, numbered_rows, cache, dry_run=False, actor=actor, batch_size=batch_size, stop_on_problem=True,
+    )
+    if any(o.status in _PROBLEM_STATUSES for o in outcomes):
+        raise _RollbackImport(outcomes)
+    return outcomes
+
+
+def _finalize_rollback(job, rows, executed, *, actor, detail: str):
+    """پس از بازگردانیِ کامل: وضعیتِ ناموفقِ Job و علتِ دقیق را (بیرون از تراکنشِ
+    برگشت‌خورده) ذخیره می‌کند تا کاربر دلیل را ببیند. هیچ ردیفی «ساخته/به‌روزشده»
+    نشان داده نمی‌شود چون هیچ تغییری باقی نمانده است."""
+    RS = ImportRowResult.RowStatus
+    executed_by_number = {o.row_number: o for o in executed if o.status in _PROBLEM_STATUSES}
+    numbered_rows, pre_rejected = _plan_rows(rows)
+    final = []
+    for outcome in pre_rejected:
+        final.append(outcome)
+    for number, row in numbered_rows:
+        if number in executed_by_number:
+            final.append(executed_by_number[number])
+            continue
+        final.append(RowOutcome(
+            row_number=number, source_identifier=_row_identifier(row, number), status=RS.VALID,
+            warnings=list(row.get("__warnings__", [])) + ["این ردیف اعمال نشد؛ چون کلِ ورودِ اطلاعات بازگردانده شد."],
+        ))
+    _store_outcomes(job, final)
+    first = next((o for o in sorted(final, key=lambda o: o.row_number) if o.status in _PROBLEM_STATUSES), None)
+    if first is not None and first.errors:
+        detail = f"ردیف {first.row_number}: {first.errors[0]}"
     job.dry_run = False
-    # بازبینیِ اشتراک هنگامِ اجرا (checkpoint 5A، §16): ممکن است بینِ آپلود/
-    # پیش‌نمایش و اجرا پلن تنزل کرده باشد. قابلیتِ واردات و سقفِ ماهانه‌ی ردیف
-    # هر دو دوباره بررسی می‌شوند — سقفِ ردیف کلِ فایل را می‌سنجد و در صورتِ
-    # عبور کلِ واردات را رد می‌کند (بدونِ کوتاه‌سازیِ خاموش).
+    job.status = ImportJob.Status.FAILED
+    job.error_summary = f"اجرا متوقف شد و هیچ تغییری روی فروشگاه اعمال نشد. {detail}"
+    job.completed_at = timezone.now()
+    job.save(update_fields=_JOB_COUNTER_FIELDS)
+    _generate_error_report(job)
+    record_audit_event(
+        store=job.store, actor=actor, action_code="import.execution_rolled_back",
+        object_type="ImportJob", object_id=str(job.pk),
+        object_label=f"{job.get_import_type_display()} — بازگردانیِ کامل",
+        after=_audit_counts(job),
+        metadata={"first_failed_row": first.row_number if first else None, "reason": detail[:300]},
+        result=AuditLogEntry.ResultStatus.FAILURE,
+    )
+    return job
+
+
+def run_execution(job: ImportJob, *, actor, batch_size: int = DEFAULT_BATCH_SIZE) -> ImportJob:
+    """اجرایِ واقعیِ یک Job — همه یا هیچ (ADR-56 بازنگری‌شده):
+
+    1. فقط Jobِ ``preview_ready`` (پیش‌نمایشِ واقعاً انجام‌شده) اجرا می‌شود؛ Jobِ
+       ``uploaded`` هرگز مستقیم اجرا نمی‌شود و Jobِ پایان‌یافته
+       هرگز دوباره اجرا نمی‌شود (ADR-61) و دو اجرایِ هم‌زمان با یک
+       compare-and-set رویِ ``status`` ناممکن است.
+    2. قابلیتِ واردات و سقفِ ردیفِ ماهانه دوباره بررسی می‌شود.
+    3. فایلِ منبع دوباره خوانده و *همه‌ی* ردیف‌ها در برابرِ وضعیتِ فعلیِ Store
+       دوباره اعتبارسنجی می‌شوند (پیش‌نمایشِ قدیمی مجوزِ تغییر نیست). اگر
+       حتی یک خطا یا سقفِ پلن وجود داشته باشد، هیچ تغییری اعمال نمی‌شود،
+       پیش‌نمایشِ تازه ذخیره می‌شود و ``ImportExecutionBlocked`` می‌افتد.
+    4. تنها آن‌گاه، کلِ تغییراتِ کسب‌وکاری درونِ *یک* تراکنشِ بیرونی اعمال
+       می‌شود؛ هر خطایِ ردیف یا استثنایِ پیش‌بینی‌نشده کلِ تغییراتِ این واردات
+       (کالا، تنوع، StockMovement، موجودیِ تجمیعی، مصرفِ سهمیه) را برمی‌گرداند و
+       نتیجه‌ی ناموفق + علت *بیرون* از آن تراکنش ذخیره می‌شود."""
+    if job.status == ImportJob.Status.UPLOADED:
+        raise ImportServiceError("این فایل هنوز بررسی نشده است. ابتدا باید پیش‌نمایشِ آن آماده شود؛ سپس می‌توانید آن را تأیید کنید.")
+    if job.status != ImportJob.Status.PREVIEW_READY:
+        raise ImportServiceError("این ورودِ اطلاعات قبلاً به پایان رسیده یا در حالِ اجراست — دوباره اجرا نمی‌شود.")
     from apps.subscriptions.services.enforcement import (
         check_import_row_budget,
         consume_import_rows,
@@ -1138,16 +1311,69 @@ def run_execution(job: ImportJob, *, actor) -> ImportJob:
     enforce_import_allowed(job.store)
     rows = read_job_rows(job)
     check_import_row_budget(job.store, len(rows))
+
+    previous_status = job.status
+    previous = {**job_preview_summary(job), "limit": bool(job.error_summary)}
+    claimed = ImportJob.objects.filter(
+        pk=job.pk, status=ImportJob.Status.PREVIEW_READY,
+    ).update(status=ImportJob.Status.PROCESSING, started_at=timezone.now(), dry_run=False)
+    if not claimed:
+        raise ImportServiceError("این ورودِ اطلاعات قبلاً به پایان رسیده یا در حالِ اجراست — دوباره اجرا نمی‌شود.")
+    job.status = ImportJob.Status.PROCESSING
+    job.dry_run = False
+
     record_audit_event(
         store=job.store, actor=actor, action_code="import.execution_started",
         object_type="ImportJob", object_id=str(job.pk),
         object_label=f"{job.get_import_type_display()} — حالتِ {job.get_mode_display()}",
     )
-    job = run_import(job, rows, actor=actor)
-    # مصرفِ ردیفِ ماهانه فقط پس از اجرایِ واقعی و یک‌بار به‌ازایِ هر Job ثبت
-    # می‌شود (Jobِ نهایی‌شده دوباره اجرا نمی‌شود ⇒ دوباره‌شماری رخ نمی‌دهد).
-    consume_import_rows(job.store, job.total_rows)
-    _generate_error_report(job)
+    try:
+        # (۳) بازبینیِ کاملِ لحظه‌یِ اجرا — بدونِ هیچ نوشتنی.
+        outcomes, limit_message = _validate_all(job, rows, actor=actor, batch_size=batch_size)
+        if limit_message or not outcomes or any(o.status in _PROBLEM_STATUSES for o in outcomes):
+            _reject_execution(job, outcomes, limit_message, previous=previous, actor=actor, reason="revalidation")
+
+        # (۴) اعمالِ همه‌یا‌هیچ.
+        try:
+            with transaction.atomic():
+                applied = _apply_all(job, rows, actor=actor, batch_size=batch_size)
+                consume_import_rows(job.store, len(applied))
+        except _RollbackImport as exc:
+            if any(o.status == ImportRowResult.RowStatus.FAILED for o in exc.outcomes):
+                return _finalize_rollback(job, rows, exc.outcomes, actor=actor, detail="یک ردیف اعمال نشد.")
+            # فقط ردیفِ «نامعتبر»: وضعیتِ Store هم‌زمان با اجرا عوض شده.
+            outcomes, limit_message = _validate_all(job, rows, actor=actor, batch_size=batch_size)
+            _reject_execution(job, outcomes, limit_message, previous=previous, actor=actor, reason="concurrent")
+        except Exception:  # noqa: BLE001 — هر خطایِ پیش‌بینی‌نشده: کلِ تراکنش برگشته است
+            logger.exception("import job %s rolled back after unexpected failure", job.pk)
+            return _finalize_rollback(
+                job, rows, [], actor=actor,
+                detail="خطایِ غیرمنتظره‌ای رخ داد؛ اگر تکرار شد با پشتیبانی تماس بگیرید.",
+            )
+    except BaseException:
+        # هر مسیرِ خروجِ دیگر (خطایِ دیتابیس هنگامِ اعتبارسنجی، رد شدنِ اجرا و ...):
+        # Job نباید در «در حالِ پردازش» گیر کند.
+        if ImportJob.objects.filter(pk=job.pk, status=ImportJob.Status.PROCESSING).update(
+            status=previous_status,
+        ):
+            job.status = previous_status
+        raise
+
+    # (۵) موفقیت: فقط حالا نتیجه‌ی نهایی ثبت می‌شود.
+    _store_outcomes(job, applied)
+    job.status = ImportJob.Status.COMPLETED
+    job.error_summary = ""
+    job.completed_at = timezone.now()
+    job.save(update_fields=_JOB_COUNTER_FIELDS)
+    if job.error_report_file:
+        job.error_report_file.delete(save=False)
+        job.save(update_fields=["error_report_file"])
+    record_audit_event(
+        store=job.store, actor=actor, action_code="import.execution_completed",
+        object_type="ImportJob", object_id=str(job.pk),
+        object_label=f"{job.get_import_type_display()} — {job.total_rows} ردیف",
+        after=_audit_counts(job),
+    )
     return job
 
 
@@ -1162,7 +1388,7 @@ def build_template_csv(import_type: str) -> str:
 
     columns = IMPORT_COLUMNS.get(import_type)
     if columns is None:
-        raise ImportServiceError(f"نوعِ واردات «{import_type}» نامعتبر است.")
+        raise ImportServiceError(f"نوعِ اطلاعاتِ «{import_type}» نامعتبر است.")
     buffer = io.StringIO()
     write_csv_rows(buffer, header=columns, rows=[])
     return buffer.getvalue()
@@ -1173,7 +1399,7 @@ def build_template_xlsx(store, import_type: str) -> bytes:
     from apps.dashboard.services import import_xlsx
 
     if import_type not in IMPORT_COLUMNS:
-        raise ImportServiceError(f"نوعِ واردات «{import_type}» نامعتبر است.")
+        raise ImportServiceError(f"نوعِ اطلاعاتِ «{import_type}» نامعتبر است.")
     return import_xlsx.build_template_xlsx(import_type, store)
 
 
@@ -1218,6 +1444,7 @@ def job_preview_summary(job: ImportJob) -> dict:
     return {
         "total": job.total_rows, "will_create": will_create, "will_update": will_update,
         "invalid": job.invalid_rows + job.failed_rows, "warnings": with_warnings,
+        "blockers": job_execution_blockers(job) if job.status == ImportJob.Status.PREVIEW_READY else [],
     }
 
 
@@ -1255,7 +1482,7 @@ def cleanup_import_files(store=None, *, now=None, retention_days: int = IMPORT_F
 def cancel_import_job(job: ImportJob, *, actor) -> ImportJob:
     """یک Jobِ هنوز اجرانشده را لغو می‌کند (فقط از حالت‌هایِ پیش از اجرا)."""
     if job.status in ImportJob.FINAL_STATUSES:
-        raise ImportServiceError("این Job قبلاً به پایان رسیده و قابلِ لغو نیست.")
+        raise ImportServiceError("این ورودِ اطلاعات قبلاً به پایان رسیده و قابلِ لغو نیست.")
     job.status = ImportJob.Status.CANCELLED
     job.completed_at = timezone.now()
     job.save(update_fields=["status", "completed_at"])

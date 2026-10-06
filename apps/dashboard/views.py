@@ -110,7 +110,7 @@ from apps.catalog.services.warehouse_service import (
     update_warehouse,
 )
 from apps.core.services.audit_service import list_audit_events, record_audit_event
-from apps.core.services.export_service import ExportError, run_export
+from apps.core.services.export_service import ExportError, generate_export
 from apps.subscriptions.services.entitlement_service import EntitlementError
 from apps.subscriptions.services import enforcement as subscription_enforcement
 from apps.dashboard.services import import_service, import_xlsx
@@ -3774,15 +3774,14 @@ def customer_bulk_action(request):
             count = customer_crm_service.set_internal_status(store, customer_ids, status, actor=request.user)
             messages.success(request, f"وضعیتِ داخلیِ {count} مشتری به‌روزرسانی شد")
         elif action == "export-selected":
-            run_export(
+            result = generate_export(
                 store, ExportJob.ExportType.CUSTOMERS, requested_by=request.user,
                 filters={"customer_ids": customer_ids},
             )
-            messages.success(request, "صادراتِ مشتریانِ انتخاب‌شده ساخته شد")
-            return redirect("dashboard:export-list")
+            return xlsx_download_response(result)
         else:
             messages.error(request, "اکشن فله‌ای نامعتبر است")
-    except customer_crm_service.CustomerCrmError as exc:
+    except (customer_crm_service.CustomerCrmError, ExportError, EntitlementError) as exc:
         messages.error(request, str(exc))
     return redirect("dashboard:customer-list")
 
@@ -6200,7 +6199,7 @@ def audit_log_table(request):
     return render(request, "dashboard/partials/audit_log_table_inner.html", _audit_log_list_context(request))
 
 
-# ---------------------------------------------------------------- صادرات (Export)
+# ---------------------------------------------------------------- خروج اطلاعات (Export)
 
 EXPORT_PERMISSION_BY_TYPE = {
     ExportJob.ExportType.PRODUCTS: IMPORT_EXPORT_VIEW,
@@ -6210,18 +6209,60 @@ EXPORT_PERMISSION_BY_TYPE = {
     ExportJob.ExportType.ORDERS: IMPORT_EXPORT_VIEW,
 }
 
+#: متنِ صفحه‌ی «خروج اطلاعات»؛ ``sensitive`` یعنی فایل شاملِ اطلاعاتِ شخصیِ مشتری است.
+EXPORT_TYPE_UI = {
+    ExportJob.ExportType.PRODUCTS: {
+        "label": "کالاها", "icon": "📦", "description": "فهرستِ کالاها با قیمت، موجودی، دسته‌بندی، برند و اطلاعاتِ سئو.", "sensitive": False,
+    },
+    ExportJob.ExportType.VARIANTS: {
+        "label": "تنوع‌ها", "icon": "🎨", "description": "تنوع‌هایِ هر کالا (رنگ، سایز و ...) با SKU، قیمت و موجودی.", "sensitive": False,
+    },
+    ExportJob.ExportType.INVENTORY: {
+        "label": "موجودی انبار", "icon": "🏬", "description": "موجودیِ هر کالا در هر انبار: موجودیِ فعلی، رزرو شده و قابل فروش.", "sensitive": False,
+    },
+    ExportJob.ExportType.CUSTOMERS: {
+        "label": "مشتریان", "icon": "👥", "description": "فهرستِ مشتریان با تعدادِ سفارش و مجموعِ خرید.", "sensitive": True,
+    },
+    ExportJob.ExportType.ORDERS: {
+        "label": "سفارش‌ها", "icon": "🧾", "description": "سفارش‌ها با وضعیت، مبلغ، پرداخت و روشِ ارسال.", "sensitive": True,
+    },
+}
+
+
+def xlsx_download_response(result):
+    """پاسخِ مستقیمِ دانلودِ یک خروج: بایت‌هایِ XLSX در همین پاسخ، به‌صورتِ ضمیمه؛
+    نه ذخیره می‌شود و نه کش."""
+    from django.utils.cache import add_never_cache_headers
+    from django.utils.http import content_disposition_header
+
+    response = HttpResponse(result.content, content_type=XLSX_CONTENT_TYPE)
+    response["Content-Disposition"] = content_disposition_header(True, result.filename)
+    response["Content-Length"] = str(len(result.content))
+    add_never_cache_headers(response)
+    return response
+
 
 @staff_required
 @permission_required(IMPORT_EXPORT_VIEW, CUSTOMER_EXPORT)
 def export_list(request):
+    from django.utils import timezone
+
     store = _resolve_dashboard_store(request)
-    jobs = ExportJob.objects.filter(store=store).select_related("requested_by").order_by("-created_at")[:100]
+    export_types = [
+        {"value": value, "label": label, **EXPORT_TYPE_UI[value]}
+        for value, label in ExportJob.ExportType.choices
+        if membership_has_permission(request.store_membership, EXPORT_PERMISSION_BY_TYPE[value])
+    ]
+    # فایل‌هایِ قدیمیِ پیش از «خروجِ مستقیم» تا زمانِ انقضایِ خودشان قابلِ دانلودند؛
+    # خروجِ تازه هرگز اینجا نمی‌آید (فایلی نگه داشته نمی‌شود).
+    legacy_jobs = [
+        job for job in ExportJob.objects.filter(
+            store=store, status=ExportJob.Status.COMPLETED, expires_at__gt=timezone.now(),
+        ).exclude(file="").order_by("-created_at")[:20]
+        if membership_has_permission(request.store_membership, EXPORT_PERMISSION_BY_TYPE.get(job.export_type, IMPORT_EXPORT_VIEW))
+    ]
     return render(request, "dashboard/export_list.html", {
-        "jobs": jobs, "active_page": "exports",
-        "export_types": [
-            (value, label) for value, label in ExportJob.ExportType.choices
-            if membership_has_permission(request.store_membership, EXPORT_PERMISSION_BY_TYPE[value])
-        ],
+        "active_page": "exports", "export_types": export_types, "legacy_jobs": legacy_jobs,
     })
 
 
@@ -6229,11 +6270,13 @@ def export_list(request):
 @staff_required
 @permission_required(IMPORT_EXPORT_MANAGE, CUSTOMER_EXPORT)
 def export_create(request):
+    """«دریافت فایل اکسل»: فایل در همین درخواست ساخته و به‌صورتِ ضمیمه برگردانده
+    می‌شود؛ هیچ فایلی روی سرور نگه داشته نمی‌شود."""
     store = _resolve_dashboard_store(request)
     export_type = request.POST.get("export_type", "")
     required_permission = EXPORT_PERMISSION_BY_TYPE.get(export_type)
     if required_permission is None:
-        messages.error(request, "نوعِ صادراتِ نامعتبر است.")
+        messages.error(request, "نوعِ خروجِ نامعتبر است.")
         return redirect("dashboard:export-list")
     # CUSTOMER_EXPORT is deliberately its own gate (PII), separate from the
     # general IMPORT_EXPORT_MANAGE that covers Product/Variant/Inventory/Order.
@@ -6241,11 +6284,14 @@ def export_create(request):
         return render(request, "dashboard/403.html", status=403)
 
     try:
-        run_export(store, export_type, requested_by=request.user)
-        messages.success(request, "صادرات با موفقیت انجام شد")
-    except ExportError as exc:
+        result = generate_export(store, export_type, requested_by=request.user)
+    except (ExportError, EntitlementError) as exc:
         messages.error(request, str(exc))
-    return redirect("dashboard:export-list")
+        return redirect("dashboard:export-list")
+    except Exception:  # noqa: BLE001 — خطایِ ساخت قبلاً در گزارشِ رخدادها ثبت شده است
+        messages.error(request, "ساختِ فایلِ اکسل انجام نشد. دوباره تلاش کنید؛ سهمیه‌ی شما مصرف نشد.")
+        return redirect("dashboard:export-list")
+    return xlsx_download_response(result)
 
 
 @staff_required
@@ -6261,7 +6307,7 @@ def export_download(request, pk):
     record_audit_event(
         store=store, actor=request.user, action_code="export.downloaded",
         object_type="ExportJob", object_id=str(job.pk),
-        object_label=f"دانلودِ صادراتِ {job.get_export_type_display()}",
+        object_label=f"دریافتِ فایلِ قدیمیِ خروجِ {job.get_export_type_display()}",
     )
     # فایل‌هایِ تازه XLSX‌اند؛ خروجی‌هایِ CSVِ قدیمی (پیش از این بازطراحی) هنوز
     # تا زمانِ انقضا با قالب و نوعِ واقعیِ خودشان دانلود می‌شوند.
@@ -6274,7 +6320,7 @@ def export_download(request, pk):
     return response
 
 
-# ---------------------------------------------------------------- واردات (Import)
+# ---------------------------------------------------------------- ورود اطلاعات (Import)
 
 IMPORT_ROW_RESULTS_PER_PAGE = 50
 
@@ -6380,11 +6426,16 @@ def _import_detail_context(request, job):
     for row in page_obj:
         row.described_errors = import_xlsx.describe_errors(job.import_type, row.errors)
     source_format = import_service.job_source_format(job)
+    summary = import_service.job_preview_summary(job)
     return {
         "job": job, "active_page": "imports",
         "row_results": page_obj, "page_obj": page_obj, "paginator": paginator,
         "can_manage_imports": membership_has_permission(request.store_membership, IMPORT_EXPORT_MANAGE),
-        "summary": import_service.job_preview_summary(job),
+        "summary": summary,
+        "can_execute": (
+            job.status == ImportJob.Status.PREVIEW_READY and not summary["blockers"]
+            and membership_has_permission(request.store_membership, IMPORT_EXPORT_MANAGE)
+        ),
         "mode_label": import_xlsx.MODE_LABELS.get(job.mode, job.get_mode_display()),
         "mode_description": import_xlsx.MODE_DESCRIPTIONS.get(job.mode, ""),
         "uses_mode": IMPORT_TYPE_UI.get(job.import_type, {}).get("uses_mode", True),
@@ -6406,17 +6457,26 @@ def import_detail(request, pk):
 @staff_required
 @permission_required(IMPORT_EXPORT_MANAGE)
 def import_execute(request, pk):
+    """تأییدِ اجرایِ واقعی. اجرا همه‌یا‌هیچ است و پیش از هر تغییر دوباره اعتبارسنجی
+    می‌شود؛ هیچ مسیرِ POSTِ مستقیمی نمی‌تواند فایلِ دارایِ خطا را اجرا کند."""
     store = _resolve_dashboard_store(request)
     job = get_object_or_404(ImportJob, pk=pk, store=store)
     try:
         import_service.run_execution(job, actor=request.user)
-        messages.success(
-            request,
-            f"واردات انجام شد — {job.created_rows} ایجاد، {job.updated_rows} به‌روزرسانی، "
-            f"{job.skipped_rows} ردشده، {job.failed_rows} ناموفق",
-        )
     except ImportServiceError as exc:
         messages.error(request, str(exc))
+    except EntitlementError as exc:
+        messages.error(request, f"{exc} هیچ تغییری روی فروشگاه اعمال نشد.")
+    else:
+        if job.status == ImportJob.Status.COMPLETED:
+            messages.success(
+                request,
+                f"ورودِ اطلاعات با موفقیت انجام شد — {job.created_rows} مورد ساخته و "
+                f"{job.updated_rows} مورد بروزرسانی شد"
+                + (f" ({job.skipped_rows} ردیف بدونِ تغییر بود)" if job.skipped_rows else "") + ".",
+            )
+        else:
+            messages.error(request, job.error_summary or "ورودِ اطلاعات انجام نشد؛ هیچ تغییری اعمال نشد.")
     return redirect("dashboard:import-detail", pk=job.pk)
 
 
@@ -6428,7 +6488,7 @@ def import_cancel(request, pk):
     job = get_object_or_404(ImportJob, pk=pk, store=store)
     try:
         import_service.cancel_import_job(job, actor=request.user)
-        messages.info(request, "واردات لغو شد")
+        messages.info(request, "ورودِ اطلاعات لغو شد")
     except ImportServiceError as exc:
         messages.error(request, str(exc))
     return redirect("dashboard:import-detail", pk=job.pk)
@@ -6494,7 +6554,7 @@ def import_template(request, import_type):
         raise Http404
     record_audit_event(
         store=store, actor=request.user, action_code="import.template_downloaded",
-        object_type="ImportTemplate", object_id=import_type, object_label=f"قالبِ واردات {import_type}",
+        object_type="ImportTemplate", object_id=import_type, object_label=f"قالبِ ورودِ اطلاعات {import_type}",
     )
     response = HttpResponse(content, content_type=XLSX_CONTENT_TYPE)
     response["Content-Disposition"] = f'attachment; filename="{import_type}-import-template.xlsx"'

@@ -1,48 +1,61 @@
 {% extends "dashboard/base_admin.html" %}
-{% block title %}صادراتِ داده‌ها | پنل مدیریت{% endblock %}
-{% block page_title %}صادراتِ داده‌ها{% endblock %}
-{% block page_sub %}فایل‌هایِ اکسل (xlsx) تولیدشده از اطلاعاتِ فروشگاه — مستقیم در اکسل باز می‌شوند و پس از چند روز به‌صورتِ خودکار منقضی می‌شوند{% endblock %}
+{% load persian %}
+{% block title %}خروج اطلاعات | پنل مدیریت{% endblock %}
+{% block page_title %}خروج اطلاعات{% endblock %}
+{% block page_sub %}از اطلاعاتِ فعلیِ فروشگاه یک فایلِ اکسل تهیه کنید{% endblock %}
+
+{% block extra_css %}
+<style>
+.exp-intro{margin:0 0 16px;padding:12px 16px;border-radius:12px;background:var(--blue-soft);font-size:13px;line-height:2}
+.exp-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.exp-card{display:flex;flex-direction:column;gap:8px;padding:16px;border:1px solid var(--border);border-radius:14px;background:var(--card)}
+.exp-card b{font-size:14.5px}
+.exp-card p{margin:0;color:var(--muted);font-size:12.5px;line-height:1.9;flex:1}
+.exp-card form{margin:0}
+.exp-privacy{margin:0;padding:8px 10px;border-radius:10px;background:var(--amber-soft);font-size:11.5px;line-height:1.8}
+.exp-note{margin-top:16px;color:var(--muted);font-size:12px;line-height:1.9}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="card" style="margin-bottom:16px">
-  <div class="card-head"><b>ساختِ صادراتِ تازه</b></div>
-  <form method="post" action="{% url 'dashboard:export-create' %}" style="display:flex;gap:10px;align-items:center;padding:14px 18px;flex-wrap:wrap">
-    {% csrf_token %}
-    <select class="inp" name="export_type" style="width:220px">
-      {% for value, label in export_types %}
-      <option value="{{ value }}">{{ label }}</option>
-      {% endfor %}
-    </select>
-    <button type="submit" class="btn btn-primary">ساختِ فایلِ اکسل</button>
-  </form>
+<p class="exp-intro">از اطلاعاتِ فعلیِ فروشگاه یک فایلِ اکسل تهیه کنید. ساختِ فایل هیچ تغییری در فروشگاه ایجاد نمی‌کند و فایل روی راستی‌سی نگهداری نمی‌شود.</p>
+
+<div class="exp-grid">
+  {% for item in export_types %}
+  <div class="exp-card">
+    <b>{{ item.icon }} {{ item.label }}</b>
+    <p>{{ item.description }}</p>
+    {% if item.sensitive %}<p class="exp-privacy">🔒 این فایل ممکن است شاملِ اطلاعاتِ شخصیِ مشتریان باشد؛ آن را در جایی امن نگه دارید.</p>{% endif %}
+    <form method="post" action="{% url 'dashboard:export-create' %}">
+      {% csrf_token %}
+      <input type="hidden" name="export_type" value="{{ item.value }}">
+      <button type="submit" class="btn btn-primary">دریافت فایل اکسل</button>
+    </form>
+  </div>
+  {% empty %}
+  <p style="color:var(--muted)">شما اجازه‌ی خروجِ هیچ‌یک از این اطلاعات را ندارید.</p>
+  {% endfor %}
 </div>
 
-<div class="card">
-  <div class="card-head"><b>تاریخچه‌ی صادرات</b></div>
+<p class="exp-note">فایل بلافاصله پس از ساخته شدن دانلود می‌شود. اگر دوباره به فایل نیاز داشتید، دوباره آن را دریافت کنید؛ فایل‌ها روی سرور ذخیره نمی‌شوند.</p>
+
+{% if legacy_jobs %}
+<div class="card" style="margin-top:20px">
+  <div class="card-head"><b>فایل‌هایِ قدیمی</b> <small style="color:var(--muted)">— پیش از این روشِ جدید ساخته شده‌اند و پس از زمانِ انقضایِ خود حذف می‌شوند</small></div>
   <div class="table-wrap"><table>
-    <thead><tr><th>نوع</th><th>وضعیت</th><th>تعداد ردیف</th><th>درخواست‌دهنده</th><th>زمانِ ایجاد</th><th>دانلود</th></tr></thead>
+    <thead><tr><th>نوع</th><th>تعدادِ ردیف</th><th>زمانِ ساخت</th><th>انقضا</th><th></th></tr></thead>
     <tbody>
-    {% for job in jobs %}
+    {% for job in legacy_jobs %}
       <tr>
         <td>{{ job.get_export_type_display }}</td>
-        <td>
-          {% if job.status == "completed" %}<span class="badge b-green">تکمیل‌شده</span>
-          {% elif job.status == "failed" %}<span class="badge b-red">ناموفق</span>
-          {% elif job.status == "expired" %}<span class="badge b-amber">منقضی‌شده</span>
-          {% else %}<span class="badge b-amber">{{ job.get_status_display }}</span>{% endif %}
-        </td>
-        <td>{{ job.row_count }}</td>
-        <td>{{ job.requested_by.username|default:"—" }}</td>
+        <td>{{ job.row_count|fa_number }}</td>
         <td style="white-space:nowrap;color:var(--muted);font-size:12px">{{ job.created_at|date:"Y-m-d H:i" }}</td>
-        <td>
-          {% if job.status == "completed" %}
-          <a class="btn btn-sm" href="{% url 'dashboard:export-download' job.pk %}">دانلود</a>
-          {% else %}—{% endif %}
-        </td>
+        <td style="white-space:nowrap;color:var(--muted);font-size:12px">{{ job.expires_at|date:"Y-m-d" }}</td>
+        <td><a class="btn btn-sm" href="{% url 'dashboard:export-download' job.pk %}">دریافت فایل</a></td>
       </tr>
-    {% empty %}
-      <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:30px">هنوز هیچ صادراتی انجام نشده است</td></tr>
     {% endfor %}
     </tbody>
   </table></div>
 </div>
+{% endif %}
 {% endblock %}

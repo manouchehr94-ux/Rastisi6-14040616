@@ -353,16 +353,14 @@ class ExportJob(models.Model):
     """یک درخواستِ صادراتِ CSV برای یک Store — نگاه کنید به ADR-52 و
     ``docs/architecture/SAAS_DOMAIN_DECISIONS.md``.
 
-    این کدبیس هیچ صف کارِ پس‌زمینه‌ای (Celery و مشابه آن) ندارد؛ بنابراین
-    اجرای واقعیِ صادرات همگام و در همان چرخه‌ی درخواست/پاسخ انجام می‌شود —
-    وضعیت‌های ``pending``/``processing``/``completed`` در عمل در یک تابعِ
-    ویو رخ می‌دهند، نه در طولِ زمان. این رکورد همچنان به‌عنوانِ تاریخچه/ابزارِ
-    پیگیری و دانلودِ بعدیِ فایل نگه داشته می‌شود — این یک تصمیمِ آگاهانه‌ی
-    محدودکننده‌ی دامنه است، نه ادعای صفِ کارِ واقعی.
-
-    فایل همیشه در ``apps.core.storage.private_storage`` نوشته می‌شود — هرگز
-    زیرِ ``MEDIA_ROOT``/``MEDIA_URL`` عمومی؛ تنها راهِ مجازِ دانلود، یک ویوِ
-    authenticated و Store-scoped است (نگاه کنید به ``export_service``)."""
+    از «خروجِ مستقیم» به بعد (data-transfer-safety-v1) این رکورد *فقط فرادادهٔ
+    حسابرسی* است: فایلِ XLSX در همان پاسخِ HTTP برگردانده می‌شود و هیچ‌جا ذخیره
+    نمی‌شود، پس برایِ خروجِ تازه ``file`` خالی و ``expires_at`` بدونِ مقدار است.
+    فایل‌هایِ قدیمی (پیش از این تغییر) تا زمانِ انقضایِ خودشان با همین رکورد قابلِ
+    دانلودند و ``cleanup_expired_exports`` آن‌ها را حذف می‌کند. فایلِ قدیمی، اگر
+    وجود داشته باشد، در ``apps.core.storage.private_storage`` است — هرگز زیرِ
+    ``MEDIA_ROOT``/``MEDIA_URL`` عمومی و فقط با ویوی authenticated و Store-scoped.
+    """
 
     class ExportType(models.TextChoices):
         PRODUCTS = "products", "کالاها"
@@ -381,7 +379,7 @@ class ExportJob(models.Model):
     store = models.ForeignKey(
         "stores.Store", verbose_name="فروشگاه", on_delete=models.CASCADE, related_name="export_jobs",
     )
-    export_type = models.CharField("نوع صادرات", max_length=20, choices=ExportType.choices)
+    export_type = models.CharField("نوعِ خروجِ اطلاعات", max_length=20, choices=ExportType.choices)
     status = models.CharField(
         "وضعیت", max_length=12, choices=Status.choices, default=Status.PENDING, db_index=True,
     )
@@ -403,8 +401,8 @@ class ExportJob(models.Model):
     expires_at = models.DateTimeField("زمان انقضا", null=True, blank=True, db_index=True)
 
     class Meta:
-        verbose_name = "درخواست صادرات"
-        verbose_name_plural = "درخواست‌های صادرات"
+        verbose_name = "درخواستِ خروجِ اطلاعات"
+        verbose_name_plural = "درخواست‌هایِ خروجِ اطلاعات"
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["store", "-created_at"], name="idx_export_store_created"),
@@ -462,7 +460,7 @@ class ImportJob(models.Model):
     store = models.ForeignKey(
         "stores.Store", verbose_name="فروشگاه", on_delete=models.CASCADE, related_name="import_jobs",
     )
-    import_type = models.CharField("نوعِ واردات", max_length=20, choices=ImportType.choices)
+    import_type = models.CharField("نوعِ اطلاعاتِ ورودی", max_length=20, choices=ImportType.choices)
     original_filename = models.CharField("نامِ اصلیِ فایل", max_length=255, blank=True, default="")
     source_file = models.FileField(
         "فایلِ منبع", upload_to=import_job_upload_path, storage=private_storage,
@@ -501,8 +499,8 @@ class ImportJob(models.Model):
     completed_at = models.DateTimeField("زمانِ پایان", null=True, blank=True)
 
     class Meta:
-        verbose_name = "درخواستِ واردات"
-        verbose_name_plural = "درخواست‌هایِ واردات"
+        verbose_name = "درخواستِ ورودِ اطلاعات"
+        verbose_name_plural = "درخواست‌هایِ ورودِ اطلاعات"
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["store", "-created_at"], name="idx_import_store_created"),
@@ -534,7 +532,7 @@ class ImportRowResult(models.Model):
         FAILED = "failed", "ناموفق"
 
     import_job = models.ForeignKey(
-        ImportJob, verbose_name="درخواستِ واردات", on_delete=models.CASCADE, related_name="row_results",
+        ImportJob, verbose_name="درخواستِ ورودِ اطلاعات", on_delete=models.CASCADE, related_name="row_results",
     )
     row_number = models.PositiveIntegerField("شماره‌ی ردیف")
     source_identifier = models.CharField("شناسه‌ی منبع", max_length=120, blank=True, default="")
@@ -549,8 +547,8 @@ class ImportRowResult(models.Model):
     updated_at = models.DateTimeField("زمانِ به‌روزرسانی", auto_now=True)
 
     class Meta:
-        verbose_name = "نتیجه‌ی ردیفِ واردات"
-        verbose_name_plural = "نتایجِ ردیف‌هایِ واردات"
+        verbose_name = "نتیجه‌ی ردیفِ ورودِ اطلاعات"
+        verbose_name_plural = "نتایجِ ردیف‌هایِ ورودِ اطلاعات"
         ordering = ["import_job_id", "row_number"]
         indexes = [
             models.Index(fields=["import_job", "status"], name="idx_importrow_job_status"),

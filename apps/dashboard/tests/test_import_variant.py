@@ -51,10 +51,13 @@ class VariantImportTestCase(TestCase):
         self.blue_value = self.color_option.values.get(label="آبی")
 
     def _job(self, csv_text, *, mode=ImportJob.Mode.UPSERT, idempotency_key=""):
-        return import_service.create_import_job(
+        job = import_service.create_import_job(
             self.store, import_type=ImportJob.ImportType.VARIANTS, uploaded_file=_csv_upload(csv_text),
             mode=mode, requested_by=self.actor, idempotency_key=idempotency_key,
         )
+        # execution requires a completed preview (UPLOADED jobs are never executable)
+        import_service.run_preview(job, actor=self.actor)
+        return job
 
 
 class NewCombinationTests(VariantImportTestCase):
@@ -78,7 +81,8 @@ class NewCombinationTests(VariantImportTestCase):
     def test_missing_option_value_for_new_combination_rejected(self):
         csv_text = VARIANT_HEADER + ",SKU-VIMP-1,,VAR-GREEN,,رنگ,سبز,,,1000,,,1,,,\n"
         job = self._job(csv_text, mode=ImportJob.Mode.CREATE_ONLY)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
         self.assertEqual(self.product.variants.count(), 0)
@@ -147,7 +151,8 @@ class ExistingCombinationTests(VariantImportTestCase):
     def test_create_only_rejects_existing_combination(self):
         csv_text = VARIANT_HEADER + ",SKU-VIMP-1,,,,رنگ,قرمز,,,1000,,,,,,\n"
         job = self._job(csv_text, mode=ImportJob.Mode.CREATE_ONLY)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
@@ -168,14 +173,16 @@ class ValidationTests(VariantImportTestCase):
     def test_missing_product_reference_rejected(self):
         csv_text = VARIANT_HEADER + ",,,,,,,,,,,,,,,\n"
         job = self._job(csv_text, mode=ImportJob.Mode.UPSERT)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
     def test_invalid_option_code_rejected(self):
         csv_text = VARIANT_HEADER + ",SKU-VIMP-1,,,,اندازه,بزرگ,,,1000,,,,,,\n"
         job = self._job(csv_text, mode=ImportJob.Mode.UPSERT)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
@@ -199,7 +206,8 @@ class LegacyProductRejectionTests(VariantImportTestCase):
         )
         csv_text = VARIANT_HEADER + ",SKU-LEGACY-1,,,,,,,,,,,,,,\n"
         job = self._job(csv_text, mode=ImportJob.Mode.UPSERT)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
@@ -223,7 +231,8 @@ class TenantIsolationTests(VariantImportTestCase):
             f"{self.foreign_product.pk},,,,,,,,,,,,,,,\n"
         )
         job = self._job(csv_text, mode=ImportJob.Mode.UPSERT)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
@@ -237,7 +246,8 @@ class TenantIsolationTests(VariantImportTestCase):
             f",SKU-VIMP-1,{foreign_variant.pk},,,,,,,,,,,,,\n"
         )
         job = self._job(csv_text, mode=ImportJob.Mode.UPSERT)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
@@ -256,11 +266,14 @@ XLSX_VARIANT_HEADERS = [
 
 class XlsxVariantImportTests(VariantImportTestCase):
     def _xjob(self, rows, *, mode=ImportJob.Mode.UPSERT):
-        return import_service.create_import_job(
+        job = import_service.create_import_job(
             self.store, import_type=ImportJob.ImportType.VARIANTS,
             uploaded_file=xlsx_upload(XLSX_VARIANT_HEADERS, rows, name="variants.xlsx"),
             mode=mode, requested_by=self.actor,
         )
+        # execution requires a completed preview (UPLOADED jobs are never executable)
+        import_service.run_preview(job, actor=self.actor)
+        return job
 
     def _row(self, **kw):
         base = {

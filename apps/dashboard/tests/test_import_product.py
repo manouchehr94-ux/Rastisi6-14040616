@@ -45,10 +45,13 @@ class ProductImportTestCase(TestCase):
         self.actor = User.objects.create_user(username="imp-owner", password="p", is_staff=True)
 
     def _job(self, csv_text, *, mode=ImportJob.Mode.UPSERT, import_type=ImportJob.ImportType.PRODUCTS, idempotency_key=""):
-        return import_service.create_import_job(
+        job = import_service.create_import_job(
             self.store, import_type=import_type, uploaded_file=_csv_upload(csv_text),
             mode=mode, requested_by=self.actor, idempotency_key=idempotency_key,
         )
+        # execution requires a completed preview (UPLOADED jobs are never executable)
+        import_service.run_preview(job, actor=self.actor)
+        return job
 
 
 class PreviewTests(ProductImportTestCase):
@@ -97,7 +100,8 @@ class CreateExecutionTests(ProductImportTestCase):
         )
         csv_text = PRODUCT_HEADER + ",SKU-EXIST-1,به‌روزرسانی,,,,,leaf-imp,999999,1,,,,,\n"
         job = self._job(csv_text, mode=ImportJob.Mode.CREATE_ONLY)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
         self.assertEqual(job.created_rows, 0)
@@ -132,7 +136,8 @@ class UpdateExecutionTests(ProductImportTestCase):
     def test_update_only_rejects_unmatched_row(self):
         csv_text = PRODUCT_HEADER + ",SKU-NO-MATCH,کالا,,,,,leaf-imp,1000,1,,,,,\n"
         job = self._job(csv_text, mode=ImportJob.Mode.UPDATE_ONLY)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
         self.assertFalse(Product.objects.filter(sku="SKU-NO-MATCH").exists())
@@ -164,21 +169,24 @@ class ReferenceValidationTests(ProductImportTestCase):
     def test_invalid_category_code_rejected(self):
         csv_text = PRODUCT_HEADER + ",SKU-BADCAT,کالا,,,,,no-such-category,1000,1,,,,,\n"
         job = self._job(csv_text, mode=ImportJob.Mode.CREATE_ONLY)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
     def test_invalid_brand_code_rejected(self):
         csv_text = PRODUCT_HEADER + ",SKU-BADBRAND,کالا,,,,no-such-brand,leaf-imp,1000,1,,,,,\n"
         job = self._job(csv_text, mode=ImportJob.Mode.CREATE_ONLY)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
     def test_invalid_tax_class_code_rejected(self):
         csv_text = PRODUCT_HEADER + ",SKU-BADTAX,کالا,,,,,leaf-imp,1000,1,,,no-such-tax,,\n"
         job = self._job(csv_text, mode=ImportJob.Mode.CREATE_ONLY)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
@@ -191,7 +199,8 @@ class ReferenceValidationTests(ProductImportTestCase):
         import_service.run_execution(job, actor=self.actor)
         # Now attempt to create a second, *different* Product with the same SKU in a new job.
         job2 = self._job(csv_text, mode=ImportJob.Mode.CREATE_ONLY)
-        import_service.run_execution(job2, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job2, actor=self.actor)
         job2.refresh_from_db()
         self.assertEqual(job2.invalid_rows, 1)
         self.assertEqual(Product.objects.filter(sku="SKU-DUP-1").count(), 1)
@@ -212,7 +221,8 @@ class TenantIsolationTests(ProductImportTestCase):
     def test_foreign_product_id_rejected(self):
         csv_text = f"product_id,sku,name,slug,barcode,status,brand_code,category_code,price,stock,weight_grams,requires_shipping,tax_class_code,seo_title,seo_description\n{self.foreign_product.pk},,دستکاری,,,,,,,,,,,,\n"
         job = self._job(csv_text, mode=ImportJob.Mode.UPSERT)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
         self.foreign_product.refresh_from_db()
@@ -249,31 +259,27 @@ class IdempotencyTests(ProductImportTestCase):
         with self.assertRaises(import_service.ImportServiceError):
             self._job(csv_text, idempotency_key="my-key-1")
 
-    def test_retry_after_partial_failure_does_not_double_apply(self):
-        # A file where row 1 is valid and row 2 is invalid → completed_with_errors.
+    def test_file_with_one_invalid_row_applies_nothing_and_cannot_be_forced(self):
         csv_text = (
             PRODUCT_HEADER
             + ",SKU-PARTIAL-1,خوب,,,,,leaf-imp,1000,1,,,,,\n"
             + ",,,,,,,,,,,,,,\n"  # invalid: missing everything
         )
         job = self._job(csv_text, mode=ImportJob.Mode.UPSERT)
-        import_service.run_execution(job, actor=self.actor)
-        job.refresh_from_db()
-        self.assertEqual(job.status, ImportJob.Status.COMPLETED_WITH_ERRORS)
-        self.assertEqual(job.created_rows, 1)
-        self.assertEqual(Product.objects.filter(store=self.store, sku="SKU-PARTIAL-1").count(), 1)
-        # Retrying the same (now-final) job is blocked — no double creation.
-        with self.assertRaises(import_service.ImportServiceError):
-            import_service.run_execution(job, actor=self.actor)
-        self.assertEqual(Product.objects.filter(store=self.store, sku="SKU-PARTIAL-1").count(), 1)
+        for _attempt in range(2):  # retrying can never push the valid row through
+            with self.assertRaises(import_service.ImportExecutionBlocked):
+                import_service.run_execution(job, actor=self.actor)
+            job.refresh_from_db()
+            self.assertEqual(job.status, ImportJob.Status.PREVIEW_READY)
+            self.assertEqual(job.created_rows, 0)
+            self.assertFalse(Product.objects.filter(store=self.store, sku="SKU-PARTIAL-1").exists())
 
 
 class BatchIsolationTests(ProductImportTestCase):
-    def test_apply_failure_on_one_row_does_not_lose_earlier_rows_in_batch(self):
-        # Two create rows sharing an explicit slug: row 1 succeeds, row 2's
-        # save hits the (store, slug) uniqueness → the row fails, but row 1
-        # (already applied earlier in the same batch) must persist — proving
-        # the per-row savepoint keeps the batch transaction usable.
+    def test_apply_failure_on_a_later_row_rolls_back_earlier_rows(self):
+        # Two create rows sharing an explicit slug pass validation, but row 2's save
+        # hits the (store, slug) uniqueness at apply time. Import is all-or-nothing, so
+        # row 1 (already written earlier in the same run) must be rolled back too.
         csv_text = (
             PRODUCT_HEADER
             + ",SKU-BATCH-1,اول,dup-slug,,,,leaf-imp,1000,1,,,,,\n"
@@ -282,10 +288,15 @@ class BatchIsolationTests(ProductImportTestCase):
         job = self._job(csv_text, mode=ImportJob.Mode.CREATE_ONLY)
         import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
-        self.assertEqual(job.created_rows, 1)
+        self.assertEqual(job.status, ImportJob.Status.FAILED)
+        self.assertEqual(job.created_rows, 0)
         self.assertEqual(job.failed_rows, 1)
-        self.assertTrue(Product.objects.filter(store=self.store, sku="SKU-BATCH-1").exists())
-        self.assertFalse(Product.objects.filter(store=self.store, sku="SKU-BATCH-2").exists())
+        self.assertIn("هیچ تغییری", job.error_summary)
+        self.assertFalse(Product.objects.filter(store=self.store, sku__in=["SKU-BATCH-1", "SKU-BATCH-2"]).exists())
+        # the failure details survive the rollback
+        failed = ImportRowResult.objects.get(import_job=job, status=ImportRowResult.RowStatus.FAILED)
+        self.assertEqual(failed.row_number, 2)
+        self.assertTrue(failed.errors)
 
 
 class BoundedQueryTests(ProductImportTestCase):
@@ -336,11 +347,14 @@ XLSX_PRODUCT_HEADERS = [
 
 class XlsxProductImportTests(ProductImportTestCase):
     def _xjob(self, rows, *, headers=None, mode=ImportJob.Mode.UPSERT, **upload_kwargs):
-        return import_service.create_import_job(
+        job = import_service.create_import_job(
             self.store, import_type=ImportJob.ImportType.PRODUCTS,
             uploaded_file=xlsx_upload(headers or XLSX_PRODUCT_HEADERS, rows, name="products.xlsx", **upload_kwargs),
             mode=mode, requested_by=self.actor,
         )
+        # execution requires a completed preview (UPLOADED jobs are never executable)
+        import_service.run_preview(job, actor=self.actor)
+        return job
 
     def _row(self, **overrides):
         base = {
@@ -496,7 +510,8 @@ class XlsxProductImportTests(ProductImportTestCase):
             self.assertIn("فرمول", " ".join(result.errors))
             self.assertEqual(import_xlsx.describe_errors("products", result.errors)[0]["column"], "نام کالا")
             job = self._xjob([self._row(sku="F-2", price=evil)])
-            import_service.run_execution(job, actor=self.actor)
+            with self.assertRaises(import_service.ImportExecutionBlocked):
+                import_service.run_execution(job, actor=self.actor)
             self.assertFalse(Product.objects.filter(store=self.store, sku__in=["F-1", "F-2"]).exists())
 
     def test_literal_text_starting_with_equals_is_data_not_formula(self):
@@ -521,6 +536,7 @@ class XlsxProductImportTests(ProductImportTestCase):
             self.store, import_type=ImportJob.ImportType.PRODUCTS,
             uploaded_file=SimpleUploadedFile("p.xlsx", buf.getvalue()), mode=ImportJob.Mode.UPSERT, requested_by=self.actor,
         )
+        import_service.run_preview(job, actor=self.actor)
         import_service.run_execution(job, actor=self.actor)
         self.assertEqual(Product.objects.get(sku="LIT-1").name, "=نام")
 
@@ -533,9 +549,8 @@ class XlsxProductImportTests(ProductImportTestCase):
         self.assertIn("ستون ناشناس", " ".join(result.warnings))
 
     def test_file_without_recognised_columns_is_rejected(self):
-        job = self._xjob([["a", "b"]], headers=["foo", "bar"])
         with self.assertRaises(import_service.ImportServiceError):
-            import_service.run_preview(job, actor=self.actor)
+            self._xjob([["a", "b"]], headers=["foo", "bar"])  # the preview step rejects the file
 
     def test_legacy_internal_headers_inside_xlsx_still_work(self):
         headers = ["sku", "name", "status", "brand_code", "category_code", "price", "stock"]
