@@ -121,6 +121,7 @@ INSTALLED_APPS = [
     "apps.portal",
     "apps.notifications",
     "apps.engagement",
+    "apps.chat_integration",
 ]
 
 # apps.stores.middleware.StoreResolutionMiddleware runs immediately after
@@ -180,6 +181,7 @@ TEMPLATES = [
                 "apps.dashboard.context_processors.platform_link",
                 "apps.dashboard.context_processors.storefront_link",
                 "apps.dashboard.context_processors.nav_badges",
+                "apps.chat_integration.context_processors.chat_permissions",
             ],
         },
     },
@@ -519,3 +521,24 @@ EMAIL_USE_TLS = env_bool("DJANGO_EMAIL_USE_TLS", default=True)
 DEFAULT_FROM_EMAIL = env_str("DJANGO_DEFAULT_FROM_EMAIL", "no-reply@rastisi.ir")
 
 
+# ---------------------------------------------------------------------------
+# RastiChat integration (apps.chat_integration) — OFF by default.
+#
+# RastiChat is a standalone chat service; RastiSi is one of its host applications (generic Integration Contract v1).
+# Deploying this code enables NOTHING: the global flag below defaults to False, and even when it is on, a store only
+# gets chat after a platform superuser enables it for that store (platform admin -> store page).
+# The host signs short-lived tokens with its OWN Ed25519 private key; RastiChat only ever stores the public key.
+# ---------------------------------------------------------------------------
+RASTICHAT_INTEGRATION_ENABLED = env_bool("RASTICHAT_INTEGRATION_ENABLED", default=False)
+RASTICHAT_BASE_URL = env_str("RASTICHAT_BASE_URL", "")                    # e.g. https://chatchat.rastisi.ir
+RASTICHAT_WS_BASE = env_str("RASTICHAT_WS_BASE", "")                      # default: derived from the base URL (wss://…/ws)
+RASTICHAT_WIDGET_URL = env_str("RASTICHAT_WIDGET_URL", "")                # the built widget script
+RASTICHAT_DASHBOARD_URL = env_str("RASTICHAT_DASHBOARD_URL", "")          # operator dashboard (with its base path)
+RASTICHAT_PLATFORM_DASHBOARD_URL = env_str("RASTICHAT_PLATFORM_DASHBOARD_URL", "")  # platform dashboard (platform owner inbox)
+RASTICHAT_INTEGRATION_SLUG = env_str("RASTICHAT_INTEGRATION_SLUG", "rastisi")
+RASTICHAT_TOKEN_AUDIENCE = env_str("RASTICHAT_TOKEN_AUDIENCE", "rastichat")
+RASTICHAT_KEY_ID = env_str("RASTICHAT_KEY_ID", "")                        # the `kid` RastiChat issued for our public key
+RASTICHAT_PRIVATE_KEY = env_str("RASTICHAT_PRIVATE_KEY", "")              # Ed25519 PEM (use \n for newlines) — a SECRET
+RASTICHAT_PRIVATE_KEY_FILE = env_str("RASTICHAT_PRIVATE_KEY_FILE", "")    # alternative: path to a root-readable PEM file
+# Development/test ONLY: extra exact hostnames (with port) sent as verified domains, e.g. "shop.localhost:8000".
+RASTICHAT_EXTRA_VERIFIED_DOMAINS = env_str("RASTICHAT_EXTRA_VERIFIED_DOMAINS", "")

@@ -608,7 +608,16 @@ def store_detail(request, store_public_id):
         "invoices": invoices, "audit_entries": audit_entries, "notes": notes, "sms_balance": sms_balance,
         "industry_installation": industry_installation, "product_count": product_count, "order_count": order_count,
         "tab": tab, "active_nav": "stores",
+        **_chat_context(store),
     })
+
+
+def _chat_context(store):
+    """RastiChat adapter state for the store page (both False unless the integration is globally switched on)."""
+    from apps.chat_integration import conf as chat_conf
+    from apps.chat_integration.services import enablement as chat_enablement
+
+    return {"chat_global": chat_conf.globally_enabled(), "chat_store_enabled": chat_enablement.chat_enabled_for_store(store)}
 
 
 @require_POST
@@ -919,6 +928,9 @@ def user_suspend(request, user_id):
         return redirect("portal_platform_admin:user-detail", user_id)
     user.is_active = False
     user.save(update_fields=["is_active"])
+    from apps.chat_integration.services import hooks as chat_hooks  # RastiChat adapter: cut chat access (no-op when off)
+
+    chat_hooks.user_suspended(user)
     record_platform_audit_event(
         actor=request.user, action_code="platform_admin.user_suspended",
         object_type="User", object_id=user.pk, object_label=user.get_username(),

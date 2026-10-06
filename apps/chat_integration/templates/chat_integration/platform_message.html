@@ -1,0 +1,18 @@
+{% extends "portal/platform_admin/base.html" %}
+{% block title %}پیام به {{ store.name }} | پنل مدیریت پلتفرم{% endblock %}
+{% block content %}
+<p><a href="{% url 'portal_platform_admin:store-detail' store.public_id %}?tab=chat" class="pa-help">← بازگشت به صفحه‌ی فروشگاه</a></p>
+<div class="pa-card">
+  <div class="pa-cardhead"><h3>ارسال پیام به مدیر «{{ store.name }}»</h3></div>
+  <div class="pa-cardbody">
+    <p class="pa-help">پیام در صندوق پشتیبانی همین فروشگاه (در پنل مدیریتِ خودش) نمایش داده می‌شود؛ لازم نیست فروشگاه قبلاً پیام داده باشد. اگر گفتگوی بازی با این فروشگاه وجود داشته باشد، پیام به همان افزوده می‌شود.</p>
+    <form method="post" id="chat-message-form">
+      {% csrf_token %}
+      <input type="hidden" name="idempotency_key" value="{{ idempotency_key }}">
+      <div class="pa-field"><label for="chat-subject">موضوع</label><input class="pa-input" id="chat-subject" type="text" name="subject" maxlength="200" placeholder="پیام پلتفرم"></div>
+      <div class="pa-field" style="margin-top:10px"><label for="chat-body">پیام</label><textarea class="pa-input" id="chat-body" name="message" rows="5" maxlength="5000" required></textarea></div>
+      <button class="pa-btn pa-primary" style="margin-top:10px" type="submit">ارسال</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
