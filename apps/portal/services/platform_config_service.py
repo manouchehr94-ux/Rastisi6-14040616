@@ -77,6 +77,18 @@ def get_platform_configuration() -> PlatformConfiguration:
     return config
 
 
+def is_new_store_registration_enabled() -> bool:
+    """سیاستِ «ثبت‌نامِ فروشگاهِ تازه» را **مستقیم از دیتابیس** می‌خواند، نه از
+    کشِ ۵دقیقه‌ایِ ``get_platform_configuration`` — کشِ پیش‌فرض LocMem و
+    per-process است و یک worker ممکن بود تا ۵ دقیقه پس از بستنِ ثبت‌نام هنوز
+    آن را باز ببیند. این یک تصمیمِ اجرایی (enforcement) است، نه نمایش.
+    اگر رکوردِ تنظیمات هنوز وجود نداشته باشد، پیش‌فرضِ مدل (فعال) است."""
+    row = PlatformConfiguration.objects.filter(pk=1).values_list(
+        "new_store_registration_enabled", flat=True,
+    ).first()
+    return True if row is None else bool(row)
+
+
 class PlatformConfigurationError(Exception):
     """مقدارِ نامعتبر برای تنظیمات پلتفرم."""
 

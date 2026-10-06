@@ -148,10 +148,12 @@ class GetOrCreateOwnerByPhoneTests(TestCase):
         customer_user = User.objects.create_user(username="09121234576", password="whatever")
         customer = Customer.objects.create(user=customer_user, full_name="Customer Person", phone="09121234576")
 
-        owner_user, created = owner_auth_service.get_or_create_owner_by_phone(
+        owner_user, owner_created = owner_auth_service.get_or_create_owner_by_phone(
             phone="09121234576", full_name="Owner Name",
         )
-        self.assertFalse(created)
+        # The flag means "OwnerProfile created" (the first-store trigger), not
+        # "User row created" — see OwnerIdentityResult.
+        self.assertTrue(owner_created)
         self.assertEqual(owner_user.pk, customer_user.pk)
         self.assertTrue(OwnerProfile.objects.filter(user=owner_user).exists())
         customer.refresh_from_db()
@@ -186,43 +188,25 @@ class OtpViewFlowTests(TestCase):
         self.assertIn("_auth_user_id", self.client.session)
         self.assertTrue(User.objects.filter(username="09121234577").exists())
 
-    def test_resend_preserves_registration_name_and_remember_me(self):
+    def test_resend_keeps_registration_name_and_remember_me_from_the_server_session(self):
         code = self._fixed_code()
         self.client.post(
             "/register/",
-            {
-                "full_name": "Resend Owner",
-                "phone": "09121234582",
-                "remember_me": "on",
-            },
+            {"full_name": "Resend Owner", "phone": "09121234582", "remember_me": "on"},
             HTTP_HOST=_HOST,
         )
 
         verify_page = self.client.get("/verify/", HTTP_HOST=_HOST)
-        self.assertContains(
-            verify_page, 'name="full_name" value="Resend Owner"'
-        )
-        self.assertContains(
-            verify_page, 'name="remember_me" value="on"'
-        )
+        # The client is never asked to round-trip name / remember_me / next.
+        self.assertNotContains(verify_page, 'name="full_name"')
+        self.assertNotContains(verify_page, 'name="remember_me"')
 
-        # Emulate the resend form submission rendered above.
-        response = self.client.post(
-            "/register/",
-            {
-                "full_name": "Resend Owner",
-                "phone": "09121234582",
-                "remember_me": "on",
-            },
-            HTTP_HOST=_HOST,
-        )
+        response = self.client.post("/verify/resend/", HTTP_HOST=_HOST)
         self.assertEqual(response.status_code, 302)
         self.assertIn("/verify/", response["Location"])
 
         response = self.client.post(
-            "/verify/",
-            {"phone": "09121234582", "code": code},
-            HTTP_HOST=_HOST,
+            "/verify/", {"phone": "09121234582", "code": code}, HTTP_HOST=_HOST,
         )
         self.assertEqual(response.status_code, 302)
         profile = OwnerProfile.objects.get(phone="09121234582")

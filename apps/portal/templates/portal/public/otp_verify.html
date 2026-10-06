@@ -1,51 +1,59 @@
 {% extends "portal/public/base_public.html" %}
-{% block title %}تأیید کد | راستی‌سی{% endblock %}
+{% load static persian %}
+{% block title %}{% if is_registration %}تأیید شماره موبایل{% else %}کد ورود{% endif %} | راستی‌سی{% endblock %}
 {% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
 
 {% block content %}
 <section class="r-auth-section">
   <div class="rs-container">
-    <div class="r-auth-shell">
+    <div class="r-auth-shell r-auth-shell--form-first">
       <aside class="r-auth-story">
-        <div class="rs-eyebrow">تأیید شماره</div>
+        {% if is_registration %}
+        <div class="rs-eyebrow">تأیید شماره موبایل</div>
+        <h1>شماره‌تان را تأیید کنید،<br>فروشگاهتان ساخته می‌شود.</h1>
+        <p>بعد از وارد کردن کد، حساب مالک شما ساخته و فروشگاه آزمایشی‌تان آماده‌ی راه‌اندازی می‌شود.</p>
+        {% else %}
+        <div class="rs-eyebrow">ورود با کد یک‌بارمصرف</div>
         <h1>یک مرحله کوتاه<br>برای ورود امن.</h1>
-        <p>کدی که برای شماره موبایل شما ارسال شده را وارد کنید تا ورود یا ثبت‌نام ادامه پیدا کند.</p>
+        <p>کدی که برای شماره موبایل شما ارسال شده را وارد کنید تا وارد حسابتان شوید.</p>
+        {% endif %}
         <div class="r-auth-points">
-          <div class="r-auth-point">کد ۶ رقمی</div>
-          <div class="r-auth-point">امکان درخواست دوباره کد</div>
-          <div class="r-auth-point">ادامه به جریان امن حساب مالک</div>
+          <div class="r-auth-point">کد ۶ رقمی، فقط {{ otp_ttl_minutes|fa_number }} دقیقه معتبر است</div>
+          <div class="r-auth-point">اگر کد نرسید، می‌توانید دوباره درخواست دهید</div>
+          <div class="r-auth-point">هر کد فقط یک بار قابل استفاده است</div>
         </div>
       </aside>
 
       <div class="r-auth-form">
         <div class="r-auth-form-head">
-          <h2>کد تأیید</h2>
-          <p>کد ارسال‌شده به <span class="r-phone-inline">{{ phone }}</span> را وارد کنید.</p>
+          <h2>{% if is_registration %}تأیید شماره موبایل{% else %}کد ورود{% endif %}</h2>
+          <p>کد ۶ رقمی ارسال‌شده به <span class="r-phone-inline">{{ phone }}</span> را وارد کنید.
+            <a class="r-inline-link" href="{{ change_phone_url }}">تغییر شماره</a></p>
         </div>
 
-        <form method="post" novalidate>
+        {% if flash %}<div class="p-alert {% if flash.kind == 'ok' %}p-alert-success{% else %}p-alert-error{% endif %}" role="{% if flash.kind == 'ok' %}status{% else %}alert{% endif %}">{{ flash.text }}</div>{% endif %}
+
+        <form method="post" novalidate data-auth-form data-loading-text="در حال بررسی کد…">
           {% csrf_token %}
           {{ form.phone }}
-          {{ form.full_name }}
-          {% if form.non_field_errors %}<div class="p-alert p-alert-error">{{ form.non_field_errors.0 }}</div>{% endif %}
-          <div class="p-field"><label for="id_code">کد ۶ رقمی</label>{{ form.code }}{% if form.code.errors %}<div class="p-error">{{ form.code.errors.0 }}</div>{% endif %}</div>
-          <button type="submit" class="rs-btn rs-btn-primary r-form-submit">تأیید و ورود</button>
+          {% if form.non_field_errors %}<div class="p-alert p-alert-error" role="alert">{{ form.non_field_errors.0 }}</div>{% endif %}
+          <div class="p-field">
+            <label for="id_code">کد ۶ رقمی</label>
+            {{ form.code }}
+            {% if form.code.errors %}<div class="p-error" id="id_code_error">{{ form.code.errors.0 }}</div>{% endif %}
+            {% if timing.expires_in or not form.code.errors %}<div class="r-field-hint" id="id_code_hint" data-otp-expires="{{ timing.expires_in }}" aria-live="polite">{% if timing.expires_in %}کد تا {{ otp_ttl_minutes|fa_number }} دقیقه پس از ارسال معتبر است.{% else %}این کد منقضی شده است؛ کد جدید دریافت کنید.{% endif %}</div>{% endif %}
+          </div>
+          <button type="submit" class="rs-btn rs-btn-primary r-form-submit">{% if is_registration %}تأیید شماره و ادامه{% else %}تأیید و ورود{% endif %}</button>
         </form>
 
-        <form method="post" action="{{ resend_url }}" class="r-otp-resend">
+        <form method="post" action="{{ resend_url }}" class="r-otp-resend" data-resend-form data-resend-in="{{ timing.resend_in }}">
           {% csrf_token %}
-          <input type="hidden" name="phone" value="{{ phone }}">
-          {% if resend_full_name %}<input type="hidden" name="full_name" value="{{ resend_full_name }}">{% endif %}
-          {% if resend_remember_me %}<input type="hidden" name="remember_me" value="on">{% endif %}
-          {% if resend_next %}<input type="hidden" name="next" value="{{ resend_next }}">{% endif %}
-          {% if resend_admin_return %}<input type="hidden" name="admin_return" value="{{ resend_admin_return }}">{% endif %}
-          <button type="submit" class="rs-link">ارسال دوباره کد</button>
-          <span class="r-otp-hint">اگر کد نرسیده، کمی صبر کنید و دوباره درخواست دهید.</span>
+          <button type="submit" class="rs-link r-resend-btn" data-resend-button>ارسال دوباره کد</button>
+          <span class="r-otp-hint">کد نرسید؟ پیامک را بررسی کنید و اگر لازم بود کد جدید بگیرید؛ کد قبلی باطل می‌شود.</span>
         </form>
-
-        <div class="r-form-links"><a href="{% url 'portal:login' %}">تغییر شماره موبایل</a></div>
       </div>
     </div>
   </div>
 </section>
 {% endblock %}
+{% block extra_js %}{{ block.super }}<script src="{% static 'portal/js/auth-forms.js' %}?v=20261006-2" defer></script>{% endblock %}
