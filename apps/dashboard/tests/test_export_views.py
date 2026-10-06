@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from apps.catalog.models import Brand, Category, Product, Vendor, Warehouse, WarehouseInventory
 from apps.core.models import AuditLogEntry, ExportJob
-from apps.core.services.export_service import ExportError, run_export
+from apps.core.services.export_service import ExportError, generate_export
 from apps.customers.models import Customer
 from apps.orders.models import (
     Order,
@@ -26,7 +26,7 @@ from apps.orders.models import (
     TaxClass,
 )
 from apps.stores.models import Store, StoreMembership
-from apps.dashboard.tests.xlsx_helpers import XLSX_MIME, open_workbook, read_job_file, sheet_values
+from apps.dashboard.tests.xlsx_helpers import XLSX_MIME, open_workbook, sheet_values
 
 User = get_user_model()
 
@@ -45,8 +45,9 @@ SHEET_TITLES = {
 }
 
 
-def _workbook(job):
-    return open_workbook(read_job_file(job.file))
+def _workbook(result):
+    """Open the XLSX bytes returned by ``generate_export`` (never stored anywhere)."""
+    return open_workbook(result.content)
 
 HOST = f"export-test.{settings.RASTISI_ADMIN_DOMAIN_SUFFIX}"
 
@@ -120,26 +121,27 @@ class ExportTestCase(TestCase):
 
 class RunExportServiceTests(ExportTestCase):
     def test_products_export_generates_completed_job_with_row(self):
-        job = run_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
-        self.assertEqual(job.status, ExportJob.Status.COMPLETED)
-        self.assertEqual(job.row_count, 1)
-        self.assertTrue(job.file.name.endswith(".xlsx"))
+        result = generate_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
+        self.assertEqual(result.job.status, ExportJob.Status.COMPLETED)
+        self.assertEqual(result.row_count, 1)
+        self.assertEqual(result.content[:2], b"PK")
+        self.assertTrue(result.filename.endswith(".xlsx"))
 
     def test_variants_export_runs(self):
-        job = run_export(self.store, ExportJob.ExportType.VARIANTS, requested_by=self.owner)
-        self.assertEqual(job.status, ExportJob.Status.COMPLETED)
+        result = generate_export(self.store, ExportJob.ExportType.VARIANTS, requested_by=self.owner)
+        self.assertEqual(result.job.status, ExportJob.Status.COMPLETED)
 
     def test_customers_export_scopes_totals_to_store(self):
-        job = run_export(self.store, ExportJob.ExportType.CUSTOMERS, requested_by=self.owner)
-        self.assertEqual(job.status, ExportJob.Status.COMPLETED)
-        self.assertEqual(job.row_count, 1)
+        result = generate_export(self.store, ExportJob.ExportType.CUSTOMERS, requested_by=self.owner)
+        self.assertEqual(result.job.status, ExportJob.Status.COMPLETED)
+        self.assertEqual(result.row_count, 1)
 
     def test_invalid_export_type_rejected(self):
         with self.assertRaises(ExportError):
-            run_export(self.store, "not-a-real-type", requested_by=self.owner)
+            generate_export(self.store, "not-a-real-type", requested_by=self.owner)
 
     def test_completion_is_audit_logged(self):
-        run_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
+        generate_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
         entry = AuditLogEntry.objects.get(store=self.store, action_code="export.completed")
         self.assertIn("xlsx", entry.after_summary)
 
@@ -150,9 +152,9 @@ class XlsxExportStructureTests(ExportTestCase):
     def test_all_five_export_types_produce_valid_xlsx(self):
         for export_type, sheet_title in SHEET_TITLES.items():
             with self.subTest(export_type=export_type):
-                job = run_export(self.store, export_type, requested_by=self.owner)
-                content = read_job_file(job.file)
-                self.assertTrue(job.file.name.endswith(".xlsx"))
+                job = generate_export(self.store, export_type, requested_by=self.owner)
+                content = job.content
+                self.assertTrue(job.filename.endswith(".xlsx"))
                 self.assertTrue(zipfile.is_zipfile(io.BytesIO(content)))
                 self.assertEqual(content[:2], b"PK")  # not a renamed CSV
                 names = zipfile.ZipFile(io.BytesIO(content)).namelist()
@@ -163,7 +165,7 @@ class XlsxExportStructureTests(ExportTestCase):
                 self.assertEqual(wb.sheetnames, [sheet_title, "راهنما"])
 
     def test_products_header_order_and_values_are_in_separate_cells(self):
-        job = run_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
+        job = generate_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
         ws = _workbook(job)["کالاها"]
         rows = sheet_values(ws)
         self.assertEqual(rows[0], PRODUCT_HEADERS)
@@ -187,17 +189,17 @@ class XlsxExportStructureTests(ExportTestCase):
         Product.objects.filter(pk=self.product.pk).update(
             name=persian, seo_title="عنوان فارسی", seo_description="توضیحاتِ سئو با نیم‌فاصله و ارقام ۰۱۲۳۴۵۶۷۸۹",
         )
-        job = run_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
+        job = generate_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
         ws = _workbook(job)["کالاها"]
         self.assertEqual(ws["A2"].value, persian)
         self.assertEqual(ws["L2"].value, "عنوان فارسی")
         self.assertEqual(ws["M2"].value, "توضیحاتِ سئو با نیم‌فاصله و ارقام ۰۱۲۳۴۵۶۷۸۹")
         # the raw bytes are UTF-8 inside the zip, not a legacy code page
-        sheet_xml = zipfile.ZipFile(io.BytesIO(read_job_file(job.file))).read("xl/worksheets/sheet1.xml").decode("utf-8")
+        sheet_xml = zipfile.ZipFile(io.BytesIO(job.content)).read("xl/worksheets/sheet1.xml").decode("utf-8")
         self.assertIn(persian, sheet_xml)
 
     def test_worksheet_presentation(self):
-        job = run_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
+        job = generate_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
         ws = _workbook(job)["کالاها"]
         self.assertTrue(ws.sheet_view.rightToLeft)
         self.assertEqual(ws.freeze_panes, "A2")
@@ -212,7 +214,7 @@ class XlsxExportStructureTests(ExportTestCase):
         self.assertNotEqual(ws["P1"].fill.start_color.rgb, ws["A1"].fill.start_color.rgb)
 
     def test_numbers_are_numeric_cells_with_thousands_format(self):
-        job = run_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
+        job = generate_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
         ws = _workbook(job)["کالاها"]
         price = ws["F2"]
         self.assertEqual(price.data_type, "n")
@@ -223,7 +225,7 @@ class XlsxExportStructureTests(ExportTestCase):
         self.assertEqual(ws["I2"].value, None)  # empty weight stays an empty cell, not "0"/"None"
 
     def test_dates_are_real_excel_datetime_cells(self):
-        job = run_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
+        job = generate_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
         ws = _workbook(job)["کالاها"]
         for coordinate in ("N2", "O2"):
             cell = ws[coordinate]
@@ -240,8 +242,8 @@ class XlsxExportStructureTests(ExportTestCase):
                 slug=f"evil-{index}-exp", sku=f"=EV{index}", price=Decimal("1"), stock=1, barcode=value,
                 seo_title=value, seo_description=value,
             )
-        job = run_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
-        content = read_job_file(job.file)
+        job = generate_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
+        content = job.content
         ws = open_workbook(content)["کالاها"]
         seen = {ws.cell(row=r, column=1).value for r in range(2, ws.max_row + 1)}
         for value in evil:
@@ -257,7 +259,7 @@ class XlsxExportStructureTests(ExportTestCase):
         self.assertNotIn("<f ", xml)
 
     def test_inventory_uses_merchant_language_and_numeric_cells(self):
-        job = run_export(self.store, ExportJob.ExportType.INVENTORY, requested_by=self.owner)
+        job = generate_export(self.store, ExportJob.ExportType.INVENTORY, requested_by=self.owner)
         ws = _workbook(job)["موجودی انبار"]
         rows = sheet_values(ws)
         self.assertEqual(rows[0], INVENTORY_HEADERS)
@@ -271,7 +273,7 @@ class XlsxExportStructureTests(ExportTestCase):
         self.assertEqual(ws["E2"].data_type, "n")
 
     def test_variants_customers_and_orders_headers_and_types(self):
-        customers = _workbook(run_export(self.store, ExportJob.ExportType.CUSTOMERS, requested_by=self.owner))["مشتریان"]
+        customers = _workbook(generate_export(self.store, ExportJob.ExportType.CUSTOMERS, requested_by=self.owner))["مشتریان"]
         self.assertEqual(sheet_values(customers)[0], [
             "نام مشتری", "موبایل", "ایمیل", "تعداد سفارش", "مجموع خرید (تومان)", "آخرین سفارش", "تاریخ عضویت", "شناسه مشتری",
         ])
@@ -281,7 +283,7 @@ class XlsxExportStructureTests(ExportTestCase):
         self.assertEqual(row["مجموع خرید (تومان)"], 150000)
         self.assertEqual(customers["D2"].data_type, "n")
 
-        orders = _workbook(run_export(self.store, ExportJob.ExportType.ORDERS, requested_by=self.owner))["سفارش‌ها"]
+        orders = _workbook(generate_export(self.store, ExportJob.ExportType.ORDERS, requested_by=self.owner))["سفارش‌ها"]
         header = sheet_values(orders)[0]
         self.assertEqual(header[0], "شماره سفارش")
         self.assertNotIn("IRT", " ".join(map(str, header)))
@@ -292,11 +294,11 @@ class XlsxExportStructureTests(ExportTestCase):
         self.assertEqual(row["وضعیت پرداخت"], "پرداخت‌شده")
         self.assertIsInstance(row["تاریخ ثبت"], datetime)
 
-        variants = _workbook(run_export(self.store, ExportJob.ExportType.VARIANTS, requested_by=self.owner))["تنوع‌ها"]
+        variants = _workbook(generate_export(self.store, ExportJob.ExportType.VARIANTS, requested_by=self.owner))["تنوع‌ها"]
         self.assertEqual(sheet_values(variants)[0][:3], ["نام کالا", "ویژگی‌هایِ تنوع", "SKU تنوع"])
 
     def test_guide_sheet_describes_the_file(self):
-        job = run_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
+        job = generate_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
         guide = _workbook(job)["راهنما"]
         text = [str(v) for row in sheet_values(guide) for v in row if v is not None]
         joined = "\n".join(text)
@@ -316,7 +318,7 @@ class XlsxExportStructureTests(ExportTestCase):
             self.assertNotIn(forbidden.lower(), joined.lower())
 
     def test_inventory_guide_explains_whole_store_reservations(self):
-        job = run_export(self.store, ExportJob.ExportType.INVENTORY, requested_by=self.owner)
+        job = generate_export(self.store, ExportJob.ExportType.INVENTORY, requested_by=self.owner)
         guide = _workbook(job)["راهنما"]
         joined = "\n".join(str(v) for row in sheet_values(guide) for v in row if v is not None)
         self.assertIn("کلِ فروشگاه", joined)
@@ -330,7 +332,7 @@ class XlsxEmptyExportTests(ExportTestCase):
     def test_empty_exports_keep_headers_and_explain_why_there_are_no_rows(self):
         for export_type, sheet_title in SHEET_TITLES.items():
             with self.subTest(export_type=export_type):
-                job = run_export(self.empty_store, export_type, requested_by=None)
+                job = generate_export(self.empty_store, export_type, requested_by=None)
                 self.assertEqual(job.row_count, 0)
                 ws = _workbook(job)[sheet_title]
                 header = [c.value for c in ws[1]]
@@ -346,22 +348,120 @@ class XlsxEmptyExportTests(ExportTestCase):
                 self.assertEqual(facts["تعداد ردیف‌ها"], 0)
 
 
-class ExportViewsTests(ExportTestCase):
-    def test_owner_can_create_and_list(self):
-        response = self.client.post(
-            reverse("dashboard:export-create"), {"export_type": ExportJob.ExportType.PRODUCTS},
-        )
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(ExportJob.objects.filter(store=self.store).count(), 1)
+class DirectDownloadViewTests(ExportTestCase):
+    """«دریافت فایل اکسل»: the XLSX is the HTTP response; nothing is retained."""
+
+    def _post(self, export_type=ExportJob.ExportType.PRODUCTS):
+        return self.client.post(reverse("dashboard:export-create"), {"export_type": export_type})
+
+    def test_post_returns_the_xlsx_attachment_in_the_same_response(self):
+        response = self._post()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], XLSX_MIME)
+        disposition = response["Content-Disposition"]
+        self.assertTrue(disposition.startswith("attachment;"))
+        self.assertRegex(disposition, r'filename="rastisi-products-\d{4}-\d{2}-\d{2}\.xlsx"')
+        self.assertIn("no-store", response["Cache-Control"])
+        body = response.content
+        self.assertEqual(body[:2], b"PK")
+        self.assertEqual(response["Content-Length"], str(len(body)))
+        self.assertEqual(open_workbook(body)["کالاها"]["B2"].value, "SKU-EXP-1")
+
+    def test_every_export_type_downloads_directly_with_xlsx_mime(self):
+        for export_type, sheet_title in SHEET_TITLES.items():
+            with self.subTest(export_type=export_type):
+                response = self._post(export_type)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response["Content-Type"], XLSX_MIME)
+                self.assertIn(f"rastisi-{export_type}-", response["Content-Disposition"])
+                self.assertEqual(open_workbook(response.content).sheetnames, [sheet_title, "راهنما"])
+
+    def test_no_file_is_stored_and_job_keeps_only_metadata(self):
+        from apps.core.storage import private_storage
+
+        exports_dir = f"exports/{self.store.pk}"
+
+        def stored():
+            return set(private_storage.listdir(exports_dir)[1]) if private_storage.exists(exports_dir) else set()
+
+        before = stored()
+        response = self._post()
+        self.assertEqual(response.status_code, 200)
+        job = ExportJob.objects.get(store=self.store)
+        self.assertEqual(job.status, ExportJob.Status.COMPLETED)
+        self.assertEqual(job.row_count, 1)
+        self.assertFalse(job.file)
+        self.assertIsNone(job.expires_at)
+        self.assertEqual(job.requested_by, self.owner)
+        self.assertEqual(stored(), before)  # no new file anywhere under the store's export folder
+        # nothing downloadable later: the legacy download URL has nothing to serve
+        later = self.client.get(reverse("dashboard:export-download", args=[job.pk]))
+        self.assertEqual(later.status_code, 404)
+
+    def test_audit_entry_is_truthful_about_direct_delivery(self):
+        self._post()
+        entry = AuditLogEntry.objects.get(store=self.store, action_code="export.completed")
+        self.assertIn("direct_download", entry.after_summary)
+        self.assertIn("retained", entry.after_summary)
+
+    def test_export_page_has_direct_download_actions_and_no_history_table(self):
         response = self.client.get(reverse("dashboard:export-list"))
         self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertContains(response, "دریافت فایل اکسل")
+        self.assertContains(response, "خروج اطلاعات")
+        self.assertContains(response, "فایل روی راستی‌سی نگهداری نمی‌شود")
+        self.assertEqual(html.count('name="export_type"'), 5)
+        for label in ("کالاها", "تنوع‌ها", "موجودی انبار", "مشتریان", "سفارش‌ها"):
+            self.assertIn(label, html)
+        self.assertNotIn("تاریخچه‌ی صادرات", html)
+        self.assertNotIn("ساختِ فایلِ اکسل", html)
+        self.assertNotIn("صادراتِ داده", html)
+        # privacy note only for customer/order cards
+        self.assertEqual(html.count("اطلاعاتِ شخصیِ مشتریان"), 2)
 
-    def test_content_editor_cannot_create_export(self):
+    def test_unknown_export_type_is_rejected_without_a_job(self):
+        response = self._post("nonsense")
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(ExportJob.objects.filter(store=self.store).exists())
+
+    def test_get_is_not_allowed(self):
+        self.assertEqual(self.client.get(reverse("dashboard:export-create")).status_code, 405)
+
+    def test_failed_generation_consumes_nothing_and_is_audited(self):
+        from unittest import mock
+
+        from apps.subscriptions.services import enforcement
+
+        with mock.patch(
+            "apps.core.services.export_service.build_export_workbook", side_effect=RuntimeError("boom"),
+        ), mock.patch.object(enforcement, "consume_export") as consume:
+            response = self._post()
+        self.assertEqual(response.status_code, 302)  # back to the page with a message
+        consume.assert_not_called()
+        job = ExportJob.objects.get(store=self.store)
+        self.assertEqual(job.status, ExportJob.Status.FAILED)
+        self.assertFalse(job.file)
+        self.assertTrue(AuditLogEntry.objects.filter(store=self.store, action_code="export.failed").exists())
+        self.assertFalse(AuditLogEntry.objects.filter(store=self.store, action_code="export.completed").exists())
+
+    def test_customers_selected_bulk_export_downloads_directly_too(self):
+        response = self.client.post(reverse("dashboard:customer-bulk-action"), {
+            "bulk_action": "export-selected", "customer_ids": [str(self.customer.pk)],
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], XLSX_MIME)
+        self.assertFalse(ExportJob.objects.get(store=self.store).file)
+
+
+class ExportPermissionTests(ExportTestCase):
+    def test_content_editor_cannot_export(self):
         self._login_as(StoreMembership.Role.CONTENT_EDITOR, "1")
         response = self.client.post(
             reverse("dashboard:export-create"), {"export_type": ExportJob.ExportType.PRODUCTS},
         )
         self.assertEqual(response.status_code, 403)
+        self.assertFalse(ExportJob.objects.filter(store=self.store).exists())
 
     def test_catalog_manager_cannot_export_customers(self):
         self._login_as(StoreMembership.Role.CATALOG_MANAGER, "2")
@@ -375,8 +475,8 @@ class ExportViewsTests(ExportTestCase):
         response = self.client.post(
             reverse("dashboard:export-create"), {"export_type": ExportJob.ExportType.CUSTOMERS},
         )
-        self.assertEqual(response.status_code, 302)
-        self.assertTrue(ExportJob.objects.filter(store=self.store, export_type="customers").exists())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], XLSX_MIME)
 
     def test_analyst_cannot_export_customers(self):
         self._login_as(StoreMembership.Role.ANALYST, "4")
@@ -385,55 +485,87 @@ class ExportViewsTests(ExportTestCase):
         )
         self.assertEqual(response.status_code, 403)
 
-    def test_download_completed_job(self):
-        job = run_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
-        response = self.client.get(reverse("dashboard:export-download", args=[job.pk]))
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["Content-Type"], XLSX_MIME)
-        self.assertIn(f'filename="products-{job.pk}.xlsx"', response["Content-Disposition"])
-        body = b"".join(response.streaming_content)
-        self.assertEqual(body[:2], b"PK")
-        self.assertEqual(open_workbook(body)["کالاها"]["B2"].value, "SKU-EXP-1")
+    def test_page_only_offers_types_the_member_may_export(self):
+        self._login_as(StoreMembership.Role.CATALOG_MANAGER, "5")
+        response = self.client.get(reverse("dashboard:export-list"))
+        types = [item["value"] for item in response.context["export_types"]]
+        self.assertNotIn("customers", types)
+        self.assertIn("products", types)
 
-    def test_download_filename_and_mime_for_every_export_type(self):
-        for export_type in SHEET_TITLES:
-            with self.subTest(export_type=export_type):
-                job = run_export(self.store, export_type, requested_by=self.owner)
-                response = self.client.get(reverse("dashboard:export-download", args=[job.pk]))
-                self.assertEqual(response["Content-Type"], XLSX_MIME)
-                self.assertIn(f"{export_type}-{job.pk}.xlsx", response["Content-Disposition"])
-                response.close()
+    def test_anonymous_denied(self):
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("dashboard:export-list")).status_code, 302)
+        response = self.client.post(reverse("dashboard:export-create"), {"export_type": "products"})
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(ExportJob.objects.filter(store=self.store).exists())
 
-    def test_legacy_csv_export_still_downloads_as_csv(self):
+
+class LegacyRetainedExportTests(ExportTestCase):
+    """Files created before direct download stay downloadable until their own expiry."""
+
+    def _legacy_job(self, *, days=1, store=None, name="legacy-test.csv", payload=b"a,b\n1,2\n"):
         from django.core.files.base import ContentFile
 
         from apps.core.storage import private_storage
 
-        stored = private_storage.save(f"exports/{self.store.pk}/legacy-test.csv", ContentFile("a,b\n1,2\n".encode()))
+        store = store or self.store
+        stored = private_storage.save(f"exports/{store.pk}/{name}", ContentFile(payload))
         self.addCleanup(private_storage.delete, stored)
-        job = ExportJob.objects.create(
-            store=self.store, export_type=ExportJob.ExportType.PRODUCTS, status=ExportJob.Status.COMPLETED,
-            expires_at=timezone.now() + timezone.timedelta(days=1), file=stored,
+        return ExportJob.objects.create(
+            store=store, export_type=ExportJob.ExportType.PRODUCTS, status=ExportJob.Status.COMPLETED,
+            expires_at=timezone.now() + timezone.timedelta(days=days), file=stored, row_count=1,
         )
+
+    def test_unexpired_legacy_csv_still_downloads_with_its_real_type(self):
+        job = self._legacy_job()
         response = self.client.get(reverse("dashboard:export-download", args=[job.pk]))
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "text/csv")
         self.assertIn(f"products-{job.pk}.csv", response["Content-Disposition"])
         response.close()
 
-    def test_export_list_page_mentions_excel(self):
-        response = self.client.get(reverse("dashboard:export-list"))
-        self.assertContains(response, "اکسل")
-        self.assertNotContains(response, "ساختِ CSV")
-
-    def test_download_pending_job_404(self):
-        job = ExportJob.objects.create(store=self.store, export_type=ExportJob.ExportType.PRODUCTS)
+    def test_legacy_xlsx_downloads_as_xlsx_and_is_listed(self):
+        job = self._legacy_job(name="legacy.xlsx", payload=b"PK-legacy")
         response = self.client.get(reverse("dashboard:export-download", args=[job.pk]))
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response["Content-Type"], XLSX_MIME)
+        response.close()
+        page = self.client.get(reverse("dashboard:export-list"))
+        self.assertEqual([j.pk for j in page.context["legacy_jobs"]], [job.pk])
+        self.assertContains(page, "فایل‌هایِ قدیمی")
 
-    def test_anonymous_denied(self):
-        self.client.logout()
-        response = self.client.get(reverse("dashboard:export-list"))
-        self.assertEqual(response.status_code, 302)
+    def test_expired_legacy_file_is_not_listed_and_cleanup_removes_it(self):
+        from apps.core.services.export_service import mark_expired_jobs
+
+        job = self._legacy_job(days=-1)
+        page = self.client.get(reverse("dashboard:export-list"))
+        self.assertEqual(list(page.context["legacy_jobs"]), [])
+        self.assertEqual(mark_expired_jobs(store=self.store), 1)
+        job.refresh_from_db()
+        self.assertEqual(job.status, ExportJob.Status.EXPIRED)
+        self.assertFalse(job.file)
+
+    def test_metadata_only_job_is_not_downloadable(self):
+        job = ExportJob.objects.create(
+            store=self.store, export_type=ExportJob.ExportType.PRODUCTS, status=ExportJob.Status.COMPLETED,
+        )
+        self.assertEqual(self.client.get(reverse("dashboard:export-download", args=[job.pk])).status_code, 404)
+
+    def test_pending_job_404(self):
+        job = ExportJob.objects.create(store=self.store, export_type=ExportJob.ExportType.PRODUCTS)
+        self.assertEqual(self.client.get(reverse("dashboard:export-download", args=[job.pk])).status_code, 404)
+
+    def test_new_exports_never_get_an_expiry_or_file(self):
+        generate_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
+        job = ExportJob.objects.get(store=self.store)
+        self.assertIsNone(job.expires_at)
+        self.assertFalse(job.file)
+
+    def test_legacy_customer_file_needs_customer_export_permission(self):
+        job = self._legacy_job()
+        job.export_type = ExportJob.ExportType.CUSTOMERS
+        job.save(update_fields=["export_type"])
+        self._login_as(StoreMembership.Role.CATALOG_MANAGER, "6")
+        self.assertEqual(self.client.get(reverse("dashboard:export-download", args=[job.pk])).status_code, 403)
 
 
 class ExportTenantIsolationTests(ExportTestCase):
@@ -441,18 +573,21 @@ class ExportTenantIsolationTests(ExportTestCase):
         super().setUp()
         self.other_store = Store.objects.create(name="فروشگاه دیگر", slug="export-other-store")
 
-    def test_cannot_download_other_stores_export(self):
-        other_job = run_export(self.other_store, ExportJob.ExportType.PRODUCTS, requested_by=None)
+    def test_cannot_download_other_stores_legacy_export(self):
+        from django.core.files.base import ContentFile
+
+        from apps.core.storage import private_storage
+
+        stored = private_storage.save(f"exports/{self.other_store.pk}/iso.xlsx", ContentFile(b"PK"))
+        self.addCleanup(private_storage.delete, stored)
+        other_job = ExportJob.objects.create(
+            store=self.other_store, export_type=ExportJob.ExportType.PRODUCTS, status=ExportJob.Status.COMPLETED,
+            expires_at=timezone.now() + timezone.timedelta(days=1), file=stored,
+        )
         response = self.client.get(reverse("dashboard:export-download", args=[other_job.pk]))
         self.assertEqual(response.status_code, 404)
-
-    def test_export_list_only_shows_own_store(self):
-        run_export(self.other_store, ExportJob.ExportType.PRODUCTS, requested_by=None)
-        run_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
-        response = self.client.get(reverse("dashboard:export-list"))
-        jobs = list(response.context["jobs"])
-        self.assertEqual(len(jobs), 1)
-        self.assertEqual(jobs[0].store_id, self.store.pk)
+        page = self.client.get(reverse("dashboard:export-list"))
+        self.assertEqual(list(page.context["legacy_jobs"]), [])
 
     def test_products_export_never_includes_other_stores_products(self):
         other_vendor = Vendor.objects.create(store=self.other_store, name="ف", slug="v-other-exp")
@@ -462,7 +597,7 @@ class ExportTenantIsolationTests(ExportTestCase):
             name="کالای فروشگاه دیگر", slug="other-store-product-exp", sku="SKU-OTHER-EXP",
             price=Decimal("1"), stock=1,
         )
-        job = run_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
+        job = generate_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.owner)
         ws = _workbook(job)["کالاها"]
         cells = [str(c.value) for row in ws.iter_rows() for c in row if c.value is not None]
         self.assertNotIn("کالای فروشگاه دیگر", cells)
@@ -477,7 +612,7 @@ class ExportTenantIsolationTests(ExportTestCase):
             name="محصولِ محرمانه", slug="other-secret-exp", sku="SKU-SECRET", price=Decimal("1"), stock=1,
         )
         for export_type in SHEET_TITLES:
-            job = run_export(self.store, export_type, requested_by=self.owner)
+            job = generate_export(self.store, export_type, requested_by=self.owner)
             blob = " ".join(
                 str(c.value) for ws in _workbook(job).worksheets for row in ws.iter_rows() for c in row if c.value is not None
             )

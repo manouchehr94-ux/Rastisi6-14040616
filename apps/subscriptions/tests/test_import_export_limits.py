@@ -94,10 +94,11 @@ class ImportRowLimitTests(TestCase):
         })
         self.vendor = Vendor.objects.create(store=self.store, name="v", slug="v-ir")
         self.category = Category.objects.create(store=self.store, name="c", slug="c-ir")
+        self.leaf = Category.objects.create(store=self.store, name="leaf", slug="leaf-ir", parent=self.category)
 
     def _rows_csv(self, n):
         body = "".join(
-            f",SKU-IR-{i},کالا {i},,,active,,,1000,0,,,,,\n" for i in range(n)
+            f",SKU-IR-{i},کالا {i},,,active,,leaf-ir,1000,0,,,,,\n" for i in range(n)
         )
         return PRODUCT_HEADER + body
 
@@ -150,9 +151,26 @@ class ImportProductBudgetTests(TestCase):
         self.parent = Category.objects.create(store=self.store, name="c", slug="c-ib", parent=None)
         self.category = Category.objects.create(store=self.store, name="leaf", slug="leaf-ib", parent=self.parent)
 
-    def test_creates_stop_at_limit_but_do_not_truncate_silently(self):
-        # Limit 2, importing 3 new products: 2 created, 1 failed with a clear error.
+    def test_file_exceeding_product_limit_is_rejected_whole(self):
+        # Limit 2, importing 3 new products: nothing is created (no partial import),
+        # and the merchant gets a clear plan-limit message with a fresh preview.
         body = "".join(f",SKU-IB-{i},کالا {i},,,active,,leaf-ib,1000,0,,,,,\n" for i in range(3))
+        job = import_service.create_import_job(
+            self.store, import_type=ImportJob.ImportType.PRODUCTS,
+            uploaded_file=_csv_upload(PRODUCT_HEADER + body),
+            mode=ImportJob.Mode.UPSERT, requested_by=self.actor,
+        )
+        with self.assertRaises(import_service.ImportExecutionBlocked) as ctx:
+            import_service.run_execution(job, actor=self.actor)
+        self.assertIn("پلن", str(ctx.exception))
+        job.refresh_from_db()
+        self.assertEqual(job.status, ImportJob.Status.PREVIEW_READY)
+        self.assertEqual(Product.objects.filter(store=self.store).count(), 0)
+        self.assertEqual(usage.get_period_usage(self.store, ekeys.CATALOG_IMPORT_ROWS_MONTHLY), 0)
+        self.assertTrue(import_service.job_execution_blockers(job))
+
+    def test_file_within_product_limit_is_applied(self):
+        body = "".join(f",SKU-IB-{i},کالا {i},,,active,,leaf-ib,1000,0,,,,,\n" for i in range(2))
         job = import_service.create_import_job(
             self.store, import_type=ImportJob.ImportType.PRODUCTS,
             uploaded_file=_csv_upload(PRODUCT_HEADER + body),
@@ -160,11 +178,8 @@ class ImportProductBudgetTests(TestCase):
         )
         import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
-        self.assertEqual(job.created_rows, 2)
-        self.assertEqual(job.failed_rows, 1)
+        self.assertEqual(job.status, ImportJob.Status.COMPLETED)
         self.assertEqual(Product.objects.filter(store=self.store).count(), 2)
-        failed = ImportRowResult.objects.get(import_job=job, status=ImportRowResult.RowStatus.FAILED)
-        self.assertTrue(any("سقف" in e for e in failed.errors))
 
     def test_update_rows_succeed_at_limit(self):
         # Fill the limit with 2 products, then import an UPSERT that updates one
@@ -201,7 +216,7 @@ class ExportGateTests(TestCase):
             ekeys.CATALOG_EXPORT: {"is_enabled": False},
         })
         with self.assertRaises(FeatureNotAvailable):
-            export_service.run_export(store, ExportJob.ExportType.PRODUCTS, requested_by=self.actor)
+            export_service.generate_export(store, ExportJob.ExportType.PRODUCTS, requested_by=self.actor)
         self.assertFalse(ExportJob.objects.filter(store=store).exists())
 
     def test_export_consumes_on_success_and_blocks_at_limit(self):
@@ -209,10 +224,51 @@ class ExportGateTests(TestCase):
             ekeys.CATALOG_EXPORT: {"is_enabled": True},
             ekeys.CATALOG_EXPORTS_MONTHLY: {"is_enabled": True, "integer_limit": 1},
         })
-        export_service.run_export(store, ExportJob.ExportType.PRODUCTS, requested_by=self.actor)
+        export_service.generate_export(store, ExportJob.ExportType.PRODUCTS, requested_by=self.actor)
         self.assertEqual(usage.get_period_usage(store, ekeys.CATALOG_EXPORTS_MONTHLY), 1)
         with self.assertRaises(UsageLimitExceeded):
-            export_service.run_export(store, ExportJob.ExportType.PRODUCTS, requested_by=self.actor)
+            export_service.generate_export(store, ExportJob.ExportType.PRODUCTS, requested_by=self.actor)
         # The blocked attempt did not create a job or consume more quota.
         self.assertEqual(ExportJob.objects.filter(store=store).count(), 1)
         self.assertEqual(usage.get_period_usage(store, ekeys.CATALOG_EXPORTS_MONTHLY), 1)
+
+
+class DirectExportAllowanceTests(TestCase):
+    """«خروج اطلاعات» is direct-download: the allowance is spent only after the workbook
+    exists, a failed build costs nothing, and no file or expiry is ever retained."""
+
+    def setUp(self):
+        self.actor = User.objects.create_user(username="exp-direct", is_staff=True)
+        self.store = _store_on_plan("exp-direct", entitlements={
+            ekeys.CATALOG_EXPORT: {"is_enabled": True},
+            ekeys.CATALOG_EXPORTS_MONTHLY: {"is_enabled": True, "integer_limit": 2},
+        })
+
+    def test_failed_generation_does_not_consume_the_allowance(self):
+        from unittest import mock
+
+        with mock.patch.object(export_service, "build_export_workbook", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                export_service.generate_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.actor)
+        self.assertEqual(usage.get_period_usage(self.store, ekeys.CATALOG_EXPORTS_MONTHLY), 0)
+        job = ExportJob.objects.get(store=self.store)
+        self.assertEqual(job.status, ExportJob.Status.FAILED)
+        self.assertFalse(job.file)
+
+    def test_success_consumes_exactly_one_and_retains_only_metadata(self):
+        result = export_service.generate_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.actor)
+        self.assertEqual(usage.get_period_usage(self.store, ekeys.CATALOG_EXPORTS_MONTHLY), 1)
+        self.assertEqual(result.content[:2], b"PK")
+        job = result.job
+        job.refresh_from_db()
+        self.assertEqual((job.status, job.row_count), (ExportJob.Status.COMPLETED, result.row_count))
+        self.assertFalse(job.file)
+        self.assertIsNone(job.expires_at)
+
+    def test_limit_blocks_before_building_anything(self):
+        for _ in range(2):
+            export_service.generate_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.actor)
+        with self.assertRaises(UsageLimitExceeded):
+            export_service.generate_export(self.store, ExportJob.ExportType.PRODUCTS, requested_by=self.actor)
+        self.assertEqual(ExportJob.objects.filter(store=self.store).count(), 2)
+        self.assertEqual(usage.get_period_usage(self.store, ekeys.CATALOG_EXPORTS_MONTHLY), 2)

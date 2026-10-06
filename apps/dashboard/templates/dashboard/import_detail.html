@@ -1,7 +1,7 @@
 {% extends "dashboard/base_admin.html" %}
 {% load persian %}
-{% block title %}واردات #{{ job.pk }} | پنل مدیریت{% endblock %}
-{% block page_title %}واردات {{ job.get_import_type_display }} (شماره {{ job.pk|fa_number }}){% endblock %}
+{% block title %}ورود اطلاعات #{{ job.pk }} | پنل مدیریت{% endblock %}
+{% block page_title %}ورود اطلاعات: {{ job.get_import_type_display }} (شماره {{ job.pk|fa_number }}){% endblock %}
 {% block page_sub %}{% if uses_mode %}{{ mode_label }} — {% endif %}فایل: {{ job.original_filename }}{% endblock %}
 
 {% block extra_css %}
@@ -21,22 +21,24 @@
 .imp-err{display:flex;gap:8px;align-items:baseline;color:var(--red);font-size:12.5px;line-height:1.9}
 .imp-err .imp-col{flex:none;padding:0 8px;border-radius:999px;background:var(--red-soft);font-size:11.5px;font-weight:700;white-space:nowrap}
 .imp-warn{color:var(--amber);font-size:12.5px}
+.imp-blockers{margin:8px 0 0;padding:0 18px;font-size:12.5px;line-height:2}
+.imp-confirm{margin:0 0 10px;padding:10px 14px;border-radius:12px;background:var(--amber-soft);font-size:12.5px;line-height:1.9}
 .imp-filter a{padding:4px 12px;border:1px solid var(--border);border-radius:999px;font-size:12px}
 .imp-filter a.is-on{background:var(--primary-soft);border-color:var(--primary);color:var(--primary-text);font-weight:700}
 </style>
 {% endblock %}
 
 {% block content %}
-<div style="margin-bottom:14px"><a class="btn btn-sm" href="{% url 'dashboard:import-list' %}">→ بازگشت به فهرستِ واردات</a></div>
+<div style="margin-bottom:14px"><a class="btn btn-sm" href="{% url 'dashboard:import-list' %}">→ بازگشت به فهرستِ ورودِ اطلاعات</a></div>
 
 <div class="card" style="margin-bottom:16px">
   <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
     <div>
       وضعیت:
       {% if job.status == "completed" %}<span class="badge b-green">تکمیل‌شده</span>
-      {% elif job.status == "completed_with_errors" %}<span class="badge b-amber">تکمیل‌شده با خطا</span>
+      {% elif job.status == "completed_with_errors" %}<span class="badge b-amber">تکمیل‌شده با خطا (قدیمی)</span>
       {% elif job.status == "preview_ready" %}<span class="badge b-blue">پیش‌نمایش آماده — هنوز چیزی تغییر نکرده است</span>
-      {% elif job.status == "failed" %}<span class="badge b-red">ناموفق</span>
+      {% elif job.status == "failed" %}<span class="badge b-red">ناموفق — هیچ تغییری اعمال نشد</span>
       {% elif job.status == "cancelled" %}<span class="badge b-gray">لغوشده</span>
       {% else %}<span class="badge b-amber">{{ job.get_status_display }}</span>{% endif %}
     </div>
@@ -66,12 +68,14 @@
 
   {% if job.status == "preview_ready" %}
   <div class="card-body" style="padding-top:0">
-    {% if summary.total == 0 %}
-    <p class="imp-banner is-bad">فایل هیچ ردیفی نداشت. ردیف‌ها را زیرِ عنوانِ ستون‌ها در شیتِ «داده‌ها» وارد کنید و دوباره بارگذاری کنید.</p>
-    {% elif summary.invalid %}
-    <p class="imp-banner is-warn">{{ summary.invalid|fa_number }} ردیف خطا دارد. اگر اجرا کنید فقط ردیف‌هایِ سالم اعمال می‌شوند و ردیف‌هایِ خطادار انجام نمی‌شوند. بهتر است ابتدا «گزارشِ خطا» را دانلود و فایل را اصلاح کنید.</p>
+    {% if summary.blockers %}
+    <div class="imp-banner is-bad" role="alert">
+      <b>این فایل قابل اجرا نیست. ابتدا همه خطاها را اصلاح و فایل را دوباره بارگذاری کنید.</b>
+      <ul class="imp-blockers">{% for reason in summary.blockers %}<li>{{ reason }}</li>{% endfor %}</ul>
+      <div>هیچ تغییری روی فروشگاه اعمال نشده است. تا همه خطاها اصلاح نشوند، فایل اجرا نمی‌شود.</div>
+    </div>
     {% else %}
-    <p class="imp-banner is-ok">همه‌ی ردیف‌ها سالم‌اند. با «اجرایِ واقعی» تغییرات روی فروشگاه اعمال می‌شود.</p>
+    <p class="imp-banner is-ok">فایل با موفقیت بررسی شد. همه ردیف‌ها معتبرند و آماده اجرا هستند.{% if summary.warnings %} <span class="imp-warn">({{ summary.warnings|fa_number }} ردیف هشدار دارد؛ هشدارها مانعِ اجرا نیستند ولی پیش از تأیید آن‌ها را ببینید.)</span>{% endif %}</p>
     {% endif %}
   </div>
   {% endif %}
@@ -81,10 +85,11 @@
   {% endif %}
 
   <div class="card-body" style="border-top:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-    {% if job.status == "preview_ready" and can_manage_imports and summary.total %}
-    <form method="post" action="{% url 'dashboard:import-execute' job.pk %}">{% csrf_token %}
-      <button type="submit" class="btn btn-primary" onclick="return confirm('اجرایِ واقعی واردات؟ این کار اطلاعاتِ فروشگاه را تغییر می‌دهد.')">
-        تأییدِ اجرایِ واقعی
+    {% if can_execute %}
+    <form method="post" action="{% url 'dashboard:import-execute' job.pk %}" style="flex-basis:100%">{% csrf_token %}
+      <p class="imp-confirm">با تأیید، اطلاعاتِ فروشگاه تغییر می‌کند. فایل پیش از اجرا یک بارِ دیگر با وضعیتِ فعلیِ فروشگاه بررسی می‌شود و اگر هر مشکلی پیدا شود هیچ تغییری اعمال نمی‌شود.</p>
+      <button type="submit" class="btn btn-primary" onclick="return confirm('با تأیید، اطلاعاتِ فروشگاه تغییر می‌کند. ادامه می‌دهید؟')">
+        تأیید اجرای واقعی
       </button>
     </form>
     {% endif %}
@@ -93,9 +98,9 @@
       <button type="submit" class="btn btn-sm">لغو</button>
     </form>
     {% endif %}
-    {% if job.error_report_file %}<a class="btn btn-sm" href="{% url 'dashboard:import-download-errors' job.pk %}">دانلودِ گزارشِ خطا (اکسل)</a>{% endif %}
-    {% if job.source_file %}<a class="btn btn-sm" href="{% url 'dashboard:import-download-source' job.pk %}">دانلودِ فایلِ بارگذاری‌شده ({{ source_format|upper }})</a>{% endif %}
-    {% if can_manage_imports and job.status != "preview_ready" %}<a class="btn btn-sm" href="{% url 'dashboard:import-upload' %}?type={{ job.import_type }}">واردات تازه</a>{% endif %}
+    {% if job.error_report_file %}<a class="btn btn-sm" href="{% url 'dashboard:import-download-errors' job.pk %}">دریافتِ گزارشِ خطا (اکسل)</a>{% endif %}
+    {% if job.source_file %}<a class="btn btn-sm" href="{% url 'dashboard:import-download-source' job.pk %}">دریافتِ فایلِ بارگذاری‌شده ({{ source_format|upper }})</a>{% endif %}
+    {% if can_manage_imports and job.status != "preview_ready" %}<a class="btn btn-sm" href="{% url 'dashboard:import-upload' %}?type={{ job.import_type }}">ورودِ اطلاعاتِ تازه</a>{% endif %}
   </div>
 </div>
 

@@ -78,7 +78,8 @@ class NewCombinationTests(VariantImportTestCase):
     def test_missing_option_value_for_new_combination_rejected(self):
         csv_text = VARIANT_HEADER + ",SKU-VIMP-1,,VAR-GREEN,,رنگ,سبز,,,1000,,,1,,,\n"
         job = self._job(csv_text, mode=ImportJob.Mode.CREATE_ONLY)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
         self.assertEqual(self.product.variants.count(), 0)
@@ -147,7 +148,8 @@ class ExistingCombinationTests(VariantImportTestCase):
     def test_create_only_rejects_existing_combination(self):
         csv_text = VARIANT_HEADER + ",SKU-VIMP-1,,,,رنگ,قرمز,,,1000,,,,,,\n"
         job = self._job(csv_text, mode=ImportJob.Mode.CREATE_ONLY)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
@@ -168,14 +170,16 @@ class ValidationTests(VariantImportTestCase):
     def test_missing_product_reference_rejected(self):
         csv_text = VARIANT_HEADER + ",,,,,,,,,,,,,,,\n"
         job = self._job(csv_text, mode=ImportJob.Mode.UPSERT)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
     def test_invalid_option_code_rejected(self):
         csv_text = VARIANT_HEADER + ",SKU-VIMP-1,,,,اندازه,بزرگ,,,1000,,,,,,\n"
         job = self._job(csv_text, mode=ImportJob.Mode.UPSERT)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
@@ -199,7 +203,8 @@ class LegacyProductRejectionTests(VariantImportTestCase):
         )
         csv_text = VARIANT_HEADER + ",SKU-LEGACY-1,,,,,,,,,,,,,,\n"
         job = self._job(csv_text, mode=ImportJob.Mode.UPSERT)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
@@ -223,7 +228,8 @@ class TenantIsolationTests(VariantImportTestCase):
             f"{self.foreign_product.pk},,,,,,,,,,,,,,,\n"
         )
         job = self._job(csv_text, mode=ImportJob.Mode.UPSERT)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
@@ -237,7 +243,8 @@ class TenantIsolationTests(VariantImportTestCase):
             f",SKU-VIMP-1,{foreign_variant.pk},,,,,,,,,,,,,\n"
         )
         job = self._job(csv_text, mode=ImportJob.Mode.UPSERT)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 

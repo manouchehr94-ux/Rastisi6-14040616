@@ -17,8 +17,8 @@ ENTITLEMENT_DEFINITIONS = [
     ("catalog.variants", "تنوع‌ها", _T.INTEGER_LIMIT, True),
     ("catalog.attributes", "ویژگی‌ها", _T.BOOLEAN, True),
     ("catalog.industry_templates", "قالب‌هایِ صنف", _T.BOOLEAN, True),
-    ("catalog.import", "واردات (Import)", _T.BOOLEAN, True),
-    ("catalog.export", "صادرات (Export)", _T.BOOLEAN, True),
+    ("catalog.import", "ورود اطلاعات (Import)", _T.BOOLEAN, True),
+    ("catalog.export", "خروج اطلاعات (Export)", _T.BOOLEAN, True),
     # سفارش‌ها
     ("orders.management", "مدیریتِ سفارش", _T.BOOLEAN, True),
     ("orders.refunds", "استرداد", _T.BOOLEAN, True),
@@ -44,8 +44,8 @@ ENTITLEMENT_DEFINITIONS = [
     ("integrations.api", "API", _T.BOOLEAN, False),
     ("integrations.webhooks", "Webhookها", _T.BOOLEAN, False),
     # محدودیت‌هایِ دوره‌ای (period-based؛ سنجش در usage_service)
-    ("catalog.import_rows_monthly", "ردیف‌هایِ واردات در ماه", _T.INTEGER_LIMIT, True),
-    ("catalog.exports_monthly", "تعدادِ صادرات در ماه", _T.INTEGER_LIMIT, True),
+    ("catalog.import_rows_monthly", "ردیف‌هایِ ورود اطلاعات در ماه", _T.INTEGER_LIMIT, True),
+    ("catalog.exports_monthly", "دفعاتِ خروج اطلاعات در ماه", _T.INTEGER_LIMIT, True),
 ]
 
 # دسترسیِ سریع به کلیدها به‌عنوانِ ثابت (برایِ استفاده در سرویس‌ها بدونِ رشته‌ی خام)
@@ -71,8 +71,8 @@ COUNT_METRIC_KEYS = {
 
 #: کلیدهایِ متریکِ دوره‌ای (بر اساسِ دوره‌ی صورتحساب صفر می‌شوند).
 PERIOD_METRIC_KEYS = {
-    CATALOG_IMPORT_ROWS_MONTHLY: "ردیف‌هایِ واردات (این دوره)",
-    CATALOG_EXPORTS_MONTHLY: "صادرات‌ها (این دوره)",
+    CATALOG_IMPORT_ROWS_MONTHLY: "ردیف‌هایِ ورود اطلاعات (این دوره)",
+    CATALOG_EXPORTS_MONTHLY: "دفعاتِ خروج اطلاعات (این دوره)",
 }
 
 

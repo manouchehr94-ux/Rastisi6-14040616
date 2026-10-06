@@ -693,7 +693,7 @@ class StockMovement(TimeStampedModel):
         REFUND_RESTOCK = "refund_restock", "بازگشتِ موجودی هنگام استرداد (بدون مرجوعیِ رسمی)"
         WAREHOUSE_TRANSFER_OUT = "warehouse_transfer_out", "خروج به‌واسطه‌ی انتقال بین انبارها"
         WAREHOUSE_TRANSFER_IN = "warehouse_transfer_in", "ورود به‌واسطه‌ی انتقال بین انبارها"
-        IMPORT_ADJUSTMENT = "import_adjustment", "اصلاح موجودی از طریق واردات (Import)"
+        IMPORT_ADJUSTMENT = "import_adjustment", "اصلاح موجودی از طریق ورود اطلاعات (Import)"
 
     store = models.ForeignKey(
         "stores.Store", verbose_name="فروشگاه", on_delete=models.CASCADE, related_name="stock_movements",

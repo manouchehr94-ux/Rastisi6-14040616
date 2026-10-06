@@ -103,7 +103,8 @@ class SetOnHandTests(InventoryImportTestCase):
     def test_negative_set_on_hand_rejected(self):
         csv_text = INV_HEADER + f"{self.warehouse.code},,SKU-IIMP-1,,,set_on_hand,-3,,\n"
         job = self._job(csv_text)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
@@ -141,7 +142,8 @@ class VariantInventoryTests(InventoryImportTestCase):
         )
         csv_text = INV_HEADER + f"{self.warehouse.code},,SKU-IIMP-2,,VAR-IIMP-1,adjustment,1,,\n"
         job = self._job(csv_text)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
@@ -190,35 +192,40 @@ class ValidationTests(InventoryImportTestCase):
     def test_missing_warehouse_rejected(self):
         csv_text = INV_HEADER + ",,SKU-IIMP-1,,,adjustment,5,,\n"
         job = self._job(csv_text)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
     def test_unknown_warehouse_rejected(self):
         csv_text = INV_HEADER + "no-such-wh,,SKU-IIMP-1,,,adjustment,5,,\n"
         job = self._job(csv_text)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
     def test_missing_product_rejected(self):
         csv_text = INV_HEADER + f"{self.warehouse.code},,,,,adjustment,5,,\n"
         job = self._job(csv_text)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
     def test_invalid_mode_rejected(self):
         csv_text = INV_HEADER + f"{self.warehouse.code},,SKU-IIMP-1,,,teleport,5,,\n"
         job = self._job(csv_text)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
     def test_non_numeric_quantity_rejected(self):
         csv_text = INV_HEADER + f"{self.warehouse.code},,SKU-IIMP-1,,,adjustment,abc,,\n"
         job = self._job(csv_text)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
@@ -262,14 +269,16 @@ class TenantIsolationTests(InventoryImportTestCase):
     def test_foreign_warehouse_rejected(self):
         csv_text = INV_HEADER + f"foreign-wh-iimp,,SKU-IIMP-1,,,adjustment,5,,\n"
         job = self._job(csv_text)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
 
     def test_foreign_product_id_rejected(self):
         csv_text = INV_HEADER + f"{self.warehouse.code},{self.foreign_product.pk},,,,adjustment,5,,\n"
         job = self._job(csv_text)
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
         self.foreign_product.refresh_from_db()
@@ -374,13 +383,18 @@ class XlsxInventoryImportTests(InventoryImportTestCase):
             store=self.store, product=self.product, variant=None, quantity=7,
             status=InventoryReservation.Status.ACTIVE,
         )
+        movements_before = StockMovement.objects.filter(store=self.store).count()
         job = self._xjob([self._row(OP_ADJUST, -5), self._row(OP_SET, 3), self._row(OP_SET, 7)])
         import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
-        self.assertEqual(job.failed_rows, 2)
-        self.assertEqual(job.updated_rows, 1)
+        # reservation safety is enforced at apply time: the offending rows fail and,
+        # because import is all-or-nothing, the valid row (set to 7) is rolled back too.
+        self.assertEqual(job.status, ImportJob.Status.FAILED)
+        self.assertGreaterEqual(job.failed_rows, 1)
+        self.assertEqual(job.updated_rows, 0)
         self.product.refresh_from_db()
-        self.assertEqual(self.product.stock, 7)
+        self.assertEqual(self.product.stock, 10)
+        self.assertEqual(StockMovement.objects.filter(store=self.store).count(), movements_before)
 
     def test_duplicate_warehouse_names_are_ambiguous(self):
         _Warehouse.objects.create(store=self.store, name=self.warehouse.name, code="dup-wh-xl")
@@ -397,7 +411,8 @@ class XlsxInventoryImportTests(InventoryImportTestCase):
 
     def test_formula_in_quantity_is_rejected(self):
         job = self._xjob([self._row(OP_SET, "=5+5")])
-        import_service.run_execution(job, actor=self.actor)
+        with self.assertRaises(import_service.ImportExecutionBlocked):
+            import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
         self.product.refresh_from_db()

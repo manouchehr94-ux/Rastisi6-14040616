@@ -242,8 +242,13 @@ class CustomerBulkActionViewTests(CustomerCrmTestCase):
         response = self.client.post(reverse("dashboard:customer-bulk-action"), {
             "bulk_action": "export-selected", "customer_ids": [self.customer.pk],
         })
-        self.assertEqual(response.status_code, 302)
-        self.assertIn(reverse("dashboard:export-list"), response.url)
+        # «خروج اطلاعات» is direct-download: the XLSX is the response, nothing is stored
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Content-Type"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        self.assertTrue(response.content.startswith(b"PK"))
+        self.assertIn("attachment", response["Content-Disposition"])
 
     def test_no_selection_warns_without_crash(self):
         response = self.client.post(reverse("dashboard:customer-bulk-action"), {"bulk_action": "set-status"})
