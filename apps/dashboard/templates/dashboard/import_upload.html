@@ -1,56 +1,135 @@
 {% extends "dashboard/base_admin.html" %}
-{% block title %}واردات تازه | پنل مدیریت{% endblock %}
-{% block page_title %}واردات تازه{% endblock %}
-{% block page_sub %}نوعِ واردات، حالتِ اجرا و فایلِ CSV را انتخاب کنید — پس از آپلود، ابتدا یک پیش‌نمایشِ آزمایشی ساخته می‌شود{% endblock %}
+{% block title %}واردات از اکسل | پنل مدیریت{% endblock %}
+{% block page_title %}واردات داده‌ها از اکسل{% endblock %}
+{% block page_sub %}قالبِ اکسل را بگیرید، پر کنید و بارگذاری کنید — پیش از هر تغییر، یک پیش‌نمایش می‌بینید{% endblock %}
+
+{% block extra_css %}
+<style>
+.imp-steps{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px;padding:0;list-style:none;counter-reset:step}
+.imp-steps li{display:flex;align-items:center;gap:8px;padding:7px 12px;border:1px solid var(--border);border-radius:999px;background:var(--card);font-size:12.5px;color:var(--muted);counter-increment:step}
+.imp-steps li:before{content:counter(step);display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--primary-soft);color:var(--primary-text);font-weight:800;font-size:11.5px}
+.imp-steps li.is-now{border-color:var(--primary);color:var(--text);font-weight:700}
+.imp-steps li.is-later{opacity:.65}
+.imp-section{padding:18px 20px;border-top:1px solid var(--border)}
+.imp-section:first-of-type{border-top:0}
+.imp-section h3{margin:0 0 4px;font-size:14.5px}
+.imp-section .imp-hint{margin:0 0 12px;color:var(--muted);font-size:12.5px;line-height:1.9}
+.imp-choices{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.imp-choice{position:relative;display:flex;flex-direction:column;gap:6px;padding:14px;border:1.5px solid var(--border);border-radius:14px;background:var(--card);cursor:pointer;transition:border-color .15s,background .15s}
+.imp-choice:hover{border-color:var(--primary)}
+.imp-choice input{position:absolute;opacity:0;pointer-events:none}
+.imp-choice:has(input:checked){border-color:var(--primary);background:var(--primary-soft)}
+.imp-choice:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:2px}
+.imp-choice b{font-size:13.5px}
+.imp-choice small{color:var(--muted);font-size:12px;line-height:1.8}
+.imp-choice .imp-dl{margin-top:auto;align-self:flex-start}
+.imp-mode[hidden]{display:none}
+.imp-file{display:block;width:100%;padding:18px;border:2px dashed var(--border);border-radius:14px;background:var(--bg);font-size:13px}
+.imp-file:hover{border-color:var(--primary)}
+.imp-cols{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0;padding:0;list-style:none}
+.imp-cols li{padding:2px 10px;border-radius:999px;background:var(--bg);border:1px solid var(--border);font-size:11.5px}
+.imp-cols li.is-required{background:var(--amber-soft);border-color:transparent;font-weight:700}
+.imp-submit{display:flex;flex-wrap:wrap;align-items:center;gap:14px}
+.imp-callout{margin:0;padding:12px 14px;border-radius:12px;background:var(--blue-soft);font-size:12.5px;line-height:1.9}
+</style>
+{% endblock %}
+
 {% block content %}
 <div style="margin-bottom:14px"><a class="btn btn-sm" href="{% url 'dashboard:import-list' %}">→ بازگشت به فهرستِ واردات</a></div>
 
-<div class="grid g-2" style="gap:16px">
-  <div class="card">
-    <div class="card-head"><b>آپلودِ فایل</b></div>
-    <form method="post" action="{% url 'dashboard:import-upload' %}" enctype="multipart/form-data" style="padding:16px;display:flex;flex-direction:column;gap:14px">
-      {% csrf_token %}
-      <div>
-        <label>نوعِ واردات</label>
-        <select class="inp" name="import_type" id="importTypeSelect" style="width:100%" onchange="document.querySelectorAll('[data-cols]').forEach(e=>e.style.display=(e.dataset.cols===this.value)?'block':'none')">
-          {% for value, label in import_types %}
-          <option value="{{ value }}">{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label>حالتِ اجرا</label>
-        <select class="inp" name="mode" style="width:100%">
-          {% for value, label in modes %}
-          <option value="{{ value }}" {% if value == "upsert" %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-        <small style="color:var(--muted);display:block;margin-top:4px">
-          «فقط ایجاد» ردیف‌هایِ منطبق با رکوردِ موجود را رد می‌کند؛ «فقط به‌روزرسانی» ردیف‌هایِ بدونِ تطبیق را رد می‌کند؛ «ایجاد یا به‌روزرسانی» هر دو را انجام می‌دهد.
-        </small>
-      </div>
-      <div>
-        <label>فایلِ CSV</label>
-        <input class="inp" type="file" name="file" accept=".csv" required style="width:100%">
-      </div>
-      <button type="submit" class="btn btn-primary" style="align-self:flex-start">آپلود و ساختِ پیش‌نمایش</button>
-    </form>
-  </div>
+<ol class="imp-steps" aria-label="مراحلِ واردات">
+  <li class="is-now">انتخابِ نوعِ داده</li>
+  <li class="is-now">دانلودِ قالبِ اکسل</li>
+  <li class="is-now">تکمیلِ فایل</li>
+  <li class="is-now">بارگذاریِ فایل</li>
+  <li class="is-later">پیش‌نمایش و بررسیِ خطاها</li>
+  <li class="is-later">تأییدِ اجرایِ واقعی</li>
+</ol>
 
+<form method="post" action="{% url 'dashboard:import-upload' %}" enctype="multipart/form-data" data-import-form>
+  {% csrf_token %}
   <div class="card">
-    <div class="card-head"><b>راهنما و قالب</b></div>
-    <div style="padding:16px;font-size:12.5px;line-height:1.9">
-      <p>فایل باید UTF-8 و با سطرِ هدرِ ستون‌ها باشد. ارقامِ فارسی/عربی خودکار به لاتین تبدیل می‌شوند.</p>
+    <div class="imp-section">
+      <h3>۱) چه چیزی را وارد می‌کنید؟</h3>
+      <p class="imp-hint">نوعِ داده را انتخاب کنید. برایِ هر نوع، قالبِ اکسلِ مخصوصِ همین فروشگاه (با منوهایِ کشوییِ برند، دسته‌بندی، انبار و ...) آماده است.</p>
+      <div class="imp-choices" role="radiogroup" aria-label="نوعِ داده">
+        {% for spec in import_type_specs %}
+        <label class="imp-choice">
+          <input type="radio" name="import_type" value="{{ spec.value }}" data-uses-mode="{{ spec.uses_mode|yesno:'1,0' }}" {% if spec.value == default_import_type %}checked{% endif %}>
+          <b>{{ spec.icon }} {{ spec.label }}</b>
+          <small>{{ spec.description }}</small>
+          <a class="btn btn-sm imp-dl" href="{% url 'dashboard:import-template' spec.value %}">دانلودِ قالبِ اکسل ({{ spec.label }})</a>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="imp-section">
+      <h3>۲ و ۳) قالب را دانلود و پر کنید</h3>
+      <p class="imp-hint">فایلِ اکسل سه شیت دارد: «داده‌ها» (جایی که اطلاعات را وارد می‌کنید)، «راهنما» (توضیحِ هر ستون با مثال) و «فهرست‌ها» (گزینه‌هایِ منویِ کشویی).</p>
       {% for spec in import_type_specs %}
-      <div data-cols="{{ spec.value }}" style="{% if not forloop.first %}display:none{% endif %}">
-        <b>ستون‌هایِ «{{ spec.label }}»:</b>
-        <div style="direction:ltr;text-align:left;font-family:monospace;font-size:11.5px;background:var(--bg-soft);padding:8px;border-radius:8px;margin:6px 0;word-break:break-all">
-          {{ spec.columns }}
-        </div>
-        <a class="btn btn-sm" href="{% url 'dashboard:import-template' spec.value %}">دانلودِ قالبِ CSV</a>
+      <div data-columns-for="{{ spec.value }}" {% if spec.value != default_import_type %}hidden{% endif %}>
+        <b style="font-size:12.5px">ستون‌هایِ قالبِ «{{ spec.label }}»</b>
+        <span style="color:var(--muted);font-size:11.5px">(پررنگ = الزامی)</span>
+        <ul class="imp-cols">
+          {% for column in spec.columns %}<li class="{% if column.required != 'no' %}is-required{% endif %}">{{ column.base_label }}{% if column.required != 'no' %} *{% endif %}</li>{% endfor %}
+        </ul>
       </div>
       {% endfor %}
+      <p class="imp-callout" style="margin-top:12px">عنوانِ ستون‌ها (ردیفِ اول) را تغییر ندهید. ارقامِ فارسی مشکلی ندارند. فرمولِ اکسل اجرا نمی‌شود و فایل‌هایِ ماکرودار (xlsm) پذیرفته نمی‌شوند.</p>
+    </div>
+
+    <div class="imp-section imp-mode" data-mode-section>
+      <h3>با ردیف‌ها چه کنیم؟</h3>
+      <p class="imp-hint">اگر مطمئن نیستید، گزینه‌ی پیشنهادی را نگه دارید.</p>
+      <div class="imp-choices" role="radiogroup" aria-label="حالتِ اجرا">
+        {% for mode in modes %}
+        <label class="imp-choice">
+          <input type="radio" name="mode" value="{{ mode.value }}" {% if mode.value == default_mode %}checked{% endif %}>
+          <b>{{ mode.label }}{% if mode.value == default_mode %} <span class="badge b-green">پیشنهادی</span>{% endif %}</b>
+          <small>{{ mode.description }}</small>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="imp-section" data-inventory-note hidden>
+      <p class="imp-callout">در واردات موجودی، نوعِ عملیات را در خودِ فایل و برایِ هر ردیف مشخص می‌کنید («تنظیم موجودی نهایی» یا «افزایش/کاهش موجودی»)، پس نیازی به انتخابِ حالتِ اجرا نیست.</p>
+      <input type="hidden" name="mode" value="{{ default_mode }}" disabled data-inventory-mode>
+    </div>
+
+    <div class="imp-section">
+      <h3>۴) فایلِ تکمیل‌شده را بارگذاری کنید</h3>
+      <p class="imp-hint">فایلِ اکسل (xlsx) تا ۱۰ مگابایت و ۲۰٬۰۰۰ ردیف. فایل‌هایِ CSVِ قدیمی هم پذیرفته می‌شوند، امّا استفاده از قالبِ اکسل پیشنهاد می‌شود.</p>
+      <input class="imp-file" type="file" name="file" accept=".xlsx,.csv" required aria-label="فایلِ اکسل">
+    </div>
+
+    <div class="imp-section imp-submit">
+      <button type="submit" class="btn btn-primary">بررسیِ فایل و ساختِ پیش‌نمایش</button>
+      <span style="color:var(--muted);font-size:12.5px">تا وقتی در مرحله‌ی بعد «اجرایِ واقعی» را تأیید نکنید، هیچ داده‌ای تغییر نمی‌کند.</span>
     </div>
   </div>
-</div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var form = document.querySelector('[data-import-form]');
+  if (!form) return;
+  function sync() {
+    var checked = form.querySelector('input[name="import_type"]:checked');
+    if (!checked) return;
+    var usesMode = checked.dataset.usesMode === '1';
+    var modeSection = form.querySelector('[data-mode-section]');
+    var note = form.querySelector('[data-inventory-note]');
+    modeSection.hidden = !usesMode;
+    note.hidden = usesMode;
+    form.querySelectorAll('input[name="mode"]:not([data-inventory-mode])').forEach(function (r) { r.disabled = !usesMode; });
+    form.querySelector('[data-inventory-mode]').disabled = usesMode;
+    form.querySelectorAll('[data-columns-for]').forEach(function (el) { el.hidden = el.dataset.columnsFor !== checked.value; });
+  }
+  form.addEventListener('change', sync);
+  sync();
+})();
+</script>
 {% endblock %}

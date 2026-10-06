@@ -240,3 +240,73 @@ class TenantIsolationTests(VariantImportTestCase):
         import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.invalid_rows, 1)
+
+
+# ============================================================ XLSX (primary format)
+
+from apps.dashboard.services import import_xlsx  # noqa: E402
+from apps.dashboard.tests.xlsx_helpers import xlsx_upload  # noqa: E402
+
+XLSX_VARIANT_HEADERS = [
+    "شناسه کالا", "SKU کالا *", "شناسه تنوع", "SKU تنوع", "بارکد", "نام ویژگی ۱", "مقدار ویژگی ۱",
+    "نام ویژگی ۲", "مقدار ویژگی ۲", "تغییر قیمت (تومان)", "قیمت مقایسه‌ای (تومان)", "بهای تمام‌شده (تومان)",
+    "موجودی", "وزن (گرم)", "فعال", "پیش‌فرض",
+]
+
+
+class XlsxVariantImportTests(VariantImportTestCase):
+    def _xjob(self, rows, *, mode=ImportJob.Mode.UPSERT):
+        return import_service.create_import_job(
+            self.store, import_type=ImportJob.ImportType.VARIANTS,
+            uploaded_file=xlsx_upload(XLSX_VARIANT_HEADERS, rows, name="variants.xlsx"),
+            mode=mode, requested_by=self.actor,
+        )
+
+    def _row(self, **kw):
+        base = {
+            "pid": None, "psku": "SKU-VIMP-1", "vid": None, "vsku": "XV-RED", "barcode": None,
+            "o1": "رنگ", "v1": "قرمز", "o2": None, "v2": None, "price": "۱۵٬۰۰۰", "cmp": None, "cost": 8000,
+            "stock": "۵", "weight": None, "active": "بله", "default": "بله",
+        }
+        base.update(kw)
+        return list(base.values())
+
+    def test_create_variant_from_persian_headers_and_values(self):
+        job = self._xjob([self._row()], mode=ImportJob.Mode.CREATE_ONLY)
+        import_service.run_preview(job, actor=self.actor)
+        job.refresh_from_db()
+        self.assertEqual(job.valid_rows, 1)
+        self.assertEqual(job.row_results.get().normalized_data_summary, {"action": "create"})
+        self.assertEqual(self.product.variants.count(), 0)
+        import_service.run_execution(job, actor=self.actor)
+        variant = ProductVariant.objects.get(product=self.product, sku="XV-RED")
+        self.assertEqual(variant.extra_price, Decimal("15000"))
+        self.assertEqual(variant.cost, Decimal("8000"))
+        self.assertEqual(variant.stock, 5)
+        self.assertTrue(variant.is_default)
+
+    def test_update_existing_combination_by_option_names(self):
+        generate_variants(self.product)
+        job = self._xjob([self._row(vsku="XV-NEW", price=777, stock=None, default=None)], mode=ImportJob.Mode.UPDATE_ONLY)
+        import_service.run_execution(job, actor=self.actor)
+        job.refresh_from_db()
+        self.assertEqual(job.updated_rows, 1)
+        self.assertEqual(ProductVariant.objects.get(product=self.product, sku="XV-NEW").extra_price, Decimal("777"))
+
+    def test_errors_name_the_option_columns_in_merchant_language(self):
+        job = self._xjob([self._row(v1="سبز"), self._row(psku="NOPE", vsku="X2")])
+        import_service.run_preview(job, actor=self.actor)
+        bad_value, bad_product = job.row_results.order_by("row_number")
+        d = import_xlsx.describe_errors("variants", bad_value.errors)
+        self.assertEqual((bad_value.row_number, d[0]["column"]), (2, "مقدار ویژگی ۱"))
+        self.assertNotIn("option_1", d[0]["message"])
+        self.assertNotIn("محور", d[0]["message"])
+        self.assertEqual(bad_product.row_number, 3)
+        self.assertEqual(import_xlsx.describe_errors("variants", bad_product.errors)[0]["column"], "SKU کالا")
+
+    def test_missing_option_names_message_is_not_technical(self):
+        job = self._xjob([self._row(o1=None, v1=None, vsku="X3")], mode=ImportJob.Mode.CREATE_ONLY)
+        import_service.run_preview(job, actor=self.actor)
+        text = " ".join(d["message"] for d in import_xlsx.describe_errors("variants", job.row_results.get().errors))
+        self.assertIn("نامِ ویژگی", text)
+        self.assertNotIn("option_N_code", text)

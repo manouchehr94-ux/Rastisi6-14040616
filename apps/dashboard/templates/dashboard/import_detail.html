@@ -1,88 +1,149 @@
 {% extends "dashboard/base_admin.html" %}
 {% load persian %}
 {% block title %}واردات #{{ job.pk }} | پنل مدیریت{% endblock %}
-{% block page_title %}واردات {{ job.get_import_type_display }} #{{ job.pk|fa_number }}{% endblock %}
-{% block page_sub %}حالت: {{ job.get_mode_display }} — فایل: {{ job.original_filename }}{% endblock %}
+{% block page_title %}واردات {{ job.get_import_type_display }} (شماره {{ job.pk|fa_number }}){% endblock %}
+{% block page_sub %}{% if uses_mode %}{{ mode_label }} — {% endif %}فایل: {{ job.original_filename }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.imp-tiles{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
+.imp-tile{padding:12px 14px;border:1px solid var(--border);border-radius:14px;background:var(--card)}
+.imp-tile b{display:block;font-size:22px;line-height:1.4}
+.imp-tile span{color:var(--muted);font-size:12px}
+.imp-tile.is-good b{color:var(--green)}
+.imp-tile.is-info b{color:var(--blue)}
+.imp-tile.is-bad b{color:var(--red)}
+.imp-tile.is-warn b{color:var(--amber)}
+.imp-banner{margin:0;padding:12px 16px;border-radius:12px;font-size:13px;line-height:1.9}
+.imp-banner.is-ok{background:var(--green-soft)}
+.imp-banner.is-warn{background:var(--amber-soft)}
+.imp-banner.is-bad{background:var(--red-soft)}
+.imp-err{display:flex;gap:8px;align-items:baseline;color:var(--red);font-size:12.5px;line-height:1.9}
+.imp-err .imp-col{flex:none;padding:0 8px;border-radius:999px;background:var(--red-soft);font-size:11.5px;font-weight:700;white-space:nowrap}
+.imp-warn{color:var(--amber);font-size:12.5px}
+.imp-filter a{padding:4px 12px;border:1px solid var(--border);border-radius:999px;font-size:12px}
+.imp-filter a.is-on{background:var(--primary-soft);border-color:var(--primary);color:var(--primary-text);font-weight:700}
+</style>
+{% endblock %}
+
 {% block content %}
 <div style="margin-bottom:14px"><a class="btn btn-sm" href="{% url 'dashboard:import-list' %}">→ بازگشت به فهرستِ واردات</a></div>
 
 <div class="card" style="margin-bottom:16px">
-  <div class="card-head" style="display:flex;justify-content:space-between;align-items:center">
+  <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
     <div>
       وضعیت:
       {% if job.status == "completed" %}<span class="badge b-green">تکمیل‌شده</span>
       {% elif job.status == "completed_with_errors" %}<span class="badge b-amber">تکمیل‌شده با خطا</span>
-      {% elif job.status == "preview_ready" %}<span class="badge b-blue">پیش‌نمایش آماده (هنوز اجرا نشده)</span>
+      {% elif job.status == "preview_ready" %}<span class="badge b-blue">پیش‌نمایش آماده — هنوز چیزی تغییر نکرده است</span>
       {% elif job.status == "failed" %}<span class="badge b-red">ناموفق</span>
       {% elif job.status == "cancelled" %}<span class="badge b-gray">لغوشده</span>
       {% else %}<span class="badge b-amber">{{ job.get_status_display }}</span>{% endif %}
     </div>
+    {% if uses_mode %}<small style="color:var(--muted)" title="{{ mode_description }}">حالت: {{ mode_label }}</small>{% endif %}
   </div>
-  <div class="card-body" style="display:flex;gap:22px;flex-wrap:wrap;font-size:13px">
-    <div><b style="font-size:19px">{{ job.total_rows|fa_number }}</b><div style="color:var(--muted)">کل ردیف</div></div>
-    <div><b style="font-size:19px">{{ job.valid_rows|fa_number }}</b><div style="color:var(--muted)">معتبر</div></div>
-    <div><b style="font-size:19px;color:var(--red)">{{ job.invalid_rows|fa_number }}</b><div style="color:var(--muted)">نامعتبر</div></div>
-    <div><b style="font-size:19px">{{ job.created_rows|fa_number }}</b><div style="color:var(--muted)">ایجادشده</div></div>
-    <div><b style="font-size:19px">{{ job.updated_rows|fa_number }}</b><div style="color:var(--muted)">به‌روزشده</div></div>
-    <div><b style="font-size:19px">{{ job.skipped_rows|fa_number }}</b><div style="color:var(--muted)">ردشده</div></div>
-    <div><b style="font-size:19px;color:var(--red)">{{ job.failed_rows|fa_number }}</b><div style="color:var(--muted)">ناموفق</div></div>
+
+  <div class="card-body">
+    {% if job.status == "preview_ready" %}
+    <div class="imp-tiles">
+      <div class="imp-tile"><b>{{ summary.total|fa_number }}</b><span>کلِ ردیف‌ها</span></div>
+      <div class="imp-tile is-good"><b>{{ summary.will_create|fa_number }}</b><span>ساخته می‌شوند</span></div>
+      <div class="imp-tile is-info"><b>{{ summary.will_update|fa_number }}</b><span>بروزرسانی می‌شوند</span></div>
+      <div class="imp-tile is-bad"><b>{{ summary.invalid|fa_number }}</b><span>ردیفِ دارایِ خطا</span></div>
+      <div class="imp-tile is-warn"><b>{{ summary.warnings|fa_number }}</b><span>ردیفِ دارایِ هشدار</span></div>
+    </div>
+    {% else %}
+    <div class="imp-tiles">
+      <div class="imp-tile"><b>{{ job.total_rows|fa_number }}</b><span>کلِ ردیف‌ها</span></div>
+      <div class="imp-tile is-good"><b>{{ job.created_rows|fa_number }}</b><span>ساخته شد</span></div>
+      <div class="imp-tile is-info"><b>{{ job.updated_rows|fa_number }}</b><span>بروزرسانی شد</span></div>
+      <div class="imp-tile"><b>{{ job.skipped_rows|fa_number }}</b><span>ردشده (بدونِ تغییر)</span></div>
+      <div class="imp-tile is-bad"><b>{{ job.invalid_rows|fa_number }}</b><span>نامعتبر</span></div>
+      <div class="imp-tile is-bad"><b>{{ job.failed_rows|fa_number }}</b><span>ناموفق</span></div>
+    </div>
+    {% endif %}
   </div>
-  {% if job.error_summary %}
+
+  {% if job.status == "preview_ready" %}
+  <div class="card-body" style="padding-top:0">
+    {% if summary.total == 0 %}
+    <p class="imp-banner is-bad">فایل هیچ ردیفی نداشت. ردیف‌ها را زیرِ عنوانِ ستون‌ها در شیتِ «داده‌ها» وارد کنید و دوباره بارگذاری کنید.</p>
+    {% elif summary.invalid %}
+    <p class="imp-banner is-warn">{{ summary.invalid|fa_number }} ردیف خطا دارد. اگر اجرا کنید فقط ردیف‌هایِ سالم اعمال می‌شوند و ردیف‌هایِ خطادار انجام نمی‌شوند. بهتر است ابتدا «گزارشِ خطا» را دانلود و فایل را اصلاح کنید.</p>
+    {% else %}
+    <p class="imp-banner is-ok">همه‌ی ردیف‌ها سالم‌اند. با «اجرایِ واقعی» تغییرات روی فروشگاه اعمال می‌شود.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if job.error_summary and job.status != "preview_ready" %}
   <div class="card-body" style="color:var(--red);border-top:1px solid var(--border)">{{ job.error_summary }}</div>
   {% endif %}
 
   <div class="card-body" style="border-top:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-    {% if job.status == "preview_ready" and can_manage_imports %}
+    {% if job.status == "preview_ready" and can_manage_imports and summary.total %}
     <form method="post" action="{% url 'dashboard:import-execute' job.pk %}">{% csrf_token %}
-      <button type="submit" class="btn btn-primary" onclick="return confirm('اجرای واقعی واردات؟ این عملیات داده‌ی فروشگاه را تغییر می‌دهد.')">
-        اجرای واردات ({{ job.get_mode_display }})
+      <button type="submit" class="btn btn-primary" onclick="return confirm('اجرایِ واقعی واردات؟ این کار اطلاعاتِ فروشگاه را تغییر می‌دهد.')">
+        تأییدِ اجرایِ واقعی
       </button>
     </form>
+    {% endif %}
+    {% if job.status == "preview_ready" and can_manage_imports %}
     <form method="post" action="{% url 'dashboard:import-cancel' job.pk %}">{% csrf_token %}
       <button type="submit" class="btn btn-sm">لغو</button>
     </form>
     {% endif %}
-    {% if job.source_file %}<a class="btn btn-sm" href="{% url 'dashboard:import-download-source' job.pk %}">دانلودِ فایلِ منبع</a>{% endif %}
-    {% if job.error_report_file %}<a class="btn btn-sm" href="{% url 'dashboard:import-download-errors' job.pk %}">دانلودِ گزارشِ خطا (CSV)</a>{% endif %}
+    {% if job.error_report_file %}<a class="btn btn-sm" href="{% url 'dashboard:import-download-errors' job.pk %}">دانلودِ گزارشِ خطا (اکسل)</a>{% endif %}
+    {% if job.source_file %}<a class="btn btn-sm" href="{% url 'dashboard:import-download-source' job.pk %}">دانلودِ فایلِ بارگذاری‌شده ({{ source_format|upper }})</a>{% endif %}
+    {% if can_manage_imports and job.status != "preview_ready" %}<a class="btn btn-sm" href="{% url 'dashboard:import-upload' %}?type={{ job.import_type }}">واردات تازه</a>{% endif %}
   </div>
 </div>
 
 <div class="card">
-  <div class="card-head"><b>نتیجه‌ی ردیف‌ها</b></div>
+  <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+    <b>نتیجه‌ی ردیف‌ها</b>
+    <span class="imp-filter" style="display:flex;gap:6px">
+      <a href="?" class="{% if not only_problems %}is-on{% endif %}">همه</a>
+      <a href="?only=problems" class="{% if only_problems %}is-on{% endif %}">فقط خطا و هشدار</a>
+    </span>
+  </div>
   <div class="table-wrap"><table>
-    <thead><tr><th>ردیف</th><th>شناسه</th><th>وضعیت</th><th>خطاها / هشدارها</th></tr></thead>
+    <thead><tr><th>{{ row_label }}</th><th>شناسه</th><th>وضعیت</th><th>مشکل / هشدار</th></tr></thead>
     <tbody>
     {% for row in row_results %}
       <tr>
         <td>{{ row.row_number|fa_number }}</td>
         <td dir="ltr" style="text-align:right">{{ row.source_identifier|default:"—" }}</td>
         <td>
-          {% if row.status == "created" %}<span class="badge b-green">ایجاد</span>
-          {% elif row.status == "updated" %}<span class="badge b-blue">به‌روز</span>
-          {% elif row.status == "valid" %}<span class="badge b-blue">معتبر</span>
-          {% elif row.status == "skipped" %}<span class="badge b-gray">ردشده</span>
-          {% elif row.status == "invalid" %}<span class="badge b-amber">نامعتبر</span>
+          {% if row.status == "created" %}<span class="badge b-green">ساخته شد</span>
+          {% elif row.status == "updated" %}<span class="badge b-blue">بروزرسانی شد</span>
+          {% elif row.status == "valid" %}
+            {% if row.normalized_data_summary.action == "create" %}<span class="badge b-green">ساخته می‌شود</span>
+            {% elif row.normalized_data_summary.action == "update" %}<span class="badge b-blue">بروزرسانی می‌شود</span>
+            {% else %}<span class="badge b-blue">معتبر</span>{% endif %}
+          {% elif row.status == "skipped" %}<span class="badge b-gray">بدونِ تغییر</span>
+          {% elif row.status == "invalid" %}<span class="badge b-amber">دارایِ خطا</span>
           {% else %}<span class="badge b-red">ناموفق</span>{% endif %}
         </td>
-        <td style="font-size:12px">
-          {% for e in row.errors %}<div style="color:var(--red)">• {{ e }}</div>{% endfor %}
-          {% for w in row.warnings %}<div style="color:var(--amber,#b45309)">⚠ {{ w }}</div>{% endfor %}
+        <td>
+          {% for e in row.described_errors %}<div class="imp-err">{% if e.column %}<span class="imp-col">{{ e.column }}</span>{% endif %}<span>{{ e.message }}</span></div>{% endfor %}
+          {% for w in row.warnings %}<div class="imp-warn">⚠ {{ w }}</div>{% endfor %}
           {% if not row.errors and not row.warnings %}—{% endif %}
         </td>
       </tr>
     {% empty %}
-      <tr><td colspan="4" style="text-align:center;color:var(--muted);padding:30px">هیچ ردیفی ثبت نشده است</td></tr>
+      <tr><td colspan="4" style="text-align:center;color:var(--muted);padding:30px">{% if only_problems %}ردیفِ دارایِ خطا یا هشدار وجود ندارد{% else %}هیچ ردیفی ثبت نشده است{% endif %}</td></tr>
     {% endfor %}
     </tbody>
   </table></div>
   {% if page_obj.paginator.num_pages > 1 %}
   <div class="pagination" style="display:flex;gap:8px;align-items:center;justify-content:center;padding:14px 0">
     {% if page_obj.has_previous %}
-    <a class="btn btn-sm" href="?page={{ page_obj.previous_page_number }}">قبلی</a>
+    <a class="btn btn-sm" href="?{% if only_problems %}only=problems&amp;{% endif %}page={{ page_obj.previous_page_number }}">قبلی</a>
     {% endif %}
     <span style="font-size:12.5px;color:var(--muted)">صفحه‌ی {{ page_obj.number|fa_number }} از {{ page_obj.paginator.num_pages|fa_number }}</span>
     {% if page_obj.has_next %}
-    <a class="btn btn-sm" href="?page={{ page_obj.next_page_number }}">بعدی</a>
+    <a class="btn btn-sm" href="?{% if only_problems %}only=problems&amp;{% endif %}page={{ page_obj.next_page_number }}">بعدی</a>
     {% endif %}
   </div>
   {% endif %}

@@ -113,7 +113,7 @@ from apps.core.services.audit_service import list_audit_events, record_audit_eve
 from apps.core.services.export_service import ExportError, run_export
 from apps.subscriptions.services.entitlement_service import EntitlementError
 from apps.subscriptions.services import enforcement as subscription_enforcement
-from apps.dashboard.services import import_service
+from apps.dashboard.services import import_service, import_xlsx
 from apps.dashboard.services.import_service import ImportServiceError
 from apps.cart.models import Coupon
 from apps.cart.services.coupon_service import (
@@ -195,6 +195,7 @@ from apps.catalog.services.variant_service import (
 from apps.core.color_utils import safe_hex
 from apps.core.utils import normalize_digits
 from apps.core.models import ExportJob, ImportJob, ImportRowResult, ShopSettings
+from apps.core.services.xlsx_utils import XLSX_CONTENT_TYPE, safe_download_filename
 from apps.core.theme_presets import THEME_PRESETS, matching_preset_key
 from apps.customers.models import (
     Customer,
@@ -6262,9 +6263,13 @@ def export_download(request, pk):
         object_type="ExportJob", object_id=str(job.pk),
         object_label=f"دانلودِ صادراتِ {job.get_export_type_display()}",
     )
+    # فایل‌هایِ تازه XLSX‌اند؛ خروجی‌هایِ CSVِ قدیمی (پیش از این بازطراحی) هنوز
+    # تا زمانِ انقضا با قالب و نوعِ واقعیِ خودشان دانلود می‌شوند.
+    extension = "xlsx" if job.file.name.lower().endswith(".xlsx") else "csv"
     response = FileResponse(
         job.file.open("rb"), as_attachment=True,
-        filename=f"{job.export_type}-{job.pk}.csv", content_type="text/csv",
+        filename=f"{job.export_type}-{job.pk}.{extension}",
+        content_type=XLSX_CONTENT_TYPE if extension == "xlsx" else "text/csv",
     )
     return response
 
@@ -6274,11 +6279,37 @@ def export_download(request, pk):
 IMPORT_ROW_RESULTS_PER_PAGE = 50
 
 
+IMPORT_TYPE_UI = {
+    ImportJob.ImportType.PRODUCTS: {
+        "icon": "📦", "description": "افزودن یا ویرایشِ گروهیِ کالاها: نام، قیمت، دسته‌بندی، موجودی، سئو و ...",
+        "uses_mode": True,
+    },
+    ImportJob.ImportType.VARIANTS: {
+        "icon": "🎨", "description": "ساخت یا ویرایشِ تنوع‌ها (رنگ، سایز و ...) برایِ کالاهایی که ویژگیِ تنوع دارند.",
+        "uses_mode": True,
+    },
+    ImportJob.ImportType.INVENTORY: {
+        "icon": "🏬", "description": "تغییرِ موجودیِ کالاها در انبارها؛ یا تنظیمِ موجودیِ نهایی یا افزایش/کاهش.",
+        "uses_mode": False,
+    },
+}
+
+
+def _import_mode_choices():
+    return [
+        {"value": value, "label": import_xlsx.MODE_LABELS[value], "description": import_xlsx.MODE_DESCRIPTIONS[value]}
+        for value in (ImportJob.Mode.UPSERT, ImportJob.Mode.CREATE_ONLY, ImportJob.Mode.UPDATE_ONLY)
+    ]
+
+
 @staff_required
 @permission_required(IMPORT_EXPORT_VIEW)
 def import_list(request):
     store = _resolve_dashboard_store(request)
-    jobs = ImportJob.objects.filter(store=store).select_related("requested_by").order_by("-created_at")[:100]
+    jobs = list(ImportJob.objects.filter(store=store).select_related("requested_by").order_by("-created_at")[:100])
+    for job in jobs:
+        job.mode_label = import_xlsx.MODE_LABELS.get(job.mode, job.get_mode_display())
+        job.source_format = import_service.job_source_format(job)
     return render(request, "dashboard/import_list.html", {
         "jobs": jobs, "active_page": "imports",
         "import_types": ImportJob.ImportType.choices,
@@ -6297,6 +6328,7 @@ def import_upload(request):
         if uploaded is None:
             messages.error(request, "فایلی انتخاب نشده است.")
             return redirect("dashboard:import-upload")
+        job = None
         try:
             job = import_service.create_import_job(
                 store, import_type=import_type, uploaded_file=uploaded, mode=mode,
@@ -6304,30 +6336,61 @@ def import_upload(request):
             )
             import_service.run_preview(job, actor=request.user)
         except ImportServiceError as exc:
+            if job is not None:
+                # فایل بارگذاری شد ولی خوانده نشد (مثلاً خراب است): Job را ناموفق ثبت کن
+                # تا در تاریخچه «بارگذاری‌شده»ِ معلق نماند.
+                from django.utils import timezone
+
+                job.status = ImportJob.Status.FAILED
+                job.error_summary = str(exc)[:500]
+                job.completed_at = timezone.now()
+                job.save(update_fields=["status", "error_summary", "completed_at"])
             messages.error(request, str(exc))
             return redirect("dashboard:import-upload")
         return redirect("dashboard:import-detail", pk=job.pk)
 
     import_type_specs = [
-        {"value": value, "label": label, "columns": ", ".join(import_service.IMPORT_COLUMNS[value])}
+        {
+            "value": value, "label": label, **IMPORT_TYPE_UI[value],
+            "columns": [c for c in import_xlsx.IMPORT_SPECS[value] if c.in_template],
+        }
         for value, label in ImportJob.ImportType.choices
     ]
+    requested_type = request.GET.get("type")
     return render(request, "dashboard/import_upload.html", {
         "active_page": "imports",
-        "import_types": ImportJob.ImportType.choices,
-        "modes": ImportJob.Mode.choices,
         "import_type_specs": import_type_specs,
+        "modes": _import_mode_choices(),
+        "default_mode": ImportJob.Mode.UPSERT,
+        "default_import_type": requested_type if requested_type in ImportJob.ImportType.values else ImportJob.ImportType.PRODUCTS,
     })
 
 
 def _import_detail_context(request, job):
     row_results = job.row_results.all().order_by("row_number")
+    only_problems = request.GET.get("only") == "problems"
+    if only_problems:
+        problem_ids = [
+            row.pk for row in row_results.only("pk", "status", "warnings")
+            if row.status in (ImportRowResult.RowStatus.INVALID, ImportRowResult.RowStatus.FAILED) or row.warnings
+        ]
+        row_results = job.row_results.filter(pk__in=problem_ids).order_by("row_number")
     paginator = Paginator(row_results, IMPORT_ROW_RESULTS_PER_PAGE)
     page_obj = paginator.get_page(request.GET.get("page", "1"))
+    for row in page_obj:
+        row.described_errors = import_xlsx.describe_errors(job.import_type, row.errors)
+    source_format = import_service.job_source_format(job)
     return {
         "job": job, "active_page": "imports",
         "row_results": page_obj, "page_obj": page_obj, "paginator": paginator,
         "can_manage_imports": membership_has_permission(request.store_membership, IMPORT_EXPORT_MANAGE),
+        "summary": import_service.job_preview_summary(job),
+        "mode_label": import_xlsx.MODE_LABELS.get(job.mode, job.get_mode_display()),
+        "mode_description": import_xlsx.MODE_DESCRIPTIONS.get(job.mode, ""),
+        "uses_mode": IMPORT_TYPE_UI.get(job.import_type, {}).get("uses_mode", True),
+        "source_format": source_format,
+        "row_label": "ردیف در اکسل" if source_format == "xlsx" else "ردیف",
+        "only_problems": only_problems,
     }
 
 
@@ -6382,9 +6445,14 @@ def import_download_source(request, pk):
         store=store, actor=request.user, action_code="import.source_downloaded",
         object_type="ImportJob", object_id=str(job.pk), object_label=job.original_filename,
     )
+    # فایلِ منبع در قالبِ اصلیِ خودش (xlsx یا csv) و با نوعِ محتوایِ درست دانلود می‌شود.
+    extension = "xlsx" if job.source_file.name.lower().endswith(".xlsx") else "csv"
     return FileResponse(
         job.source_file.open("rb"), as_attachment=True,
-        filename=f"{job.import_type}-source-{job.pk}.csv", content_type="text/csv",
+        filename=safe_download_filename(
+            job.original_filename, extension, f"{job.import_type}-source-{job.pk}",
+        ),
+        content_type=XLSX_CONTENT_TYPE if extension == "xlsx" else "text/csv",
     )
 
 
@@ -6399,22 +6467,37 @@ def import_download_errors(request, pk):
         store=store, actor=request.user, action_code="import.error_report_downloaded",
         object_type="ImportJob", object_id=str(job.pk), object_label=job.original_filename,
     )
+    extension = "xlsx" if job.error_report_file.name.lower().endswith(".xlsx") else "csv"
     return FileResponse(
         job.error_report_file.open("rb"), as_attachment=True,
-        filename=f"{job.import_type}-errors-{job.pk}.csv", content_type="text/csv",
+        filename=f"{job.import_type}-errors-{job.pk}.{extension}",
+        content_type=XLSX_CONTENT_TYPE if extension == "xlsx" else "text/csv",
     )
 
 
 @staff_required
 @permission_required(IMPORT_EXPORT_VIEW)
 def import_template(request, import_type):
-    _resolve_dashboard_store(request)
+    store = _resolve_dashboard_store(request)
+    if request.GET.get("format") == "csv":
+        # قالبِ CSVِ قدیمی (ستون‌هایِ داخلی) — فقط برایِ سازگاریِ عقب‌رو؛ UI به آن لینک نمی‌دهد.
+        try:
+            content = import_service.build_template_csv(import_type)
+        except ImportServiceError:
+            raise Http404
+        response = HttpResponse(content, content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="{import_type}-template.csv"'
+        return response
     try:
-        content = import_service.build_template_csv(import_type)
+        content = import_service.build_template_xlsx(store, import_type)
     except ImportServiceError:
         raise Http404
-    response = HttpResponse(content, content_type="text/csv")
-    response["Content-Disposition"] = f'attachment; filename="{import_type}-template.csv"'
+    record_audit_event(
+        store=store, actor=request.user, action_code="import.template_downloaded",
+        object_type="ImportTemplate", object_id=import_type, object_label=f"قالبِ واردات {import_type}",
+    )
+    response = HttpResponse(content, content_type=XLSX_CONTENT_TYPE)
+    response["Content-Disposition"] = f'attachment; filename="{import_type}-import-template.xlsx"'
     return response
 
 

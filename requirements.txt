@@ -10,6 +10,11 @@ cryptography>=43.0,<50
 psycopg[binary]>=3.2,<4
 
 beautifulsoup4>=4.12,<5
+
+# Real .xlsx reading/writing for merchant import/export (exports are genuine
+# OOXML workbooks, never renamed CSV). Pure Python; also used to inspect the
+# generated workbooks in tests.
+openpyxl>=3.1,<4
 PySocks>=1.7.1,<2
 
 # Real DNS TXT/CNAME lookups for custom-domain ownership verification
