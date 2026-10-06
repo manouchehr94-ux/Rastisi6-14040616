@@ -1,11 +1,12 @@
 {% extends "portal/public/base_public.html" %}
+{% load static %}
 {% block title %}ورود | راستی‌سی{% endblock %}
 {% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
 
 {% block content %}
 <section class="r-auth-section">
   <div class="rs-container">
-    <div class="r-auth-shell" x-data="{ mode: '{% if otp_form.errors %}otp{% else %}password{% endif %}' }">
+    <div class="r-auth-shell r-auth-shell--form-first" x-data="{ mode: '{% if otp_form.errors %}otp{% else %}password{% endif %}' }">
       <aside class="r-auth-story">
         <div class="rs-eyebrow">برگردید به فروشگاهتان</div>
         <h1>پشتِ هر ویترین،<br>جایی برای مدیریت.</h1>
@@ -25,7 +26,7 @@
           <button type="button" class="r-auth-tab" :class="mode === 'otp' ? 'is-active' : ''" @click="mode='otp'">رمز یک‌بارمصرف</button>
         </div>
 
-        <form method="post" action="{% url 'portal:login-password' %}" x-show="mode === 'password'" x-cloak novalidate>
+        <form method="post" action="{% url 'portal:login-password' %}" x-show="mode === 'password'" x-cloak novalidate data-auth-form data-loading-text="در حال ورود…">
           {% csrf_token %}
           {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
           {% if admin_return %}<input type="hidden" name="admin_return" value="{{ admin_return }}">{% endif %}
@@ -40,22 +41,33 @@
           <div class="r-form-links"><a href="{% url 'portal:password-reset-request' %}">فراموشی رمز عبور</a></div>
         </form>
 
-        <form method="post" x-show="mode === 'otp'" x-cloak novalidate>
+        <form method="post" x-show="mode === 'otp'" x-cloak novalidate data-auth-form data-loading-text="در حال ارسال کد…">
           {% csrf_token %}
           {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
           {% if admin_return %}<input type="hidden" name="admin_return" value="{{ admin_return }}">{% endif %}
           {% if otp_form.non_field_errors %}<div class="p-alert p-alert-error">{{ otp_form.non_field_errors.0 }}</div>{% endif %}
 
-          <div class="p-field"><label for="id_phone">شماره موبایل</label>{{ otp_form.phone }}{% if otp_form.phone.errors %}<div class="p-error">{{ otp_form.phone.errors.0 }}</div>{% endif %}</div>
+          <div class="p-field">
+            <label for="id_phone">شماره موبایل</label>
+            {{ otp_form.phone }}
+            <div class="r-field-hint" id="id_phone_hint">مثلاً <span class="r-phone-inline">0912 123 4567</span></div>
+            {% if otp_form.phone.errors %}<div class="p-error" id="id_phone_error">{{ otp_form.phone.errors.0 }}</div>{% endif %}
+          </div>
           <label class="p-remember-me">{{ otp_form.remember_me }} مرا به خاطر بسپار</label>
+          {% if registration_open %}
+          <p class="r-field-hint r-otp-account-note">اگر این شماره هنوز حساب مالک ندارد، بعد از تأیید کد، نام و نام خانوادگی شما را می‌پرسیم و حساب مالک و فروشگاه آزمایشی شما ساخته می‌شود.</p>
+          {% else %}
+          <p class="r-field-hint r-otp-account-note">ساخت حساب جدید فعلاً در دسترس نیست؛ فقط مالکانی که قبلاً حساب ساخته‌اند می‌توانند با کد یک‌بارمصرف وارد شوند.</p>
+          {% endif %}
 
           {% include "portal/public/_turnstile.html" with turnstile_action="login_otp" %}
           <button type="submit" class="rs-btn rs-btn-primary r-form-submit">ارسال رمز یک‌بارمصرف</button>
         </form>
 
-        <div class="r-form-links">حساب ندارید؟ <a href="{% url 'portal:register' %}">ساخت حساب</a></div>
+        {% if registration_open %}<div class="r-form-links">حساب ندارید؟ <a href="{% url 'portal:register' %}">ساخت حساب</a></div>{% endif %}
       </div>
     </div>
   </div>
 </section>
 {% endblock %}
+{% block extra_js %}{{ block.super }}<script src="{% static 'portal/js/auth-forms.js' %}?v=20261006-3" defer></script>{% endblock %}

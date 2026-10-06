@@ -1,5 +1,7 @@
 from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
+import time
+
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.http import Http404
@@ -7,6 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from django.conf import settings
@@ -47,7 +50,8 @@ from .forms import (
     OwnerIdentifierLoginForm,
     OwnerOtpVerifyForm,
     OwnerPhoneRequestForm,
-    OwnerRegisterForm,
+    OwnerRegistrationRequestForm,
+    OwnerSignupCompletionForm,
     PasswordResetConfirmForm,
     PasswordResetRequestForm,
 )
@@ -57,6 +61,7 @@ from .services import (
     handoff_service,
     owner_auth_service,
     owner_otp_service,
+    platform_config_service,
     provisioning_service,
     session_service,
     step_up_service,
@@ -72,6 +77,17 @@ _OTP_SESSION_FULL_NAME_KEY = "portal_otp_full_name"
 _OTP_SESSION_NEXT_KEY = "portal_otp_next"
 _OTP_SESSION_ADMIN_RETURN_KEY = "portal_otp_admin_return"
 _OTP_SESSION_REMEMBER_KEY = "portal_otp_remember_me"
+_OTP_SESSION_FLASH_KEY = "portal_otp_flash"
+#: «شمارهٔ تأییدشده، منتظرِ تکمیلِ ثبت‌نام» — فقط سمتِ سرور (نشست)، با عمرِ کوتاه،
+#: و تنها پس از موفقیتِ OTP نوشته می‌شود. مرحله‌ی تکمیل شماره را *فقط* از همین
+#: می‌خواند، هرگز از بدنه‌ی درخواست.
+_SIGNUP_PENDING_KEY = "portal_signup_pending"
+SIGNUP_PENDING_TTL_SECONDS = 600
+_OTP_SESSION_KEYS = (
+    _OTP_SESSION_PHONE_KEY, _OTP_SESSION_PURPOSE_KEY, _OTP_SESSION_FULL_NAME_KEY,
+    _OTP_SESSION_NEXT_KEY, _OTP_SESSION_ADMIN_RETURN_KEY, _OTP_SESSION_REMEMBER_KEY,
+    _OTP_SESSION_FLASH_KEY,
+)
 
 
 def _turnstile_form_is_valid(request, form, *, action: str) -> bool:
@@ -219,6 +235,7 @@ def _request_otp_and_go_to_verify(
     except owner_otp_service.OtpRateLimitError as exc:
         return None, str(exc)
 
+    request.session.pop(_SIGNUP_PENDING_KEY, None)
     request.session[_OTP_SESSION_PHONE_KEY] = phone
     request.session[_OTP_SESSION_PURPOSE_KEY] = purpose
     request.session[_OTP_SESSION_FULL_NAME_KEY] = full_name
@@ -258,20 +275,32 @@ def _post_login_redirect(request, user, *, next_url: str, admin_return: str):
 
 
 def register(request):
-    """Section 3: primary owner registration is phone + OTP, not email +
-    password (that flow is kept, not deleted — see register_email — for
-    existing accounts and platform-superuser recovery)."""
+    """Section 3: owner registration is phone + OTP only. There is no public
+    email+password registration (``/register-email/`` just redirects here);
+    email accounts that already exist keep logging in through ``/login/``.
+
+    نامِ کامل الزامی است و فقط از همین فرم می‌آید؛ شماره و نام در نشستِ
+    سمتِ سرور نگه داشته می‌شوند و ``/verify/`` هیچ نامی را از کلاینت نمی‌پذیرد.
+    وقتی ``new_store_registration_enabled`` خاموش است، این صفحه اطلاعِ
+    ناموجود بودنِ ثبت‌نام را می‌دهد و هیچ OTPی صادر نمی‌شود؛ مالکانِ موجود از
+    ``/login/`` وارد می‌شوند."""
     if request.user.is_authenticated:
         return redirect("portal:app-home")
 
+    if not platform_config_service.is_new_store_registration_enabled():
+        return render(
+            request, "portal/public/register.html",
+            {"form": OwnerRegistrationRequestForm(), "registration_open": False},
+        )
+
     if request.method == "POST":
-        form = OwnerPhoneRequestForm(request.POST)
+        form = OwnerRegistrationRequestForm(request.POST)
         if form.is_valid() and _turnstile_form_is_valid(
             request, form, action="register"
         ):
             phone, error = _request_otp_and_go_to_verify(
                 request, phone_raw=form.cleaned_data["phone"],
-                full_name=form.cleaned_data.get("full_name", ""), purpose=OwnerOtpChallenge.Purpose.REGISTER,
+                full_name=form.cleaned_data["full_name"], purpose=OwnerOtpChallenge.Purpose.REGISTER,
                 remember_me=form.cleaned_data.get("remember_me", False),
             )
             if error:
@@ -279,8 +308,8 @@ def register(request):
             else:
                 return redirect("portal:otp-verify")
     else:
-        form = OwnerPhoneRequestForm()
-    return render(request, "portal/public/register.html", {"form": form})
+        form = OwnerRegistrationRequestForm()
+    return render(request, "portal/public/register.html", {"form": form, "registration_open": True})
 
 
 def login_view(request):
@@ -329,6 +358,7 @@ def login_view(request):
         {
             "otp_form": otp_form, "password_form": password_form,
             "next": next_url, "admin_return": admin_return,
+            "registration_open": platform_config_service.is_new_store_registration_enabled(),
         },
     )
 
@@ -370,101 +400,246 @@ def login_password(request):
         {
             "otp_form": otp_form, "password_form": form,
             "next": next_url, "admin_return": admin_return, "password_mode": True,
+            "registration_open": platform_config_service.is_new_store_registration_enabled(),
+        },
+    )
+
+
+_OTP_CHECK_MESSAGES = {
+    owner_otp_service.OtpCheckResult.INVALID: "کد واردشده درست نیست؛ دوباره بررسی کنید.",
+    owner_otp_service.OtpCheckResult.EXPIRED: "این کد منقضی یا قبلاً استفاده شده است؛ کد جدید دریافت کنید.",
+    owner_otp_service.OtpCheckResult.TOO_MANY_ATTEMPTS: "تعداد تلاش‌های این کد به حد مجاز رسید؛ کد جدید دریافت کنید.",
+}
+_REGISTRATION_CLOSED_LOGIN_MESSAGE = (
+    "حسابی با این شماره پیدا نشد و ساخت فروشگاه تازه موقتاً در دسترس نیست."
+)
+_INACTIVE_ACCOUNT_MESSAGE = "ورود با این شماره امکان‌پذیر نیست؛ لطفاً با پشتیبانی تماس بگیرید."
+
+
+def _clear_otp_session(request) -> None:
+    for key in _OTP_SESSION_KEYS:
+        request.session.pop(key, None)
+
+
+def _render_otp_verify(request, form, *, phone: str, purpose: str):
+    is_registration = purpose == OwnerOtpChallenge.Purpose.REGISTER
+    return render(
+        request, "portal/public/otp_verify.html",
+        {
+            "form": form, "phone": phone, "purpose": purpose, "is_registration": is_registration,
+            "resend_url": reverse("portal:otp-resend"),
+            "change_phone_url": reverse("portal:register" if is_registration else "portal:login"),
+            "timing": owner_otp_service.resend_timing(phone=phone, purpose=purpose),
+            "otp_ttl_minutes": max(1, owner_otp_service.OTP_TTL_SECONDS // 60),
+            "flash": request.session.pop(_OTP_SESSION_FLASH_KEY, None),
         },
     )
 
 
 def otp_verify(request):
+    """تأییدِ کدِ OTP و تکمیلِ ورود/ثبت‌نام.
+
+    همه‌ی وضعیت (شماره، هدف، نامِ ثبت‌نام، next، …) از **نشستِ سمتِ سرور** که
+    درخواستِ OTP ساخته می‌آید؛ بدنه‌ی POST فقط ``code`` (و یک ``phone`` برایِ
+    تشخیصِ صفحه‌ی کهنه) را می‌دهد. فروشگاهِ آزمایشیِ اول فقط وقتی ساخته می‌شود
+    که همین درخواست ``OwnerProfile`` را واقعاً ساخته باشد (``owner_created``)
+    — چه ``User`` تازه باشد چه مشتریِ موجود."""
     phone = request.session.get(_OTP_SESSION_PHONE_KEY)
     purpose = request.session.get(_OTP_SESSION_PURPOSE_KEY)
     if not phone or not purpose:
         return redirect("portal:login")
 
-    if request.method == "POST":
-        form = OwnerOtpVerifyForm(request.POST)
-        if form.is_valid() and form.cleaned_data["phone"] == phone:
-            ok = owner_otp_service.verify_otp(phone=phone, purpose=purpose, code=form.cleaned_data["code"])
-            if not ok:
-                form.add_error(None, "کد نادرست یا منقضی‌شده است.")
-            else:
-                full_name = request.session.get(_OTP_SESSION_FULL_NAME_KEY, "")
-                next_url = request.session.get(_OTP_SESSION_NEXT_KEY, "")
-                admin_return = request.session.get(_OTP_SESSION_ADMIN_RETURN_KEY, "")
-                remember_me = request.session.get(_OTP_SESSION_REMEMBER_KEY, False)
-                for key in (
-                    _OTP_SESSION_PHONE_KEY, _OTP_SESSION_PURPOSE_KEY,
-                    _OTP_SESSION_FULL_NAME_KEY, _OTP_SESSION_NEXT_KEY,
-                    _OTP_SESSION_ADMIN_RETURN_KEY, _OTP_SESSION_REMEMBER_KEY,
-                ):
-                    request.session.pop(key, None)
-                user, created = owner_auth_service.get_or_create_owner_by_phone(
-                    phone=phone, full_name=full_name,
-                )
-                auth_login(request, user)
-                session_service.apply_remember_me(request, remember_me)
+    is_registration = purpose == OwnerOtpChallenge.Purpose.REGISTER
+    if is_registration and not request.session.get(_OTP_SESSION_FULL_NAME_KEY):
+        # نشستِ ثبت‌نام بدونِ نام معتبر نیست (نباید رخ دهد)؛ از ابتدا شروع شود.
+        _clear_otp_session(request)
+        return redirect("portal:register")
 
-                if created:
-                    # Section 3.1 ("onboarding mode C"): registration
-                    # provisions exactly one trial Store automatically —
-                    # the owner never sees an empty My Stores page or a
-                    # separate "create store" click on their very first visit.
-                    try:
-                        store = provisioning_service.provision_trial_store(
-                            owner=user, name=DEFAULT_TRIAL_STORE_NAME,
-                        )
-                    except provisioning_service.ProvisioningError:
-                        messages.error(
-                            request,
-                            "حساب شما ساخته شد، اما ساخت فروشگاه آزمایشی کامل نشد؛ "
-                            "از صفحه «فروشگاه‌های من» دوباره تلاش کنید.",
-                        )
-                    else:
-                        return redirect("portal:onboarding", store_public_id=store.public_id)
+    if request.method != "POST":
+        return _render_otp_verify(request, OwnerOtpVerifyForm(initial={"phone": phone}), phone=phone, purpose=purpose)
 
-                return _post_login_redirect(request, user, next_url=next_url, admin_return=admin_return)
-    else:
-        form = OwnerOtpVerifyForm(initial={"phone": phone})
-    resend_url_name = "portal:register" if purpose == OwnerOtpChallenge.Purpose.REGISTER else "portal:login"
-    return render(
-        request, "portal/public/otp_verify.html",
-        {
-            "form": form, "phone": phone, "resend_url": reverse(resend_url_name),
-            "resend_next": request.session.get(_OTP_SESSION_NEXT_KEY, ""),
-            "resend_admin_return": request.session.get(_OTP_SESSION_ADMIN_RETURN_KEY, ""),
-            "resend_full_name": request.session.get(_OTP_SESSION_FULL_NAME_KEY, ""),
-            "resend_remember_me": request.session.get(_OTP_SESSION_REMEMBER_KEY, False),
-        },
+    form = OwnerOtpVerifyForm(request.POST)
+    if not form.is_valid():
+        return _render_otp_verify(request, form, phone=phone, purpose=purpose)
+    posted_phone = form.cleaned_data.get("phone")
+    if posted_phone and posted_phone != phone:
+        form.add_error(None, "این صفحه مربوط به درخواستِ قدیمی است؛ صفحه را دوباره باز کنید.")
+        return _render_otp_verify(request, form, phone=phone, purpose=purpose)
+
+    result = owner_otp_service.check_otp(phone=phone, purpose=purpose, code=form.cleaned_data["code"])
+    if result is not owner_otp_service.OtpCheckResult.OK:
+        form.add_error("code", _OTP_CHECK_MESSAGES[result])
+        return _render_otp_verify(request, form, phone=phone, purpose=purpose)
+
+    full_name = request.session.get(_OTP_SESSION_FULL_NAME_KEY, "") if is_registration else ""
+    next_url = request.session.get(_OTP_SESSION_NEXT_KEY, "")
+    admin_return = request.session.get(_OTP_SESSION_ADMIN_RETURN_KEY, "")
+    remember_me = request.session.get(_OTP_SESSION_REMEMBER_KEY, False)
+    _clear_otp_session(request)
+
+    registration_open = platform_config_service.is_new_store_registration_enabled()
+    try:
+        identity = owner_auth_service.resolve_owner_identity_by_phone(
+            phone=phone, full_name=full_name,
+            # /register/ already captured the name server-side, so it may create the
+            # Owner now. /login/ never creates one: OTP only proves the phone, and a
+            # phone without an Owner continues to the «تکمیل ثبت‌نام» step.
+            allow_new_owner=registration_open and is_registration,
+        )
+    except owner_auth_service.NewOwnerRegistrationClosedError:
+        if not is_registration and registration_open:
+            request.session[_SIGNUP_PENDING_KEY] = {
+                "phone": phone, "verified_at": int(time.time()), "next": next_url,
+                "admin_return": admin_return, "remember_me": bool(remember_me),
+            }
+            return redirect("portal:signup-complete")
+        messages.warning(request, _REGISTRATION_CLOSED_LOGIN_MESSAGE)
+        return redirect("portal:login")
+    except owner_auth_service.OwnerAccountInactiveError:
+        messages.error(request, _INACTIVE_ACCOUNT_MESSAGE)
+        return redirect("portal:login")
+
+    return _finish_owner_login(
+        request, identity, next_url=next_url, admin_return=admin_return, remember_me=remember_me,
     )
 
 
-def register_email(request):
-    """Legacy email+password registration — kept for existing accounts and
-    platform-superuser recovery (Section 3), not the primary flow anymore."""
+def _finish_owner_login(request, identity, *, next_url: str, admin_return: str, remember_me: bool):
+    """ورودِ نهایی پس از تعیینِ هویتِ مالک — مشترک بینِ تأییدِ OTP و مرحله‌ی
+    «تکمیل ثبت‌نام». فروشگاهِ آزمایشیِ اول فقط وقتی ساخته می‌شود که همین درخواست
+    ``OwnerProfile`` را واقعاً ساخته باشد (``owner_created``)."""
+    auth_login(request, identity.user)
+    session_service.apply_remember_me(request, remember_me)
+
+    if identity.owner_created:
+        # Section 3.1 ("onboarding mode C"): the first time a person becomes
+        # an Owner (new User OR an existing storefront Customer) exactly one
+        # trial Store is provisioned — the owner never sees an empty My
+        # Stores page on their very first visit.
+        try:
+            store, store_created = provisioning_service.provision_initial_trial_store(
+                owner=identity.user, name=DEFAULT_TRIAL_STORE_NAME,
+            )
+        except provisioning_service.RegistrationClosedError:
+            messages.error(request, provisioning_service.REGISTRATION_CLOSED_MESSAGE)
+        except provisioning_service.ProvisioningError:
+            messages.error(
+                request,
+                "حساب شما ساخته شد، اما ساخت فروشگاه آزمایشی کامل نشد؛ "
+                "از صفحه «فروشگاه‌های من» دوباره تلاش کنید.",
+            )
+        else:
+            if store_created:
+                return redirect("portal:onboarding", store_public_id=store.public_id)
+
+    return _post_login_redirect(request, identity.user, next_url=next_url, admin_return=admin_return)
+
+
+def _get_pending_signup(request):
+    """وضعیتِ «شمارهٔ تأییدشده» از نشستِ سرور؛ منقضی/خراب → پاک و ``None``."""
+    pending = request.session.get(_SIGNUP_PENDING_KEY)
+    if isinstance(pending, dict):
+        phone, verified_at = pending.get("phone"), pending.get("verified_at")
+        if (
+            isinstance(phone, str) and phone and isinstance(verified_at, int)
+            and 0 <= time.time() - verified_at <= SIGNUP_PENDING_TTL_SECONDS
+        ):
+            return pending
+    request.session.pop(_SIGNUP_PENDING_KEY, None)
+    return None
+
+
+def signup_complete(request):
+    """«تکمیل ثبت‌نام»: شمارهٔ تأییدشده با OTP هنوز مالک ندارد؛ نامِ کامل را می‌گیرد و
+    سپس (با سرویس‌هایِ سخت‌شده‌ی هویت/راه‌اندازی) دقیقاً یک ``OwnerProfile`` و یک
+    فروشگاهِ آزمایشی می‌سازد.
+
+    امنیت: شماره **فقط** از نشستِ سمتِ سرور (که تنها پس از موفقیتِ OTP نوشته
+    می‌شود و عمرِ کوتاه دارد) خوانده می‌شود؛ هیچ شماره‌ای از بدنه‌ی درخواست
+    نمی‌آید و بدونِ OTP این آدرس چیزی نمی‌سازد. وضعیت پس از موفقیت پاک می‌شود
+    (تک‌مصرف)؛ تکرار/دابل‌سابمیت/مسابقه را یکتاییِ دیتابیس و قفلِ سرویس‌ها ایمن
+    می‌کند. اگر ``new_store_registration_enabled`` خاموش شده باشد هیچ‌چیز ساخته
+    نمی‌شود."""
+    pending = _get_pending_signup(request)
+    if pending is None:
+        return redirect("portal:login")
     if request.user.is_authenticated:
+        request.session.pop(_SIGNUP_PENDING_KEY, None)
         return redirect("portal:app-home")
 
+    phone = pending["phone"]
+    context = {"phone": phone, "registration_open": True}
+    if not platform_config_service.is_new_store_registration_enabled():
+        context.update(form=OwnerSignupCompletionForm(), registration_open=False)
+        return render(request, "portal/public/signup_complete.html", context)
+
     if request.method == "POST":
-        form = OwnerRegisterForm(request.POST)
-        try:
-            enforce_rate_limit(
-                "register_email", request.META.get("REMOTE_ADDR", "unknown"), max_attempts=10, window_seconds=600,
-            )
-        except RateLimitExceeded:
-            messages.error(request, "تعداد تلاش ثبت‌نام بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید.")
-            return render(request, "portal/public/register_email.html", {"form": form})
-        if form.is_valid() and _turnstile_form_is_valid(
-            request, form, action="register_email"
-        ):
+        form = OwnerSignupCompletionForm(request.POST)  # a posted "phone" is never read
+        if form.is_valid():
             try:
-                user = owner_auth_service.register_owner(**form.cleaned_data)
-            except owner_auth_service.OwnerAuthError as exc:
-                form.add_error(None, str(exc))
-            else:
-                auth_login(request, user)
-                return redirect("portal:app-home")
+                identity = owner_auth_service.resolve_owner_identity_by_phone(
+                    phone=phone, full_name=form.cleaned_data["full_name"],
+                    allow_new_owner=platform_config_service.is_new_store_registration_enabled(),
+                )
+            except owner_auth_service.NewOwnerRegistrationClosedError:
+                context.update(form=OwnerSignupCompletionForm(), registration_open=False)
+                return render(request, "portal/public/signup_complete.html", context)
+            except owner_auth_service.OwnerAccountInactiveError:
+                request.session.pop(_SIGNUP_PENDING_KEY, None)
+                messages.error(request, _INACTIVE_ACCOUNT_MESSAGE)
+                return redirect("portal:login")
+            request.session.pop(_SIGNUP_PENDING_KEY, None)  # single use
+            return _finish_owner_login(
+                request, identity, next_url=pending.get("next", ""),
+                admin_return=pending.get("admin_return", ""), remember_me=bool(pending.get("remember_me")),
+            )
     else:
-        form = OwnerRegisterForm()
-    return render(request, "portal/public/register_email.html", {"form": form})
+        form = OwnerSignupCompletionForm()
+    context["form"] = form
+    return render(request, "portal/public/signup_complete.html", context)
+
+
+@require_POST
+def otp_resend(request):
+    """ارسالِ دوباره‌ی کد برایِ همان درخواستِ در-جریان. شماره/هدف/نام/next همه
+    از نشستِ سرور می‌آید (هیچ فیلدِ پنهانِ کلاینتی خوانده نمی‌شود). سقفِ
+    درخواست به‌ازایِ شماره و IP همان سقف‌هایِ ``request_otp`` است؛ شمارشِ
+    معکوسِ صفحه فقط UX است. Turnstile در همان درخواستِ اولِ ثبت‌نام/ورود
+    اعمال شده و هر حلِ آن حداکثر به سقفِ شماره (۳ پیامک/۱۰ دقیقه) می‌رسد."""
+    phone = request.session.get(_OTP_SESSION_PHONE_KEY)
+    purpose = request.session.get(_OTP_SESSION_PURPOSE_KEY)
+    if not phone or not purpose:
+        return redirect("portal:login")
+
+    if (
+        purpose == OwnerOtpChallenge.Purpose.REGISTER
+        and not platform_config_service.is_new_store_registration_enabled()
+    ):
+        _clear_otp_session(request)
+        return redirect("portal:register")
+
+    try:
+        owner_otp_service.request_otp(
+            phone=phone, purpose=purpose, client_ip=request.META.get("REMOTE_ADDR", "unknown"),
+        )
+    except owner_otp_service.OtpRateLimitError as exc:
+        request.session[_OTP_SESSION_FLASH_KEY] = {"kind": "error", "text": str(exc)}
+    else:
+        request.session[_OTP_SESSION_FLASH_KEY] = {"kind": "ok", "text": "کد جدید ارسال شد."}
+    return redirect("portal:otp-verify")
+
+
+@csrf_exempt  # reads nothing from the request: a stale cached form POST redirects instead of 403
+def register_email(request):
+    """Compatibility redirect — anonymous email+password registration no longer exists.
+
+    New merchant/Owner registration must go through a verified mobile OTP:
+    ``/register/`` (name + phone) or ``/login/`` → ``/signup/complete/``. Any
+    method (GET *or* POST) is sent to ``/register/``; the body is never read,
+    so nothing is created, nobody is authenticated and no Store is provisioned.
+    Existing email accounts keep logging in via ``/login/`` (email + password)
+    and ``/reset-password/``."""
+    return redirect("portal:register")
 
 
 def login_email(request):

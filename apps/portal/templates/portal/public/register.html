@@ -1,38 +1,63 @@
 {% extends "portal/public/base_public.html" %}
-{% block title %}ایجاد حساب | راستی‌سی{% endblock %}
+{% load static %}
+{% block title %}ساخت حساب مالک فروشگاه | راستی‌سی{% endblock %}
 {% block content %}
 <section class="r-auth-section">
   <div class="rs-container">
-    <div class="r-auth-shell">
-      <aside class="r-auth-story">
+    <div class="r-auth-shell r-auth-shell--form-first{% if not registration_open %} r-auth-shell--closed{% endif %}">
+      {% if registration_open %}<aside class="r-auth-story">
         <div class="rs-eyebrow">شروع مسیر</div>
         <h1>اول حساب.<br>بعد فروشگاه شما.</h1>
-        <p>ثبت‌نام اولین قدم است. بعد از تأیید شماره موبایل، مسیر ساخت فروشگاه در حساب مالک ادامه پیدا می‌کند.</p>
+        <p>با تأیید شماره موبایل، حساب مالک شما ساخته می‌شود و راه‌اندازی فروشگاه آزمایشی مرحله‌به‌مرحله ادامه پیدا می‌کند.</p>
         <div class="r-auth-points">
-          <div class="r-auth-point">بدون نیاز به شروع از کدنویسی</div>
-          <div class="r-auth-point">تأیید حساب با جریان واقعی پروژه</div>
-          <div class="r-auth-point">ادامه مستقیم به مسیر ساخت فروشگاه</div>
+          <div class="r-auth-point">تأیید شماره با کد ۶ رقمی پیامکی</div>
+          <div class="r-auth-point">ساخت فروشگاه آزمایشی بعد از تأیید</div>
+          <div class="r-auth-point">راه‌اندازی مرحله‌به‌مرحله: معرفی، صنف، ظاهر</div>
         </div>
-      </aside>
+      </aside>{% endif %}
 
       <div class="r-auth-form">
-        <div class="r-auth-form-head"><h2>ایجاد حساب</h2><p>اطلاعات اولیه را وارد کنید تا مرحله تأیید حساب آغاز شود.</p></div>
+        {% if registration_open %}
+        <div class="r-auth-form-head">
+          <h2>ساخت حساب مالک فروشگاه</h2>
+          <p>نام و شماره موبایل خود را وارد کنید؛ کد تأیید برایتان پیامک می‌شود.</p>
+        </div>
 
-        <form method="post" novalidate>
+        <form method="post" novalidate data-auth-form data-loading-text="در حال ارسال کد…">
           {% csrf_token %}
-          {% if form.non_field_errors %}<div class="p-alert p-alert-error">{{ form.non_field_errors.0 }}</div>{% endif %}
+          {% if form.non_field_errors %}<div class="p-alert p-alert-error" role="alert">{{ form.non_field_errors.0 }}</div>{% endif %}
 
-          <div class="p-field"><label for="id_full_name">نام و نام خانوادگی</label>{{ form.full_name }}{% if form.full_name.errors %}<div class="p-error">{{ form.full_name.errors.0 }}</div>{% endif %}</div>
-          <div class="p-field"><label for="id_phone">شماره موبایل</label>{{ form.phone }}{% if form.phone.errors %}<div class="p-error">{{ form.phone.errors.0 }}</div>{% endif %}</div>
+          <div class="p-field">
+            <label for="id_full_name">نام و نام خانوادگی <span class="r-required" aria-hidden="true">*</span></label>
+            {{ form.full_name }}
+            {% if form.full_name.errors %}<div class="p-error" id="id_full_name_error">{{ form.full_name.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="p-field">
+            <label for="id_phone">شماره موبایل <span class="r-required" aria-hidden="true">*</span></label>
+            {{ form.phone }}
+            <div class="r-field-hint" id="id_phone_hint">مثلاً <span class="r-phone-inline">0912 123 4567</span> — کد تأیید به همین شماره پیامک می‌شود.</div>
+            {% if form.phone.errors %}<div class="p-error" id="id_phone_error">{{ form.phone.errors.0 }}</div>{% endif %}
+          </div>
+          <label class="p-remember-me">{{ form.remember_me }} مرا در این دستگاه به خاطر بسپار</label>
 
           {% include "portal/public/_turnstile.html" with turnstile_action="register" %}
           <button type="submit" class="rs-btn rs-btn-primary r-form-submit">دریافت کد تأیید</button>
         </form>
 
-        <div class="r-form-links">قبلاً حساب دارید؟ <a href="{% url 'portal:login' %}">وارد شوید</a></div>
-        <div class="r-security-note">شماره موبایل برای تأیید حساب و ادامه امن مسیر ثبت‌نام استفاده می‌شود.</div>
+        <div class="r-form-links">قبلاً حساب ساخته‌اید؟ <a href="{% url 'portal:login' %}">وارد شوید</a></div>
+        <div class="r-security-note">شماره موبایل فقط برای تأیید حساب و ورود امن استفاده می‌شود. ادامه‌ی ثبت‌نام به معنی پذیرش <a href="{% url 'portal:terms' %}">شرایط استفاده</a> است.</div>
+        {% else %}
+        <div class="r-auth-closed" role="status">
+          <h2>ساخت فروشگاه تازه موقتاً در دسترس نیست</h2>
+          <p>در حال حاضر ثبت‌نام فروشگاه‌های جدید متوقف شده است؛ لطفاً بعداً دوباره سر بزنید.</p>
+          <p>اگر قبلاً حساب دارید، ورود شما و دسترسی به فروشگاه‌های موجودتان تغییری نکرده است.</p>
+          <a class="rs-btn rs-btn-primary r-form-submit" href="{% url 'portal:login' %}">ورود به حساب</a>
+          <div class="r-form-links"><a href="{% url 'portal:contact' %}">تماس با ما</a></div>
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>
 </section>
 {% endblock %}
+{% block extra_js %}{{ block.super }}<script src="{% static 'portal/js/auth-forms.js' %}?v=20261006-3" defer></script>{% endblock %}

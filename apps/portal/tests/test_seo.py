@@ -49,9 +49,10 @@ class AuthAndAccountPageNoindexTests(TestCase):
         response = self.client.get("/login-email/", HTTP_HOST=_HOST, follow=True)
         self.assertContains(response, "noindex")
 
-    def test_register_email_is_noindex(self):
+    def test_register_email_is_only_a_redirect_to_the_registration_page(self):
         response = self.client.get("/register-email/", HTTP_HOST=_HOST)
-        self.assertContains(response, "noindex")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/register/")
 
     def test_password_reset_request_is_noindex(self):
         response = self.client.get("/reset-password/", HTTP_HOST=_HOST)

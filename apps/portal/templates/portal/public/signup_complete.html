@@ -1,0 +1,48 @@
+{% extends "portal/public/base_public.html" %}
+{% load static %}
+{% block title %}تکمیل ثبت‌نام | راستی‌سی{% endblock %}
+{% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block content %}
+<section class="r-auth-section">
+  <div class="rs-container">
+    <div class="r-auth-shell r-auth-shell--form-first{% if not registration_open %} r-auth-shell--closed{% endif %}">
+      {% if registration_open %}<aside class="r-auth-story">
+        <div class="rs-eyebrow">شماره تأیید شد</div>
+        <h1>یک قدم تا<br>فروشگاه شما.</h1>
+        <p>با تکمیل ثبت‌نام، حساب مالک و فروشگاه آزمایشی‌تان ساخته می‌شود و راه‌اندازی مرحله‌به‌مرحله ادامه پیدا می‌کند.</p>
+      </aside>{% endif %}
+
+      <div class="r-auth-form">
+        {% if registration_open %}
+        <div class="r-auth-form-head">
+          <h2>تکمیل ثبت‌نام</h2>
+          <p>شماره موبایل شما تأیید شد. برای ساخت فروشگاه، نام و نام خانوادگی خود را وارد کنید.</p>
+        </div>
+
+        <p class="r-verified-phone">شماره تأییدشده: <span class="r-phone-inline">{{ phone }}</span></p>
+
+        <form method="post" novalidate data-auth-form data-loading-text="در حال ساخت فروشگاه…">
+          {% csrf_token %}
+          {% if form.non_field_errors %}<div class="p-alert p-alert-error" role="alert">{{ form.non_field_errors.0 }}</div>{% endif %}
+          <div class="p-field">
+            <label for="id_full_name">نام و نام خانوادگی <span class="r-required" aria-hidden="true">*</span></label>
+            {{ form.full_name }}
+            {% if form.full_name.errors %}<div class="p-error" id="id_full_name_error">{{ form.full_name.errors.0 }}</div>{% endif %}
+          </div>
+          <button type="submit" class="rs-btn rs-btn-primary r-form-submit">ساخت فروشگاه و ادامه</button>
+        </form>
+        {% else %}
+        <div class="r-auth-closed" role="status">
+          <h2>ساخت فروشگاه تازه موقتاً در دسترس نیست</h2>
+          <p>در حال حاضر ثبت‌نام فروشگاه‌های جدید متوقف شده است؛ لطفاً بعداً دوباره سر بزنید.</p>
+          <p>اگر قبلاً حساب مالک دارید، ورود شما و دسترسی به فروشگاه‌های موجودتان تغییری نکرده است.</p>
+          <a class="rs-btn rs-btn-primary r-form-submit" href="{% url 'portal:login' %}">بازگشت به ورود</a>
+          <div class="r-form-links"><a href="{% url 'portal:contact' %}">تماس با ما</a></div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+{% block extra_js %}{{ block.super }}<script src="{% static 'portal/js/auth-forms.js' %}?v=20261006-3" defer></script>{% endblock %}

@@ -4079,10 +4079,14 @@ via `apps.portal.phone.normalize_iranian_phone` (accepts `09...`,
 6-digit code (hashed at rest with Django's own password hasher, 2-minute
 TTL, 3 requests per phone per 10 minutes, 10 requests per IP per 10
 minutes, 5 verify attempts before permanent invalidation, single-use).
-The old email+password flow is **not deleted** — it moved to
-`/register-email/` and `/login-email/`, kept exactly as built (ADR-93) for
-existing accounts and platform-superuser recovery, per the spec's own
-explicit allowance.
+Email+password **login** is not deleted: existing email accounts and
+platform superusers still sign in through the unified `/login/` (password
+tab) and recover via `/reset-password/`. *(Update, owner-registration audit:
+anonymous email+password **registration** was removed. `/register-email/` and
+`/login-email/` are now pure compatibility redirects to `/register/` and
+`/login/`; new Owners are created only through a verified mobile OTP —
+`/register/`, or `/login/` → `/signup/complete/`. `register_owner()` remains
+an internal service function with no public route.)*
 
 **The shared-identity decision.** `apps.customers.services.auth_service`
 already uses `User.username = phone` for storefront customers. Rather than

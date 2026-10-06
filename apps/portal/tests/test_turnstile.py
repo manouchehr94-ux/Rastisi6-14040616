@@ -182,21 +182,17 @@ class ProtectedPublicFormsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("_auth_user_id", self.client.session)
 
-    def test_legacy_email_registration_is_blocked_when_turnstile_fails(self):
-        with self._deny():
-            response = self.client.post(
-                "/register-email/",
-                {
-                    "full_name": "Bot Email",
-                    "email": "bot-email@example.com",
-                    "password": "a-very-strong-pass-1",
-                },
-                HTTP_HOST=_HOST,
-            )
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(
-            User.objects.filter(username="bot-email@example.com").exists()
+    def test_legacy_email_registration_route_only_redirects_and_never_creates_anything(self):
+        # Anonymous email registration was removed: the route is a redirect, so
+        # there is nothing left for Turnstile to guard (and nothing is created).
+        response = self.client.post(
+            "/register-email/",
+            {"full_name": "Bot Email", "email": "bot-email@example.com", "password": "a-very-strong-pass-1"},
+            HTTP_HOST=_HOST,
         )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/register/")
+        self.assertFalse(User.objects.filter(username="bot-email@example.com").exists())
 
     def test_password_reset_request_is_blocked_when_turnstile_fails(self):
         owner_auth_service.register_owner(

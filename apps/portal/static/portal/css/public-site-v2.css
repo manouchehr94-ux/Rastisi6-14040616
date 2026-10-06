@@ -881,3 +881,60 @@ h1,h2,h3,h4,p{margin-top:0}
 .rs-bento-photo img{display:block;width:100%;height:100%;object-fit:cover;transition:transform .45s ease}
 .rs-bento-card:hover .rs-bento-photo img{transform:scale(1.04)}
 @media(prefers-reduced-motion:reduce){.rs-bento-photo img{transition:none!important;transform:none!important}}
+
+
+/* ---------------------------------------------------------------------------
+   Owner auth pages (register / verify / login) — readability + mobile order.
+   Scoped to .r-auth-* so the rest of the public redesign is untouched.
+   --------------------------------------------------------------------------- */
+.r-auth-form .r-auth-form-head h2{font-size:26px;line-height:1.6}
+.r-auth-form .r-auth-form-head p{font-size:14px;line-height:2;color:var(--rs-muted)}
+.r-auth-form .p-field{margin-bottom:20px}
+.r-auth-form .p-field label{font-size:14px!important;font-weight:700}
+.r-auth-form .p-field input{min-height:50px!important;font-size:16px!important;border-radius:6px!important}
+.r-auth-form .p-field input::placeholder{color:color-mix(in srgb,var(--rs-muted) 78%,var(--rs-surface));opacity:1}
+.r-auth-form .p-field input:focus-visible{outline:3px solid var(--rs-focus)!important;outline-offset:2px;border-color:var(--rs-brand)!important}
+.r-auth-form .p-field input[aria-invalid="true"]{border-color:var(--rs-danger)!important}
+.r-auth-form .p-error{margin-top:7px;color:var(--rs-danger);font-size:13.5px;font-weight:600;line-height:1.8}
+.r-auth-form .p-alert{font-size:14px;line-height:1.9}
+.r-auth-form .p-remember-me{font-size:14px;gap:10px}
+.r-auth-form .p-remember-me input{width:20px;height:20px;accent-color:var(--rs-brand)}
+.r-auth-form .r-form-submit{min-height:52px;font-size:16px}
+.r-auth-form .r-form-submit:disabled,.r-auth-form button[disabled]{opacity:.65;cursor:not-allowed}
+.r-auth-form .r-form-links{font-size:14px}
+.r-auth-form .r-form-links a,.r-auth-form .r-inline-link,.r-otp-account-note a{color:var(--rs-brand);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.r-auth-form .r-security-note{font-size:13px;line-height:2}
+.r-auth-form .r-security-note a{color:var(--rs-brand);text-decoration:underline}
+.r-auth-story .r-auth-point{font-size:14px}
+.r-auth-story .rs-eyebrow{font-size:13px}
+.r-auth-story>p{font-size:14px}
+.r-auth-tab{min-height:46px;font-size:14px}
+.r-required{color:var(--rs-danger);margin-inline-start:2px}
+.r-field-hint{margin-top:7px;color:var(--rs-muted);font-size:13px;line-height:1.9}
+.r-field-hint.is-expired{color:var(--rs-danger);font-weight:600}
+.r-otp-account-note{margin:2px 0 14px}
+.r-auth-form #id_code{font-size:26px!important;letter-spacing:10px;padding-inline:10px;min-height:56px!important}
+.r-auth-form #id_code::placeholder{letter-spacing:6px;font-size:22px}
+.r-otp-resend{margin-top:22px;padding-top:18px;border-top:1px solid var(--rs-line)}
+.r-otp-resend .r-resend-btn{min-height:44px;padding:8px 16px;font-size:15px;font-weight:700;color:var(--rs-brand);text-decoration:underline;text-underline-offset:3px}
+.r-otp-resend .r-resend-btn:disabled{color:var(--rs-muted);text-decoration:none}
+.r-otp-resend .r-resend-btn:focus-visible{outline:3px solid var(--rs-focus);outline-offset:2px;border-radius:4px}
+.r-otp-hint{font-size:13px;line-height:1.9}
+.r-auth-shell--closed{grid-template-columns:1fr;max-width:600px}
+.r-verified-phone{margin:0 0 20px;padding:12px 14px;background:var(--rs-soft);border-radius:6px;color:var(--rs-ink);font-size:14px}
+.r-auth-closed{padding:6px 0}
+.r-auth-closed h2{margin:0 0 12px;font-size:23px;line-height:1.7}
+.r-auth-closed p{margin:0 0 12px;color:var(--rs-muted);font-size:15px;line-height:2.05}
+.r-auth-closed .r-form-submit{display:flex;align-items:center;justify-content:center;margin-top:18px;text-decoration:none}
+.r-auth-shell{min-width:0}.r-auth-form,.r-auth-story{min-width:0}
+@media(max-width:900px){
+  /* Signup fields come first on small screens; the story follows. */
+  .r-auth-shell--form-first .r-auth-form{order:-1}
+  .r-auth-shell--form-first .r-auth-story{border-top:1px solid var(--rs-line)}
+  .r-auth-section{padding:32px 0 56px}
+}
+@media(max-width:720px){
+  .r-auth-shell--form-first .r-auth-story .r-auth-points{display:none}
+  .r-auth-shell--form-first .r-auth-story h1{font-size:24px;line-height:1.8;margin-bottom:10px}
+  .r-auth-form .r-auth-form-head h2{font-size:24px}
+}

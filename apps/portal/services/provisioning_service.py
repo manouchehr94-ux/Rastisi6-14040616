@@ -42,6 +42,23 @@ class ProvisioningError(Exception):
     """خطای قابل‌نمایش هنگام راه‌اندازیِ فروشگاهِ آزمایشی."""
 
 
+class RegistrationClosedError(ProvisioningError):
+    """``PlatformConfiguration.new_store_registration_enabled`` خاموش است."""
+
+
+REGISTRATION_CLOSED_MESSAGE = "ساخت فروشگاه تازه موقتاً در دسترس نیست؛ لطفاً بعداً دوباره تلاش کنید."
+
+
+def enforce_new_store_registration_open() -> None:
+    """سیاستِ پلتفرم در لایه‌ی سرویس: هیچ Storeی (چه ثبت‌نامِ اول، چه فروشگاهِ
+    اضافه‌ی مالکِ موجود، چه فراخوانیِ داخلی) وقتی ثبت‌نامِ فروشگاهِ تازه خاموش
+    است ساخته نمی‌شود. Storeهایِ موجود و ورودِ مالکان تأثیری نمی‌پذیرند."""
+    from .platform_config_service import is_new_store_registration_enabled
+
+    if not is_new_store_registration_enabled():
+        raise RegistrationClosedError(REGISTRATION_CLOSED_MESSAGE)
+
+
 def _owned_active_store_count(owner) -> int:
     return StoreMembership.objects.filter(
         user=owner, role=StoreMembership.Role.OWNER, status=StoreMembership.MembershipStatus.ACTIVE,
@@ -105,6 +122,7 @@ def provision_trial_store(*, owner, name: str, industry_template: IndustryTempla
     if not name:
         raise ProvisioningError("نامِ فروشگاه الزامی است")
 
+    enforce_new_store_registration_open()
     enforce_can_provision_store(owner)
 
     slug = _unique_slug(name)
@@ -146,3 +164,24 @@ def provision_trial_store(*, owner, name: str, industry_template: IndustryTempla
         after={"platform_code": store.platform_code, "trial_hostname": trial_hostname},
     )
     return store
+
+
+def provision_initial_trial_store(*, owner, name: str) -> tuple[Store, bool]:
+    """فروشگاهِ آزمایشیِ **اولِ** یک مالکِ تازه — idempotent و ایمن در برابرِ
+    مسابقه. ردیفِ ``User`` مالک در تراکنش قفل می‌شود (PostgreSQL:
+    ``SELECT ... FOR UPDATE``)؛ اگر مالک از قبل عضوِ فعالِ OWNER یک Store باشد،
+    همان Store برمی‌گردد و Storeِ دومی ساخته نمی‌شود. خروجی: ``(store, created)``.
+
+    این لایه‌ی دفاعیِ دوم است؛ لایه‌ی اول این است که فقط درخواستی که
+    ``OwnerProfile`` را واقعاً ساخته (``owner_created``) این تابع را صدا می‌زند."""
+    with transaction.atomic():
+        User.objects.select_for_update().get(pk=owner.pk)
+        existing = (
+            Store.objects.filter(
+                memberships__user=owner, memberships__role=StoreMembership.Role.OWNER,
+                memberships__status=StoreMembership.MembershipStatus.ACTIVE,
+            ).order_by("created_at", "pk").first()
+        )
+        if existing is not None:
+            return existing, False
+        return provision_trial_store(owner=owner, name=name), True

@@ -13,14 +13,13 @@ _HOST = "rastisi.localhost"
 
 @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
 class OwnerRegistrationTests(TestCase):
-    def test_register_creates_user_and_owner_profile_no_customer(self):
-        response = self.client.post(
-            "/register-email/",
-            {"full_name": "Sara Ahmadi", "email": "Sara@Example.com", "password": "a-very-strong-pass-1"},
-            HTTP_HOST=_HOST,
+    def test_the_internal_service_creates_user_and_owner_profile_no_customer(self):
+        # register_owner() is an internal service (fixtures/commands); the public
+        # /register-email/ route no longer exists (see the hardening module).
+        user = owner_auth_service.register_owner(
+            full_name="Sara Ahmadi", email="Sara@Example.com", password="a-very-strong-pass-1",
         )
-        self.assertEqual(response.status_code, 302)
-        user = User.objects.get(username="sara@example.com")
+        self.assertEqual(user.username, "sara@example.com")
         self.assertTrue(OwnerProfile.objects.filter(user=user).exists())
         self.assertFalse(Customer.objects.filter(user=user).exists())
         self.assertFalse(user.is_staff)

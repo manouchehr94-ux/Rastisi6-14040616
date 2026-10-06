@@ -8,28 +8,115 @@ from apps.stores.services.enamad_verification_service import (
 )
 
 
-class OwnerPhoneRequestForm(forms.Form):
-    full_name = forms.CharField(label="نام و نام خانوادگی", max_length=150, required=False)
+_DIGIT_MAP = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+_PHONE_ATTRS = {
+    "autocomplete": "tel", "inputmode": "tel", "dir": "ltr", "aria-describedby": "id_phone_hint",
+    "placeholder": "0912 123 4567", "autocapitalize": "off", "spellcheck": "false", "maxlength": "20",
+}
+
+
+class _FieldErrorA11yMixin:
+    """وقتی فیلدی خطا دارد، ``aria-invalid`` و اتصالِ ``aria-describedby`` به
+    عنصرِ خطایِ همان فیلد (``id_<name>_error``) را روی ویجت می‌گذارد؛ در حالتِ
+    عادی ``aria-describedby``ِ ثابتِ ویجت (مثلاً راهنمایِ فیلد) دست‌نخورده می‌ماند."""
+
+    def add_error(self, field, error):
+        super().add_error(field, error)
+        names = [field] if field else []
+        for name in names:
+            if name in self.fields:
+                widget = self.fields[name].widget
+                widget.attrs["aria-invalid"] = "true"
+                described = widget.attrs.get("aria-describedby", "").split()
+                error_id = f"id_{name}_error"
+                if error_id not in described:
+                    described.append(error_id)
+                widget.attrs["aria-describedby"] = " ".join(described)
+
+
+class OwnerPhoneRequestForm(_FieldErrorA11yMixin, forms.Form):
+    """درخواستِ OTP برایِ **ورود** (``/login/``). نام نمی‌گیرد و هرگز نباید
+    بگیرد — ثبت‌نام فرمِ جدا دارد (``OwnerRegistrationRequestForm``)."""
+
     phone = forms.CharField(
-        label="شماره موبایل", max_length=20,
-        widget=forms.TextInput(attrs={"autocomplete": "tel", "dir": "ltr"}),
+        label="شماره موبایل", widget=forms.TextInput(attrs=_PHONE_ATTRS),
     )
     remember_me = forms.BooleanField(label="مرا به خاطر بسپار", required=False)
 
+    def clean_phone(self):
+        """شماره را همین‌جا به شکلِ متعارفِ ``09xxxxxxxxx`` درمی‌آورد تا خطا کنارِ
+        خودِ فیلد نمایش داده شود (نه یک پیامِ کلیِ بالایِ فرم)."""
+        from .phone import InvalidPhoneError, normalize_iranian_phone
 
-class OwnerOtpVerifyForm(forms.Form):
-    phone = forms.CharField(widget=forms.HiddenInput)
-    full_name = forms.CharField(widget=forms.HiddenInput, required=False)
-    code = forms.CharField(
-        label="کد تأیید", max_length=6, min_length=6,
-        widget=forms.TextInput(attrs={"autocomplete": "one-time-code", "inputmode": "numeric"}),
+        raw = str(self.cleaned_data.get("phone") or "")
+        if len(raw) > 20:
+            raise forms.ValidationError("شماره موبایل باید ۱۱ رقم و با ۰۹ شروع شود (مثل ۰۹۱۲۱۲۳۴۵۶۷).")
+        try:
+            return normalize_iranian_phone(raw)
+        except InvalidPhoneError as exc:
+            raise forms.ValidationError(exc.messages[0]) from exc
+
+
+class OwnerFullNameForm(_FieldErrorA11yMixin, forms.Form):
+    """نامِ کاملِ مالک — یک منبعِ واحد برایِ اعتبارسنجی/نرمال‌سازی (ثبت‌نام و
+    مرحله‌ی «تکمیل ثبت‌نام»)؛ در ``OwnerProfile.full_name`` ذخیره می‌شود."""
+
+    full_name = forms.CharField(
+        label="نام و نام خانوادگی", strip=True,
+        error_messages={"required": "نام و نام خانوادگی را وارد کنید."},
+        widget=forms.TextInput(attrs={
+            "autocomplete": "name", "autocapitalize": "words", "placeholder": "مثلاً سارا احمدی",
+            "maxlength": "100",
+        }),
     )
 
+    def clean_full_name(self):
+        from .services.owner_auth_service import OwnerAuthError, normalize_owner_full_name
 
-class OwnerRegisterForm(forms.Form):
-    full_name = forms.CharField(label="نام و نام خانوادگی", max_length=150)
-    email = forms.EmailField(label="ایمیل")
-    password = forms.CharField(label="رمز عبور", widget=forms.PasswordInput)
+        try:
+            return normalize_owner_full_name(self.cleaned_data.get("full_name"))
+        except OwnerAuthError as exc:
+            raise forms.ValidationError(str(exc)) from exc
+
+
+class OwnerRegistrationRequestForm(OwnerFullNameForm, OwnerPhoneRequestForm):
+    """درخواستِ OTP برایِ **ثبت‌نامِ مالکِ تازه** (``/register/``): نامِ کامل
+    الزامی و نرمال‌شده است."""
+
+    field_order = ["full_name", "phone", "remember_me"]
+
+
+class OwnerSignupCompletionForm(OwnerFullNameForm):
+    """مرحله‌ی «تکمیل ثبت‌نام» پس از ورودِ OTP با شمارهٔ بدونِ مالک. **هیچ
+    فیلدِ شماره‌ای ندارد**: شمارهٔ تأییدشده فقط از نشستِ سمتِ سرور می‌آید."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["full_name"].widget.attrs["data-autofocus"] = ""
+
+
+class OwnerOtpVerifyForm(_FieldErrorA11yMixin, forms.Form):
+    """تأییدِ کد. شماره و نام **از نشستِ سمتِ سرور** می‌آیند؛ فیلدِ مخفیِ
+    ``phone`` فقط برایِ تشخیصِ صفحه‌ی کهنه (چندتب) است و هیچ ``full_name``ای
+    از کلاینت خوانده نمی‌شود."""
+
+    phone = forms.CharField(widget=forms.HiddenInput, required=False)
+    code = forms.CharField(
+        label="کد تأیید", strip=True,
+        error_messages={"required": "کد ۶ رقمی را وارد کنید."},
+        widget=forms.TextInput(attrs={
+            "autocomplete": "one-time-code", "inputmode": "numeric", "pattern": "[0-9۰-۹ ]*",
+            "dir": "ltr", "placeholder": "••••••",
+        }),
+    )
+
+    def clean_code(self):
+        raw = str(self.cleaned_data.get("code") or "")
+        code = raw.translate(_DIGIT_MAP).replace(" ", "").replace("-", "")
+        if len(code) != 6 or not code.isascii() or not code.isdigit():
+            raise forms.ValidationError("کد باید ۶ رقم باشد.")
+        return code
 
 
 class OwnerLoginForm(forms.Form):
