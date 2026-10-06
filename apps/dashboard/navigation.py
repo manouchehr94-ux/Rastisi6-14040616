@@ -285,10 +285,10 @@ SECTIONS: tuple = (
                 keywords="مصرف سقف محدودیت usage limits"),
             Tab("imports", "ورود اطلاعات", "import-list", perms=("can_view_imports",),
                 matches=(_m(prefix="import-"),), pages=("imports",),
-                keywords="ورود اطلاعات واردات اکسل آپلود بارگذاری فایل import"),
+                keywords="ورود اطلاعات اکسل آپلود بارگذاری فایل ورود کالا موجودی import"),
             Tab("exports", "خروج اطلاعات", "export-list", perms=("can_view_exports",),
                 matches=(_m(prefix="export-"),), pages=("exports",),
-                keywords="خروج اطلاعات صادرات خروجی اکسل دانلود دریافت فایل export"),
+                keywords="خروج اطلاعات خروجی اکسل دانلود دریافت فایل export"),
         ),
     ),
 )

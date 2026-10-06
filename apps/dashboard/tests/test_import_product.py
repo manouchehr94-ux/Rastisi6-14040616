@@ -45,10 +45,13 @@ class ProductImportTestCase(TestCase):
         self.actor = User.objects.create_user(username="imp-owner", password="p", is_staff=True)
 
     def _job(self, csv_text, *, mode=ImportJob.Mode.UPSERT, import_type=ImportJob.ImportType.PRODUCTS, idempotency_key=""):
-        return import_service.create_import_job(
+        job = import_service.create_import_job(
             self.store, import_type=import_type, uploaded_file=_csv_upload(csv_text),
             mode=mode, requested_by=self.actor, idempotency_key=idempotency_key,
         )
+        # execution requires a completed preview (UPLOADED jobs are never executable)
+        import_service.run_preview(job, actor=self.actor)
+        return job
 
 
 class PreviewTests(ProductImportTestCase):
@@ -344,11 +347,14 @@ XLSX_PRODUCT_HEADERS = [
 
 class XlsxProductImportTests(ProductImportTestCase):
     def _xjob(self, rows, *, headers=None, mode=ImportJob.Mode.UPSERT, **upload_kwargs):
-        return import_service.create_import_job(
+        job = import_service.create_import_job(
             self.store, import_type=ImportJob.ImportType.PRODUCTS,
             uploaded_file=xlsx_upload(headers or XLSX_PRODUCT_HEADERS, rows, name="products.xlsx", **upload_kwargs),
             mode=mode, requested_by=self.actor,
         )
+        # execution requires a completed preview (UPLOADED jobs are never executable)
+        import_service.run_preview(job, actor=self.actor)
+        return job
 
     def _row(self, **overrides):
         base = {
@@ -530,6 +536,7 @@ class XlsxProductImportTests(ProductImportTestCase):
             self.store, import_type=ImportJob.ImportType.PRODUCTS,
             uploaded_file=SimpleUploadedFile("p.xlsx", buf.getvalue()), mode=ImportJob.Mode.UPSERT, requested_by=self.actor,
         )
+        import_service.run_preview(job, actor=self.actor)
         import_service.run_execution(job, actor=self.actor)
         self.assertEqual(Product.objects.get(sku="LIT-1").name, "=نام")
 
@@ -542,9 +549,8 @@ class XlsxProductImportTests(ProductImportTestCase):
         self.assertIn("ستون ناشناس", " ".join(result.warnings))
 
     def test_file_without_recognised_columns_is_rejected(self):
-        job = self._xjob([["a", "b"]], headers=["foo", "bar"])
         with self.assertRaises(import_service.ImportServiceError):
-            import_service.run_preview(job, actor=self.actor)
+            self._xjob([["a", "b"]], headers=["foo", "bar"])  # the preview step rejects the file
 
     def test_legacy_internal_headers_inside_xlsx_still_work(self):
         headers = ["sku", "name", "status", "brand_code", "category_code", "price", "stock"]

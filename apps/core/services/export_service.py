@@ -33,7 +33,7 @@ class ExportSpec:
     columns: list
     rows: object  # iterable of row lists, aligned with ``columns``
     guide_intro: list = field(default_factory=list)
-    empty_message: str = "هیچ رکوردی با این صادرات مطابقت نداشت؛ فروشگاه شما هنوز موردی برای این بخش ندارد."
+    empty_message: str = "هیچ رکوردی برایِ این خروجِ اطلاعات پیدا نشد؛ فروشگاه شما هنوز موردی برای این بخش ندارد."
 
 
 def _yes_no(value) -> str:
@@ -73,7 +73,7 @@ def _products_spec(store, filters):
 
     columns = [
         Column("نام کالا", width=34, wrap=True, note="نامی که مشتری در فروشگاه می‌بیند."),
-        Column("SKU", width=16, text_format=True, note="کدِ کالا برایِ شناسایی و واردات."),
+        Column("SKU", width=16, text_format=True, note="کدِ کالا برایِ شناسایی و ورودِ اطلاعات."),
         Column("وضعیت", width=12, note="فعال، غیرفعال یا پیش‌نویس."),
         Column("برند", width=16),
         Column("دسته‌بندی", width=30, wrap=True, note="مسیرِ کاملِ دسته‌بندی؛ مثلاً «پوشاک > مردانه»."),
@@ -87,7 +87,7 @@ def _products_spec(store, filters):
         Column("توضیحات سئو", width=38, wrap=True, note="توضیحِ کوتاهی که زیرِ عنوان در گوگل نشان داده می‌شود."),
         Column("تاریخ ایجاد", "datetime"),
         Column("آخرین بروزرسانی", "datetime"),
-        Column("شناسه کالا", "id", tier="tech", note="شناسه‌ی داخلی؛ برایِ ردیابی و واردات."),
+        Column("شناسه کالا", "id", tier="tech", note="شناسه‌ی داخلی؛ برایِ ردیابی و ورودِ اطلاعات."),
         Column("نشانی صفحه (اسلاگ)", width=26, tier="tech", note="بخشی از آدرسِ صفحه‌ی کالا در فروشگاه."),
     ]
 
@@ -106,7 +106,7 @@ def _products_spec(store, filters):
 
     return ExportSpec("کالاها", columns, rows(), guide_intro=[
         "هر ردیف یک کالاست. ستون‌هایِ خاکستری (شناسه و نشانیِ صفحه) فقط برایِ ردیابی‌اند.",
-        "برایِ ویرایشِ گروهیِ کالاها می‌توانید همین فایل را ویرایش کنید و از بخشِ «واردات داده» دوباره بارگذاری کنید.",
+        "برایِ ویرایشِ گروهیِ کالاها می‌توانید همین فایل را ویرایش کنید و از بخشِ «ورود اطلاعات» دوباره بارگذاری کنید.",
     ])
 
 
@@ -209,7 +209,7 @@ def _inventory_spec(store, filters):
     return ExportSpec("موجودی انبار", columns, rows(), guide_intro=[
         "هر ردیف موجودیِ یک کالا (یا تنوعِ آن) در یک انبار است.",
         "«رزرو شده» و «موجودی قابل فروش» برایِ کلِ فروشگاه حساب می‌شوند، نه فقط انبارِ همان ردیف.",
-        "برایِ تغییرِ موجودی از بخشِ «واردات داده ← موجودی انبار» استفاده کنید؛ تغییرِ عددِ این فایل به‌تنهایی اثری ندارد.",
+        "برایِ تغییرِ موجودی از بخشِ «ورود اطلاعات ← موجودی انبار» استفاده کنید؛ تغییرِ عددِ این فایل به‌تنهایی اثری ندارد.",
     ], empty_message="هنوز موجودیِ ثبت‌شده‌ای در انبارهایِ این فروشگاه وجود ندارد.")
 
 
@@ -336,7 +336,7 @@ def build_export_workbook(store, export_type: str, filters: dict | None = None):
     """کارپوشه‌ی (Workbook) یک صادرات را می‌سازد و ``(workbook, row_count)`` برمی‌گرداند."""
     spec = _EXPORT_SPEC_BUILDERS[export_type](store, filters)
     label = dict(ExportJob.ExportType.choices)[export_type]
-    wb = new_workbook(f"صادراتِ {label} — {store.name}")
+    wb = new_workbook(f"خروجِ اطلاعات: {label} — {store.name}")
     data_sheet = wb.active
     data_sheet.title = spec.sheet_title
     row_count = write_table_sheet(data_sheet, spec.columns, spec.rows, empty_message=spec.empty_message)

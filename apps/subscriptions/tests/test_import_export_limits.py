@@ -117,6 +117,7 @@ class ImportRowLimitTests(TestCase):
             uploaded_file=_csv_upload(self._rows_csv(2)),
             mode=ImportJob.Mode.UPSERT, requested_by=self.actor,
         )
+        import_service.run_preview(job, actor=self.actor)
         import_service.run_execution(job, actor=self.actor)
         self.assertEqual(usage.get_period_usage(self.store, ekeys.CATALOG_IMPORT_ROWS_MONTHLY), 2)
         # Re-executing a finalized job is refused → no double-consume.
@@ -130,6 +131,7 @@ class ImportRowLimitTests(TestCase):
             uploaded_file=_csv_upload(self._rows_csv(3)),  # 3 > limit 2
             mode=ImportJob.Mode.UPSERT, requested_by=self.actor,
         )
+        import_service.run_preview(job, actor=self.actor)
         with self.assertRaises(UsageLimitExceeded):
             import_service.run_execution(job, actor=self.actor)
         # No silent truncation: nothing imported, no rows consumed.
@@ -160,6 +162,7 @@ class ImportProductBudgetTests(TestCase):
             uploaded_file=_csv_upload(PRODUCT_HEADER + body),
             mode=ImportJob.Mode.UPSERT, requested_by=self.actor,
         )
+        import_service.run_preview(job, actor=self.actor)
         with self.assertRaises(import_service.ImportExecutionBlocked) as ctx:
             import_service.run_execution(job, actor=self.actor)
         self.assertIn("پلن", str(ctx.exception))
@@ -176,6 +179,7 @@ class ImportProductBudgetTests(TestCase):
             uploaded_file=_csv_upload(PRODUCT_HEADER + body),
             mode=ImportJob.Mode.UPSERT, requested_by=self.actor,
         )
+        import_service.run_preview(job, actor=self.actor)
         import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.status, ImportJob.Status.COMPLETED)
@@ -200,6 +204,7 @@ class ImportProductBudgetTests(TestCase):
             uploaded_file=_csv_upload(PRODUCT_HEADER + body),
             mode=ImportJob.Mode.UPDATE_ONLY, requested_by=self.actor,
         )
+        import_service.run_preview(job, actor=self.actor)
         import_service.run_execution(job, actor=self.actor)
         job.refresh_from_db()
         self.assertEqual(job.updated_rows, 1)

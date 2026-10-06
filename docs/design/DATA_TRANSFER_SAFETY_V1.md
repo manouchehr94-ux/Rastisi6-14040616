@@ -29,8 +29,11 @@ answer as the UI: nothing is applied.
 
 ## Execution (`import_service.run_execution`)
 
-1. Only `uploaded`/`preview_ready` jobs run. A compare-and-set `UPDATE … WHERE status IN (…)`
-   claims the job (`processing`), so finished jobs and concurrent double-submits cannot replay.
+1. Only a job that already has a completed preview (`preview_ready`) can run. An `uploaded` job
+   (no preview yet) is refused with «ابتدا باید پیش‌نمایشِ آن آماده شود», and so is anything else
+   (`processing`, finished, cancelled, failed). A compare-and-set `UPDATE … WHERE status =
+   'preview_ready'` claims the job (`processing`), so finished jobs, stale in-memory objects and
+   concurrent double-submits cannot replay. Execution still re-reads and fully revalidates the file.
 2. Feature gate (`enforce_import_allowed`) and monthly row budget (`check_import_row_budget`) are
    re-checked. Permission is enforced by the view decorator (`IMPORT_EXPORT_MANAGE`) and Store
    resolution.
@@ -93,6 +96,17 @@ Jobs created before this change keep their file until their own `expires_at` (7 
 `export-download` still serves them with their real type (`.xlsx` or `.csv`), with the same permission
 checks, and the page lists them under «فایل‌هایِ قدیمی». `cleanup_expired_exports` (unchanged) marks
 them `expired` and deletes the files. No new export ever enters the retention workflow.
+
+## Terminology
+
+All merchant-visible text uses «ورود اطلاعات» / «خروج اطلاعات»: pages, flash messages, service
+error messages, generated XLSX (cells, comments, validation prompts, document properties), the
+XLSX error report/templates, entitlement labels (display `name` updated for existing rows by
+`subscriptions.0008`), the stock-movement reason label (`catalog.0040`) and model verbose names
+(`core.0020`, metadata only). `test_data_transfer_terminology` scans these and rejects any
+«واردات»/«صادرات» (which covers «واردات داده(‌ها)» and «صادرات داده(‌ها)»). Internal identifiers,
+routes, docstrings and comments keep the old words. The palette keyword aliases no longer contain
+the old words either.
 
 ## Smaller changes
 

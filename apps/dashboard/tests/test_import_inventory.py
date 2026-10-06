@@ -51,10 +51,13 @@ class InventoryImportTestCase(TestCase):
         self.warehouse = Warehouse.objects.filter(store=self.store, is_default=True).first()
 
     def _job(self, csv_text, *, mode=ImportJob.Mode.UPSERT, idempotency_key=""):
-        return import_service.create_import_job(
+        job = import_service.create_import_job(
             self.store, import_type=ImportJob.ImportType.INVENTORY, uploaded_file=_csv_upload(csv_text),
             mode=mode, requested_by=self.actor, idempotency_key=idempotency_key,
         )
+        # execution requires a completed preview (UPLOADED jobs are never executable)
+        import_service.run_preview(job, actor=self.actor)
+        return job
 
 
 class AdjustmentTests(InventoryImportTestCase):
@@ -300,11 +303,14 @@ OP_ADJUST = "افزایش/کاهش موجودی"
 
 class XlsxInventoryImportTests(InventoryImportTestCase):
     def _xjob(self, rows, *, headers=None):
-        return import_service.create_import_job(
+        job = import_service.create_import_job(
             self.store, import_type=ImportJob.ImportType.INVENTORY,
             uploaded_file=xlsx_upload(headers or XLSX_INV_HEADERS, rows, name="inventory.xlsx"),
             mode=ImportJob.Mode.UPSERT, requested_by=self.actor,
         )
+        # execution requires a completed preview (UPLOADED jobs are never executable)
+        import_service.run_preview(job, actor=self.actor)
+        return job
 
     def _row(self, op, qty, *, sku="SKU-IIMP-1", warehouse=None, reason="شمارش", note=""):
         return [warehouse or self.warehouse.name, None, sku, None, None, op, qty, reason, note]

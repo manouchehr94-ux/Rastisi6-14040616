@@ -190,6 +190,82 @@ class FailClosedProductTests(ProductImportTestCase):
             import_service.run_execution(job, actor=self.actor)
 
 
+class PreviewRequiredServiceTests(ProductImportTestCase):
+    """An ``uploaded`` job (no completed preview) is never executable."""
+
+    def _uploaded(self, count=3, **kwargs):
+        # ``_job`` previews for convenience; build the raw UPLOADED job explicitly.
+        from apps.dashboard.tests.test_import_product import _csv_upload
+
+        return import_service.create_import_job(
+            self.store, import_type=ImportJob.ImportType.PRODUCTS,
+            uploaded_file=_csv_upload(PRODUCT_HEADER + _product_rows(count)),
+            mode=ImportJob.Mode.CREATE_ONLY, requested_by=self.actor, **kwargs,
+        )
+
+    def test_uploaded_job_is_refused_with_zero_changes(self):
+        from apps.subscriptions import entitlements as ekeys
+        from apps.subscriptions.services import usage_service
+
+        job = self._uploaded()
+        self.assertEqual(job.status, ImportJob.Status.UPLOADED)
+        with self.assertRaises(import_service.ImportServiceError) as ctx:
+            import_service.run_execution(job, actor=self.actor)
+        self.assertNotIsInstance(ctx.exception, Blocked)
+        self.assertIn("پیش‌نمایش", str(ctx.exception))
+        self.assertFalse(Product.objects.filter(store=self.store, sku__startswith="AON-").exists())
+        job.refresh_from_db()
+        self.assertEqual(job.status, ImportJob.Status.UPLOADED)  # untouched
+        self.assertFalse(ImportRowResult.objects.filter(import_job=job).exists())
+        self.assertEqual(usage_service.get_period_usage(self.store, ekeys.CATALOG_IMPORT_ROWS_MONTHLY), 0)
+        actions = _actions(self.store)
+        self.assertNotIn("import.execution_started", actions)
+        self.assertNotIn("import.execution_completed", actions)
+
+    def test_uploaded_job_stays_refused_even_when_the_file_is_perfectly_valid_and_repeated(self):
+        job = self._uploaded(5)
+        for _ in range(3):
+            with self.assertRaises(import_service.ImportServiceError):
+                import_service.run_execution(job, actor=self.actor)
+        self.assertFalse(Product.objects.filter(store=self.store, sku__startswith="AON-").exists())
+
+    def test_after_a_completed_preview_the_same_job_executes(self):
+        job = self._uploaded(3)
+        with self.assertRaises(import_service.ImportServiceError):
+            import_service.run_execution(job, actor=self.actor)
+        import_service.run_preview(job, actor=self.actor)
+        self.assertEqual(job.status, ImportJob.Status.PREVIEW_READY)
+        import_service.run_execution(job, actor=self.actor)
+        job.refresh_from_db()
+        self.assertEqual(job.status, ImportJob.Status.COMPLETED)
+        self.assertEqual(Product.objects.filter(store=self.store, sku__startswith="AON-").count(), 3)
+
+    def test_failed_cancelled_and_validating_jobs_are_not_executable_either(self):
+        for status in (ImportJob.Status.FAILED, ImportJob.Status.CANCELLED, ImportJob.Status.VALIDATING):
+            with self.subTest(status=status):
+                job = self._uploaded(2)
+                ImportJob.objects.filter(pk=job.pk).update(status=status)
+                job.refresh_from_db()
+                with self.assertRaises(import_service.ImportServiceError):
+                    import_service.run_execution(job, actor=self.actor)
+                self.assertFalse(Product.objects.filter(store=self.store, sku__startswith="AON-").exists())
+
+    def test_claim_requires_preview_ready_even_if_the_in_memory_job_is_stale(self):
+        # The caller holds a stale object that still says preview_ready while the row was
+        # reset to uploaded in the database: the compare-and-set claim must still refuse.
+        job = self._uploaded(2)
+        import_service.run_preview(job, actor=self.actor)
+        ImportJob.objects.filter(pk=job.pk).update(status=ImportJob.Status.UPLOADED)
+        self.assertEqual(job.status, ImportJob.Status.PREVIEW_READY)  # stale
+        with self.assertRaises(import_service.ImportServiceError):
+            import_service.run_execution(job, actor=self.actor)
+        self.assertFalse(Product.objects.filter(store=self.store, sku__startswith="AON-").exists())
+
+    def test_blockers_report_non_preview_states_as_not_executable(self):
+        job = self._uploaded(1)
+        self.assertTrue(import_service.job_execution_blockers(job))
+
+
 class AllOrNothingProductTests(ProductImportTestCase):
     def test_runtime_failure_on_a_later_row_rolls_back_earlier_rows_across_batches(self):
         job = self._job(PRODUCT_HEADER + _product_rows(6), mode=ImportJob.Mode.CREATE_ONLY)
@@ -221,7 +297,7 @@ class AllOrNothingProductTests(ProductImportTestCase):
         others = ImportRowResult.objects.filter(import_job=job).exclude(pk=failed.pk)
         self.assertEqual(others.count(), 5)
         self.assertEqual(set(others.values_list("status", flat=True)), {"valid"})
-        self.assertTrue(all("کلِ واردات بازگردانده شد" in " ".join(r.warnings) for r in others))
+        self.assertTrue(all("کلِ ورودِ اطلاعات بازگردانده شد" in " ".join(r.warnings) for r in others))
         self.assertTrue(job.error_report_file)
 
     def test_rollback_is_audited_truthfully(self):
@@ -598,6 +674,31 @@ class StrictImportViewTests(ImportViewTestCase):
         self.assertFalse(Product.objects.filter(store=self.store, sku__startswith="SV-").exists())
         job.refresh_from_db()
         self.assertEqual(job.status, ImportJob.Status.PREVIEW_READY)
+
+    def test_direct_post_for_an_uploaded_job_changes_nothing(self):
+        # create the job through the service only: no upload view, hence no preview
+        job = import_service.create_import_job(
+            self.store, import_type=ImportJob.ImportType.PRODUCTS,
+            uploaded_file=SimpleUploadedFile(
+                "p.csv", (PRODUCT_HEADER + self._rows(3)).encode(), content_type="text/csv",
+            ),
+            mode=ImportJob.Mode.CREATE_ONLY, requested_by=self.owner,
+        )
+        self.assertEqual(job.status, ImportJob.Status.UPLOADED)
+        response = self.client.post(reverse("dashboard:import-execute", args=[job.pk]), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Product.objects.filter(store=self.store, sku__startswith="SV-").exists())
+        job.refresh_from_db()
+        self.assertEqual(job.status, ImportJob.Status.UPLOADED)
+        text = " ".join(str(m) for m in response.context["messages"])
+        self.assertIn("پیش‌نمایش", text)
+        self.assertFalse(response.context["can_execute"])
+        self.assertNotContains(response, reverse("dashboard:import-execute", args=[job.pk]))
+        # once the preview exists the very same job can be confirmed
+        import_service.run_preview(job, actor=self.owner)
+        self.client.post(reverse("dashboard:import-execute", args=[job.pk]))
+        job.refresh_from_db()
+        self.assertEqual(job.status, ImportJob.Status.COMPLETED)
 
     def test_terminology_in_merchant_import_pages(self):
         job = self._upload(PRODUCT_HEADER + self._rows(1))

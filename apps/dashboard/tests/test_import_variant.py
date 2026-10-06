@@ -51,10 +51,13 @@ class VariantImportTestCase(TestCase):
         self.blue_value = self.color_option.values.get(label="آبی")
 
     def _job(self, csv_text, *, mode=ImportJob.Mode.UPSERT, idempotency_key=""):
-        return import_service.create_import_job(
+        job = import_service.create_import_job(
             self.store, import_type=ImportJob.ImportType.VARIANTS, uploaded_file=_csv_upload(csv_text),
             mode=mode, requested_by=self.actor, idempotency_key=idempotency_key,
         )
+        # execution requires a completed preview (UPLOADED jobs are never executable)
+        import_service.run_preview(job, actor=self.actor)
+        return job
 
 
 class NewCombinationTests(VariantImportTestCase):
@@ -263,11 +266,14 @@ XLSX_VARIANT_HEADERS = [
 
 class XlsxVariantImportTests(VariantImportTestCase):
     def _xjob(self, rows, *, mode=ImportJob.Mode.UPSERT):
-        return import_service.create_import_job(
+        job = import_service.create_import_job(
             self.store, import_type=ImportJob.ImportType.VARIANTS,
             uploaded_file=xlsx_upload(XLSX_VARIANT_HEADERS, rows, name="variants.xlsx"),
             mode=mode, requested_by=self.actor,
         )
+        # execution requires a completed preview (UPLOADED jobs are never executable)
+        import_service.run_preview(job, actor=self.actor)
+        return job
 
     def _row(self, **kw):
         base = {

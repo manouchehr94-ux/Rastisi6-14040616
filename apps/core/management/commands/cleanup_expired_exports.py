@@ -29,4 +29,4 @@ class Command(BaseCommand):
             total = 0
             for store in Store.objects.all().iterator(chunk_size=100):
                 total += mark_expired_jobs(store=store)
-        self.stdout.write(self.style.SUCCESS(f"{total} صادراتِ منقضی‌شده پاک‌سازی شد."))
+        self.stdout.write(self.style.SUCCESS(f"{total} خروجِ اطلاعاتِ منقضی‌شده پاک‌سازی شد."))

@@ -31,4 +31,4 @@ class Command(BaseCommand):
             total = cleanup_import_files(store=store, retention_days=retention_days)
         else:
             total = cleanup_import_files(retention_days=retention_days)
-        self.stdout.write(self.style.SUCCESS(f"فایل‌هایِ {total} واردات پاک‌سازی شد."))
+        self.stdout.write(self.style.SUCCESS(f"فایل‌هایِ {total} ورودِ اطلاعات پاک‌سازی شد."))
