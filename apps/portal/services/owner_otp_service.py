@@ -14,6 +14,7 @@ import secrets
 from datetime import timedelta
 
 from django.contrib.auth.hashers import check_password, make_password
+from django.db import connection, transaction
 from django.db.models import F
 from django.utils import timezone
 
@@ -65,12 +66,54 @@ def _generate_code() -> str:
     return f"{secrets.randbelow(10 ** OTP_LENGTH):0{OTP_LENGTH}d}"
 
 
+_PHONE_LIMIT_MESSAGE = "تعداد درخواست کد برای این شماره بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید."
+
+
+def _recent_request_count(phone: str, purpose: str) -> int:
+    window_start = timezone.now() - timedelta(seconds=PHONE_REQUEST_WINDOW_SECONDS)
+    return OwnerOtpChallenge.objects.filter(
+        phone=phone, purpose=purpose, created_at__gte=window_start,
+    ).count()
+
+
+def _lock_phone_purpose(phone: str, purpose: str) -> None:
+    """درخواست‌هایِ هم‌زمانِ یک (شماره، هدف) را در دیتابیس سریال می‌کند.
+
+    PostgreSQL: ``pg_advisory_xact_lock`` — قفلِ سطحِ تراکنش که با commit/
+    rollback خودکار آزاد می‌شود و بینِ همه‌ی processها/workerها مشترک است (نه
+    قفلِ محلیِ process یا cache). برخوردِ هشِ دو کلیدِ متفاوت فقط یک سریال‌سازیِ
+    اضافیِ بی‌ضرر است. SQLite (فقط توسعه/تست): نوشتن‌ها از پیش سریال‌اند و
+    قفلِ مشورتی وجود ندارد."""
+    if connection.vendor == "postgresql":
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                [f"owner_otp_request:{purpose}:{phone}"],
+            )
+
+
 def request_otp(*, phone: str, purpose: str, client_ip: str, message: str | None = None) -> None:
     """کدِ تازه می‌سازد و پیامک می‌کند. اگر تعداد درخواست‌های اخیر (برایِ این
     شماره یا این IP) بیش از حد باشد، ``OtpRateLimitError`` می‌دهد — و در آن
     حالت هیچ کدِ تازه‌ای ساخته/ارسال نمی‌شود (جلوگیری از حدس‌زدنِ شماره و
     اسپم). ``message`` برایِ متنِ سفارشیِ پیامک است (مثلاً Section 10 —
-    تأییدِ عملیاتِ حساس — که نباید بگوید «کد ورود»)."""
+    تأییدِ عملیاتِ حساس — که نباید بگوید «کد ورود»).
+
+    **سقفِ شماره (اتمیک):** بررسیِ «تعداد اخیر < سقف» و ساختنِ ردیفِ چالش در
+    *یک* تراکنش و زیرِ قفلِ مشورتیِ دیتابیس برایِ همان (شماره، هدف) انجام
+    می‌شود؛ پس درخواست‌هایِ هم‌زمان نمی‌توانند هم‌زمان همان شمارش را ببینند و
+    از سقف عبور کنند. قفل فقط دورِ «شمارش + درج» است، نه دورِ ارسالِ پیامک.
+
+    **سیاستِ سهمیه (صریح):** فقط کدهایی که واقعاً تحویلِ موفق گرفته‌اند — به
+    اضافه‌ی تلاش‌هایِ هنوز-در-جریان — از سقف مصرف می‌کنند. یک تلاشِ در-جریان
+    تا روشن‌شدنِ نتیجه یک سهمیه را نگه می‌دارد (تا هم‌زمانی از سقف رد نشود)؛ اگر
+    تحویل شکست بخورد ردیف حذف و سهمیه آزاد می‌شود. پس شکستِ Provider سهمیه‌ی
+    موفق را نمی‌سوزاند (ولی درخواست‌هایی که همان لحظه رد شده بودند خودکار
+    تکرار نمی‌شوند؛ کاربر دوباره تلاش می‌کند). سقفِ IP جدا و مستقل است.
+
+    **تازه‌ترین کدِ تحویل‌شده معتبر است:** پس از تحویلِ موفق، چالش‌هایِ قدیمیِ
+    همین (شماره، هدف) باطل می‌شوند. ترتیب بر اساس ``pk`` است که زیرِ همان قفل
+    به‌ترتیبِ درج صادر می‌شود."""
     try:
         enforce_rate_limit(
             f"owner_otp_request_ip:{purpose}", client_ip,
@@ -79,18 +122,21 @@ def request_otp(*, phone: str, purpose: str, client_ip: str, message: str | None
     except RateLimitExceeded as exc:
         raise OtpRateLimitError(str(exc)) from exc
 
-    window_start = timezone.now() - timedelta(seconds=PHONE_REQUEST_WINDOW_SECONDS)
-    recent_count = OwnerOtpChallenge.objects.filter(
-        phone=phone, purpose=purpose, created_at__gte=window_start,
-    ).count()
-    if recent_count >= MAX_REQUESTS_PER_PHONE_WINDOW:
-        raise OtpRateLimitError("تعداد درخواست کد برای این شماره بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید.")
+    # ردِ سریعِ بدون قفل: درخواستِ آشکارا بیش از سقف، هشِ کندِ PBKDF2 نمی‌سوزاند.
+    if _recent_request_count(phone, purpose) >= MAX_REQUESTS_PER_PHONE_WINDOW:
+        raise OtpRateLimitError(_PHONE_LIMIT_MESSAGE)
 
     code = _generate_code()
-    challenge = OwnerOtpChallenge.objects.create(
-        phone=phone, purpose=purpose, code_hash=make_password(code),
-        expires_at=timezone.now() + timedelta(seconds=OTP_TTL_SECONDS),
-    )
+    code_hash = make_password(code)  # کند؛ عمداً بیرون از قفل
+
+    with transaction.atomic():
+        _lock_phone_purpose(phone, purpose)
+        if _recent_request_count(phone, purpose) >= MAX_REQUESTS_PER_PHONE_WINDOW:
+            raise OtpRateLimitError(_PHONE_LIMIT_MESSAGE)
+        challenge = OwnerOtpChallenge.objects.create(
+            phone=phone, purpose=purpose, code_hash=code_hash,
+            expires_at=timezone.now() + timedelta(seconds=OTP_TTL_SECONDS),
+        )
 
     # متن نهایی OTP در Pattern تأییدشده Provider تعریف می‌شود. پارامتر
     # message برای سازگاری API قدیمی باقی مانده ولی کد خام دیگر وارد متن
@@ -130,7 +176,7 @@ def request_otp(*, phone: str, purpose: str, client_ip: str, message: str | None
     # مصرفِ کدِ تازه دوباره قابلِ استفاده نباشد.
     now = timezone.now()
     OwnerOtpChallenge.objects.filter(
-        phone=phone, purpose=purpose, consumed_at__isnull=True, created_at__lt=challenge.created_at,
+        phone=phone, purpose=purpose, consumed_at__isnull=True, pk__lt=challenge.pk,
         expires_at__gt=now,
     ).update(expires_at=now, updated_at=now)
 
@@ -155,7 +201,7 @@ def check_otp(*, phone: str, purpose: str, code: str) -> OtpCheckResult:
     now = timezone.now()
     challenge = (
         OwnerOtpChallenge.objects.filter(phone=phone, purpose=purpose, consumed_at__isnull=True)
-        .order_by("-created_at", "-pk").first()
+        .order_by("-pk").first()
     )
     if challenge is None or challenge.expires_at <= now:
         return OtpCheckResult.EXPIRED
@@ -196,7 +242,7 @@ def resend_timing(*, phone: str, purpose: str) -> dict:
     فقط اطلاعاتی است؛ هیچ تصمیمِ امنیتی‌ای از آن گرفته نمی‌شود."""
     challenge = (
         OwnerOtpChallenge.objects.filter(phone=phone, purpose=purpose, consumed_at__isnull=True)
-        .order_by("-created_at", "-pk").first()
+        .order_by("-pk").first()
     )
     if challenge is None:
         return {"expires_in": 0, "resend_in": 0}

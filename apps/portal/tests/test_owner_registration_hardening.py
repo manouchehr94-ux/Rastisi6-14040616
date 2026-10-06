@@ -797,6 +797,23 @@ class OtpVerificationTests(_OtpTestMixin, TestCase):
             owner_otp_service.request_otp(phone="09120009999", purpose="register", client_ip="8.8.8.8")
         owner_otp_service.request_otp(phone="09120009998", purpose="register", client_ip="8.8.4.4")
 
+    def test_failed_deliveries_do_not_consume_the_successful_issuance_quota(self):
+        """Documented policy: only delivered codes (plus in-flight attempts)
+        count toward the per-phone budget; a failed delivery frees its slot."""
+        failure = SmsSendResult(success=False, error_message="provider down")
+        with patch.object(owner_otp_service, "send_platform_otp", return_value=failure):
+            for _ in range(owner_otp_service.MAX_REQUESTS_PER_PHONE_WINDOW + 2):
+                with self.assertRaises(owner_otp_service.OtpDeliveryError):
+                    owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+        self.assertEqual(OwnerOtpChallenge.objects.count(), 0)
+
+        for _ in range(owner_otp_service.MAX_REQUESTS_PER_PHONE_WINDOW):
+            owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+        with self.assertRaises(owner_otp_service.OtpRateLimitError) as caught:
+            owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+        self.assertNotIsInstance(caught.exception, owner_otp_service.OtpDeliveryError)
+        self.assertEqual(OwnerOtpChallenge.objects.count(), owner_otp_service.MAX_REQUESTS_PER_PHONE_WINDOW)
+
     def test_provider_failure_shows_a_controlled_error_and_leaves_no_challenge(self):
         with patch.object(
             owner_otp_service, "send_platform_otp",
@@ -1133,3 +1150,163 @@ class ConcurrencyTests(_OtpTestMixin, TransactionTestCase):
         self.assertEqual([r for r in results if isinstance(r, Exception)], [])
         self.assertEqual(results.count(True), 1)
         self.assertEqual((User.objects.count(), OwnerProfile.objects.count(), self.stores().count()), (1, 1, 1))
+
+
+# ---------------------------------------------------------------------------
+# 11. Per-phone request budget under real concurrency (PostgreSQL only)
+# ---------------------------------------------------------------------------
+
+
+def _issue(phone, purpose, index):
+    """One OTP request → 'ok' | 'limit' | 'delivery' (or the unexpected exception)."""
+    try:
+        owner_otp_service.request_otp(phone=phone, purpose=purpose, client_ip=f"10.0.0.{index}")
+    except owner_otp_service.OtpDeliveryError:
+        return "delivery"
+    except owner_otp_service.OtpRateLimitError:
+        return "limit"
+    return "ok"
+
+
+@unittest.skipUnless(connection.vendor == "postgresql", "real-thread race tests need PostgreSQL advisory locks")
+@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
+class PhoneRequestBudgetConcurrencyTests(_OtpTestMixin, TransactionTestCase):
+    serialized_rollback = True
+    LIMIT = owner_otp_service.MAX_REQUESTS_PER_PHONE_WINDOW
+
+    def _newest_code(self):
+        from django.contrib.auth.hashers import check_password
+
+        newest = OwnerOtpChallenge.objects.order_by("-pk").first()
+        return next(item["code"] for item in self.sent if check_password(item["code"], newest.code_hash))
+
+    def test_a_burst_never_exceeds_the_phone_budget_and_only_the_newest_code_works(self):
+        burst = 12
+        self.assertEqual(self.LIMIT, 3)
+        results = _run_concurrently(burst, lambda i: _issue(_PHONE, "register", i))
+
+        self.assertEqual([r for r in results if r not in ("ok", "limit")], [])
+        self.assertEqual(results.count("ok"), self.LIMIT)
+        self.assertEqual(results.count("limit"), burst - self.LIMIT)  # controlled rate-limit error
+        self.assertEqual(len(self.sent), self.LIMIT)  # at most 3 SMS were ever sent
+        self.assertEqual(OwnerOtpChallenge.objects.filter(phone=_PHONE).count(), self.LIMIT)
+
+        newest = self._newest_code()
+        older = [item["code"] for item in self.sent if item["code"] != newest]
+        self.assertEqual(len(older), self.LIMIT - 1)
+        for code in older:  # superseded codes are dead…
+            self.assertFalse(owner_otp_service.verify_otp(phone=_PHONE, purpose="register", code=code))
+        self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose="register", code=newest))
+        for code in older:  # …and cannot resurface once the newest was consumed
+            self.assertFalse(owner_otp_service.verify_otp(phone=_PHONE, purpose="register", code=code))
+
+    def test_in_flight_attempts_hold_their_slot_until_delivery_resolves(self):
+        burst = 10
+        release = threading.Event()
+        inside = []
+        lock = threading.Lock()
+
+        def gated_send(*, to, code, purpose, expire_minutes, **_):
+            with lock:
+                inside.append(code)
+                self.sent.append({"to": to, "code": code, "purpose": purpose})
+            release.wait(60)
+            return SmsSendResult(success=True, provider_ref_id="gated")
+
+        results = [None] * burst
+
+        def worker(i):
+            try:
+                results[i] = _issue(_PHONE, "login", i)
+            except Exception as exc:  # noqa: BLE001
+                results[i] = exc
+            finally:
+                connections.close_all()
+
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=gated_send):
+            threads = [threading.Thread(target=worker, args=(i,)) for i in range(burst)]
+            for thread in threads:
+                thread.start()
+            deadline = timezone.now() + timedelta(seconds=60)
+            # Everyone beyond the budget is rejected while the admitted ones are still blocked in "SMS".
+            while sum(1 for r in results if r == "limit") < burst - self.LIMIT and timezone.now() < deadline:
+                threading.Event().wait(0.05)
+            self.assertEqual(sum(1 for r in results if r == "limit"), burst - self.LIMIT)
+            self.assertEqual(len(inside), self.LIMIT)
+            self.assertEqual(OwnerOtpChallenge.objects.filter(phone=_PHONE).count(), self.LIMIT)
+            release.set()
+            for thread in threads:
+                thread.join(timeout=60)
+
+        self.assertEqual([r for r in results if r not in ("ok", "limit")], [])
+        self.assertEqual(results.count("ok"), self.LIMIT)
+        self.assertEqual(OwnerOtpChallenge.objects.filter(phone=_PHONE).count(), self.LIMIT)
+
+    def test_provider_failures_never_burn_the_successful_quota_under_a_burst(self):
+        failure = SmsSendResult(success=False, error_message="provider down")
+        with patch.object(owner_otp_service, "send_platform_otp", return_value=failure):
+            results = _run_concurrently(8, lambda i: _issue(_PHONE, "login", i))
+        self.assertEqual([r for r in results if r not in ("delivery", "limit")], [])
+        self.assertEqual(OwnerOtpChallenge.objects.filter(phone=_PHONE).count(), 0)  # nothing counted
+
+        # The whole budget is still available once the provider recovers…
+        after = [_issue(_PHONE, "login", 100 + i) for i in range(self.LIMIT + 2)]
+        self.assertEqual(after.count("ok"), self.LIMIT)
+        self.assertEqual(after.count("limit"), 2)
+        self.assertEqual(OwnerOtpChallenge.objects.filter(phone=_PHONE).count(), self.LIMIT)
+
+    def test_a_mixed_burst_counts_only_delivered_codes(self):
+        calls = {"n": 0}
+        lock = threading.Lock()
+
+        def flaky_send(*, to, code, purpose, expire_minutes, **_):
+            with lock:
+                calls["n"] += 1
+                n = calls["n"]
+            if n <= 2:  # the first two SMS attempts fail
+                return SmsSendResult(success=False, error_message="provider down")
+            with lock:
+                self.sent.append({"to": to, "code": code, "purpose": purpose})
+            return SmsSendResult(success=True, provider_ref_id="ok")
+
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=flaky_send):
+            results = _run_concurrently(8, lambda i: _issue(_PHONE, "login", i))
+            self.assertEqual([r for r in results if r not in ("ok", "delivery", "limit")], [])
+            delivered = results.count("ok")
+            self.assertLessEqual(delivered, self.LIMIT)
+            self.assertEqual(len(self.sent), delivered)
+            # Rows left == delivered codes only (failed attempts deleted their rows).
+            self.assertEqual(OwnerOtpChallenge.objects.filter(phone=_PHONE).count(), delivered)
+
+            # Top up sequentially: the failed attempts did not consume quota, so
+            # the total delivered always lands on exactly the budget.
+            while _issue(_PHONE, "login", 200) == "ok":
+                pass
+        self.assertEqual(OwnerOtpChallenge.objects.filter(phone=_PHONE).count(), self.LIMIT)
+        self.assertEqual(len(self.sent), self.LIMIT)
+
+    def test_the_database_lock_itself_closes_a_deliberately_widened_race_window(self):
+        """Stretch the gap between "count" and "insert" (every count is followed
+        by a pause) so that, without the advisory lock, every request would see
+        an empty budget. The lock must still hold the line at exactly LIMIT."""
+        real_count = owner_otp_service._recent_request_count
+
+        def slow_count(phone, purpose):
+            value = real_count(phone, purpose)
+            threading.Event().wait(0.25)
+            return value
+
+        with patch.object(owner_otp_service, "_recent_request_count", side_effect=slow_count):
+            results = _run_concurrently(10, lambda i: _issue(_PHONE, "register", i))
+
+        self.assertEqual([r for r in results if r not in ("ok", "limit")], [])
+        self.assertEqual(results.count("ok"), self.LIMIT)
+        self.assertEqual(len(self.sent), self.LIMIT)
+        self.assertEqual(OwnerOtpChallenge.objects.filter(phone=_PHONE).count(), self.LIMIT)
+
+    def test_different_phones_do_not_block_each_other(self):
+        phones = [f"0912000{n:04d}" for n in range(4)]
+        results = _run_concurrently(
+            len(phones) * self.LIMIT, lambda i: _issue(phones[i % len(phones)], "register", i),
+        )
+        self.assertEqual(results.count("ok"), len(phones) * self.LIMIT)
