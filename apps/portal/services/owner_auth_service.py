@@ -1,9 +1,14 @@
-"""لایه‌ی سرویسِ هویتِ مالک — ثبت‌نام، ورود با موبایل/ایمیل/نام کاربری و بازیابی رمز.
+"""لایه‌ی سرویسِ هویتِ مالک — هویتِ موبایل+OTP، ورود با موبایل/ایمیل/نام کاربری و بازیابی رمز.
 
 عمداً از ``apps.customers.services.auth_service`` جداست (ADR-93): آن سرویس
-مشتریِ فروشگاه می‌سازد (شناسه = موبایل، همیشه به یک ``store`` وابسته است)؛
-این‌جا مالکِ پلتفرم ساخته می‌شود (شناسه = ایمیل، مستقل از هر Store‌ای —
-مالک قبل از ساختِ اولین Store هم باید بتواند ثبت‌نام کند).
+مشتریِ فروشگاه می‌سازد (همیشه به یک ``store`` وابسته است)؛ این‌جا مالکِ پلتفرم
+(``OwnerProfile``) مدیریت می‌شود، مستقل از هر Store‌ای.
+
+* ثبتِ‌نامِ عمومیِ مالک **فقط با موبایلِ تأییدشده با OTP** است
+  (:func:`resolve_owner_identity_by_phone`).
+* ورود با ایمیل/نام‌کاربری + رمز و بازیابیِ رمز برایِ حساب‌هایِ *موجود* باقی است.
+* :func:`register_owner` (ایمیل+رمز) فقط سرویسِ داخلی است — هیچ مسیرِ عمومی
+  ندارد.
 """
 
 import re
@@ -82,6 +87,10 @@ def _looks_like_email(identifier: str) -> bool:
 
 @transaction.atomic
 def register_owner(*, full_name: str, email: str, password: str) -> User:
+    """**Internal only** (management commands, fixtures, tests): creates an
+    email+password Owner. There is deliberately NO public route for this — public
+    registration is mobile OTP only (``/register/`` or ``/login/`` →
+    ``/signup/complete/``). Do not wire it to an anonymous view."""
     email = _normalize_email(email)
     if not email:
         raise OwnerAuthError("ایمیل الزامی است")

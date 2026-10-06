@@ -1,9 +1,0 @@
-{% extends "portal/public/base_public.html" %}
-{% block title %}ثبت‌نام ایمیلی | راستیسی{% endblock %}
-{% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
-{% block content %}
-<section class="r-auth-section"><div class="r-wrap"><div class="r-auth-shell">
-  <aside class="r-auth-story"><span class="r-overline">روش سازگاری</span><h1>ثبت‌نام ایمیلی</h1><p>این مسیر برای سازگاری و بازیابی حساب‌های موجود نگه داشته شده است. روش اصلی ثبت‌نام راستیسی، ثبت‌نام با موبایل است.</p></aside>
-  <div class="r-auth-form"><div class="r-auth-form-head"><h2>ایجاد حساب با ایمیل</h2><p>اطلاعات حساب را وارد کنید.</p></div><form method="post" novalidate>{% csrf_token %}{% if form.non_field_errors %}<div class="p-alert p-alert-error">{{ form.non_field_errors.0 }}</div>{% endif %}<div class="p-field"><label for="id_full_name">نام و نام خانوادگی</label>{{ form.full_name }}{% if form.full_name.errors %}<div class="p-error">{{ form.full_name.errors.0 }}</div>{% endif %}</div><div class="p-field"><label for="id_email">ایمیل</label>{{ form.email }}{% if form.email.errors %}<div class="p-error">{{ form.email.errors.0 }}</div>{% endif %}</div><div class="p-field"><label for="id_password">رمز عبور</label>{{ form.password }}{% if form.password.errors %}<div class="p-error">{{ form.password.errors.0 }}</div>{% endif %}</div>{% include "portal/public/_turnstile.html" with turnstile_action="register_email" %}<button type="submit" class="r-btn r-btn-primary r-form-submit">ایجاد حساب</button></form><div class="r-form-links"><a href="{% url 'portal:register' %}">ثبت‌نام با موبایل (روش پیشنهادی)</a></div></div>
-</div></div></section>
-{% endblock %}

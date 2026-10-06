@@ -28,9 +28,8 @@ urlpatterns = [
     path("verify/resend/", views.otp_resend, name="otp-resend"),
     path("signup/complete/", views.signup_complete, name="signup-complete"),
     path("logout/", views.logout_view, name="logout"),
-    # Legacy email+password registration — kept for existing accounts/
-    # platform-superuser recovery, not linked from the primary nav (Section
-    # 3). /login-email/ itself now just redirects to the unified /login/.
+    # Compatibility redirects only: anonymous email+password registration was
+    # removed (registration is mobile-OTP only); /login-email/ redirects to /login/.
     path("register-email/", views.register_email, name="register-email"),
     path("login-email/", views.login_email, name="login-email"),
     path("reset-password/", views.password_reset_request, name="password-reset-request"),

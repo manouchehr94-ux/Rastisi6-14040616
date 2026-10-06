@@ -9,6 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from django.conf import settings
@@ -49,7 +50,6 @@ from .forms import (
     OwnerIdentifierLoginForm,
     OwnerOtpVerifyForm,
     OwnerPhoneRequestForm,
-    OwnerRegisterForm,
     OwnerRegistrationRequestForm,
     OwnerSignupCompletionForm,
     PasswordResetConfirmForm,
@@ -275,9 +275,9 @@ def _post_login_redirect(request, user, *, next_url: str, admin_return: str):
 
 
 def register(request):
-    """Section 3: primary owner registration is phone + OTP, not email +
-    password (that flow is kept, not deleted — see register_email — for
-    existing accounts and platform-superuser recovery).
+    """Section 3: owner registration is phone + OTP only. There is no public
+    email+password registration (``/register-email/`` just redirects here);
+    email accounts that already exist keep logging in through ``/login/``.
 
     نامِ کامل الزامی است و فقط از همین فرم می‌آید؛ شماره و نام در نشستِ
     سمتِ سرور نگه داشته می‌شوند و ``/verify/`` هیچ نامی را از کلاینت نمی‌پذیرد.
@@ -629,34 +629,17 @@ def otp_resend(request):
     return redirect("portal:otp-verify")
 
 
+@csrf_exempt  # reads nothing from the request: a stale cached form POST redirects instead of 403
 def register_email(request):
-    """Legacy email+password registration — kept for existing accounts and
-    platform-superuser recovery (Section 3), not the primary flow anymore."""
-    if request.user.is_authenticated:
-        return redirect("portal:app-home")
+    """Compatibility redirect — anonymous email+password registration no longer exists.
 
-    if request.method == "POST":
-        form = OwnerRegisterForm(request.POST)
-        try:
-            enforce_rate_limit(
-                "register_email", request.META.get("REMOTE_ADDR", "unknown"), max_attempts=10, window_seconds=600,
-            )
-        except RateLimitExceeded:
-            messages.error(request, "تعداد تلاش ثبت‌نام بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید.")
-            return render(request, "portal/public/register_email.html", {"form": form})
-        if form.is_valid() and _turnstile_form_is_valid(
-            request, form, action="register_email"
-        ):
-            try:
-                user = owner_auth_service.register_owner(**form.cleaned_data)
-            except owner_auth_service.OwnerAuthError as exc:
-                form.add_error(None, str(exc))
-            else:
-                auth_login(request, user)
-                return redirect("portal:app-home")
-    else:
-        form = OwnerRegisterForm()
-    return render(request, "portal/public/register_email.html", {"form": form})
+    New merchant/Owner registration must go through a verified mobile OTP:
+    ``/register/`` (name + phone) or ``/login/`` → ``/signup/complete/``. Any
+    method (GET *or* POST) is sent to ``/register/``; the body is never read,
+    so nothing is created, nobody is authenticated and no Store is provisioned.
+    Existing email accounts keep logging in via ``/login/`` (email + password)
+    and ``/reset-password/``."""
+    return redirect("portal:register")
 
 
 def login_email(request):

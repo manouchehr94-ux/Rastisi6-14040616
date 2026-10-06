@@ -119,12 +119,6 @@ class OwnerOtpVerifyForm(_FieldErrorA11yMixin, forms.Form):
         return code
 
 
-class OwnerRegisterForm(forms.Form):
-    full_name = forms.CharField(label="نام و نام خانوادگی", max_length=150)
-    email = forms.EmailField(label="ایمیل")
-    password = forms.CharField(label="رمز عبور", widget=forms.PasswordInput)
-
-
 class OwnerLoginForm(forms.Form):
     """Platform-admin password form: three identifiers, unchanged superuser gate.
 

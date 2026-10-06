@@ -629,6 +629,174 @@ class RegistrationPolicyTests(_OtpTestMixin, TestCase):
 
 
 # ---------------------------------------------------------------------------
+# 6a. Anonymous email registration is gone (/register-email/ is only a redirect)
+# ---------------------------------------------------------------------------
+
+
+@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
+class AnonymousEmailRegistrationRemovedTests(_OtpTestMixin, TestCase):
+    PAYLOAD = {"full_name": "Bypass Person", "email": "bypass@example.com", "password": "a-very-strong-pass-1"}
+
+    def counts(self):
+        return (User.objects.count(), OwnerProfile.objects.count(), self.stores().count(), self.new_rows(StoreMembership).count())
+
+    # 1
+    def test_get_redirects_to_register(self):
+        response = self.client.get("/register-email/", HTTP_HOST=_HOST)
+        self.assertRedirects(response, "/register/", fetch_redirect_response=False)
+
+    # 2 + 3 + 4
+    def test_post_redirects_creates_nothing_and_does_not_authenticate(self):
+        before = self.counts()
+        response = self.client.post("/register-email/", self.PAYLOAD, HTTP_HOST=_HOST)
+        self.assertRedirects(response, "/register/", fetch_redirect_response=False)
+        self.assertEqual(self.counts(), before)
+        self.assertFalse(User.objects.filter(email__iexact="bypass@example.com").exists())
+        self.assertNotIn("_auth_user_id", self.client.session)
+        # …and the follow-up page echoes nothing that was submitted.
+        followed = self.client.post("/register-email/", self.PAYLOAD, HTTP_HOST=_HOST, follow=True)
+        self.assertEqual(followed.status_code, 200)
+        self.assertNotContains(followed, "bypass@example.com")
+        self.assertNotContains(followed, "a-very-strong-pass-1")
+        self.assertNotContains(followed, 'name="password"')
+        self.assertNotContains(followed, 'name="email"')
+
+    def test_every_method_and_a_stale_form_without_a_csrf_token_just_redirect(self):
+        strict = Client(enforce_csrf_checks=True)
+        for method in ("get", "post", "put", "patch", "delete", "head", "options"):
+            with self.subTest(method=method):
+                response = getattr(strict, method)("/register-email/", HTTP_HOST=_HOST)
+                self.assertEqual(response.status_code, 302)
+                self.assertEqual(response["Location"], "/register/")
+        self.assertEqual(self.counts(), (0, 0, 0, 0))
+
+    def test_an_already_authenticated_visitor_creates_nothing_either(self):
+        owner = User.objects.create_user(username="09120009991")
+        self.client.force_login(owner)
+        before = self.counts()
+        response = self.client.post("/register-email/", self.PAYLOAD, HTTP_HOST=_HOST)
+        self.assertRedirects(response, "/register/", fetch_redirect_response=False)
+        self.assertEqual(self.counts(), before)
+
+    # 5
+    def test_the_disabled_registration_policy_cannot_be_bypassed_through_it(self):
+        self.set_registration(False)
+        before = self.counts()
+        response = self.client.post("/register-email/", self.PAYLOAD, HTTP_HOST=_HOST, follow=True)
+        self.assertEqual(response.redirect_chain, [("/register/", 302)])
+        self.assertContains(response, "ساخت فروشگاه تازه موقتاً در دسترس نیست")  # /register/ stays closed
+        self.assertEqual(self.counts(), before)
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_nothing_of_the_old_flow_remains(self):
+        from django.template import TemplateDoesNotExist
+        from django.template.loader import get_template
+
+        from apps.portal import forms as portal_forms
+
+        with self.assertRaises(TemplateDoesNotExist):
+            get_template("portal/public/register_email.html")
+        self.assertFalse(hasattr(portal_forms, "OwnerRegisterForm"))
+        for page in ("/register/", "/login/", "/signup/complete/", "/"):
+            html = self.client.get(page, HTTP_HOST=_HOST, follow=True).content.decode()
+            self.assertNotIn("register-email", html, page)
+
+    # 6
+    def test_an_existing_email_owner_still_logs_in_with_email_and_password(self):
+        owner_auth_service.register_owner(
+            full_name="Legacy Email Owner", email="legacy-login@example.com", password="a-very-strong-pass-1",
+        )
+        response = self.client.post(
+            "/login/password/", {"identifier": "legacy-login@example.com", "password": "a-very-strong-pass-1"},
+            HTTP_HOST=_HOST,
+        )
+        self.assertRedirects(response, "/app/", fetch_redirect_response=False)
+        self.assertIn("_auth_user_id", self.client.session)
+        self.assertEqual(self.client.get("/app/", HTTP_HOST=_HOST).status_code, 200)
+
+    def test_email_owners_still_log_in_when_new_registration_is_disabled(self):
+        owner_auth_service.register_owner(
+            full_name="Legacy Email Owner", email="legacy-closed@example.com", password="a-very-strong-pass-1",
+        )
+        self.set_registration(False)
+        response = self.client.post(
+            "/login/password/", {"identifier": "LEGACY-closed@example.com", "password": "a-very-strong-pass-1"},
+            HTTP_HOST=_HOST,
+        )
+        self.assertRedirects(response, "/app/", fetch_redirect_response=False)
+
+    def test_a_wrong_password_is_still_rejected_generically(self):
+        owner_auth_service.register_owner(
+            full_name="Legacy Email Owner", email="legacy-bad@example.com", password="a-very-strong-pass-1",
+        )
+        response = self.client.post(
+            "/login/password/", {"identifier": "legacy-bad@example.com", "password": "wrong-password-9"},
+            HTTP_HOST=_HOST,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, owner_auth_service.GENERIC_LOGIN_ERROR)
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    # 7
+    def test_password_reset_for_an_existing_email_owner_still_works_end_to_end(self):
+        import re
+
+        from django.core import mail
+
+        owner_auth_service.register_owner(
+            full_name="Reset Owner", email="reset-flow@example.com", password="a-very-strong-pass-1",
+        )
+        mail.outbox.clear()
+        response = self.client.post("/reset-password/", {"email": "reset-flow@example.com"}, HTTP_HOST=_HOST)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        link = re.search(r"/reset-password/[\w-]+/[\w-]+/", mail.outbox[0].body)
+        self.assertIsNotNone(link)
+
+        confirm = self.client.get(link.group(0), HTTP_HOST=_HOST, follow=True)
+        self.assertEqual(confirm.status_code, 200)
+        set_url = confirm.redirect_chain[-1][0] if confirm.redirect_chain else link.group(0)
+        done = self.client.post(
+            set_url, {"password": "a-brand-new-pass-77", "password_confirm": "a-brand-new-pass-77"}, HTTP_HOST=_HOST,
+        )
+        self.assertEqual(done.status_code, 302)
+
+        login = self.client.post(
+            "/login/password/", {"identifier": "reset-flow@example.com", "password": "a-brand-new-pass-77"},
+            HTTP_HOST=_HOST,
+        )
+        self.assertRedirects(login, "/app/", fetch_redirect_response=False)
+
+    def test_password_reset_for_an_unknown_email_reveals_nothing(self):
+        from django.core import mail
+
+        mail.outbox.clear()
+        response = self.client.post("/reset-password/", {"email": "nobody-here@example.com"}, HTTP_HOST=_HOST)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 0)
+
+    # 8 + 9
+    def test_the_two_remaining_public_routes_still_create_owners_via_otp_only(self):
+        # /register/ → OTP → Owner + first Store → onboarding
+        self.register()
+        registered = self.verify()
+        self.assertIn("/onboarding/", registered["Location"])
+        self.assertEqual(OwnerProfile.objects.get(phone=_PHONE).full_name, _NAME)
+        self.client.post("/logout/", HTTP_HOST=_HOST)
+
+        # /login/ → OTP → (new phone) → /signup/complete/ → name → Owner + first Store → onboarding
+        other = "09121230088"
+        self.login_otp(phone=other)
+        verified = self.verify()
+        self.assertEqual(verified["Location"], "/signup/complete/")
+        self.assertFalse(OwnerProfile.objects.filter(phone=other).exists())
+        completed = self.client.post("/signup/complete/", {"full_name": "Second Owner"}, HTTP_HOST=_HOST)
+        self.assertIn("/onboarding/", completed["Location"])
+        self.assertEqual(OwnerProfile.objects.get(phone=other).full_name, "Second Owner")
+        self.assertEqual(self.stores().count(), 2)  # exactly one Store per new Owner
+
+
+# ---------------------------------------------------------------------------
 # 6b. «تکمیل ثبت‌نام» — signup completion after a /login/ OTP on a phone with no Owner
 # ---------------------------------------------------------------------------
 
