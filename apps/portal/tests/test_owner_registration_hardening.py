@@ -744,7 +744,8 @@ class OtpVerificationTests(_OtpTestMixin, TestCase):
         OwnerOtpChallenge.objects.update(expires_at=timezone.now() - timedelta(seconds=1))
         response = self.verify()
         self.assertContains(response, "این کد منقضی یا قبلاً استفاده شده است")
-        self.assertContains(response, "این کد منقضی شده است؛ کد جدید دریافت کنید.")
+        # One message only: the validity hint is hidden when the error already says so.
+        self.assertNotContains(response, 'id="id_code_hint"')
 
     def test_locked_code_message_at_the_view(self):
         self.register()
