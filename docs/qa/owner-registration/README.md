@@ -12,6 +12,8 @@ with `RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP=true` — never set this in production
   → owner_otp_service.request_otp (IP + phone limits, hashed code, SMS)
   → server session: phone, purpose=register, full_name, remember_me
 /verify/ (code only; phone/name come from the session)
+  (purpose=login and a phone with no Owner → session state `portal_signup_pending`
+   {phone, verified_at, ...} → /signup/complete/ (name only) → same identity/provisioning below)
   → owner_otp_service.check_otp  (atomic: reserve attempt → conditional consume)
   → owner_auth_service.resolve_owner_identity_by_phone
        → OwnerIdentityResult(user, user_created, owner_created)
@@ -46,3 +48,7 @@ with `RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP=true` — never set this in production
 | `13`, `14` | Landing in onboarding after signup |
 | `15`, `19` | Login (password / OTP tab with the "OTP can create an account" note) |
 | `16`, `17` | Registration closed |
+| `20`–`22` | «تکمیل ثبت‌نام» (login OTP on a phone with no Owner): 1440 / 768 / 390 |
+| `23` | Completion: validation error (blank name) |
+| `24`, `25` | Completion: registration disabled after OTP, mobile / desktop |
+| `26`, `27` | Completion → onboarding handoff, desktop / mobile |
