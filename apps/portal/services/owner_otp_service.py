@@ -10,6 +10,7 @@
 """
 
 import enum
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone as dt_timezone
 
@@ -22,6 +23,8 @@ from apps.portal.models import OwnerOtpChallenge
 
 from .owner_sms_service import send_platform_otp
 from .rate_limit import RateLimitExceeded, enforce_rate_limit
+
+logger = logging.getLogger(__name__)
 
 OTP_LENGTH = 6
 OTP_TTL_SECONDS = 120
@@ -162,36 +165,74 @@ def request_otp(*, phone: str, purpose: str, client_ip: str, message: str | None
         result = send_platform_otp(
             to=phone, code=code, purpose=purpose, expire_minutes=expire_minutes,
         )
-    except BaseException:
-        _drop_pending(challenge)  # an unexpected provider crash must not leak a quota slot
+    except Exception:
+        # Only ``Exception``: KeyboardInterrupt/SystemExit must not be intercepted
+        # here. An unexpected provider crash must not leak a quota slot, and the
+        # cleanup must never mask the provider's own exception.
+        _drop_pending_best_effort(challenge)
         raise
 
-    # لاگ پلتفرم بدون ذخیره متن/کد OTP؛ فقط طول، Provider و نتیجه نگهداری می‌شود.
-    from apps.sms.events import SmsEvent
-    from apps.sms.models import SmsTemplate
-    from apps.sms.services.billing_policy_service import record_platform_attempt
-    template = SmsTemplate.objects.filter(event_key=SmsEvent.PLATFORM_OWNER_OTP).first()
-    reference_body = (template.body if template else "کد تأیید راستیسی: {otp_code}")
-    try:
-        from apps.sms.services import template_renderer
-        rendered_for_count = template_renderer.render(
-            reference_body, {"otp_code": code, "expire_minutes": expire_minutes},
-            ("otp_code", "expire_minutes"),
-        )
-    except ValueError:
-        rendered_for_count = ""
-    record_platform_attempt(
-        event_key=SmsEvent.PLATFORM_OWNER_OTP, recipient=phone,
-        message=rendered_for_count, result=result, protect_body=True,
+    # ── چرخه‌ی حیاتِ OTP همین‌جا و *پیش از* هر تله‌متری تمام می‌شود ──────────────
+    # حالتِ احرازِ هویت هرگز نباید به موفقیتِ نوشتنِ SmsLog وابسته باشد.
+    if result.success:
+        try:
+            _activate_delivered_challenge(challenge)
+        except Exception:
+            # فعال‌سازی (دیتابیس) خطای حیاتی است و بلعیده نمی‌شود؛ فقط تلاش
+            # می‌کنیم رزروِ معلق نماند و خطای اصلی همان را بالا می‌دهیم.
+            _drop_pending_best_effort(challenge)
+            raise
+        _record_sms_attempt_best_effort(phone=phone, code=code, expire_minutes=expire_minutes, result=result)
+        return
+
+    _drop_pending(challenge)
+    _record_sms_attempt_best_effort(phone=phone, code=code, expire_minutes=expire_minutes, result=result)
+    raise OtpDeliveryError(
+        "ارسال کد تأیید موقتاً انجام نشد؛ لطفاً دوباره تلاش کنید."
     )
 
-    if not result.success:
-        _drop_pending(challenge)
-        raise OtpDeliveryError(
-            "ارسال کد تأیید موقتاً انجام نشد؛ لطفاً دوباره تلاش کنید."
+
+def _record_sms_attempt_best_effort(*, phone: str, code: str, expire_minutes: int, result) -> None:
+    """لاگِ پلتفرمِ پیامک (بدونِ ذخیره‌ی متن/کدِ OTP؛ فقط طول، Provider و نتیجه).
+
+    **تله‌متری است، نه بخشی از چرخه‌ی OTP:** هر خطایِ نوشتنِ SmsLog/قالب/
+    محاسبه‌ی هزینه فقط برایِ اپراتور لاگ می‌شود و هرگز کدِ تحویل‌شده را
+    بی‌اثر یا خطایِ کنترل‌شده‌ی تحویل را به 500 تبدیل نمی‌کند. نوشتن در یک
+    savepoint انجام می‌شود تا شکستش تراکنشِ احتمالیِ بیرونی را خراب نکند.
+    تولیدِ کد، سقفِ سهمیه، فعال‌سازیِ دیتابیس و خودِ ارسال عمداً *خارج* از
+    این تابع‌اند و بلعیده نمی‌شوند."""
+    try:
+        from apps.sms.events import SmsEvent
+        from apps.sms.models import SmsTemplate
+        from apps.sms.services.billing_policy_service import record_platform_attempt
+
+        template = SmsTemplate.objects.filter(event_key=SmsEvent.PLATFORM_OWNER_OTP).first()
+        reference_body = (template.body if template else "کد تأیید راستیسی: {otp_code}")
+        try:
+            from apps.sms.services import template_renderer
+            rendered_for_count = template_renderer.render(
+                reference_body, {"otp_code": code, "expire_minutes": expire_minutes},
+                ("otp_code", "expire_minutes"),
+            )
+        except ValueError:
+            rendered_for_count = ""
+        with transaction.atomic():
+            record_platform_attempt(
+                event_key=SmsEvent.PLATFORM_OWNER_OTP, recipient=phone,
+                message=rendered_for_count, result=result, protect_body=True,
+            )
+    except Exception:
+        logger.error(
+            "owner OTP SMS telemetry write failed; the OTP lifecycle is unaffected", exc_info=True,
         )
 
-    _activate_delivered_challenge(challenge)
+
+def _drop_pending_best_effort(challenge: OwnerOtpChallenge) -> None:
+    """پاک‌سازی در مسیرِ خطا: اگر خودش هم شکست بخورد خطایِ اصلی را نمی‌پوشاند."""
+    try:
+        _drop_pending(challenge)
+    except Exception:
+        logger.error("could not release a pending OTP reservation", exc_info=True)
 
 
 def _drop_pending(challenge: OwnerOtpChallenge) -> None:

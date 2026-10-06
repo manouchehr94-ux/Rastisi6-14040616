@@ -961,6 +961,114 @@ class OtpVerificationTests(_OtpTestMixin, TestCase):
 
         self.assertFalse(owner_otp_service.verify_otp(phone=_PHONE, purpose="login", code=codes["A"]))
 
+    # --- telemetry (SmsLog) must never drive the OTP lifecycle ---
+
+    TELEMETRY = "apps.sms.services.billing_policy_service.record_platform_attempt"
+
+    def _telemetry_down(self):
+        service_logger = logging.getLogger("apps.portal.services.owner_otp_service")
+        previous_level = service_logger.level
+        service_logger.setLevel(logging.CRITICAL)  # keep expected telemetry tracebacks out of test output
+        self.addCleanup(service_logger.setLevel, previous_level)
+        patcher = patch(self.TELEMETRY, side_effect=RuntimeError("telemetry store down"))
+        self.addCleanup(patcher.stop)
+        return patcher.start()
+
+    def test_a_successful_delivery_stays_usable_when_the_sms_log_write_fails(self):
+        telemetry = self._telemetry_down()
+        with self.assertLogs("apps.portal.services.owner_otp_service", level="ERROR") as logs:
+            owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")  # must not raise
+        telemetry.assert_called_once()
+        self.assertTrue(any("telemetry write failed" in line for line in logs.output))  # operators are told
+        self.assertFalse([line for line in logs.output if self.last_code in line], "OTP leaked into logs")
+        row = OwnerOtpChallenge.objects.get()
+        self.assertGreater(row.expires_at, timezone.now())  # activated, not pending
+        self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose="login", code=self.last_code))
+
+    def test_a_failed_delivery_with_a_failing_sms_log_still_gives_the_controlled_error_and_keeps_the_old_code(self):
+        owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+        old_code = self.last_code
+        self._telemetry_down()
+        failure = SmsSendResult(success=False, error_message="provider down")
+        with patch.object(owner_otp_service, "send_platform_otp", return_value=failure):
+            with self.assertRaises(owner_otp_service.OtpDeliveryError):  # not the RuntimeError from telemetry
+                owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+        self.assertEqual(OwnerOtpChallenge.objects.count(), 1)  # pending reservation removed
+        self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose="login", code=old_code))
+
+    def test_a_failing_sms_log_never_leaks_quota_slots(self):
+        self._telemetry_down()
+        failure = SmsSendResult(success=False, error_message="provider down")
+        with patch.object(owner_otp_service, "send_platform_otp", return_value=failure):
+            for _ in range(owner_otp_service.MAX_REQUESTS_PER_PHONE_WINDOW + 2):
+                with self.assertRaises(owner_otp_service.OtpDeliveryError):
+                    owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+        self.assertEqual(OwnerOtpChallenge.objects.count(), 0)
+        for _ in range(owner_otp_service.MAX_REQUESTS_PER_PHONE_WINDOW):  # full budget still there
+            owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+        with self.assertRaises(owner_otp_service.OtpRateLimitError):
+            owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+
+    def test_a_failing_sms_log_does_not_change_which_code_wins_out_of_order(self):
+        self._telemetry_down()
+        codes = {}
+
+        def send(*, to, code, purpose, expire_minutes, **_):
+            if "A" not in codes:
+                codes["A"] = code
+                owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="2.2.2.2")  # B, nested
+                return SmsSendResult(success=True, provider_ref_id="A")
+            codes["B"] = code
+            return SmsSendResult(success=True, provider_ref_id="B")
+
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=send):
+            owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+        self.assertFalse(owner_otp_service.verify_otp(phone=_PHONE, purpose="login", code=codes["A"]))
+        self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose="login", code=codes["B"]))
+
+    def test_a_newer_failure_with_a_failing_sms_log_does_not_destroy_the_older_code(self):
+        self._telemetry_down()
+        codes = {}
+
+        def send(*, to, code, purpose, expire_minutes, **_):
+            if "A" not in codes:
+                codes["A"] = code
+                with self.assertRaises(owner_otp_service.OtpDeliveryError):
+                    owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="2.2.2.2")
+                return SmsSendResult(success=True, provider_ref_id="A")
+            return SmsSendResult(success=False, error_message="down")
+
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=send):
+            owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+        self.assertEqual(OwnerOtpChallenge.objects.count(), 1)
+        self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose="login", code=codes["A"]))
+
+    def test_a_provider_exception_cleans_up_and_is_not_masked_by_a_failing_cleanup_or_log(self):
+        self._telemetry_down()
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=RuntimeError("provider exploded")):
+            with self.assertRaisesMessage(RuntimeError, "provider exploded"):
+                owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+        self.assertEqual(OwnerOtpChallenge.objects.count(), 0)
+
+        # Even if the cleanup itself breaks, the provider's exception is what surfaces.
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=RuntimeError("provider exploded")):
+            with patch.object(owner_otp_service, "_drop_pending", side_effect=RuntimeError("cleanup failed")):
+                with self.assertLogs("apps.portal.services.owner_otp_service", level="ERROR"):
+                    with self.assertRaisesMessage(RuntimeError, "provider exploded"):
+                        owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="3.3.3.3")
+
+    def test_base_exceptions_are_not_intercepted_by_the_provider_guard(self):
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+
+    def test_activation_errors_are_not_swallowed(self):
+        """Only telemetry is non-critical: a DB failure while activating must surface."""
+        with patch.object(owner_otp_service, "_activate_delivered_challenge", side_effect=RuntimeError("db down")):
+            with self.assertRaisesMessage(RuntimeError, "db down"):
+                owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+        self.assertEqual(OwnerOtpChallenge.objects.count(), 0)  # reservation released on the way out
+
     def test_provider_failure_shows_a_controlled_error_and_leaves_no_challenge(self):
         with patch.object(
             owner_otp_service, "send_platform_otp",
@@ -1450,6 +1558,18 @@ class PhoneRequestBudgetConcurrencyTests(_OtpTestMixin, TransactionTestCase):
         self.assertEqual(results.count("ok"), self.LIMIT)
         self.assertEqual(len(self.sent), self.LIMIT)
         self.assertEqual(OwnerOtpChallenge.objects.filter(phone=_PHONE).count(), self.LIMIT)
+
+    def test_a_burst_with_a_failing_sms_log_still_issues_exactly_the_budget_and_one_usable_code(self):
+        with patch("apps.sms.services.billing_policy_service.record_platform_attempt", side_effect=RuntimeError("down")):
+            results = _run_concurrently(12, lambda i: _issue(_PHONE, "register", i))
+        self.assertEqual([r for r in results if r not in ("ok", "limit")], [])
+        self.assertEqual(results.count("ok"), self.LIMIT)
+        self.assertEqual(OwnerOtpChallenge.objects.filter(phone=_PHONE).count(), self.LIMIT)
+        newest = self._newest_code()
+        self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose="register", code=newest))
+        for item in self.sent:
+            if item["code"] != newest:
+                self.assertFalse(owner_otp_service.verify_otp(phone=_PHONE, purpose="register", code=item["code"]))
 
     def test_different_phones_do_not_block_each_other(self):
         phones = [f"0912000{n:04d}" for n in range(4)]
