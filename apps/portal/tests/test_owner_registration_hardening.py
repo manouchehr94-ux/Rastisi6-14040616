@@ -814,6 +814,153 @@ class OtpVerificationTests(_OtpTestMixin, TestCase):
         self.assertNotIsInstance(caught.exception, owner_otp_service.OtpDeliveryError)
         self.assertEqual(OwnerOtpChallenge.objects.count(), owner_otp_service.MAX_REQUESTS_PER_PHONE_WINDOW)
 
+    # --- in-flight issuance (deterministic: the SMS callback runs the interleaving) ---
+
+    def _wrong(self, code):
+        return "000000" if code != "000000" else "111111"
+
+    def test_an_in_flight_challenge_is_invisible_to_verification_and_gets_no_attempts(self):
+        owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+        old_code = self.last_code
+        seen = {}
+
+        def in_flight_send(*, to, code, purpose, expire_minutes, **_):
+            pending = OwnerOtpChallenge.objects.order_by("-pk").first()
+            seen["pending_marker"] = pending.expires_at
+            seen["timing"] = owner_otp_service.resend_timing(phone=_PHONE, purpose="login")
+            # Hammer verification while the new SMS has not been delivered yet.
+            seen["guesses"] = [
+                owner_otp_service.check_otp(phone=_PHONE, purpose="login", code=self._wrong(old_code))
+                for _ in range(owner_otp_service.MAX_VERIFY_ATTEMPTS + 1)
+            ]
+            seen["undelivered_code_result"] = owner_otp_service.check_otp(phone=_PHONE, purpose="login", code=code)
+            seen["pending_attempts"] = OwnerOtpChallenge.objects.get(pk=pending.pk).attempt_count
+            self.sent.append({"to": to, "code": code, "purpose": purpose})
+            return SmsSendResult(success=True, provider_ref_id="x")
+
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=in_flight_send):
+            owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+
+        self.assertEqual(seen["pending_marker"], owner_otp_service.PENDING_EXPIRES_AT)
+        # resend_timing describes the usable (old) code, not the reservation.
+        self.assertTrue(0 < seen["timing"]["expires_in"] <= owner_otp_service.OTP_TTL_SECONDS)
+        # The guesses landed on the OLD challenge (5 wrong, then locked)…
+        OtpResult = owner_otp_service.OtpCheckResult
+        self.assertEqual(seen["guesses"], [OtpResult.INVALID] * 5 + [OtpResult.TOO_MANY_ATTEMPTS])
+        # …the undelivered new code did not verify, and its attempt counter is untouched.
+        self.assertIsNot(seen["undelivered_code_result"], OtpResult.OK)
+        self.assertEqual(seen["pending_attempts"], 0)
+        # Once delivered it is fully usable (it supersedes the locked old code).
+        self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose="login", code=self.last_code))
+
+    def test_the_old_code_stays_valid_while_a_resend_is_in_flight_and_dies_only_after_delivery(self):
+        owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+        old_code = self.last_code
+        old_row = OwnerOtpChallenge.objects.get()
+        states = {}
+
+        def in_flight_send(*, to, code, purpose, expire_minutes, **_):
+            old_row.refresh_from_db()
+            states["old_active_in_flight"] = old_row.expires_at > timezone.now()
+            self.sent.append({"to": to, "code": code, "purpose": purpose})
+            return SmsSendResult(success=True, provider_ref_id="x")
+
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=in_flight_send):
+            owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+
+        self.assertTrue(states["old_active_in_flight"])
+        old_row.refresh_from_db()
+        new_row = OwnerOtpChallenge.objects.order_by("-pk").first()
+        self.assertLessEqual(old_row.expires_at, timezone.now())  # superseded after success
+        self.assertGreater(new_row.expires_at, timezone.now())  # activated with a fresh TTL
+        self.assertFalse(owner_otp_service.verify_otp(phone=_PHONE, purpose="login", code=old_code))
+        self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose="login", code=self.last_code))
+
+    def test_a_failed_in_flight_resend_never_disturbs_the_previous_code(self):
+        owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+        old_code = self.last_code
+        before = OwnerOtpChallenge.objects.get()
+        timings = []
+
+        guesses = []
+
+        def failing_send(*, to, code, purpose, expire_minutes, **_):
+            timings.append(owner_otp_service.resend_timing(phone=_PHONE, purpose="login")["expires_in"])
+            # During the in-flight window a guess is judged against the OLD code.
+            guesses.append(owner_otp_service.check_otp(phone=_PHONE, purpose="login", code=self._wrong(old_code)))
+            return SmsSendResult(success=False, error_message="down")
+
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=failing_send):
+            with self.assertRaises(owner_otp_service.OtpDeliveryError):
+                owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+
+        self.assertTrue(all(value > 0 for value in timings))  # usable during the in-flight window
+        self.assertEqual(guesses, [owner_otp_service.OtpCheckResult.INVALID])
+        after = OwnerOtpChallenge.objects.get()  # reservation row was removed; the old one remains
+        self.assertEqual((after.pk, after.expires_at, after.attempt_count), (before.pk, before.expires_at, 1))
+        self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose="login", code=old_code))
+
+    def test_a_provider_crash_releases_the_reserved_slot(self):
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+        self.assertEqual(OwnerOtpChallenge.objects.count(), 0)
+
+    def test_an_older_request_finishing_after_a_newer_one_does_not_take_over(self):
+        """A is admitted first but its delivery finishes last (B completes inside A's SMS call)."""
+        codes = {}
+
+        def send(*, to, code, purpose, expire_minutes, **_):
+            if "A" not in codes:
+                codes["A"] = code
+                owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="2.2.2.2")  # B, nested
+                return SmsSendResult(success=True, provider_ref_id="A")
+            codes["B"] = code
+            return SmsSendResult(success=True, provider_ref_id="B")
+
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=send):
+            owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+
+        self.assertFalse(owner_otp_service.verify_otp(phone=_PHONE, purpose="login", code=codes["A"]))
+        self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose="login", code=codes["B"]))
+        # …and A cannot resurface after B was consumed.
+        self.assertFalse(owner_otp_service.verify_otp(phone=_PHONE, purpose="login", code=codes["A"]))
+        self.assertEqual(OwnerOtpChallenge.objects.count(), 2)
+
+    def test_a_newer_request_that_fails_does_not_destroy_the_older_successful_code(self):
+        codes = {}
+
+        def send(*, to, code, purpose, expire_minutes, **_):
+            if "A" not in codes:
+                codes["A"] = code
+                with self.assertRaises(owner_otp_service.OtpDeliveryError):
+                    owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="2.2.2.2")  # B fails
+                return SmsSendResult(success=True, provider_ref_id="A")
+            return SmsSendResult(success=False, error_message="down")
+
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=send):
+            owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+
+        self.assertEqual(OwnerOtpChallenge.objects.count(), 1)
+        self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose="login", code=codes["A"]))
+
+    def test_a_late_older_request_cannot_activate_after_the_newer_code_was_consumed(self):
+        codes = {}
+
+        def send(*, to, code, purpose, expire_minutes, **_):
+            if "A" not in codes:
+                codes["A"] = code
+                owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="2.2.2.2")  # B delivered
+                self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose="login", code=codes["B"]))
+                return SmsSendResult(success=True, provider_ref_id="A")  # A finishes after B was used
+            codes["B"] = code
+            return SmsSendResult(success=True, provider_ref_id="B")
+
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=send):
+            owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
+
+        self.assertFalse(owner_otp_service.verify_otp(phone=_PHONE, purpose="login", code=codes["A"]))
+
     def test_provider_failure_shows_a_controlled_error_and_leaves_no_challenge(self):
         with patch.object(
             owner_otp_service, "send_platform_otp",
@@ -1310,3 +1457,265 @@ class PhoneRequestBudgetConcurrencyTests(_OtpTestMixin, TransactionTestCase):
             len(phones) * self.LIMIT, lambda i: _issue(phones[i % len(phones)], "register", i),
         )
         self.assertEqual(results.count("ok"), len(phones) * self.LIMIT)
+
+
+# ---------------------------------------------------------------------------
+# 12. In-flight SMS delivery (PostgreSQL real threads)
+# ---------------------------------------------------------------------------
+
+
+def _wait_until(predicate, timeout=60):
+    deadline = timezone.now() + timedelta(seconds=timeout)
+    while not predicate():
+        if timezone.now() > deadline:
+            raise AssertionError("timed out waiting for a concurrent condition")
+        threading.Event().wait(0.02)
+
+
+class _GatedSms:
+    """SMS provider stand-in whose calls block until the test releases them,
+    individually and in any order — a controllable in-flight window."""
+
+    def __init__(self, test):
+        self.test = test
+        self.lock = threading.Lock()
+        self.gates = {}      # code -> Event
+        self.outcome = {}    # code -> success?
+
+    def __call__(self, *, to, code, purpose, expire_minutes, **_):
+        gate = threading.Event()
+        with self.lock:
+            self.gates[code] = gate
+        gate.wait(60)
+        ok = self.outcome.get(code, True)
+        if ok:
+            with self.lock:
+                self.test.sent.append({"to": to, "code": code, "purpose": purpose})
+            return SmsSendResult(success=True, provider_ref_id="gated")
+        return SmsSendResult(success=False, error_message="provider down")
+
+    @property
+    def in_flight(self):
+        with self.lock:
+            return list(self.gates)
+
+    def release(self, code, success=True):
+        self.outcome[code] = success
+        self.gates[code].set()
+
+
+class _IssueThread(threading.Thread):
+    def __init__(self, phone, purpose, index):
+        super().__init__(daemon=True)
+        self.args = (phone, purpose, index)
+        self.result = None
+
+    def run(self):
+        try:
+            self.result = _issue(*self.args)
+        except Exception as exc:  # noqa: BLE001
+            self.result = exc
+        finally:
+            connections.close_all()
+
+
+@unittest.skipUnless(connection.vendor == "postgresql", "real-thread race tests need PostgreSQL advisory locks")
+@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
+class InFlightDeliveryConcurrencyTests(_OtpTestMixin, TransactionTestCase):
+    serialized_rollback = True
+    PURPOSE = "login"
+
+    def setUp(self):
+        super().setUp()
+        self.gated = _GatedSms(self)
+
+    def _issue_delivered(self, index=1):
+        """A normal, already-delivered code (the mixin's immediate fake SMS)."""
+        owner_otp_service.request_otp(phone=_PHONE, purpose=self.PURPOSE, client_ip=f"9.9.9.{index}")
+        return self.last_code
+
+    def _start(self, index):
+        thread = _IssueThread(_PHONE, self.PURPOSE, index)
+        thread.start()
+        return thread
+
+    def _row(self, code):
+        from django.contrib.auth.hashers import check_password
+
+        for row in OwnerOtpChallenge.objects.filter(phone=_PHONE, purpose=self.PURPOSE):
+            if check_password(code, row.code_hash):
+                return row
+        raise AssertionError("no challenge row for that code")
+
+    def _state(self, code):
+        row = self._row(code)
+        if row.expires_at == owner_otp_service.PENDING_EXPIRES_AT:
+            return "pending"
+        if row.consumed_at is not None:
+            return "consumed"
+        return "active" if row.expires_at > timezone.now() else "dead"
+
+    def _two_in_flight(self):
+        """Two concurrent requests, both blocked in the provider. Returns (older, newer) codes by admission order."""
+        first, second = self._start(1), self._start(2)
+        _wait_until(lambda: len(self.gated.in_flight) == 2)
+        codes = sorted(self.gated.in_flight, key=lambda c: self._row(c).pk)
+        return (codes[0], codes[1]), (first, second)
+
+    # 1 + 2
+    def test_the_old_code_works_while_a_resend_is_in_flight_and_no_attempts_hit_the_new_one(self):
+        old_code = self._issue_delivered()
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=self.gated):
+            resend = self._start(2)
+            _wait_until(lambda: len(self.gated.in_flight) == 1)
+            new_code = self.gated.in_flight[0]
+            self.assertEqual(self._state(new_code), "pending")
+            self.assertEqual(self._state(old_code), "active")
+            wrong = "000000" if old_code != "000000" else "111111"
+            for _ in range(3):
+                self.assertIs(
+                    owner_otp_service.check_otp(phone=_PHONE, purpose=self.PURPOSE, code=wrong),
+                    owner_otp_service.OtpCheckResult.INVALID,
+                )
+            self.assertEqual(self._row(new_code).attempt_count, 0)   # nothing counted against the undelivered code
+            self.assertEqual(self._row(old_code).attempt_count, 3)
+            self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose=self.PURPOSE, code=old_code))
+            self.gated.release(new_code)
+            resend.join(60)
+        self.assertEqual(resend.result, "ok")
+
+    # 3
+    def test_parallel_old_code_guesses_cannot_lock_an_undelivered_new_challenge(self):
+        old_code = self._issue_delivered()
+        wrong = "000000" if old_code != "000000" else "111111"
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=self.gated):
+            resend = self._start(2)
+            _wait_until(lambda: len(self.gated.in_flight) == 1)
+            new_code = self.gated.in_flight[0]
+            results = _run_concurrently(
+                8, lambda _i: owner_otp_service.check_otp(phone=_PHONE, purpose=self.PURPOSE, code=wrong),
+            )
+            self.assertEqual([r for r in results if isinstance(r, Exception)], [])
+            self.assertEqual(
+                results.count(owner_otp_service.OtpCheckResult.INVALID), owner_otp_service.MAX_VERIFY_ATTEMPTS,
+            )
+            self.assertEqual(self._row(new_code).attempt_count, 0)
+            self.gated.release(new_code)
+            resend.join(60)
+        # The new code was never locked: it works as soon as it is delivered.
+        self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose=self.PURPOSE, code=new_code))
+
+    # 4
+    def test_a_failed_in_flight_resend_leaves_the_previous_code_continuously_usable(self):
+        old_code = self._issue_delivered()
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=self.gated):
+            resend = self._start(2)
+            _wait_until(lambda: len(self.gated.in_flight) == 1)
+            new_code = self.gated.in_flight[0]
+            self.assertEqual(self._state(old_code), "active")
+            wrong = "000000" if old_code != "000000" else "111111"
+            self.assertIs(  # judged against the old code while the resend is in flight
+                owner_otp_service.check_otp(phone=_PHONE, purpose=self.PURPOSE, code=wrong),
+                owner_otp_service.OtpCheckResult.INVALID,
+            )
+            self.assertEqual((self._row(old_code).attempt_count, self._row(new_code).attempt_count), (1, 0))
+            self.gated.release(new_code, success=False)
+            resend.join(60)
+        self.assertEqual(resend.result, "delivery")
+        self.assertEqual(OwnerOtpChallenge.objects.filter(phone=_PHONE).count(), 1)   # reservation gone
+        self.assertEqual(self._state(old_code), "active")
+        self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose=self.PURPOSE, code=old_code))
+
+    # 5
+    def test_a_successful_resend_supersedes_the_old_code_only_after_delivery(self):
+        old_code = self._issue_delivered()
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=self.gated):
+            resend = self._start(2)
+            _wait_until(lambda: len(self.gated.in_flight) == 1)
+            new_code = self.gated.in_flight[0]
+            self.assertEqual((self._state(old_code), self._state(new_code)), ("active", "pending"))
+            timing = owner_otp_service.resend_timing(phone=_PHONE, purpose=self.PURPOSE)
+            self.assertEqual(timing["expires_in"], int((self._row(old_code).expires_at - timezone.now()).total_seconds()))
+            self.gated.release(new_code)
+            resend.join(60)
+        self.assertEqual(resend.result, "ok")
+        self.assertEqual((self._state(old_code), self._state(new_code)), ("dead", "active"))
+        self.assertGreater(self._row(new_code).expires_at, timezone.now() + timedelta(seconds=owner_otp_service.OTP_TTL_SECONDS - 10))
+        self.assertFalse(owner_otp_service.verify_otp(phone=_PHONE, purpose=self.PURPOSE, code=old_code))
+        self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose=self.PURPOSE, code=new_code))
+
+    # 6a
+    def test_provider_calls_finishing_out_of_order_newer_first_then_older(self):
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=self.gated):
+            (older, newer), (t1, t2) = self._two_in_flight()
+            self.assertEqual((self._state(older), self._state(newer)), ("pending", "pending"))
+            self.gated.release(newer)
+            _wait_until(lambda: self._state(newer) == "active")
+            self.assertEqual(self._state(older), "pending")   # still in flight, never verifiable
+            self.assertFalse(owner_otp_service.verify_otp(phone=_PHONE, purpose=self.PURPOSE, code=older))
+            self.gated.release(older)
+            t1.join(60), t2.join(60)
+        self.assertEqual((t1.result, t2.result), ("ok", "ok"))
+        # The late, older request did not take the newer one's place.
+        self.assertEqual((self._state(older), self._state(newer)), ("dead", "active"))
+        self.assertFalse(owner_otp_service.verify_otp(phone=_PHONE, purpose=self.PURPOSE, code=older))
+        self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose=self.PURPOSE, code=newer))
+
+    # 6b
+    def test_provider_calls_finishing_in_order_older_first_then_newer(self):
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=self.gated):
+            (older, newer), (t1, t2) = self._two_in_flight()
+            self.gated.release(older)
+            _wait_until(lambda: self._state(older) == "active")
+            self.assertEqual(self._state(newer), "pending")   # an older code may stay usable meanwhile
+            self.gated.release(newer)
+            t1.join(60), t2.join(60)
+        self.assertEqual((self._state(older), self._state(newer)), ("dead", "active"))
+        self.assertFalse(owner_otp_service.verify_otp(phone=_PHONE, purpose=self.PURPOSE, code=older))
+        self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose=self.PURPOSE, code=newer))
+
+    # 6c
+    def test_an_older_late_request_cannot_resurface_after_the_newer_code_was_used(self):
+        with patch.object(owner_otp_service, "send_platform_otp", side_effect=self.gated):
+            (older, newer), (t1, t2) = self._two_in_flight()
+            self.gated.release(newer)
+            _wait_until(lambda: self._state(newer) == "active")
+            self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose=self.PURPOSE, code=newer))
+            self.gated.release(older)
+            t1.join(60), t2.join(60)
+        self.assertEqual(self._state(older), "dead")
+        self.assertFalse(owner_otp_service.verify_otp(phone=_PHONE, purpose=self.PURPOSE, code=older))
+
+    # 7
+    def test_a_newer_failed_request_does_not_destroy_an_older_successful_code(self):
+        for newer_finishes_first in (True, False):
+            with self.subTest(newer_finishes_first=newer_finishes_first):
+                OwnerOtpChallenge.objects.all().delete()
+                cache.clear()
+                self.gated = _GatedSms(self)
+                with patch.object(owner_otp_service, "send_platform_otp", side_effect=self.gated):
+                    (older, newer), (t1, t2) = self._two_in_flight()
+                    if newer_finishes_first:
+                        self.gated.release(newer, success=False)
+                        # The failed reservation disappears; the older one is still in flight.
+                        _wait_until(lambda: OwnerOtpChallenge.objects.filter(phone=_PHONE).count() == 1)
+                        self.gated.release(older)
+                    else:
+                        self.gated.release(older)
+                        _wait_until(lambda: self._state(older) == "active")
+                        self.gated.release(newer, success=False)
+                    t1.join(60), t2.join(60)
+                results = sorted(r for r in (t1.result, t2.result))
+                self.assertEqual(results, ["delivery", "ok"])
+                self.assertEqual(OwnerOtpChallenge.objects.filter(phone=_PHONE).count(), 1)
+                self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose=self.PURPOSE, code=older))
+
+    # 8 — the burst budget is unchanged by the activation step
+    def test_the_burst_budget_is_still_capped_at_three_with_activation(self):
+        results = _run_concurrently(12, lambda i: _issue(_PHONE, self.PURPOSE, i))
+        self.assertEqual(results.count("ok"), owner_otp_service.MAX_REQUESTS_PER_PHONE_WINDOW)
+        self.assertEqual(len(self.sent), owner_otp_service.MAX_REQUESTS_PER_PHONE_WINDOW)
+        self.assertEqual(OwnerOtpChallenge.objects.filter(phone=_PHONE).count(), owner_otp_service.MAX_REQUESTS_PER_PHONE_WINDOW)
+        active = [r for r in OwnerOtpChallenge.objects.filter(phone=_PHONE) if r.expires_at > timezone.now()]
+        self.assertEqual(len(active), 1)   # exactly one usable code: the newest admitted
+        self.assertEqual(active[0].pk, OwnerOtpChallenge.objects.filter(phone=_PHONE).order_by("-pk").first().pk)

@@ -11,7 +11,7 @@
 
 import enum
 import secrets
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 
 from django.contrib.auth.hashers import check_password, make_password
 from django.db import connection, transaction
@@ -66,6 +66,14 @@ def _generate_code() -> str:
     return f"{secrets.randbelow(10 ** OTP_LENGTH):0{OTP_LENGTH}d}"
 
 
+#: ردیفِ «در-جریان» (رزروِ سهمیه‌ای که پیامکش هنوز تحویل نشده): ``expires_at`` روی
+#: این مقدارِ ثابتِ گذشته است. چنین ردیفی در ``_recent_request_count`` شمرده می‌شود
+#: (پس هم‌زمانی از سقف رد نمی‌شود) ولی چون «منقضی» است هرگز توسط ``check_otp``/
+#: ``resend_timing`` انتخاب نمی‌شود، تلاشِ تأیید نمی‌گیرد، و کدِ فعلیِ معتبر را
+#: کنار نمی‌زند. پس از تحویلِ موفق، زیرِ همان قفل با TTLِ تازه فعال می‌شود.
+#: بدونِ مایگریشن: فقط از فیلدهایِ موجود استفاده می‌کند.
+PENDING_EXPIRES_AT = datetime(1970, 1, 1, tzinfo=dt_timezone.utc)
+
 _PHONE_LIMIT_MESSAGE = "تعداد درخواست کد برای این شماره بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید."
 
 
@@ -111,9 +119,18 @@ def request_otp(*, phone: str, purpose: str, client_ip: str, message: str | None
     موفق را نمی‌سوزاند (ولی درخواست‌هایی که همان لحظه رد شده بودند خودکار
     تکرار نمی‌شوند؛ کاربر دوباره تلاش می‌کند). سقفِ IP جدا و مستقل است.
 
-    **تازه‌ترین کدِ تحویل‌شده معتبر است:** پس از تحویلِ موفق، چالش‌هایِ قدیمیِ
-    همین (شماره، هدف) باطل می‌شوند. ترتیب بر اساس ``pk`` است که زیرِ همان قفل
-    به‌ترتیبِ درج صادر می‌شود."""
+    **تا تحویلِ موفق، کد قابلِ‌تأیید نیست:** ردیفِ جدید ابتدا «در-جریان» ساخته
+    می‌شود (``PENDING_EXPIRES_AT``): سهمیه را نگه می‌دارد ولی توسط ``check_otp``
+    دیده نمی‌شود، تلاشِ تأیید نمی‌گیرد و کدِ فعلیِ معتبر را کنار نمی‌زند. اگر
+    تحویل شکست بخورد (یا Provider استثنا بدهد) فقط همان ردیف حذف می‌شود و کدِ
+    قبلی بدونِ وقفه معتبر می‌ماند. پس از موفقیت، :func:`_activate_delivered_challenge`
+    آن را با TTLِ تازه فعال و کدهایِ قدیمی‌تر را باطل می‌کند.
+
+    **قاعده‌یِ ترتیب — «تازه‌ترین درخواستِ موفق برنده است»:** ترتیب = ترتیبِ
+    پذیرشِ درخواست‌ها زیرِ قفلِ (هدف، شماره)، یعنی ``pk``؛ نه ترتیبِ رسیدنِ
+    پیامک. تا وقتی درخواستِ جدیدتر در-جریان است، کدِ قدیمیِ تحویل‌شده معتبر
+    می‌ماند؛ وقتی جدیدتر موفق شد قدیمی باطل می‌شود؛ و درخواستِ قدیمیِ دیرتمام
+    هرگز جدیدتر را پس نمی‌گیرد."""
     try:
         enforce_rate_limit(
             f"owner_otp_request_ip:{purpose}", client_ip,
@@ -134,17 +151,20 @@ def request_otp(*, phone: str, purpose: str, client_ip: str, message: str | None
         if _recent_request_count(phone, purpose) >= MAX_REQUESTS_PER_PHONE_WINDOW:
             raise OtpRateLimitError(_PHONE_LIMIT_MESSAGE)
         challenge = OwnerOtpChallenge.objects.create(
-            phone=phone, purpose=purpose, code_hash=code_hash,
-            expires_at=timezone.now() + timedelta(seconds=OTP_TTL_SECONDS),
+            phone=phone, purpose=purpose, code_hash=code_hash, expires_at=PENDING_EXPIRES_AT,
         )
 
     # متن نهایی OTP در Pattern تأییدشده Provider تعریف می‌شود. پارامتر
     # message برای سازگاری API قدیمی باقی مانده ولی کد خام دیگر وارد متن
     # آزاد/Console نمی‌شود.
     expire_minutes = max(1, OTP_TTL_SECONDS // 60)
-    result = send_platform_otp(
-        to=phone, code=code, purpose=purpose, expire_minutes=expire_minutes,
-    )
+    try:
+        result = send_platform_otp(
+            to=phone, code=code, purpose=purpose, expire_minutes=expire_minutes,
+        )
+    except BaseException:
+        _drop_pending(challenge)  # an unexpected provider crash must not leak a quota slot
+        raise
 
     # لاگ پلتفرم بدون ذخیره متن/کد OTP؛ فقط طول، Provider و نتیجه نگهداری می‌شود.
     from apps.sms.events import SmsEvent
@@ -166,19 +186,53 @@ def request_otp(*, phone: str, purpose: str, client_ip: str, message: str | None
     )
 
     if not result.success:
-        challenge.delete()
+        _drop_pending(challenge)
         raise OtpDeliveryError(
             "ارسال کد تأیید موقتاً انجام نشد؛ لطفاً دوباره تلاش کنید."
         )
 
-    # فقط «تازه‌ترین» کد معتبر است: پس از تحویلِ موفق، کدهای قبلیِ همین
-    # (شماره، هدف) باطل می‌شوند تا یک کدِ قدیمیِ هنوز-منقضی‌نشده بعد از
-    # مصرفِ کدِ تازه دوباره قابلِ استفاده نباشد.
-    now = timezone.now()
-    OwnerOtpChallenge.objects.filter(
-        phone=phone, purpose=purpose, consumed_at__isnull=True, pk__lt=challenge.pk,
-        expires_at__gt=now,
-    ).update(expires_at=now, updated_at=now)
+    _activate_delivered_challenge(challenge)
+
+
+def _drop_pending(challenge: OwnerOtpChallenge) -> None:
+    """رزروِ شکست‌خورده را حذف می‌کند؛ کدِ فعلیِ معتبر هرگز تغییر نمی‌کند."""
+    OwnerOtpChallenge.objects.filter(pk=challenge.pk, expires_at=PENDING_EXPIRES_AT).delete()
+
+
+def _activate_delivered_challenge(challenge: OwnerOtpChallenge) -> None:
+    """پس از تحویلِ موفقِ پیامک، زیرِ **همان قفلِ (هدف، شماره)** و در یک تراکنش:
+
+    * اگر درخواستی *جدیدتر* از این (``pk`` بزرگ‌تر) قبلاً با موفقیت صادر شده
+      باشد (فعال، مصرف‌شده، منقضی یا باطل‌شده — هر ردیفِ غیرِ در-جریان)، این
+      کد هرگز قابل‌استفاده نمی‌شود و باطل علامت می‌خورد؛ یک درخواستِ قدیمیِ دیرتمام
+      کدِ جدیدتر را پس نمی‌گیرد و پس از مصرفِ کدِ جدیدتر دوباره زنده نمی‌شود.
+    * وگرنه با TTLِ تازه فعال می‌شود و کدهایِ فعالِ قدیمی‌ترِ همین (شماره،
+      هدف) باطل می‌شوند. ردیف‌هایِ قدیمی‌ترِ هنوز-در-جریان دست‌نخورده می‌مانند؛
+      وقتی تمام شوند با قاعده‌یِ بالا باطل می‌شوند.
+
+    ترتیب = ترتیبِ پذیرشِ درخواست‌ها زیرِ قفل (``pk``)، **نه** ترتیبِ رسیدنِ
+    پیامک به گوشی — برنامه ترتیبِ تحویلِ اپراتور را نمی‌داند."""
+    with transaction.atomic():
+        _lock_phone_purpose(challenge.phone, challenge.purpose)
+        now = timezone.now()
+        newer_issued = (
+            OwnerOtpChallenge.objects.filter(
+                phone=challenge.phone, purpose=challenge.purpose, pk__gt=challenge.pk,
+            ).exclude(expires_at=PENDING_EXPIRES_AT).exists()
+        )
+        if newer_issued:
+            OwnerOtpChallenge.objects.filter(
+                pk=challenge.pk, expires_at=PENDING_EXPIRES_AT,
+            ).update(expires_at=now, updated_at=now)
+            return
+        activated = OwnerOtpChallenge.objects.filter(
+            pk=challenge.pk, expires_at=PENDING_EXPIRES_AT, consumed_at__isnull=True,
+        ).update(expires_at=now + timedelta(seconds=OTP_TTL_SECONDS), updated_at=now)
+        if activated:
+            OwnerOtpChallenge.objects.filter(
+                phone=challenge.phone, purpose=challenge.purpose, consumed_at__isnull=True,
+                pk__lt=challenge.pk, expires_at__gt=now,
+            ).update(expires_at=now, updated_at=now)
 
 
 def check_otp(*, phone: str, purpose: str, code: str) -> OtpCheckResult:
@@ -199,11 +253,14 @@ def check_otp(*, phone: str, purpose: str, code: str) -> OtpCheckResult:
 
     هَشِ کد (PBKDF2، کند) عمداً بیرون از هر تراکنش/قفلی بررسی می‌شود."""
     now = timezone.now()
+    # فقط چالشِ «واقعاً فعال» (تحویل‌شده، مصرف‌نشده، منقضی‌نشده)؛ ردیفِ در-جریان
+    # (PENDING_EXPIRES_AT) هرگز انتخاب نمی‌شود.
     challenge = (
-        OwnerOtpChallenge.objects.filter(phone=phone, purpose=purpose, consumed_at__isnull=True)
-        .order_by("-pk").first()
+        OwnerOtpChallenge.objects.filter(
+            phone=phone, purpose=purpose, consumed_at__isnull=True, expires_at__gt=now,
+        ).order_by("-pk").first()
     )
-    if challenge is None or challenge.expires_at <= now:
+    if challenge is None:
         return OtpCheckResult.EXPIRED
 
     reserved = OwnerOtpChallenge.objects.filter(
@@ -226,8 +283,8 @@ def check_otp(*, phone: str, purpose: str, code: str) -> OtpCheckResult:
         return OtpCheckResult.EXPIRED  # دیگری همین کد را همین لحظه مصرف کرد
 
     OwnerOtpChallenge.objects.filter(
-        phone=phone, purpose=purpose, consumed_at__isnull=True,
-    ).update(consumed_at=now, updated_at=now)
+        phone=phone, purpose=purpose, consumed_at__isnull=True, expires_at__gt=now,
+    ).update(consumed_at=now, updated_at=now)  # ردیف‌هایِ در-جریان دست‌نخورده می‌مانند
     return OtpCheckResult.OK
 
 
@@ -240,13 +297,14 @@ def verify_otp(*, phone: str, purpose: str, code: str) -> bool:
 def resend_timing(*, phone: str, purpose: str) -> dict:
     """زمان‌هایِ باقی‌مانده برایِ نمایشِ UX (اعتبارِ کد و دکمه‌ی ارسال دوباره).
     فقط اطلاعاتی است؛ هیچ تصمیمِ امنیتی‌ای از آن گرفته نمی‌شود."""
+    now = timezone.now()
     challenge = (
-        OwnerOtpChallenge.objects.filter(phone=phone, purpose=purpose, consumed_at__isnull=True)
-        .order_by("-pk").first()
+        OwnerOtpChallenge.objects.filter(
+            phone=phone, purpose=purpose, consumed_at__isnull=True, expires_at__gt=now,
+        ).order_by("-pk").first()
     )
     if challenge is None:
         return {"expires_in": 0, "resend_in": 0}
-    now = timezone.now()
     expires_in = max(0, int((challenge.expires_at - now).total_seconds()))
     age = (now - challenge.created_at).total_seconds()
     resend_in = max(0, int(RESEND_UX_COOLDOWN_SECONDS - age))
