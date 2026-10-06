@@ -36,10 +36,16 @@ def membership_removed(membership):
     if not conf.globally_enabled() or enablement.get_connection(store) is None:
         return
     _safe("membership_removed", lambda: client.remove_staff_member(
-        tenant_service.external_tenant_id(store), identity_service.external_user_id(membership.user)))
+        tenant_service.external_tenant_id(store), identity_service.external_user_id(membership.user, store)))
 
 
 def user_suspended(user):
     if not conf.globally_enabled():
         return
-    _safe("user_suspended", lambda: client.disable_staff_user(identity_service.external_user_id(user)))
+    from apps.stores.models import StoreMembership
+    # a person holds one RastiChat identity per store (plus a platform one): cut them all
+    ids = {identity_service.external_user_id(user)}
+    for store in {m.store for m in StoreMembership.objects.filter(user=user).select_related("store")}:
+        ids.add(identity_service.external_user_id(user, store))
+    for external_id in sorted(ids):
+        _safe("user_suspended", lambda external_id=external_id: client.disable_staff_user(external_id))

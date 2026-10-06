@@ -79,7 +79,7 @@ def tenant_service_role_sync(store, user, role):
     """Make sure the dedicated RastiChat account + membership exist with exactly this role BEFORE the browser arrives
     (idempotent; failures are not fatal — the assertion exchange itself also ensures the membership)."""
     try:
-        client.set_staff_member(tenant_service.external_tenant_id(store), identity_service.external_user_id(user), role,
+        client.set_staff_member(tenant_service.external_tenant_id(store), identity_service.external_user_id(user, store), role,
                                 identity_service.display_name(user))
     except client.RastiChatError:
         pass
@@ -101,6 +101,11 @@ def merchant_platform_support(request):
 platform_only = user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
 
 
+def _back_to_chat_tab(store_public_id):
+    from django.urls import reverse
+    return HttpResponseRedirect(reverse("portal_platform_admin:store-detail", args=[store_public_id]) + "?tab=chat")
+
+
 @platform_only
 @require_POST
 def platform_store_chat_enable(request, store_public_id):
@@ -112,7 +117,7 @@ def platform_store_chat_enable(request, store_public_id):
         messages.error(request, str(exc))
     except client.RastiChatError:
         messages.error(request, "ارتباط با RastiChat برقرار نشد؛ گفتگو فعال نشد. کمی بعد دوباره تلاش کنید.")
-    return redirect("portal_platform_admin:store-detail", store_public_id)
+    return _back_to_chat_tab(store_public_id)
 
 
 @platform_only
@@ -121,7 +126,7 @@ def platform_store_chat_disable(request, store_public_id):
     store = get_object_or_404(Store, public_id=store_public_id)
     enablement.disable_for_store(store, actor=request.user)
     messages.success(request, f"گفتگوی آنلاین برای «{store.name}» غیرفعال شد.")
-    return redirect("portal_platform_admin:store-detail", store_public_id)
+    return _back_to_chat_tab(store_public_id)
 
 
 @platform_only

@@ -290,7 +290,7 @@ class MerchantFlowTests(ChatTestCase):
             self.assertEqual((base, next_path), ("https://chat.example.test/admin/sso", "/"))
             _, claims = verify_jwt(assertion)
             self.assertEqual((claims["actor"], claims["role"], claims["tenant"]), ("tenant_staff", expected, str(self.a.public_id)))
-            self.assertEqual(claims["sub"], f"u{user.pk}")
+            self.assertEqual(claims["sub"], f"u{user.pk}.{self.a.public_id}")   # one RastiChat identity PER STORE
             self.assertIn("no-store", response["Cache-Control"])
             self.assertEqual(response["Referrer-Policy"], "no-referrer")
 
@@ -313,7 +313,21 @@ class MerchantFlowTests(ChatTestCase):
         sync = [c for c in self.calls if "/members/" in c["path"]]
         self.assertEqual(len(sync), 1)
         self.assertEqual((sync[0]["method"], sync[0]["path"], sync[0]["body"]["role"]),
-                         ("PUT", f"/api/v1/integrations/tenants/{self.a.public_id}/members/u{self.order_mgr.pk}/", "operator"))
+                         ("PUT", f"/api/v1/integrations/tenants/{self.a.public_id}/members/u{self.order_mgr.pk}.{self.a.public_id}/", "operator"))
+
+    def test_a_person_with_two_stores_gets_a_separate_chat_identity_in_each(self):
+        """Isolation by construction: entering through store B can never expose store A's inbox to the same person."""
+        from apps.stores.models import StoreMembership
+        from django.utils import timezone
+        StoreMembership.objects.create(store=self.b, user=self.owner, role=StoreMembership.Role.OWNER,
+                                       status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now())
+        self.client.force_login(self.owner)
+        subs = {}
+        for store, host in ((self.a, self.host_a), (self.b, self.host_b)):
+            response = self.client.get("/admin-portal/chat/customers/", HTTP_HOST=host)
+            self.assertEqual(response.status_code, 302, store.slug)
+            subs[store.slug] = verify_jwt(fragment_assertion(response)[1])[1]["sub"]
+        self.assertEqual(len(set(subs.values())), 2)
 
     def test_an_admin_of_store_A_cannot_reach_store_Bs_chat_through_either_host(self):
         # on B's admin host the user is not a member of B -> staff_required refuses (redirect, no assertion)
@@ -500,7 +514,7 @@ class LifecycleHookTests(ChatTestCase):
         with self.captureOnCommitCallbacks(execute=True):
             membership_service.revoke_membership(StoreMembership.objects.get(store=self.store, user=self.operator))
         self.assertEqual([c["path"] for c in self.removals()],
-                         [f"/api/v1/integrations/tenants/{self.store.public_id}/members/u{self.operator.pk}/"])
+                         [f"/api/v1/integrations/tenants/{self.store.public_id}/members/u{self.operator.pk}.{self.store.public_id}/"])
 
     def test_role_change_removes_access_only_when_the_new_role_has_no_chat_role(self):
         from apps.stores.services import membership_service
@@ -527,7 +541,9 @@ class LifecycleHookTests(ChatTestCase):
         with override_settings(ALLOWED_HOSTS=CHAT_SETTINGS["ALLOWED_HOSTS"]), self.captureOnCommitCallbacks(execute=True):
             self.client.post(f"/users/{self.operator.pk}/suspend/", {"reason": "x"},
                              HTTP_HOST=PLATFORM_ADMIN_HOST)
-        self.assertIn(f"/api/v1/integrations/users/u{self.operator.pk}/disable/", [c["path"] for c in self.calls])
+        paths = [c["path"] for c in self.calls]
+        self.assertIn(f"/api/v1/integrations/users/u{self.operator.pk}.{self.store.public_id}/disable/", paths)   # per-store identity
+        self.assertIn(f"/api/v1/integrations/users/u{self.operator.pk}/disable/", paths)                         # platform-level identity
 
 
 # ------------------------------------------------------------------------------------------ reconcile command

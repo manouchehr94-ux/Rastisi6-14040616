@@ -20,8 +20,12 @@ CUSTOMER_CHAT_ROLES = {Role.OWNER: "owner", Role.ADMINISTRATOR: "admin", Role.OR
 PLATFORM_SUPPORT_ROLES = {Role.OWNER: "owner", Role.ADMINISTRATOR: "admin"}
 
 
-def external_user_id(user) -> str:
-    return f"u{user.pk}"
+def external_user_id(user, store=None) -> str:
+    """The `sub` RastiChat knows this person by. Tenant staff get ONE identity PER STORE (`u<id>.<store public id>`), so a
+    person who runs several stores holds a separate, isolated RastiChat account in each: the session obtained through
+    store B's admin can never see store A's conversations, by construction (RastiChat scopes by membership). Platform
+    staff keep a single platform-level identity (`u<id>`)."""
+    return f"u{user.pk}.{store.public_id}" if store is not None else f"u{user.pk}"
 
 
 def display_name(user) -> str:
@@ -44,7 +48,7 @@ def staff_role_for(membership, *, surface: str):
 
 def staff_assertion(*, store, user, role: str) -> str:
     return client.make_assertion(
-        actor="tenant_staff", sub=external_user_id(user), tenant=tenant_service.external_tenant_id(store),
+        actor="tenant_staff", sub=external_user_id(user, store), tenant=tenant_service.external_tenant_id(store),
         role=role, name=display_name(user),
     )
 

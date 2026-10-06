@@ -16,7 +16,7 @@ chat logic and RastiChat contains no RastiSi logic.
 | verified, un-retired `StoreDomain` hostnames | project allowed domains (`verified_domains`, exact hosts) | RastiSi's own verification (merchant-claimed domains never reach RastiChat) |
 | `Store.name`, `Store.status` | tenant display name, `active`/`suspended` | `chat_sync_tenants` + lifecycle hooks |
 | authenticated `Customer` | `customer` assertion, `sub = c<pk>`, name only (no phone/email) | the storefront session |
-| `StoreMembership` ACTIVE: owner / administrator / order_manager | staff role `owner` / `admin` / `operator` (generic) | `apps.stores.authorization.get_active_membership` |
+| `StoreMembership` ACTIVE: owner / administrator / order_manager | staff role `owner` / `admin` / `operator` (generic); `sub = u<user pk>.<store public id>` — **one RastiChat account per (person, store)**, so a multi-store owner entering through store B can never see store A's inbox | `apps.stores.authorization.get_active_membership` |
 | platform superuser (`is_staff and is_superuser`) | platform staff `owner` | existing platform-owner semantics (no new support role invented) |
 
 Other store roles (catalog manager, content editor, analyst) get no chat access. Platform support (talking to the RastiSi
