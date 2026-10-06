@@ -921,6 +921,7 @@ h1,h2,h3,h4,p{margin-top:0}
 .r-otp-resend .r-resend-btn:focus-visible{outline:3px solid var(--rs-focus);outline-offset:2px;border-radius:4px}
 .r-otp-hint{font-size:13px;line-height:1.9}
 .r-auth-shell--closed{grid-template-columns:1fr;max-width:600px}
+.r-verified-phone{margin:0 0 20px;padding:12px 14px;background:var(--rs-soft);border-radius:6px;color:var(--rs-ink);font-size:14px}
 .r-auth-closed{padding:6px 0}
 .r-auth-closed h2{margin:0 0 12px;font-size:23px;line-height:1.7}
 .r-auth-closed p{margin:0 0 12px;color:var(--rs-muted);font-size:15px;line-height:2.05}

@@ -177,16 +177,19 @@ class RegistrationNameTests(_OtpTestMixin, TestCase):
         self.assertNotIn("full_name", OwnerPhoneRequestForm().fields)
         self.assertIn("full_name", OwnerRegistrationRequestForm().fields)
         self.assertTrue(OwnerRegistrationRequestForm().fields["full_name"].required)
-        response = self.login_otp()
+        response = self.login_otp()  # no name asked on /login/
         self.assertEqual(response.status_code, 302)
-        self.verify(full_name="Ignored On Login")
-        self.assertEqual(OwnerProfile.objects.get(phone=_PHONE).full_name, "")
+        verified = self.verify(full_name="Ignored On Verify")
+        # The verify step ignores any posted name: nothing is created from it.
+        self.assertEqual(verified["Location"], "/signup/complete/")
+        self.assertEqual(OwnerProfile.objects.count(), 0)
 
     def test_a_login_request_clears_a_stale_registration_name(self):
         self.register(name="Stale Name")
         self.login_otp(phone="09121230099")
         self.verify()
-        self.assertEqual(OwnerProfile.objects.get(phone="09121230099").full_name, "")
+        self.client.post("/signup/complete/", {"full_name": "Real Name"}, HTTP_HOST=_HOST)
+        self.assertEqual(OwnerProfile.objects.get(phone="09121230099").full_name, "Real Name")
 
     def test_registration_without_a_session_name_restarts_registration(self):
         self.register()
@@ -384,12 +387,14 @@ class ExistingIdentityTests(_OtpTestMixin, TestCase):
         self.assertEqual((customer.full_name, customer.city, customer.phone), ("Customer Person", "Shiraz", _PHONE))
         self.assertTrue(customer_user.check_password("customer-pass"))
 
-    def test_existing_customer_via_login_otp_also_becomes_a_first_time_owner_once(self):
+    def test_existing_customer_via_login_otp_becomes_a_first_time_owner_only_after_the_name_step(self):
         customer_user = User.objects.create_user(username=_PHONE, password="customer-pass")
         Customer.objects.create(user=customer_user, full_name="Customer Person", phone=_PHONE)
         self.login_otp()
         self.verify()
-        self.assertEqual(self.stores().count(), 1)
+        self.assertEqual((OwnerProfile.objects.count(), self.stores().count()), (0, 0))
+        self.client.post("/signup/complete/", {"full_name": "Owner Person"}, HTTP_HOST=_HOST)
+        self.assertEqual((OwnerProfile.objects.count(), self.stores().count()), (1, 1))
 
     def test_existing_owner_registering_again_gets_no_extra_store_and_keeps_their_name(self):
         self.register(name="First Name")
@@ -470,25 +475,25 @@ class ExistingIdentityTests(_OtpTestMixin, TestCase):
 
 @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
 class LoginWithUnknownPhoneTests(_OtpTestMixin, TestCase):
-    def test_new_phone_via_login_creates_an_owner_and_one_trial_store(self):
-        """Product behavior kept as-is and pinned here: a never-seen phone
-        submitted to /login/ becomes an Owner (empty name) with one trial
-        Store (also covered by test_owner_otp)."""
+    def test_new_phone_via_login_proves_the_phone_and_creates_nothing_until_the_name_step(self):
+        """Product behavior (final): /login/ OTP on a phone with no Owner only proves
+        phone ownership and leads to «تکمیل ثبت‌نام»; the Owner and Store come after."""
         self.login_otp()
         response = self.verify()
-        self.assertEqual(OwnerProfile.objects.get().full_name, "")
-        self.assertEqual(self.stores().count(), 1)
-        self.assertIn("/onboarding/", response["Location"])
+        self.assertRedirects(response, "/signup/complete/", fetch_redirect_response=False)
+        self.assertEqual((User.objects.count(), OwnerProfile.objects.count(), self.stores().count()), (0, 0, 0))
+        self.assertNotIn("_auth_user_id", self.client.session)
 
-    def test_login_page_truthfully_says_otp_can_create_an_account(self):
+    def test_login_page_truthfully_describes_the_extra_step_for_a_new_number(self):
         page = self.client.get("/login/", HTTP_HOST=_HOST)
-        self.assertContains(page, "حسابی ندارید، بعد از تأیید کد، حساب مالک و فروشگاه آزمایشی شما ساخته می‌شود")
+        self.assertContains(page, "اگر این شماره هنوز حساب مالک ندارد")
+        self.assertContains(page, "نام و نام خانوادگی شما را می‌پرسیم")
         self.assertContains(page, "/register/")
 
     def test_login_page_does_not_promise_account_creation_when_registration_is_closed(self):
         self.set_registration(False)
         page = self.client.get("/login/", HTTP_HOST=_HOST)
-        self.assertNotContains(page, "حساب مالک و فروشگاه آزمایشی شما ساخته می‌شود")
+        self.assertNotContains(page, "نام و نام خانوادگی شما را می‌پرسیم")
         self.assertContains(page, "ساخت حساب جدید فعلاً در دسترس نیست")
 
 
@@ -621,6 +626,275 @@ class RegistrationPolicyTests(_OtpTestMixin, TestCase):
         self.register()
         response = self.verify()
         self.assertIn("/onboarding/", response["Location"])
+
+
+# ---------------------------------------------------------------------------
+# 6b. «تکمیل ثبت‌نام» — signup completion after a /login/ OTP on a phone with no Owner
+# ---------------------------------------------------------------------------
+
+
+@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
+class SignupCompletionTests(_OtpTestMixin, TestCase):
+    URL = "/signup/complete/"
+
+    def complete(self, name=_NAME, client=None, **extra):
+        client = client or self.client
+        return client.post(self.URL, {"full_name": name, **extra}, HTTP_HOST=_HOST)
+
+    def login_and_verify_new_phone(self, phone=_PHONE):
+        self.login_otp(phone=phone)
+        return self.verify()
+
+    def assertNothingCreated(self, phone=_PHONE):
+        self.assertFalse(OwnerProfile.objects.filter(phone=phone).exists())
+        self.assertEqual(self.stores().count(), 0)
+        self.assertEqual(self.new_rows(StoreMembership).count(), 0)
+
+    # 1
+    def test_an_existing_owner_logs_in_directly_with_no_completion_step_and_no_extra_store(self):
+        owner = User.objects.create_user(username=_PHONE)
+        OwnerProfile.objects.create(user=owner, phone=_PHONE, full_name="Existing Owner")
+        provisioning_service.provision_trial_store(owner=owner, name="Old Store")
+        self.login_otp()
+        response = self.verify()
+        self.assertRedirects(response, "/app/", fetch_redirect_response=False)
+        self.assertEqual(int(self.client.session["_auth_user_id"]), owner.pk)
+        self.assertNotIn("portal_signup_pending", self.client.session)
+        self.assertEqual(self.stores().count(), 1)
+        self.assertEqual(OwnerProfile.objects.get().full_name, "Existing Owner")  # never asked again
+
+    # 2
+    def test_a_brand_new_phone_completes_signup_with_a_name_and_gets_one_owner_and_one_store(self):
+        response = self.login_and_verify_new_phone()
+        self.assertRedirects(response, self.URL, fetch_redirect_response=False)
+        self.assertNothingCreated()
+        self.assertEqual(User.objects.count(), 0)
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+        page = self.client.get(self.URL, HTTP_HOST=_HOST)
+        self.assertContains(page, "تکمیل ثبت‌نام")
+        self.assertContains(page, "شماره موبایل شما تأیید شد. برای ساخت فروشگاه، نام و نام خانوادگی خود را وارد کنید.")
+        self.assertContains(page, "ساخت فروشگاه و ادامه")
+        self.assertContains(page, _PHONE)
+        self.assertNotContains(page, 'name="phone"')  # the phone is never a client field
+        self.assertContains(page, "r-auth-shell--form-first")
+        self.assertNothingCreated()
+
+        response = self.complete()
+        user = User.objects.get(username=_PHONE)
+        store = self.stores().get()
+        self.assertRedirects(response, f"/app/stores/{store.public_id}/onboarding/", fetch_redirect_response=False)
+        self.assertEqual(OwnerProfile.objects.get().full_name, _NAME)
+        self.assertEqual(OwnerProfile.objects.count(), 1)
+        self.assertEqual(self.owner_store_count(user), 1)
+        self.assertEqual(int(self.client.session["_auth_user_id"]), user.pk)
+        self.assertNotIn("portal_signup_pending", self.client.session)  # single use
+        self.assertRedirects(
+            self.client.get(response["Location"], HTTP_HOST=_HOST),
+            f"/app/stores/{store.public_id}/onboarding/identity/",
+        )
+
+    # 3
+    def test_a_customer_only_phone_reuses_the_same_user_and_leaves_customer_data_untouched(self):
+        customer_user = User.objects.create_user(username=_PHONE, password="customer-pass")
+        customer = Customer.objects.create(user=customer_user, full_name="Customer Person", phone=_PHONE, city="Shiraz")
+        password_hash = customer_user.password
+
+        response = self.login_and_verify_new_phone()
+        self.assertRedirects(response, self.URL, fetch_redirect_response=False)
+        self.assertNothingCreated()
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+        self.complete("Owner Person")
+        self.assertEqual(User.objects.count(), 1)
+        self.assertEqual(OwnerProfile.objects.get().user_id, customer_user.pk)
+        self.assertEqual(OwnerProfile.objects.count(), 1)
+        self.assertEqual(self.stores().count(), 1)
+        customer.refresh_from_db()
+        customer_user.refresh_from_db()
+        self.assertEqual((customer.full_name, customer.city, customer.phone), ("Customer Person", "Shiraz", _PHONE))
+        self.assertEqual(customer_user.password, password_hash)
+        self.assertTrue(customer_user.check_password("customer-pass"))
+        self.assertEqual(Customer.objects.count(), 1)
+
+    # 4
+    def test_the_completion_url_is_useless_without_a_verified_otp(self):
+        for method in ("get", "post"):
+            with self.subTest(method=method):
+                response = getattr(self.client, method)(self.URL, {"full_name": _NAME, "phone": _PHONE}, HTTP_HOST=_HOST)
+                self.assertRedirects(response, "/login/", fetch_redirect_response=False)
+        self.assertNothingCreated()
+        self.assertEqual(User.objects.count(), 0)
+
+    def test_an_unverified_otp_request_or_a_register_session_does_not_unlock_completion(self):
+        self.login_otp()  # code requested, never verified
+        self.assertRedirects(self.complete(), "/login/", fetch_redirect_response=False)
+        self.register(phone="09121230055")  # a /register/ session is not a verified phone either
+        self.assertRedirects(self.complete(), "/login/", fetch_redirect_response=False)
+        self.assertEqual((User.objects.count(), OwnerProfile.objects.count(), self.stores().count()), (0, 0, 0))
+
+    def test_a_forged_malformed_or_expired_pending_state_is_rejected_and_cleared(self):
+        import time as _time
+
+        stale = int(_time.time()) - views_signup_ttl() - 5
+        for forged in (
+            {"phone": _PHONE},                                         # no verified_at
+            {"phone": _PHONE, "verified_at": "yesterday"},
+            {"phone": "", "verified_at": int(_time.time())},
+            {"phone": _PHONE, "verified_at": stale},                   # expired
+            {"phone": _PHONE, "verified_at": int(_time.time()) + 3600},  # from the future
+            "09121230001",
+        ):
+            with self.subTest(forged=forged):
+                session = self.client.session
+                session["portal_signup_pending"] = forged
+                session.save()
+                self.assertRedirects(self.complete(), "/login/", fetch_redirect_response=False)
+                self.assertNotIn("portal_signup_pending", self.client.session)
+        self.assertEqual((User.objects.count(), OwnerProfile.objects.count(), self.stores().count()), (0, 0, 0))
+
+    # 5
+    def test_a_client_posted_phone_is_ignored_and_the_verified_session_phone_is_used(self):
+        self.login_and_verify_new_phone(phone=_PHONE)
+        self.complete(phone="09129998888", **{"username": "09129998888", "user": "1"})
+        self.assertTrue(OwnerProfile.objects.filter(phone=_PHONE).exists())
+        self.assertFalse(OwnerProfile.objects.filter(phone="09129998888").exists())
+        self.assertFalse(User.objects.filter(username="09129998888").exists())
+        self.assertEqual(OwnerProfile.objects.count(), 1)
+
+    # 6
+    def test_invalid_blank_or_whitespace_names_create_nothing_and_keep_the_verified_state(self):
+        self.login_and_verify_new_phone()
+        for bad in ("", "   ", "\u200c\u200c", "\u00a0 \u200b", "12345", "!", "a" * 101):
+            with self.subTest(bad=repr(bad)):
+                response = self.complete(bad)
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, 'id="id_full_name_error"')
+                self.assertContains(response, 'aria-invalid="true"')
+                self.assertNothingCreated()
+                self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertIn("portal_signup_pending", self.client.session)  # the user can simply retry
+        self.assertEqual(self.complete().status_code, 302)
+        self.assertEqual(self.stores().count(), 1)
+
+    # 7
+    def test_registration_disabled_between_otp_and_completion_blocks_creation(self):
+        self.login_and_verify_new_phone()
+        self.set_registration(False)
+        page = self.client.get(self.URL, HTTP_HOST=_HOST)
+        self.assertContains(page, "ساخت فروشگاه تازه موقتاً در دسترس نیست")
+        self.assertNotContains(page, 'name="full_name"')
+        self.assertContains(page, "r-auth-shell--closed")
+        response = self.complete()
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "ساخت فروشگاه تازه موقتاً در دسترس نیست")
+        self.assertNothingCreated()
+        self.assertEqual(User.objects.count(), 0)
+        self.assertNotIn("_auth_user_id", self.client.session)
+        # …and the same request cannot sneak through the service layer either.
+        with self.assertRaises(provisioning_service.RegistrationClosedError):
+            provisioning_service.provision_initial_trial_store(
+                owner=User.objects.create_user(username="09120000777"), name="x",
+            )
+
+    def test_registration_closed_at_otp_time_creates_no_pending_state(self):
+        self.set_registration(False)
+        self.login_otp(phone="09125550000")
+        response = self.verify()
+        self.assertRedirects(response, "/login/", fetch_redirect_response=False)
+        self.assertNotIn("portal_signup_pending", self.client.session)
+
+    # 8
+    def test_double_submit_refresh_and_replayed_post_never_duplicate_anything(self):
+        self.login_and_verify_new_phone()
+        before_cookies = self.client.cookies.copy()  # a captured pre-submission session
+        first = self.complete()
+        self.assertIn("/onboarding/", first["Location"])
+
+        again = self.complete()  # double-click / refresh in the same browser
+        self.assertEqual(again.status_code, 302)
+        self.assertEqual(self.client.get(self.URL, HTTP_HOST=_HOST).status_code, 302)
+
+        replay = Client()  # replay of the original session cookie from another client
+        replay.cookies = before_cookies
+        self.assertRedirects(self.complete(client=replay), "/login/", fetch_redirect_response=False)
+
+        self.assertEqual(OwnerProfile.objects.filter(phone=_PHONE).count(), 1)
+        self.assertEqual(self.stores().count(), 1)
+        self.assertEqual(self.new_rows(StoreMembership).count(), 1)
+
+    # 10
+    def test_the_primary_register_flow_is_unchanged_and_skips_the_completion_step(self):
+        self.register()
+        response = self.verify()
+        self.assertIn("/onboarding/", response["Location"])
+        self.assertNotIn("signup/complete", response["Location"])
+        self.assertNotIn("portal_signup_pending", self.client.session)
+        self.assertEqual(OwnerProfile.objects.get().full_name, _NAME)
+        self.assertEqual(self.stores().count(), 1)
+
+    # 11
+    def test_existing_owners_still_log_in_when_new_registration_is_disabled(self):
+        owner = User.objects.create_user(username=_PHONE)
+        OwnerProfile.objects.create(user=owner, phone=_PHONE, full_name="Existing Owner")
+        provisioning_service.provision_trial_store(owner=owner, name="Old Store")
+        self.set_registration(False)
+        self.login_otp()
+        response = self.verify()
+        self.assertRedirects(response, "/app/", fetch_redirect_response=False)
+        self.assertContains(self.client.get("/app/", HTTP_HOST=_HOST), "Old Store")
+        self.assertNotIn("portal_signup_pending", self.client.session)
+
+    # extras
+    def test_a_provisioning_failure_at_completion_leaves_no_partial_store(self):
+        self.login_and_verify_new_phone()
+        with patch.object(
+            provisioning_service, "_create_store_with_unique_platform_code",
+            side_effect=provisioning_service.ProvisioningError("boom"),
+        ):
+            response = self.complete()
+            follow = self.client.get(response["Location"], HTTP_HOST=_HOST)
+        self.assertContains(follow, "ساخت فروشگاه آزمایشی کامل نشد")
+        self.assertEqual(OwnerProfile.objects.count(), 1)  # the account exists…
+        for model in (Store, StoreMembership, StoreDomain, ShopSettings, Warehouse):
+            self.assertEqual(self.new_rows(model).count(), 0, model.__name__)  # …no partial Store rows
+
+    def test_an_inactive_customer_gets_no_pending_state(self):
+        User.objects.create_user(username=_PHONE, is_active=False)
+        self.login_otp()
+        response = self.verify()
+        self.assertRedirects(response, "/login/", fetch_redirect_response=False)
+        self.assertNotIn("portal_signup_pending", self.client.session)
+        self.assertNothingCreated()
+
+    def test_requesting_a_new_otp_discards_a_stale_verified_phone(self):
+        self.login_and_verify_new_phone(phone=_PHONE)
+        self.login_otp(phone="09121230066")  # the visitor starts over with another number
+        self.assertRedirects(self.complete(), "/login/", fetch_redirect_response=False)
+        self.assertNothingCreated()
+
+    def test_an_authenticated_visitor_is_sent_to_the_dashboard(self):
+        self.login_and_verify_new_phone()
+        owner = User.objects.create_user(username="09120008888")
+        self.client.force_login(owner)
+        self.assertRedirects(self.client.get(self.URL, HTTP_HOST=_HOST), "/app/", fetch_redirect_response=False)
+
+    def test_if_the_owner_appears_meanwhile_completion_logs_in_without_a_second_store(self):
+        self.login_and_verify_new_phone()
+        other = User.objects.create_user(username=_PHONE)  # created by a concurrent request
+        OwnerProfile.objects.create(user=other, phone=_PHONE, full_name="Won The Race")
+        provisioning_service.provision_trial_store(owner=other, name="Their Store")
+        response = self.complete("Late Name")
+        self.assertRedirects(response, "/app/", fetch_redirect_response=False)
+        self.assertEqual(OwnerProfile.objects.count(), 1)
+        self.assertEqual(OwnerProfile.objects.get().full_name, "Won The Race")
+        self.assertEqual(self.stores().count(), 1)
+
+
+def views_signup_ttl():
+    from apps.portal import views
+
+    return views.SIGNUP_PENDING_TTL_SECONDS
 
 
 # ---------------------------------------------------------------------------
@@ -1390,6 +1664,48 @@ class ConcurrencyTests(_OtpTestMixin, TransactionTestCase):
         self.assertEqual(results.count(True), 1)
         self.assertEqual(self.stores().count(), 1)
         self.assertEqual(StoreMembership.objects.filter(user=owner).count(), 1)
+
+    def test_concurrent_signup_completion_submissions_create_one_owner_profile_and_one_store(self):
+        self.login_otp()
+        self.verify()  # verified phone -> pending signup state in the server-side session
+        cookies = self.client.cookies
+        clients = []
+        for _ in range(8):
+            c = Client()
+            c.cookies = cookies.__class__()
+            c.cookies.update(cookies)
+            clients.append(c)
+
+        results = _run_concurrently(
+            8, lambda i: clients[i].post("/signup/complete/", {"full_name": _NAME}, HTTP_HOST=_HOST),
+        )
+        self.assertEqual([r for r in results if isinstance(r, Exception)], [])
+        onboarding = [r for r in results if r.status_code == 302 and "/onboarding/" in r["Location"]]
+        self.assertEqual(len(onboarding), 1)  # only the request that created the Owner provisions
+        self.assertEqual(User.objects.filter(username=_PHONE).count(), 1)
+        self.assertEqual(OwnerProfile.objects.filter(phone=_PHONE).count(), 1)
+        self.assertEqual(Store.objects.exclude(pk__in=self.base_store_ids).count(), 1)
+        self.assertEqual(StoreMembership.objects.exclude(store_id__in=self.base_store_ids).count(), 1)
+        self.assertEqual(StoreDomain.objects.exclude(store_id__in=self.base_store_ids).count(), 1)
+
+    def test_concurrent_completion_for_a_customer_only_phone_reuses_the_user_once(self):
+        customer_user = User.objects.create_user(username=_PHONE, password="pw")
+        Customer.objects.create(user=customer_user, full_name="Customer", phone=_PHONE)
+        self.login_otp()
+        self.verify()
+        cookies = self.client.cookies
+        clients = []
+        for _ in range(6):
+            c = Client()
+            c.cookies = cookies.__class__()
+            c.cookies.update(cookies)
+            clients.append(c)
+        results = _run_concurrently(
+            6, lambda i: clients[i].post("/signup/complete/", {"full_name": _NAME}, HTTP_HOST=_HOST),
+        )
+        self.assertEqual([r for r in results if isinstance(r, Exception)], [])
+        self.assertEqual((User.objects.count(), OwnerProfile.objects.count(), Customer.objects.count()), (1, 1, 1))
+        self.assertEqual(Store.objects.exclude(pk__in=self.base_store_ids).count(), 1)
 
     def test_a_customer_first_owner_race_still_creates_exactly_one_owner_profile_and_store(self):
         customer_user = User.objects.create_user(username=_PHONE, password="pw")

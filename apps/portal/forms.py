@@ -58,9 +58,9 @@ class OwnerPhoneRequestForm(_FieldErrorA11yMixin, forms.Form):
             raise forms.ValidationError(exc.messages[0]) from exc
 
 
-class OwnerRegistrationRequestForm(OwnerPhoneRequestForm):
-    """درخواستِ OTP برایِ **ثبت‌نامِ مالکِ تازه** (``/register/``): نامِ کامل
-    الزامی و نرمال‌شده است و در ``OwnerProfile.full_name`` ذخیره می‌شود."""
+class OwnerFullNameForm(_FieldErrorA11yMixin, forms.Form):
+    """نامِ کاملِ مالک — یک منبعِ واحد برایِ اعتبارسنجی/نرمال‌سازی (ثبت‌نام و
+    مرحله‌ی «تکمیل ثبت‌نام»)؛ در ``OwnerProfile.full_name`` ذخیره می‌شود."""
 
     full_name = forms.CharField(
         label="نام و نام خانوادگی", strip=True,
@@ -70,7 +70,6 @@ class OwnerRegistrationRequestForm(OwnerPhoneRequestForm):
             "maxlength": "100",
         }),
     )
-    field_order = ["full_name", "phone", "remember_me"]
 
     def clean_full_name(self):
         from .services.owner_auth_service import OwnerAuthError, normalize_owner_full_name
@@ -79,6 +78,22 @@ class OwnerRegistrationRequestForm(OwnerPhoneRequestForm):
             return normalize_owner_full_name(self.cleaned_data.get("full_name"))
         except OwnerAuthError as exc:
             raise forms.ValidationError(str(exc)) from exc
+
+
+class OwnerRegistrationRequestForm(OwnerFullNameForm, OwnerPhoneRequestForm):
+    """درخواستِ OTP برایِ **ثبت‌نامِ مالکِ تازه** (``/register/``): نامِ کامل
+    الزامی و نرمال‌شده است."""
+
+    field_order = ["full_name", "phone", "remember_me"]
+
+
+class OwnerSignupCompletionForm(OwnerFullNameForm):
+    """مرحله‌ی «تکمیل ثبت‌نام» پس از ورودِ OTP با شمارهٔ بدونِ مالک. **هیچ
+    فیلدِ شماره‌ای ندارد**: شمارهٔ تأییدشده فقط از نشستِ سمتِ سرور می‌آید."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["full_name"].widget.attrs["data-autofocus"] = ""
 
 
 class OwnerOtpVerifyForm(_FieldErrorA11yMixin, forms.Form):

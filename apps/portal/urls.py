@@ -26,6 +26,7 @@ urlpatterns = [
     path("login/password/", views.login_password, name="login-password"),
     path("verify/", views.otp_verify, name="otp-verify"),
     path("verify/resend/", views.otp_resend, name="otp-resend"),
+    path("signup/complete/", views.signup_complete, name="signup-complete"),
     path("logout/", views.logout_view, name="logout"),
     # Legacy email+password registration — kept for existing accounts/
     # platform-superuser recovery, not linked from the primary nav (Section

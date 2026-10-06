@@ -9,7 +9,8 @@
 
   // Put the cursor where the user must act: the first invalid field, or the
   // code box on the verify page.
-  const focusTarget = document.querySelector('[aria-invalid="true"]') || document.querySelector('#id_code');
+  const focusTarget = document.querySelector('[aria-invalid="true"]') || document.querySelector('#id_code')
+    || document.querySelector('[data-autofocus]');
   if (focusTarget) focusTarget.focus({ preventScroll: false });
 
   // Double-submit protection: lock the submit button once a form is sent.

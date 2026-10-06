@@ -55,7 +55,7 @@
           </div>
           <label class="p-remember-me">{{ otp_form.remember_me }} مرا به خاطر بسپار</label>
           {% if registration_open %}
-          <p class="r-field-hint r-otp-account-note">اگر با این شماره هنوز حسابی ندارید، بعد از تأیید کد، حساب مالک و فروشگاه آزمایشی شما ساخته می‌شود. برای ثبت‌نام با نام و نام خانوادگی از <a href="{% url 'portal:register' %}">صفحه ساخت حساب</a> استفاده کنید.</p>
+          <p class="r-field-hint r-otp-account-note">اگر این شماره هنوز حساب مالک ندارد، بعد از تأیید کد، نام و نام خانوادگی شما را می‌پرسیم و حساب مالک و فروشگاه آزمایشی شما ساخته می‌شود.</p>
           {% else %}
           <p class="r-field-hint r-otp-account-note">ساخت حساب جدید فعلاً در دسترس نیست؛ فقط مالکانی که قبلاً حساب ساخته‌اند می‌توانند با کد یک‌بارمصرف وارد شوند.</p>
           {% endif %}
@@ -70,4 +70,4 @@
   </div>
 </section>
 {% endblock %}
-{% block extra_js %}{{ block.super }}<script src="{% static 'portal/js/auth-forms.js' %}?v=20261006-2" defer></script>{% endblock %}
+{% block extra_js %}{{ block.super }}<script src="{% static 'portal/js/auth-forms.js' %}?v=20261006-3" defer></script>{% endblock %}

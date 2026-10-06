@@ -266,20 +266,27 @@ class OtpViewFlowTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], "/app/")
 
-    def test_new_owner_via_login_path_still_gets_a_trial_store_and_onboarding(self):
-        # Registering through /login/ with a never-seen phone is
-        # functionally identical to /register/ — both funnel into the same
-        # get-or-create-by-phone identity (ADR-102).
+    def test_new_phone_via_login_is_verified_then_completes_signup_before_getting_a_trial_store(self):
+        # A never-seen phone on /login/ only proves phone ownership: no Owner and
+        # no Store exist until the «تکمیل ثبت‌نام» step receives a name.
         from apps.stores.models import Store
 
+        stores_before = Store.objects.count()
         code = self._fixed_code()
         self.client.post("/login/", {"phone": "09121234581"}, HTTP_HOST=_HOST)
         response = self.client.post(
             "/verify/", {"phone": "09121234581", "code": code}, HTTP_HOST=_HOST,
         )
         self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/signup/complete/")
+        self.assertFalse(OwnerProfile.objects.filter(phone="09121234581").exists())
+        self.assertEqual(Store.objects.count(), stores_before)
+
+        response = self.client.post("/signup/complete/", {"full_name": "Login Newcomer"}, HTTP_HOST=_HOST)
+        self.assertEqual(response.status_code, 302)
         self.assertIn("/onboarding/", response["Location"])
-        self.assertTrue(Store.objects.filter(name="فروشگاه من").exists())
+        self.assertEqual(Store.objects.count(), stores_before + 1)
+        self.assertEqual(OwnerProfile.objects.get(phone="09121234581").full_name, "Login Newcomer")
 
     def test_second_owner_verify_reuses_account_across_login_sessions(self):
         code = self._fixed_code()
