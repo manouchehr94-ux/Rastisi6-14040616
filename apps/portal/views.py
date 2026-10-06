@@ -1,16 +1,20 @@
 from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
 import time
+from urllib.parse import urlencode
 
 from django.contrib import messages
+from django.contrib.auth.password_validation import password_validators_help_texts
 from django.core.exceptions import ValidationError
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods, require_POST
 
 from django.conf import settings
 
@@ -215,8 +219,20 @@ def contact(request):
 # ---------------------------------------------------------------------------
 
 
+_NEXT_MAX_LENGTH = 2000
+
+
 def _is_safe_next(next_url: str) -> bool:
-    return bool(next_url) and next_url.startswith("/") and not next_url.startswith("//")
+    """فقط مسیرِ محلیِ هم‌میزبان («/…») پذیرفته می‌شود. علاوه بر ردِ «//host» و
+    «scheme:»، قاعده‌یِ خودِ جنگو (``url_has_allowed_host_and_scheme`` با
+    ``allowed_hosts=None``، یعنی هیچ hostِ خارجی) شکل‌هایِ مرورگریِ بک‌اسلش
+    (slash+backslash+host)، tab/newlineِ میانه، «///host» و نویسه‌هایِ کنترلی را
+    هم می‌بندد؛ یک ``startswith('//')`` ساده این‌ها را رد نمی‌کرد (open redirect)."""
+    if not next_url or len(next_url) > _NEXT_MAX_LENGTH or not next_url.startswith("/"):
+        return False
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in next_url):
+        return False
+    return url_has_allowed_host_and_scheme(next_url, allowed_hosts=None)
 
 
 def _request_otp_and_go_to_verify(
@@ -330,9 +346,9 @@ def login_view(request):
         # that store's handoff; ACTIVE membership is still enforced by
         # ``issue_ticket``. Without one this is the usual My Stores redirect.
         admin_return = request.GET.get("admin_return") or ""
-        if admin_return:
-            return _post_login_redirect(request, request.user, next_url="", admin_return=admin_return)
-        return redirect("portal:app-home")
+        return _post_login_redirect(
+            request, request.user, next_url=request.GET.get("next") or "", admin_return=admin_return,
+        )
 
     next_url = request.GET.get("next") or request.POST.get("next") or ""
     admin_return = request.GET.get("admin_return") or request.POST.get("admin_return") or ""
@@ -353,21 +369,52 @@ def login_view(request):
     else:
         otp_form = OwnerPhoneRequestForm()
     password_form = OwnerIdentifierLoginForm()
+    # POST here is always the OTP form; ``?mode=otp`` is the no-JS tab link.
+    mode = "otp" if request.method == "POST" or request.GET.get("mode") == "otp" else "password"
     return render(
         request, "portal/public/login.html",
         {
-            "otp_form": otp_form, "password_form": password_form,
+            "otp_form": otp_form, "password_form": password_form, "mode": mode,
             "next": next_url, "admin_return": admin_return,
             "registration_open": platform_config_service.is_new_store_registration_enabled(),
         },
     )
 
 
-@require_POST
+_LOGIN_THROTTLED_MESSAGE = "تعداد تلاش ورود بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید."
+LOGIN_IDENTIFIER_MAX_ATTEMPTS = 10
+LOGIN_IDENTIFIER_WINDOW_SECONDS = 600
+
+
+def _login_identifier_throttled(form) -> bool:
+    """سقفِ تلاشِ ورود به‌ازایِ *شناسه* (جدا از سقفِ IP): پشتِ IPهایِ چرخان نمی‌شود
+    یک حساب را بی‌نهایت حدس زد. کلید از متنِ واردشده ساخته می‌شود (نه از وجودِ
+    حساب)، پس خودِ این سقف چیزی دربارهٔ وجودِ حساب فاش نمی‌کند. قربانیِ
+    قفل‌شدن همچنان با کدِ پیامکی می‌تواند وارد شود."""
+    key = owner_auth_service.login_identifier_throttle_key(form.cleaned_data["identifier"])
+    try:
+        enforce_rate_limit(
+            "login_password_identifier", key,
+            max_attempts=LOGIN_IDENTIFIER_MAX_ATTEMPTS, window_seconds=LOGIN_IDENTIFIER_WINDOW_SECONDS,
+        )
+    except RateLimitExceeded:
+        return True
+    return False
+
+
+@require_http_methods(["GET", "HEAD", "POST"])
 def login_password(request):
     """POSTِ فرمِ رمزِ عبورِ صفحه‌ی یکپارچه‌ی ورود — شناسه (ایمیل یا
     موبایل) + رمز عبور. پیامِ خطا همیشه عمومی است؛ هرگز فاش نمی‌کند کدام
-    بخش نادرست بود یا اصلاً چنین حسابی هست یا نه."""
+    بخش نادرست بود یا اصلاً چنین حسابی هست یا نه.
+
+    پس از یک ورودِ ناموفق نشانیِ مرورگر همین آدرس است؛ بارگذاریِ دوباره/نشانک
+    (GET) به‌جای 405 به صفحه‌ی ورود می‌رود (``next``/``admin_return`` حفظ می‌شوند)
+    — هیچ ورودی‌ای با GET انجام نمی‌شود."""
+    if request.method != "POST":
+        params = {k: request.GET[k] for k in ("next", "admin_return") if request.GET.get(k)}
+        target = reverse("portal:login")
+        return redirect(f"{target}?{urlencode(params)}" if params else target)
     if request.user.is_authenticated:
         return redirect("portal:app-home")
 
@@ -384,21 +431,26 @@ def login_password(request):
         if form.is_valid() and _turnstile_form_is_valid(
             request, form, action="login_password"
         ):
-            user = owner_auth_service.authenticate_owner_by_identifier(
-                request, identifier=form.cleaned_data["identifier"], password=form.cleaned_data["password"],
-            )
-            if user is None:
-                form.add_error(None, owner_auth_service.GENERIC_LOGIN_ERROR)
+            # Turnstile first: only a solved challenge may spend (or lock) an
+            # identifier's attempt budget, so an anonymous script cannot lock a victim out.
+            if _login_identifier_throttled(form):
+                form.add_error(None, _LOGIN_THROTTLED_MESSAGE)
             else:
-                auth_login(request, user)
-                session_service.apply_remember_me(request, form.cleaned_data.get("remember_me", False))
-                return _post_login_redirect(request, user, next_url=next_url, admin_return=admin_return)
+                user = owner_auth_service.authenticate_owner_by_identifier(
+                    request, identifier=form.cleaned_data["identifier"], password=form.cleaned_data["password"],
+                )
+                if user is None:
+                    form.add_error(None, owner_auth_service.GENERIC_LOGIN_ERROR)
+                else:
+                    auth_login(request, user)
+                    session_service.apply_remember_me(request, form.cleaned_data.get("remember_me", False))
+                    return _post_login_redirect(request, user, next_url=next_url, admin_return=admin_return)
 
     otp_form = OwnerPhoneRequestForm()
     return render(
         request, "portal/public/login.html",
         {
-            "otp_form": otp_form, "password_form": form,
+            "otp_form": otp_form, "password_form": form, "mode": "password",
             "next": next_url, "admin_return": admin_return, "password_mode": True,
             "registration_open": platform_config_service.is_new_store_registration_enabled(),
         },
@@ -675,17 +727,29 @@ def password_reset_request(request):
         ):
             base_url = f"{request.scheme}://{request.get_host()}"
             owner_auth_service.request_password_reset(email=form.cleaned_data["email"], base_url=base_url)
-            messages.success(request, "اگر این ایمیل ثبت‌نام کرده باشد، پیوند بازیابی رمز برای آن ارسال شد.")
-            return redirect("portal:login-email")
+            messages.success(
+                request,
+                "اگر این ایمیل برای حسابی با رمز عبور ثبت شده باشد، پیوند بازیابی برایش ارسال شد. "
+                "اگر پیامی نرسید، پوشه‌ی هرزنامه را هم بررسی کنید.",
+            )
+            return redirect("portal:password-reset-request")
     else:
         form = PasswordResetRequestForm()
     return render(request, "portal/public/password_reset_request.html", {"form": form})
 
 
+@never_cache
 def password_reset_confirm(request, uidb64, token):
+    """تعیینِ رمزِ جدید با پیوندِ ایمیلی. پاسخ ``Referrer-Policy: same-origin`` و
+    ``no-store`` دارد (توکن در URL است و نباید از طریقِ Referer به سایتِ دیگری درز
+    کند). عمداً ``no-referrer`` نیست: مرورگرها آن‌وقت در POSTِ فرم ``Origin: null``
+    می‌فرستند و بررسیِ Origin در CSRFِ جنگو فرمِ رمزِ جدید را رد می‌کند.
+    اعتبارِ رمز فقط با ``AUTH_PASSWORD_VALIDATORS``ِ تنظیم‌شده سنجیده می‌شود."""
     user = owner_auth_service.get_user_from_reset_link(uidb64=uidb64, token=token)
     if user is None:
-        return render(request, "portal/public/password_reset_invalid.html", status=400)
+        response = render(request, "portal/public/password_reset_invalid.html", status=400)
+        response["Referrer-Policy"] = "same-origin"
+        return response
 
     if request.method == "POST":
         form = PasswordResetConfirmForm(request.POST)
@@ -694,14 +758,20 @@ def password_reset_confirm(request, uidb64, token):
                 owner_auth_service.set_new_password(
                     user=user, password=form.cleaned_data["password"]
                 )
-            except owner_auth_service.OwnerAuthError as exc:
-                form.add_error("password", str(exc))
+            except owner_auth_service.PasswordPolicyError as exc:
+                for message in exc.messages:
+                    form.add_error("password", message)
             else:
                 messages.success(request, "رمز عبور با موفقیت تغییر کرد؛ اکنون می‌توانید وارد شوید.")
                 return redirect("portal:login-email")
     else:
         form = PasswordResetConfirmForm()
-    return render(request, "portal/public/password_reset_confirm.html", {"form": form})
+    response = render(
+        request, "portal/public/password_reset_confirm.html",
+        {"form": form, "password_help": password_validators_help_texts()},
+    )
+    response["Referrer-Policy"] = "same-origin"
+    return response
 
 
 # ---------------------------------------------------------------------------

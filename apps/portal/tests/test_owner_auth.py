@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.core.cache import cache
 from django.test import TestCase, override_settings
 
 from apps.customers.models import Customer
@@ -240,6 +241,7 @@ class AuthenticateOwnerByIdentifierTests(TestCase):
 @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
 class PasswordResetTests(TestCase):
     def setUp(self):
+        cache.clear()  # the per-email reset throttle lives in the cache
         self.user = owner_auth_service.register_owner(
             full_name="Reset Test", email="reset@example.com", password="a-very-strong-pass-1",
         )
