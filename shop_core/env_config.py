@@ -439,3 +439,57 @@ def resolve_turnstile_settings(debug, *, environ=None):
         "enabled": enabled, "site_key": site_key, "secret_key": secret_key,
         "expected_hostnames": hostnames, "timeout_seconds": timeout,
     }
+
+
+# ---------------------------------------------------------------------------
+# Local-QA owner OTP (DEVELOPMENT ONLY)
+# ---------------------------------------------------------------------------
+
+_DEV_OTP_RE = re.compile(r"[0-9]{6}")
+
+
+def resolve_dev_otp_code(debug, *, environ=None):
+    """Parse ``RASTISI_DEV_OTP_CODE`` — the opt-in fixed owner-OTP for local browser QA.
+
+    * empty / unset -> ``""`` (disabled; the secure default).
+    * non-empty -> must be exactly six ASCII digits, and ``debug`` must be true:
+      with ``DJANGO_DEBUG=False`` this raises, so a production process can never
+      start with a known OTP. The value is never echoed in the error message.
+    """
+    name = "RASTISI_DEV_OTP_CODE"
+    raw = env_str(name, "", environ=environ)
+    if not raw:
+        return ""
+    if not debug:
+        raise ImproperlyConfigured(
+            f"{name} is a DEVELOPMENT-ONLY local-QA setting and must be unset when DJANGO_DEBUG=False."
+        )
+    if not (raw.isascii() and _DEV_OTP_RE.fullmatch(raw)):
+        raise ImproperlyConfigured(f"{name} must be exactly 6 ASCII digits (e.g. 123456), or empty to disable it.")
+    return raw
+
+
+def resolve_allow_console_otp(debug, *, running_tests, environ=None):
+    """``RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP``: lets the *console* platform provider report
+    success. Defaults to on only for ``manage.py test``. Explicitly enabling it with
+    ``DJANGO_DEBUG=False`` is refused, so it cannot become a production escape hatch."""
+    name = "RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP"
+    value = env_bool(name, default=running_tests, environ=environ)
+    if value and not debug and not running_tests:
+        raise ImproperlyConfigured(
+            f"{name} must not be enabled when DJANGO_DEBUG=False (it would fake OTP delivery in production)."
+        )
+    return value
+
+
+def dev_otp_problems(*, dev_otp_code, allow_console_otp, production, running_tests=False):
+    """Problems with the effective local-QA OTP settings (empty list = fine)."""
+    problems = []
+    if production and dev_otp_code:
+        problems.append("RASTISI_DEV_OTP_CODE must be empty when DJANGO_DEBUG=False (development-only setting).")
+    if production and allow_console_otp and not running_tests:
+        problems.append(
+            "RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP must be false when DJANGO_DEBUG=False "
+            "(it would report fake OTP delivery)."
+        )
+    return problems

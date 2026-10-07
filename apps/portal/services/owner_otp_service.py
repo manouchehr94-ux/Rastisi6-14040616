@@ -21,7 +21,7 @@ from django.utils import timezone
 
 from apps.portal.models import OwnerOtpChallenge
 
-from .owner_sms_service import send_platform_otp
+from .owner_sms_service import dev_otp_code_for_console_provider, send_platform_otp
 from .rate_limit import UNAVAILABLE_MESSAGE, RateLimitExceeded, RateLimitUnavailable, enforce_rate_limit
 
 logger = logging.getLogger(__name__)
@@ -66,7 +66,9 @@ class OtpDeliveryError(OtpRateLimitError):
 
 
 def _generate_code() -> str:
-    return f"{secrets.randbelow(10 ** OTP_LENGTH):0{OTP_LENGTH}d}"
+    # DEVELOPMENT ONLY (RASTISI_DEV_OTP_CODE): a fixed code, only while the platform OTP provider
+    # is the console backend. Production / real-provider deployments always get a random code.
+    return dev_otp_code_for_console_provider() or f"{secrets.randbelow(10 ** OTP_LENGTH):0{OTP_LENGTH}d}"
 
 
 #: ردیفِ «در-جریان» (رزروِ سهمیه‌ای که پیامکش هنوز تحویل نشده): ``expires_at`` روی
@@ -103,7 +105,28 @@ def _lock_phone_purpose(phone: str, purpose: str) -> None:
             )
 
 
-def request_otp(*, phone: str, purpose: str, client_ip: str, message: str | None = None) -> None:
+def charge_ip_budget(*, purpose: str, client_ip: str) -> None:
+    """Spend one unit of the per-IP OTP-request budget (shared rate-limit store, fail-closed).
+
+    Raises ``OtpRateLimitError`` over budget and ``OtpDeliveryError`` (controlled
+    "temporarily unavailable") when the shared counter cannot be charged. Exposed separately so
+    an enumeration-safe flow (password reset) can charge it for *every* phone, known or not."""
+    try:
+        enforce_rate_limit(
+            f"owner_otp_request_ip:{purpose}", client_ip,
+            max_attempts=IP_MAX_REQUESTS, window_seconds=IP_REQUEST_WINDOW_SECONDS,
+        )
+    except RateLimitExceeded as exc:
+        raise OtpRateLimitError(str(exc)) from exc
+    except RateLimitUnavailable as exc:
+        # Fail closed: no code is created and no SMS is sent while the shared throttle store is down
+        # (an SMS-pumping/brute-force control must not vanish).
+        raise OtpDeliveryError(UNAVAILABLE_MESSAGE) from exc
+
+
+def request_otp(
+    *, phone: str, purpose: str, client_ip: str, message: str | None = None, charge_ip: bool = True,
+) -> None:
     """کدِ تازه می‌سازد و پیامک می‌کند. اگر تعداد درخواست‌های اخیر (برایِ این
     شماره یا این IP) بیش از حد باشد، ``OtpRateLimitError`` می‌دهد — و در آن
     حالت هیچ کدِ تازه‌ای ساخته/ارسال نمی‌شود (جلوگیری از حدس‌زدنِ شماره و
@@ -134,17 +157,8 @@ def request_otp(*, phone: str, purpose: str, client_ip: str, message: str | None
     پیامک. تا وقتی درخواستِ جدیدتر در-جریان است، کدِ قدیمیِ تحویل‌شده معتبر
     می‌ماند؛ وقتی جدیدتر موفق شد قدیمی باطل می‌شود؛ و درخواستِ قدیمیِ دیرتمام
     هرگز جدیدتر را پس نمی‌گیرد."""
-    try:
-        enforce_rate_limit(
-            f"owner_otp_request_ip:{purpose}", client_ip,
-            max_attempts=IP_MAX_REQUESTS, window_seconds=IP_REQUEST_WINDOW_SECONDS,
-        )
-    except RateLimitExceeded as exc:
-        raise OtpRateLimitError(str(exc)) from exc
-    except RateLimitUnavailable as exc:
-        # Fail closed: no code is created and no SMS is sent while the shared
-        # throttle store is down (an SMS-pumping/brute-force control must not vanish).
-        raise OtpDeliveryError(UNAVAILABLE_MESSAGE) from exc
+    if charge_ip:
+        charge_ip_budget(purpose=purpose, client_ip=client_ip)
 
     # ردِ سریعِ بدون قفل: درخواستِ آشکارا بیش از سقف، هشِ کندِ PBKDF2 نمی‌سوزاند.
     if _recent_request_count(phone, purpose) >= MAX_REQUESTS_PER_PHONE_WINDOW:

@@ -738,7 +738,7 @@ class AnonymousEmailRegistrationRemovedTests(_OtpTestMixin, TestCase):
         self.assertNotIn("_auth_user_id", self.client.session)
 
     # 7
-    def test_password_reset_for_an_existing_email_owner_still_works_end_to_end(self):
+    def test_legacy_email_token_reset_for_an_existing_email_owner_still_works_end_to_end(self):
         import re
 
         from django.core import mail
@@ -747,8 +747,8 @@ class AnonymousEmailRegistrationRemovedTests(_OtpTestMixin, TestCase):
             full_name="Reset Owner", email="reset-flow@example.com", password="a-very-strong-pass-1",
         )
         mail.outbox.clear()
-        response = self.client.post("/reset-password/", {"email": "reset-flow@example.com"}, HTTP_HOST=_HOST)
-        self.assertEqual(response.status_code, 302)
+        # The public page no longer mails; the legacy service (already-issued links / internal use) does.
+        owner_auth_service.request_password_reset(email="reset-flow@example.com", base_url=f"http://{_HOST}")
         self.assertEqual(len(mail.outbox), 1)
         link = re.search(r"/reset-password/[\w-]+/[\w-]+/", mail.outbox[0].body)
         self.assertIsNotNone(link)
@@ -767,13 +767,15 @@ class AnonymousEmailRegistrationRemovedTests(_OtpTestMixin, TestCase):
         )
         self.assertRedirects(login, "/app/", fetch_redirect_response=False)
 
-    def test_password_reset_for_an_unknown_email_reveals_nothing(self):
+    def test_password_reset_page_for_an_unknown_mobile_creates_nothing(self):
         from django.core import mail
 
         mail.outbox.clear()
-        response = self.client.post("/reset-password/", {"email": "nobody-here@example.com"}, HTTP_HOST=_HOST)
+        users, profiles = User.objects.count(), OwnerProfile.objects.count()
+        response = self.client.post("/reset-password/", {"phone": "09129998877"}, HTTP_HOST=_HOST)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual((User.objects.count(), OwnerProfile.objects.count()), (users, profiles))
 
     # 8 + 9
     def test_the_two_remaining_public_routes_still_create_owners_via_otp_only(self):

@@ -20,7 +20,7 @@ from django.urls import reverse
 from apps.content.models import NewsletterSubscriber
 from apps.core.services import rate_limit
 from apps.core.services.rate_limit import UNAVAILABLE_MESSAGE, RateLimitUnavailable
-from apps.portal.models import ContactMessage, OwnerOtpChallenge
+from apps.portal.models import ContactMessage, OwnerOtpChallenge, OwnerProfile
 from apps.portal.services import owner_auth_service, owner_otp_service, turnstile_service
 from apps.sms.services import otp_service as store_otp_service
 from apps.sms.services.backends import SmsSendResult
@@ -250,17 +250,19 @@ class RateLimitOutageFailsClosedTests(_Base):
         send.assert_not_called()
         self.assertEqual(OwnerOtpChallenge.objects.count(), 0)
 
-    def test_password_reset_sends_no_mail(self):
-        with _outage():
-            response = self.client.post("/reset-password/", {"email": "outage@example.com"}, HTTP_HOST=_HOST)
+    def test_password_reset_sends_no_sms_when_the_counter_is_down(self):
+        OwnerProfile.objects.filter(user=self.owner).update(phone="09121230001")
+        with _outage(), patch.object(owner_otp_service, "send_platform_otp") as send:
+            response = self.client.post("/reset-password/", {"phone": "09121230001"}, HTTP_HOST=_HOST)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, UNAVAILABLE_MESSAGE)
+        send.assert_not_called()
+        self.assertEqual(OwnerOtpChallenge.objects.count(), 0)
         self.assertEqual(mail.outbox, [])
 
-    def test_password_reset_per_email_budget_outage_sends_no_mail_and_stays_generic(self):
+    def test_legacy_per_email_budget_outage_sends_no_mail_and_stays_silent(self):
         with patch.object(owner_auth_service, "enforce_rate_limit", side_effect=RateLimitUnavailable("x")):
-            response = self.client.post("/reset-password/", {"email": "outage@example.com"}, HTTP_HOST=_HOST)
-        self.assertEqual(response.status_code, 302)  # identical to the normal generic success
+            owner_auth_service.request_password_reset(email="outage@example.com", base_url="http://rastisi.localhost")
         self.assertEqual(mail.outbox, [])
 
     def test_contact_form_is_refused_with_a_controlled_message(self):
@@ -400,14 +402,17 @@ class TurnstileOutageFailsClosedTests(_Base):
                     send.assert_not_called()
         self.assertEqual(OwnerOtpChallenge.objects.count(), 0)
 
-    def test_password_reset_never_sends_mail(self):
+    def test_password_reset_never_sends_sms_or_mail(self):
+        OwnerProfile.objects.filter(user__email="ts@example.com").update(phone="09121230002")
         for label, kwargs in self.OUTAGES:
             cache.clear()  # six outages would otherwise exhaust the per-IP reset budget (5)
-            with self.subTest(label), _siteverify(**kwargs):
+            with self.subTest(label), _siteverify(**kwargs), patch.object(owner_otp_service, "send_platform_otp") as send:
                 response = self.client.post(
-                    "/reset-password/", {"email": "ts@example.com", "cf-turnstile-response": "tok"}, HTTP_HOST=_HOST,
+                    "/reset-password/", {"phone": "09121230002", "cf-turnstile-response": "tok"}, HTTP_HOST=_HOST,
                 )
                 self.assertContains(response, turnstile_service.PUBLIC_ERROR_MESSAGE)
+                send.assert_not_called()
+        self.assertEqual(OwnerOtpChallenge.objects.count(), 0)
         self.assertEqual(mail.outbox, [])
 
     def test_missing_token_never_calls_the_provider_or_the_protected_action(self):

@@ -95,3 +95,16 @@ def check_auth_cookies(app_configs, **kwargs):
         csrf_domain=settings.CSRF_COOKIE_DOMAIN,
     )
     return _errors("rastisi.E005", problems)
+
+
+@register(Tags.security)
+def check_dev_otp(app_configs, **kwargs):
+    import sys
+
+    problems = env_config.dev_otp_problems(
+        dev_otp_code=getattr(settings, "RASTISI_DEV_OTP_CODE", ""),
+        allow_console_otp=bool(getattr(settings, "RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP", False)),
+        production=_production(),
+        running_tests="test" in sys.argv,
+    )
+    return _errors("rastisi.E006", problems)

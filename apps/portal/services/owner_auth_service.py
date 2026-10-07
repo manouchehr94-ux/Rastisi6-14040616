@@ -251,6 +251,10 @@ def _can_use_password_reset(user) -> bool:
 
 
 def request_password_reset(*, email: str, base_url: str) -> None:
+    # LEGACY / INTERNAL: no public view calls this any more. Public password recovery is
+    # mobile + SMS OTP (``/reset-password/`` -> ``/verify/`` -> ``/reset-password/new/``).
+    # Kept (with ``get_user_from_reset_link`` and ``/reset-password/<uidb64>/<token>/``) so
+    # already-issued email links and internal tooling keep working.
     """اگر ایمیل متعلق به **یک** مالکِ فعال باشد ایمیل بازیابی می‌فرستد؛ در غیر
     این صورت بی‌صدا کاری نمی‌کند — تا فرمِ عمومی هرگز فاش نکند کدام ایمیل
     ثبت‌نام کرده (enumeration-safety). چند حسابِ هم‌ایمیل مبهم است و مثلِ ورود
@@ -291,6 +295,29 @@ def request_password_reset(*, email: str, base_url: str) -> None:
         recipient_list=[user.email],
         fail_silently=True,
     )
+
+
+def find_reset_eligible_user_by_phone(phone: str):
+    """Mobile password-recovery eligibility (public SMS-OTP reset).
+
+    Returns the existing, **active** ``User`` that owns an ``OwnerProfile`` with this
+    (already normalised) phone, else ``None``. It only *reads*: it never creates a
+    ``User``/``OwnerProfile``/Store, so an unknown mobile stays unknown. A usable password is
+    deliberately NOT required — an OTP-created owner (unusable password) may set a first one.
+    A customer-only account (no ``OwnerProfile``) is not eligible."""
+    profile = OwnerProfile.objects.select_related("user").filter(phone=phone).first()
+    if profile is None or not profile.user.is_active:
+        return None
+    return profile.user
+
+
+def get_reset_eligible_user_by_id(user_id):
+    """Re-check, at password-setting time, that the OTP-authorised user is still an active
+    owner (the id comes only from the server-side session proof, never from the request)."""
+    user = User.objects.filter(pk=user_id, is_active=True).first()
+    if user is None or not OwnerProfile.objects.filter(user=user).exists():
+        return None
+    return user
 
 
 def get_user_from_reset_link(*, uidb64: str, token: str):

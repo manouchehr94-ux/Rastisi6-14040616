@@ -46,7 +46,7 @@
 
           {% include "portal/public/_turnstile.html" with turnstile_action="login_password" %}
           <button type="submit" class="rs-btn rs-btn-primary r-form-submit">ورود</button>
-          <div class="r-form-links"><a href="{% url 'portal:password-reset-request' %}">فراموشی رمز عبور</a></div>
+          <div class="r-form-links"><a href="{% url 'portal:password-reset-request' %}">فراموشی رمز عبور؟ تعیین رمز با کد پیامکی</a></div>
         </form>
 
         <form method="post" action="{% url 'portal:login' %}" id="login-panel-otp" data-login-panel="otp"{% if mode != 'otp' %} hidden{% endif %} novalidate data-auth-form data-loading-text="در حال ارسال کد…">

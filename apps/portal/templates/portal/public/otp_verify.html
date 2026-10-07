@@ -1,6 +1,6 @@
 {% extends "portal/public/base_public.html" %}
 {% load static persian %}
-{% block title %}{% if is_registration %}تأیید شماره موبایل{% else %}کد ورود{% endif %} | راستی‌سی{% endblock %}
+{% block title %}{% if is_registration %}تأیید شماره موبایل{% elif is_reset %}تأیید برای تعیین رمز{% else %}کد ورود{% endif %} | راستی‌سی{% endblock %}
 {% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
 
 {% block content %}
@@ -12,6 +12,10 @@
         <div class="rs-eyebrow">تأیید شماره موبایل</div>
         <h1>شماره‌تان را تأیید کنید،<br>فروشگاهتان ساخته می‌شود.</h1>
         <p>بعد از وارد کردن کد، حساب مالک شما ساخته و فروشگاه آزمایشی‌تان آماده‌ی راه‌اندازی می‌شود.</p>
+        {% elif is_reset %}
+        <div class="rs-eyebrow">بازیابی یا تعیین رمز</div>
+        <h1>شماره‌تان را تأیید کنید،<br>بعد رمز جدید بگذارید.</h1>
+        <p>اگر حساب فعالی با این شماره وجود داشته باشد، کدی برایش پیامک شده است. بعد از وارد کردن کد، رمز عبور جدید را انتخاب می‌کنید؛ با این کد وارد حساب نمی‌شوید.</p>
         {% else %}
         <div class="rs-eyebrow">ورود با کد یک‌بارمصرف</div>
         <h1>یک مرحله کوتاه<br>برای ورود امن.</h1>
@@ -26,7 +30,7 @@
 
       <div class="r-auth-form">
         <div class="r-auth-form-head">
-          <h2>{% if is_registration %}تأیید شماره موبایل{% else %}کد ورود{% endif %}</h2>
+          <h2>{% if is_registration %}تأیید شماره موبایل{% elif is_reset %}تأیید برای تعیین رمز{% else %}کد ورود{% endif %}</h2>
           <p>کد ۶ رقمی ارسال‌شده به <span class="r-phone-inline">{{ phone }}</span> را وارد کنید.
             <a class="r-inline-link" href="{{ change_phone_url }}">تغییر شماره</a></p>
         </div>
@@ -43,7 +47,7 @@
             {% if form.code.errors %}<div class="p-error" id="id_code_error">{{ form.code.errors.0 }}</div>{% endif %}
             {% if timing.expires_in or not form.code.errors %}<div class="r-field-hint" id="id_code_hint" data-otp-expires="{{ timing.expires_in }}" aria-live="polite">{% if timing.expires_in %}کد تا {{ otp_ttl_minutes|fa_number }} دقیقه پس از ارسال معتبر است.{% else %}این کد منقضی شده است؛ کد جدید دریافت کنید.{% endif %}</div>{% endif %}
           </div>
-          <button type="submit" class="rs-btn rs-btn-primary r-form-submit">{% if is_registration %}تأیید شماره و ادامه{% else %}تأیید و ورود{% endif %}</button>
+          <button type="submit" class="rs-btn rs-btn-primary r-form-submit">{% if is_registration %}تأیید شماره و ادامه{% elif is_reset %}تأیید و ادامه{% else %}تأیید و ورود{% endif %}</button>
         </form>
 
         <form method="post" action="{{ resend_url }}" class="r-otp-resend" data-resend-form data-resend-in="{{ timing.resend_in }}">

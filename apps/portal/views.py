@@ -1,5 +1,6 @@
 from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
+import logging
 import time
 from urllib.parse import urlencode
 
@@ -67,6 +68,7 @@ from .services import (
     handoff_service,
     owner_auth_service,
     owner_otp_service,
+    owner_sms_service,
     platform_config_service,
     provisioning_service,
     session_service,
@@ -74,6 +76,8 @@ from .services import (
     turnstile_service,
 )
 from .services.rate_limit import UNAVAILABLE_MESSAGE, RateLimitExceeded, RateLimitUnavailable, enforce_rate_limit
+
+logger = logging.getLogger(__name__)
 
 _STORE_CREATE_TOKEN_SESSION_KEY = "portal_store_create_token"
 DEFAULT_TRIAL_STORE_NAME = "فروشگاه من"
@@ -84,6 +88,12 @@ _OTP_SESSION_NEXT_KEY = "portal_otp_next"
 _OTP_SESSION_ADMIN_RETURN_KEY = "portal_otp_admin_return"
 _OTP_SESSION_REMEMBER_KEY = "portal_otp_remember_me"
 _OTP_SESSION_FLASH_KEY = "portal_otp_flash"
+_OTP_SESSION_STARTED_KEY = "portal_otp_started_at"
+#: «اجازه‌ی تعیینِ رمزِ جدید» — فقط سمتِ سرور (نشست)، کوتاه‌عمر و تک‌مصرف؛ تنها پس از
+#: موفقیتِ OTPِ هدفِ «بازیابی رمز» نوشته می‌شود. صفحه‌ی رمزِ جدید کاربر را *فقط* از همین
+#: می‌خواند، هرگز از بدنه‌ی درخواست. این OTP هرگز کسی را وارد نمی‌کند.
+_RESET_PENDING_KEY = "portal_password_reset_pending"
+RESET_PENDING_TTL_SECONDS = 600
 #: «شمارهٔ تأییدشده، منتظرِ تکمیلِ ثبت‌نام» — فقط سمتِ سرور (نشست)، با عمرِ کوتاه،
 #: و تنها پس از موفقیتِ OTP نوشته می‌شود. مرحله‌ی تکمیل شماره را *فقط* از همین
 #: می‌خواند، هرگز از بدنه‌ی درخواست.
@@ -92,7 +102,7 @@ SIGNUP_PENDING_TTL_SECONDS = 600
 _OTP_SESSION_KEYS = (
     _OTP_SESSION_PHONE_KEY, _OTP_SESSION_PURPOSE_KEY, _OTP_SESSION_FULL_NAME_KEY,
     _OTP_SESSION_NEXT_KEY, _OTP_SESSION_ADMIN_RETURN_KEY, _OTP_SESSION_REMEMBER_KEY,
-    _OTP_SESSION_FLASH_KEY,
+    _OTP_SESSION_FLASH_KEY, _OTP_SESSION_STARTED_KEY,
 )
 
 
@@ -257,12 +267,14 @@ def _request_otp_and_go_to_verify(
         return None, str(exc)
 
     request.session.pop(_SIGNUP_PENDING_KEY, None)
+    request.session.pop(_RESET_PENDING_KEY, None)
     request.session[_OTP_SESSION_PHONE_KEY] = phone
     request.session[_OTP_SESSION_PURPOSE_KEY] = purpose
     request.session[_OTP_SESSION_FULL_NAME_KEY] = full_name
     request.session[_OTP_SESSION_NEXT_KEY] = next_url
     request.session[_OTP_SESSION_ADMIN_RETURN_KEY] = admin_return
     request.session[_OTP_SESSION_REMEMBER_KEY] = bool(remember_me)
+    request.session[_OTP_SESSION_STARTED_KEY] = int(time.time())
     return phone, None
 
 
@@ -486,20 +498,50 @@ _REGISTRATION_CLOSED_LOGIN_MESSAGE = (
 _INACTIVE_ACCOUNT_MESSAGE = "ورود با این شماره امکان‌پذیر نیست؛ لطفاً با پشتیبانی تماس بگیرید."
 
 
+_RESET_GENERIC_NOTICE = "اگر حساب فعالی با این شماره وجود داشته باشد، کد تأیید برای آن ارسال می‌شود."
+_RESET_RESEND_NOTICE = "اگر حساب فعالی با این شماره وجود داشته باشد، کد جدید برای آن ارسال می‌شود."
+_RESET_OTP_FAILURE_MESSAGE = "کد واردشده نادرست یا منقضی شده است؛ در صورت نیاز کد جدید دریافت کنید."
+_SMS_UNAVAILABLE_MESSAGE = "ارسال پیامک در حال حاضر در دسترس نیست؛ لطفاً کمی بعد دوباره تلاش کنید."
+_RESET_SESSION_EXPIRED_MESSAGE = "زمانِ تعیینِ رمز عبور به پایان رسید؛ لطفاً دوباره کد تأیید بگیرید."
+
+
 def _clear_otp_session(request) -> None:
     for key in _OTP_SESSION_KEYS:
         request.session.pop(key, None)
 
 
+def _reset_otp_timing(request) -> dict:
+    """UX countdowns for the password-reset verify page, computed from the *session* only. The
+    real challenge row exists only for an eligible account, so reading it would leak whether the
+    phone has an account; this makes the page identical for known and unknown numbers."""
+    started = request.session.get(_OTP_SESSION_STARTED_KEY)
+    elapsed = max(0, int(time.time()) - started) if isinstance(started, int) else owner_otp_service.OTP_TTL_SECONDS
+    return {
+        "expires_in": max(0, owner_otp_service.OTP_TTL_SECONDS - elapsed),
+        "resend_in": max(0, owner_otp_service.RESEND_UX_COOLDOWN_SECONDS - elapsed),
+    }
+
+
 def _render_otp_verify(request, form, *, phone: str, purpose: str):
     is_registration = purpose == OwnerOtpChallenge.Purpose.REGISTER
+    is_reset = purpose == OwnerOtpChallenge.Purpose.PASSWORD_RESET
+    if is_registration:
+        change_phone_url = reverse("portal:register")
+    elif is_reset:
+        change_phone_url = reverse("portal:password-reset-request")
+    else:
+        change_phone_url = reverse("portal:login")
     return render(
         request, "portal/public/otp_verify.html",
         {
             "form": form, "phone": phone, "purpose": purpose, "is_registration": is_registration,
+            "is_reset": is_reset,
             "resend_url": reverse("portal:otp-resend"),
-            "change_phone_url": reverse("portal:register" if is_registration else "portal:login"),
-            "timing": owner_otp_service.resend_timing(phone=phone, purpose=purpose),
+            "change_phone_url": change_phone_url,
+            "timing": (
+                _reset_otp_timing(request) if is_reset
+                else owner_otp_service.resend_timing(phone=phone, purpose=purpose)
+            ),
             "otp_ttl_minutes": max(1, owner_otp_service.OTP_TTL_SECONDS // 60),
             "flash": request.session.pop(_OTP_SESSION_FLASH_KEY, None),
         },
@@ -520,6 +562,7 @@ def otp_verify(request):
         return redirect("portal:login")
 
     is_registration = purpose == OwnerOtpChallenge.Purpose.REGISTER
+    is_reset = purpose == OwnerOtpChallenge.Purpose.PASSWORD_RESET
     if is_registration and not request.session.get(_OTP_SESSION_FULL_NAME_KEY):
         # نشستِ ثبت‌نام بدونِ نام معتبر نیست (نباید رخ دهد)؛ از ابتدا شروع شود.
         _clear_otp_session(request)
@@ -538,8 +581,13 @@ def otp_verify(request):
 
     result = owner_otp_service.check_otp(phone=phone, purpose=purpose, code=form.cleaned_data["code"])
     if result is not owner_otp_service.OtpCheckResult.OK:
-        form.add_error("code", _OTP_CHECK_MESSAGES[result])
+        # Reset: ONE message for every failure kind — a precise one ("wrong" vs "expired") would
+        # tell an attacker whether this phone has an active challenge, i.e. an account.
+        form.add_error("code", _RESET_OTP_FAILURE_MESSAGE if is_reset else _OTP_CHECK_MESSAGES[result])
         return _render_otp_verify(request, form, phone=phone, purpose=purpose)
+
+    if is_reset:
+        return _begin_password_reset_authorization(request, phone=phone)
 
     full_name = request.session.get(_OTP_SESSION_FULL_NAME_KEY, "") if is_registration else ""
     next_url = request.session.get(_OTP_SESSION_NEXT_KEY, "")
@@ -688,6 +736,18 @@ def otp_resend(request):
         _clear_otp_session(request)
         return redirect("portal:register")
 
+    if purpose == OwnerOtpChallenge.Purpose.PASSWORD_RESET:
+        # Never the generic sender: that would create/send a reset challenge for ANY phone.
+        # The helper re-checks that this phone belongs to an eligible owner, and answers the
+        # same way for known and unknown numbers.
+        error = _send_reset_otp_if_eligible(request, phone=phone)
+        if error:
+            request.session[_OTP_SESSION_FLASH_KEY] = {"kind": "error", "text": error}
+        else:
+            request.session[_OTP_SESSION_STARTED_KEY] = int(time.time())
+            request.session[_OTP_SESSION_FLASH_KEY] = {"kind": "ok", "text": _RESET_RESEND_NOTICE}
+        return redirect("portal:otp-verify")
+
     try:
         owner_otp_service.request_otp(
             phone=phone, purpose=purpose, client_ip=get_client_ip_bucket(request),
@@ -730,7 +790,44 @@ def logout_view(request):
     return redirect("portal:home")
 
 
+def _send_reset_otp_if_eligible(request, *, phone: str) -> str | None:
+    """Issue a password-reset OTP **only** to an existing, active owner — and answer identically
+    for every phone, so the public flow is not an account-enumeration oracle.
+
+    Returns a user-facing error only for *account-independent* failures (SMS not deliverable at
+    all, per-IP budget, shared rate-limit store down). Everything that depends on the account —
+    unknown/ineligible phone, per-phone budget, a provider failure for this send — is swallowed
+    into the same generic success path: no challenge is left active in those cases (the OTP
+    service removes a challenge whose delivery failed) and nothing is ever created for an unknown
+    phone. The per-IP budget is charged for every phone, known or not."""
+    if not owner_sms_service.otp_delivery_available():
+        return _SMS_UNAVAILABLE_MESSAGE
+    client_ip = get_client_ip_bucket(request)
+    try:
+        owner_otp_service.charge_ip_budget(purpose=OwnerOtpChallenge.Purpose.PASSWORD_RESET, client_ip=client_ip)
+    except owner_otp_service.OtpRateLimitError as exc:  # incl. OtpDeliveryError("temporarily unavailable")
+        return str(exc)
+
+    if owner_auth_service.find_reset_eligible_user_by_phone(phone) is None:
+        return None  # unknown / inactive / not an owner: send nothing, create nothing, say nothing
+    try:
+        owner_otp_service.request_otp(
+            phone=phone, purpose=OwnerOtpChallenge.Purpose.PASSWORD_RESET, client_ip=client_ip, charge_ip=False,
+        )
+    except owner_otp_service.OtpRateLimitError:
+        # Per-phone budget or SMS delivery failure. Not shown (it would reveal the account); the
+        # operator-side detail is logged by the SMS layer. No active challenge remains.
+        logger.warning("password-reset OTP was not issued (phone budget or SMS delivery failure)")
+    return None
+
+
 def password_reset_request(request):
+    """بازیابی/تعیینِ رمز با **موبایل + کدِ پیامکی** (جایگزینِ ایمیلِ عمومی).
+
+    جریان: شماره → OTPِ هدفِ «بازیابی رمز» → ``/verify/`` → ``/reset-password/new/`` → ورود.
+    هیچ ``User``/``OwnerProfile``/Store ساخته نمی‌شود و پاسخِ عمومی برایِ شمارهٔ ناشناخته،
+    مالکِ فعال و حسابِ بدونِ رمز یکسان است. سقفِ IP همان ``password_reset`` است؛ Turnstile و
+    fail-closed بودنِ شمارنده‌ی مشترک حفظ شده‌اند."""
     if request.method == "POST":
         form = PasswordResetRequestForm(request.POST)
         try:
@@ -746,17 +843,86 @@ def password_reset_request(request):
         if form.is_valid() and _turnstile_form_is_valid(
             request, form, action="password_reset"
         ):
-            base_url = f"{request.scheme}://{request.get_host()}"
-            owner_auth_service.request_password_reset(email=form.cleaned_data["email"], base_url=base_url)
-            messages.success(
-                request,
-                "اگر این ایمیل برای حسابی با رمز عبور ثبت شده باشد، پیوند بازیابی برایش ارسال شد. "
-                "اگر پیامی نرسید، پوشه‌ی هرزنامه را هم بررسی کنید.",
-            )
-            return redirect("portal:password-reset-request")
+            phone = form.cleaned_data["phone"]
+            error = _send_reset_otp_if_eligible(request, phone=phone)
+            if error:
+                form.add_error(None, error)
+            else:
+                for key in _OTP_SESSION_KEYS + (_SIGNUP_PENDING_KEY, _RESET_PENDING_KEY):
+                    request.session.pop(key, None)
+                request.session[_OTP_SESSION_PHONE_KEY] = phone
+                request.session[_OTP_SESSION_PURPOSE_KEY] = OwnerOtpChallenge.Purpose.PASSWORD_RESET
+                request.session[_OTP_SESSION_STARTED_KEY] = int(time.time())
+                request.session[_OTP_SESSION_FLASH_KEY] = {"kind": "ok", "text": _RESET_GENERIC_NOTICE}
+                return redirect("portal:otp-verify")
     else:
         form = PasswordResetRequestForm()
     return render(request, "portal/public/password_reset_request.html", {"form": form})
+
+
+def _get_reset_authorization(request):
+    """اجازه‌ی تعیینِ رمز از نشستِ سرور؛ نبود/خراب/منقضی → پاک و ``None``."""
+    pending = request.session.get(_RESET_PENDING_KEY)
+    if isinstance(pending, dict):
+        uid, verified_at = pending.get("uid"), pending.get("verified_at")
+        if (
+            isinstance(uid, int) and not isinstance(uid, bool) and isinstance(verified_at, int)
+            and 0 <= time.time() - verified_at <= RESET_PENDING_TTL_SECONDS
+        ):
+            return pending
+    request.session.pop(_RESET_PENDING_KEY, None)
+    return None
+
+
+def _begin_password_reset_authorization(request, *, phone: str):
+    """پس از موفقیتِ OTPِ بازیابی: هیچ ورودی انجام نمی‌شود و هیچ‌چیز ساخته نمی‌شود؛ فقط یک
+    مجوزِ کوتاه‌عمر و تک‌مصرفِ سمتِ سرور (متصل به همین کاربر) نوشته و OTP session پاک می‌شود."""
+    user = owner_auth_service.find_reset_eligible_user_by_phone(phone)
+    _clear_otp_session(request)
+    if user is None:  # became ineligible between issue and verify
+        messages.error(request, _RESET_OTP_FAILURE_MESSAGE)
+        return redirect("portal:password-reset-request")
+    request.session.cycle_key()  # fresh session id for the new privilege
+    request.session[_RESET_PENDING_KEY] = {"uid": user.pk, "verified_at": int(time.time())}
+    return redirect("portal:password-reset-new")
+
+
+@never_cache
+def password_reset_new(request):
+    """تعیینِ رمزِ جدید پس از تأییدِ موبایل با OTP.
+
+    کاربر **فقط** از مجوزِ سمتِ سرور (نه از بدنه‌ی درخواست) خوانده و دوباره از نظرِ اهلیت
+    سنجیده می‌شود؛ مجوز ۱۰ دقیقه اعتبار دارد و با موفقیت مصرف می‌شود (تک‌مصرف). رمز فقط از
+    ``owner_auth_service.set_new_password`` (اعتبارسنجی‌هایِ Django) می‌گذرد. خودکار وارد
+    نمی‌کند؛ به صفحه‌ی ورود می‌رود. حسابِ بدونِ رمز (ساخته‌شده با OTP) اولین رمزش را همین‌جا می‌گذارد."""
+    pending = _get_reset_authorization(request)
+    if pending is None:
+        messages.warning(request, _RESET_SESSION_EXPIRED_MESSAGE)
+        return redirect("portal:password-reset-request")
+    user = owner_auth_service.get_reset_eligible_user_by_id(pending["uid"])
+    if user is None:
+        request.session.pop(_RESET_PENDING_KEY, None)
+        messages.warning(request, _RESET_SESSION_EXPIRED_MESSAGE)
+        return redirect("portal:password-reset-request")
+
+    if request.method == "POST":
+        form = PasswordResetConfirmForm(request.POST)
+        if form.is_valid():
+            try:
+                owner_auth_service.set_new_password(user=user, password=form.cleaned_data["password"])
+            except owner_auth_service.PasswordPolicyError as exc:
+                for message in exc.messages:
+                    form.add_error("password", message)
+            else:
+                request.session.pop(_RESET_PENDING_KEY, None)  # single use
+                messages.success(request, "رمز عبور با موفقیت تعیین شد؛ اکنون می‌توانید با شماره موبایل و رمز جدید وارد شوید.")
+                return redirect("portal:login")
+    else:
+        form = PasswordResetConfirmForm()
+    return render(
+        request, "portal/public/password_reset_confirm.html",
+        {"form": form, "password_help": password_validators_help_texts(), "via_sms": True},
+    )
 
 
 #: The reset token lives in the URL path; see ``password_reset_confirm``.

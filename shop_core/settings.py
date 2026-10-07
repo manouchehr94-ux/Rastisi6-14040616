@@ -24,7 +24,9 @@ from shop_core.env_config import (
     env_int,
     env_list,
     env_str,
+    resolve_allow_console_otp,
     resolve_allowed_hosts,
+    resolve_dev_otp_code,
     resolve_log_level,
     resolve_secret_key,
     resolve_secure_proxy_ssl_header,
@@ -509,9 +511,14 @@ RASTISI_OWNER_SMS_KAVENEGAR_OTP_TEMPLATE = env_str(
 )
 # runserver/production هرگز Console OTP را تحویل‌شده فرض نمی‌کنند. فقط
 # Django test command برای سازگاری تست‌های قدیمی اجازه‌ی fake success دارد.
-RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP = env_bool(
-    "RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP", default=("test" in sys.argv),
+RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP = resolve_allow_console_otp(
+    DEBUG, running_tests=("test" in sys.argv),
 )
+# DEVELOPMENT ONLY: opt-in fixed owner OTP for local browser QA on a machine with no SMS
+# provider (e.g. $env:RASTISI_DEV_OTP_CODE="123456"). Empty (default) = off. Startup fails if it
+# is set while DJANGO_DEBUG=False; it only ever takes effect when the platform SMS provider is
+# the console backend, never over a real provider. See owner_sms_service.dev_otp_code().
+RASTISI_DEV_OTP_CODE = resolve_dev_otp_code(DEBUG)
 
 # Checkpoint 5A â€” default subscription plan for newly onboarded stores.
 # ``RASTISI_DEFAULT_PLAN_CODE`` names a Plan.code whose latest published

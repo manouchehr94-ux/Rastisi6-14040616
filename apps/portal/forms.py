@@ -192,18 +192,11 @@ class OwnerIdentifierLoginForm(_FieldErrorA11yMixin, forms.Form):
     remember_me = forms.BooleanField(label="مرا به خاطر بسپار", required=False)
 
 
-class PasswordResetRequestForm(_FieldErrorA11yMixin, forms.Form):
-    email = forms.EmailField(
-        label="ایمیل", max_length=LOGIN_IDENTIFIER_MAX_LENGTH,
-        error_messages={
-            "required": "ایمیل را وارد کنید.",
-            "invalid": "ایمیل واردشده معتبر نیست؛ آن را دوباره بررسی کنید.",
-        },
-        widget=forms.EmailInput(attrs={
-            "autocomplete": "email", "dir": "ltr", "autocapitalize": "off", "spellcheck": "false",
-            "inputmode": "email", "placeholder": "name@example.com",
-        }),
-    )
+class PasswordResetRequestForm(OwnerPhoneRequestForm):
+    """درخواستِ بازیابی/تعیینِ رمز با **موبایل** (کدِ پیامکی) — همان اعتبارسنجیِ شماره‌ی
+    ورود با OTP، بدونِ «مرا به خاطر بسپار». ایمیل دیگر در مسیرِ عمومیِ بازیابی نیست."""
+
+    remember_me = None  # a reset never logs anyone in
 
 
 class PasswordResetConfirmForm(_FieldErrorA11yMixin, forms.Form):
