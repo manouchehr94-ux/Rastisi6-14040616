@@ -818,6 +818,13 @@ def _send_reset_otp_if_eligible(request, *, phone: str) -> str | None:
         # Per-phone budget or SMS delivery failure. Not shown (it would reveal the account); the
         # operator-side detail is logged by the SMS layer. No active challenge remains.
         logger.warning("password-reset OTP was not issued (phone budget or SMS delivery failure)")
+    except Exception as exc:  # noqa: BLE001 — deliberately NOT BaseException (Ctrl-C/SystemExit propagate)
+        # An unexpected provider/infrastructure exception must not become a 500: that would be an
+        # account-dependent response (an unknown phone never reaches the provider). ``request_otp``
+        # has already removed the in-flight challenge (best effort; an un-removed one is the
+        # never-verifiable "pending" row), so no usable reset code and no authorization exist. Only the
+        # exception CLASS is logged: its text may carry credentials, URLs or the code.
+        logger.error("password-reset OTP failed unexpectedly: %s", exc.__class__.__name__)
     return None
 
 

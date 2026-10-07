@@ -82,3 +82,26 @@ class TermsPageTests(TestCase):
         self.assertIn('class="r-legal-toc"', self.html)
         self.assertEqual(self.html.count("<h1"), 1)
         self.assertIn('aria-label="فهرست مطالب"', self.html)
+
+    def test_no_absolute_tenant_isolation_claim(self):
+        """The repo's own deployment doc still lists Store-boundary hardening as an open item, so the
+        public Terms must not promise complete data isolation (regression guard for the reviewed text)."""
+        for banned in (
+            "فروشگاه‌ها از یکدیگر جدا هستند",
+            "هر فروشگاه فقط به داده‌های خودش دسترسی دارد",
+            "فقط به داده‌های خودش دسترسی دارد",
+            "کاملاً جدا",
+            "ایزوله",
+            "هیچ فروشگاهی به داده",
+            "دسترسی غیرمجاز غیرممکن",
+        ):
+            self.assertNotIn(banned, self.html)
+        stores = self.html[self.html.index('id="stores"'):self.html.index('id="merchant-duty"')]
+        self.assertIn("طراحی شده", stores)  # described as design intent…
+        self.assertIn("تضمین نمی‌کند", stores)  # …explicitly not a guarantee
+        self.assertIn("هنوز در دست تکمیل یا بازبینی", stores)  # consistent with the repo's recorded open work
+        self.assertIn("مسئول اقدامات همکاران خود است", stores)  # merchant owns staff access decisions
+
+    def test_other_absolute_security_or_legal_guarantees_are_absent(self):
+        for banned in ("کاملاً امن", "صددرصد", "۱۰۰٪", "100%", "بدون هیچ خطر", "هیچ‌گونه نقص", "خطای صفر", "تا زمانی که خلاف آن ثابت نشده"):
+            self.assertNotIn(banned, self.html)

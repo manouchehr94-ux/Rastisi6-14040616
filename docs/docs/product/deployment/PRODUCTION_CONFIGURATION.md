@@ -465,6 +465,17 @@ only in the server-side session and is bound to the verified user. The legacy
 `owner_auth_service.request_password_reset` is retained for that/internal use but no public
 view calls it. Public recovery therefore needs a working platform SMS provider in production.
 
+**Enumeration resistance — what is and is not claimed.** The public status, redirect, copy,
+verify-page content and session shape are the same for known and unknown numbers, and the
+per-IP OTP budget is charged for both. It is **not** perfectly enumeration-proof: delivery is
+synchronous, so a request for an eligible owner performs an SMS-provider round trip while an
+unknown number does not, and the *response time* can therefore distinguish them. This is a
+known residual of synchronous SMS sending; the repository deliberately does not paper over it
+with sleeps/jitter or fake sends. Closing it properly means queueing the send (so every request
+returns after the same local work), which is out of scope here. An unexpected provider
+exception during a reset request is caught at the public reset boundary (`Exception` only; the
+class name alone is logged) and answered with the same generic response.
+
 **Local-QA OTP (`RASTISI_DEV_OTP_CODE`) — development only.** On a laptop with no SMS
 provider the console OTP backend is deliberately *not* treated as delivered, so register/login
 OTP cannot be completed in a browser. For local QA only, set a 6-digit code:

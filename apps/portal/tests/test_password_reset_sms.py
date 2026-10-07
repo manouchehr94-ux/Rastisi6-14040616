@@ -6,6 +6,7 @@ Everything runs through the real Django views. The SMS provider is faked at
 ``owner_otp_service.send_platform_otp`` (the exact seam the other owner-OTP tests use).
 """
 
+import logging
 import re
 from datetime import timedelta
 from unittest.mock import patch
@@ -441,10 +442,12 @@ class ResetFailurePolicyTests(_Base):
         self.assertNotIn("portal_password_reset_pending", self.client.session)
         self.assertEqual(self.client.get("/reset-password/new/", HTTP_HOST=_HOST).status_code, 302)
 
-    def test_provider_exception_is_not_a_500(self):
+    def test_service_removes_the_in_flight_challenge_when_the_provider_raises(self):
+        """SERVICE boundary only: ``request_otp`` cleans up and re-raises. (The HTTP behaviour is
+        proven by ``ResetProviderExceptionAtTheViewTests``.)"""
         self.owner()
         with patch.object(owner_otp_service, "send_platform_otp", side_effect=RuntimeError("boom")):
-            with self.assertRaises(RuntimeError):  # the OTP engine's contract: re-raise after cleanup
+            with self.assertRaises(RuntimeError):
                 owner_otp_service.request_otp(phone=_PHONE, purpose=_RESET, client_ip="1.1.1.1")
         self.assertEqual(self.active_challenges().count(), 0)
         self.assertFalse(OwnerOtpChallenge.objects.filter(phone=_PHONE).exists())
@@ -685,3 +688,100 @@ class LegacyAndCopyTests(_Base):
         row = OwnerOtpChallenge.objects.get(phone=_PHONE, purpose=_RESET)
         self.assertNotEqual(row.code_hash, self.code)
         self.assertNotIn(self.code, row.code_hash)
+
+
+# ---------------------------------------------------------------------------
+# An unexpected provider EXCEPTION at the real public view must not be a 500
+# ---------------------------------------------------------------------------
+
+_SECRET_TEXT = "provider exploded: redis://:s3cretpw@10.0.0.9:6379/0 token=ABC123 code=654321"
+
+
+class ResetProviderExceptionAtTheViewTests(_Base):
+    def setUp(self):
+        super().setUp()
+        self.user = self.owner()
+        gen = patch.object(owner_otp_service, "_generate_code", return_value="654321")
+        gen.start()
+        self.addCleanup(gen.stop)
+
+    def exploding(self):
+        return patch.object(owner_otp_service, "send_platform_otp", side_effect=RuntimeError(_SECRET_TEXT))
+
+    def public_shape(self, client, response):
+        page = client.get(response["Location"], HTTP_HOST=_HOST)
+        html = re.sub(r'value="[^"]*"', "", page.content.decode())
+        return response.status_code, response["Location"], re.sub(r"\s+", " ", html)
+
+    def test_post_with_a_provider_exception_is_controlled_and_leaves_nothing_behind(self):
+        before = {"users": User.objects.count(), "profiles": OwnerProfile.objects.count(), "stores": Store.objects.count()}
+        with self.exploding() as send, self.assertLogs(level="DEBUG") as logs:
+            logging.getLogger("probe").debug("probe")  # assertLogs needs at least one record
+            response = self.request_reset()  # the Django test client re-raises any view exception
+        send.assert_called_once()  # the provider WAS reached (eligible owner)…
+        self.assertEqual((response.status_code, response["Location"]), (302, "/verify/"))  # …and it is no 500
+
+        # no usable or pending reset challenge survives; a code cannot be verified
+        self.assertFalse(OwnerOtpChallenge.objects.filter(phone=_PHONE).exists())
+        self.assertEqual(self.active_challenges().count(), 0)
+        self.assertEqual(
+            owner_otp_service.check_otp(phone=_PHONE, purpose=_RESET, code="654321"),
+            owner_otp_service.OtpCheckResult.EXPIRED,
+        )
+        self.assertContains(self.verify("654321"), portal_views._RESET_OTP_FAILURE_MESSAGE)
+
+        # no authorization, no login, nothing created or modified
+        self.assertNotIn("portal_password_reset_pending", self.client.session)
+        self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertEqual(self.client.get("/reset-password/new/", HTTP_HOST=_HOST).status_code, 302)
+        self.assertEqual(
+            before, {"users": User.objects.count(), "profiles": OwnerProfile.objects.count(), "stores": Store.objects.count()},
+        )
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password(_OLD))
+        self.assertEqual(SmsLog.objects.count(), 0)
+
+        # logs: the exception CLASS is recorded, never its text, the code, credentials or the phone
+        joined = "\n".join(logs.output)
+        self.assertIn("RuntimeError", joined)
+        for leaked in ("provider exploded", "s3cretpw", "ABC123", "654321", "10.0.0.9", _PHONE):
+            self.assertNotIn(leaked, joined)
+
+    def test_the_public_response_is_the_same_as_for_an_unknown_phone(self):
+        with self.exploding():
+            known_client = self.client_class()
+            known = self.request_reset(_PHONE, client=known_client)
+        unknown_client = self.client_class()
+        unknown = self.request_reset(_UNKNOWN, client=unknown_client)
+        strip = lambda text, phone: text.replace(phone, "PHONE")
+        k, u = self.public_shape(known_client, known), self.public_shape(unknown_client, unknown)
+        self.assertEqual(k[:2], u[:2])
+        self.assertEqual(strip(k[2], _PHONE), strip(u[2], _UNKNOWN))
+
+    def test_a_provider_exception_during_resend_is_equally_controlled(self):
+        self.request_reset()  # a normal first send succeeds
+        with self.exploding():
+            response = self.client.post("/verify/resend/", HTTP_HOST=_HOST)
+        self.assertEqual((response.status_code, response["Location"]), (302, "/verify/"))
+        self.assertContains(self.client.get("/verify/", HTTP_HOST=_HOST), portal_views._RESET_RESEND_NOTICE)
+        self.assertNotIn("portal_password_reset_pending", self.client.session)
+        # only the first (successful) challenge exists: the failed resend left nothing behind
+        self.assertEqual(OwnerOtpChallenge.objects.filter(phone=_PHONE, purpose=_RESET).count(), 1)
+
+    def test_keyboard_interrupt_and_system_exit_are_not_swallowed(self):
+        for exc in (KeyboardInterrupt, SystemExit):
+            with self.subTest(exc=exc.__name__):
+                cache.clear()
+                with patch.object(owner_otp_service, "send_platform_otp", side_effect=exc()):
+                    with self.assertRaises(exc):
+                        self.request_reset()
+                self.assertEqual(self.active_challenges().count(), 0)  # an interrupted send is never verifiable
+                self.assertEqual(
+                    owner_otp_service.check_otp(phone=_PHONE, purpose=_RESET, code="654321"),
+                    owner_otp_service.OtpCheckResult.EXPIRED,
+                )
+
+    def test_register_and_login_otp_behaviour_is_unchanged_by_the_reset_boundary(self):
+        # the broad catch lives only in the reset helper: the generic OTP service still re-raises
+        with self.exploding(), self.assertRaises(RuntimeError):
+            owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="2.2.2.2")
