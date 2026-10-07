@@ -34,17 +34,15 @@ _PROXY = "10.0.0.2"
 _HOSTS = [_HOST, _ADMIN_HOST, "testserver"]
 
 
-class _DownStore:
-    """A cache backend whose every operation fails (Redis outage)."""
+class _DownCounter:
+    """A rate-limit backend whose every operation fails (Redis outage)."""
 
-    def _boom(self, *a, **k):
+    def hit(self, key, window_seconds):
         raise ConnectionError("redis://:topsecret@10.0.0.9:6379/0 unreachable")
-
-    add = incr = touch = get = set = delete = _boom
 
 
 def _outage():
-    return patch.object(rate_limit, "_store", return_value=_DownStore())
+    return patch.object(rate_limit, "get_counter", return_value=_DownCounter())
 
 
 class _Base(TestCase):

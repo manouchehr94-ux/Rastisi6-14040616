@@ -332,16 +332,31 @@ hanging workers.
 (e.g. the platform-configuration row), so a Redis outage cannot take every page
 down — only the throttled anonymous endpoints are affected.
 
-**Algorithm.** Fixed window anchored on the first attempt: `SET key 1 EX window NX`
-(Django `cache.add`) creates the counter atomically, `INCR` (Django `cache.incr`)
-counts, and a request is rejected when the count exceeds the budget. There is no
-read-modify-write in application code; the TTL is the only window clock (not
-worker clocks) and later attempts never extend it. If the key expires between
-`add` and `incr` the window restarts; if Django's `EXISTS`+`INCR` recreates an
-expired key without a TTL, the limiter immediately restores it, so a counter can
-never become permanent. Keys are `rl:v1:<action>:<sha256(identifier)[:32]>`
-(plus Django's own `:1:` prefix); identifiers are always hashed, so no email,
-token or OTP appears in Redis. IPv6 clients are bucketed per /64.
+**Algorithm.** Fixed window anchored on the first attempt, executed by one
+server-side Lua script (`EVALSHA`, via the `redis` client the app already needs):
+
+```lua
+local count = redis.call('INCR', KEYS[1])
+if count == 1 or redis.call('PTTL', KEYS[1]) < 0 then
+    redis.call('EXPIRE', KEYS[1], tonumber(ARGV[1]))
+end
+return count
+```
+
+Redis runs a script as one indivisible unit, so the increment and the first
+expiry can never be separated: a counter cannot exist without its TTL even if the
+client process is killed the instant after sending the command, and concurrent
+workers cannot overshoot the budget. A request is rejected when the returned
+count exceeds the budget. There is no read-modify-write, no `EXISTS`+`INCR`, and
+no client-side `EXPIRE`. The TTL is the only window clock (not worker clocks);
+later attempts never extend it; after it lapses the next attempt starts a fresh
+window. The `PTTL < 0` branch also puts an expiry on any counter that was somehow
+written without one. The connection (URL, TLS, 2 s timeouts) comes from
+`CACHES["ratelimit"]`; the client is created lazily, so nothing connects at import
+time. Keys are `rl:v1:<action>:<sha256(identifier)[:32]>` (no Django key prefix);
+identifiers are always hashed, so no email, token or OTP appears in Redis. IPv6
+clients are bucketed per /64. Redis ≥ 2.6 (Lua scripting) is required; any managed
+Redis qualifies. A Redis *Cluster* is not needed (and each counter touches one key).
 
 **Outage policy: fail closed.** If Redis is unreachable or errors, anonymous
 password login, OTP SMS, password-reset mail, contact, newsletter, storefront
@@ -359,12 +374,12 @@ error log.
 ```
 python manage.py check                      # fails on missing/non-Redis cache, Turnstile, proxy, cookie errors
 python manage.py check --deploy
-python manage.py verify_rate_limit_cache    # LIVE probe: write, atomic incr, expiry, delete (no secrets printed)
+python manage.py verify_rate_limit_cache    # LIVE probe of the atomic counter: create+TTL, incr, no TTL extension, expiry, delete (no secrets printed)
 ```
 
 Run `verify_rate_limit_cache` from the same environment (network/secrets) as the
 workers. Operators can unlock one bucket with `redis-cli DEL` on the exact key
-(`rl:v1:<action>:<sha256(identifier)[:32]>`, `:1:` prefixed) or wait for the TTL.
+(`rl:v1:<action>:<sha256(identifier)[:32]>`) or wait for the TTL.
 
 ### 6.2 Client IP and reverse proxies
 

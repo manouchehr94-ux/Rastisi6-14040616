@@ -39,10 +39,12 @@ def _worker_env(url):
     return env
 
 
-def _spawn(action, identifier, max_attempts, window, attempts, *, url=None, start_at=0.0):
+def _spawn(action, identifier, max_attempts, window, attempts, *, url=None, start_at=0.0, extra_env=None):
+    env = _worker_env(url or _URL)
+    env.update(extra_env or {})
     return subprocess.Popen(
         [sys.executable, _WORKER, action, identifier, str(max_attempts), str(window), str(attempts), str(start_at)],
-        env=_worker_env(url or _URL), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
     )
 
 
@@ -51,6 +53,26 @@ def _collect(proc, timeout=60):
     if proc.returncode != 0:
         raise AssertionError(f"worker failed ({proc.returncode}): {err[-2000:]}")
     return json.loads(out.strip().splitlines()[-1])
+
+
+class _TtlPoller(threading.Thread):
+    """Samples PTTL of every counter matching ``pattern`` as fast as it can; any
+    value of -1 (key exists without expiry) is recorded. A correct atomic
+    INCR+EXPIRE can never be observed in that state."""
+
+    def __init__(self, raw, pattern):
+        super().__init__(daemon=True)
+        self.raw, self.pattern = raw, pattern
+        self.stop = threading.Event()
+        self.ttl_less, self.samples = [], 0
+
+    def run(self):
+        while not self.stop.is_set():
+            for key in self.raw.scan_iter(match=self.pattern, count=1000):
+                ttl = self.raw.pttl(key)
+                self.samples += 1
+                if ttl == -1:
+                    self.ttl_less.append(key)
 
 
 def _run(*args, **kwargs):
@@ -157,44 +179,153 @@ class RealRedisRateLimitTests(SimpleTestCase):
         self.assertEqual(_run(action, "b", 1, 60, 1)["allowed"], 1)
         self.assertEqual(_run(self._action("other_action"), "a", 1, 60, 1)["allowed"], 1)
 
-    # TTL healing on real Redis ----------------------------------------------
-    def test_key_that_expires_between_exists_and_incr_never_becomes_permanent(self):
-        """Django's Redis ``incr`` is EXISTS + INCR. If the key expires in between,
-        INCR recreates it with no TTL; the limiter must restore the TTL."""
-        from unittest import mock
-
-        import redis
-
-        from django.core.cache import caches
+    # Atomic increment + expiry on real Redis ---------------------------------------------
+    def _counter_via_settings(self):
         from apps.core.services import rate_limit
 
-        action = self._action("heal")
         cfg = {
             "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
             "ratelimit": {"BACKEND": "django.core.cache.backends.redis.RedisCache", "LOCATION": _URL},
         }
-        with self.settings(CACHES=cfg):
-            caches._settings = caches.settings = caches.configure_settings(None)  # re-read CACHES
-            store = caches["ratelimit"]
-            key = rate_limit.build_key(action, "k")
-            store.delete(key)
-            # EXISTS lies (the key "existed" a microsecond ago), INCR then creates it TTL-less
-            with mock.patch.object(redis.Redis, "exists", return_value=1), \
-                    mock.patch.object(store, "add", return_value=False):
-                rate_limit.enforce_rate_limit(action, "k", max_attempts=5, window_seconds=20)
-            ttl = self.raw.pttl(store.make_key(key))
-            self.assertTrue(0 < ttl <= 20_000, ttl)
-            # genuinely-missing key at incr time: Django raises ValueError, the window restarts
-            store.delete(key)
-            real_add, calls = store.add, []
-            def flaky_add(*a, **k):
-                calls.append(1)
-                return False if len(calls) == 1 else real_add(*a, **k)
-            with mock.patch.object(store, "add", side_effect=flaky_add):
-                rate_limit.enforce_rate_limit(action, "k", max_attempts=5, window_seconds=20)
-            self.assertEqual(self.raw.get(store.make_key(key)), b"1")
-            self.assertTrue(0 < self.raw.pttl(store.make_key(key)) <= 20_000)
-            store.delete(key)
+        ctx = self.settings(CACHES=cfg)
+        ctx.enable()
+        self.addCleanup(ctx.disable)
+        rate_limit._redis_counters.clear()
+        self.addCleanup(rate_limit._redis_counters.clear)
+        return rate_limit.get_counter(), rate_limit.build_key(self._action("direct"), "k")
+
+    def test_first_hit_creates_count_one_with_ttl_and_later_hits_never_extend_it(self):
+        counter, key = self._counter_via_settings()
+        self.assertEqual(counter.hit(key, 6), 1)
+        first_ttl = self.raw.pttl(key)
+        self.assertTrue(0 < first_ttl <= 6000, first_ttl)
+        self.assertEqual(self.raw.get(key), b"1")
+        time.sleep(1.2)
+        self.assertEqual(counter.hit(key, 6), 2)
+        self.assertEqual(counter.hit(key, 6), 3)
+        later_ttl = self.raw.pttl(key)
+        self.assertTrue(0 < later_ttl <= first_ttl - 1000, (first_ttl, later_ttl))  # strictly counting down
+        self.assertEqual(self.raw.get(key), b"3")
+
+    def test_a_counter_that_somehow_has_no_ttl_is_repaired_in_the_same_atomic_step(self):
+        counter, key = self._counter_via_settings()
+        self.raw.set(key, 7)  # pre-existing TTL-less counter (e.g. written by older code)
+        self.assertEqual(self.raw.pttl(key), -1)
+        self.assertEqual(counter.hit(key, 30), 8)
+        self.assertTrue(0 < self.raw.pttl(key) <= 30_000)
+
+    def test_increment_and_expiry_are_never_separate_client_commands(self):
+        """MONITOR proves INCR/EXPIRE/PTTL only ever run *inside* the Lua script
+        (client_type 'lua'); the client sends EVALSHA/EVAL and nothing else for the key."""
+        counter, key = self._counter_via_settings()
+        counter.hit(key, 30)  # warm: loads the script
+        seen, ready = [], threading.Event()
+        sentinel = f"sentinel-{self.tag}"
+
+        def watch():
+            with self.raw.monitor() as monitor:
+                ready.set()
+                for event in monitor.listen():
+                    seen.append(event)
+                    if sentinel in event["command"]:
+                        return
+
+        thread = threading.Thread(target=watch, daemon=True)
+        thread.start()
+        self.assertTrue(ready.wait(5))
+        time.sleep(0.2)
+        for _ in range(3):
+            counter.hit(key, 30)
+        self.raw.set(sentinel, 1, ex=5)
+        thread.join(5)
+        mine = [e for e in seen if key in e["command"]]
+        self.assertTrue(mine, "monitor saw nothing for the counter key")
+        client_side = [e["command"].split()[0].strip('"').upper() for e in mine if e["client_type"] != "lua"]
+        script_side = [e["command"].split()[0].strip('"').upper() for e in mine if e["client_type"] == "lua"]
+        self.assertTrue(set(client_side) <= {"EVALSHA", "EVAL"}, client_side)
+        self.assertEqual(client_side.count("EVALSHA") + client_side.count("EVAL"), 3)
+        self.assertIn("INCR", script_side)
+        self.assertEqual(script_side.count("INCR"), 3)
+        self.assertNotIn("INCR", client_side)
+        self.assertNotIn("EXPIRE", client_side)
+        self.assertNotIn("EXISTS", client_side)
+
+    # Expiry boundary under real multi-process concurrency ---------------------------------
+    def test_expiry_boundary_a_new_concurrent_burst_starts_a_fresh_fixed_window(self):
+        action = self._action("boundary")
+        window, budget, workers, per_worker = 3, 25, 8, 20
+        poller = _TtlPoller(self.raw, f"*rl:v1:{action}:*")
+        poller.start()
+        try:
+            for round_number in (1, 2, 3):
+                start_at = time.time() + 6
+                procs = [_spawn(action, "k", budget, window, per_worker, start_at=start_at) for _ in range(workers)]
+                results = [_collect(p) for p in procs]
+                self.assertEqual(sum(r["unavailable"] for r in results), 0)
+                self.assertEqual(sum(r["allowed"] for r in results), budget, (round_number, results))
+                keys = self._redis_keys(action)
+                self.assertEqual(len(keys), 1)
+                self.assertTrue(0 < self.raw.pttl(keys[0]) <= window * 1000)
+                deadline = time.time() + window + 3  # let the window lapse completely
+                while self.raw.exists(*keys) and time.time() < deadline:
+                    time.sleep(0.1)
+                self.assertEqual(self.raw.exists(*keys), 0, "window did not expire on its own")
+        finally:
+            poller.stop.set()
+            poller.join(5)
+        self.assertEqual(poller.ttl_less, [], "a live counter was observed without an expiry")
+        self.assertGreater(poller.samples, 0)
+
+    def test_continuous_hammering_across_many_expiries_never_leaves_a_ttl_less_counter(self):
+        action = self._action("stress")
+        poller = _TtlPoller(self.raw, f"*rl:v1:{action}:*")
+        poller.start()
+        start_at = time.time() + 6
+        env = {"RL_DURATION": "5"}
+        procs = [
+            _spawn(action, "k", 10**9, 1, 0, start_at=start_at, extra_env=env) for _ in range(6)
+        ]  # 1s window => ~5 expiries while 6 processes hit at full speed
+        try:
+            results = [_collect(p, timeout=90) for p in procs]
+        finally:
+            poller.stop.set()
+            poller.join(5)
+        self.assertEqual(sum(r["unavailable"] for r in results), 0)
+        self.assertGreater(sum(r["allowed"] for r in results), 1000)
+        self.assertEqual(poller.ttl_less, [])
+        time.sleep(1.5)
+        self.assertEqual(self._redis_keys(action), [], "a counter outlived its window")
+
+    def test_killing_workers_mid_flight_never_leaves_a_counter_without_expiry(self):
+        """SIGKILL clients at random moments of a hot loop (the crash scenario of the
+        old INCR-then-EXPIRE design): every counter must still expire on its own."""
+        import random
+        import signal
+
+        action = self._action("kill")
+        poller = _TtlPoller(self.raw, f"*rl:v1:{action}:*")
+        poller.start()
+        env = {"RL_DURATION": "30", "RL_READY": "1"}
+        try:
+            for _ in range(3):
+                batch = [_spawn(action, f"id{n}", 10**9, 1, 0, extra_env=env) for n in range(4)]
+                for proc in batch:
+                    self.assertEqual(proc.stdout.readline().strip(), "READY")
+                time.sleep(random.uniform(0.05, 0.6))
+                for proc in batch:
+                    proc.send_signal(signal.SIGKILL)
+                for proc in batch:
+                    proc.wait(10)
+                    proc.stdout.close()
+                    proc.stderr.close()
+        finally:
+            poller.stop.set()
+            poller.join(5)
+        self.assertEqual(poller.ttl_less, [])
+        deadline = time.time() + 5
+        while self._redis_keys(action) and time.time() < deadline:
+            time.sleep(0.2)
+        self.assertEqual(self._redis_keys(action), [], "a killed worker left a persistent counter")
 
     # 6 -------------------------------------------------------------------
     def test_unreachable_redis_fails_closed_without_hanging(self):
