@@ -6,6 +6,8 @@ import logging
 import requests
 from django.conf import settings
 
+from apps.core.services.client_ip import get_client_ip
+
 logger = logging.getLogger(__name__)
 
 SITEVERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
@@ -28,7 +30,13 @@ def _normalized_hostname(value: str) -> str:
 
 
 def verify_token(*, token: str, remote_ip: str = "", expected_action: str = ""):
+    production = bool(getattr(settings, "RASTISI_PRODUCTION_MODE", False))
     if not getattr(settings, "TURNSTILE_ENABLED", False):
+        if production:
+            # Defence in depth behind the startup/system-check enforcement: a
+            # production process can never treat "Turnstile off" as success.
+            logger.error("Turnstile is disabled in production configuration; failing closed.")
+            return TurnstileValidationResult(False, "turnstile-misconfigured")
         return TurnstileValidationResult(success=True, skipped=True)
 
     token = str(token or "").strip()
@@ -55,7 +63,7 @@ def verify_token(*, token: str, remote_ip: str = "", expected_action: str = ""):
         )
         response.raise_for_status()
         result = response.json()
-    except (requests.RequestException, ValueError, TypeError) as exc:
+    except Exception as exc:  # noqa: BLE001 — any provider/transport failure fails closed
         logger.warning(
             "Turnstile Siteverify request failed: %s",
             exc.__class__.__name__,
@@ -66,8 +74,8 @@ def verify_token(*, token: str, remote_ip: str = "", expected_action: str = ""):
         return TurnstileValidationResult(False, "invalid-siteverify-response")
 
     if not bool(result.get("success")):
-        codes = result.get("error-codes") or []
-        code = str(codes[0]) if codes else "verification-failed"
+        codes = result.get("error-codes")
+        code = str(codes[0]) if isinstance(codes, list) and codes else "verification-failed"
         return TurnstileValidationResult(False, code)
 
     action = str(result.get("action") or "")
@@ -83,6 +91,11 @@ def verify_token(*, token: str, remote_ip: str = "", expected_action: str = ""):
         for value in getattr(settings, "TURNSTILE_EXPECTED_HOSTNAMES", ())
         if _normalized_hostname(value)
     }
+    if production and not expected_hostnames:
+        logger.error("Turnstile expected hostnames are empty in production; failing closed.")
+        return TurnstileValidationResult(
+            False, "hostname-not-configured", hostname=hostname, action=action
+        )
     if expected_hostnames and hostname not in expected_hostnames:
         return TurnstileValidationResult(
             False, "hostname-mismatch", hostname=hostname, action=action
@@ -96,6 +109,6 @@ def verify_token(*, token: str, remote_ip: str = "", expected_action: str = ""):
 def verify_request(request, *, expected_action: str):
     return verify_token(
         token=request.POST.get(RESPONSE_FIELD, ""),
-        remote_ip=request.META.get("REMOTE_ADDR", ""),
+        remote_ip=get_client_ip(request),
         expected_action=expected_action,
     )

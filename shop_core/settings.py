@@ -16,7 +16,10 @@ import sys
 from django.core.exceptions import ImproperlyConfigured
 
 from shop_core.env_config import (
+    RATE_LIMIT_CACHE_ALIAS,
+    build_cache_config,
     build_database_config,
+    cookie_security_problems,
     env_bool,
     env_int,
     env_list,
@@ -25,6 +28,9 @@ from shop_core.env_config import (
     resolve_log_level,
     resolve_secret_key,
     resolve_secure_proxy_ssl_header,
+    resolve_trusted_proxy_cidrs,
+    resolve_turnstile_settings,
+    trusted_proxy_problems,
 )
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -40,6 +46,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env_bool("DJANGO_DEBUG", default=True)
+
+# The *real configured* production flag, captured at import time exactly like
+# PAYMENTS_SIMULATION_ENABLED below: Django's test runner forces
+# ``settings.DEBUG = False`` for the whole run regardless of DJANGO_DEBUG, so
+# production-only enforcement (system checks, Turnstile fail-closed) must key
+# off this, never off ``settings.DEBUG``.
+RASTISI_PRODUCTION_MODE = not DEBUG
 
 # SECURITY WARNING: keep the secret key used in production secret! Raises
 # ImproperlyConfigured immediately if DJANGO_DEBUG=False and no real key (or
@@ -131,6 +144,10 @@ INSTALLED_APPS = [
 # request's Host header; it never touches request.user or the session.
 # See docs/architecture/SAAS_ARCHITECTURE.md ("Request Store Context").
 MIDDLEWARE = [
+    # Must run before SecurityMiddleware (and everything else that reads the
+    # request scheme): drops the forwarded-HTTPS header unless the direct peer
+    # is a configured trusted proxy. See apps/core/middleware.py.
+    "apps.core.middleware.TrustedProxyHeaderMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "apps.stores.middleware.StoreResolutionMiddleware",
     # Routes Rastisi's own platform-level hosts (bare marketing/owner-portal
@@ -194,8 +211,20 @@ WSGI_APPLICATION = "shop_core.wsgi.application"
 # HSTS rollout (HSTS is irreversible-feeling in browsers once accepted, so it
 # is never enabled implicitly).
 SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", default=False)
-SESSION_COOKIE_SECURE = env_bool("DJANGO_SESSION_COOKIE_SECURE", default=False)
-CSRF_COOKIE_SECURE = env_bool("DJANGO_CSRF_COOKIE_SECURE", default=False)
+# Auth cookies default to Secure whenever DJANGO_DEBUG=False; production is
+# HTTPS-only and a system check refuses an explicit opt-out (see shop_core/checks.py).
+SESSION_COOKIE_SECURE = env_bool("DJANGO_SESSION_COOKIE_SECURE", default=not DEBUG)
+CSRF_COOKIE_SECURE = env_bool("DJANGO_CSRF_COOKIE_SECURE", default=not DEBUG)
+if not DEBUG:
+    # Import-time (not only a system check): gunicorn/uWSGI never run `check`.
+    _cookie_problems = cookie_security_problems(
+        session_secure=SESSION_COOKIE_SECURE, csrf_secure=CSRF_COOKIE_SECURE,
+        session_httponly=True, session_samesite="Lax", csrf_samesite="Lax",
+        session_domain=None, csrf_domain=None,
+    )
+    if _cookie_problems:
+        raise ImproperlyConfigured(" ".join(_cookie_problems))
+    del _cookie_problems
 SECURE_HSTS_SECONDS = env_int("DJANGO_SECURE_HSTS_SECONDS", default=0)
 SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", default=False)
 SECURE_HSTS_PRELOAD = env_bool("DJANGO_SECURE_HSTS_PRELOAD", default=False)
@@ -203,6 +232,27 @@ SECURE_HSTS_PRELOAD = env_bool("DJANGO_SECURE_HSTS_PRELOAD", default=False)
 # Unset (None) unless explicitly configured â€” a reverse proxy's
 # X-Forwarded-Proto (or equivalent) header is never trusted by default.
 SECURE_PROXY_SSL_HEADER = resolve_secure_proxy_ssl_header()
+
+# Networks (CIDRs, plus the optional ``unix`` token) whose direct connections are
+# trusted to report the real client via X-Forwarded-For and the forwarded-proto
+# header above. Empty (default) = every forwarded header is ignored and the
+# TCP peer is the client. Parsed/validated here; consumed ONLY through
+# apps.core.services.client_ip and apps.core.middleware.
+RASTISI_TRUSTED_PROXY_CIDRS = resolve_trusted_proxy_cidrs()
+
+_proxy_problems = trusted_proxy_problems(
+    trusted_cidrs=RASTISI_TRUSTED_PROXY_CIDRS, secure_proxy_ssl_header=SECURE_PROXY_SSL_HEADER,
+)
+if _proxy_problems:
+    raise ImproperlyConfigured(" ".join(_proxy_problems))
+del _proxy_problems
+
+# Cache aliases. ``default`` is process-local (non-security caching only);
+# ``ratelimit`` holds the anonymous-auth throttle counters and MUST be a shared
+# Redis cache when DJANGO_DEBUG=False (RASTISI_RATE_LIMIT_CACHE_URL), or startup
+# fails. See shop_core/env_config.build_cache_config.
+CACHES = build_cache_config(DEBUG)
+RASTISI_RATE_LIMIT_CACHE_ALIAS = RATE_LIMIT_CACHE_ALIAS
 
 # "Remember me" session duration (unified login â€” every interactive login
 # form). Applied via apps.portal.services.session_service.apply_remember_me,
@@ -216,28 +266,16 @@ AUTH_SESSION_REMEMBER_ME_EXPIRY_SECONDS = env_int(
 )
 
 # Cloudflare Turnstile bot protection for public account/contact forms.
-TURNSTILE_ENABLED = env_bool("TURNSTILE_ENABLED", default=False)
-TURNSTILE_SITE_KEY = env_str("TURNSTILE_SITE_KEY", "")
-TURNSTILE_SECRET_KEY = env_str("TURNSTILE_SECRET_KEY", "")
-TURNSTILE_EXPECTED_HOSTNAMES = tuple(
-    value.strip().lower().rstrip(".")
-    for value in env_list("TURNSTILE_EXPECTED_HOSTNAMES", default=())
-    if value.strip()
-)
-TURNSTILE_VERIFY_TIMEOUT_SECONDS = env_int(
-    "TURNSTILE_VERIFY_TIMEOUT_SECONDS", default=5
-)
-
-if TURNSTILE_ENABLED:
-    if not TURNSTILE_SITE_KEY or not TURNSTILE_SECRET_KEY:
-        raise ImproperlyConfigured(
-            "TURNSTILE_ENABLED=True requires TURNSTILE_SITE_KEY and "
-            "TURNSTILE_SECRET_KEY."
-        )
-    if not DEBUG and not TURNSTILE_EXPECTED_HOSTNAMES:
-        raise ImproperlyConfigured(
-            "Production Turnstile requires TURNSTILE_EXPECTED_HOSTNAMES."
-        )
+# Fail-closed: ``TURNSTILE_ENABLED`` defaults to ``not DEBUG``; with
+# DJANGO_DEBUG=False it must be enabled with both keys and a non-empty
+# TURNSTILE_EXPECTED_HOSTNAMES, otherwise startup raises ImproperlyConfigured.
+_turnstile = resolve_turnstile_settings(DEBUG)
+TURNSTILE_ENABLED = _turnstile["enabled"]
+TURNSTILE_SITE_KEY = _turnstile["site_key"]
+TURNSTILE_SECRET_KEY = _turnstile["secret_key"]
+TURNSTILE_EXPECTED_HOSTNAMES = _turnstile["expected_hostnames"]
+TURNSTILE_VERIFY_TIMEOUT_SECONDS = _turnstile["timeout_seconds"]
+del _turnstile
 
 
 # Database

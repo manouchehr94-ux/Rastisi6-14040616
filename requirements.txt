@@ -22,3 +22,9 @@ PySocks>=1.7.1,<2
 # verified; apps.stores.services.domain_verification_service actually
 # queries DNS.
 dnspython>=2.6,<3
+
+# Shared rate-limit store (production). Django's built-in
+# django.core.cache.backends.redis.RedisCache needs only this client library —
+# no django-redis. Used for the anonymous-auth throttle counters; see
+# docs/docs/product/deployment/PRODUCTION_CONFIGURATION.md section 6.
+redis>=8.1,<9

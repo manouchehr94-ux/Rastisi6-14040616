@@ -11,6 +11,7 @@ from django.views.decorators.http import require_POST
 
 from apps.cart.models import CartItem
 from apps.cart.services.cart_service import get_cart
+from apps.core.services.client_ip import get_client_ip_bucket
 from apps.customers.models import Customer
 from apps.customers.services import auth_service
 from apps.sms.services import otp_service
@@ -124,7 +125,7 @@ def checkout_pay(request):
     try:
         otp_service.request_otp(
             phone, store=resolve_store_for_service(request),
-            ip_address=request.META.get("REMOTE_ADDR", "unknown"),
+            ip_address=get_client_ip_bucket(request),
         )
     except otp_service.OtpRateLimitError as exc:
         return _dynamic_response(
@@ -170,7 +171,7 @@ def checkout_resend_otp(request):
     try:
         otp_service.request_otp(
             phone, store=resolve_store_for_service(request),
-            ip_address=request.META.get("REMOTE_ADDR", "unknown"),
+            ip_address=get_client_ip_bucket(request),
         )
         message, message_type = "کد جدید پیامک شد", "ok"
     except otp_service.OtpRateLimitError as exc:

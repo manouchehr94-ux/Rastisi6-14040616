@@ -11,6 +11,8 @@ from apps.orders.models import Order
 from apps.sms.services import otp_service
 from apps.stores.resolution import resolve_store_for_service, resolve_store_for_storefront
 
+from apps.core.services.client_ip import get_client_ip_bucket
+
 from .forms import AddressForm, LoginForm, OtpRequestForm, OtpVerifyForm, ProfileForm, SignupForm
 from .models import Address, Customer, Wishlist
 from apps.cart.services import coupon_service
@@ -189,7 +191,7 @@ def otp_request_view(request):
             try:
                 otp_service.request_otp(
                     phone, store=resolve_store_for_service(request),
-                    ip_address=request.META.get("REMOTE_ADDR", "unknown"),
+                    ip_address=get_client_ip_bucket(request),
                 )
             except otp_service.OtpRateLimitError as exc:
                 form.add_error(None, str(exc))

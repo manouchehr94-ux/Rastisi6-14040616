@@ -10,7 +10,9 @@ each function accepts an explicit ``environ`` mapping instead of always
 reading the real ``os.environ``.
 """
 
+import ipaddress
 import os
+import re
 from urllib.parse import urlparse
 
 from django.core.exceptions import ImproperlyConfigured
@@ -173,3 +175,267 @@ def resolve_log_level(*, environ=None):
             f"DJANGO_LOG_LEVEL={level!r} is invalid; use one of {sorted(_VALID_LOG_LEVELS)}."
         )
     return level
+
+
+# ---------------------------------------------------------------------------
+# Production authentication infrastructure (shared rate-limit cache, trusted
+# proxies, Turnstile). See docs/docs/product/deployment/PRODUCTION_CONFIGURATION.md §6.
+#
+# Every function below is pure (explicit ``environ``), never touches the
+# network, and never echoes a URL/secret back in an error message — a cache
+# URL commonly embeds the Redis password.
+# ---------------------------------------------------------------------------
+
+#: Alias of the cache that holds the anonymous-auth rate-limit counters. It is
+#: deliberately NOT ``default``: ``default`` stays process-local and is used
+#: for non-security caching (e.g. the platform configuration row), so a Redis
+#: outage can only ever affect the throttled anonymous endpoints, never every
+#: page render.
+RATE_LIMIT_CACHE_ALIAS = "ratelimit"
+
+REDIS_CACHE_BACKEND = "django.core.cache.backends.redis.RedisCache"
+_LOCMEM_CACHE_BACKEND = "django.core.cache.backends.locmem.LocMemCache"
+
+#: Name of the shared in-process LocMem store used for local development/tests.
+#: ``default`` and ``ratelimit`` use the *same* LOCATION so they share storage:
+#: ``cache.clear()`` (used throughout the test suite) resets rate-limit state.
+_DEV_LOCMEM_LOCATION = "rastisi-local-dev"
+
+#: Seconds. Bound the time an unreachable Redis can stall a request: without
+#: a socket timeout a blackholed connection would hang the worker instead of
+#: failing closed promptly.
+RATE_LIMIT_CACHE_CONNECT_TIMEOUT = 2
+RATE_LIMIT_CACHE_SOCKET_TIMEOUT = 2
+
+_REDIS_URL_SCHEMES = {"redis", "rediss"}
+
+#: Cache backends acceptable as the production rate-limit store: shared across
+#: processes AND with a server-side atomic INCR / SET-NX-EX.
+PRODUCTION_RATE_LIMIT_BACKENDS = frozenset({REDIS_CACHE_BACKEND})
+
+#: Environment token meaning "the peer is a unix-domain-socket / empty
+#: REMOTE_ADDR" (gunicorn/uWSGI bound to a socket behind a local proxy).
+TRUSTED_PROXY_UNIX_TOKEN = "unix"
+
+
+def validate_redis_cache_url(url, *, name):
+    """Validate a ``redis://`` / ``rediss://`` URL without connecting.
+
+    The URL is never included in the raised message (it may hold a password).
+    Query strings are rejected: redis-py would honour options such as
+    ``ssl_cert_reqs=none`` there, silently weakening TLS verification.
+    """
+    try:
+        parsed = urlparse(url)
+        port = parsed.port  # raises ValueError for a malformed/out-of-range port
+        hostname = parsed.hostname
+    except ValueError as exc:
+        raise ImproperlyConfigured(f"{name} is not a valid URL (bad host/port).") from exc
+    if parsed.scheme not in _REDIS_URL_SCHEMES:
+        raise ImproperlyConfigured(
+            f"{name} must use the redis:// or rediss:// (TLS) scheme."
+        )
+    if not hostname:
+        raise ImproperlyConfigured(f"{name} must include a host, e.g. rediss://:<password>@<host>:6379/0.")
+    if parsed.query or parsed.fragment or parsed.params:
+        raise ImproperlyConfigured(
+            f"{name} must not contain query parameters or fragments; "
+            "use the rediss:// scheme for TLS."
+        )
+    db_path = parsed.path.lstrip("/")
+    if db_path and not db_path.isdigit():
+        raise ImproperlyConfigured(f"{name} database must be a number, e.g. /0.")
+    return port
+
+
+def build_cache_config(debug, *, environ=None):
+    """Build ``CACHES``.
+
+    * ``default`` — always process-local LocMem (non-security caching only).
+    * ``ratelimit`` — the anonymous-auth rate-limit store:
+
+      - ``RASTISI_RATE_LIMIT_CACHE_URL`` set -> Django's built-in Redis backend
+        (``redis://`` or ``rediss://``), in any mode;
+      - unset and ``debug`` -> the shared local LocMem store (dev/tests);
+      - unset and not ``debug`` -> ``ImproperlyConfigured``. Production never
+        silently falls back to a process-local counter.
+    """
+    name = "RASTISI_RATE_LIMIT_CACHE_URL"
+    url = env_str(name, "", environ=environ)
+    default_cache = {"BACKEND": _LOCMEM_CACHE_BACKEND, "LOCATION": _DEV_LOCMEM_LOCATION}
+    if not url:
+        if not debug:
+            raise ImproperlyConfigured(
+                f"{name} is required when DJANGO_DEBUG=False: anonymous-auth rate limits "
+                "must live in a cache shared by every worker (Redis). Example: "
+                "rediss://:<password>@<host>:6379/0 — never commit the real value."
+            )
+        return {
+            "default": default_cache,
+            RATE_LIMIT_CACHE_ALIAS: dict(default_cache),
+        }
+    validate_redis_cache_url(url, name=name)
+    return {
+        "default": default_cache,
+        RATE_LIMIT_CACHE_ALIAS: {
+            "BACKEND": REDIS_CACHE_BACKEND,
+            "LOCATION": url,
+            "OPTIONS": {
+                "socket_connect_timeout": RATE_LIMIT_CACHE_CONNECT_TIMEOUT,
+                "socket_timeout": RATE_LIMIT_CACHE_SOCKET_TIMEOUT,
+            },
+        },
+    }
+
+
+def rate_limit_cache_problems(caches, *, alias=RATE_LIMIT_CACHE_ALIAS):
+    """Return a list of human-readable problems with the *effective* ``CACHES``
+    as a production rate-limit store (empty list = acceptable)."""
+    config = (caches or {}).get(alias)
+    if not config:
+        return [f"CACHES[{alias!r}] is not configured; the rate limiter needs a shared cache."]
+    backend = config.get("BACKEND", "")
+    if backend not in PRODUCTION_RATE_LIMIT_BACKENDS:
+        return [
+            f"CACHES[{alias!r}] uses {backend or 'no backend'!r}, which is process-local or "
+            "not atomic across workers; production requires the Redis cache backend."
+        ]
+    if not config.get("LOCATION"):
+        return [f"CACHES[{alias!r}] has no LOCATION."]
+    return []
+
+
+def resolve_trusted_proxy_cidrs(*, environ=None):
+    """Parse ``DJANGO_TRUSTED_PROXY_CIDRS`` (comma-separated IPv4/IPv6 networks).
+
+    Returns a tuple of canonical network strings; the special token ``unix``
+    marks an empty/unix-socket peer as trusted. An unset/empty variable means
+    *no* proxy is trusted: forwarded headers are ignored. A bare address
+    (``10.0.0.5``) is accepted as a /32 (or /128) host network.
+    """
+    name = "DJANGO_TRUSTED_PROXY_CIDRS"
+    result = []
+    for item in env_list(name, default=(), environ=environ):
+        if item.lower() == TRUSTED_PROXY_UNIX_TOKEN:
+            canonical = TRUSTED_PROXY_UNIX_TOKEN
+        else:
+            try:
+                canonical = str(ipaddress.ip_network(item, strict=False))
+            except ValueError as exc:
+                raise ImproperlyConfigured(
+                    f"{name} contains an invalid network {item!r}; expected comma-separated "
+                    "IPv4/IPv6 CIDRs such as '10.0.0.0/8,2001:db8::/32'."
+                ) from exc
+        if canonical not in result:
+            result.append(canonical)
+    return tuple(result)
+
+
+def trusted_proxy_problems(*, trusted_cidrs, secure_proxy_ssl_header, use_x_forwarded_host=False):
+    """Contradictory/unsafe proxy configuration (empty list = fine)."""
+    problems = []
+    if secure_proxy_ssl_header and not trusted_cidrs:
+        problems.append(
+            "DJANGO_SECURE_PROXY_SSL_HEADER is set but DJANGO_TRUSTED_PROXY_CIDRS is empty: "
+            "the forwarded-proto header is only honoured from a trusted proxy, so HTTPS "
+            "detection could never work. Configure the proxy network(s) or unset the header."
+        )
+    for cidr in trusted_cidrs:
+        if cidr == TRUSTED_PROXY_UNIX_TOKEN:
+            continue
+        network = ipaddress.ip_network(cidr, strict=False)
+        if network.prefixlen == 0:
+            problems.append(
+                f"DJANGO_TRUSTED_PROXY_CIDRS contains {cidr}, which trusts every address on the "
+                "internet as a proxy and defeats client-IP and HTTPS spoofing protection."
+            )
+    if use_x_forwarded_host:
+        problems.append(
+            "USE_X_FORWARDED_HOST must stay False: Store/tenant resolution uses the Host header "
+            "(see docs/architecture/SAAS_ARCHITECTURE.md)."
+        )
+    return problems
+
+
+_HOSTNAME_RE = re.compile(r"^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$")
+
+
+def turnstile_config_problems(*, enabled, site_key, secret_key, expected_hostnames, production):
+    """Problems with the effective Turnstile configuration (empty list = fine).
+
+    ``production`` is the *real configured* ``DEBUG=False`` state — never
+    Django's test-runner-forced ``settings.DEBUG``.
+    """
+    problems = []
+    if production and not enabled:
+        problems.append(
+            "TURNSTILE_ENABLED must be true when DJANGO_DEBUG=False (bot protection is "
+            "never silently disabled in production)."
+        )
+    if enabled or production:
+        if not site_key:
+            problems.append("TURNSTILE_SITE_KEY is required.")
+        if not secret_key:
+            problems.append("TURNSTILE_SECRET_KEY is required.")
+        if production and not expected_hostnames:
+            problems.append(
+                "TURNSTILE_EXPECTED_HOSTNAMES is required (comma-separated bare hostnames, "
+                "e.g. rastisi.ir,www.rastisi.ir)."
+            )
+        for hostname in expected_hostnames:
+            if not _HOSTNAME_RE.match(hostname):
+                problems.append(
+                    "TURNSTILE_EXPECTED_HOSTNAMES entries must be bare hostnames "
+                    "(no scheme, port, path or wildcard)."
+                )
+                break
+    return problems
+
+
+def cookie_security_problems(*, session_secure, csrf_secure, session_httponly, session_samesite,
+                             csrf_samesite, session_domain, csrf_domain):
+    """Unsafe production auth-cookie configuration (empty list = fine)."""
+    problems = []
+    if not session_secure:
+        problems.append("SESSION_COOKIE_SECURE must be true when DJANGO_DEBUG=False (DJANGO_SESSION_COOKIE_SECURE).")
+    if not csrf_secure:
+        problems.append("CSRF_COOKIE_SECURE must be true when DJANGO_DEBUG=False (DJANGO_CSRF_COOKIE_SECURE).")
+    if not session_httponly:
+        problems.append("SESSION_COOKIE_HTTPONLY must be true.")
+    for label, value in (("SESSION_COOKIE_SAMESITE", session_samesite), ("CSRF_COOKIE_SAMESITE", csrf_samesite)):
+        if str(value or "").lower() not in {"lax", "strict"}:
+            problems.append(f"{label} must be 'Lax' or 'Strict'.")
+    if session_domain or csrf_domain:
+        problems.append(
+            "SESSION_COOKIE_DOMAIN/CSRF_COOKIE_DOMAIN must stay unset: sessions are host-only by "
+            "design; Merchant Admin uses the one-time handoff ticket, never a parent-domain cookie."
+        )
+    return problems
+
+
+def resolve_turnstile_settings(debug, *, environ=None):
+    """Parse the ``TURNSTILE_*`` variables and enforce production fail-closed.
+
+    ``TURNSTILE_ENABLED`` defaults to ``not debug``: local development may run
+    without it, a ``DEBUG=False`` process may not. Raises ``ImproperlyConfigured``
+    listing every problem (never a secret value).
+    """
+    enabled = env_bool("TURNSTILE_ENABLED", default=not debug, environ=environ)
+    site_key = env_str("TURNSTILE_SITE_KEY", "", environ=environ)
+    secret_key = env_str("TURNSTILE_SECRET_KEY", "", environ=environ)
+    hostnames = tuple(
+        value.strip().lower().rstrip(".")
+        for value in env_list("TURNSTILE_EXPECTED_HOSTNAMES", default=(), environ=environ)
+        if value.strip()
+    )
+    problems = turnstile_config_problems(
+        enabled=enabled, site_key=site_key, secret_key=secret_key,
+        expected_hostnames=hostnames, production=not debug,
+    )
+    if problems:
+        raise ImproperlyConfigured("Invalid Turnstile configuration: " + " ".join(problems))
+    timeout = env_int("TURNSTILE_VERIFY_TIMEOUT_SECONDS", default=5, environ=environ)
+    return {
+        "enabled": enabled, "site_key": site_key, "secret_key": secret_key,
+        "expected_hostnames": hostnames, "timeout_seconds": timeout,
+    }

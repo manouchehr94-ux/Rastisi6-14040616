@@ -21,6 +21,7 @@ from django.views.decorators.http import require_POST
 
 from apps.core.models import AuditLogEntry
 from apps.core.services.audit_service import record_audit_event
+from apps.core.services.client_ip import get_client_ip_bucket
 from apps.stores.hostnames import build_cross_host_url
 from apps.stores.models import Store, StoreDomain, StoreMembership
 from apps.subscriptions.models import StoreSubscription
@@ -30,7 +31,7 @@ from apps.core.services import session_service
 from .forms import OwnerLoginForm, PlatformConfigurationForm, PlatformSmsConfigForm
 from .models import PlatformAuditLogEntry
 from .services.platform_config_service import get_platform_configuration, record_platform_audit_event
-from .services.rate_limit import RateLimitExceeded, enforce_rate_limit
+from .services.rate_limit import UNAVAILABLE_MESSAGE, RateLimitExceeded, RateLimitUnavailable, enforce_rate_limit
 
 
 def _is_platform_staff(user):
@@ -45,11 +46,14 @@ def login_view(request):
         form = OwnerLoginForm(request.POST)
         try:
             enforce_rate_limit(
-                "platform_admin_login", request.META.get("REMOTE_ADDR", "unknown"),
+                "platform_admin_login", get_client_ip_bucket(request),
                 max_attempts=10, window_seconds=600,
             )
         except RateLimitExceeded:
             form.add_error(None, "تعداد تلاش ورود بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید.")
+            return render(request, "portal/platform_admin/login.html", {"form": form})
+        except RateLimitUnavailable:
+            form.add_error(None, UNAVAILABLE_MESSAGE)
             return render(request, "portal/platform_admin/login.html", {"form": form})
         if form.is_valid():
             from .services import owner_auth_service
