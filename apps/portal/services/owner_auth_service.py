@@ -27,7 +27,7 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
 from apps.core.phone import InvalidPhoneError, normalize_iranian_phone
-from apps.core.services.rate_limit import RateLimitExceeded, enforce_rate_limit
+from apps.core.services.rate_limit import RateLimitExceeded, RateLimitUnavailable, enforce_rate_limit
 from apps.portal.models import OwnerProfile
 
 User = get_user_model()
@@ -271,6 +271,11 @@ def request_password_reset(*, email: str, base_url: str) -> None:
             max_attempts=PASSWORD_RESET_EMAIL_MAX_PER_HOUR, window_seconds=3600,
         )
     except RateLimitExceeded:
+        return
+    except RateLimitUnavailable:
+        # Fail closed AND silent: no reset mail is sent while the shared counter
+        # is down, and (enumeration safety) the caller cannot tell an eligible
+        # account from an ineligible one by this branch.
         return
     uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
     token = default_token_generator.make_token(user)

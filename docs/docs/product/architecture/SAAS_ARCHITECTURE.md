@@ -294,7 +294,13 @@ headers.
 
 `SECURE_PROXY_SSL_HEADER` is unrelated to this concern — it affects only
 `request.is_secure()`/scheme detection, not `get_host()` or Store
-resolution, and is also unset in this repository today.
+resolution, and is unset unless `DJANGO_SECURE_PROXY_SSL_HEADER` is configured.
+When it is configured, `apps.core.middleware.TrustedProxyHeaderMiddleware`
+(first in `MIDDLEWARE`) removes that header from every request whose direct peer
+is not in `DJANGO_TRUSTED_PROXY_CIDRS`, so a client reaching Django directly
+cannot spoof HTTPS detection. Client-IP trust (`apps.core.services.client_ip`) is
+likewise independent of Store/host resolution, which is unchanged. A production
+system check also rejects `USE_X_FORWARDED_HOST = True`.
 
 ### 6.7 Explicit non-goals of this PR
 

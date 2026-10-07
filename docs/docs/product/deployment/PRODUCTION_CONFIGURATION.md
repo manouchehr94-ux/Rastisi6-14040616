@@ -27,12 +27,18 @@ list with placeholder values. Summary:
 | `DJANGO_ALLOWED_HOSTS` | Yes | `[]` | Comma-separated, no wildcards |
 | `DJANGO_CSRF_TRUSTED_ORIGINS` | Yes, once behind a real domain | `[]` | Comma-separated, full origin (`https://host`) |
 | `DJANGO_SECURE_SSL_REDIRECT` | Recommended once HTTPS works | `False` | |
-| `DJANGO_SESSION_COOKIE_SECURE` | Recommended once HTTPS works | `False` | |
-| `DJANGO_CSRF_COOKIE_SECURE` | Recommended once HTTPS works | `False` | |
+| `DJANGO_SESSION_COOKIE_SECURE` | Must be true | `True` when `DJANGO_DEBUG=False`, else `False` | `false` with `DJANGO_DEBUG=False` is a startup error (§7) |
+| `DJANGO_CSRF_COOKIE_SECURE` | Must be true | `True` when `DJANGO_DEBUG=False`, else `False` | same |
+| `RASTISI_RATE_LIMIT_CACHE_URL` | **Yes** — startup fails without it | unset (local LocMem; dev only) | `redis://` / `rediss://` URL of a Redis shared by all workers — §6.1 |
+| `DJANGO_TRUSTED_PROXY_CIDRS` | Yes behind any proxy/CDN | empty (forwarded headers ignored) | Comma-separated IPv4/IPv6 CIDRs (+ optional `unix`) of your reverse proxies — §6.2 |
+| `TURNSTILE_ENABLED` | **Yes** — must be true | `True` when `DJANGO_DEBUG=False`, else `False` | `false` with `DJANGO_DEBUG=False` is a startup error |
+| `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | **Yes** | empty | Required in production |
+| `TURNSTILE_EXPECTED_HOSTNAMES` | **Yes** | empty | Bare hostnames the widget runs on; verified against Siteverify |
+| `TURNSTILE_VERIFY_TIMEOUT_SECONDS` | Optional | `5` | |
 | `DJANGO_SECURE_HSTS_SECONDS` | Staged — see §7 | `0` | |
 | `DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS` | Staged | `False` | |
 | `DJANGO_SECURE_HSTS_PRELOAD` | Staged, last | `False` | |
-| `DJANGO_SECURE_PROXY_SSL_HEADER` | Only behind a proxy that strips it | unset | See §6 warning |
+| `DJANGO_SECURE_PROXY_SSL_HEADER` | Only behind a proxy that strips it | unset | Honoured only from `DJANGO_TRUSTED_PROXY_CIDRS` peers; requires them — §6 |
 | `DATABASE_URL` | Recommended (PostgreSQL) | unset (SQLite) | `postgres://user:pass@host:port/dbname` |
 | `DJANGO_STATIC_ROOT` | Recommended | `<repo>/staticfiles` | |
 | `DJANGO_MEDIA_ROOT` | Recommended | `<repo>/media` | Must be persistent + backed up |
@@ -291,58 +297,159 @@ its own TLS termination, or behind a reverse proxy that terminates TLS and
 forwards plain HTTP internally. If you use the latter:
 
 - Only set `DJANGO_SECURE_PROXY_SSL_HEADER` if your proxy is configured to
-  **strip any client-supplied copy of that header** before setting its own
-  — otherwise a client can forge the header and make Django believe an
-  insecure request was secure. This setting is unset by default and must be
-  deliberately opted into.
+  **strip any client-supplied copy of that header** before setting its own. As a
+  second line of defence the application drops that header from every request
+  whose *direct* peer is not inside `DJANGO_TRUSTED_PROXY_CIDRS`
+  (`apps.core.middleware.TrustedProxyHeaderMiddleware`, first in `MIDDLEWARE`,
+  i.e. before `SecurityMiddleware`), so a client that reaches Django directly
+  cannot spoof HTTPS detection. Setting the header without any trusted proxy
+  is a startup error (it could never work). This setting is unset by default.
 - `Store` resolution (`apps/stores/resolution.py`) uses Django's own
   `request.get_host()`, gated by `DJANGO_ALLOWED_HOSTS` — make sure your
-  proxy passes through the real client-facing `Host` header unchanged.
+  proxy passes through the real client-facing `Host` header unchanged. Client-IP
+  trust is independent of host resolution; `USE_X_FORWARDED_HOST` must stay
+  `False` (a system check enforces this in production).
 
-### 6.1 Public-auth rate limits: cache backend and client IP (owner login / OTP / reset)
+### 6.1 Public-auth rate limits: shared cache, atomicity, outage policy
 
-The public auth endpoints (`/login/password/`, OTP request/resend, `/reset-password/`,
-`/contact/`) are throttled by `apps/core/services/rate_limit.py`, which is a thin
-counter on Django's **default cache**, keyed by `REMOTE_ADDR` (per IP) and — for
-password login and reset mail — also by a hash of the submitted identifier / email.
-The per-phone OTP budget is different: it lives in the database (and is serialised
-with a PostgreSQL advisory lock), so it is correct regardless of the points below.
+The anonymous auth/public endpoints (`/login/password/`, OTP request/resend,
+`/reset-password/`, `/contact/`, platform-admin login, storefront customer OTP,
+newsletter) are throttled by `apps/core/services/rate_limit.py`.
 
-The IP/identifier counters are only as strong as the deployment makes them:
+**Shared store (required).** The counters live in the cache alias `ratelimit`.
+With `DJANGO_DEBUG=False`, `RASTISI_RATE_LIMIT_CACHE_URL` is mandatory and must be
+a `redis://` or `rediss://` (TLS) URL; startup raises `ImproperlyConfigured` when
+it is missing/malformed, and the `rastisi.E001` system check rejects any
+non-Redis backend (LocMem, Dummy, file, database) for that alias. Django's
+built-in `django.core.cache.backends.redis.RedisCache` is used — the only added
+dependency is the `redis` client library. The URL carries the password: supply it
+through your secret store; it is never echoed in errors/logs. Query strings are
+rejected (redis-py would otherwise honour `ssl_cert_reqs=none`). Connect/socket
+timeouts are 2 s so an unreachable Redis fails closed quickly instead of
+hanging workers.
 
-- **No `CACHES` setting exists in `shop_core/settings.py`**, so Django's default
-  `LocMemCache` is used: counters are *per process*. With *N* gunicorn/uWSGI workers
-  the effective limit is up to *N*× the configured one, and counters reset on every
-  restart/deploy. For the limits to mean what they say, configure a cache **shared by
-  all workers** (Redis/Memcached/database cache) — or run a single worker.
-- **`REMOTE_ADDR` is the direct TCP peer.** Behind a reverse proxy it is the proxy's
-  address, so *every* visitor shares one per-IP bucket (15 password attempts / 10 min,
-  10 OTP requests / 10 min, 5 reset requests / 10 min): a handful of legitimate users
-  would lock everyone out. The application deliberately does **not** read
-  `X-Forwarded-For` (a client can forge it). The fix belongs at the edge: terminate
-  the proxy so the real client address reaches Django as `REMOTE_ADDR` (for example a
-  WSGI server option that rewrites the peer address *only* for a trusted proxy
-  address, or `proxy_protocol`), never by trusting the header in application code.
-- `TURNSTILE_ENABLED` defaults to **False**; production must set it together with
-  `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` and `TURNSTILE_EXPECTED_HOSTNAMES`
-  (the settings module refuses to start without the hostnames when `DEBUG=False`).
-  Turnstile is checked on the server before any authentication attempt, SMS or mail.
-- Password-reset mails use `request.get_host()`, which Django validates against
-  `DJANGO_ALLOWED_HOSTS`; `/reset-password/` is only routed on
-  `RASTISI_PLATFORM_HOSTS`. Keep wildcards out of `DJANGO_ALLOWED_HOSTS` for those
-  hosts and make the proxy pass the client-facing `Host` unchanged.
+`default` stays a process-local LocMem on purpose: it holds non-security caches
+(e.g. the platform-configuration row), so a Redis outage cannot take every page
+down — only the throttled anonymous endpoints are affected.
+
+**Algorithm.** Fixed window anchored on the first attempt: `SET key 1 EX window NX`
+(Django `cache.add`) creates the counter atomically, `INCR` (Django `cache.incr`)
+counts, and a request is rejected when the count exceeds the budget. There is no
+read-modify-write in application code; the TTL is the only window clock (not
+worker clocks) and later attempts never extend it. If the key expires between
+`add` and `incr` the window restarts; if Django's `EXISTS`+`INCR` recreates an
+expired key without a TTL, the limiter immediately restores it, so a counter can
+never become permanent. Keys are `rl:v1:<action>:<sha256(identifier)[:32]>`
+(plus Django's own `:1:` prefix); identifiers are always hashed, so no email,
+token or OTP appears in Redis. IPv6 clients are bucketed per /64.
+
+**Outage policy: fail closed.** If Redis is unreachable or errors, anonymous
+password login, OTP SMS, password-reset mail, contact, newsletter, storefront
+customer OTP and platform-admin login are *refused* with the Persian message
+«سرویس موقتاً در دسترس نیست؛ لطفاً چند دقیقه‌ی دیگر دوباره تلاش کنید.» — never an
+unhandled 500 and never unlimited attempts. The failure is logged (class name
+only, no URL/secret). Already-authenticated dashboard use and public page
+rendering do not depend on this store. The only deliberate exception is the
+per-Store storefront-builder publish/restore/draft throttles, which are
+authenticated anti-churn limits (not a security boundary) and fail open with an
+error log.
+
+**Pre-deploy / post-deploy verification**
+
+```
+python manage.py check                      # fails on missing/non-Redis cache, Turnstile, proxy, cookie errors
+python manage.py check --deploy
+python manage.py verify_rate_limit_cache    # LIVE probe: write, atomic incr, expiry, delete (no secrets printed)
+```
+
+Run `verify_rate_limit_cache` from the same environment (network/secrets) as the
+workers. Operators can unlock one bucket with `redis-cli DEL` on the exact key
+(`rl:v1:<action>:<sha256(identifier)[:32]>`, `:1:` prefixed) or wait for the TTL.
+
+### 6.2 Client IP and reverse proxies
+
+All security code resolves the client through
+`apps.core.services.client_ip.get_client_ip()` (never `REMOTE_ADDR`/headers
+directly):
+
+1. The direct peer (`REMOTE_ADDR`) is validated; an invalid/missing peer yields
+   "unknown" and trusts nothing.
+2. If the peer is **not** inside `DJANGO_TRUSTED_PROXY_CIDRS`, the peer *is* the
+   client. `X-Forwarded-For`, `Forwarded`, `CF-Connecting-IP`, `True-Client-IP`
+   and `X-Real-IP` are all ignored — a direct attacker cannot choose a bucket.
+3. If the peer is trusted, `X-Forwarded-For` is read **right to left**; each hop
+   that is itself a trusted network is a proxy of yours and is skipped; the
+   first untrusted address is the client. Entries left of it are
+   attacker-supplied and never examined. At most 16 hops are examined; a
+   malformed hop, or a chain with no untrusted address, falls back to the
+   direct peer. Ports/zone ids in hops are treated as malformed.
+4. Only `X-Forwarded-For` is ever parsed. `Forwarded` and CDN headers are not.
+
+Because a fallback bucket is shared, make sure the proxy always sets a clean
+`X-Forwarded-For`. The same client-IP is sent to Turnstile as `remoteip`.
+
+**A. Direct Django (no proxy).** Leave `DJANGO_TRUSTED_PROXY_CIDRS` empty and do not
+set `DJANGO_SECURE_PROXY_SSL_HEADER` (TLS terminates on a server that sets
+`REMOTE_ADDR` truthfully). All forwarded headers are ignored.
+
+**B. One reverse proxy (e.g. Nginx on the same host or private network).**
+
+```
+DJANGO_TRUSTED_PROXY_CIDRS=127.0.0.1/32,::1/128        # or the proxy's private address/CIDR
+DJANGO_SECURE_PROXY_SSL_HEADER=X-Forwarded-Proto:https
+```
+
+Nginx must *overwrite*, not forward, client-supplied values and Django must not
+be reachable by any path that bypasses the proxy:
+
+```
+proxy_set_header Host $host;
+proxy_set_header X-Forwarded-For $remote_addr;      # overwrite: Nginx is the first hop
+proxy_set_header X-Forwarded-Proto $scheme;          # overwrite; never $http_x_forwarded_proto
+```
+
+A WSGI server bound to a unix socket typically reports an empty `REMOTE_ADDR`
+(verify yours); in that case add the token `unix`
+(`DJANGO_TRUSTED_PROXY_CIDRS=unix`) — only an *empty* peer is then trusted, garbage never is.
+
+**C. CDN (e.g. Cloudflare) + reverse proxy — safest layout.** Do **not** put the
+CDN's ranges into Django. Terminate CDN trust at the proxy with Nginx's
+`realip` module (`set_real_ip_from <CDN ranges>; real_ip_header
+CF-Connecting-IP;` — the CDN ranges are published by the CDN and must be
+refreshed on a schedule you own, or enforced with authenticated origin pulls /
+firewall rules), then overwrite the header for Django exactly as in B
+(`X-Forwarded-For $remote_addr`, where `$remote_addr` is now the real client).
+Django then trusts only Nginx. If instead Django must see a multi-hop
+`X-Forwarded-For`, **every** hop in the chain must be deliberately listed in
+`DJANGO_TRUSTED_PROXY_CIDRS`; any unlisted proxy IP is (correctly) treated as the
+client, and a listed-but-uncontrolled network lets its users spoof their IP. The
+repository does not hardcode any CDN range because no maintenance process for
+them exists here.
+
+**Turnstile (production).** With `DJANGO_DEBUG=False`, `TURNSTILE_ENABLED`,
+`TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` and `TURNSTILE_EXPECTED_HOSTNAMES`
+are mandatory (startup fails otherwise; `rastisi.E002`). Verification is
+server-side and authoritative: token, `action` and `hostname` must all match. Any
+Siteverify timeout/network/parse error fails closed with the generic public error
+before password authentication, SMS or mail happens. Runtime guards also refuse to
+treat "Turnstile off" or empty hostnames as success while `DJANGO_DEBUG=False`.
 
 ## 7. Secure cookies and staged HSTS rollout
 
-Do not enable `DJANGO_SECURE_SSL_REDIRECT` / `*_COOKIE_SECURE` / HSTS until
-you've confirmed HTTPS actually works for every hostname in
-`DJANGO_ALLOWED_HOSTS`. Suggested rollout:
+Production (`DJANGO_DEBUG=False`) is HTTPS-only: `SESSION_COOKIE_SECURE` and
+`CSRF_COOKIE_SECURE` default to true and an explicit `false` is a startup error
+(`rastisi.E005` also checks `HttpOnly`, `SameSite` Lax/Strict and that
+`SESSION_COOKIE_DOMAIN`/`CSRF_COOKIE_DOMAIN` stay unset — sessions are
+intentionally host-only; Merchant Admin uses the one-time handoff ticket, never a
+parent-domain cookie). `DJANGO_SECURE_SSL_REDIRECT` and HSTS remain staged: do not
+enable them until you've confirmed HTTPS actually works for every hostname in
+`DJANGO_ALLOWED_HOSTS`. HSTS is never enabled automatically. Suggested rollout:
 
 1. Launch with HTTPS available but `DJANGO_SECURE_SSL_REDIRECT=False` and
    HSTS at `0`; confirm the site loads correctly over both `http://` and
    `https://`.
-2. Set `DJANGO_SECURE_SSL_REDIRECT=True`, `DJANGO_SESSION_COOKIE_SECURE=True`,
-   `DJANGO_CSRF_COOKIE_SECURE=True`. Confirm login/checkout still work.
+2. Set `DJANGO_SECURE_SSL_REDIRECT=True` (the secure cookies are already on).
+   Confirm login/checkout still work.
 3. Set `DJANGO_SECURE_HSTS_SECONDS=3600` (1 hour) for a day or two; watch for
    problems.
 4. Raise to `86400` (1 day), then eventually `31536000` (1 year).
@@ -356,7 +463,9 @@ you've confirmed HTTPS actually works for every hostname in
 After deploying, verify at minimum:
 
 ```
+python manage.py check
 python manage.py check --deploy
+python manage.py verify_rate_limit_cache
 ```
 
 Review every warning it prints — some may be intentionally deferred (e.g.
@@ -399,6 +508,7 @@ Before a launch deploy, confirm you can:
 ```
 python manage.py check
 python manage.py check --deploy
+python manage.py verify_rate_limit_cache
 python manage.py makemigrations --check --dry-run
 python manage.py showmigrations
 python manage.py migrate

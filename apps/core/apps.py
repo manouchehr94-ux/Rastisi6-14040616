@@ -11,3 +11,6 @@ class CoreConfig(AppConfig):
         from .converters import UnicodeSlugConverter
 
         register_converter(UnicodeSlugConverter, "uslug")
+
+        # Registers the production auth-infrastructure system checks.
+        from shop_core import checks  # noqa: F401

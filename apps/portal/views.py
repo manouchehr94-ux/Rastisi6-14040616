@@ -59,6 +59,8 @@ from .forms import (
     PasswordResetConfirmForm,
     PasswordResetRequestForm,
 )
+from apps.core.services.client_ip import get_client_ip_bucket
+
 from .models import ContactMessage, OwnerOtpChallenge
 from .phone import InvalidPhoneError, normalize_iranian_phone
 from .services import (
@@ -71,7 +73,7 @@ from .services import (
     step_up_service,
     turnstile_service,
 )
-from .services.rate_limit import RateLimitExceeded, enforce_rate_limit
+from .services.rate_limit import UNAVAILABLE_MESSAGE, RateLimitExceeded, RateLimitUnavailable, enforce_rate_limit
 
 _STORE_CREATE_TOKEN_SESSION_KEY = "portal_store_create_token"
 DEFAULT_TRIAL_STORE_NAME = "فروشگاه من"
@@ -198,10 +200,13 @@ def contact(request):
         form = ContactForm(request.POST)
         try:
             enforce_rate_limit(
-                "contact", request.META.get("REMOTE_ADDR", "unknown"), max_attempts=5, window_seconds=600,
+                "contact", get_client_ip_bucket(request), max_attempts=5, window_seconds=600,
             )
         except RateLimitExceeded:
             messages.error(request, "تعداد ارسال پیام بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید.")
+            return render(request, "portal/public/contact.html", {"form": form})
+        except RateLimitUnavailable:
+            messages.error(request, UNAVAILABLE_MESSAGE)
             return render(request, "portal/public/contact.html", {"form": form})
         if form.is_valid() and _turnstile_form_is_valid(
             request, form, action="contact"
@@ -246,7 +251,7 @@ def _request_otp_and_go_to_verify(
 
     try:
         owner_otp_service.request_otp(
-            phone=phone, purpose=purpose, client_ip=request.META.get("REMOTE_ADDR", "unknown"),
+            phone=phone, purpose=purpose, client_ip=get_client_ip_bucket(request),
         )
     except owner_otp_service.OtpRateLimitError as exc:
         return None, str(exc)
@@ -399,6 +404,7 @@ def _login_identifier_throttled(form) -> bool:
         )
     except RateLimitExceeded:
         return True
+    # RateLimitUnavailable deliberately propagates: the caller must fail closed.
     return False
 
 
@@ -423,28 +429,40 @@ def login_password(request):
     form = OwnerIdentifierLoginForm(request.POST)
     try:
         enforce_rate_limit(
-            "login_password", request.META.get("REMOTE_ADDR", "unknown"), max_attempts=15, window_seconds=600,
+            "login_password", get_client_ip_bucket(request), max_attempts=15, window_seconds=600,
         )
     except RateLimitExceeded:
         form.add_error(None, "تعداد تلاش ورود بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید.")
+    except RateLimitUnavailable:
+        # Fail closed: no password authentication while the shared counter is down.
+        form.add_error(None, UNAVAILABLE_MESSAGE)
     else:
         if form.is_valid() and _turnstile_form_is_valid(
             request, form, action="login_password"
         ):
             # Turnstile first: only a solved challenge may spend (or lock) an
             # identifier's attempt budget, so an anonymous script cannot lock a victim out.
-            if _login_identifier_throttled(form):
-                form.add_error(None, _LOGIN_THROTTLED_MESSAGE)
+            try:
+                throttled = _login_identifier_throttled(form)
+            except RateLimitUnavailable:
+                # Fail closed: the per-identifier budget cannot be charged, so no authentication.
+                form.add_error(None, UNAVAILABLE_MESSAGE)
             else:
-                user = owner_auth_service.authenticate_owner_by_identifier(
-                    request, identifier=form.cleaned_data["identifier"], password=form.cleaned_data["password"],
-                )
-                if user is None:
-                    form.add_error(None, owner_auth_service.GENERIC_LOGIN_ERROR)
+                if throttled:
+                    form.add_error(None, _LOGIN_THROTTLED_MESSAGE)
                 else:
-                    auth_login(request, user)
-                    session_service.apply_remember_me(request, form.cleaned_data.get("remember_me", False))
-                    return _post_login_redirect(request, user, next_url=next_url, admin_return=admin_return)
+                    user = owner_auth_service.authenticate_owner_by_identifier(
+                        request, identifier=form.cleaned_data["identifier"],
+                        password=form.cleaned_data["password"],
+                    )
+                    if user is None:
+                        form.add_error(None, owner_auth_service.GENERIC_LOGIN_ERROR)
+                    else:
+                        auth_login(request, user)
+                        session_service.apply_remember_me(request, form.cleaned_data.get("remember_me", False))
+                        return _post_login_redirect(
+                            request, user, next_url=next_url, admin_return=admin_return,
+                        )
 
     otp_form = OwnerPhoneRequestForm()
     return render(
@@ -672,7 +690,7 @@ def otp_resend(request):
 
     try:
         owner_otp_service.request_otp(
-            phone=phone, purpose=purpose, client_ip=request.META.get("REMOTE_ADDR", "unknown"),
+            phone=phone, purpose=purpose, client_ip=get_client_ip_bucket(request),
         )
     except owner_otp_service.OtpRateLimitError as exc:
         request.session[_OTP_SESSION_FLASH_KEY] = {"kind": "error", "text": str(exc)}
@@ -717,10 +735,13 @@ def password_reset_request(request):
         form = PasswordResetRequestForm(request.POST)
         try:
             enforce_rate_limit(
-                "password_reset", request.META.get("REMOTE_ADDR", "unknown"), max_attempts=5, window_seconds=600,
+                "password_reset", get_client_ip_bucket(request), max_attempts=5, window_seconds=600,
             )
         except RateLimitExceeded:
             messages.error(request, "تعداد درخواست بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید.")
+            return render(request, "portal/public/password_reset_request.html", {"form": form})
+        except RateLimitUnavailable:
+            messages.error(request, UNAVAILABLE_MESSAGE)
             return render(request, "portal/public/password_reset_request.html", {"form": form})
         if form.is_valid() and _turnstile_form_is_valid(
             request, form, action="password_reset"
@@ -1235,7 +1256,7 @@ def billing_checkout(request, store_public_id, plan_version_id):
             step_up_service.begin_challenge(
                 request, action=_STEP_UP_ACTION_SUBSCRIPTION_PURCHASE, target=target, phone=phone,
                 message="کدِ تأییدِ خریدِ اشتراک در راستیسی: {code}",
-                client_ip=request.META.get("REMOTE_ADDR", ""),
+                client_ip=get_client_ip_bucket(request),
             )
         except step_up_service.OtpRateLimitError as exc:
             messages.error(request, str(exc))
@@ -1332,7 +1353,7 @@ def claim_handle(request, store_public_id):
                 step_up_service.begin_challenge(
                     request, action=_STEP_UP_ACTION_HANDLE_CLAIM, target=target, phone=phone,
                     message="کدِ تأییدِ ثبتِ نامِ دائمیِ فروشگاه: {code}",
-                    client_ip=request.META.get("REMOTE_ADDR", ""),
+                    client_ip=get_client_ip_bucket(request),
                 )
             except step_up_service.OtpRateLimitError as exc:
                 messages.error(request, str(exc))
@@ -1558,7 +1579,7 @@ def custom_domain_activate(request, store_public_id, domain_id):
             step_up_service.begin_challenge(
                 request, action=_STEP_UP_ACTION_DOMAIN_ACTIVATE, target=target, phone=phone,
                 message="کدِ تأییدِ فعال‌سازیِ دامنه‌ی اختصاصی: {code}",
-                client_ip=request.META.get("REMOTE_ADDR", ""),
+                client_ip=get_client_ip_bucket(request),
             )
         except step_up_service.OtpRateLimitError as exc:
             messages.error(request, str(exc))
@@ -1636,7 +1657,7 @@ def request_store_deletion(request, store_public_id):
                 step_up_service.begin_challenge(
                     request, action=_STEP_UP_ACTION_STORE_DELETE, target=target, phone=phone,
                     message="کدِ تأییدِ حذفِ فروشگاه: {code}",
-                    client_ip=request.META.get("REMOTE_ADDR", ""),
+                    client_ip=get_client_ip_bucket(request),
                 )
             except step_up_service.OtpRateLimitError as exc:
                 messages.error(request, str(exc))
@@ -1743,7 +1764,7 @@ def initiate_ownership_transfer(request, store_public_id):
                 step_up_service.begin_challenge(
                     request, action=_STEP_UP_ACTION_OWNERSHIP_TRANSFER, target=target, phone=phone,
                     message="کدِ تأییدِ انتقالِ مالکیتِ فروشگاه: {code}",
-                    client_ip=request.META.get("REMOTE_ADDR", ""),
+                    client_ip=get_client_ip_bucket(request),
                 )
             except step_up_service.OtpRateLimitError as exc:
                 messages.error(request, str(exc))
@@ -1830,7 +1851,7 @@ def accept_ownership_transfer(request, token):
             try:
                 owner_otp_service.request_otp(
                     phone=transfer.target_phone, purpose=OwnerOtpChallenge.Purpose.STEP_UP,
-                    client_ip=request.META.get("REMOTE_ADDR", "unknown"),
+                    client_ip=get_client_ip_bucket(request),
                     message="کدِ پذیرشِ مالکیتِ فروشگاه: {code}",
                 )
                 messages.success(request, "کد ارسال شد.")

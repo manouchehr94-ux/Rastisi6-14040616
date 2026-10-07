@@ -22,7 +22,7 @@ from django.utils import timezone
 from apps.portal.models import OwnerOtpChallenge
 
 from .owner_sms_service import send_platform_otp
-from .rate_limit import RateLimitExceeded, enforce_rate_limit
+from .rate_limit import UNAVAILABLE_MESSAGE, RateLimitExceeded, RateLimitUnavailable, enforce_rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +141,10 @@ def request_otp(*, phone: str, purpose: str, client_ip: str, message: str | None
         )
     except RateLimitExceeded as exc:
         raise OtpRateLimitError(str(exc)) from exc
+    except RateLimitUnavailable as exc:
+        # Fail closed: no code is created and no SMS is sent while the shared
+        # throttle store is down (an SMS-pumping/brute-force control must not vanish).
+        raise OtpDeliveryError(UNAVAILABLE_MESSAGE) from exc
 
     # ردِ سریعِ بدون قفل: درخواستِ آشکارا بیش از سقف، هشِ کندِ PBKDF2 نمی‌سوزاند.
     if _recent_request_count(phone, purpose) >= MAX_REQUESTS_PER_PHONE_WINDOW:

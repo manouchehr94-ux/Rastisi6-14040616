@@ -53,9 +53,11 @@ from ..storefront_appearance.validation import (
     normalize_persisted_manifest,
 )
 
-_PUBLISH_RATE_LIMIT = dict(max_attempts=20, window_seconds=3600)
-_RESTORE_RATE_LIMIT = dict(max_attempts=20, window_seconds=3600)
-_NEW_DRAFT_RATE_LIMIT = dict(max_attempts=30, window_seconds=3600)
+# fail_open: authenticated, per-Store anti-churn throttles — not a security boundary, so a
+# shared-cache outage must not take the merchant panel down (it is logged by the limiter).
+_PUBLISH_RATE_LIMIT = dict(max_attempts=20, window_seconds=3600, fail_open=True)
+_RESTORE_RATE_LIMIT = dict(max_attempts=20, window_seconds=3600, fail_open=True)
+_NEW_DRAFT_RATE_LIMIT = dict(max_attempts=30, window_seconds=3600, fail_open=True)
 
 
 class NoDraftToPublishError(Exception):

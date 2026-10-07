@@ -13,7 +13,12 @@ from datetime import timedelta
 from django.contrib.auth.hashers import check_password, make_password
 from django.utils import timezone
 
-from apps.core.services.rate_limit import RateLimitExceeded, enforce_rate_limit
+from apps.core.services.rate_limit import (
+    UNAVAILABLE_MESSAGE,
+    RateLimitExceeded,
+    RateLimitUnavailable,
+    enforce_rate_limit,
+)
 
 from ..events import SmsEvent
 from ..models import OtpCode
@@ -57,6 +62,9 @@ def request_otp(phone: str, *, store, ip_address: str) -> OtpCode:
         )
     except RateLimitExceeded as exc:
         raise OtpRateLimitError(str(exc)) from exc
+    except RateLimitUnavailable as exc:
+        # Fail closed: never send an SMS while the shared throttle store is down.
+        raise OtpDeliveryError(UNAVAILABLE_MESSAGE) from exc
 
     window_start = timezone.now() - timedelta(seconds=REQUEST_WINDOW_SECONDS)
     recent_count = OtpCode.objects.filter(phone=phone, created_at__gte=window_start).count()

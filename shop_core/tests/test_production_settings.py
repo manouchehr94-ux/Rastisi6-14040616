@@ -32,7 +32,7 @@ def _run_check(extra_env):
     """
     env = os.environ.copy()
     controlled_prefixes = (
-        "DJANGO_", "RASTISI_", "STORES_", "AUTH_", "SHOP_", "PAYMENT_",
+        "DJANGO_", "RASTISI_", "STORES_", "AUTH_", "SHOP_", "PAYMENT_", "TURNSTILE_",
     )
     controlled_exact = {
         "DATABASE_URL", "LOG_LEVEL", "PAYMENTS_SIMULATION_ENABLED",
@@ -50,6 +50,19 @@ def _run_check(extra_env):
         text=True,
         timeout=60,
     )
+
+
+#: A complete, safe production environment (placeholders only — no real secrets).
+_PROD_ENV = {
+    "DJANGO_DEBUG": "False",
+    "DJANGO_SECRET_KEY": "a-real-unique-production-secret",
+    "DJANGO_ALLOWED_HOSTS": "example.com,www.example.com",
+    "DJANGO_CSRF_TRUSTED_ORIGINS": "https://example.com",
+    "RASTISI_RATE_LIMIT_CACHE_URL": "rediss://:placeholder-pw@cache.example.internal:6380/0",
+    "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",
+    "TURNSTILE_SECRET_KEY": "1x0000000000000000000000000000AA",
+    "TURNSTILE_EXPECTED_HOSTNAMES": "example.com,www.example.com",
+}
 
 
 class DevelopmentDefaultsRemainUsableTests(SimpleTestCase):
@@ -84,15 +97,9 @@ class ProductionSafetyEnforcedEndToEndTests(SimpleTestCase):
         self.assertIn("DJANGO_ALLOWED_HOSTS must be set", result.stderr)
 
     def test_debug_false_fully_configured_passes(self):
-        result = _run_check(
-            {
-                "DJANGO_DEBUG": "False",
-                "DJANGO_SECRET_KEY": "a-real-unique-production-secret",
-                "DJANGO_ALLOWED_HOSTS": "example.com,www.example.com",
-                "DJANGO_CSRF_TRUSTED_ORIGINS": "https://example.com",
-            }
-        )
+        result = _run_check(dict(_PROD_ENV))
         self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("System check identified no issues", result.stdout + result.stderr)
 
     def test_invalid_boolean_env_var_fails_with_clear_message(self):
         result = _run_check({"DJANGO_SECURE_SSL_REDIRECT": "maybe"})
@@ -103,3 +110,58 @@ class ProductionSafetyEnforcedEndToEndTests(SimpleTestCase):
         result = _run_check({"DATABASE_URL": "mysql://user:pass@host/db"})
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("DATABASE_URL scheme", result.stderr)
+
+
+class ProductionAuthInfrastructureEnforcedEndToEndTests(SimpleTestCase):
+    """A real ``DJANGO_DEBUG=False`` process must refuse to start (or fail
+    ``check``) with an unsafe auth-infrastructure configuration — each case
+    removes/breaks exactly one thing from an otherwise valid environment."""
+
+    def _fails(self, drop=(), **override):
+        env = {k: v for k, v in _PROD_ENV.items() if k not in drop}
+        env.update(override)
+        result = _run_check(env)
+        self.assertNotEqual(result.returncode, 0, msg="unsafe production config was accepted")
+        return result.stderr
+
+    def test_missing_shared_cache_url_fails(self):
+        self.assertIn("RASTISI_RATE_LIMIT_CACHE_URL is required", self._fails(drop=["RASTISI_RATE_LIMIT_CACHE_URL"]))
+
+    def test_malformed_cache_url_fails_without_leaking_the_password(self):
+        for url in ("memcached://host:11211", "redis://:LEAKME@host:6379/0?ssl_cert_reqs=none", "redis://:LEAKME@:6379/0"):
+            with self.subTest(url=url):
+                stderr = self._fails(RASTISI_RATE_LIMIT_CACHE_URL=url)
+                self.assertIn("RASTISI_RATE_LIMIT_CACHE_URL", stderr)
+                self.assertNotIn("LEAKME", stderr)
+
+    def test_turnstile_disabled_or_incomplete_fails(self):
+        self.assertIn("TURNSTILE_ENABLED must be true", self._fails(TURNSTILE_ENABLED="false"))
+        self.assertIn("TURNSTILE_SITE_KEY is required", self._fails(drop=["TURNSTILE_SITE_KEY"]))
+        self.assertIn("TURNSTILE_SECRET_KEY is required", self._fails(drop=["TURNSTILE_SECRET_KEY"]))
+        self.assertIn("TURNSTILE_EXPECTED_HOSTNAMES is required", self._fails(drop=["TURNSTILE_EXPECTED_HOSTNAMES"]))
+
+    def test_malformed_trusted_proxy_cidr_fails(self):
+        self.assertIn("DJANGO_TRUSTED_PROXY_CIDRS", self._fails(DJANGO_TRUSTED_PROXY_CIDRS="10.0.0.0/99"))
+
+    def test_secure_proxy_header_without_trusted_proxies_is_contradictory(self):
+        self.assertIn(
+            "DJANGO_TRUSTED_PROXY_CIDRS is empty",
+            self._fails(DJANGO_SECURE_PROXY_SSL_HEADER="X-Forwarded-Proto:https"),
+        )
+
+    def test_insecure_auth_cookies_fail(self):
+        self.assertIn("SESSION_COOKIE_SECURE", self._fails(DJANGO_SESSION_COOKIE_SECURE="false"))
+        self.assertIn("CSRF_COOKIE_SECURE", self._fails(DJANGO_CSRF_COOKIE_SECURE="false"))
+
+    def test_proxy_and_tls_configuration_passes(self):
+        result = _run_check({
+            **_PROD_ENV,
+            "DJANGO_TRUSTED_PROXY_CIDRS": "10.0.0.0/8,2001:db8::/32",
+            "DJANGO_SECURE_PROXY_SSL_HEADER": "X-Forwarded-Proto:https",
+            "DJANGO_SECURE_SSL_REDIRECT": "true",
+        })
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+    def test_development_still_needs_none_of_it(self):
+        result = _run_check({"DJANGO_DEBUG": "True"})
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
