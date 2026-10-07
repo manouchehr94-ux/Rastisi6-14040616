@@ -938,3 +938,20 @@ h1,h2,h3,h4,p{margin-top:0}
   .r-auth-shell--form-first .r-auth-story h1{font-size:24px;line-height:1.8;margin-bottom:10px}
   .r-auth-form .r-auth-form-head h2{font-size:24px}
 }
+
+/* ── Owner login audit: method tabs as real links, password toggle, hints ─────────── */
+.r-auth-form [hidden]{display:none!important}
+.r-auth-tab{display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 12px;color:var(--rs-ink);text-decoration:none;text-align:center}
+.r-auth-tab:hover{background:color-mix(in srgb,var(--rs-surface) 60%,transparent)}
+.r-auth-tab.is-active{color:var(--rs-brand);cursor:default}
+.r-auth-tab:focus-visible{outline:3px solid var(--rs-focus);outline-offset:2px}
+.r-auth-form > .p-alert{margin-bottom:16px}
+.r-auth-form .p-alert:focus{outline:3px solid var(--rs-focus);outline-offset:2px}
+.r-password-field{position:relative}
+.r-password-field input{padding-right:68px!important}
+.r-password-toggle{position:absolute;top:50%;right:6px;transform:translateY(-50%);min-width:56px;min-height:38px;padding:0 10px;border:0;border-radius:4px;background:transparent;color:var(--rs-brand);font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.r-password-toggle:hover{background:var(--rs-soft)}
+.r-password-toggle:focus-visible{outline:3px solid var(--rs-focus);outline-offset:1px}
+.r-hint-list,.r-error-list{margin:7px 0 0;padding:0 18px 0 0;list-style:disc}
+.r-hint-list li,.r-error-list li{margin-bottom:3px}
+@media(max-width:720px){.r-auth-tabs{grid-template-columns:1fr 1fr}.r-auth-tab{font-size:14px;padding:0 6px}}

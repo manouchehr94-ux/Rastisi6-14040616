@@ -299,6 +299,39 @@ forwards plain HTTP internally. If you use the latter:
   `request.get_host()`, gated by `DJANGO_ALLOWED_HOSTS` — make sure your
   proxy passes through the real client-facing `Host` header unchanged.
 
+### 6.1 Public-auth rate limits: cache backend and client IP (owner login / OTP / reset)
+
+The public auth endpoints (`/login/password/`, OTP request/resend, `/reset-password/`,
+`/contact/`) are throttled by `apps/core/services/rate_limit.py`, which is a thin
+counter on Django's **default cache**, keyed by `REMOTE_ADDR` (per IP) and — for
+password login and reset mail — also by a hash of the submitted identifier / email.
+The per-phone OTP budget is different: it lives in the database (and is serialised
+with a PostgreSQL advisory lock), so it is correct regardless of the points below.
+
+The IP/identifier counters are only as strong as the deployment makes them:
+
+- **No `CACHES` setting exists in `shop_core/settings.py`**, so Django's default
+  `LocMemCache` is used: counters are *per process*. With *N* gunicorn/uWSGI workers
+  the effective limit is up to *N*× the configured one, and counters reset on every
+  restart/deploy. For the limits to mean what they say, configure a cache **shared by
+  all workers** (Redis/Memcached/database cache) — or run a single worker.
+- **`REMOTE_ADDR` is the direct TCP peer.** Behind a reverse proxy it is the proxy's
+  address, so *every* visitor shares one per-IP bucket (15 password attempts / 10 min,
+  10 OTP requests / 10 min, 5 reset requests / 10 min): a handful of legitimate users
+  would lock everyone out. The application deliberately does **not** read
+  `X-Forwarded-For` (a client can forge it). The fix belongs at the edge: terminate
+  the proxy so the real client address reaches Django as `REMOTE_ADDR` (for example a
+  WSGI server option that rewrites the peer address *only* for a trusted proxy
+  address, or `proxy_protocol`), never by trusting the header in application code.
+- `TURNSTILE_ENABLED` defaults to **False**; production must set it together with
+  `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` and `TURNSTILE_EXPECTED_HOSTNAMES`
+  (the settings module refuses to start without the hostnames when `DEBUG=False`).
+  Turnstile is checked on the server before any authentication attempt, SMS or mail.
+- Password-reset mails use `request.get_host()`, which Django validates against
+  `DJANGO_ALLOWED_HOSTS`; `/reset-password/` is only routed on
+  `RASTISI_PLATFORM_HOSTS`. Keep wildcards out of `DJANGO_ALLOWED_HOSTS` for those
+  hosts and make the proxy pass the client-facing `Host` unchanged.
+
 ## 7. Secure cookies and staged HSTS rollout
 
 Do not enable `DJANGO_SECURE_SSL_REDIRECT` / `*_COOKIE_SECURE` / HSTS until

@@ -11,6 +11,7 @@
   ندارد.
 """
 
+import hashlib
 import re
 import unicodedata
 from dataclasses import dataclass
@@ -26,6 +27,7 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
 from apps.core.phone import InvalidPhoneError, normalize_iranian_phone
+from apps.core.services.rate_limit import RateLimitExceeded, enforce_rate_limit
 from apps.portal.models import OwnerProfile
 
 User = get_user_model()
@@ -35,9 +37,23 @@ User = get_user_model()
 #: نمی‌توان از روی پیام تشخیص داد.
 GENERIC_LOGIN_ERROR = "اطلاعات ورود صحیح نیست."
 
+#: سقفِ طولِ ورودی‌هایِ ورود با رمز. بلندتر از این هرگز یک حسابِ واقعی نیست و
+#: نباید پرس‌وجو/هشِ سنگین بسازد (حدِ ایمیل در RFC 5321: ۲۵۴؛ رمز: سقفِ سخاوتمندانه).
+LOGIN_IDENTIFIER_MAX_LENGTH = 254
+LOGIN_PASSWORD_MAX_LENGTH = 1024
+
 
 class OwnerAuthError(Exception):
     """خطای قابل‌نمایش به کاربر در فرم ثبت‌نام/ورود/بازیابیِ رمزِ پرتال."""
+
+
+class PasswordPolicyError(OwnerAuthError):
+    """رمزِ جدید توسطِ ``AUTH_PASSWORD_VALIDATORS`` رد شد؛ ``messages`` فهرستِ
+    پیام‌هایِ (فارسیِ) همان اعتبارسنج‌هاست — بدونِ بازنویسی یا تضعیفِ قواعد."""
+
+    def __init__(self, messages):
+        self.messages = list(messages)
+        super().__init__(" ".join(self.messages))
 
 
 class NewOwnerRegistrationClosedError(OwnerAuthError):
@@ -111,21 +127,33 @@ def authenticate_owner(request, *, email: str, password: str):
     return authenticate(request, username=_normalize_email(email), password=password)
 
 
-def authenticate_owner_by_identifier(request, *, identifier: str, password: str):
-    """Authenticate with email, mobile number or username + password.
+def _burn_password_hash(password: str) -> None:
+    """هزینه‌یِ یک هشِ رمز را می‌پردازد تا پاسخِ «حسابی نیست / حسابِ ورودِ-با-رمز
+    نیست» از نظرِ زمانی با «رمز نادرست» تفاوتِ قابلِ‌اندازه‌گیری نداشته باشد
+    (همان تکنیکِ ``ModelBackend.authenticate`` برایِ کاربرِ ناموجود)."""
+    User().set_password(password)
 
-    This resolves *identity* only. Access to a specific merchant dashboard
-    still requires an ACTIVE StoreMembership and a valid admin host, enforced
-    by the existing handoff and dashboard permission layers. A plain Customer
-    never gains merchant privileges simply by sharing a username or phone.
 
-    Ambiguous case-insensitive identifiers fail closed instead of selecting
-    an arbitrary account. Password validation remains Django's authenticate().
-    """
-    identifier = (identifier or "").strip()
-    if not identifier or not password:
-        return None
+def _is_owner_portal_identity(user) -> bool:
+    """فقط هویت‌هایِ «مالک/کارمند/مدیرِ پلتفرم» از ورودِ رمزیِ پرتال عبور می‌کنند:
+    مدیرِ پلتفرم، یا دارایِ ``OwnerProfile``، یا عضوِ **فعالِ** دست‌کم یک Store.
+    یک ``User`` که فقط مشتریِ فروشگاه است (حتی اگر ایمیل/رمز داشته باشد) هرگز
+    از این مسیر وارد پرتال نمی‌شود."""
+    from apps.stores.models import StoreMembership
 
+    return bool(
+        user.is_superuser
+        or OwnerProfile.objects.filter(user=user).exists()
+        or StoreMembership.objects.filter(
+            user=user, status=StoreMembership.MembershipStatus.ACTIVE
+        ).exists()
+    )
+
+
+def _resolve_login_candidate(identifier: str):
+    """شناسه (ایمیل / موبایل / نام‌کاربری) را به *یک* ``User`` تبدیل می‌کند، یا
+    ``None``. مبهم (چند حسابِ هم‌نام) fail-closed است. اهلیتِ پرتال و رمز را
+    بررسی نمی‌کند — آن‌ها کارِ :func:`authenticate_owner_by_identifier` است."""
     user = None
     if _looks_like_email(identifier):
         matches = list(User.objects.filter(email__iexact=_normalize_email(identifier))[:2])
@@ -146,15 +174,8 @@ def authenticate_owner_by_identifier(request, *, identifier: str, password: str)
             # an OwnerProfile. Only an existing merchant membership or a
             # platform superuser may use this compatibility path.
             if user is None:
-                from apps.stores.models import StoreMembership
-
                 candidate = User.objects.filter(username=phone).first()
-                if candidate is not None and (
-                    candidate.is_superuser
-                    or StoreMembership.objects.filter(
-                        user=candidate, status=StoreMembership.MembershipStatus.ACTIVE
-                    ).exists()
-                ):
+                if candidate is not None and _is_owner_portal_identity(candidate):
                     user = candidate
 
     if user is None:
@@ -163,29 +184,93 @@ def authenticate_owner_by_identifier(request, *, identifier: str, password: str)
         matches = list(User.objects.filter(username__iexact=identifier)[:2])
         if len(matches) != 1:
             return None
-        candidate = matches[0]
-        from apps.stores.models import StoreMembership
+        user = matches[0]
+    return user
 
-        if not (
-            candidate.is_superuser
-            or OwnerProfile.objects.filter(user=candidate).exists()
-            or StoreMembership.objects.filter(
-                user=candidate, status=StoreMembership.MembershipStatus.ACTIVE
-            ).exists()
-        ):
-            return None
-        user = candidate
+
+def authenticate_owner_by_identifier(request, *, identifier: str, password: str):
+    """Authenticate with email, mobile number or username + password.
+
+    This resolves *identity* only. Access to a specific merchant dashboard
+    still requires an ACTIVE StoreMembership and a valid admin host, enforced
+    by the existing handoff and dashboard permission layers. A plain Customer
+    never gains merchant privileges simply by sharing a username, phone or
+    email: every resolved account — whichever identifier matched — must be a
+    platform superuser, an Owner, or an ACTIVE Store member
+    (:func:`_is_owner_portal_identity`).
+
+    Ambiguous case-insensitive identifiers fail closed instead of selecting
+    an arbitrary account. Password validation remains Django's authenticate().
+
+    Every failure returns ``None`` after doing the cost of one password hash
+    (:func:`_burn_password_hash`), so unknown, ineligible, OTP-only (unusable
+    password) and wrong-password accounts are not distinguishable by latency.
+    """
+    identifier = (identifier or "").strip()
+    password = password or ""
+    if (
+        not identifier or not password
+        or len(identifier) > LOGIN_IDENTIFIER_MAX_LENGTH or len(password) > LOGIN_PASSWORD_MAX_LENGTH
+    ):
+        _burn_password_hash(password[:LOGIN_PASSWORD_MAX_LENGTH])
+        return None
+
+    user = _resolve_login_candidate(identifier)
+    if user is None or not user.has_usable_password() or not _is_owner_portal_identity(user):
+        _burn_password_hash(password)
+        return None
 
     return authenticate(request, username=user.username, password=password)
 
 
+def login_identifier_throttle_key(identifier: str) -> str:
+    """کلیدِ پایدارِ throttle برایِ یک شناسه‌یِ ورود — بدونِ حساس‌بودن به
+    حروف/ارقامِ فارسی/فاصله، و هشِ SHA-256 (هیچ ایمیل/شماره‌ای خام در cache
+    نمی‌ماند). برایِ هر رشته‌ای ساخته می‌شود، پس خودِ throttle هرگز فاش
+    نمی‌کند که حسابی وجود دارد."""
+    value = (identifier or "").strip().lower()[:LOGIN_IDENTIFIER_MAX_LENGTH * 2]
+    value = value.translate(_FA_AR_DIGIT_MAP)
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:32]
+
+
+_FA_AR_DIGIT_MAP = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+
+#: سقفِ درخواستِ ایمیلِ بازیابی به‌ازایِ هر ایمیل (جدا از سقفِ IP در ویو) — تا
+#: نشود صندوقِ یک نفر را با درخواستِ پشت‌سرهم پر کرد. عبور از سقف *بی‌صدا* است
+#: (پاسخِ عمومی همان «ارسال شد» می‌ماند) پس چیزی فاش نمی‌شود.
+PASSWORD_RESET_EMAIL_MAX_PER_HOUR = 3
+
+
+def _can_use_password_reset(user) -> bool:
+    """بازیابیِ رمز فقط برایِ حسابی که خودش می‌تواند با رمز وارد پرتال شود:
+    فعال، دارایِ رمزِ قابل‌استفاده (مثلِ ``PasswordResetForm.get_users`` جنگو) و
+    هویتِ مالک/کارمند/مدیر. مشتریِ تنها و حسابِ غیرفعال ایمیل نمی‌گیرند و
+    پیوندشان هم کار نمی‌کند."""
+    return bool(user.is_active and user.has_usable_password() and _is_owner_portal_identity(user))
+
+
 def request_password_reset(*, email: str, base_url: str) -> None:
-    """اگر ایمیل متعلق به کاربری باشد ایمیل بازیابی می‌فرستد؛ در غیر این صورت
-    بی‌صدا کاری نمی‌کند — تا فرمِ عمومی هرگز فاش نکند کدام ایمیل ثبت‌نام کرده
-    (enumeration-safety). ``base_url`` مثلِ ``"https://rastisi.ir"`` — بدونِ
-    اسلش پایانی."""
-    user = User.objects.filter(email__iexact=_normalize_email(email)).first()
-    if user is None:
+    """اگر ایمیل متعلق به **یک** مالکِ فعال باشد ایمیل بازیابی می‌فرستد؛ در غیر
+    این صورت بی‌صدا کاری نمی‌کند — تا فرمِ عمومی هرگز فاش نکند کدام ایمیل
+    ثبت‌نام کرده (enumeration-safety). چند حسابِ هم‌ایمیل مبهم است و مثلِ ورود
+    fail-closed (ارسال نمی‌شود). ``base_url`` مثلِ ``"https://rastisi.ir"`` —
+    بدونِ اسلشِ پایانی؛ ویو آن را از ``request.get_host()`` می‌سازد که پیش‌تر
+    توسطِ ``ALLOWED_HOSTS`` اعتبارسنجی شده و این URLconf فقط روی hostهایِ
+    پلتفرم سرو می‌شود."""
+    normalized = _normalize_email(email)
+    if not normalized:
+        return
+    matches = list(User.objects.filter(email__iexact=normalized)[:2])
+    if len(matches) != 1 or not _can_use_password_reset(matches[0]):
+        return
+    user = matches[0]
+    try:
+        enforce_rate_limit(
+            "password_reset_email", hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:32],
+            max_attempts=PASSWORD_RESET_EMAIL_MAX_PER_HOUR, window_seconds=3600,
+        )
+    except RateLimitExceeded:
         return
     uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
     token = default_token_generator.make_token(user)
@@ -204,15 +289,37 @@ def request_password_reset(*, email: str, base_url: str) -> None:
 
 
 def get_user_from_reset_link(*, uidb64: str, token: str):
-    """کاربر را از uid رمزگشایی‌شده برمی‌گرداند اگر توکن معتبر باشد، وگرنه None."""
+    """کاربر را از uid رمزگشایی‌شده برمی‌گرداند اگر توکن معتبر باشد و حساب هنوز
+    اجازه‌یِ بازیابی داشته باشد، وگرنه None. توکنِ جنگو به هشِ رمز و ``last_login``
+    بسته است؛ پس با تغییرِ رمز (یا یک ورودِ تازه) خودبه‌خود باطل می‌شود."""
     try:
         uid = urlsafe_base64_decode(uidb64).decode()
         user = User.objects.get(pk=uid)
     except (TypeError, ValueError, OverflowError, User.DoesNotExist):
         return None
-    if not default_token_generator.check_token(user, token):
+    if not default_token_generator.check_token(user, token) or not _can_use_password_reset(user):
         return None
     return user
+
+
+_ARABIC_SCRIPT_RE = re.compile("[\u0600-\u06FF]")
+_POLICY_FALLBACK_MESSAGE = "این رمز عبور پذیرفته نیست؛ رمز دیگری انتخاب کنید."
+
+
+def _persian_policy_messages(exc: DjangoValidationError) -> list[str]:
+    """پیام‌هایِ اعتبارسنج‌هایِ تنظیم‌شده را فارسی نگه می‌دارد. فایلِ ترجمه‌یِ ``fa``
+    جنگو پیامِ «حداقل طول» را (به‌خاطرِ شکلِ جمع) ندارد و انگلیسی برمی‌گرداند؛ آن را
+    از رویِ ``code``/``params`` همان اعتبارسنج فارسی می‌کنیم. قاعده تغییر نمی‌کند، فقط
+    متنِ نمایشی؛ و هر پیامِ بدونِ حرفِ فارسی هرگز به کاربر نشان داده نمی‌شود."""
+    out = []
+    for error in exc.error_list:
+        params = error.params or {}
+        if error.code == "password_too_short" and "min_length" in params:
+            text = f"رمز عبور باید دست‌کم {params['min_length']} نویسه باشد."
+        else:
+            text = str(error.message % params if params else error.message)
+        out.append(text if _ARABIC_SCRIPT_RE.search(text) else _POLICY_FALLBACK_MESSAGE)
+    return list(dict.fromkeys(out))
 
 
 @transaction.atomic
@@ -220,7 +327,7 @@ def set_new_password(*, user, password: str) -> None:
     try:
         validate_password(password, user=user)
     except DjangoValidationError as exc:
-        raise OwnerAuthError(" ".join(exc.messages)) from exc
+        raise PasswordPolicyError(_persian_policy_messages(exc)) from exc
     user.set_password(password)
     user.save(update_fields=["password"])
 

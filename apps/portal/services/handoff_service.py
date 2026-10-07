@@ -1,11 +1,11 @@
-﻿"""ظ¾ظ„ ظˆط±ظˆط¯ ط§ط² ظ¾ط±طھط§ظ„ ظ…ط§ظ„ع© ط¨ظ‡ ظ…غŒط²ط¨ط§ظ† ظ…ط¬ط²ط§غŒ ظ¾ظ†ظ„ ظ…ط¯غŒط±غŒطھ ظ‡ط± ظپط±ظˆط´ع¯ط§ظ‡ (ADR-98).
+"""پل ورود از پرتال مالک به میزبان مجزای پنل مدیریت هر فروشگاه (ADR-98).
 
-``SESSION_COOKIE_DOMAIN`` ط¯ط± ط§غŒظ† ظ¾ط±ظˆعکظ‡ ط¹ظ…ط¯ط§ظ‹ طھظ†ط¸غŒظ… ظ†ط´ط¯ظ‡ (ع©ظˆع©غŒâ€Œظ‡ط§غŒ host-only)
-â€” ظ¾ط³ ظ†ط´ط³طھظگ ظˆط§ط±ط¯ط´ط¯ظ‡â€ŒغŒ ظ…ط§ظ„ع© ط±ظˆغŒ ظ…غŒط²ط¨ط§ظ† ظ¾ط±طھط§ظ„ (ظ…ط«ظ„ط§ظ‹ app.rastisi.ir) ط±ظˆغŒ
-ظ…غŒط²ط¨ط§ظ†ظگ ظ…طھظپط§ظˆطھظگ ``{admin_subdomain}.{RASTISI_ADMIN_DOMAIN_SUFFIX}`` ظˆط¬ظˆط¯
-ظ†ط¯ط§ط±ط¯. ط§غŒظ† ظ…ط§عکظˆظ„ غŒع© ط¨ظ„غŒطھظگ ع©ظˆطھط§ظ‡â€Œط¹ظ…ط± ظˆ غŒع©ط¨ط§ط±ظ…طµط±ظپ ظ…غŒâ€Œط³ط§ط²ط¯ ع©ظ‡ ظˆغŒظˆغŒ ط³ظ…طھظگ
-ظ…غŒط²ط¨ط§ظ†ظگ ظ…ط¯غŒط±غŒطھ (``apps.dashboard.views.consume_admin_handoff``) ظ…طµط±ظپ ظ…غŒâ€Œع©ظ†ط¯
-ظˆ ط¨ظ„ط§ظپط§طµظ„ظ‡ ``login()`` ظˆط§ظ‚ط¹غŒظگ ط¬ظ†ع¯ظˆ ط±ط§ ط¨ط±ط§غŒ ظ‡ظ…ط§ظ† ظ…غŒط²ط¨ط§ظ† طµط¯ط§ ظ…غŒâ€Œط²ظ†ط¯."""
+``SESSION_COOKIE_DOMAIN`` در این پروژه عمداً تنظیم نشده (کوکی‌های host-only)؛ پس
+نشست واردشده‌ی مالک روی میزبان پرتال (مثلاً app.rastisi.ir) روی میزبان متفاوت
+``{admin_subdomain}.{RASTISI_ADMIN_DOMAIN_SUFFIX}`` وجود ندارد. این ماژول یک بلیت
+کوتاه‌عمر و یک‌بارمصرف می‌سازد که ویوی سمت میزبان مدیریت
+(``apps.dashboard.views.consume_admin_handoff``) مصرف می‌کند و بلافاصله ``login()``
+واقعی جنگو را برای همان میزبان صدا می‌زند."""
 
 from datetime import timedelta
 
@@ -20,35 +20,35 @@ from ..models import AdminHandoffTicket
 
 TICKET_TTL_SECONDS = 600
 
-#: Section 4 â€” how long a signed "return to Merchant Admin after central
-#: login" token stays valid. Short window: this only needs to survive one
-#: OTP round-trip, not a browsing session.
+#: Section 4 — مدت اعتبار توکنِ امضاشده‌ی «بازگشت به Merchant Admin پس از ورود
+#: مرکزی». پنجره‌ی کوتاه: فقط باید یک دور ورود (مثلاً OTP) را تحمل کند، نه یک
+#: جلسه‌ی مرورگر.
 ADMIN_RETURN_TOKEN_MAX_AGE_SECONDS = 600
 _ADMIN_RETURN_SALT = "portal.admin_return_token"
 
 
 class HandoffError(Exception):
-    """طµط¯ظˆط± غŒط§ ظ…طµط±ظپظگ ط¨ظ„غŒطھظگ ظˆط±ظˆط¯ ط¨ظ‡ ظ¾ظ†ظ„ ظ…ط¯غŒط±غŒطھ ظ…ظ…ع©ظ† ظ†غŒط³طھ."""
+    """صدور یا مصرف بلیت ورود به پنل مدیریت ممکن نیست."""
 
 
 def build_admin_return_token(*, admin_subdomain: str, destination_path: str) -> str:
-    """غŒع© طھظˆع©ظ†ظگ ط§ظ…ط¶ط§ط´ط¯ظ‡ (HMACطŒ ``django.core.signing``) ظ…غŒâ€Œط³ط§ط²ط¯ ع©ظ‡ ظ¾ط³ ط§ط² ظˆط±ظˆط¯ظگ
-    ظ…ط±ع©ط²غŒطŒ ظ…ط³غŒط±ظگ ط¨ط§ط²ع¯ط´طھ ط¨ظ‡ ط¯ظ‚غŒظ‚ط§ظ‹ ظ‡ظ…غŒظ† (admin_subdomain, destination_path)
-    ط±ط§ ط¨ط¯ظˆظ†ظگ ظ‚ط§ط¨ظ„ظگâ€Œط¯ط³طھع©ط§ط±غŒâ€Œط¨ظˆط¯ظ† ط­ظ…ظ„ ظ…غŒâ€Œع©ظ†ط¯ (Section 4).
+    """توکنِ امضاشده (HMAC، ``django.core.signing``) می‌سازد که پس از ورود مرکزی، مسیر
+    بازگشت به دقیقاً همین (admin_subdomain, destination_path) را بدون امکان دست‌کاری حمل
+    می‌کند (Section 4).
 
-    غŒع© URL ط®ط§ظ… ظ†غŒط³طھ â€” غŒع© payload ط§ظ…ط¶ط§ط´ط¯ظ‡ ط§ط³طھ â€” ظ¾ط³ ظ‡ط±ع¯ط² ظ†ظ…غŒâ€Œطھظˆط§ظ†ط¯ ط¨ظ‡ غŒع©
-    ظ…ظ‚طµط¯ظگ ط¯ظ„ط®ظˆط§ظ‡ظگ ط¨غŒط±ظˆظ†غŒ (open redirect) ط§ط´ط§ط±ظ‡ ع©ظ†ط¯: ظ…طµط±ظپâ€Œع©ظ†ظ†ط¯ظ‡
-    (``apps.portal.views``) ظ‡ظ…غŒط´ظ‡ ط®ظˆط¯ط´ ``https://{admin_subdomain}.
-    {RASTISI_ADMIN_DOMAIN_SUFFIX}/...`` ط±ط§ ظ…غŒâ€Œط³ط§ط²ط¯طŒ ظ†ظ‡ ط§غŒظ†ع©ظ‡ غŒع© URL ط±ط§ ط§ط²
-    طھظˆع©ظ† ظ…ط³طھظ‚غŒظ…ط§ظ‹ ط¨ط®ظˆط§ظ†ط¯."""
+    یک URL خام نیست — یک payload امضاشده است؛ پس هرگز نمی‌تواند به مقصد دلخواه بیرونی
+    اشاره کند (open redirect): مصرف‌کننده (``apps.portal.views``) همیشه خودش
+    ``https://{admin_subdomain}.{RASTISI_ADMIN_DOMAIN_SUFFIX}/...`` را می‌سازد، نه اینکه URL
+    را مستقیماً از توکن بخواند. توکن هیچ هویتی حمل نمی‌کند و اعتباری نمی‌دهد؛ دسترسی همیشه
+    با عضویت فعال کاربرِ واردشده در ``issue_ticket`` تعیین می‌شود."""
     signer = signing.TimestampSigner(salt=_ADMIN_RETURN_SALT)
     return signer.sign_object({"admin_subdomain": admin_subdomain, "destination_path": destination_path})
 
 
 def decode_admin_return_token(token: str):
-    """طھظˆع©ظ† ط±ط§ ط±ظ…ط²ع¯ط´ط§غŒغŒ ظ…غŒâ€Œع©ظ†ط¯ ط§ع¯ط± ظ…ط¹طھط¨ط±/طھط§ط²ظ‡ ط¨ط§ط´ط¯طŒ ظˆع¯ط±ظ†ظ‡ ``None`` â€”
-    ظ‡ط±ع¯ط² Exception ظ¾ط±طھط§ط¨ ظ†ظ…غŒâ€Œع©ظ†ط¯ (ظˆط±ظˆط¯غŒظگ ع©ط§ط±ط¨ط± ط§ط³طھطŒ ظ‡ظ…غŒط´ظ‡ ظ…غŒâ€Œطھظˆط§ظ†ط¯ ظ†ط§ظ…ط¹طھط¨ط±
-    ط¨ط§ط´ط¯)."""
+    """توکن را رمزگشایی می‌کند اگر معتبر و تازه باشد، وگرنه ``None`` — هرگز Exception
+    پرتاب نمی‌کند (ورودیِ کاربر است و همیشه می‌تواند نامعتبر باشد). مسیرِ مقصد باید زیرِ
+    ``/admin-portal/`` باشد."""
     signer = signing.TimestampSigner(salt=_ADMIN_RETURN_SALT)
     try:
         payload = signer.unsign_object(token, max_age=ADMIN_RETURN_TOKEN_MAX_AGE_SECONDS)
@@ -62,13 +62,12 @@ def decode_admin_return_token(token: str):
 
 
 def issue_support_ticket(*, actor, store: Store, destination_path: str = "/admin-portal/") -> AdminHandoffTicket:
-    """بلیتِ «ورودِ پشتیبانی» — برخلافِ ``issue_ticket``، ``actor`` (مدیرِ
-    پلتفرم) نیازی به عضویت در این Store ندارد؛ به‌جایش بلیت برایِ همان
-    مالکِ فعالِ Store صادر می‌شود تا مصرف‌کننده (``consume_ticket`` →
-    ``apps.dashboard.views.consume_admin_handoff``) بدونِ هیچ تغییری در
-    منطقِ ورود/دسترسیِ موجود کار کند — فقط ``issued_by_platform_admin``
-    این بلیت را از یک handoff معمولیِ مالک متمایز می‌کند، و صفحه‌ی مصرف‌کننده
-    از رویِ همین فیلد نشانه‌ی «حالتِ پشتیبانی» را در سشن می‌گذارد."""
+    """بلیتِ «ورودِ پشتیبانی» — برخلاف ``issue_ticket``، ``actor`` (مدیر پلتفرم) نیازی
+    به عضویت در این Store ندارد؛ به‌جایش بلیت برای همان مالکِ فعالِ Store صادر می‌شود تا
+    مصرف‌کننده (``consume_ticket`` → ``apps.dashboard.views.consume_admin_handoff``) بدون
+    هیچ تغییری در منطقِ ورود/دسترسی کار کند — فقط ``issued_by_platform_admin`` این بلیت را از
+    یک handoff معمولیِ مالک متمایز می‌کند، و صفحه‌ی مصرف‌کننده از روی همین فیلد نشانه‌ی «حالت
+    پشتیبانی» را در سشن می‌گذارد."""
     from apps.stores.models import StoreMembership
 
     owner_membership = (
@@ -87,11 +86,12 @@ def issue_support_ticket(*, actor, store: Store, destination_path: str = "/admin
 
 
 def issue_ticket(*, user, store: Store, destination_path: str = "/admin-portal/") -> AdminHandoffTicket:
-    """ظپظ‚ط· ط¨ط±ط§غŒ (user, store)ط§غŒ ع©ظ‡ ط¹ط¶ظˆغŒطھظگ ظپط¹ط§ظ„ ط¯ط§ط±ط¯ ط¨ظ„غŒطھ طµط§ط¯ط± ظ…غŒâ€Œع©ظ†ط¯ â€”
-    ظ‡ط±ع¯ط² ط¨ط±ط§غŒ ظپط±ظˆط´ع¯ط§ظ‡غŒ ع©ظ‡ ع©ط§ط±ط¨ط± ط¹ط¶ظˆط´ ظ†غŒط³طھ."""
+    """فقط برای (user, store)ای که عضویتِ **فعال** دارد بلیت صادر می‌کند — هرگز برای
+    فروشگاهی که کاربر عضوش نیست یا عضویتش دعوت‌شده/لغوشده است. این تنها نقطه‌ای است که
+    ورود مرکزی را به دسترسی به یک Store تبدیل می‌کند."""
     membership = get_active_membership(user, store)
     if membership is None:
-        raise HandoffError("ط´ظ…ط§ ط¹ط¶ظˆظگ ظپط¹ط§ظ„ظگ ط§غŒظ† ظپط±ظˆط´ع¯ط§ظ‡ ظ†غŒط³طھغŒط¯")
+        raise HandoffError("شما عضوِ فعالِ این فروشگاه نیستید")
 
     return AdminHandoffTicket.objects.create(
         user=user, store=store, destination_path=destination_path,
@@ -101,11 +101,11 @@ def issue_ticket(*, user, store: Store, destination_path: str = "/admin-portal/"
 
 @transaction.atomic
 def consume_ticket(token: str, *, store: Store):
-    """ط¨ظ„غŒطھ ط±ط§ ط§طھظ…غŒع© ظ…غŒâ€Œط®ظˆط§ظ†ط¯ ظˆ ط¨ظ„ط§ظپط§طµظ„ظ‡ ظ…طµط±ظپâ€Œط´ط¯ظ‡ ط¹ظ„ط§ظ…طھ ظ…غŒâ€Œط²ظ†ط¯ (select_for_update
-    طھط§ ط¯ظˆ ظ…طµط±ظپظگ ظ‡ظ…â€Œط²ظ…ط§ظ† ظ‡ط±ع©ط¯ط§ظ… غŒع© ظ†ط³ط®ظ‡â€ŒغŒ ظ‚ط¯غŒظ…غŒ ظ†ط®ظˆط§ظ†ظ†ط¯)طŒ ظˆ ع©ط§ط±ط¨ط±ظگ ظ…طھط¹ظ„ظ‚ ط¨ظ‡ ط¢ظ†
-    ط±ط§ ط¨ط±ظ…غŒâ€Œع¯ط±ط¯ط§ظ†ط¯. ``store`` ط¨ط§غŒط¯ ط¯ظ‚غŒظ‚ط§ظ‹ ظ‡ظ…ط§ظ† Storeط§غŒ ط¨ط§ط´ط¯ ع©ظ‡ ط¨ظ„غŒطھ ط¨ط±ط§غŒط´
-    طµط§ط¯ط± ط´ط¯ظ‡ â€” غŒع© ط¨ظ„غŒطھظگ ظپط±ظˆط´ع¯ط§ظ‡ظگ ط¯غŒع¯ط±طŒ ط­طھغŒ ظ…ط¹طھط¨ط± ظˆ ظ…طµط±ظپâ€Œظ†ط´ط¯ظ‡طŒ ط§غŒظ†ط¬ط§ ط±ط¯
-    ظ…غŒâ€Œط´ظˆط¯. ط¨ظ„غŒطھظگ ظ†ط§ظ…ط¹طھط¨ط±/ظ…ظ†ظ‚ط¶غŒ/ظ…طµط±ظپâ€Œط´ط¯ظ‡/ظپط±ظˆط´ع¯ط§ظ‡ظگ ظ†ط§ط¯ط±ط³طھ None ط¨ط±ظ…غŒâ€Œع¯ط±ط¯ط§ظ†ط¯."""
+    """بلیت را اتمیک می‌خواند و بلافاصله مصرف‌شده علامت می‌زند (``select_for_update`` تا دو
+    مصرف‌کننده‌ی هم‌زمان هر کدام یک نسخه‌ی قدیمی نخوانند) و کاربر متعلق به آن را برمی‌گرداند.
+    ``store`` باید دقیقاً همان Storeای باشد که بلیت برایش صادر شده — بلیت فروشگاهی دیگر، حتی
+    معتبر و مصرف‌نشده، اینجا رد می‌شود. بلیت نامعتبر/منقضی/مصرف‌شده/فروشگاه نادرست ``None``
+    برمی‌گرداند."""
     # ``issued_by_platform_admin`` is deliberately left out of
     # ``select_related`` here: it is a nullable ForeignKey, so joining it
     # turns this into a LEFT OUTER JOIN — and PostgreSQL rejects

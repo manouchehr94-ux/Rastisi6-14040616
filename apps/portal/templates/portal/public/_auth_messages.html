@@ -1,0 +1,4 @@
+{% comment %}Inline flash messages for the auth pages. The default toast in base_platform sits at the
+bottom edge, never auto-dismisses and is not a live region — wrong for «رمز تغییر کرد» / «حساب غیرفعال است».
+Auth pages override the toast block and render these at the top of the card instead.{% endcomment %}
+{% for message in messages %}<div class="p-alert {% if message.tags == 'error' %}p-alert-error{% elif message.tags == 'warning' %}p-alert-warning{% else %}p-alert-success{% endif %}" role="{% if message.tags == 'error' or message.tags == 'warning' %}alert{% else %}status{% endif %}" tabindex="-1">{{ message }}</div>{% endfor %}

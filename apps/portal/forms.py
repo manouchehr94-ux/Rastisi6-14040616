@@ -1,5 +1,9 @@
 from django import forms
 
+from apps.portal.services.owner_auth_service import (
+    LOGIN_IDENTIFIER_MAX_LENGTH,
+    LOGIN_PASSWORD_MAX_LENGTH,
+)
 from apps.stores.services.enamad_verification_service import (
     EnamadBadgeError,
     EnamadVerificationMetaError,
@@ -21,15 +25,22 @@ class _FieldErrorA11yMixin:
     عنصرِ خطایِ همان فیلد (``id_<name>_error``) را روی ویجت می‌گذارد؛ در حالتِ
     عادی ``aria-describedby``ِ ثابتِ ویجت (مثلاً راهنمایِ فیلد) دست‌نخورده می‌ماند."""
 
+    #: فرم‌هایِ بدونِ فیلدِ مشخص (مثلاً «اطلاعاتِ ورود صحیح نیست») می‌توانند
+    #: فیلدهایی را که خطای کلی به آن‌ها مربوط است نام ببرند؛ آن فیلدها
+    #: ``aria-invalid`` می‌گیرند و به عنصرِ خطایِ کلی (``id_form_error``) وصل می‌شوند.
+    non_field_error_fields: tuple = ()
+
     def add_error(self, field, error):
         super().add_error(field, error)
-        names = [field] if field else []
-        for name in names:
+        if field:
+            targets = [(field, f"id_{field}_error")]
+        else:
+            targets = [(name, "id_form_error") for name in self.non_field_error_fields]
+        for name, error_id in targets:
             if name in self.fields:
                 widget = self.fields[name].widget
                 widget.attrs["aria-invalid"] = "true"
                 described = widget.attrs.get("aria-describedby", "").split()
-                error_id = f"id_{name}_error"
                 if error_id not in described:
                     described.append(error_id)
                 widget.attrs["aria-describedby"] = " ".join(described)
@@ -146,32 +157,80 @@ class OwnerLoginForm(forms.Form):
         return cleaned
 
 
-class OwnerIdentifierLoginForm(forms.Form):
-    """فرمِ یکپارچه‌ی ورود با رمز: موبایل، نام کاربری یا ایمیل."""
+class OwnerIdentifierLoginForm(_FieldErrorA11yMixin, forms.Form):
+    """فرمِ یکپارچه‌ی ورود با رمز: موبایل، نام کاربری یا ایمیل.
+
+    فقط *کدام شناسه‌ها پذیرفته می‌شوند* را محدود می‌کند، نه سیاستِ ساختِ رمز:
+    هیچ ``validate_password``ای در ورود اجرا نمی‌شود. خطایِ «اطلاعات ورود صحیح
+    نیست» عمداً به هیچ فیلدِ مشخصی نسبت داده نمی‌شود، فقط هر دو فیلد را به آن
+    وصل می‌کند."""
+
+    non_field_error_fields = ("identifier", "password")
 
     identifier = forms.CharField(
-        label="شماره موبایل، نام کاربری یا ایمیل",
-        widget=forms.TextInput(attrs={"autocomplete": "username", "dir": "ltr"}),
+        label="شماره موبایل، نام کاربری یا ایمیل", max_length=LOGIN_IDENTIFIER_MAX_LENGTH,
+        strip=True,
+        error_messages={
+            "required": "شماره موبایل، نام کاربری یا ایمیل را وارد کنید.",
+            "max_length": "شناسه‌ی واردشده بیش از حد بلند است.",
+        },
+        widget=forms.TextInput(attrs={
+            "autocomplete": "username", "dir": "ltr", "autocapitalize": "off", "spellcheck": "false",
+            "maxlength": str(LOGIN_IDENTIFIER_MAX_LENGTH),
+        }),
     )
     password = forms.CharField(
-        label="رمز عبور",
-        widget=forms.PasswordInput(attrs={"autocomplete": "current-password"}),
+        label="رمز عبور", max_length=LOGIN_PASSWORD_MAX_LENGTH, strip=False,
+        error_messages={
+            "required": "رمز عبور را وارد کنید.",
+            "max_length": "رمز عبور واردشده بیش از حد بلند است.",
+        },
+        widget=forms.PasswordInput(attrs={
+            "autocomplete": "current-password", "dir": "ltr", "maxlength": str(LOGIN_PASSWORD_MAX_LENGTH),
+        }),
     )
     remember_me = forms.BooleanField(label="مرا به خاطر بسپار", required=False)
 
 
-class PasswordResetRequestForm(forms.Form):
-    email = forms.EmailField(label="ایمیل")
+class PasswordResetRequestForm(_FieldErrorA11yMixin, forms.Form):
+    email = forms.EmailField(
+        label="ایمیل", max_length=LOGIN_IDENTIFIER_MAX_LENGTH,
+        error_messages={
+            "required": "ایمیل را وارد کنید.",
+            "invalid": "ایمیل واردشده معتبر نیست؛ آن را دوباره بررسی کنید.",
+        },
+        widget=forms.EmailInput(attrs={
+            "autocomplete": "email", "dir": "ltr", "autocapitalize": "off", "spellcheck": "false",
+            "inputmode": "email", "placeholder": "name@example.com",
+        }),
+    )
 
 
-class PasswordResetConfirmForm(forms.Form):
-    password = forms.CharField(label="رمز عبور جدید", widget=forms.PasswordInput)
-    password_confirm = forms.CharField(label="تکرار رمز عبور", widget=forms.PasswordInput)
+class PasswordResetConfirmForm(_FieldErrorA11yMixin, forms.Form):
+    """رمزِ جدید: اعتبارسنجی فقط با ``AUTH_PASSWORD_VALIDATORS`` (در سرویس) — این
+    فرم هیچ سیاستِ رمزِ جداگانه‌ای نمی‌سازد."""
+
+    password = forms.CharField(
+        label="رمز عبور جدید", max_length=LOGIN_PASSWORD_MAX_LENGTH, strip=False,
+        error_messages={"required": "رمز عبور جدید را وارد کنید."},
+        widget=forms.PasswordInput(attrs={
+            "autocomplete": "new-password", "dir": "ltr", "aria-describedby": "id_password_hint",
+            "maxlength": str(LOGIN_PASSWORD_MAX_LENGTH),
+        }),
+    )
+    password_confirm = forms.CharField(
+        label="تکرار رمز عبور", max_length=LOGIN_PASSWORD_MAX_LENGTH, strip=False,
+        error_messages={"required": "رمز عبور را یک بار دیگر وارد کنید."},
+        widget=forms.PasswordInput(attrs={
+            "autocomplete": "new-password", "dir": "ltr", "maxlength": str(LOGIN_PASSWORD_MAX_LENGTH),
+        }),
+    )
 
     def clean(self):
         cleaned = super().clean()
-        if cleaned.get("password") and cleaned.get("password") != cleaned.get("password_confirm"):
-            raise forms.ValidationError("رمز عبور و تکرار آن یکسان نیستند")
+        password, confirm = cleaned.get("password"), cleaned.get("password_confirm")
+        if password and confirm and password != confirm:
+            self.add_error("password_confirm", "رمز عبور و تکرار آن یکسان نیستند.")
         return cleaned
 
 

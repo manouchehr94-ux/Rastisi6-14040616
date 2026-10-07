@@ -2238,8 +2238,17 @@ class InFlightDeliveryConcurrencyTests(_OtpTestMixin, TransactionTestCase):
             _wait_until(lambda: len(self.gated.in_flight) == 1)
             new_code = self.gated.in_flight[0]
             self.assertEqual((self._state(old_code), self._state(new_code)), ("active", "pending"))
+            old_expires_at = self._row(old_code).expires_at
+            before = timezone.now()
             timing = owner_otp_service.resend_timing(phone=_PHONE, purpose=self.PURPOSE)
-            self.assertEqual(timing["expires_in"], int((self._row(old_code).expires_at - timezone.now()).total_seconds()))
+            after = timezone.now()
+            # resend_timing() reads the clock itself, somewhere between `before` and `after`, and truncates to
+            # whole seconds. Comparing it with a *separate* clock read (the old assertion) flaked whenever a
+            # second boundary fell between the two reads (117 != 116). Bracketing the call needs no arbitrary
+            # tolerance and still pins it to the old, active code's expiry: truncation is monotonic, so the
+            # reported value must lie between the truncated remaining time at `after` and at `before`.
+            self.assertGreaterEqual(timing["expires_in"], int((old_expires_at - after).total_seconds()))
+            self.assertLessEqual(timing["expires_in"], int((old_expires_at - before).total_seconds()))
             self.gated.release(new_code)
             resend.join(60)
         self.assertEqual(resend.result, "ok")

@@ -1,4 +1,4 @@
-/* Progressive enhancement for the public auth pages (register / verify).
+/* Progressive enhancement for the public auth pages (register / login / verify / reset).
  *
  * Everything here is UX only. The server stays authoritative for rate limits,
  * OTP expiry/attempts and idempotency; with JavaScript disabled every form
@@ -9,9 +9,54 @@
 
   // Put the cursor where the user must act: the first invalid field, or the
   // code box on the verify page.
-  const focusTarget = document.querySelector('[aria-invalid="true"]') || document.querySelector('#id_code')
-    || document.querySelector('[data-autofocus]');
+  // Only look inside visible panels: the login page keeps both forms in the DOM.
+  const visible = (el) => el && !el.closest('[hidden]');
+  const firstVisible = (selector) => [...document.querySelectorAll(selector)].find(visible);
+  const focusTarget = firstVisible('[aria-invalid="true"]') || firstVisible('.p-alert[role="alert"]')
+    || document.querySelector('#id_code') || document.querySelector('[data-autofocus]');
   if (focusTarget) focusTarget.focus({ preventScroll: false });
+
+  // Login method tabs. They are real links (?mode=…) so the page works without
+  // JavaScript; with it, switching is instant and the URL is kept in sync.
+  const loginModes = document.querySelector('[data-login-modes]');
+  if (loginModes) {
+    const tabs = [...loginModes.querySelectorAll('[data-login-tab]')];
+    const panels = [...loginModes.querySelectorAll('[data-login-panel]')];
+    tabs.forEach((tab) => tab.addEventListener('click', (event) => {
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button) return;
+      event.preventDefault();
+      const mode = tab.dataset.loginTab;
+      tabs.forEach((other) => {
+        const on = other === tab;
+        other.classList.toggle('is-active', on);
+        if (on) other.setAttribute('aria-current', 'true'); else other.removeAttribute('aria-current');
+      });
+      panels.forEach((panel) => { panel.hidden = panel.dataset.loginPanel !== mode; });
+      try { history.replaceState(null, '', tab.getAttribute('href')); } catch (_) { /* optional */ }
+    }));
+  }
+
+  // Optional show/hide for password fields (added by JS only, so no-JS layout is unchanged).
+  document.querySelectorAll('[data-password-field]').forEach((wrap) => {
+    const input = wrap.querySelector('input');
+    if (!input) return;
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'r-password-toggle';
+    toggle.textContent = 'نمایش';
+    toggle.setAttribute('aria-label', 'نمایش رمز عبور');
+    toggle.setAttribute('aria-pressed', 'false');
+    if (input.id) toggle.setAttribute('aria-controls', input.id);
+    const paint = (show) => {
+      input.type = show ? 'text' : 'password';
+      toggle.textContent = show ? 'پنهان' : 'نمایش';
+      toggle.setAttribute('aria-pressed', show ? 'true' : 'false');
+    };
+    toggle.addEventListener('click', () => paint(input.type === 'password'));
+    wrap.appendChild(toggle);
+    wrap.closest('form')?.addEventListener('submit', () => paint(false));
+    window.addEventListener('pageshow', () => paint(false));
+  });
 
   // Double-submit protection: lock the submit button once a form is sent.
   document.querySelectorAll('form[data-auth-form]').forEach((form) => {
