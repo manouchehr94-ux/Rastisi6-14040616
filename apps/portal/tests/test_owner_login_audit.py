@@ -649,9 +649,9 @@ class PasswordResetAuditTests(_Base, TestCase):
         link = self._link()
         page = self.client.get(link, HTTP_HOST=_HOST)
         self.assertEqual(page.status_code, 200)
-        # same-origin (not no-referrer): "no-referrer" makes browsers POST with `Origin: null`,
-        # which Django's CSRF origin check rejects — the reset form would be unusable.
-        self.assertEqual(page["Referrer-Policy"], "same-origin")
+        # `origin`: neither `no-referrer` (browsers then POST with `Origin: null`, which Django's CSRF
+        # origin check rejects) nor `same-origin` (sends the token-bearing path to our own logs).
+        self.assertEqual(page["Referrer-Policy"], "origin")
         self.assertIn("no-store", page["Cache-Control"])
         self.assertContains(page, 'autocomplete="new-password"', count=2)
         done = self.client.post(link, {"password": "brand-new-strong-pass-9", "password_confirm": "brand-new-strong-pass-9"}, HTTP_HOST=_HOST)
@@ -720,6 +720,124 @@ class PasswordResetAuditTests(_Base, TestCase):
         link = self._link()
         _post_login(self.client, "rst@example.com")  # last_login changes → token invalid (Django behaviour)
         self.assertEqual(self.client.get(link, HTTP_HOST=_HOST).status_code, 400)
+
+
+# ---------------------------------------------------------------------------
+# Reset-confirm: the token is in the URL path, so it must never become a Referer
+# ---------------------------------------------------------------------------
+
+
+@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
+class ResetConfirmReferrerPolicyAndCsrfTests(_Base, TestCase):
+    """Pins ``Referrer-Policy: origin`` and proves the form still passes real CSRF checks.
+
+    * ``no-referrer`` is wrong: browsers then send ``Origin: null`` on the form POST and Django's
+      CSRF origin check (correctly) rejects it.
+    * ``same-origin`` is wrong: the full ``/reset-password/<uid>/<token>/`` path would be sent as the
+      Referer of every same-origin CSS/JS request and land in access/proxy/CDN logs.
+    * ``origin`` sends scheme+host+port only and keeps a real ``Origin`` on the POST.
+    """
+
+    ORIGIN = f"http://{_HOST}"
+    NEW = "brand-new-strong-pass-9"
+
+    def setUp(self):
+        super().setUp()
+        self.owner = owner_auth_service.register_owner(full_name="Ref", email="ref@example.com", password=_PASSWORD)
+        self.client.post("/reset-password/", {"email": "ref@example.com"}, HTTP_HOST=_HOST)
+        self.link = re.search(r"/reset-password/[\w-]+/[\w-]+/", mail.outbox[-1].body).group(0)
+        self.csrf_client = self.client_class(enforce_csrf_checks=True)
+
+    def assertSafeHeaders(self, response):
+        self.assertEqual(response["Referrer-Policy"], "origin")
+        self.assertIn("no-store", response["Cache-Control"])
+
+    def _csrf_token(self, page):
+        return re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', page.content.decode()).group(1)
+
+    def _form(self, token, password=None):
+        password = password or self.NEW
+        return {"csrfmiddlewaretoken": token, "password": password, "password_confirm": password}
+
+    def test_valid_link_response_sends_origin_only_and_is_not_cacheable(self):
+        self.assertSafeHeaders(self.client.get(self.link, HTTP_HOST=_HOST))
+
+    def test_failed_validation_rerender_keeps_the_policy(self):
+        response = self.client.post(self.link, {"password": "abc", "password_confirm": "abc"}, HTTP_HOST=_HOST)
+        self.assertEqual(response.status_code, 200)
+        self.assertSafeHeaders(response)
+
+    def test_every_invalid_link_response_has_the_same_policy(self):
+        _, _, uid, token, _ = self.link.split("/")
+        paths = {
+            "garbage uid": f"/reset-password/!!!/{token}/",
+            "tampered token": f"/reset-password/{uid}/{token[:-3]}xyz/",
+            "unknown user": f"/reset-password/{'Mzk5OTk5'}/{token}/",
+            "oversized": f"/reset-password/{'A' * 5000}/{'t' * 3000}/",
+        }
+        for name, path in paths.items():
+            with self.subTest(name=name):
+                response = self.client.get(path, HTTP_HOST=_HOST)
+                self.assertEqual(response.status_code, 400)
+                self.assertSafeHeaders(response)
+                self.assertNotIn('rel="canonical"', response.content.decode())
+        with override_settings(PASSWORD_RESET_TIMEOUT=-1):  # expired
+            expired = self.client.get(self.link, HTTP_HOST=_HOST)
+        self.assertEqual(expired.status_code, 400)
+        self.assertSafeHeaders(expired)
+
+    def test_policy_is_exactly_origin_not_a_weaker_value(self):
+        self.assertEqual(portal_views.RESET_CONFIRM_REFERRER_POLICY, "origin")
+        response = self.client.get(self.link, HTTP_HOST=_HOST)
+        self.assertNotIn(response["Referrer-Policy"], {"same-origin", "unsafe-url", "no-referrer-when-downgrade", "origin-when-cross-origin", ""})
+
+    def test_page_cannot_override_the_header_and_never_echoes_the_token(self):
+        html = self.client.get(self.link, HTTP_HOST=_HOST).content.decode()
+        self.assertNotRegex(html, r'(?i)<meta[^>]+name=["\']referrer["\']')  # a <meta> would override the header
+        self.assertNotRegex(html, r'(?i)referrerpolicy=["\'](?!origin["\'])')
+        self.assertNotIn(self.link.strip("/").split("/")[-1], html)  # token is not rendered anywhere (incl. <link rel=canonical>)
+        self.assertNotIn('rel="canonical"', html)
+        self.assertNotIn(self.link, html)  # the token path is not linked or embedded either
+
+    def test_real_csrf_enforced_post_succeeds_with_the_real_origin(self):
+        page = self.csrf_client.get(self.link, HTTP_HOST=_HOST)
+        done = self.csrf_client.post(self.link, self._form(self._csrf_token(page)), HTTP_HOST=_HOST, HTTP_ORIGIN=self.ORIGIN)
+        self.assertEqual(done.status_code, 302)
+        self.assertEqual(done["Location"], "/login-email/")  # legacy alias that forwards to /login/
+        self.owner.refresh_from_db()
+        self.assertTrue(self.owner.check_password(self.NEW))
+
+    def test_csrf_is_not_weakened_missing_token_null_origin_and_foreign_origin_are_rejected(self):
+        page = self.csrf_client.get(self.link, HTTP_HOST=_HOST)
+        token = self._csrf_token(page)
+        cases = {
+            "no csrf token": ({"password": self.NEW, "password_confirm": self.NEW}, self.ORIGIN),
+            "Origin: null (what no-referrer produces)": (self._form(token), "null"),
+            "foreign Origin": (self._form(token), "https://evil.example"),
+        }
+        for name, (data, origin) in cases.items():
+            with self.subTest(name=name):
+                response = self.csrf_client.post(self.link, data, HTTP_HOST=_HOST, HTTP_ORIGIN=origin)
+                self.assertEqual(response.status_code, 403)
+        self.owner.refresh_from_db()
+        self.assertTrue(self.owner.check_password(_PASSWORD))  # nothing changed, token not consumed
+        self.assertEqual(self.client.get(self.link, HTTP_HOST=_HOST).status_code, 200)
+
+    def test_token_is_single_use_with_real_csrf_enforcement(self):
+        page = self.csrf_client.get(self.link, HTTP_HOST=_HOST)
+        token = self._csrf_token(page)
+        first = self.csrf_client.post(self.link, self._form(token), HTTP_HOST=_HOST, HTTP_ORIGIN=self.ORIGIN)
+        self.assertEqual(first.status_code, 302)
+        replay_get = self.csrf_client.get(self.link, HTTP_HOST=_HOST)
+        self.assertEqual(replay_get.status_code, 400)
+        self.assertSafeHeaders(replay_get)
+        replay_post = self.csrf_client.post(
+            self.link, self._form(token, "another-strong-pass-8"), HTTP_HOST=_HOST, HTTP_ORIGIN=self.ORIGIN,
+        )
+        self.assertEqual(replay_post.status_code, 400)
+        self.assertSafeHeaders(replay_post)
+        self.owner.refresh_from_db()
+        self.assertTrue(self.owner.check_password(self.NEW))
 
 
 # ---------------------------------------------------------------------------

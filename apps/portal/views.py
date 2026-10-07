@@ -738,17 +738,27 @@ def password_reset_request(request):
     return render(request, "portal/public/password_reset_request.html", {"form": form})
 
 
+#: The reset token lives in the URL path; see ``password_reset_confirm``.
+RESET_CONFIRM_REFERRER_POLICY = "origin"
+
+
 @never_cache
 def password_reset_confirm(request, uidb64, token):
-    """تعیینِ رمزِ جدید با پیوندِ ایمیلی. پاسخ ``Referrer-Policy: same-origin`` و
-    ``no-store`` دارد (توکن در URL است و نباید از طریقِ Referer به سایتِ دیگری درز
-    کند). عمداً ``no-referrer`` نیست: مرورگرها آن‌وقت در POSTِ فرم ``Origin: null``
-    می‌فرستند و بررسیِ Origin در CSRFِ جنگو فرمِ رمزِ جدید را رد می‌کند.
+    """تعیینِ رمزِ جدید با پیوندِ ایمیلی. توکن در مسیرِ URL است، پس مسیر هرگز نباید
+    به‌عنوانِ Referer فرستاده شود — حتی برایِ درخواست‌هایِ هم‌مبدأِ CSS/JS که در
+    لاگِ وب‌سرور/پروکسی/CDN می‌نشینند. به همین دلیل ``Referrer-Policy: origin``
+    (فقط scheme+host+port) و ``Cache-Control: no-store`` روی هر دو پاسخ (معتبر و
+    نامعتبر) می‌آید.
+
+    چرا نه ``no-referrer``: مرورگر در POSTِ فرم ``Origin: null`` می‌فرستد و بررسیِ
+    Originِ CSRFِ جنگو فرمِ رمزِ جدید را رد می‌کند. چرا نه ``same-origin``: مسیرِ
+    کاملِ (توکن‌دار) را در Refererِ درخواست‌هایِ هم‌مبدأ می‌فرستد. ``origin`` هر
+    دو را برآورده می‌کند و Originِ واقعیِ POST حفظ می‌شود.
     اعتبارِ رمز فقط با ``AUTH_PASSWORD_VALIDATORS``ِ تنظیم‌شده سنجیده می‌شود."""
     user = owner_auth_service.get_user_from_reset_link(uidb64=uidb64, token=token)
     if user is None:
         response = render(request, "portal/public/password_reset_invalid.html", status=400)
-        response["Referrer-Policy"] = "same-origin"
+        response["Referrer-Policy"] = RESET_CONFIRM_REFERRER_POLICY
         return response
 
     if request.method == "POST":
@@ -770,7 +780,7 @@ def password_reset_confirm(request, uidb64, token):
         request, "portal/public/password_reset_confirm.html",
         {"form": form, "password_help": password_validators_help_texts()},
     )
-    response["Referrer-Policy"] = "same-origin"
+    response["Referrer-Policy"] = RESET_CONFIRM_REFERRER_POLICY
     return response
 
 

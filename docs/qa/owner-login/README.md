@@ -29,11 +29,38 @@ session; `GET /login/password/` redirects to `/login/` instead of a bare 405; JS
 updates `?mode=` and `aria-current`; weak passwords show Persian policy messages and focus the
 first invalid field.
 
-## Found by browser QA (not by the unit tests)
+## Reset-confirm `Referrer-Policy` (found by browser QA, then corrected after review)
 
-* `Referrer-Policy: no-referrer` on the reset-confirm page made Chromium POST with
-  `Origin: null`, which Django's CSRF origin check rejects (403) — the form was unusable.
-  Fixed with `same-origin`; the regression test pins the header value and explains why.
+The reset URL carries the token in its path (`/reset-password/<uid>/<token>/`), so that path must never be sent
+as a `Referer`, yet the form must still pass Django's CSRF *Origin* check. Real Chromium results
+(`tools/owner_login_qa/reset_referrer_e2e.py`, request headers read via Playwright `request.all_headers()`):
+
+| Policy on the reset-confirm responses | Chromium behaviour | Verdict |
+|---|---|---|
+| `no-referrer` | form POST sent `Origin: null` → Django CSRF rejects it (403); form unusable | rejected (first QA finding) |
+| `same-origin` (my first fix) | the page's own CSS/JS requests **and the form POST** carried `Referer: http://rastisi.localhost:8000/reset-password/<uid>/<token>/` → token ends up in web-server / proxy / CDN logs | rejected (review finding; I missed it because the test client does not issue subresource requests) |
+| **`origin`** (current) | page-initiated CSS/JS: `Referer: http://rastisi.localhost:8000/`; form POST: `Origin: http://rastisi.localhost:8000`, `Referer: http://rastisi.localhost:8000/` | **accepted** |
+
+With `origin` (18/18 checks, valid link): valid and invalid (HTTP 400) responses both send
+`Referrer-Policy: origin` and `Cache-Control: max-age=0, no-cache, no-store, must-revalidate, private`; no request
+anywhere carries a `Referer` containing `/reset-password/`; the POST has the real site `Origin` (not `null`); the
+password change completes and lands on `/login/` with the success message; reopening the used URL gives HTTP 400.
+The only non-bare-origin referrer is `…/static/css/base.css` on a resource fetched from *inside* that stylesheet
+(standard browser behaviour; it contains no token).
+
+The same script run against a server deliberately set back to `same-origin` fails 7 checks (11/18) and against
+`no-referrer` fails 8 checks (10/18), so it is a real regression guard. CSRF was not weakened (no `csrf_exempt`,
+Origin check untouched; unit tests with `enforce_csrf_checks=True` prove missing token / `Origin: null` / foreign origin
+→ 403 and a real-origin POST → 302). The token stays in the URL path and Django's token generator is unchanged.
+
+Also fixed in the same pass: `base_platform.html` rendered `<link rel="canonical">` with the full token URL on the
+reset pages; the canonical link is now suppressed on the reset-confirm and invalid-link pages.
+
+Run it (needs `pip install playwright`, a dev server, and a *valid unused* reset link; it consumes the link):
+
+```
+python tools/owner_login_qa/reset_referrer_e2e.py http://rastisi.localhost:8000/reset-password/<uid>/<token>/
+```
 
 ## Not captured
 
