@@ -264,3 +264,6 @@ a.ob-step-link:hover .ob-step-text{color:var(--rs-brand)}
 .ob-review-tpl-shot{flex:none;width:160px;height:100px;object-fit:cover;object-position:top;border:1px solid var(--rs-line);border-radius:var(--rs-radius-sm)}
 .ob-error-inline{color:var(--rs-danger)}
 @media(max-width:720px){.ob-review-tpl{flex-direction:column;align-items:flex-start}.ob-review-tpl-shot{width:100%;height:auto;aspect-ratio:8/5}}
+.ob-tpl-current-title{margin:0 0 4px;font-weight:700}
+.ob-tpl-current p{margin:0 0 8px}
+.ob-tpl-keep{margin:12px 0 0}

@@ -9,6 +9,7 @@ from apps.portal.services import provisioning_service
 from apps.portal.tests._ready_template import select_template
 from apps.stores.models import Store, StoreDomain, StoreMembership
 from apps.stores.services.publication_service import PublicationState, get_store_publication_state
+from apps.subscriptions.models import StoreSubscription
 
 User = get_user_model()
 _HOST = "rastisi.localhost"
@@ -417,18 +418,15 @@ class RegistrationAutoProvisionsTrialStoreTests(TestCase):
 
         with self.settings(ALLOWED_HOSTS=[trial_domain.hostname, _HOST, "testserver"]):
             response = self.client.get("/", HTTP_HOST=trial_domain.hostname)
-        # RASTISI_DEFAULT_PLAN_CODE is unset in this environment (Section 7 —
-        # the four seeded Plans — is not built yet), so provisioning's call
-        # to provision_default_subscription fails open and creates no
-        # subscription at all. With zero subscriptions, publication_service
-        # itself fails open (ADR-65/ADR-103) rather than restrict a Store it
-        # has no entitlement data for — so this is correctly 200 today. Once
-        # a real default plan is configured, this same Store (still not
-        # onboarded) would 403 instead — see test_publication_service.py for
-        # that behavior tested directly against the service, and
-        # test_full_chain_with_real_default_plan_configured below for the
-        # same thing exercised end-to-end.
-        self.assertEqual(response.status_code, 200)
+        # RASTISI_DEFAULT_PLAN_CODE is unset here, so provisioning's call to
+        # provision_default_subscription fails open and creates NO subscription.
+        # That must never make a portal-provisioned Store public early: the
+        # durable ``onboarding_required_at`` signal keeps it private until the
+        # final onboarding Publish, whatever the billing configuration is.
+        # (Legacy Stores without the signal keep the ADR-65 fail-open — see
+        # test_publication_service.py.)
+        self.assertFalse(StoreSubscription.objects.filter(store=store).exists())
+        self.assertEqual(response.status_code, 403)
 
     @override_settings(RASTISI_DEFAULT_PLAN_CODE="trial")
     def test_full_chain_with_real_default_plan_configured(self):

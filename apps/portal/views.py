@@ -1393,19 +1393,31 @@ def onboarding_template(request, store_public_id):
     if request.method == "POST":
         if not portal_action_allowed(request, store, SETTINGS_MANAGE):
             return portal_permission_denied(request)
-        try:
-            store_template_service.select_ready_template(
-                store=store, actor=request.user, template_key=request.POST.get("template_key"),
-            )
-        except store_template_service.ReadyTemplateSelectionError as exc:
-            error = str(exc)
-            messages.error(request, error)
-        except RateLimitExceeded:
-            error = "تعدادِ تغییرِ قالب در این بازه بیش از حدِ مجاز است؛ کمی بعد دوباره تلاش کنید."
-            messages.error(request, error)
+        if request.POST.get("action") == "keep_current":
+            # Zero-mutation advance: only valid when the Store REALLY carries a valid
+            # applied Ready Template (read from the Draft/Published provenance, never from
+            # the client). No select/apply/switch is called, so the Storefront Draft, its
+            # history and its revision stay untouched; only the wizard stage moves.
+            if store_template_service.get_applied_template(store) is None:
+                error = "فروشگاهِ شما هنوز قالبِ آماده‌ای ندارد؛ یکی از قالب‌هایِ فهرست را انتخاب کنید."
+                messages.error(request, error)
+            else:
+                _advance_onboarding_stage(store, completed=Store.OnboardingStage.TEMPLATE)
+                return redirect("portal:onboarding-branding", store_public_id=store.public_id)
         else:
-            _advance_onboarding_stage(store, completed=Store.OnboardingStage.TEMPLATE)
-            return redirect("portal:onboarding-branding", store_public_id=store.public_id)
+            try:
+                store_template_service.select_ready_template(
+                    store=store, actor=request.user, template_key=request.POST.get("template_key"),
+                )
+            except store_template_service.ReadyTemplateSelectionError as exc:
+                error = str(exc)
+                messages.error(request, error)
+            except RateLimitExceeded:
+                error = "تعدادِ تغییرِ قالب در این بازه بیش از حدِ مجاز است؛ کمی بعد دوباره تلاش کنید."
+                messages.error(request, error)
+            else:
+                _advance_onboarding_stage(store, completed=Store.OnboardingStage.TEMPLATE)
+                return redirect("portal:onboarding-branding", store_public_id=store.public_id)
 
     applied = store_template_service.get_applied_template(store)
     cards = ready_template_card_service.build_ready_template_cards(
@@ -1413,8 +1425,11 @@ def onboarding_template(request, store_public_id):
         current_template_key=applied.key if applied else None,
         current_template_version=applied.version if applied else None,
     )
-    applied_key = applied.key if applied else ""
-    selected_key = request.POST.get("template_key", "") if error else applied_key
+    # A gallery card is "selected" only by an explicit choice or when it is the EXACT applied
+    # (key AND version) template. A Store on a historical version of a key never gets the latest
+    # same-key card pre-selected — that would let "Continue" silently upgrade it.
+    exact_current = next((card["preset"].key for card in cards if card["is_current"]), "")
+    selected_key = request.POST.get("template_key", "") if error else exact_current
     return render(request, "portal/app/onboarding_template.html", {
         **_onboarding_shell_context(store, Store.OnboardingStage.TEMPLATE, applied_template=applied),
         "template_cards": cards, "applied_template": applied, "selected_key": selected_key,

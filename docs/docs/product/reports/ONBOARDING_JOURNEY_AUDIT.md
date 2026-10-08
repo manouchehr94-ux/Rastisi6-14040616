@@ -75,3 +75,12 @@ The wizard is now معرفی · صنف · **قالب فروشگاه** · برن�
 real captured screenshots (lazy-loaded, full-size lightbox), is required, and applies the choice to the Storefront Draft through the
 Storefront Builder services; the Review page shows the Industry Template and the visual template separately, and the final Publish
 publishes the Storefront Draft (then completes onboarding) in one transaction. See ADR-108.
+
+## Update — pre-publish privacy + historical template (hardening)
+
+* A Store provisioned through the portal carries `Store.onboarding_required_at` and stays non-public until the final Publish sets
+  `onboarding_completed_at`, even with no default subscription plan (`AccessState.NONE`). Legacy Stores without the signal are unchanged.
+* The Template step no longer pre-selects the latest same-key card for a Store on a historical version; it shows the actual
+  template/version and offers «ادامه با همین قالب» (zero mutation, server-validated). Choosing a card remains the explicit upgrade.
+* Publish error boundary: only `NoDraftToPublishError`, `RateLimitExceeded` and `DatabaseError` from the canonical publish path become
+  controlled Persian errors; programmer errors propagate (and still roll back); `BaseException` is never caught.

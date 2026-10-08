@@ -11,7 +11,15 @@
   </div>
 
   {% if applied_template and applied_is_older_version %}
-  <div class="ob-alert ob-alert-info" role="status">فروشگاهِ شما از قبل با قالبِ «{{ applied_template.preset.label_fa }}» (نسخه‌ی {{ applied_template.version }}) ساخته شده است. اگر قالبِ دیگری انتخاب کنید، همان قالب جایگزین می‌شود.</div>
+  <section class="ob-alert ob-alert-info ob-tpl-current" aria-labelledby="ob-tpl-current-title" data-ob-tpl-current>
+    <p id="ob-tpl-current-title" class="ob-tpl-current-title">قالب فعلی شما: «{{ applied_template.preset.label_fa }}»، نسخه {{ applied_template.version }}</p>
+    <p>فروشگاهِ شما از قبل با این نسخهٔ قدیمی‌تر ساخته شده است و بدون انتخابِ شما به نسخهٔ جدید ارتقا نمی‌یابد. می‌توانید با همین قالب ادامه دهید (هیچ چیز تغییر نمی‌کند)، یا از فهرستِ زیر یک قالبِ دیگر — از جمله نسخهٔ جدیدِ همین قالب — را آگاهانه انتخاب کنید.</p>
+    <form method="post" class="ob-tpl-keep" data-ob-once>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="keep_current">
+      <button type="submit" class="ob-btn ob-btn-primary" data-loading-text="در حال ادامه…">ادامه با همین قالب</button>
+    </form>
+  </section>
   {% endif %}
 
   <form method="post" id="ob-template-form" novalidate data-ob-once data-ob-templates>

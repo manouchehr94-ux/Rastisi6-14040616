@@ -4471,6 +4471,18 @@ require an applied Ready Template (read from the real layout provenance), publis
 through the Template step by the dispatcher (stored progress untouched); nothing is auto-applied. **Not done:** industry→template
 recommendations (no authoritative mapping exists), live iframe previews (Merchant Admin preview is staff/host-bound).
 
+**Pre-publish privacy (hardening).** A Store created by the modern portal provisioning flow is never public before the final Publish,
+regardless of subscription/billing configuration. The durable modern-vs-legacy signal is the new nullable
+`Store.onboarding_required_at` (migration `stores/0020`, schema only — existing rows stay NULL, no backfill), set only by
+`provisioning_service.provision_trial_store` at creation. `publication_service.get_store_publication_state` returns `TRIAL_PRIVATE`
+when it is set and `onboarding_completed_at` is NULL, **before** the ADR-65 `AccessState.NONE` fail-open (a genuinely restricted/expired
+subscription is still reported as `RESTRICTED`). After Publish the normal policy applies unchanged. Legacy/ad-hoc Stores (no signal) are untouched.
+
+**Historical template UX.** A gallery card is selected/current only when BOTH key and version match the applied template. A Store on a
+historical version (key X, v2) shows an informational «قالب فعلی شما» panel and an «ادامه با همین قالب» (`action=keep_current`) form;
+`keep_current` is accepted only when `store_template_service.get_applied_template` is not None, mutates nothing in the Storefront (only
+`onboarding_stage` advances), and the upgrade to the latest version happens only when the owner explicitly selects that card.
+
 ## Summary Table
 
 | Decision | Status |

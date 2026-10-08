@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.templatetags.static import static
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -50,6 +51,7 @@ def _versions_by_key():
 @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
 class Base(TestCase):
     def setUp(self):
+        cache.clear()  # per-Store rate-limit counters are keyed by pk, which a rolled-back DB can reuse
         self.owner = User.objects.create_user(username="tpl-owner@example.com", email="tpl-owner@example.com", password=_PASS)
         self.store = provisioning_service.provision_trial_store(owner=self.owner, name="فروشگاهِ قالب")
         plan = Plan.objects.create(code="tpl-plan", name="Tpl")
@@ -606,3 +608,317 @@ class RegressionTests(Base):
         self.select(KEY_A)
         self.assertIsNone(store_template_service.get_applied_template(other))
         self.assertFalse(StorefrontLayout.objects.filter(store=other).exists() and StorefrontLayout.objects.get(store=other).draft_version_id)
+
+
+# ── Pre-publish privacy: a modern Store is never public before the final Publish ──────────────────
+
+
+@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
+class PrePublishPrivacyTests(TestCase):
+    """The exact misconfigured case: real portal provisioning with NO default subscription plan
+    (``AccessState.NONE``). The Store must still be private until ``onboarding_completed_at`` is set."""
+
+    def setUp(self):
+        cache.clear()
+        self.owner = User.objects.create_user(username="priv-owner@example.com", email="priv-owner@example.com", password=_PASS)
+        self.store = provisioning_service.provision_trial_store(owner=self.owner, name="فروشگاهِ خصوصی")
+        self.domain = self.store.domains.filter(is_primary=True).first().hostname
+        self.client.force_login(self.owner)
+
+    def anonymous_home(self):
+        from django.test import Client
+
+        with self.settings(ALLOWED_HOSTS=[self.domain, _HOST, "testserver"]):
+            return Client().get("/", HTTP_HOST=self.domain)
+
+    def test_the_setup_really_has_no_subscription_and_a_routable_trial_domain(self):
+        self.assertFalse(StoreSubscription.objects.filter(store=self.store).exists())
+        self.assertIsNotNone(self.store.onboarding_required_at)
+        self.assertIsNone(self.store.onboarding_completed_at)
+        from apps.subscriptions.services.entitlement_service import AccessState, get_subscription_access_state
+
+        self.assertEqual(get_subscription_access_state(self.store).state, AccessState.NONE)
+
+    def test_without_a_subscription_the_anonymous_storefront_is_private_until_the_final_publish(self):
+        from apps.stores.services.publication_service import PublicationState, get_store_publication_state
+
+        self.assertEqual(get_store_publication_state(self.store), PublicationState.TRIAL_PRIVATE)
+        self.assertEqual(self.anonymous_home().status_code, 403)
+
+        # Choosing the template alone (a Draft) must not publish anything either.
+        self.client.post(f"/app/stores/{self.store.public_id}/onboarding/template/", {"template_key": KEY_A}, HTTP_HOST=_HOST)
+        self.assertEqual(self.anonymous_home().status_code, 403)
+
+        response = self.client.post(f"/app/stores/{self.store.public_id}/onboarding/review/", {}, HTTP_HOST=_HOST)
+        self.assertRedirects(response, f"/app/stores/{self.store.public_id}/created/")
+        self.store.refresh_from_db()
+        self.assertIsNotNone(self.store.onboarding_completed_at)
+        self.assertFalse(StoreSubscription.objects.filter(store=self.store).exists())  # still no subscription
+
+        public = self.anonymous_home()
+        self.assertEqual(public.status_code, 200)  # the normal post-onboarding policy applies
+        preset = layout_preset_registry.get_layout_preset(KEY_A)
+        published = StorefrontLayoutVersion.objects.get(
+            layout__store=self.store, status=StorefrontLayoutVersion.Status.PUBLISHED,
+        )
+        self.assertEqual(published.template_provenance["template"], {"key": KEY_A, "version": preset.version})
+
+    def test_the_gate_holds_for_a_no_default_plan_configuration(self):
+        from apps.stores.services.publication_service import PublicationState, get_store_publication_state, is_publicly_visible
+        from apps.subscriptions.services.subscription_service import resolve_default_plan_version
+
+        self.assertIsNone(resolve_default_plan_version())  # the misconfiguration under test
+        self.assertEqual(get_store_publication_state(self.store), PublicationState.TRIAL_PRIVATE)
+        self.assertFalse(is_publicly_visible(self.store))
+
+    def test_a_failed_publish_keeps_the_no_subscription_store_private(self):
+        self.client.post(f"/app/stores/{self.store.public_id}/onboarding/template/", {"template_key": KEY_A}, HTTP_HOST=_HOST)
+        with mock.patch.object(layout_service, "publish", side_effect=RateLimitExceeded("x")):
+            self.client.post(f"/app/stores/{self.store.public_id}/onboarding/review/", {}, HTTP_HOST=_HOST)
+        self.store.refresh_from_db()
+        self.assertIsNone(self.store.onboarding_completed_at)
+        self.assertEqual(self.anonymous_home().status_code, 403)
+
+    def test_a_legacy_store_without_the_signal_is_still_public(self):
+        from apps.stores.models import Store as StoreModel
+        from apps.stores.services.platform_code_service import generate_unique_platform_code
+
+        legacy = StoreModel.objects.create(
+            name="قدیمی", slug="legacy-no-signal", status=StoreModel.Status.ACTIVE,
+            platform_code=generate_unique_platform_code(),
+        )
+        self.assertIsNone(legacy.onboarding_required_at)
+        self.assertIsNone(legacy.onboarding_completed_at)
+        from apps.stores.services.publication_service import is_publicly_visible
+
+        self.assertTrue(is_publicly_visible(legacy))
+
+    def test_both_modern_creation_paths_set_the_signal_and_the_store_create_view_too(self):
+        other = User.objects.create_user(username="priv-o2@example.com", email="priv-o2@example.com", password=_PASS)
+        store, created = provisioning_service.provision_initial_trial_store(owner=other, name="دوم")
+        self.assertTrue(created)
+        self.assertIsNotNone(store.onboarding_required_at)
+
+
+# ── Historical applied template: never silently upgraded ──────────────────────────────────────────
+
+
+class HistoricalTemplateTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.key, self.latest, self.old = self._historical_pair()
+        self.old_preset = layout_preset_registry.get_layout_preset_version(self.key, self.old)
+        self.latest_preset = layout_preset_registry.get_layout_preset(self.key)
+        draft = layout_service.get_or_create_draft(self.store, user=self.owner)
+        from apps.storefront_builder.services import preset_service
+
+        preset_service.apply_preset(draft, self.old_preset)
+
+    @staticmethod
+    def _historical_pair():
+        for key, versions in _versions_by_key().items():
+            current = next((p for p in READY if p.key == key), None)
+            if current is not None and len(versions) > 1:
+                return key, current.version, next(v for v in versions if v != current.version)
+        raise AssertionError("no historical Ready Template fixture")
+
+    def snapshot(self):
+        draft = self.draft()
+        return (
+            self.counts(), draft.pk, draft.edit_revision, draft.template_provenance,
+            draft.template_baseline_snapshot, draft.edit_history_entries.count(),
+            list(draft.sections.values_list("pk", flat=True)),
+        )
+
+    def test_the_fixture_is_really_a_historical_version_of_the_current_card_key(self):
+        applied = store_template_service.get_applied_template(self.store)
+        self.assertEqual((applied.key, applied.version), (self.key, self.old))
+        self.assertFalse(applied.is_current_version)
+        self.assertNotEqual(self.old, self.latest)
+
+    def test_the_latest_same_key_card_is_neither_selected_nor_marked_current(self):
+        response = self.get("template")
+        html = response.content.decode()
+        self.assertEqual(response.context["selected_key"], "")
+        self.assertEqual(html.count("ob-tpl-card is-selected"), 0)
+        self.assertNotRegex(html, r'name="template_key" value="[^"]+" checked')
+        self.assertFalse(any(card["is_current"] for card in response.context["template_cards"]))
+        self.assertNotIn("قالبِ فعلی</span>", html)
+
+    def test_the_actual_historical_template_and_version_are_shown_in_an_informational_panel(self):
+        html = self.get("template").content.decode()
+        self.assertIn("data-ob-tpl-current", html)
+        self.assertIn(f"قالب فعلی شما: «{self.old_preset.label_fa}»، نسخه {self.old}", html)
+        self.assertIn("ادامه با همین قالب", html)
+        self.assertIn('name="action" value="keep_current"', html)
+
+    def test_get_of_the_step_mutates_nothing(self):
+        before = self.snapshot()
+        self.get("template")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_keep_current_advances_with_zero_storefront_mutation(self):
+        before = self.snapshot()
+        with mock.patch.object(store_template_service, "select_ready_template") as select, \
+                mock.patch("apps.storefront_builder.services.preset_service.apply_preset") as apply, \
+                mock.patch("apps.storefront_builder.services.r4_mutation_service.switch_template_current") as switch:
+            response = self.post_template({"action": "keep_current"})
+        self.assertRedirects(response, self.url("branding"))
+        select.assert_not_called()
+        apply.assert_not_called()
+        switch.assert_not_called()
+        self.assertEqual(self.snapshot(), before)
+        applied = store_template_service.get_applied_template(self.store)
+        self.assertEqual((applied.key, applied.version), (self.key, self.old))
+        self.store.refresh_from_db()
+        self.assertEqual(self.store.onboarding_stage, Store.OnboardingStage.BRANDING)
+
+    def test_keep_current_ignores_any_forged_template_fields(self):
+        before = self.snapshot()
+        response = self.post_template({
+            "action": "keep_current", "template_key": KEY_B, "template_version": "999", "version": self.latest,
+        })
+        self.assertRedirects(response, self.url("branding"))
+        self.assertEqual(self.snapshot(), before)
+
+    def test_keep_current_then_publish_keeps_the_historical_version(self):
+        self.post_template({"action": "keep_current"})
+        self.client.post(self.url("review"), {}, HTTP_HOST=_HOST)
+        applied = store_template_service.get_applied_template(self.store)
+        self.assertEqual((applied.key, applied.version, applied.location), (self.key, self.old, "published"))
+
+    def test_a_member_without_settings_manage_cannot_keep_current(self):
+        analyst = User.objects.create_user(username="tpl-an3@example.com", email="tpl-an3@example.com", password=_PASS)
+        StoreMembership.objects.create(
+            store=self.store, user=analyst, role=StoreMembership.Role.ANALYST,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
+        )
+        self.client.force_login(analyst)
+        before = self.snapshot()
+        self.assertEqual(self.post_template({"action": "keep_current"}).status_code, 403)
+        self.assertEqual(self.snapshot(), before)
+        self.store.refresh_from_db()
+        self.assertNotEqual(self.store.onboarding_stage, Store.OnboardingStage.BRANDING)
+
+    def test_explicitly_choosing_the_latest_card_performs_the_upgrade(self):
+        before_revision = self.draft().edit_revision
+        response = self.select(self.key)
+        self.assertRedirects(response, self.url("branding"))
+        applied = store_template_service.get_applied_template(self.store)
+        self.assertEqual((applied.key, applied.version), (self.key, self.latest))
+        self.assertTrue(applied.is_current_version)
+        self.assertGreater(self.draft().edit_revision, before_revision)
+
+    def test_after_an_explicit_upgrade_the_exact_card_is_selected_and_the_panel_is_gone(self):
+        self.select(self.key)
+        response = self.get("template")
+        html = response.content.decode()
+        self.assertEqual(response.context["selected_key"], self.key)
+        self.assertNotIn("data-ob-tpl-current", html)
+        self.assertRegex(html, rf'value="{self.key}" checked')
+
+
+class KeepCurrentAuthorityTests(Base):
+    """``keep_current`` is only valid when the Store REALLY has a valid applied Ready Template."""
+
+    def test_a_forged_keep_current_without_an_applied_template_cannot_advance_or_mutate(self):
+        before = self.counts()
+        stage = self.store.onboarding_stage
+        response = self.post_template({"action": "keep_current"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "هنوز قالبِ آماده‌ای ندارد")
+        self.assertEqual(self.counts(), before)  # not even a Draft/Layout/history row
+        self.assertIsNone(store_template_service.get_applied_template(self.store))
+        self.store.refresh_from_db()
+        self.assertEqual(self.store.onboarding_stage, stage)
+
+    def test_a_draft_without_template_provenance_does_not_satisfy_keep_current(self):
+        layout_service.get_or_create_draft(self.store, user=self.owner)  # untouched legacy bootstrap Draft
+        before = self.counts()
+        response = self.post_template({"action": "keep_current"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.counts(), before)
+        self.assertIsNone(store_template_service.get_applied_template(self.store))
+        self.store.refresh_from_db()
+        self.assertNotEqual(self.store.onboarding_stage, Store.OnboardingStage.BRANDING)
+
+    def test_a_current_version_store_can_also_keep_current_with_no_mutation(self):
+        self.select(KEY_A)
+        draft = self.draft()
+        revision, history = draft.edit_revision, draft.edit_history_entries.count()
+        before = self.counts()
+        response = self.post_template({"action": "keep_current"})
+        self.assertRedirects(response, self.url("branding"))
+        draft.refresh_from_db()
+        self.assertEqual((draft.edit_revision, draft.edit_history_entries.count(), self.counts()), (revision, history, before))
+
+    def test_keep_current_cannot_touch_another_stores_template(self):
+        intruder = User.objects.create_user(username="tpl-kc@example.com", email="tpl-kc@example.com", password=_PASS)
+        provisioning_service.provision_trial_store(owner=intruder, name="دیگری")
+        self.select(KEY_A)
+        self.client.force_login(intruder)
+        before = self.counts()
+        response = self.post_template({"action": "keep_current"})
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(self.counts(), before)
+
+
+# ── Publish error boundary ─────────────────────────────────────────────────────────────────────────
+
+
+class PublishErrorBoundaryTests(Base):
+    def published(self):
+        return StorefrontLayoutVersion.objects.filter(
+            layout__store=self.store, status=StorefrontLayoutVersion.Status.PUBLISHED,
+        )
+
+    def assertStillPrivateAndUnpublished(self):
+        self.store.refresh_from_db()
+        self.assertIsNone(self.store.onboarding_completed_at)
+        self.assertNotEqual(self.store.onboarding_stage, Store.OnboardingStage.DONE)
+        self.assertFalse(self.published().exists())
+        self.assertEqual(self.draft().status, StorefrontLayoutVersion.Status.DRAFT)
+
+    def test_expected_domain_publication_failures_become_controlled_persian_errors(self):
+        self.select(KEY_A)
+        for exc, code in (
+            (layout_service.NoDraftToPublishError("x"), "no_draft"),
+            (RateLimitExceeded("x"), "rate_limited"),
+        ):
+            with self.subTest(code=code), mock.patch.object(layout_service, "publish", side_effect=exc):
+                response = self.client.post(self.url("review"), {}, HTTP_HOST=_HOST)
+                self.assertEqual(response.status_code, 302)  # a redirect with a message — never a 500
+                with self.assertRaises(onboarding_publish_service.OnboardingPublishError) as ctx:
+                    onboarding_publish_service.complete_onboarding(store=self.store, actor=self.owner)
+                self.assertEqual(ctx.exception.code, code)
+                self.assertStillPrivateAndUnpublished()
+
+    def test_a_database_error_during_publish_is_controlled_and_rolls_back(self):
+        from django.db import IntegrityError
+
+        self.select(KEY_A)
+        with mock.patch.object(layout_service, "publish", side_effect=IntegrityError("dup")):
+            response = self.client.post(self.url("review"), {}, HTTP_HOST=_HOST)
+        self.assertRedirects(response, self.url("review"))
+        self.assertStillPrivateAndUnpublished()
+
+    def test_a_programmer_error_is_not_swallowed_and_still_rolls_back(self):
+        self.select(KEY_A)
+        with mock.patch.object(layout_service, "publish", side_effect=RuntimeError("bug")):
+            with self.assertRaises(RuntimeError):
+                onboarding_publish_service.complete_onboarding(store=self.store, actor=self.owner)
+        self.assertStillPrivateAndUnpublished()
+
+    def test_base_exceptions_are_never_caught(self):
+        self.select(KEY_A)
+        for exc in (KeyboardInterrupt, SystemExit):
+            with self.subTest(exc=exc.__name__), mock.patch.object(layout_service, "publish", side_effect=exc()):
+                with self.assertRaises(exc):
+                    onboarding_publish_service.complete_onboarding(store=self.store, actor=self.owner)
+                self.assertStillPrivateAndUnpublished()
+
+    def test_the_service_does_not_catch_base_exception_or_bare_except(self):
+        source = inspect.getsource(onboarding_publish_service)
+        self.assertNotRegex(source, r"except\s*:")
+        self.assertNotRegex(source, r"except\s+BaseException")
+        self.assertNotRegex(source, r"except\s+Exception\b")
