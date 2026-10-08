@@ -267,3 +267,22 @@ a.ob-step-link:hover .ob-step-text{color:var(--rs-brand)}
 .ob-tpl-current-title{margin:0 0 4px;font-weight:700}
 .ob-tpl-current p{margin:0 0 8px}
 .ob-tpl-keep{margin:12px 0 0}
+.ob-sample-note{margin:0 0 20px}
+.ob-tpl-sample{position:absolute;inset-block-start:10px;inset-inline-start:10px;padding:3px 10px;border-radius:999px;background:color-mix(in srgb,var(--rs-ink) 78%,transparent);color:var(--rs-surface);font-size:11px;font-weight:700;line-height:1.8;pointer-events:none}
+.ob-tpl-choose{display:inline-flex;align-items:center;justify-content:center;align-self:flex-start;min-height:36px;padding:0 16px;border:1px solid var(--rs-brand);border-radius:999px;color:var(--rs-brand);font-size:13px;font-weight:700}
+.ob-tpl-choose-on{display:none}
+.ob-tpl-card.is-selected{border-color:var(--rs-brand);box-shadow:0 0 0 4px var(--rs-brand);background:color-mix(in srgb,var(--rs-brand) 7%,var(--rs-surface))}
+.ob-tpl-card.is-selected .ob-tpl-choose{background:var(--rs-brand);color:var(--rs-surface)}
+.ob-tpl-card.is-selected .ob-tpl-choose-off{display:none}
+.ob-tpl-card.is-selected .ob-tpl-choose-on{display:inline}
+.ob-lightbox-actions{display:inline-flex;gap:10px}
+.ob-lightbox-note{margin:0;padding:10px 16px;border-bottom:1px solid var(--rs-line);background:var(--rs-soft);color:var(--rs-muted);font-size:12.5px;line-height:1.9}
+.ob-page--gallery .ob-actions{position:sticky;bottom:0;z-index:5;margin-inline:-1px;padding-bottom:16px;background:var(--rs-surface)}
+.ob-selection-summary{color:var(--rs-muted);font-size:14px;font-weight:700}
+.ob-selection-summary.is-set{color:var(--rs-ink)}
+@media(max-width:720px){.ob-page--gallery .ob-actions{flex-direction:column;align-items:stretch;gap:6px;margin-top:12px;padding-top:10px;padding-bottom:10px}.ob-page--gallery .ob-actions .ob-btn-quiet{min-height:36px}.ob-page--gallery .ob-actions .ob-btn{min-height:46px}.ob-selection-summary{text-align:center;font-size:13px}}
+.ob-review-tpl--chosen{flex-direction:column;align-items:flex-start;padding:14px;border:2px solid var(--rs-brand);border-radius:var(--rs-radius-md);background:color-mix(in srgb,var(--rs-brand) 6%,var(--rs-surface))}
+.ob-review-tpl--chosen .ob-review-tpl-shot{width:100%;max-width:380px;height:auto;aspect-ratio:8/5}
+.ob-review-tpl-info{display:flex;flex-direction:column;gap:6px}
+.ob-review-tpl-name{font-size:20px;line-height:1.6}
+@media(max-width:720px){.ob-review-tpl--chosen .ob-review-tpl-shot{width:100%;height:auto}}

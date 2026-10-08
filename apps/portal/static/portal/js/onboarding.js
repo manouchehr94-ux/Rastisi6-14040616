@@ -162,7 +162,9 @@
     var empty = form.querySelector('[data-ob-tpl-empty]');
     var status = form.querySelector('[data-ob-tpl-status]');
     var submit = document.querySelector('[data-ob-template-submit]');
+    var summary = document.querySelector('[data-ob-tpl-summary]');
     var dialog = document.querySelector('[data-ob-lightbox]');
+    var previewCard = null;  // the card whose large preview is open (preview ≠ selection)
 
     // Palette swatch colours come from the canonical registry; applied via CSSOM (no inline style attribute in HTML).
     form.querySelectorAll('.ob-swatch[data-color]').forEach(function (el) {
@@ -175,13 +177,20 @@
         var input = card.querySelector('input[type="radio"]');
         card.classList.toggle('is-selected', !!input && input.checked);
       });
+      var chosen = checked && checked.closest('[data-ob-tpl-card]');
+      var name = chosen ? chosen.getAttribute('data-name') : '';
       if (submit) {
         submit.disabled = !checked;
         submit.setAttribute('aria-disabled', checked ? 'false' : 'true');
+        // The CTA names exactly what will be applied (server remains the authority).
+        submit.textContent = name ? ('اعمالِ «' + name + '» و ادامه') : 'اعمالِ قالبِ انتخاب‌شده و ادامه';
+      }
+      if (summary) {
+        summary.textContent = name ? ('قالبِ انتخاب‌شده: «' + name + '»') : 'هنوز قالبی انتخاب نشده است.';
+        summary.classList.toggle('is-set', !!name);
       }
       if (status) {
-        var card = checked && checked.closest('[data-ob-tpl-card]');
-        status.textContent = card ? ('قالبِ «' + card.getAttribute('data-name') + '» انتخاب شد.') : '';
+        status.textContent = name ? ('قالبِ «' + name + '» انتخاب شد.') : '';
       }
     }
 
@@ -209,11 +218,23 @@
       form.querySelectorAll('[data-ob-zoom]').forEach(function (link) {
         link.addEventListener('click', function (event) {
           event.preventDefault();
+          previewCard = link.closest('[data-ob-tpl-card]');
           img.src = link.getAttribute('href');
           img.alt = 'پیش‌نمایشِ بزرگ‌ترِ قالبِ ' + link.getAttribute('data-title');
           title.textContent = link.getAttribute('data-title');
           dialog.showModal();
         });
+      });
+      var choose = dialog.querySelector('[data-ob-lightbox-choose]');
+      if (choose) choose.addEventListener('click', function () {
+        // Only an explicit click here selects the previewed card; opening/closing the preview never does.
+        var radio = previewCard && previewCard.querySelector('input[type="radio"]');
+        if (radio) {
+          radio.checked = true;
+          radio.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        dialog.close();
+        if (previewCard && previewCard.scrollIntoView) previewCard.scrollIntoView({ block: 'center', behavior: 'smooth' });
       });
       var close = dialog.querySelector('[data-ob-lightbox-close]');
       if (close) close.addEventListener('click', function () { dialog.close(); });

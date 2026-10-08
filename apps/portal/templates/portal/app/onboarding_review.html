@@ -42,9 +42,14 @@
         <dt class="ob-summary-label">قالب فروشگاه</dt>
         <dd class="ob-summary-value{% if not template_card %} is-empty{% endif %}">
           {% if template_card %}
-          <span class="ob-review-tpl">
-            {% if template_card.thumbnail_kind == "screenshot" %}<img class="ob-review-tpl-shot" src="{{ template_card.thumbnail_url }}" alt="پیش‌نمایشِ قالبِ {{ template_card.preset.label_fa }}" loading="lazy" width="160" height="100">{% endif %}
-            <span><strong>{{ template_card.preset.label_fa }}</strong>{% if applied_template.version %} <span class="ob-tag">نسخه‌ی {{ applied_template.version }}</span>{% endif %}<br><span class="ob-hint">پیش‌نویسِ ویترین با این قالب ساخته شده و با «انتشار» منتشر می‌شود.</span></span>
+          <span class="ob-review-tpl ob-review-tpl--chosen" data-ob-review-template="{{ applied_template.key }}">
+            {% if template_card.thumbnail_kind == "screenshot" %}<img class="ob-review-tpl-shot" src="{{ template_card.thumbnail_url }}" alt="پیش‌نمایشِ قالبِ {{ template_card.preset.label_fa }}" loading="lazy" width="320" height="200">{% endif %}
+            <span class="ob-review-tpl-info">
+              <span class="ob-hint">قالبِ انتخاب‌شده شما</span>
+              <strong class="ob-review-tpl-name">{{ template_card.preset.label_fa }}</strong>{% if applied_template.version %} <span class="ob-tag">نسخه‌ی {{ applied_template.version }}</span>{% endif %}
+              <span class="ob-hint">پیش‌نویسِ ویترین با این قالب ساخته شده و با «انتشار» منتشر می‌شود.</span>
+              <span class="ob-hint ob-review-tpl-sample">تصویرِ روبه‌رو با محتوای نمونه ساخته شده است. فروشگاهِ شما ابتدا با ساختارِ همین قالب و بدونِ محصول منتشر می‌شود؛ محصولات و تصاویرِ خودتان را بعداً از پنلِ مدیریت اضافه می‌کنید.</span>
+            </span>
           </span>
           {% else %}
           <strong class="ob-error-inline">قالب فروشگاه انتخاب نشده</strong> — بدونِ قالب نمی‌توان فروشگاه را منتشر کرد.

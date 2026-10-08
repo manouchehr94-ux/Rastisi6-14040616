@@ -4483,6 +4483,12 @@ historical version (key X, v2) shows an informational «قالب فعلی شما
 `keep_current` is accepted only when `store_template_service.get_applied_template` is not None, mutates nothing in the Storefront (only
 `onboarding_stage` advances), and the upgrade to the latest version happens only when the owner explicitly selects that card.
 
+**Delivered-storefront fidelity (ADR-108 addendum).** The Ready Template is applied/published exactly; a new Store is simply empty, so
+the data-driven composition (hero slides, category rail, product rows) disappeared and canonical previews (captured from the populated
+Rasti Mode Demo store) were not labelled as sample content. Resolution: non-persistent first-run structural placeholders on the public
+home of modern-portal Stores with no listable product (`first_run_placeholder_service`, tokens-only, never creates records), truthful
+"sample content" labelling, and an unmistakable explicit select/apply UX. Investigation: `ONBOARDING_TEMPLATE_FIDELITY_INVESTIGATION.md`.
+
 ## Summary Table
 
 | Decision | Status |
