@@ -1142,6 +1142,11 @@ def hide_empty_public_sections(items: list[dict]) -> list[dict]:
     wrapper, heading, or Cell/Container survives for it."""
     visible = []
     for item in items:
+        if item.get("first_run_placeholder"):
+            # A first-run Store's structural placeholder (first_run_placeholder_service) stands in for
+            # the empty section on purpose — never drop it.
+            visible.append(item)
+            continue
         context_key = OPTIONAL_PRODUCT_DATA_SECTION_KEYS.get(item["section"].section_key)
         if context_key is not None and not item["context"].get(context_key):
             continue

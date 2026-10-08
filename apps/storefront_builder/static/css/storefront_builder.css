@@ -5391,3 +5391,29 @@ html[data-sfb-density="compact"] .feat small{font-size:9.5px}
 @media(max-width:680px){
   .collection-tiles-carousel.tiles-carousel .pcard{flex-basis:180px}
 }
+
+/* ==== First-run structural placeholders ==== */
+/* (first_run_placeholder_service): a brand-new Store with no catalog keeps its
+   selected Ready Template's composition visible. Tokens only — the selected template's own --theme-* palette and --radius. */
+.frp{margin:0 0 28px}
+.frp-head h2{margin:0 0 14px;font-size:20px;color:var(--theme-text)}
+.frp-note{margin:12px 0 0;color:var(--theme-muted);font-size:13px;text-align:center}
+.frp-hero{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:20px;align-items:center;min-height:300px;padding:28px;border:1px solid var(--theme-border);border-radius:var(--radius);background:linear-gradient(135deg,var(--theme-surface),color-mix(in srgb,var(--theme-primary) 14%,var(--theme-surface)))}
+.frp-hero-copy{display:flex;flex-direction:column;gap:10px;color:var(--theme-text)}
+.frp-hero-copy strong{font-size:28px;line-height:1.5}
+.frp-hero-copy span{color:var(--theme-muted);font-size:14px;line-height:2}
+.frp-hero-art{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;height:100%}
+.frp-hero-art i,.frp-tiles i,.frp-cards i{display:block;border:1px solid var(--theme-border);border-radius:var(--radius);background:color-mix(in srgb,var(--theme-primary) 10%,var(--theme-surface))}
+.frp-hero-art i{min-height:200px}
+.frp-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.frp-tiles i{aspect-ratio:4/3}
+.frp-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.frp-cards i{display:flex;flex-direction:column;gap:10px;padding:12px;background:var(--theme-surface)}
+.frp-cards b{display:block;aspect-ratio:4/5;border-radius:calc(var(--radius) - 4px);background:color-mix(in srgb,var(--theme-primary) 10%,var(--theme-surface))}
+.frp-cards u{display:block;height:10px;border-radius:6px;background:var(--theme-border);text-decoration:none}
+.frp-cards u+u{width:55%}
+@media(max-width:720px){
+  .frp-hero{grid-template-columns:1fr;min-height:0;padding:20px}
+  .frp-hero-art{display:none}
+  .frp-tiles,.frp-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
