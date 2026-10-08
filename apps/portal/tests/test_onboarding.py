@@ -6,6 +6,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from apps.portal.services import provisioning_service
+from apps.portal.tests._ready_template import select_template
 from apps.stores.models import Store, StoreDomain, StoreMembership
 from apps.stores.services.publication_service import PublicationState, get_store_publication_state
 
@@ -66,7 +67,7 @@ class OnboardingViewTests(TestCase):
         response = self.client.post(
             self._url("industry"), {"industry_template_id": template.pk, "confirm_industry_install": "1"}, HTTP_HOST=_HOST,
         )
-        self.assertRedirects(response, self._url("branding"))
+        self.assertRedirects(response, self._url("template"))
         installation = StoreIndustryInstallation.objects.get(store=self.store)
         self.assertEqual(installation.industry_template_id, template.pk)
 
@@ -86,16 +87,16 @@ class OnboardingViewTests(TestCase):
         self.assertContains(response, "کتاب")
 
         response = self.client.post(self._url("industry"), {}, HTTP_HOST=_HOST)
-        self.assertRedirects(response, self._url("branding"))
+        self.assertRedirects(response, self._url("template"))
         self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 1)
 
-    def test_industry_stage_skip_advances_to_branding_without_installing(self):
+    def test_industry_stage_skip_advances_to_template_without_installing(self):
         self._complete_identity()
         response = self.client.post(self._url("industry"), {"action": "skip"}, HTTP_HOST=_HOST)
-        self.assertRedirects(response, self._url("branding"))
+        self.assertRedirects(response, self._url("template"))
         self.assertFalse(hasattr(self.store, "industry_installation"))
         self.store.refresh_from_db()
-        self.assertEqual(self.store.onboarding_stage, Store.OnboardingStage.BRANDING)
+        self.assertEqual(self.store.onboarding_stage, Store.OnboardingStage.TEMPLATE)
 
     def test_branding_stage_skip_advances_to_review(self):
         self._complete_identity()
@@ -141,6 +142,7 @@ class OnboardingViewTests(TestCase):
     def test_review_stage_publishes_and_completes_onboarding(self):
         self._complete_identity()
         self.client.post(self._url("industry"), {"action": "skip"}, HTTP_HOST=_HOST)
+        select_template(self.client, self._url("template"))
         self.client.post(self._url("branding"), {"action": "skip"}, HTTP_HOST=_HOST)
         response = self.client.post(self._url("review"), {}, HTTP_HOST=_HOST)
         self.assertEqual(response.status_code, 302)
@@ -156,6 +158,7 @@ class OnboardingViewTests(TestCase):
     def test_dispatcher_sends_a_completed_store_straight_to_store_created(self):
         self._complete_identity()
         self.client.post(self._url("industry"), {"action": "skip"}, HTTP_HOST=_HOST)
+        select_template(self.client, self._url("template"))
         self.client.post(self._url("branding"), {"action": "skip"}, HTTP_HOST=_HOST)
         self.client.post(self._url("review"), {}, HTTP_HOST=_HOST)
         response = self.client.get(f"/app/stores/{self.store.public_id}/onboarding/", HTTP_HOST=_HOST)
@@ -453,6 +456,7 @@ class RegistrationAutoProvisionsTrialStoreTests(TestCase):
         base = f"/app/stores/{store.public_id}/onboarding"
         self.client.post(f"{base}/identity/", {"name": "فروشگاه چهارم"}, HTTP_HOST=_HOST)
         self.client.post(f"{base}/industry/", {"action": "skip"}, HTTP_HOST=_HOST)
+        select_template(self.client, f"{base}/template/")
         self.client.post(f"{base}/branding/", {"action": "skip"}, HTTP_HOST=_HOST)
         self.client.post(f"{base}/review/", {}, HTTP_HOST=_HOST)
         with self.settings(ALLOWED_HOSTS=[trial_domain.hostname, _HOST, "testserver"]):

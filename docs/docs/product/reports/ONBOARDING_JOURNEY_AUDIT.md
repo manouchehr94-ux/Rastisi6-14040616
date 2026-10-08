@@ -68,3 +68,10 @@ shell), billing.
 | 17 | GET of a stage by a member without `SETTINGS_MANAGE` shows editable forms (POST is denied with 403) | **Deferred** — read-only variant needs product decision; no security impact (POST gate unchanged) |
 | 18 | 76 of 107 templates are skeletal and now held at `review_required` | **Content backlog** — see `INDUSTRY_TEMPLATE_COMPLETENESS_AUDIT.md` |
 | 19 | No app-level logo size/format limit beyond "is an image" | **Deferred** — would be a backend behaviour change; guidance only |
+
+## Update — Ready Template step (5 steps)
+
+The wizard is now معرفی · صنف · **قالب فروشگاه** · برند · بازبینی. The Template step shows the canonical 50 Ready Templates with their
+real captured screenshots (lazy-loaded, full-size lightbox), is required, and applies the choice to the Storefront Draft through the
+Storefront Builder services; the Review page shows the Industry Template and the visual template separately, and the final Publish
+publishes the Storefront Draft (then completes onboarding) in one transaction. See ADR-108.

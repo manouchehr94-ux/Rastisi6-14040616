@@ -23,7 +23,7 @@
   </div>
 
   <div class="ob-summary-group">
-    <h3 class="ob-summary-group-title">صنف و ظاهر</h3>
+    <h3 class="ob-summary-group-title">صنف فروشگاه</h3>
     <dl class="ob-summary">
       <div class="ob-summary-row">
         <dt class="ob-summary-label">قالبِ صنف</dt>
@@ -32,6 +32,32 @@
         </dd>
         <dd><a class="ob-summary-edit" href="{% url 'portal:onboarding-industry' store.public_id %}">{% if installation %}مشاهده{% else %}انتخاب{% endif %}</a></dd>
       </div>
+    </dl>
+  </div>
+
+  <div class="ob-summary-group">
+    <h3 class="ob-summary-group-title">قالب ظاهریِ فروشگاه</h3>
+    <dl class="ob-summary">
+      <div class="ob-summary-row" data-review-template>
+        <dt class="ob-summary-label">قالب فروشگاه</dt>
+        <dd class="ob-summary-value{% if not template_card %} is-empty{% endif %}">
+          {% if template_card %}
+          <span class="ob-review-tpl">
+            {% if template_card.thumbnail_kind == "screenshot" %}<img class="ob-review-tpl-shot" src="{{ template_card.thumbnail_url }}" alt="پیش‌نمایشِ قالبِ {{ template_card.preset.label_fa }}" loading="lazy" width="160" height="100">{% endif %}
+            <span><strong>{{ template_card.preset.label_fa }}</strong>{% if applied_template.version %} <span class="ob-tag">نسخه‌ی {{ applied_template.version }}</span>{% endif %}<br><span class="ob-hint">پیش‌نویسِ ویترین با این قالب ساخته شده و با «انتشار» منتشر می‌شود.</span></span>
+          </span>
+          {% else %}
+          <strong class="ob-error-inline">قالب فروشگاه انتخاب نشده</strong> — بدونِ قالب نمی‌توان فروشگاه را منتشر کرد.
+          {% endif %}
+        </dd>
+        <dd><a class="ob-summary-edit" href="{% url 'portal:onboarding-template' store.public_id %}">{% if template_card %}ویرایش قالب{% else %}انتخاب قالب{% endif %}</a></dd>
+      </div>
+    </dl>
+  </div>
+
+  <div class="ob-summary-group">
+    <h3 class="ob-summary-group-title">برند</h3>
+    <dl class="ob-summary">
       <div class="ob-summary-row">
         <dt class="ob-summary-label">لوگو</dt>
         <dd class="ob-summary-value{% if not shop_settings.logo %} is-empty{% endif %}">{% if shop_settings.logo %}<span class="ob-logo-preview"><img src="{{ shop_settings.logo.url }}" alt="لوگوی فروشگاه"></span>{% else %}ثبت نشده{% endif %}</dd>
@@ -61,12 +87,13 @@
         <li>ویترین روی نشانیِ آزمایشی{% if trial_domain %} (<span class="ob-ltr">{{ trial_domain.hostname }}</span>){% endif %} برای بازدیدکنندگان قابلِ مشاهده می‌شود.</li>
         {% endif %}
         <li>همه‌ی اطلاعاتِ بالا، از جمله لوگو و تماس، هر زمان از پنلِ مدیریت قابلِ ویرایش می‌مانند.</li>
-        <li>محصول، قیمت و ظاهرِ ویترین را بعد از انتشار از پنلِ مدیریت کامل می‌کنید.</li>
+        <li>قالبِ انتخاب‌شده به‌عنوانِ ظاهرِ ویترین منتشر می‌شود؛ محصول، قیمت و جزئیاتِ ظاهر را بعد از انتشار از پنلِ مدیریت کامل می‌کنید.</li>
       </ul>
       <p>انتشار فقط با زدنِ دکمه‌ی زیر انجام می‌شود{% if private_until_publish %}؛ پیش از آن چیزی عمومی نیست{% endif %}.</p>
     </div>
   </form>
-  {% include "portal/onboarding/_actions.html" with form_id="ob-publish-form" continue_label="انتشارِ فروشگاه" loading_text="در حال انتشار…" %}
+  {% include "portal/onboarding/_actions.html" with form_id="ob-publish-form" continue_label="انتشارِ فروشگاه" loading_text="در حال انتشار…" publish_blocked=template_applied|yesno:",1" %}
+  {% if not template_applied %}<p class="ob-error">برای انتشار ابتدا یک قالبِ فروشگاه انتخاب کنید.</p>{% endif %}
   {% else %}
   <div class="ob-actions">
     <a class="ob-btn ob-btn-quiet" href="{{ ob_previous_url }}">قبلی</a>

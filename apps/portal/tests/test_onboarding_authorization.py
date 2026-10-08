@@ -226,9 +226,9 @@ class OnboardingMutationAuthorizationTests(TestCase):
 
         self.client.force_login(self.owner)
         response = self.client.post(self._url("industry"), {}, HTTP_HOST=_HOST)
-        self.assertRedirects(response, self._url("branding"))
+        self.assertRedirects(response, self._url("template"))
         self.store.refresh_from_db()
-        self.assertEqual(self.store.onboarding_stage, Store.OnboardingStage.BRANDING)
+        self.assertEqual(self.store.onboarding_stage, Store.OnboardingStage.TEMPLATE)
 
     def test_analyst_cannot_publish_via_review(self):
         self.client.force_login(self.analyst)

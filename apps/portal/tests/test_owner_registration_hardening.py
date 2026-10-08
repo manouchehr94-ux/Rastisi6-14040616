@@ -30,6 +30,7 @@ from apps.core.models import ShopSettings
 from apps.customers.models import Customer
 from apps.portal.forms import OwnerPhoneRequestForm, OwnerRegistrationRequestForm
 from apps.portal.models import OwnerOtpChallenge, OwnerProfile, OwnerTermsAcceptance, PlatformConfiguration
+from apps.portal.tests._ready_template import select_template
 from apps.portal.services import (
     owner_auth_service,
     owner_otp_service,
@@ -1643,7 +1644,10 @@ class OnboardingHandoffTests(_OtpTestMixin, TestCase):
             self.client.post(f"{base}/identity/", {"name": "فروشگاه سارا"}, HTTP_HOST=_HOST), f"{base}/industry/",
         )
         self.assertRedirects(
-            self.client.post(f"{base}/industry/", {"action": "skip"}, HTTP_HOST=_HOST), f"{base}/branding/",
+            self.client.post(f"{base}/industry/", {"action": "skip"}, HTTP_HOST=_HOST), f"{base}/template/",
+        )
+        self.assertRedirects(
+            select_template(self.client, f"{base}/template/"), f"{base}/branding/",
         )
         self.assertRedirects(
             self.client.post(f"{base}/branding/", {"action": "skip"}, HTTP_HOST=_HOST), f"{base}/review/",

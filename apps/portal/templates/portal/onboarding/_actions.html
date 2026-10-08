@@ -10,5 +10,5 @@
   {% endif %}
   <span class="ob-actions-spacer"></span>
   {% if skip_form_id %}<button type="submit" form="{{ skip_form_id }}" class="ob-btn">فعلاً رد شو</button>{% endif %}
-  <button type="submit" form="{{ form_id }}" class="ob-btn ob-btn-primary{% if install_mode %} ob-btn-install{% endif %}"{% if install_mode %} data-ob-install-submit{% endif %}{% if loading_text %} data-loading-text="{{ loading_text }}"{% endif %}>{{ continue_label|default:"ذخیره و ادامه" }}</button>
+  <button type="submit" form="{{ form_id }}" class="ob-btn ob-btn-primary{% if install_mode %} ob-btn-install{% endif %}"{% if install_mode %} data-ob-install-submit{% endif %}{% if template_mode %} data-ob-template-submit{% endif %}{% if publish_blocked %} disabled aria-disabled="true"{% endif %}{% if loading_text %} data-loading-text="{{ loading_text }}"{% endif %}>{{ continue_label|default:"ذخیره و ادامه" }}</button>
 </div>

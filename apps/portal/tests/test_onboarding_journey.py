@@ -1,7 +1,7 @@
 """The store-creation → onboarding wizard → store-created journey as ONE coherent system.
 
 Contracts pinned here: a single shell (no legacy dark-theme classes, no inline styles, one palette),
-a real 4-step progress indicator, every field error rendered, real-data template previews,
+a real 5-step progress indicator, every field error rendered, real-data template previews,
 one-time-install confirmation, forged non-offerable installs refused, honest publication state.
 """
 
@@ -27,6 +27,7 @@ from apps.catalog.models import (
 from apps.catalog.services.template_validation_service import validate_and_persist
 from apps.core.models import ShopSettings
 from apps.portal.services import provisioning_service
+from apps.portal.tests._ready_template import select_template
 from apps.stores.models import Store
 from apps.subscriptions.models import Plan, PlanVersion, StoreSubscription
 
@@ -39,7 +40,7 @@ _JOURNEY_TEMPLATES = sorted(
     list((_TEMPLATES / "onboarding").glob("*.html"))
     + [
         _TEMPLATES / "app" / name for name in (
-            "onboarding_identity.html", "onboarding_industry.html", "onboarding_branding.html",
+            "onboarding_identity.html", "onboarding_industry.html", "onboarding_template.html", "onboarding_branding.html",
             "onboarding_review.html", "store_create.html", "store_created.html",
         )
     ]
@@ -142,7 +143,7 @@ class SingleShellContractTests(JourneyBase):
                     self.assertNotRegex(source, rf"(?<![\w-]){re.escape(legacy)}")
 
     def test_every_stage_uses_the_one_onboarding_shell(self):
-        for stage in ("identity", "industry", "branding", "review"):
+        for stage in ("identity", "industry", "template", "branding", "review"):
             with self.subTest(stage=stage):
                 html = self.get(stage).content.decode()
                 self.assertIn("portal/css/public-site-v2.css", html)
@@ -172,24 +173,34 @@ class ProgressIndicatorTests(JourneyBase):
     def test_fresh_store_has_current_first_step_and_locked_rest(self):
         html = self.get("identity").content.decode()
         classes = self._steps(html)
-        self.assertEqual(len(classes), 4)
+        self.assertEqual(len(classes), 5)
         self.assertIn("is-current", classes[0])
         for later in classes[1:]:
             self.assertIn("is-locked", later)
-        for label in ("معرفی", "صنف", "ظاهر", "بازبینی"):
+        for label in ("معرفی", "صنف", "قالب فروشگاه", "برند", "بازبینی"):
             self.assertIn(label, html)
-        self.assertIn("مرحله 1 از 4", html.replace("۱", "1").replace("۴", "4"))
+        self.assertNotIn("ظاهر", html.split('<ol class="ob-steps">')[1].split("</ol>")[0])  # branding renamed
+        self.assertIn("مرحله 1 از 5", html.replace("۱", "1").replace("۵", "5"))
         self.assertEqual(html.count('aria-current="step"'), 1)
+
+    def test_template_step_is_done_once_a_template_is_applied(self):
+        select_template(self.client, self.url("template"))
+        self.set_stage(Store.OnboardingStage.REVIEW)
+        classes = self._steps(self.get("review").content.decode())
+        self.assertIn("is-done", classes[2])
 
     def test_completed_steps_are_links_and_current_changes_per_stage(self):
         self.set_stage(Store.OnboardingStage.REVIEW)
         html = self.get("review").content.decode()
         classes = self._steps(html)
+        self.assertEqual(len(classes), 5)
         self.assertIn("is-done", classes[0])
         self.assertIn("is-done", classes[1])
-        self.assertIn("is-done", classes[2])
-        self.assertIn("is-current", classes[3])
-        for stage in ("identity", "industry", "branding"):
+        # «قالب فروشگاه» is done only when a Ready Template is REALLY applied — not merely passed
+        self.assertNotIn("is-done", classes[2])
+        self.assertIn("is-done", classes[3])
+        self.assertIn("is-current", classes[4])
+        for stage in ("identity", "industry", "template", "branding"):
             self.assertIn(f'href="{self.url(stage)}"', html)
         # revisiting an earlier step never loses progress
         earlier = self.get("identity").content.decode()
@@ -199,6 +210,8 @@ class ProgressIndicatorTests(JourneyBase):
 
     def test_optional_steps_are_marked_optional_and_have_a_skip_action(self):
         self.assertIn("اختیاری", self.get("industry").content.decode())
+        template_html = self.get("template").content.decode()
+        self.assertNotIn("فعلاً رد شو", template_html)  # the template step is required: no skip path
         html = self.get("branding").content.decode()
         self.assertIn("فعلاً رد شو", html)
         self.assertNotIn("فعلاً رد شو", self.get("identity").content.decode())
@@ -307,7 +320,7 @@ class IndustryStageTests(JourneyBase):
         response = self.client.post(
             self.url("industry"), {"industry_template_id": template.pk, **CONFIRM}, HTTP_HOST=_HOST,
         )
-        self.assertRedirects(response, self.url("branding"))
+        self.assertRedirects(response, self.url("template"))
         installation = StoreIndustryInstallation.objects.get(store=self.store)
         self.assertEqual(installation.categories_created, template.categories.count())
         self.assertEqual(Category.objects.filter(store=self.store).count(), 5)
@@ -315,20 +328,20 @@ class IndustryStageTests(JourneyBase):
         replay = self.client.post(
             self.url("industry"), {"industry_template_id": template.pk, **CONFIRM}, HTTP_HOST=_HOST,
         )
-        self.assertRedirects(replay, self.url("branding"))
+        self.assertRedirects(replay, self.url("template"))
         self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 1)
         self.assertEqual(Category.objects.filter(store=self.store).count(), 5)
 
     def test_skip_and_already_installed_continue_do_not_require_confirmation(self):
         skip = self.client.post(self.url("industry"), {"action": "skip"}, HTTP_HOST=_HOST)
-        self.assertRedirects(skip, self.url("branding"))
+        self.assertRedirects(skip, self.url("template"))
         self.assertFalse(StoreIndustryInstallation.objects.filter(store=self.store).exists())
 
     def test_installed_continue_without_confirmation_is_fine(self):
         template = make_rich_template()
         self.client.post(self.url("industry"), {"industry_template_id": template.pk, **CONFIRM}, HTTP_HOST=_HOST)
         cont = self.client.post(self.url("industry"), {}, HTTP_HOST=_HOST)
-        self.assertRedirects(cont, self.url("branding"))
+        self.assertRedirects(cont, self.url("template"))
         self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 1)
 
     def test_forged_post_cannot_install_a_review_required_template(self):
@@ -377,7 +390,7 @@ class IndustryStageTests(JourneyBase):
             response = self.client.post(
                 self.url("industry"), {"industry_template_id": template.pk, **CONFIRM}, HTTP_HOST=_HOST,
             )
-        self.assertRedirects(response, self.url("branding"))
+        self.assertRedirects(response, self.url("template"))
         self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 1)
 
     def test_empty_selection_explains_instead_of_silently_reloading(self):
@@ -395,7 +408,7 @@ class IndustryStageTests(JourneyBase):
         self.assertIn("5 دسته‌بندی و 5 ویژگی ساخته شد", html)
         self.assertNotIn("data-ob-industry", html)  # no selector, no second install
         again = self.client.post(self.url("industry"), {"industry_template_id": template.pk, **CONFIRM}, HTTP_HOST=_HOST)
-        self.assertRedirects(again, self.url("branding"))
+        self.assertRedirects(again, self.url("template"))
         self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 1)
         self.assertEqual(Category.objects.filter(store=self.store).count(), 5)
 
@@ -405,7 +418,7 @@ class IndustryStageTests(JourneyBase):
         self.assertContains(response, "در حال حاضر قالبِ صنفی برای ارائه موجود نیست.")
         self.assertContains(response, "ادامه بدونِ قالبِ صنف")
         skip = self.client.post(self.url("industry"), {"action": "skip"}, HTTP_HOST=_HOST)
-        self.assertRedirects(skip, self.url("branding"))
+        self.assertRedirects(skip, self.url("template"))
 
 
 class BrandingStageTests(JourneyBase):
@@ -445,7 +458,7 @@ class ReviewAndPublishTests(JourneyBase):
             self.assertIn(expected, html)
         self.assertIn("ob-ltr", html)  # phone/email/hostname are isolated LTR runs
         self.assertIn(self.store.domains.filter(is_primary=True).first().hostname, html)
-        for stage in ("identity", "industry", "branding"):
+        for stage in ("identity", "industry", "template", "branding"):
             self.assertIn(f'href="{self.url(stage)}"', html)
         self.assertIn("نصب نشده", html)
         self.assertIn("انتشارِ فروشگاه", html)
@@ -456,6 +469,7 @@ class ReviewAndPublishTests(JourneyBase):
         from apps.stores.services.publication_service import PublicationState, get_store_publication_state
 
         self.assertEqual(get_store_publication_state(self.store), PublicationState.TRIAL_PRIVATE)
+        select_template(self.client, self.url("template"))
         self.get("review")  # viewing never publishes
         self.store.refresh_from_db()
         self.assertIsNone(self.store.onboarding_completed_at)
@@ -470,6 +484,7 @@ class ReviewAndPublishTests(JourneyBase):
         self.assertEqual(self.store.onboarding_completed_at, stamp)
 
     def test_review_after_publish_has_no_second_publish_button(self):
+        select_template(self.client, self.url("template"))
         self.client.post(self.url("review"), {}, HTTP_HOST=_HOST)
         html = self.get("review").content.decode()
         self.assertNotIn("ob-publish-form", html)
@@ -498,6 +513,7 @@ class StoreCreatedAndStoreCreateTests(JourneyBase):
         self.assertNotIn("/enter-admin/", html)
 
     def test_published_store_shows_real_hostname_and_admin_entry(self):
+        select_template(self.client, self.url("template"))
         self.client.post(self.url("review"), {}, HTTP_HOST=_HOST)
         html = self.created()
         self.assertIn("منتشر شد", html)

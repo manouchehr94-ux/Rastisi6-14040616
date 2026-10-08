@@ -4452,6 +4452,25 @@ inside `resolve_owner_identity_by_phone`'s transaction **only for the request th
 **Not done (by design).** Existing owners are not blocked and no acceptance is fabricated for them; a
 re-acceptance workflow for a future Terms version is a separate task. No IP/User-Agent is collected.
 
+
+## ADR-108: Owner Onboarding Chooses a Ready Template (the ONE 50-template catalog), Applied by Storefront Builder Services, and Final Publish Publishes the Storefront Draft
+
+**Decision.** Onboarding has five steps (معرفی · صنف · قالب فروشگاه · برند · بازبینی); `Store.OnboardingStage.TEMPLATE`
+is new (choices-only migration `stores/0019`, no data change). The Template step is **required** (no skip) and lists exactly
+`layout_preset_registry.list_ready_templates()` through the shared read-only `ready_template_card_service` (extracted from
+`storefront_builder.views`, which re-exports it) — one catalog, one thumbnail authority (`template_preview_service`).
+A POST carries only `template_key`; the version is always the current registry version. Application is orchestrated by
+`storefront_builder.services.store_template_service.select_ready_template`: an untouched first bootstrap Draft gets
+`preset_service.apply_preset` (the exact template, no hybrid with legacy content); any other state goes through
+`r4_mutation_service.switch_template_current` (preservation-first). The portal contains no section/provenance/baseline logic.
+Final onboarding Publish (`portal.services.onboarding_publish_service.complete_onboarding`) is one transaction under a Store row lock:
+require an applied Ready Template (read from the real layout provenance), publish the Draft via `layout_service.publish`, then set
+`onboarding_completed_at`/`DONE`; any failure rolls everything back (still private/incomplete); an already-completed Store is a no-op.
+
+**Compatibility.** Completed Stores are never sent back; an unpublished Store at branding/review with no applied template is routed
+through the Template step by the dispatcher (stored progress untouched); nothing is auto-applied. **Not done:** industry→template
+recommendations (no authoritative mapping exists), live iframe previews (Merchant Admin preview is staff/host-bound).
+
 ## Summary Table
 
 | Decision | Status |

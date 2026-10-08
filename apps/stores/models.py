@@ -121,6 +121,7 @@ class Store(StoresTimestampedModel):
     class OnboardingStage(models.TextChoices):
         IDENTITY = "identity", "معرفیِ فروشگاه"
         INDUSTRY = "industry", "انتخابِ صنف"
+        TEMPLATE = "template", "قالبِ فروشگاه"
         BRANDING = "branding", "هویتِ بصری"
         REVIEW = "review", "بازبینی و انتشار"
         DONE = "done", "تکمیل‌شده"

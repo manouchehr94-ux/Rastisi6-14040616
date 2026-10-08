@@ -154,8 +154,80 @@
     });
   }
 
+  /* ── Ready Template gallery ─────────────────────────────────────────── */
+  function initTemplates(form) {
+    var cards = Array.prototype.slice.call(form.querySelectorAll('[data-ob-tpl-card]'));
+    var search = form.querySelector('[data-ob-tpl-search]');
+    var visibleCount = form.querySelector('[data-ob-tpl-visible]');
+    var empty = form.querySelector('[data-ob-tpl-empty]');
+    var status = form.querySelector('[data-ob-tpl-status]');
+    var submit = document.querySelector('[data-ob-template-submit]');
+    var dialog = document.querySelector('[data-ob-lightbox]');
+
+    // Palette swatch colours come from the canonical registry; applied via CSSOM (no inline style attribute in HTML).
+    form.querySelectorAll('.ob-swatch[data-color]').forEach(function (el) {
+      el.style.backgroundColor = el.getAttribute('data-color');
+    });
+
+    function refresh() {
+      var checked = form.querySelector('input[name="template_key"]:checked');
+      cards.forEach(function (card) {
+        var input = card.querySelector('input[type="radio"]');
+        card.classList.toggle('is-selected', !!input && input.checked);
+      });
+      if (submit) {
+        submit.disabled = !checked;
+        submit.setAttribute('aria-disabled', checked ? 'false' : 'true');
+      }
+      if (status) {
+        var card = checked && checked.closest('[data-ob-tpl-card]');
+        status.textContent = card ? ('قالبِ «' + card.getAttribute('data-name') + '» انتخاب شد.') : '';
+      }
+    }
+
+    function filter() {
+      var query = norm(search && search.value);
+      var shown = 0;
+      cards.forEach(function (card) {
+        var match = !query || norm(card.getAttribute('data-name')).indexOf(query) !== -1;
+        card.hidden = !match;
+        if (match) shown += 1;
+      });
+      if (visibleCount) visibleCount.textContent = shown;
+      if (empty) empty.hidden = shown !== 0;
+    }
+
+    cards.forEach(function (card) {
+      var input = card.querySelector('input[type="radio"]');
+      if (input) input.addEventListener('change', refresh);
+    });
+    if (search) search.addEventListener('input', filter);
+
+    if (dialog && typeof dialog.showModal === 'function') {
+      var img = dialog.querySelector('[data-ob-lightbox-img]');
+      var title = dialog.querySelector('[data-ob-lightbox-title]');
+      form.querySelectorAll('[data-ob-zoom]').forEach(function (link) {
+        link.addEventListener('click', function (event) {
+          event.preventDefault();
+          img.src = link.getAttribute('href');
+          img.alt = 'پیش‌نمایشِ بزرگ‌ترِ قالبِ ' + link.getAttribute('data-title');
+          title.textContent = link.getAttribute('data-title');
+          dialog.showModal();
+        });
+      });
+      var close = dialog.querySelector('[data-ob-lightbox-close]');
+      if (close) close.addEventListener('click', function () { dialog.close(); });
+      dialog.addEventListener('click', function (event) { if (event.target === dialog) dialog.close(); });
+      dialog.addEventListener('close', function () { img.removeAttribute('src'); });
+    }
+
+    refresh();
+    filter();
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('[data-ob-industry]').forEach(initIndustry);
+    document.querySelectorAll('[data-ob-templates]').forEach(initTemplates);
     document.querySelectorAll('form[data-ob-once]').forEach(initOnce);
     document.querySelectorAll('[data-ob-logo-input]').forEach(initLogo);
     var summary = document.querySelector('[data-ob-error-summary]');

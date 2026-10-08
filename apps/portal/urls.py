@@ -48,6 +48,10 @@ urlpatterns = [
         views.onboarding_industry, name="onboarding-industry",
     ),
     path(
+        "app/stores/<uuid:store_public_id>/onboarding/template/",
+        views.onboarding_template, name="onboarding-template",
+    ),
+    path(
         "app/stores/<uuid:store_public_id>/onboarding/branding/",
         views.onboarding_branding, name="onboarding-branding",
     ),

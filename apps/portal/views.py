@@ -21,6 +21,7 @@ from django.conf import settings
 
 from apps.catalog.models import IndustryTemplate
 from apps.catalog.services import industry_catalog_service, template_summary_service
+from apps.storefront_builder.services import ready_template_card_service, store_template_service
 from apps.billing.models import SubscriptionPaymentAttempt
 from apps.billing.services import payment_flow_service
 from apps.billing.services import plan_change_billing_service
@@ -67,6 +68,7 @@ from .phone import InvalidPhoneError, normalize_iranian_phone
 from .terms import CURRENT_TERMS_VERSION, TERMS_ACCEPTANCE_REQUIRED_MESSAGE
 from .services import (
     handoff_service,
+    onboarding_publish_service,
     owner_auth_service,
     owner_otp_service,
     owner_sms_service,
@@ -1119,12 +1121,14 @@ def _get_owned_store_or_404(request, store_public_id) -> Store:
 _ONBOARDING_STAGE_ORDER = [
     Store.OnboardingStage.IDENTITY,
     Store.OnboardingStage.INDUSTRY,
+    Store.OnboardingStage.TEMPLATE,
     Store.OnboardingStage.BRANDING,
     Store.OnboardingStage.REVIEW,
 ]
 _ONBOARDING_STAGE_URL_NAMES = {
     Store.OnboardingStage.IDENTITY: "portal:onboarding-identity",
     Store.OnboardingStage.INDUSTRY: "portal:onboarding-industry",
+    Store.OnboardingStage.TEMPLATE: "portal:onboarding-template",
     Store.OnboardingStage.BRANDING: "portal:onboarding-branding",
     Store.OnboardingStage.REVIEW: "portal:onboarding-review",
 }
@@ -1134,7 +1138,8 @@ _ONBOARDING_STAGE_URL_NAMES = {
 _ONBOARDING_STEP_META = {
     Store.OnboardingStage.IDENTITY: ("معرفی", False),
     Store.OnboardingStage.INDUSTRY: ("صنف", True),
-    Store.OnboardingStage.BRANDING: ("ظاهر", True),
+    Store.OnboardingStage.TEMPLATE: ("قالب فروشگاه", False),
+    Store.OnboardingStage.BRANDING: ("برند", True),
     Store.OnboardingStage.REVIEW: ("بازبینی", False),
 }
 
@@ -1167,12 +1172,18 @@ def _sector_tabs_for(template_cards) -> list:
     return [tab for tab in industry_catalog_service.SECTOR_TABS if tab[0] == "all" or tab[0] in present]
 
 
-def _onboarding_shell_context(store, current: str) -> dict:
+def _onboarding_shell_context(store, current: str, *, applied_template="__lookup__") -> dict:
     """زمینه‌ی مشترکِ پوسته‌ی ویزارد (نوارِ پیشرفت، قبلی/بعدی) — فقط نمایشی.
 
     ``store.onboarding_stage`` دورترین مرحله‌ی رسیده است؛ مرحله‌هایِ قبل از آن
     «انجام‌شده» و آزادانه قابلِ بازدیدند، مرحله‌هایِ بعد از آن هنوز قفل‌اند
-    (فقط با «ادامه» باز می‌شوند). هیچ منطقِ دسترسی/مجوزی اینجا نیست."""
+    (فقط با «ادامه» باز می‌شوند). هیچ منطقِ دسترسی/مجوزی اینجا نیست.
+
+    مرحله‌ی «قالب فروشگاه» فقط وقتی «انجام‌شده» نشان داده می‌شود که قالبِ آماده‌ی
+    معتبری واقعاً روی Draft/نسخه‌ی منتشرشده اعمال شده باشد (نه صرفاً چون
+    ``onboarding_stage`` از آن گذشته — مثلاً فروشگاه‌هایِ قدیمیِ پیش از این مرحله)."""
+    if applied_template == "__lookup__":
+        applied_template = store_template_service.get_applied_template(store)
     order = _ONBOARDING_STAGE_ORDER
     if store.onboarding_stage in order:
         reached = order.index(store.onboarding_stage)
@@ -1188,7 +1199,9 @@ def _onboarding_shell_context(store, current: str) -> dict:
             "key": stage, "number": index + 1, "label": label, "optional": optional,
             "url": reverse(_ONBOARDING_STAGE_URL_NAMES[stage], kwargs={"store_public_id": store.public_id}),
             "is_current": is_current,
-            "is_done": index < reached and not is_current,
+            "is_done": index < reached and not is_current and (
+                stage != Store.OnboardingStage.TEMPLATE or applied_template is not None
+            ),
             "is_available": index <= reached,
         })
     current_index = order.index(current)
@@ -1198,6 +1211,7 @@ def _onboarding_shell_context(store, current: str) -> dict:
         "ob_current": steps[current_index],
         "ob_total": len(order),
         "ob_previous_url": steps[current_index - 1]["url"] if current_index > 0 else None,
+        "template_applied": applied_template is not None,
     }
 
 
@@ -1228,6 +1242,13 @@ def onboarding(request, store_public_id):
     stage = store.onboarding_stage if store.onboarding_stage in _ONBOARDING_STAGE_URL_NAMES else (
         Store.OnboardingStage.IDENTITY
     )
+    if stage in (Store.OnboardingStage.BRANDING, Store.OnboardingStage.REVIEW) and (
+        store_template_service.get_applied_template(store) is None
+    ):
+        # A Store from before the «قالب فروشگاه» step (or one that skipped past it) that is still
+        # unpublished must choose a Ready Template before it can be published. Stored progress is
+        # left untouched; already-completed Stores returned above and are never sent back.
+        stage = Store.OnboardingStage.TEMPLATE
     return redirect(_ONBOARDING_STAGE_URL_NAMES[stage], store_public_id=store.public_id)
 
 
@@ -1303,7 +1324,7 @@ def onboarding_industry(request, store_public_id):
         action = request.POST.get("action")
         if action == "skip":
             _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
-            return redirect("portal:onboarding-branding", store_public_id=store.public_id)
+            return redirect("portal:onboarding-template", store_public_id=store.public_id)
 
         form = OnboardingIndustryForm(request.POST)
         valid = form.is_valid()
@@ -1331,15 +1352,15 @@ def onboarding_industry(request, store_public_id):
                         if StoreIndustryInstallation.objects.filter(store=store).exists():
                             # دابل‌کلیک/درخواستِ هم‌زمان: نصبِ اول موفق بوده؛ خطا نشان نده، فقط جلو ببر.
                             _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
-                            return redirect("portal:onboarding-branding", store_public_id=store.public_id)
+                            return redirect("portal:onboarding-template", store_public_id=store.public_id)
                         messages.error(request, str(exc))
                     else:
                         _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
-                        return redirect("portal:onboarding-branding", store_public_id=store.public_id)
+                        return redirect("portal:onboarding-template", store_public_id=store.public_id)
     elif request.method == "POST":
         # از قبل نصب‌شده — POST دیگری اینجا معنایی ندارد جز عبور به مرحله‌ی بعد.
         _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
-        return redirect("portal:onboarding-branding", store_public_id=store.public_id)
+        return redirect("portal:onboarding-template", store_public_id=store.public_id)
 
     template_cards = template_summary_service.attach_summaries(templates)
     installed_summary = (
@@ -1350,6 +1371,54 @@ def onboarding_industry(request, store_public_id):
         "template_cards": template_cards, "installation": installation, "installed_summary": installed_summary,
         "selected_template_id": selected_template_id, "confirm_error": confirm_error,
         "industry_sector_tabs": _sector_tabs_for(template_cards),
+    })
+
+
+@owner_required
+def onboarding_template(request, store_public_id):
+    """مرحله‌ی «قالب فروشگاه»: انتخابِ قالبِ آمادهٔ ظاهریِ فروشگاه (Ready Template) — الزامی و بدونِ رد کردن.
+
+    کاتالوگ فقط همان ۵۰ قالبِ رسمیِ Storefront Builder است
+    (``layout_preset_registry.list_ready_templates()``)، و کارت‌ها از همان projectionِ مشترکِ
+    گالریِ مرچنت (``ready_template_card_service``) می‌آیند — نه کاتالوگ/تصویرِ دومی. POST فقط
+    ``template_key`` را می‌پذیرد؛ نسخه/ظاهر/پالت/مانیفست همیشه سمتِ سرور از کاتالوگِ کانونی
+    resolve می‌شوند و اعمال کاملاً توسطِ سرویس‌هایِ Storefront Builder انجام می‌شود (هیچ منطقِ
+    اعمالِ قالب در پرتال نیست). GET هیچ نوشتنی ندارد (حتی Draft نمی‌سازد)."""
+    store = _get_owned_store_or_404(request, store_public_id)
+    if store.onboarding_stage == Store.OnboardingStage.DONE or store.onboarding_completed_at:
+        # فروشگاهِ منتشرشده هرگز از این مسیر دوباره قالب عوض نمی‌کند؛ تغییرِ قالب در Storefront Builder است.
+        return redirect("portal:store-created", store_public_id=store.public_id)
+
+    error = None
+    if request.method == "POST":
+        if not portal_action_allowed(request, store, SETTINGS_MANAGE):
+            return portal_permission_denied(request)
+        try:
+            store_template_service.select_ready_template(
+                store=store, actor=request.user, template_key=request.POST.get("template_key"),
+            )
+        except store_template_service.ReadyTemplateSelectionError as exc:
+            error = str(exc)
+            messages.error(request, error)
+        except RateLimitExceeded:
+            error = "تعدادِ تغییرِ قالب در این بازه بیش از حدِ مجاز است؛ کمی بعد دوباره تلاش کنید."
+            messages.error(request, error)
+        else:
+            _advance_onboarding_stage(store, completed=Store.OnboardingStage.TEMPLATE)
+            return redirect("portal:onboarding-branding", store_public_id=store.public_id)
+
+    applied = store_template_service.get_applied_template(store)
+    cards = ready_template_card_service.build_ready_template_cards(
+        None,
+        current_template_key=applied.key if applied else None,
+        current_template_version=applied.version if applied else None,
+    )
+    applied_key = applied.key if applied else ""
+    selected_key = request.POST.get("template_key", "") if error else applied_key
+    return render(request, "portal/app/onboarding_template.html", {
+        **_onboarding_shell_context(store, Store.OnboardingStage.TEMPLATE, applied_template=applied),
+        "template_cards": cards, "applied_template": applied, "selected_key": selected_key,
+        "applied_is_older_version": bool(applied and not applied.is_current_version),
     })
 
 
@@ -1417,21 +1486,32 @@ def onboarding_review(request, store_public_id):
         # SETTINGS_MANAGE permission, not merely an ACTIVE membership.
         if not portal_action_allowed(request, store, SETTINGS_MANAGE):
             return portal_permission_denied(request)
-        if not store.onboarding_completed_at:
-            # idempotent: انتشارِ دوباره (refresh/دابل‌کلیک) تاریخِ اولین انتشار را بازنویسی نمی‌کند.
-            store.onboarding_completed_at = timezone.now()
-            store.onboarding_stage = Store.OnboardingStage.DONE
-            store.save(update_fields=["onboarding_completed_at", "onboarding_stage", "updated_at"])
+        # One transaction: publish the Storefront Draft through the canonical layout service, and only
+        # then mark onboarding complete. Idempotent (an already-completed Store is a no-op: no second
+        # publish, the first completion timestamp is preserved).
+        try:
+            outcome = onboarding_publish_service.complete_onboarding(store=store, actor=request.user)
+        except onboarding_publish_service.OnboardingPublishError as exc:
+            messages.error(request, str(exc))
+            if exc.code in ("no_template", "no_draft"):
+                return redirect("portal:onboarding-template", store_public_id=store.public_id)
+            return redirect("portal:onboarding-review", store_public_id=store.public_id)
+        if not outcome.already_completed:
             messages.success(request, "فروشگاه شما منتشر شد!")
         return redirect("portal:store-created", store_public_id=store.public_id)
 
     installed_summary = (
         template_summary_service.summarize_template(installation.industry_template) if installation else None
     )
+    applied = store_template_service.get_applied_template(store)
+    template_card = None
+    if applied is not None:
+        template_card = ready_template_card_service.build_ready_template_card(None, applied.preset, is_current=True)
     return render(request, "portal/app/onboarding_review.html", {
-        **_onboarding_shell_context(store, Store.OnboardingStage.REVIEW),
+        **_onboarding_shell_context(store, Store.OnboardingStage.REVIEW, applied_template=applied),
         "shop_settings": shop_settings, "installation": installation, "installed_summary": installed_summary,
-        "trial_domain": trial_domain, **_publication_context(store),
+        "trial_domain": trial_domain, "applied_template": applied, "template_card": template_card,
+        **_publication_context(store),
     })
 
 
