@@ -1,45 +1,29 @@
-{% extends "portal/base_platform.html" %}
-{% block title %}معرفیِ فروشگاه | راستیسی{% endblock %}
-{% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
-{% block content %}
-<div class="p-wrap">
-<div class="p-form-card">
-  <p style="text-align:center;font-size:12px;color:var(--p-muted);margin-bottom:4px">مرحله ۱ از ۴</p>
-  <h2 style="text-align:center;margin-bottom:8px">معرفیِ فروشگاه</h2>
-  <p style="text-align:center;font-size:13px;color:var(--p-muted);margin-bottom:20px">
-    این اطلاعات به مشتریان شما نشان داده می‌شود؛ هر زمان از پنلِ مدیریت هم قابلِ ویرایش است.
-  </p>
-  <form method="post" novalidate>
+{% extends "portal/onboarding/base_onboarding.html" %}
+{% block title %}معرفیِ فروشگاه | راه‌اندازی | راستی‌سی{% endblock %}
+{% block ob_page_class %} ob-page--narrow{% endblock %}
+{% block ob_body %}
+{% include "portal/onboarding/_wizard_head.html" %}
+
+<section class="ob-card" aria-labelledby="ob-identity-title">
+  <div class="ob-card-head">
+    <h2 id="ob-identity-title">معرفیِ فروشگاه</h2>
+    <p>فقط «نام فروشگاه» الزامی است. بقیه‌ی موارد را می‌توانید همین حالا یا بعداً از پنلِ مدیریت پر کنید؛ چیزی که وارد نکنید، ذخیره نمی‌شود.</p>
+  </div>
+
+  {% include "portal/onboarding/_form_errors.html" %}
+
+  <form method="post" id="ob-identity-form" novalidate data-ob-once>
     {% csrf_token %}
-    {% if form.non_field_errors %}<div class="p-alert p-alert-error">{{ form.non_field_errors.0 }}</div>{% endif %}
-    <div class="p-field">
-      <label for="{{ form.name.id_for_label }}">نام فروشگاه</label>
-      {{ form.name }}
-      {% if form.name.errors %}<div class="p-error">{{ form.name.errors.0 }}</div>{% endif %}
+    <div class="ob-form-grid">
+      {% include "portal/onboarding/_field.html" with field=form.name required=True full=True %}
+      {% include "portal/onboarding/_field.html" with field=form.tagline full=True %}
+      {% include "portal/onboarding/_field.html" with field=form.description full=True %}
+      {% include "portal/onboarding/_field.html" with field=form.contact_phone %}
+      {% include "portal/onboarding/_field.html" with field=form.contact_email %}
+      {% include "portal/onboarding/_field.html" with field=form.contact_address full=True %}
     </div>
-    <div class="p-field">
-      <label for="{{ form.tagline.id_for_label }}">شعار فروشگاه (اختیاری)</label>
-      {{ form.tagline }}
-    </div>
-    <div class="p-field">
-      <label for="{{ form.description.id_for_label }}">درباره‌ی فروشگاه (اختیاری)</label>
-      {{ form.description }}
-    </div>
-    <div class="p-field">
-      <label for="{{ form.contact_phone.id_for_label }}">شماره تماس (اختیاری)</label>
-      {{ form.contact_phone }}
-    </div>
-    <div class="p-field">
-      <label for="{{ form.contact_email.id_for_label }}">ایمیل فروشگاه (اختیاری)</label>
-      {{ form.contact_email }}
-    </div>
-    <div class="p-field">
-      <label for="{{ form.contact_address.id_for_label }}">آدرس (اختیاری)</label>
-      {{ form.contact_address }}
-    </div>
-    <button type="submit" class="p-btn p-btn-primary" style="width:100%">ادامه</button>
   </form>
-</div>
-</div>
+
+  {% include "portal/onboarding/_actions.html" with form_id="ob-identity-form" continue_label="ذخیره و ادامه به انتخاب صنف" loading_text="در حال ذخیره…" %}
+</section>
 {% endblock %}
-{% block extra_css %}<style>.p-field input,.p-field textarea{width:100%;padding:10px 14px;border:1px solid var(--p-line);border-radius:10px;font-family:inherit;font-size:14px}.p-field textarea{min-height:80px;resize:vertical}</style>{% endblock %}

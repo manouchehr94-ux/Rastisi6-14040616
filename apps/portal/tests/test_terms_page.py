@@ -105,3 +105,43 @@ class TermsPageTests(TestCase):
     def test_other_absolute_security_or_legal_guarantees_are_absent(self):
         for banned in ("کاملاً امن", "صددرصد", "۱۰۰٪", "100%", "بدون هیچ خطر", "هیچ‌گونه نقص", "خطای صفر", "تا زمانی که خلاف آن ثابت نشده"):
             self.assertNotIn(banned, self.html)
+
+
+@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
+class TermsLayoutContractTests(TestCase):
+    """Layout contract: full-width head, TOC column + document column, anchors clear the sticky header."""
+
+    def setUp(self):
+        self.html = self.client.get("/terms/", HTTP_HOST=_HOST).content.decode()
+        from pathlib import Path
+
+        css_path = Path(__file__).resolve().parents[1] / "static" / "portal" / "css" / "public-site-v2.css"
+        self.css = css_path.read_text(encoding="utf-8")
+
+    def test_page_is_a_two_column_layout_not_a_narrow_body(self):
+        self.assertIn('class="r-legal-layout"', self.html)
+        self.assertIn('class="r-legal-aside"', self.html)
+        # the old pattern (780px head/body inside a 1248px container) must not return
+        self.assertNotRegex(self.css, r"\.r-legal-(head|body)\{[^}]*max-width:780px")
+        self.assertNotIn("r-legal-body", self.html)
+
+    def test_toc_is_a_single_collapsible_nav_with_one_link_per_section(self):
+        self.assertEqual(self.html.count("data-legal-toc"), 2)  # attribute + script lookup
+        toc = self.html[self.html.index("<details"):self.html.index("</details>")]
+        self.assertEqual(toc.count('href="#'), len(SECTIONS))
+        self.assertIn(f"{len(SECTIONS)} بخش".replace("18", "۱۸"), toc)
+
+    def test_every_anchor_target_has_a_scroll_margin_below_the_sticky_header(self):
+        rule = re.search(r"\.r-legal-section\{[^}]*\}", self.css).group(0)
+        self.assertIn("scroll-margin-top:calc(var(--r-legal-header) + var(--r-legal-gap))", rule)
+        self.assertRegex(self.css, r"\.r-legal\{--r-legal-header:86px")
+        self.assertRegex(self.css, r"max-width:720px\)\{\.r-legal\{--r-legal-header:74px\}")
+        # anchors are on the section element that carries the scroll margin
+        self.assertEqual(self.html.count('class="r-legal-section" id='), len(SECTIONS))
+
+    def test_toc_is_sticky_on_desktop_and_static_below_the_tablet_breakpoint(self):
+        self.assertRegex(self.css, r"\.r-legal-aside\{position:sticky;top:calc\(var\(--r-legal-header\)")
+        self.assertRegex(self.css, r"max-width:960px\)\{[^@]*\.r-legal-aside\{position:static")
+
+    def test_stylesheet_is_cache_busted_for_this_change(self):
+        self.assertIn("public-site-v2.css?v=20261008-5", self.html)

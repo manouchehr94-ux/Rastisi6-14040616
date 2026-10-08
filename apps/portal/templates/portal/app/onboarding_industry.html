@@ -1,55 +1,98 @@
-{% extends "portal/base_platform.html" %}
-{% block title %}انتخابِ صنف | راستیسی{% endblock %}
-{% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
-{% block content %}
-<div class="p-wrap">
-<div class="p-form-card" style="max-width:960px">
-  <p style="text-align:center;font-size:12px;color:var(--p-muted);margin-bottom:4px">مرحله ۲ از ۴</p>
-  <h2 style="text-align:center;margin-bottom:8px">انتخابِ صنف</h2>
+{% extends "portal/onboarding/base_onboarding.html" %}
+{% block title %}انتخابِ صنف | راه‌اندازی | راستی‌سی{% endblock %}
+{% block ob_page_class %}{% if not installation %} ob-page--wide{% else %} ob-page--narrow{% endif %}{% endblock %}
+{% block ob_body %}
+{% include "portal/onboarding/_wizard_head.html" %}
 
+<section class="ob-card" aria-labelledby="ob-industry-title">
   {% if installation %}
-  <p style="text-align:center;font-size:13px;color:var(--p-muted);margin-bottom:20px">
-    قالبِ صنفِ «{{ installation.industry_template.name }}» روی این فروشگاه نصب شده است.
-    نصبِ قالبِ صنف فقط یک‌بار برای هر فروشگاه ممکن است.
-  </p>
-  <form method="post">
-    {% csrf_token %}
-    <button type="submit" class="p-btn p-btn-primary" style="width:100%">ادامه</button>
-  </form>
-  {% else %}
-  <p style="text-align:center;font-size:13px;color:var(--p-muted);margin-bottom:20px">
-    اگر صنفِ فروشگاهِ شما در این فهرست است، انتخابش کنید تا دسته‌بندی‌ها و ویژگی‌های پیشنهادی‌اش
-    به‌طور خودکار ساخته شود؛ این مرحله اختیاری است و بعداً هم دیگر قابلِ تغییر نیست.
-  </p>
-  {% if messages %}{% for message in messages %}<div class="p-alert p-alert-error">{{ message }}</div>{% endfor %}{% endif %}
-  <form method="post">
-    {% csrf_token %}
-    <input type="hidden" name="industry_template_id" id="id_industry_template_id" value="">
-    {% if templates %}
-    {% include "catalog/partials/industry_filter_bar.html" with sector_tabs=industry_sector_tabs search_placeholder="جستجوی صنف؛ مثال: پوشاک، دیجیتال، خوراک..." search_input_id="onboardingIndustrySearch" %}
-    <div class="industry-grid" style="max-height:340px;overflow-y:auto;padding:4px">
-      {% for template in templates %}
-      <div class="industry-card" data-id="{{ template.pk }}" data-name="{{ template.name }}"
-           data-sector="{{ template.sector }}" data-sector-label="{{ template.get_sector_display }}"
-           onclick="industrySelectCard(this, 'id_industry_template_id')">
-        <div class="ic-emoji">{{ template.icon|default:"🏷️" }}</div>
-        <div class="ic-name">{{ template.name }}</div>
-        <div class="ic-sector">{{ template.get_sector_display }}</div>
-      </div>
-      {% endfor %}
+  {# ── از قبل نصب‌شده: خلاصه + ادامه‌ی idempotent ── #}
+  <div class="ob-card-head">
+    <h2 id="ob-industry-title">صنفِ فروشگاه</h2>
+    <p>قالبِ صنفِ این فروشگاه نصب شده است. نصبِ قالب فقط یک‌بار برای هر فروشگاه ممکن است، پس نیازی به کاری در این مرحله نیست.</p>
+  </div>
+  <div class="ob-installed">
+    <span class="ob-ic-icon" aria-hidden="true">{{ installed_summary.icon|default:"🏷️" }}</span>
+    <div>
+      <h3>{{ installation.industry_template.name }}</h3>
+      <p>{{ installed_summary.sector_label }} · نسخه‌ی {{ installation.installed_version }}</p>
+      <p>{{ installation.categories_created }} دسته‌بندی و {{ installation.attributes_created }} ویژگی ساخته شد. می‌توانید آن‌ها را از پنلِ مدیریت ویرایش کنید؛ نصبِ قالبِ دیگری ممکن نیست.</p>
     </div>
-    {% include "catalog/partials/industry_empty_state.html" %}
-    {% else %}
-    <p style="font-size:13px;color:var(--p-muted)">در حال حاضر قالبِ صنفی برای ارائه موجود نیست.</p>
-    {% endif %}
-    <button type="submit" id="industryContinueBtn" class="p-btn p-btn-primary" style="width:100%;margin-top:12px" disabled>نصبِ قالبِ انتخاب‌شده</button>
+  </div>
+  <form method="post" id="ob-industry-form" data-ob-once>{% csrf_token %}</form>
+  {% include "portal/onboarding/_actions.html" with form_id="ob-industry-form" continue_label="ادامه به ظاهر فروشگاه" loading_text="در حال ادامه…" %}
+
+  {% else %}
+  <div class="ob-card-head">
+    <h2 id="ob-industry-title">{% if template_cards %}صنفِ فروشگاهتان را انتخاب کنید{% else %}صنفِ فروشگاه{% endif %}</h2>
+    {% if template_cards %}<p>با انتخابِ صنف، دسته‌بندی‌ها و ویژگی‌هایِ پیشنهادیِ همان کسب‌وکار یک‌جا ساخته می‌شود تا از صفر شروع نکنید. این مرحله اختیاری است.</p>{% else %}<p>این مرحله اختیاری است و ادامه دادن بدونِ آن هیچ مشکلی ایجاد نمی‌کند.</p>{% endif %}
+  </div>
+
+  {% if template_cards %}
+  <form method="post" id="ob-industry-form" data-ob-industry data-ob-once>
+    {% csrf_token %}
+    <div class="ob-industry-tools">
+      <div class="ob-search">
+        <label class="ob-sr-only" for="ob-industry-search">جست‌وجوی صنف</label>
+        <input type="search" id="ob-industry-search" data-ob-search placeholder="جست‌وجوی صنف؛ مثلاً پوشاک، دیجیتال، خوراک…" autocomplete="off">
+      </div>
+      <div class="ob-chips" role="group" aria-label="رسته‌ی صنف">
+        {% for code, label in industry_sector_tabs %}
+        <button type="button" class="ob-chip" data-ob-sector="{{ code }}" aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}">{{ label }}</button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="ob-industry-layout">
+      <div>
+        <div class="ob-industry-list" role="radiogroup" aria-label="فهرستِ صنف‌ها">
+          {% for card in template_cards %}
+          <label class="ob-industry-card" data-ob-card data-id="{{ card.id }}" data-name="{{ card.name }}" data-sector="{{ card.sector }}" data-sector-label="{{ card.sector_label }}">
+            <input type="radio" name="industry_template_id" value="{{ card.id }}">
+            <span class="ob-ic-check" aria-hidden="true">✓</span>
+            <span class="ob-ic-icon" aria-hidden="true">{{ card.icon|default:"🏷️" }}</span>
+            <span class="ob-ic-name">{{ card.name }}</span>
+            <span class="ob-ic-sector">{{ card.sector_label }}</span>
+            <span class="ob-ic-meta">{{ card.category_count }} دسته{% if card.attribute_count %} · {{ card.attribute_count }} ویژگی{% endif %}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <div class="ob-industry-empty" data-ob-no-results hidden>صنفی با این جست‌وجو پیدا نشد. عبارتِ دیگری را امتحان کنید یا از فهرست، صنفِ «سایر» را انتخاب کنید.</div>
+      </div>
+
+      <aside class="ob-preview" data-ob-preview aria-label="پیش‌نمایشِ صنفِ انتخاب‌شده" aria-live="polite">
+        <div class="ob-preview-empty" data-ob-preview-empty>یک صنف را از فهرست انتخاب کنید تا دسته‌بندی‌ها، ویژگی‌ها و آنچه نصب می‌سازد را اینجا ببینید.</div>
+        {% for card in template_cards %}
+        <div data-ob-panel="{{ card.id }}" hidden>{% include "portal/onboarding/_template_preview.html" %}</div>
+        {% endfor %}
+      </aside>
+    </div>
+    <p class="ob-sr-only" role="status" data-ob-selection-status></p>
+
+    <div class="ob-confirm">
+      <p class="ob-confirm-title">نصبِ قالبِ «<span data-ob-selected-name>—</span>»</p>
+      <p>نصبِ قالبِ صنف <b>فقط یک‌بار</b> برای هر فروشگاه ممکن است و بعد از آن نمی‌توان قالبِ دیگری نصب کرد. اگر مطمئن نیستید، «فعلاً رد شو» را بزنید و بعداً از پنلِ مدیریت دسته‌بندی‌ها و ویژگی‌ها را خودتان بسازید.</p>
+      <label class="ob-check"><input type="checkbox" data-ob-confirm-check> می‌دانم که این نصب یک‌بارمصرف است و می‌خواهم قالبِ انتخاب‌شده نصب شود.</label>
+    </div>
   </form>
-  <form method="post" style="margin-top:8px">
+
+  <form method="post" id="ob-skip-form" data-ob-once>
     {% csrf_token %}
     <input type="hidden" name="action" value="skip">
-    <button type="submit" class="p-btn" style="width:100%">فعلاً رد شو</button>
   </form>
+  <p class="ob-skip-explain">«فعلاً رد شو» یعنی هیچ دسته‌بندی یا ویژگیِ آماده‌ای ساخته نمی‌شود و فروشگاهِ خالی ادامه می‌دهد؛ تا وقتی قالبی نصب نکرده‌اید، بعداً از تنظیماتِ صنف در پنلِ مدیریت هم می‌توانید یکی را نصب کنید.</p>
+  {% include "portal/onboarding/_actions.html" with form_id="ob-industry-form" continue_label="نصبِ قالبِ انتخاب‌شده" skip_form_id="ob-skip-form" install_mode=True loading_text="در حال نصب…" %}
+
+  {% else %}
+  {# ── بدونِ قالبِ قابل‌ارائه: بن‌بست نیست؛ رد شدن همیشه ممکن است ── #}
+  <div class="ob-alert ob-alert-info" role="status">در حال حاضر قالبِ صنفی برای ارائه موجود نیست.</div>
+  <p class="ob-skip-explain">می‌توانید بدونِ قالب ادامه دهید و دسته‌بندی‌ها و ویژگی‌ها را بعداً از پنلِ مدیریت بسازید.</p>
+  <form method="post" id="ob-skip-form" data-ob-once>
+    {% csrf_token %}
+    <input type="hidden" name="action" value="skip">
+  </form>
+  {% include "portal/onboarding/_actions.html" with form_id="ob-skip-form" continue_label="ادامه بدونِ قالبِ صنف" loading_text="در حال ادامه…" %}
   {% endif %}
-</div>
-</div>
+  {% endif %}
+</section>
 {% endblock %}

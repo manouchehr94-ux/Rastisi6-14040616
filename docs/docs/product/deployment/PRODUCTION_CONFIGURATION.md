@@ -101,15 +101,23 @@ Run this immediately after `migrate`, on every deploy:
 ```
 python manage.py seed_industry_templates
 python manage.py validate_industry_templates
+python manage.py audit_industry_templates --apply   # optional: converge readiness of platform rows
 ```
 
-Both are idempotent (`update_or_create` on stable natural keys) and safe to
+All are idempotent (`update_or_create` on stable natural keys) and safe to
 run on every deploy, including ones that change nothing — re-running
 `seed_industry_templates` creates no duplicate `IndustryTemplate`/category/
 attribute rows. `validate_industry_templates` is read-only by default and
 exits non-zero (failing the deploy, if your pipeline checks exit codes) the
 moment any template fails validation — never skip or silence this step to
 get a deploy through; fix the registry entry instead.
+
+A template is offered to merchants only while `production_ready`. Structural
+validity alone is not enough: the sector-aware completeness gate (ADR-26
+addendum) holds skeletal templates at `review_required`, and a re-seed or
+`audit_industry_templates --apply` converges existing platform rows to it
+(`--format markdown --output …` regenerates the enrichment backlog report).
+Existing stores' installed categories/attributes are never touched by this.
 
 Skipping this step is exactly the production bug this section exists to
 prevent: a fresh database that never runs `seed_industry_templates` silently
@@ -574,6 +582,7 @@ python manage.py showmigrations
 python manage.py migrate
 python manage.py seed_industry_templates
 python manage.py validate_industry_templates
+python manage.py audit_industry_templates --format table
 python manage.py provision_default_warehouses
 python manage.py verify_inventory_consistency --strict
 python manage.py collectstatic --noinput

@@ -228,7 +228,11 @@ class PasswordResetConfirmForm(_FieldErrorA11yMixin, forms.Form):
 
 
 class CreateStoreForm(forms.Form):
-    name = forms.CharField(label="نام فروشگاه", max_length=200)
+    name = forms.CharField(
+        label="نام فروشگاه", max_length=200,
+        help_text="نامی که مشتریان می‌بینند؛ بعداً هم از پنلِ مدیریت قابلِ تغییر است.",
+        widget=forms.TextInput(attrs={"placeholder": "مثلاً: فروشگاه لوازم خانگی رضایی", "autocomplete": "organization"}),
+    )
     industry_template_id = forms.IntegerField(label="صنف", required=False)
     submission_token = forms.CharField(widget=forms.HiddenInput, required=False)
 
@@ -345,26 +349,34 @@ class OnboardingIdentityForm(forms.Form):
 
     name = forms.CharField(
         label="نام فروشگاه", max_length=150,
-        widget=forms.TextInput(attrs={"placeholder": "مثلاً: فروشگاه لوازم خانگی رضایی"}),
+        help_text="نامی که مشتریان در ویترین و پیام‌های فروشگاه می‌بینند.",
+        widget=forms.TextInput(attrs={"placeholder": "مثلاً: فروشگاه لوازم خانگی رضایی", "autocomplete": "organization"}),
     )
     tagline = forms.CharField(
         label="شعار فروشگاه", max_length=200, required=False,
+        help_text="یک جمله‌ی کوتاه درباره‌ی فروشگاه (حداکثر ۲۰۰ نویسه).",
         widget=forms.TextInput(attrs={"placeholder": "مثلاً: بهترین کیفیت، مناسب‌ترین قیمت"}),
     )
     description = forms.CharField(
         label="درباره‌ی فروشگاه", required=False,
-        widget=forms.Textarea(attrs={"placeholder": "مثلاً: فروشگاه ما از سال ... با هدف ... راه‌اندازی شده است."}),
+        help_text="چند جمله برای معرفیِ کسب‌وکارتان به مشتریان؛ هر زمان قابلِ ویرایش است.",
+        widget=forms.Textarea(attrs={"rows": 5, "placeholder": "مثلاً: فروشگاه ما از سال ... با هدف ... راه‌اندازی شده است."}),
     )
     contact_phone = forms.CharField(
         label="شماره تماس", max_length=30, required=False,
-        widget=forms.TextInput(attrs={"placeholder": "مثلاً: 021-12345678"}),
+        help_text="شماره‌ی ثابت یا موبایل برای تماسِ مشتریان.",
+        widget=forms.TextInput(attrs={
+            "placeholder": "مثلاً: 021-12345678", "dir": "auto", "inputmode": "tel", "autocomplete": "tel",
+        }),
     )
     contact_email = forms.EmailField(
         label="ایمیل فروشگاه", required=False,
-        widget=forms.EmailInput(attrs={"placeholder": "مثلاً: info@example.com"}),
+        help_text="ایمیلی که مشتریان می‌توانند با آن با شما در تماس باشند.",
+        widget=forms.EmailInput(attrs={"placeholder": "مثلاً: info@example.com", "dir": "auto", "autocomplete": "email"}),
     )
     contact_address = forms.CharField(
         label="آدرس", max_length=300, required=False,
+        help_text="نشانیِ فروشگاه یا دفتر (حداکثر ۳۰۰ نویسه).",
         widget=forms.TextInput(attrs={"placeholder": "مثلاً: تهران، خیابان ..."}),
     )
 
@@ -385,7 +397,13 @@ class OnboardingBrandingForm(forms.Form):
     متأثر نمی‌شود) — پیش‌فرضِ ``ShopSettings.primary_color``/``accent_color``
     هم دست‌نخورده می‌ماند."""
 
-    logo = forms.ImageField(label="لوگو", required=False)
+    logo = forms.ImageField(
+        label="لوگو", required=False,
+        help_text="PNG، JPG یا WebP؛ ترجیحاً کمتر از ۲ مگابایت.",
+        widget=forms.FileInput(attrs={
+            "accept": "image/png,image/jpeg,image/webp,image/gif", "data-ob-logo-input": "",
+        }),
+    )
 
 
 class ContactForm(forms.Form):

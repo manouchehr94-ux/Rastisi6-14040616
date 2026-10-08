@@ -1,0 +1,53 @@
+{% extends "portal/base_platform.html" %}
+{% load static %}
+{% comment %}
+  پوسته‌ی واحدِ مسیرِ راه‌اندازیِ فروشگاه (ساخت فروشگاه ← ویزارد ← فروشگاه آماده).
+  همان توکن‌ها و دکمه‌های سایتِ عمومیِ راستی‌سی (`--rs-*`) را بازمصرف می‌کند و فقط یک
+  هدرِ متمرکز (برند + نامِ فروشگاه + «ذخیره و بازگشت») دارد؛ پالتِ دومی وجود ندارد.
+{% endcomment %}
+{% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block canonical %}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'portal/css/public-site-v2.css' %}?v=20261008-5">
+<link rel="stylesheet" href="{% static 'portal/css/onboarding.css' %}?v=20261008-3">
+{% endblock %}
+
+{% block header %}
+<header class="ob-header">
+  <div class="ob-header-inner">
+    <a class="r-brand" href="{% url 'portal:app-home' %}" aria-label="راستی‌سی، فروشگاه‌های من">
+      <span class="r-brand-mark" aria-hidden="true"></span>
+      <span>راستی‌سی</span>
+    </a>
+    {% if store %}
+    <div class="ob-store">
+      <span class="ob-store-label">فروشگاه</span>
+      <span class="ob-store-name" dir="auto" title="{{ store.name }}">{{ store.name }}</span>
+    </div>
+    {% endif %}
+    <a class="ob-exit" href="{% url 'portal:app-home' %}">ذخیره و بازگشت<span class="ob-exit-long">&nbsp;به فروشگاه‌های من</span></a>
+  </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="ob-page{% block ob_page_class %}{% endblock %}">
+  {% if messages %}
+  <div class="ob-messages">
+    {% for message in messages %}
+    <div class="ob-alert {% if message.tags == 'error' %}ob-alert-error{% elif message.tags == 'warning' %}ob-alert-warning{% elif message.tags == 'success' %}ob-alert-success{% else %}ob-alert-info{% endif %}" role="{% if message.tags == 'error' %}alert{% else %}status{% endif %}">{{ message }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% block ob_body %}{% endblock %}
+</div>
+{% endblock %}
+
+{% block footer %}
+<footer class="ob-footer">
+  <p>پیشرفت شما در هر مرحله ذخیره می‌شود. <a href="{% url 'portal:terms' %}">قوانین و مقررات</a> · <a href="{% url 'portal:contact' %}">پشتیبانی</a></p>
+</footer>
+<script src="{% static 'portal/js/onboarding.js' %}?v=20261008-3" defer></script>
+{% endblock %}
+{% block messages_toast %}{% endblock %}

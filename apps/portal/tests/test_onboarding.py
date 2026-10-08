@@ -520,27 +520,31 @@ class IndustrySearchInputContrastTests(TestCase):
         placeholder_end = css.index("}", placeholder_start)
         self.assertIn("color:var(--p-muted)", css[placeholder_start:placeholder_end])
 
-    def test_onboarding_industry_page_loads_both_stylesheets_in_the_needed_order(self):
+    def test_onboarding_industry_page_uses_the_light_onboarding_shell_search_input(self):
+        """The onboarding journey no longer renders the legacy dark-themed selector
+        (the original root cause); its own search input pairs a background with a
+        readable foreground token, so typed text can never go invisible."""
         response = self.client.get(
             f"/app/stores/{self.store.public_id}/onboarding/industry/", HTTP_HOST=_HOST,
         )
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
-        tokens_pos = content.find("portal/css/platform-tokens.css")
-        selector_pos = content.find("css/industry_selector.css")
-        self.assertNotEqual(tokens_pos, -1)
-        self.assertNotEqual(selector_pos, -1)
-        # The override in platform-tokens.css only reliably wins the
-        # cascade because it is more specific than industry_selector.css's
-        # own same-property rule — not because of load order — but assert
-        # both are actually present on this exact page regardless.
-        self.assertIn('class="industry-search"', content)
+        self.assertIn("portal/css/onboarding.css", content)
+        self.assertNotIn("css/industry_selector.css", content)
+        self.assertIn("data-ob-search", content)
 
-    def test_store_create_wizard_also_loads_the_fix(self):
-        """The same dark-themed component appears on the new-store wizard
-        (``portal/app/store_create.html``), not just onboarding — the fix
-        lives in the shared ``platform-tokens.css``, so both get it from
-        one place."""
+        from pathlib import Path
+        import apps.portal as portal_app_module
+
+        css = (Path(portal_app_module.__file__).resolve().parent / "static/portal/css/onboarding.css").read_text(
+            encoding="utf-8",
+        )
+        rule = css[css.index(".ob-search input{"):]
+        rule = rule[:rule.index("}")]
+        self.assertIn("background:var(--rs-paper)", rule)
+        self.assertIn("color:var(--rs-ink)", rule)
+
+    def test_store_create_wizard_uses_the_same_selector(self):
         self.client.logout()
         second_owner = User.objects.create_user(
             username="contrastowner2@example.com", email="contrastowner2@example.com",
@@ -550,5 +554,6 @@ class IndustrySearchInputContrastTests(TestCase):
         response = self.client.get("/app/stores/new/", HTTP_HOST=_HOST)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
-        self.assertIn("portal/css/platform-tokens.css", content)
-        self.assertIn('class="industry-search"', content)
+        self.assertIn("portal/css/onboarding.css", content)
+        self.assertNotIn("css/industry_selector.css", content)
+        self.assertIn("data-ob-search", content)

@@ -1451,6 +1451,43 @@ platform operators need to inspect *why* a template is not
 `production_ready` without re-running validation by hand each time (see
 ADR context in §11 of the Phase 1F report for the persistence policy).
 
+### ADR-26 addendum — Merchant-completeness gate (REVIEW_REQUIRED)
+
+**Context.** Structural validity is necessary but is not "a merchant can start
+selling with this". A template with one generic category and three free-text
+fields passes every structural check yet gives a clothing/food/electronics
+merchant nothing they could not type themselves. Before this addendum 101 of
+107 latest templates were `production_ready`, of which ~75 were that skeletal
+pattern.
+
+**Decision.** `validate_industry_template` additionally evaluates a
+*sector-aware completeness profile* (`completeness_profile_for(sector)`):
+
+| Profile | Sectors | Needs |
+|---|---|---|
+| `product` | retail, digital, food, home, beauty, sport, culture, auto, industry | ≥4 categories, ≥5 attributes, ≥8 category↔attribute mappings, schema coverage (with parent inheritance) on ≥50% of leaf categories and ≥2 mapped categories, ≥1 choice attribute with ≥2 values; **retail** also ≥1 recommended variant axis |
+| `service` | services | ≥3 service categories; no product attributes required |
+| `free_form` | other | deliberately generic; structural validity only |
+
+Gaps are `review`-severity issues (`COMPLETENESS_*`), kept apart from
+`errors`. Recommended readiness: any error → `validation_failed`; else any gap →
+`review_required`; else `production_ready`. The advisory `quality_score` is
+capped at 69 while gaps exist. "No filterable mapping" stays a warning, not a gap.
+Strict global mode is **not** enabled. `validate_and_persist` stores the gap list
+under `metrics["completeness"]`; `deprecated`/`archived` stay operator decisions.
+
+**Consequences.** Merchant-facing selectors (`offerable_industry_templates`,
+onboarding, store creation, public supported-industries page) already offer only
+`production_ready`, so `review_required` templates simply stop being offered
+for **new** installations. Existing `StoreIndustryInstallation` rows and the
+Categories/Attributes copied to a Store are never deleted or rewritten — readiness
+governs new installs only. `seed_industry_templates` runs `validate_and_persist`
+for every entry, and `audit_industry_templates --apply` does the same for
+platform rows already in the database, so an existing environment converges
+without manual DB editing. Enriching a template (editing the registry entry) and
+re-running seed promotes it automatically.
+The backlog is in `docs/docs/product/reports/INDUSTRY_TEMPLATE_COMPLETENESS_AUDIT.md`.
+
 ## ADR-27: Template Versioning Stays on `IndustryTemplate.(slug, version)` — No Separate Version-Family Model
 
 **Context.** Phase 1F requires representing "Industry family identity,

@@ -20,13 +20,13 @@ from django.views.decorators.http import require_http_methods, require_POST
 from django.conf import settings
 
 from apps.catalog.models import IndustryTemplate
-from apps.catalog.services import industry_catalog_service
+from apps.catalog.services import industry_catalog_service, template_summary_service
 from apps.billing.models import SubscriptionPaymentAttempt
 from apps.billing.services import payment_flow_service
 from apps.billing.services import plan_change_billing_service
 from apps.stores.hostnames import build_cross_host_url
 from apps.stores.models import Store, StoreDomain, StoreMembership, StoreOwnershipTransfer
-from apps.stores.services import deletion_service, domain_verification_service, handle_service, ownership_transfer_service
+from apps.stores.services import deletion_service, domain_verification_service, handle_service, ownership_transfer_service, publication_service
 from apps.subscriptions.models import Plan, PlanVersion, StoreSubscription
 from apps.subscriptions.services import entitlement_service as ent
 from apps.subscriptions.services import plan_change_service
@@ -1030,6 +1030,11 @@ def store_create(request):
                 industry_template = IndustryTemplate.objects.filter(
                     pk=template_id, is_active=True, readiness=IndustryTemplate.Readiness.PRODUCTION_READY,
                 ).first()
+                if industry_template is None:
+                    messages.warning(
+                        request,
+                        "صنفِ انتخاب‌شده در دسترس نبود؛ فروشگاه بدونِ صنف ساخته می‌شود و می‌توانید در مرحله‌ی «صنف» دوباره انتخاب کنید.",
+                    )
             try:
                 store = provisioning_service.provision_trial_store(
                     owner=request.user, name=form.cleaned_data["name"], industry_template=industry_template,
@@ -1043,11 +1048,13 @@ def store_create(request):
         form = CreateStoreForm()
 
     industry_templates = provisioning_service.latest_offerable_industry_templates()
+    template_cards = template_summary_service.attach_summaries(industry_templates)
     return render(
         request, "portal/app/store_create.html",
         {
-            "form": form, "industry_templates": industry_templates,
-            "industry_sector_tabs": industry_catalog_service.SECTOR_TABS,
+            "form": form, "industry_templates": industry_templates, "template_cards": template_cards,
+            "selected_template_id": str(form["industry_template_id"].value() or ""),
+            "industry_sector_tabs": _sector_tabs_for(template_cards),
             "submission_token": request.session[_STORE_CREATE_TOKEN_SESSION_KEY],
         },
     )
@@ -1104,6 +1111,72 @@ _ONBOARDING_STAGE_URL_NAMES = {
     Store.OnboardingStage.BRANDING: "portal:onboarding-branding",
     Store.OnboardingStage.REVIEW: "portal:onboarding-review",
 }
+
+
+#: برچسبِ مرحله‌ها در نوارِ پیشرفتِ ویزارد؛ ``True`` یعنی مرحله اختیاری است.
+_ONBOARDING_STEP_META = {
+    Store.OnboardingStage.IDENTITY: ("معرفی", False),
+    Store.OnboardingStage.INDUSTRY: ("صنف", True),
+    Store.OnboardingStage.BRANDING: ("ظاهر", True),
+    Store.OnboardingStage.REVIEW: ("بازبینی", False),
+}
+
+
+def _publication_context(store) -> dict:
+    """وضعیتِ *واقعیِ* انتشار (همان تک‌مرجعِ ``publication_service``) برای صفحه‌هایِ
+    بازبینی/فروشگاهِ آماده — هرگز ادعایی درباره‌ی عمومی‌بودن بدونِ این سیگنال نمی‌شود."""
+    state = publication_service.get_store_publication_state(store)
+    return {
+        "publication_state": state,
+        "publication_state_label": publication_service.PublicationState(state).label,
+        "is_publicly_visible": state not in publication_service.NON_PUBLIC_STATES,
+        "private_until_publish": state == publication_service.PublicationState.TRIAL_PRIVATE,
+        "publication_blocked_by_status": state in (
+            publication_service.PublicationState.RESTRICTED,
+            publication_service.PublicationState.SUSPENDED,
+            publication_service.PublicationState.INACTIVE,
+        ),
+    }
+
+
+def _sector_tabs_for(template_cards) -> list:
+    """فقط رسته‌هایی که واقعاً قالبِ قابل‌ارائه دارند (تبِ خالی دیده نمی‌شود)."""
+    present = {card["sector"] for card in template_cards}
+    return [tab for tab in industry_catalog_service.SECTOR_TABS if tab[0] == "all" or tab[0] in present]
+
+
+def _onboarding_shell_context(store, current: str) -> dict:
+    """زمینه‌ی مشترکِ پوسته‌ی ویزارد (نوارِ پیشرفت، قبلی/بعدی) — فقط نمایشی.
+
+    ``store.onboarding_stage`` دورترین مرحله‌ی رسیده است؛ مرحله‌هایِ قبل از آن
+    «انجام‌شده» و آزادانه قابلِ بازدیدند، مرحله‌هایِ بعد از آن هنوز قفل‌اند
+    (فقط با «ادامه» باز می‌شوند). هیچ منطقِ دسترسی/مجوزی اینجا نیست."""
+    order = _ONBOARDING_STAGE_ORDER
+    if store.onboarding_stage in order:
+        reached = order.index(store.onboarding_stage)
+    elif store.onboarding_stage == Store.OnboardingStage.DONE or store.onboarding_completed_at:
+        reached = len(order) - 1
+    else:
+        reached = 0
+    steps = []
+    for index, stage in enumerate(order):
+        label, optional = _ONBOARDING_STEP_META[stage]
+        is_current = stage == current
+        steps.append({
+            "key": stage, "number": index + 1, "label": label, "optional": optional,
+            "url": reverse(_ONBOARDING_STAGE_URL_NAMES[stage], kwargs={"store_public_id": store.public_id}),
+            "is_current": is_current,
+            "is_done": index < reached and not is_current,
+            "is_available": index <= reached,
+        })
+    current_index = order.index(current)
+    return {
+        "store": store,
+        "ob_steps": steps,
+        "ob_current": steps[current_index],
+        "ob_total": len(order),
+        "ob_previous_url": steps[current_index - 1]["url"] if current_index > 0 else None,
+    }
 
 
 def _advance_onboarding_stage(store, *, completed: str) -> None:
@@ -1172,7 +1245,9 @@ def onboarding_identity(request, store_public_id):
             "contact_email": shop_settings.contact_email, "contact_address": shop_settings.contact_address,
         })
 
-    return render(request, "portal/app/onboarding_identity.html", {"store": store, "form": form})
+    return render(request, "portal/app/onboarding_identity.html", {
+        **_onboarding_shell_context(store, Store.OnboardingStage.IDENTITY), "form": form,
+    })
 
 
 @owner_required
@@ -1207,23 +1282,41 @@ def onboarding_industry(request, store_public_id):
             return redirect("portal:onboarding-branding", store_public_id=store.public_id)
 
         form = OnboardingIndustryForm(request.POST)
-        if form.is_valid() and form.cleaned_data["industry_template_id"]:
-            template = get_object_or_404(IndustryTemplate, pk=form.cleaned_data["industry_template_id"])
-            try:
-                install_industry_template(store, template)
-            except IndustryInstallationError as exc:
-                messages.error(request, str(exc))
+        template_id = form.cleaned_data["industry_template_id"] if form.is_valid() else None
+        if not template_id:
+            messages.error(request, "ابتدا یک صنف را انتخاب کنید؛ یا اگر صنفِ شما در فهرست نیست، این مرحله را رد کنید.")
+        else:
+            template = IndustryTemplate.objects.filter(pk=template_id).first()
+            if template is None or not template.is_offerable_for_new_installation:
+                # شناسه‌ی جعلی/منسوخ/«نیازمند بازبینی»: هرگز نصب نمی‌شود
+                # (``install_industry_template`` هم همین را تضمین می‌کند)؛ پیامِ
+                # دوستانه به‌جایِ ۴۰۴ تا مالک بتواند صنفِ دیگری انتخاب یا رد کند.
+                messages.error(request, "این صنف در حال حاضر برای نصب در دسترس نیست؛ صنفِ دیگری انتخاب کنید یا این مرحله را رد کنید.")
             else:
-                _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
-                return redirect("portal:onboarding-branding", store_public_id=store.public_id)
+                try:
+                    install_industry_template(store, template)
+                except IndustryInstallationError as exc:
+                    if StoreIndustryInstallation.objects.filter(store=store).exists():
+                        # دابل‌کلیک/درخواستِ هم‌زمان: نصبِ اول موفق بوده؛ خطا نشان نده، فقط جلو ببر.
+                        _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
+                        return redirect("portal:onboarding-branding", store_public_id=store.public_id)
+                    messages.error(request, str(exc))
+                else:
+                    _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
+                    return redirect("portal:onboarding-branding", store_public_id=store.public_id)
     elif request.method == "POST":
         # از قبل نصب‌شده — POST دیگری اینجا معنایی ندارد جز عبور به مرحله‌ی بعد.
         _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
         return redirect("portal:onboarding-branding", store_public_id=store.public_id)
 
+    template_cards = template_summary_service.attach_summaries(templates)
+    installed_summary = (
+        template_summary_service.summarize_template(installation.industry_template) if installation else None
+    )
     return render(request, "portal/app/onboarding_industry.html", {
-        "store": store, "templates": templates, "installation": installation,
-        "industry_sector_tabs": industry_catalog_service.SECTOR_TABS,
+        **_onboarding_shell_context(store, Store.OnboardingStage.INDUSTRY),
+        "template_cards": template_cards, "installation": installation, "installed_summary": installed_summary,
+        "industry_sector_tabs": _sector_tabs_for(template_cards),
     })
 
 
@@ -1267,7 +1360,8 @@ def onboarding_branding(request, store_public_id):
         form = OnboardingBrandingForm()
 
     return render(request, "portal/app/onboarding_branding.html", {
-        "store": store, "form": form, "shop_settings": shop_settings,
+        **_onboarding_shell_context(store, Store.OnboardingStage.BRANDING),
+        "form": form, "shop_settings": shop_settings,
     })
 
 
@@ -1290,14 +1384,21 @@ def onboarding_review(request, store_public_id):
         # SETTINGS_MANAGE permission, not merely an ACTIVE membership.
         if not portal_action_allowed(request, store, SETTINGS_MANAGE):
             return portal_permission_denied(request)
-        store.onboarding_completed_at = timezone.now()
-        store.onboarding_stage = Store.OnboardingStage.DONE
-        store.save(update_fields=["onboarding_completed_at", "onboarding_stage", "updated_at"])
-        messages.success(request, "فروشگاه شما منتشر شد!")
+        if not store.onboarding_completed_at:
+            # idempotent: انتشارِ دوباره (refresh/دابل‌کلیک) تاریخِ اولین انتشار را بازنویسی نمی‌کند.
+            store.onboarding_completed_at = timezone.now()
+            store.onboarding_stage = Store.OnboardingStage.DONE
+            store.save(update_fields=["onboarding_completed_at", "onboarding_stage", "updated_at"])
+            messages.success(request, "فروشگاه شما منتشر شد!")
         return redirect("portal:store-created", store_public_id=store.public_id)
 
+    installed_summary = (
+        template_summary_service.summarize_template(installation.industry_template) if installation else None
+    )
     return render(request, "portal/app/onboarding_review.html", {
-        "store": store, "shop_settings": shop_settings, "installation": installation, "trial_domain": trial_domain,
+        **_onboarding_shell_context(store, Store.OnboardingStage.REVIEW),
+        "shop_settings": shop_settings, "installation": installation, "installed_summary": installed_summary,
+        "trial_domain": trial_domain, **_publication_context(store),
     })
 
 
@@ -1307,7 +1408,11 @@ def store_created(request, store_public_id):
     trial_domain = store.domains.filter(is_primary=True).first()
     if trial_domain is None:
         raise Http404
-    return render(request, "portal/app/store_created.html", {"store": store, "trial_domain": trial_domain})
+    return render(request, "portal/app/store_created.html", {
+        "store": store, "trial_domain": trial_domain,
+        "onboarding_complete": bool(store.onboarding_completed_at), **_publication_context(store),
+        "onboarding_resume_url": reverse("portal:onboarding", kwargs={"store_public_id": store.public_id}),
+    })
 
 
 # ---------------------------------------------------------------------------

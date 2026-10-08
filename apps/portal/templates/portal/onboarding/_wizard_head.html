@@ -1,0 +1,16 @@
+{# عنوان + نوارِ پیشرفتِ ویزارد؛ نیازمندِ ob_steps/ob_current/ob_total از `_onboarding_shell_context` #}
+<h1 class="ob-title">راه‌اندازی فروشگاه</h1>
+<p class="ob-lead">چند مرحله‌ی کوتاه تا فروشگاهِ آماده‌ی فروش. هر مرحله ذخیره می‌شود و هر زمان می‌توانید برگردید.</p>
+<nav class="ob-progress" aria-label="مراحل راه‌اندازی">
+  <p class="ob-progress-summary">مرحله {{ ob_current.number }} از {{ ob_total }} · <b>{{ ob_current.label }}</b></p>
+  <ol class="ob-steps">
+    {% for step in ob_steps %}
+    <li class="ob-step{% if step.is_current %} is-current{% elif step.is_done %} is-done{% elif not step.is_available %} is-locked{% endif %}">
+      {% if step.is_available and not step.is_current %}<a class="ob-step-link" href="{{ step.url }}">{% else %}<span class="ob-step-link"{% if step.is_current %} aria-current="step"{% endif %}>{% endif %}
+        <span class="ob-step-dot" aria-hidden="true">{% if step.is_done %}✓{% else %}{{ step.number }}{% endif %}</span>
+        <span class="ob-step-text">{{ step.label }}{% if step.optional %}<small>اختیاری</small>{% endif %}<span class="ob-sr-only">{% if step.is_done %} — انجام شد{% elif step.is_current %} — مرحله‌ی فعلی{% elif not step.is_available %} — هنوز باز نشده{% endif %}</span></span>
+      {% if step.is_available and not step.is_current %}</a>{% else %}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+</nav>

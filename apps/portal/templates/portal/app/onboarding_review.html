@@ -1,32 +1,78 @@
-{% extends "portal/base_platform.html" %}
-{% block title %}بازبینی و انتشار | راستیسی{% endblock %}
-{% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
-{% block content %}
-<div class="p-wrap">
-<div class="p-form-card">
-  <p style="text-align:center;font-size:12px;color:var(--p-muted);margin-bottom:4px">مرحله ۴ از ۴</p>
-  <h2 style="text-align:center;margin-bottom:8px">بازبینی و انتشار</h2>
-  <p style="text-align:center;font-size:13px;color:var(--p-muted);margin-bottom:20px">
-    فروشگاه آزمایشی شما آماده است. تا پیش از انتشار، این فروشگاه فقط برای شما قابلِ‌مشاهده است.
-  </p>
+{% extends "portal/onboarding/base_onboarding.html" %}
+{% block title %}بازبینی و انتشار | راه‌اندازی | راستی‌سی{% endblock %}
+{% block ob_page_class %} ob-page--narrow{% endblock %}
+{% block ob_body %}
+{% include "portal/onboarding/_wizard_head.html" %}
 
-  <div style="display:grid;gap:10px;margin-bottom:20px;font-size:14px">
-    <div style="display:flex;justify-content:space-between"><span style="color:var(--p-muted)">نام فروشگاه</span><span>{{ store.name }}</span></div>
-    {% if shop_settings.tagline %}<div style="display:flex;justify-content:space-between"><span style="color:var(--p-muted)">شعار</span><span>{{ shop_settings.tagline }}</span></div>{% endif %}
-    {% if shop_settings.contact_phone %}<div style="display:flex;justify-content:space-between"><span style="color:var(--p-muted)">تماس</span><span style="direction:ltr">{{ shop_settings.contact_phone }}</span></div>{% endif %}
-    <div style="display:flex;justify-content:space-between"><span style="color:var(--p-muted)">صنف</span><span>{% if installation %}{{ installation.industry_template.name }}{% else %}انتخاب نشده{% endif %}</span></div>
-    {% if trial_domain %}<div style="display:flex;justify-content:space-between"><span style="color:var(--p-muted)">آدرسِ آزمایشی</span><span style="direction:ltr">{{ trial_domain.hostname }}</span></div>{% endif %}
+<section class="ob-card" aria-labelledby="ob-review-title">
+  <div class="ob-card-head">
+    <h2 id="ob-review-title">بازبینی و انتشار</h2>
+    <p>{% if store.onboarding_completed_at %}این فروشگاه قبلاً منتشر شده است. می‌توانید اطلاعات را مرور کنید.{% elif private_until_publish %}اطلاعاتِ زیر را مرور کنید. تا وقتی «انتشار» را نزده‌اید، فروشگاه فقط برای شما قابلِ مشاهده است.{% else %}اطلاعاتِ زیر را مرور کنید و راه‌اندازی را با «انتشار» تکمیل کنید.{% endif %}</p>
   </div>
 
-  <div style="display:flex;gap:8px;margin-bottom:14px">
-    <a href="{% url 'portal:onboarding-identity' store.public_id %}" class="p-btn" style="flex:1;text-align:center">ویرایشِ معرفی</a>
-    <a href="{% url 'portal:onboarding-branding' store.public_id %}" class="p-btn" style="flex:1;text-align:center">ویرایشِ هویتِ بصری</a>
+  <div class="ob-summary-group">
+    <h3 class="ob-summary-group-title">معرفی و تماس <a class="ob-summary-edit" href="{% url 'portal:onboarding-identity' store.public_id %}">ویرایش</a></h3>
+    <dl class="ob-summary">
+      <div class="ob-summary-row"><dt class="ob-summary-label">نام فروشگاه</dt><dd class="ob-summary-value" dir="auto">{{ store.name }}</dd></div>
+      <div class="ob-summary-row"><dt class="ob-summary-label">شعار</dt><dd class="ob-summary-value{% if not shop_settings.tagline %} is-empty{% endif %}" dir="auto">{{ shop_settings.tagline|default:"ثبت نشده" }}</dd></div>
+      <div class="ob-summary-row"><dt class="ob-summary-label">درباره‌ی فروشگاه</dt><dd class="ob-summary-value{% if not shop_settings.description %} is-empty{% endif %}" dir="auto">{{ shop_settings.description|default:"ثبت نشده"|truncatechars:240 }}</dd></div>
+      <div class="ob-summary-row"><dt class="ob-summary-label">شماره تماس</dt><dd class="ob-summary-value{% if not shop_settings.contact_phone %} is-empty{% endif %}">{% if shop_settings.contact_phone %}<span class="ob-ltr">{{ shop_settings.contact_phone }}</span>{% else %}ثبت نشده{% endif %}</dd></div>
+      <div class="ob-summary-row"><dt class="ob-summary-label">ایمیل</dt><dd class="ob-summary-value{% if not shop_settings.contact_email %} is-empty{% endif %}">{% if shop_settings.contact_email %}<span class="ob-ltr">{{ shop_settings.contact_email }}</span>{% else %}ثبت نشده{% endif %}</dd></div>
+      <div class="ob-summary-row"><dt class="ob-summary-label">آدرس</dt><dd class="ob-summary-value{% if not shop_settings.contact_address %} is-empty{% endif %}" dir="auto">{{ shop_settings.contact_address|default:"ثبت نشده" }}</dd></div>
+    </dl>
   </div>
 
-  <form method="post">
+  <div class="ob-summary-group">
+    <h3 class="ob-summary-group-title">صنف و ظاهر</h3>
+    <dl class="ob-summary">
+      <div class="ob-summary-row">
+        <dt class="ob-summary-label">قالبِ صنف</dt>
+        <dd class="ob-summary-value{% if not installation %} is-empty{% endif %}">
+          {% if installation %}{{ installation.industry_template.name }} <span class="ob-tag">{{ installation.categories_created }} دسته · {{ installation.attributes_created }} ویژگی</span>{% else %}نصب نشده — فروشگاه با دسته‌بندیِ خالی شروع می‌شود{% endif %}
+        </dd>
+        <dd><a class="ob-summary-edit" href="{% url 'portal:onboarding-industry' store.public_id %}">{% if installation %}مشاهده{% else %}انتخاب{% endif %}</a></dd>
+      </div>
+      <div class="ob-summary-row">
+        <dt class="ob-summary-label">لوگو</dt>
+        <dd class="ob-summary-value{% if not shop_settings.logo %} is-empty{% endif %}">{% if shop_settings.logo %}<span class="ob-logo-preview"><img src="{{ shop_settings.logo.url }}" alt="لوگوی فروشگاه"></span>{% else %}ثبت نشده{% endif %}</dd>
+        <dd><a class="ob-summary-edit" href="{% url 'portal:onboarding-branding' store.public_id %}">ویرایش</a></dd>
+      </div>
+    </dl>
+  </div>
+
+  <div class="ob-summary-group">
+    <h3 class="ob-summary-group-title">نشانی</h3>
+    <dl class="ob-summary">
+      <div class="ob-summary-row"><dt class="ob-summary-label">نشانیِ آزمایشی</dt><dd class="ob-summary-value">{% if trial_domain %}<span class="ob-ltr">{{ trial_domain.hostname }}</span>{% else %}—{% endif %}</dd></div>
+      <div class="ob-summary-row"><dt class="ob-summary-label">وضعیتِ انتشار</dt><dd class="ob-summary-value">{% if store.onboarding_completed_at %}راه‌اندازی منتشر شده · {{ publication_state_label }}{% elif private_until_publish %}هنوز منتشر نشده — فقط شما می‌توانید فروشگاه را ببینید{% else %}راه‌اندازی هنوز تکمیل نشده · {{ publication_state_label }}{% endif %}</dd></div>
+    </dl>
+  </div>
+
+  {% if not store.onboarding_completed_at %}
+  <form method="post" id="ob-publish-form" data-ob-once>
     {% csrf_token %}
-    <button type="submit" class="p-btn p-btn-primary" style="width:100%">انتشارِ فروشگاه</button>
+    <div class="ob-publish">
+      <h3>با انتشار چه می‌شود؟</h3>
+      <ul>
+        <li>راه‌اندازیِ اولیه تکمیل می‌شود و فروشگاه از «راه‌اندازی ناتمام» خارج می‌شود.</li>
+        {% if publication_blocked_by_status %}
+        <li>وضعیتِ فعلیِ فروشگاه «{{ publication_state_label }}» است؛ انتشارِ راه‌اندازی ثبت می‌شود اما تا رفعِ این وضعیت ویترین برای عموم نمایش داده نمی‌شود.</li>
+        {% elif private_until_publish %}
+        <li>ویترین روی نشانیِ آزمایشی{% if trial_domain %} (<span class="ob-ltr">{{ trial_domain.hostname }}</span>){% endif %} برای بازدیدکنندگان قابلِ مشاهده می‌شود.</li>
+        {% endif %}
+        <li>همه‌ی اطلاعاتِ بالا، از جمله لوگو و تماس، هر زمان از پنلِ مدیریت قابلِ ویرایش می‌مانند.</li>
+        <li>محصول، قیمت و ظاهرِ ویترین را بعد از انتشار از پنلِ مدیریت کامل می‌کنید.</li>
+      </ul>
+      <p>انتشار فقط با زدنِ دکمه‌ی زیر انجام می‌شود{% if private_until_publish %}؛ پیش از آن چیزی عمومی نیست{% endif %}.</p>
+    </div>
   </form>
-</div>
-</div>
+  {% include "portal/onboarding/_actions.html" with form_id="ob-publish-form" continue_label="انتشارِ فروشگاه" loading_text="در حال انتشار…" %}
+  {% else %}
+  <div class="ob-actions">
+    <a class="ob-btn ob-btn-quiet" href="{{ ob_previous_url }}">قبلی</a>
+    <span class="ob-actions-spacer"></span>
+    <a class="ob-btn ob-btn-primary" href="{% url 'portal:store-created' store.public_id %}">رفتن به صفحه‌ی فروشگاه</a>
+  </div>
+  {% endif %}
+</section>
 {% endblock %}

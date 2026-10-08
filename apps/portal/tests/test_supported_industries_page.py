@@ -41,6 +41,17 @@ class SupportedIndustriesPageTests(TestCase):
         self.assertNotContains(response, "صنفِ غیرفعالِ آزمایشی")
         self.assertNotContains(response, "صنفِ پیش‌نویسِ آزمایشی")
 
+    def test_review_required_templates_are_not_listed_publicly(self):
+        """The completeness gate: a structurally valid but skeletal template is
+        REVIEW_REQUIRED and must not be advertised on the public page."""
+        _make_template(
+            slug="pub-review", name="صنفِ نیازمندِ بازبینیِ آزمایشی",
+            readiness=IndustryTemplate.Readiness.REVIEW_REQUIRED,
+        )
+        response = self.client.get("/supported-industries/", HTTP_HOST=_HOST)
+        self.assertNotContains(response, "صنفِ نیازمندِ بازبینیِ آزمایشی")
+        self.assertEqual(response.context["industry_count"], 1)
+
     def test_hero_count_matches_real_active_count(self):
         response = self.client.get("/supported-industries/", HTTP_HOST=_HOST)
         self.assertEqual(response.context["industry_count"], 1)

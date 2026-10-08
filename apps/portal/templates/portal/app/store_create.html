@@ -1,60 +1,85 @@
-{% extends "portal/base_platform.html" %}
-{% block title %}فروشگاه تازه | راستیسی{% endblock %}
-{% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
-{% block content %}
-<div class="p-wrap">
-<div class="p-form-card" style="max-width:720px">
-  <h2 style="text-align:center;margin-bottom:8px">فروشگاه تازه بسازید</h2>
-  <p style="text-align:center;font-size:13px;color:var(--p-muted);margin-bottom:20px">یک نام و در صورت تمایل صنف فروشگاه را انتخاب کنید؛ فروشگاه آزمایشی شما بلافاصله آماده می‌شود.</p>
-  {% if form.non_field_errors %}<div class="p-alert p-alert-error">{{ form.non_field_errors.0 }}</div>{% endif %}
-  <form method="post" id="storeCreateForm">
+{% extends "portal/onboarding/base_onboarding.html" %}
+{% block title %}فروشگاه تازه | راستی‌سی{% endblock %}
+{% block ob_page_class %} ob-page--wide{% endblock %}
+{% block ob_body %}
+<h1 class="ob-title">فروشگاه تازه بسازید</h1>
+<p class="ob-lead">یک نام و در صورت تمایل صنفِ فروشگاه را انتخاب کنید؛ فروشگاهِ آزمایشیِ شما بلافاصله آماده می‌شود و بعد از آن چند مرحله‌ی کوتاهِ راه‌اندازی دارید.</p>
+
+<section class="ob-card ob-card--spaced" aria-labelledby="ob-create-title">
+  <div class="ob-card-head">
+    <h2 id="ob-create-title">مشخصاتِ فروشگاه</h2>
+  </div>
+
+  {% if form.non_field_errors %}<div class="ob-alert ob-alert-error" role="alert">{{ form.non_field_errors.0 }}</div>{% endif %}
+
+  <form method="post" id="storeCreateForm" novalidate data-ob-industry data-ob-once>
     {% csrf_token %}
     <input type="hidden" name="submission_token" value="{{ submission_token }}">
-    <div class="p-field">
-      <label for="id_name">نام فروشگاه</label>
+    <div class="ob-field{% if form.name.errors %} has-error{% endif %}">
+      <label class="ob-label" for="{{ form.name.id_for_label }}">نام فروشگاه<span class="ob-tag ob-tag-required">الزامی</span></label>
       {{ form.name }}
-      {% if form.name.errors %}<div class="p-error">{{ form.name.errors.0 }}</div>{% endif %}
+      <p class="ob-hint" id="{{ form.name.auto_id }}_helptext">{{ form.name.help_text }}</p>
+      {% for error in form.name.errors %}<p class="ob-error" role="alert">{{ error }}</p>{% endfor %}
     </div>
-    <div class="p-field">
-      <label>صنف (اختیاری)</label>
-      <input type="hidden" name="industry_template_id" id="id_industry_template_id"
-             value="{{ form.industry_template_id.value|default:'' }}">
-      {% if industry_templates %}
-      {% include "catalog/partials/industry_filter_bar.html" with sector_tabs=industry_sector_tabs search_placeholder="جستجوی صنف؛ مثال: پوشاک، دیجیتال، خوراک..." search_input_id="storeCreateIndustrySearch" %}
-      <div class="industry-grid" style="max-height:340px;overflow-y:auto;padding:4px">
-        {% for template in industry_templates %}
-        <div class="industry-card{% if form.industry_template_id.value|stringformat:'s' == template.pk|stringformat:'s' %} selected{% endif %}"
-             data-id="{{ template.pk }}" data-name="{{ template.name }}" data-sector="{{ template.sector }}"
-             data-sector-label="{{ template.get_sector_display }}"
-             onclick="industrySelectCard(this, 'id_industry_template_id')">
-          <div class="ic-emoji">{{ template.icon|default:"🏷️" }}</div>
-          <div class="ic-name">{{ template.name }}</div>
-          <div class="ic-sector">{{ template.get_sector_display }}</div>
+
+    <div class="ob-section">
+      <h3 class="ob-section-title">صنف <span class="ob-tag">اختیاری</span></h3>
+      {% if template_cards %}
+      <p class="ob-hint">با انتخابِ صنف، دسته‌بندی‌ها و ویژگی‌هایِ پیشنهادیِ آن همراهِ فروشگاه ساخته می‌شود. نصبِ قالب فقط یک‌بار ممکن است؛ اگر مطمئن نیستید، بدونِ صنف بسازید و در مرحله‌ی «صنف» تصمیم بگیرید.</p>
+      <div class="ob-industry-tools">
+        <div class="ob-search">
+          <label class="ob-sr-only" for="ob-industry-search">جست‌وجوی صنف</label>
+          <input type="search" id="ob-industry-search" data-ob-search placeholder="جست‌وجوی صنف؛ مثلاً پوشاک، دیجیتال، خوراک…" autocomplete="off">
         </div>
-        {% endfor %}
+        <div class="ob-chips" role="group" aria-label="رسته‌ی صنف">
+          {% for code, label in industry_sector_tabs %}
+          <button type="button" class="ob-chip" data-ob-sector="{{ code }}" aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}">{{ label }}</button>
+          {% endfor %}
+        </div>
       </div>
-      {% include "catalog/partials/industry_empty_state.html" %}
-      <div style="font-size:12px;color:var(--p-muted);margin-top:6px">
-        صنفِ انتخاب‌شده:
-        <b id="industrySelectedName">
-          {% for template in industry_templates %}{% if form.industry_template_id.value|stringformat:'s' == template.pk|stringformat:'s' %}{{ template.name }}{% endif %}{% endfor %}
-          {% if not form.industry_template_id.value %}— بدون صنف مشخص —{% endif %}
-        </b>
-        — بعداً هم از تنظیماتِ فروشگاه قابلِ انتخاب است.
+
+      <div class="ob-industry-layout">
+        <div>
+          <div class="ob-industry-list" role="radiogroup" aria-label="فهرستِ صنف‌ها">
+            <label class="ob-industry-card" data-ob-card data-id="" data-name="بدونِ صنف" data-sector="all" data-sector-label="">
+              <input type="radio" name="industry_template_id" value=""{% if not selected_template_id %} checked{% endif %}>
+              <span class="ob-ic-check" aria-hidden="true">✓</span>
+              <span class="ob-ic-icon" aria-hidden="true">⚪</span>
+              <span class="ob-ic-name">بدونِ صنف</span>
+              <span class="ob-ic-sector">بعداً انتخاب می‌کنم</span>
+            </label>
+            {% for card in template_cards %}
+            <label class="ob-industry-card{% if selected_template_id == card.id|stringformat:'s' %} is-selected{% endif %}" data-ob-card data-id="{{ card.id }}" data-name="{{ card.name }}" data-sector="{{ card.sector }}" data-sector-label="{{ card.sector_label }}">
+              <input type="radio" name="industry_template_id" value="{{ card.id }}"{% if selected_template_id == card.id|stringformat:'s' %} checked{% endif %}>
+              <span class="ob-ic-check" aria-hidden="true">✓</span>
+              <span class="ob-ic-icon" aria-hidden="true">{{ card.icon|default:"🏷️" }}</span>
+              <span class="ob-ic-name">{{ card.name }}</span>
+              <span class="ob-ic-sector">{{ card.sector_label }}</span>
+              <span class="ob-ic-meta">{{ card.category_count }} دسته{% if card.attribute_count %} · {{ card.attribute_count }} ویژگی{% endif %}</span>
+            </label>
+            {% endfor %}
+          </div>
+          <div class="ob-industry-empty" data-ob-no-results hidden>صنفی با این جست‌وجو پیدا نشد. عبارتِ دیگری را امتحان کنید یا صنفِ «سایر» را انتخاب کنید.</div>
+        </div>
+        <aside class="ob-preview" data-ob-preview aria-label="پیش‌نمایشِ صنفِ انتخاب‌شده" aria-live="polite">
+          <div class="ob-preview-empty" data-ob-preview-empty>یک صنف را انتخاب کنید تا دسته‌بندی‌ها، ویژگی‌ها و آنچه ساخته می‌شود را اینجا ببینید.</div>
+          {% for card in template_cards %}
+          <div data-ob-panel="{{ card.id }}" hidden>{% include "portal/onboarding/_template_preview.html" %}</div>
+          {% endfor %}
+        </aside>
       </div>
+      <p class="ob-hint" role="status">صنفِ انتخاب‌شده: <b data-ob-selected-name>— بدونِ صنف مشخص —</b></p>
       {% else %}
-      <div class="p-error" style="color:var(--p-muted);font-size:12px;margin-top:4px">
-        در حال حاضر هیچ الگوی صنفی برای انتخاب موجود نیست؛ می‌توانید بعداً از تنظیماتِ فروشگاه صنف را مشخص کنید.
-      </div>
+      <div class="ob-alert ob-alert-info" role="status">در حال حاضر هیچ الگوی صنفی برای انتخاب موجود نیست؛ می‌توانید فروشگاه را بسازید و بعداً از تنظیماتِ فروشگاه صنف را مشخص کنید.</div>
+      <input type="hidden" name="industry_template_id" value="">
       {% endif %}
     </div>
-    <button type="submit" class="p-btn p-btn-primary" style="width:100%">ساخت فروشگاه</button>
+
+    <div class="ob-actions">
+      <a class="ob-btn ob-btn-quiet" href="{% url 'portal:app-home' %}">انصراف</a>
+      <span class="ob-actions-spacer"></span>
+      <button type="submit" class="ob-btn ob-btn-primary" data-loading-text="در حال ساخت فروشگاه…">ساخت فروشگاه</button>
+    </div>
   </form>
-</div>
-</div>
-{% endblock %}
-{% block extra_css %}
-<style>
-.p-field input[type=text], .p-field select{width:100%;padding:10px 14px;border:1px solid var(--p-line);border-radius:10px;font-family:inherit;font-size:14px;background:#0c1310;color:var(--p-ink)}
-</style>
+</section>
 {% endblock %}

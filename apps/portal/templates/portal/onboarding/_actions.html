@@ -1,0 +1,14 @@
+{% comment %}
+نوارِ عملِ یکسان در همه‌ی مرحله‌ها: قبلی ← (فاصله) ← رد کردن (مراحلِ اختیاری) ← ادامه.
+   پارامترها: form_id، continue_label، skip_form_id (اختیاری)، install_mode، loading_text (اختیاری)
+{% endcomment %}
+<div class="ob-actions">
+  {% if ob_previous_url %}
+  <a class="ob-btn ob-btn-quiet" href="{{ ob_previous_url }}">قبلی</a>
+  {% else %}
+  <a class="ob-btn ob-btn-quiet" href="{% url 'portal:app-home' %}">ذخیره و بازگشت</a>
+  {% endif %}
+  <span class="ob-actions-spacer"></span>
+  {% if skip_form_id %}<button type="submit" form="{{ skip_form_id }}" class="ob-btn">فعلاً رد شو</button>{% endif %}
+  <button type="submit" form="{{ form_id }}" class="ob-btn ob-btn-primary{% if install_mode %} ob-btn-install{% endif %}"{% if install_mode %} data-ob-install-submit disabled aria-disabled="true"{% endif %}{% if loading_text %} data-loading-text="{{ loading_text }}"{% endif %}>{{ continue_label|default:"ذخیره و ادامه" }}</button>
+</div>
