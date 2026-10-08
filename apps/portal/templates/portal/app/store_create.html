@@ -1,9 +1,9 @@
 {% extends "portal/onboarding/base_onboarding.html" %}
 {% block title %}فروشگاه تازه | راستی‌سی{% endblock %}
-{% block ob_page_class %} ob-page--wide{% endblock %}
+{% block ob_page_class %} ob-page--narrow{% endblock %}
 {% block ob_body %}
 <h1 class="ob-title">فروشگاه تازه بسازید</h1>
-<p class="ob-lead">یک نام و در صورت تمایل صنفِ فروشگاه را انتخاب کنید؛ فروشگاهِ آزمایشیِ شما بلافاصله آماده می‌شود و بعد از آن چند مرحله‌ی کوتاهِ راه‌اندازی دارید.</p>
+<p class="ob-lead">فقط یک نام لازم است؛ فروشگاهِ آزمایشیِ شما بلافاصله آماده می‌شود. صنف و بقیه‌ی جزئیات را در مرحله‌های کوتاهِ راه‌اندازیِ بعدی تنظیم می‌کنید.</p>
 
 <section class="ob-card ob-card--spaced" aria-labelledby="ob-create-title">
   <div class="ob-card-head">
@@ -12,7 +12,7 @@
 
   {% if form.non_field_errors %}<div class="ob-alert ob-alert-error" role="alert">{{ form.non_field_errors.0 }}</div>{% endif %}
 
-  <form method="post" id="storeCreateForm" novalidate data-ob-industry data-ob-once>
+  <form method="post" id="storeCreateForm" novalidate data-ob-once>
     {% csrf_token %}
     <input type="hidden" name="submission_token" value="{{ submission_token }}">
     <div class="ob-field{% if form.name.errors %} has-error{% endif %}">
@@ -22,58 +22,7 @@
       {% for error in form.name.errors %}<p class="ob-error" role="alert">{{ error }}</p>{% endfor %}
     </div>
 
-    <div class="ob-section">
-      <h3 class="ob-section-title">صنف <span class="ob-tag">اختیاری</span></h3>
-      {% if template_cards %}
-      <p class="ob-hint">با انتخابِ صنف، دسته‌بندی‌ها و ویژگی‌هایِ پیشنهادیِ آن همراهِ فروشگاه ساخته می‌شود. نصبِ قالب فقط یک‌بار ممکن است؛ اگر مطمئن نیستید، بدونِ صنف بسازید و در مرحله‌ی «صنف» تصمیم بگیرید.</p>
-      <div class="ob-industry-tools">
-        <div class="ob-search">
-          <label class="ob-sr-only" for="ob-industry-search">جست‌وجوی صنف</label>
-          <input type="search" id="ob-industry-search" data-ob-search placeholder="جست‌وجوی صنف؛ مثلاً پوشاک، دیجیتال، خوراک…" autocomplete="off">
-        </div>
-        <div class="ob-chips" role="group" aria-label="رسته‌ی صنف">
-          {% for code, label in industry_sector_tabs %}
-          <button type="button" class="ob-chip" data-ob-sector="{{ code }}" aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}">{{ label }}</button>
-          {% endfor %}
-        </div>
-      </div>
-
-      <div class="ob-industry-layout">
-        <div>
-          <div class="ob-industry-list" role="radiogroup" aria-label="فهرستِ صنف‌ها">
-            <label class="ob-industry-card" data-ob-card data-id="" data-name="بدونِ صنف" data-sector="all" data-sector-label="">
-              <input type="radio" name="industry_template_id" value=""{% if not selected_template_id %} checked{% endif %}>
-              <span class="ob-ic-check" aria-hidden="true">✓</span>
-              <span class="ob-ic-icon" aria-hidden="true">⚪</span>
-              <span class="ob-ic-name">بدونِ صنف</span>
-              <span class="ob-ic-sector">بعداً انتخاب می‌کنم</span>
-            </label>
-            {% for card in template_cards %}
-            <label class="ob-industry-card{% if selected_template_id == card.id|stringformat:'s' %} is-selected{% endif %}" data-ob-card data-id="{{ card.id }}" data-name="{{ card.name }}" data-sector="{{ card.sector }}" data-sector-label="{{ card.sector_label }}">
-              <input type="radio" name="industry_template_id" value="{{ card.id }}"{% if selected_template_id == card.id|stringformat:'s' %} checked{% endif %}>
-              <span class="ob-ic-check" aria-hidden="true">✓</span>
-              <span class="ob-ic-icon" aria-hidden="true">{{ card.icon|default:"🏷️" }}</span>
-              <span class="ob-ic-name">{{ card.name }}</span>
-              <span class="ob-ic-sector">{{ card.sector_label }}</span>
-              <span class="ob-ic-meta">{{ card.category_count }} دسته{% if card.attribute_count %} · {{ card.attribute_count }} ویژگی{% endif %}</span>
-            </label>
-            {% endfor %}
-          </div>
-          <div class="ob-industry-empty" data-ob-no-results hidden>صنفی با این جست‌وجو پیدا نشد. عبارتِ دیگری را امتحان کنید یا صنفِ «سایر» را انتخاب کنید.</div>
-        </div>
-        <aside class="ob-preview" data-ob-preview aria-label="پیش‌نمایشِ صنفِ انتخاب‌شده" aria-live="polite">
-          <div class="ob-preview-empty" data-ob-preview-empty>یک صنف را انتخاب کنید تا دسته‌بندی‌ها، ویژگی‌ها و آنچه ساخته می‌شود را اینجا ببینید.</div>
-          {% for card in template_cards %}
-          <div data-ob-panel="{{ card.id }}" hidden>{% include "portal/onboarding/_template_preview.html" %}</div>
-          {% endfor %}
-        </aside>
-      </div>
-      <p class="ob-hint" role="status">صنفِ انتخاب‌شده: <b data-ob-selected-name>— بدونِ صنف مشخص —</b></p>
-      {% else %}
-      <div class="ob-alert ob-alert-info" role="status">در حال حاضر هیچ الگوی صنفی برای انتخاب موجود نیست؛ می‌توانید فروشگاه را بسازید و بعداً از تنظیماتِ فروشگاه صنف را مشخص کنید.</div>
-      <input type="hidden" name="industry_template_id" value="">
-      {% endif %}
-    </div>
+    <p class="ob-note">انتخابِ صنف (و نصبِ دسته‌بندی‌ها و ویژگی‌هایِ آماده) در مرحله‌ی «صنف» انجام می‌شود؛ آنجا پیش‌نمایشِ کامل می‌بینید و نصب فقط پس از تأییدِ صریحِ شما انجام می‌شود. در این صفحه هیچ قالبی نصب نمی‌شود.</p>
 
     <div class="ob-actions">
       <a class="ob-btn ob-btn-quiet" href="{% url 'portal:app-home' %}">انصراف</a>

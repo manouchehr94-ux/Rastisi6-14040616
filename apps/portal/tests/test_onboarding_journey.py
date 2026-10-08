@@ -46,6 +46,7 @@ _JOURNEY_TEMPLATES = sorted(
 )
 
 Readiness = IndustryTemplate.Readiness
+CONFIRM = {"confirm_industry_install": "1"}
 
 
 def make_rich_template(slug="journey-rich", name="پوشاک نمونه", sector=IndustryTemplate.Sector.RETAIL):
@@ -148,7 +149,12 @@ class SingleShellContractTests(JourneyBase):
                 self.assertIn("portal/css/onboarding.css", html)
                 self.assertIn('class="ob-header"', html)
                 self.assertIn("فروشگاهِ سفر", html)  # current store name in the header
-                self.assertIn("ذخیره و بازگشت", html)  # save-and-exit
+                # the header link is plain navigation and must never promise a save
+                self.assertIn("بازگشت<span", html)
+                self.assertIn("بازگشت به فروشگاه‌های من", html)
+                self.assertNotIn("ذخیره و بازگشت", html)
+                self.assertIn("پس از «ذخیره و ادامه» در هر مرحله، پیشرفت شما ثبت می‌شود", html)
+                self.assertNotIn("پیشرفت شما در هر مرحله ذخیره می‌شود", html)
                 self.assertNotIn("p-header", html)
                 self.assertNotIn("p-form-card", html)
 
@@ -262,21 +268,74 @@ class IndustryStageTests(JourneyBase):
         self.assertIn("data-ob-confirm-check", html)
         self.assertIn("فقط یک‌بار", html)
         self.assertIn("می‌دانم که این نصب یک‌بارمصرف است", html)
-        self.assertIn("data-ob-install-submit disabled", html)
+        self.assertIn("data-ob-install-submit", html)
+        self.assertNotIn("data-ob-install-submit disabled", html)  # JS enables/disables; no-JS can still submit (server decides)
         self.assertIn("فعلاً رد شو", html)
         self.assertIn("هیچ دسته‌بندی یا ویژگیِ آماده‌ای ساخته نمی‌شود", html)
 
-    def test_selected_template_installs_once_and_creates_exactly_what_the_preview_promised(self):
+    def test_direct_post_without_confirmation_installs_nothing(self):
+        """The one-time-install acknowledgement is enforced SERVER-side: a bare
+        {"industry_template_id": pk} POST (JS disabled / forged) must not install."""
         template = make_rich_template()
         response = self.client.post(self.url("industry"), {"industry_template_id": template.pk}, HTTP_HOST=_HOST)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "برای نصبِ قالبِ صنف باید تأیید کنید")
+        self.assertContains(response, "برای نصب باید کادرِ تأییدِ بالا را علامت بزنید")
+        self.assertTrue(response.context["confirm_error"])
+        self.assertFalse(StoreIndustryInstallation.objects.filter(store=self.store).exists())
+        self.assertEqual(Category.objects.filter(store=self.store).count(), 0)
+        self.store.refresh_from_db()
+        self.assertEqual(self.store.onboarding_stage, Store.OnboardingStage.IDENTITY)  # not advanced
+        # the selection is kept so the owner only has to tick the box
+        self.assertIn(f'value="{template.pk}" checked', response.content.decode())
+        for falsy in ("", "0", "false"):
+            with self.subTest(confirm=falsy):
+                again = self.client.post(
+                    self.url("industry"),
+                    {"industry_template_id": template.pk, "confirm_industry_install": falsy}, HTTP_HOST=_HOST,
+                )
+                self.assertEqual(again.status_code, 200)
+                self.assertFalse(StoreIndustryInstallation.objects.filter(store=self.store).exists())
+
+    def test_confirmation_checkbox_is_a_real_named_input(self):
+        make_rich_template()
+        html = self.get("industry").content.decode()
+        self.assertRegex(html, r'<input type="checkbox" name="confirm_industry_install" value="1" data-ob-confirm-check')
+
+    def test_selected_template_with_confirmation_installs_exactly_once(self):
+        template = make_rich_template()
+        response = self.client.post(
+            self.url("industry"), {"industry_template_id": template.pk, **CONFIRM}, HTTP_HOST=_HOST,
+        )
         self.assertRedirects(response, self.url("branding"))
         installation = StoreIndustryInstallation.objects.get(store=self.store)
         self.assertEqual(installation.categories_created, template.categories.count())
         self.assertEqual(Category.objects.filter(store=self.store).count(), 5)
+        # replay / double-submit with the same payload: no second install, no error, no duplicate rows
+        replay = self.client.post(
+            self.url("industry"), {"industry_template_id": template.pk, **CONFIRM}, HTTP_HOST=_HOST,
+        )
+        self.assertRedirects(replay, self.url("branding"))
+        self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 1)
+        self.assertEqual(Category.objects.filter(store=self.store).count(), 5)
+
+    def test_skip_and_already_installed_continue_do_not_require_confirmation(self):
+        skip = self.client.post(self.url("industry"), {"action": "skip"}, HTTP_HOST=_HOST)
+        self.assertRedirects(skip, self.url("branding"))
+        self.assertFalse(StoreIndustryInstallation.objects.filter(store=self.store).exists())
+
+    def test_installed_continue_without_confirmation_is_fine(self):
+        template = make_rich_template()
+        self.client.post(self.url("industry"), {"industry_template_id": template.pk, **CONFIRM}, HTTP_HOST=_HOST)
+        cont = self.client.post(self.url("industry"), {}, HTTP_HOST=_HOST)
+        self.assertRedirects(cont, self.url("branding"))
+        self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 1)
 
     def test_forged_post_cannot_install_a_review_required_template(self):
         held = make_skeletal_template()
-        response = self.client.post(self.url("industry"), {"industry_template_id": held.pk}, HTTP_HOST=_HOST)
+        response = self.client.post(
+            self.url("industry"), {"industry_template_id": held.pk, **CONFIRM}, HTTP_HOST=_HOST,
+        )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "در دسترس نیست")
         self.assertFalse(StoreIndustryInstallation.objects.filter(store=self.store).exists())
@@ -293,7 +352,9 @@ class IndustryStageTests(JourneyBase):
         IndustryTemplate.objects.filter(pk=draft.pk).update(readiness=Readiness.DRAFT)
         for pk in (rich.pk, deprecated.pk, draft.pk, 999999):
             with self.subTest(pk=pk):
-                response = self.client.post(self.url("industry"), {"industry_template_id": pk}, HTTP_HOST=_HOST)
+                response = self.client.post(
+                    self.url("industry"), {"industry_template_id": pk, **CONFIRM}, HTTP_HOST=_HOST,
+                )
                 self.assertEqual(response.status_code, 200)  # friendly error, not a 404 page
                 self.assertFalse(StoreIndustryInstallation.objects.filter(store=self.store).exists())
 
@@ -313,7 +374,9 @@ class IndustryStageTests(JourneyBase):
             return real_install(store, tpl)  # this request now fails: already installed
 
         with mock.patch("apps.catalog.services.industry_template_service.install_industry_template", racing):
-            response = self.client.post(self.url("industry"), {"industry_template_id": template.pk}, HTTP_HOST=_HOST)
+            response = self.client.post(
+                self.url("industry"), {"industry_template_id": template.pk, **CONFIRM}, HTTP_HOST=_HOST,
+            )
         self.assertRedirects(response, self.url("branding"))
         self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 1)
 
@@ -325,13 +388,13 @@ class IndustryStageTests(JourneyBase):
 
     def test_already_installed_state_shows_summary_and_is_idempotent(self):
         template = make_rich_template()
-        self.client.post(self.url("industry"), {"industry_template_id": template.pk}, HTTP_HOST=_HOST)
+        self.client.post(self.url("industry"), {"industry_template_id": template.pk, **CONFIRM}, HTTP_HOST=_HOST)
         html = self.get("industry").content.decode()
         self.assertIn("ob-installed", html)
         self.assertIn("پوشاک نمونه", html)
         self.assertIn("5 دسته‌بندی و 5 ویژگی ساخته شد", html)
         self.assertNotIn("data-ob-industry", html)  # no selector, no second install
-        again = self.client.post(self.url("industry"), {"industry_template_id": template.pk}, HTTP_HOST=_HOST)
+        again = self.client.post(self.url("industry"), {"industry_template_id": template.pk, **CONFIRM}, HTTP_HOST=_HOST)
         self.assertRedirects(again, self.url("branding"))
         self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 1)
         self.assertEqual(Category.objects.filter(store=self.store).count(), 5)
@@ -442,27 +505,30 @@ class StoreCreatedAndStoreCreateTests(JourneyBase):
         self.assertIn("ورود به پنلِ مدیریت", html)
         self.assertNotIn("ادامه‌ی راه‌اندازی", html)
 
-    def test_store_create_uses_the_same_shell_and_real_summaries(self):
+    def test_store_create_uses_the_same_shell_and_has_no_industry_installation_path(self):
         make_rich_template()
-        make_skeletal_template()
-        response = self.client.get("/app/stores/new/", HTTP_HOST=_HOST)
-        html = response.content.decode()
+        html = self.client.get("/app/stores/new/", HTTP_HOST=_HOST).content.decode()
         self.assertIn("portal/css/onboarding.css", html)
-        self.assertIn("پوشاک نمونه", html)
-        self.assertNotIn("اسکلتیِ نیازمندِ بازبینی", html)
-        self.assertIn("بدونِ صنف", html)
-        self.assertIn("5 دسته · 5 ویژگی", html)
+        self.assertNotIn("پوشاک نمونه", html)  # no selector at creation
+        self.assertNotIn("industry_template_id", html)
+        self.assertNotIn("confirm_industry_install", html)
+        self.assertIn("در این صفحه هیچ قالبی نصب نمی‌شود", html)
 
-    def test_store_create_with_a_forged_non_offerable_template_creates_the_store_without_it(self):
+    def test_store_create_ignores_a_forged_template_even_with_confirmation(self):
+        rich = make_rich_template()
         held = make_skeletal_template()
-        token = self.client.get("/app/stores/new/", HTTP_HOST=_HOST).context["submission_token"]
-        before = Store.objects.count()
-        response = self.client.post(
-            "/app/stores/new/",
-            {"name": "فروشگاهِ جعلی", "industry_template_id": held.pk, "submission_token": token},
-            HTTP_HOST=_HOST, follow=True,
-        )
-        self.assertEqual(Store.objects.count(), before + 1)
-        created = Store.objects.get(name="فروشگاهِ جعلی")
-        self.assertFalse(StoreIndustryInstallation.objects.filter(store=created).exists())
-        self.assertContains(response, "صنفِ انتخاب‌شده در دسترس نبود")
+        for index, payload in enumerate((
+            {"industry_template_id": rich.pk},
+            {"industry_template_id": rich.pk, **CONFIRM},
+            {"industry_template_id": held.pk, **CONFIRM},
+        )):
+            with self.subTest(payload=payload):
+                token = self.client.get("/app/stores/new/", HTTP_HOST=_HOST).context["submission_token"]
+                name = f"فروشگاهِ جعلی {index}"
+                response = self.client.post(
+                    "/app/stores/new/", {"name": name, "submission_token": token, **payload}, HTTP_HOST=_HOST,
+                )
+                self.assertEqual(response.status_code, 302)
+                created = Store.objects.get(name=name)
+                self.assertFalse(StoreIndustryInstallation.objects.filter(store=created).exists())
+                self.assertEqual(Category.objects.filter(store=created).count(), 0)

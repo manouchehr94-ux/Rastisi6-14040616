@@ -1466,7 +1466,7 @@ pattern.
 | Profile | Sectors | Needs |
 |---|---|---|
 | `product` | retail, digital, food, home, beauty, sport, culture, auto, industry | ≥4 categories, ≥5 attributes, ≥8 category↔attribute mappings, schema coverage (with parent inheritance) on ≥50% of leaf categories and ≥2 mapped categories, ≥1 choice attribute with ≥2 values; **retail** also ≥1 recommended variant axis |
-| `service` | services | ≥3 service categories; no product attributes required |
+| `service` | services | ≥3 service categories; product attributes/mappings/variant axes are not required (and not prohibited) |
 | `free_form` | other | deliberately generic; structural validity only |
 
 Gaps are `review`-severity issues (`COMPLETENESS_*`), kept apart from

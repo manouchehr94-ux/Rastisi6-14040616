@@ -48,7 +48,7 @@
         <div class="ob-industry-list" role="radiogroup" aria-label="فهرستِ صنف‌ها">
           {% for card in template_cards %}
           <label class="ob-industry-card" data-ob-card data-id="{{ card.id }}" data-name="{{ card.name }}" data-sector="{{ card.sector }}" data-sector-label="{{ card.sector_label }}">
-            <input type="radio" name="industry_template_id" value="{{ card.id }}">
+            <input type="radio" name="industry_template_id" value="{{ card.id }}"{% if selected_template_id == card.id|stringformat:'s' %} checked{% endif %}>
             <span class="ob-ic-check" aria-hidden="true">✓</span>
             <span class="ob-ic-icon" aria-hidden="true">{{ card.icon|default:"🏷️" }}</span>
             <span class="ob-ic-name">{{ card.name }}</span>
@@ -69,10 +69,11 @@
     </div>
     <p class="ob-sr-only" role="status" data-ob-selection-status></p>
 
-    <div class="ob-confirm">
+    <div class="ob-confirm{% if confirm_error %} has-error{% endif %}">
       <p class="ob-confirm-title">نصبِ قالبِ «<span data-ob-selected-name>—</span>»</p>
       <p>نصبِ قالبِ صنف <b>فقط یک‌بار</b> برای هر فروشگاه ممکن است و بعد از آن نمی‌توان قالبِ دیگری نصب کرد. اگر مطمئن نیستید، «فعلاً رد شو» را بزنید و بعداً از پنلِ مدیریت دسته‌بندی‌ها و ویژگی‌ها را خودتان بسازید.</p>
-      <label class="ob-check"><input type="checkbox" data-ob-confirm-check> می‌دانم که این نصب یک‌بارمصرف است و می‌خواهم قالبِ انتخاب‌شده نصب شود.</label>
+      <label class="ob-check"><input type="checkbox" name="confirm_industry_install" value="1" data-ob-confirm-check{% if confirm_error %} aria-invalid="true" aria-describedby="ob-confirm-error"{% endif %}> می‌دانم که این نصب یک‌بارمصرف است و می‌خواهم قالبِ انتخاب‌شده نصب شود.</label>
+      {% if confirm_error %}<p class="ob-error" id="ob-confirm-error">برای نصب باید کادرِ تأییدِ بالا را علامت بزنید.</p>{% endif %}
     </div>
   </form>
 

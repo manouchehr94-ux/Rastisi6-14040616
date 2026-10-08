@@ -76,36 +76,45 @@ class StoreCreateViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(Store.objects.filter(name="Over Cap Shop").exists())
 
-    def test_installs_chosen_industry_template(self):
+    def test_store_creation_never_installs_an_industry_template(self):
+        """Policy: the irreversible one-time install lives only on the onboarding «صنف» step behind a
+        server-validated acknowledgement. Even a hand-forged ``industry_template_id`` (with or without a
+        confirmation flag, offerable or not) must not install anything at store creation."""
+        from apps.catalog.models import Category, StoreIndustryInstallation
+
         template = IndustryTemplate.objects.create(
             slug="clothing", name="پوشاک", version=1,
             readiness=IndustryTemplate.Readiness.PRODUCTION_READY, is_active=True,
         )
-        token = self._get_token()
-        self.client.post(
-            "/app/stores/new/",
-            {"name": "Clothing Co", "industry_template_id": template.pk, "submission_token": token},
-            HTTP_HOST=_HOST,
+        held = IndustryTemplate.objects.create(
+            slug="held-skeleton", name="نیازمند بازبینی", version=1,
+            readiness=IndustryTemplate.Readiness.REVIEW_REQUIRED, is_active=True,
         )
-        from apps.catalog.models import StoreIndustryInstallation
-        store = Store.objects.get(name="Clothing Co")
-        self.assertTrue(StoreIndustryInstallation.objects.filter(store=store).exists())
+        for index, extra in enumerate((
+            {"industry_template_id": template.pk},
+            {"industry_template_id": template.pk, "confirm_industry_install": "1"},
+            {"industry_template_id": held.pk, "confirm_industry_install": "1"},
+        )):
+            with self.subTest(extra=extra):
+                token = self._get_token()
+                name = f"Clothing Co {index}"
+                response = self.client.post(
+                    "/app/stores/new/", {"name": name, "submission_token": token, **extra}, HTTP_HOST=_HOST,
+                )
+                self.assertEqual(response.status_code, 302)
+                store = Store.objects.get(name=name)
+                self.assertFalse(StoreIndustryInstallation.objects.filter(store=store).exists())
+                self.assertEqual(Category.objects.filter(store=store).count(), 0)
 
-    def test_selected_industry_preserved_after_validation_error(self):
-        """بخشِ ۷: انتخابِ صنف باید پس از خطایِ اعتبارسنجیِ فرم (نامِ خالی) حفظ شود."""
-        template = IndustryTemplate.objects.create(
-            slug="preserved-industry", name="صنفِ حفظ‌شده", version=1,
+    def test_page_has_no_industry_selector_and_points_to_the_onboarding_step(self):
+        IndustryTemplate.objects.create(
+            slug="clothing-page", name="پوشاکِ صفحه", version=1,
             readiness=IndustryTemplate.Readiness.PRODUCTION_READY, is_active=True,
         )
-        token = self._get_token()
-        response = self.client.post(
-            "/app/stores/new/",
-            {"name": "", "industry_template_id": template.pk, "submission_token": token},
-            HTTP_HOST=_HOST,
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, f'value="{template.pk}"')
-        self.assertContains(response, "selected")
+        response = self.client.get("/app/stores/new/", HTTP_HOST=_HOST)
+        self.assertNotContains(response, "پوشاکِ صفحه")
+        self.assertNotContains(response, "industry_template_id")
+        self.assertContains(response, "در این صفحه هیچ قالبی نصب نمی‌شود")
 
 
 @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])

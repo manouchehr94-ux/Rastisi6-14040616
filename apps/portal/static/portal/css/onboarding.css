@@ -146,6 +146,7 @@ a.ob-step-link:hover .ob-step-text{color:var(--rs-brand)}
 .ob-confirm p{margin:0 0 12px;color:var(--rs-muted);font-size:13.5px;line-height:2}
 .ob-check{display:flex;gap:10px;align-items:flex-start;color:var(--rs-ink);font-size:14px;line-height:1.9;cursor:pointer}
 .ob-check input{flex:none;width:22px;height:22px;margin-top:5px;accent-color:var(--rs-brand)}
+.ob-confirm.has-error{border-color:var(--rs-danger)}
 .ob-skip-explain{margin:20px 0 0;color:var(--rs-muted);font-size:13px;line-height:2}
 
 /* ── Installed / summary rows ─────────────────────────────────────────── */

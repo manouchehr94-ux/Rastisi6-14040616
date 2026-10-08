@@ -3,14 +3,14 @@
 {% comment %}
   پوسته‌ی واحدِ مسیرِ راه‌اندازیِ فروشگاه (ساخت فروشگاه ← ویزارد ← فروشگاه آماده).
   همان توکن‌ها و دکمه‌های سایتِ عمومیِ راستی‌سی (`--rs-*`) را بازمصرف می‌کند و فقط یک
-  هدرِ متمرکز (برند + نامِ فروشگاه + «ذخیره و بازگشت») دارد؛ پالتِ دومی وجود ندارد.
+  هدرِ متمرکز (برند + نامِ فروشگاه + لینکِ ناوبری «بازگشت به فروشگاه‌های من») دارد؛ پالتِ دومی وجود ندارد.
 {% endcomment %}
 {% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
 {% block canonical %}{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'portal/css/public-site-v2.css' %}?v=20261008-5">
-<link rel="stylesheet" href="{% static 'portal/css/onboarding.css' %}?v=20261008-3">
+<link rel="stylesheet" href="{% static 'portal/css/onboarding.css' %}?v=20261008-4">
 {% endblock %}
 
 {% block header %}
@@ -26,7 +26,7 @@
       <span class="ob-store-name" dir="auto" title="{{ store.name }}">{{ store.name }}</span>
     </div>
     {% endif %}
-    <a class="ob-exit" href="{% url 'portal:app-home' %}">ذخیره و بازگشت<span class="ob-exit-long">&nbsp;به فروشگاه‌های من</span></a>
+    <a class="ob-exit" href="{% url 'portal:app-home' %}" aria-label="بازگشت به فروشگاه‌های من (تغییرات ذخیره‌نشده‌ی این صفحه حفظ نمی‌شود)">بازگشت<span class="ob-exit-long">&nbsp;به فروشگاه‌های من</span></a>
   </div>
 </header>
 {% endblock %}
@@ -46,8 +46,8 @@
 
 {% block footer %}
 <footer class="ob-footer">
-  <p>پیشرفت شما در هر مرحله ذخیره می‌شود. <a href="{% url 'portal:terms' %}">قوانین و مقررات</a> · <a href="{% url 'portal:contact' %}">پشتیبانی</a></p>
+  <p>پس از «ذخیره و ادامه» در هر مرحله، پیشرفت شما ثبت می‌شود. <a href="{% url 'portal:terms' %}">قوانین و مقررات</a> · <a href="{% url 'portal:contact' %}">پشتیبانی</a></p>
 </footer>
-<script src="{% static 'portal/js/onboarding.js' %}?v=20261008-3" defer></script>
+<script src="{% static 'portal/js/onboarding.js' %}?v=20261008-4" defer></script>
 {% endblock %}
 {% block messages_toast %}{% endblock %}

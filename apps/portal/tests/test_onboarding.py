@@ -64,7 +64,7 @@ class OnboardingViewTests(TestCase):
         )
         self._complete_identity()
         response = self.client.post(
-            self._url("industry"), {"industry_template_id": template.pk}, HTTP_HOST=_HOST,
+            self._url("industry"), {"industry_template_id": template.pk, "confirm_industry_install": "1"}, HTTP_HOST=_HOST,
         )
         self.assertRedirects(response, self._url("branding"))
         installation = StoreIndustryInstallation.objects.get(store=self.store)
@@ -357,7 +357,7 @@ class OnboardingIndustryTemplateVisibilityTests(TestCase):
         other_store = provisioning_service.provision_trial_store(owner=other_owner, name="فروشگاه دیگر")
 
         response = self.client.post(
-            self._industry_url(), {"industry_template_id": template.pk}, HTTP_HOST=_HOST,
+            self._industry_url(), {"industry_template_id": template.pk, "confirm_industry_install": "1"}, HTTP_HOST=_HOST,
         )
         self.assertEqual(response.status_code, 302)
 
@@ -544,7 +544,9 @@ class IndustrySearchInputContrastTests(TestCase):
         self.assertIn("background:var(--rs-paper)", rule)
         self.assertIn("color:var(--rs-ink)", rule)
 
-    def test_store_create_wizard_uses_the_same_selector(self):
+    def test_store_create_wizard_no_longer_renders_the_selector(self):
+        """Store creation installs nothing (the irreversible install is confirmation-gated on the
+        onboarding «صنف» step), so there is no selector — and no contrast issue — on that page."""
         self.client.logout()
         second_owner = User.objects.create_user(
             username="contrastowner2@example.com", email="contrastowner2@example.com",
@@ -556,4 +558,4 @@ class IndustrySearchInputContrastTests(TestCase):
         content = response.content.decode()
         self.assertIn("portal/css/onboarding.css", content)
         self.assertNotIn("css/industry_selector.css", content)
-        self.assertIn("data-ob-search", content)
+        self.assertNotIn("data-ob-search", content)

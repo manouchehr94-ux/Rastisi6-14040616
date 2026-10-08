@@ -233,7 +233,6 @@ class CreateStoreForm(forms.Form):
         help_text="نامی که مشتریان می‌بینند؛ بعداً هم از پنلِ مدیریت قابلِ تغییر است.",
         widget=forms.TextInput(attrs={"placeholder": "مثلاً: فروشگاه لوازم خانگی رضایی", "autocomplete": "organization"}),
     )
-    industry_template_id = forms.IntegerField(label="صنف", required=False)
     submission_token = forms.CharField(widget=forms.HiddenInput, required=False)
 
 
@@ -385,6 +384,13 @@ class OnboardingIndustryForm(forms.Form):
     """مرحله‌ی ۲ ویزارد آنبوردینگ: انتخابِ صنف (اختیاری، فقط یک‌بار قابلِ نصب - ADR-25)."""
 
     industry_template_id = forms.IntegerField(required=False)
+    #: تأییدِ صریحِ نصبِ یک‌بارمصرف — فقط وقتی لازم است که واقعاً قرار است قالبی نصب شود
+    #: (رد کردن/ادامه‌ی حالتِ «نصب‌شده» آن را لازم ندارد)؛ مرجعِ اجرایی همین سمتِ سرور است.
+    #: عمداً «فقط مقدارِ دقیقِ ۱» پذیرفته می‌شود (نه هر رشته‌ی غیرخالی؛ مثلاً "0"/"false" تأیید نیست).
+    confirm_industry_install = forms.CharField(required=False)
+
+    def clean_confirm_industry_install(self):
+        return (self.cleaned_data.get("confirm_industry_install") or "").strip() == "1"
 
 
 class OnboardingBrandingForm(forms.Form):

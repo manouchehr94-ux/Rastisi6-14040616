@@ -180,7 +180,7 @@ class OnboardingMutationAuthorizationTests(TestCase):
         self.client.force_login(self.analyst)
         before = self._snapshot()
         response = self.client.post(
-            self._url("industry"), {"industry_template_id": template.pk}, HTTP_HOST=_HOST,
+            self._url("industry"), {"industry_template_id": template.pk, "confirm_industry_install": "1"}, HTTP_HOST=_HOST,
         )
         self.assertEqual(response.status_code, 403)
         self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 0)

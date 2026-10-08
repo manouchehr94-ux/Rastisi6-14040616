@@ -1007,9 +1007,11 @@ def app_home(request):
 
 @owner_required
 def store_create(request):
-    """Section D (lite) + Section G: one-step store name + optional industry
-    choice, then immediate atomic trial provisioning
-    (``provisioning_service.provision_trial_store``). Double-submit
+    """Section D (lite) + Section G: one-step store name, then immediate atomic
+    trial provisioning (``provisioning_service.provision_trial_store``).
+    No industry template is installed here — that irreversible, one-time action
+    lives on the onboarding «صنف» step behind a server-validated
+    acknowledgement. Double-submit
     protection is a per-session, single-use token — a genuine, truly
     concurrent double-submit within the same session is not fully excluded
     (no DB-level mutex), but sequential double-clicks/back-button resubmits
@@ -1024,20 +1026,13 @@ def store_create(request):
 
         if form.is_valid():
             request.session[_STORE_CREATE_TOKEN_SESSION_KEY] = get_random_string(32)
-            industry_template = None
-            template_id = form.cleaned_data.get("industry_template_id")
-            if template_id:
-                industry_template = IndustryTemplate.objects.filter(
-                    pk=template_id, is_active=True, readiness=IndustryTemplate.Readiness.PRODUCTION_READY,
-                ).first()
-                if industry_template is None:
-                    messages.warning(
-                        request,
-                        "صنفِ انتخاب‌شده در دسترس نبود؛ فروشگاه بدونِ صنف ساخته می‌شود و می‌توانید در مرحله‌ی «صنف» دوباره انتخاب کنید.",
-                    )
+            # Policy (documented in ONBOARDING_JOURNEY_AUDIT.md): store creation NEVER installs an
+            # industry template. The one-time, irreversible install happens only on the onboarding
+            # «صنف» step, behind a server-validated acknowledgement. A posted
+            # ``industry_template_id`` is deliberately not even read here.
             try:
                 store = provisioning_service.provision_trial_store(
-                    owner=request.user, name=form.cleaned_data["name"], industry_template=industry_template,
+                    owner=request.user, name=form.cleaned_data["name"],
                 )
             except provisioning_service.ProvisioningError as exc:
                 messages.error(request, str(exc))
@@ -1047,16 +1042,9 @@ def store_create(request):
         request.session[_STORE_CREATE_TOKEN_SESSION_KEY] = get_random_string(32)
         form = CreateStoreForm()
 
-    industry_templates = provisioning_service.latest_offerable_industry_templates()
-    template_cards = template_summary_service.attach_summaries(industry_templates)
     return render(
         request, "portal/app/store_create.html",
-        {
-            "form": form, "industry_templates": industry_templates, "template_cards": template_cards,
-            "selected_template_id": str(form["industry_template_id"].value() or ""),
-            "industry_sector_tabs": _sector_tabs_for(template_cards),
-            "submission_token": request.session[_STORE_CREATE_TOKEN_SESSION_KEY],
-        },
+        {"form": form, "submission_token": request.session[_STORE_CREATE_TOKEN_SESSION_KEY]},
     )
 
 
@@ -1137,6 +1125,11 @@ def _publication_context(store) -> dict:
             publication_service.PublicationState.INACTIVE,
         ),
     }
+
+
+INDUSTRY_CONFIRM_REQUIRED_MESSAGE = (
+    "برای نصبِ قالبِ صنف باید تأیید کنید که این نصب یک‌بارمصرف است؛ کادرِ تأیید را علامت بزنید و دوباره تلاش کنید."
+)
 
 
 def _sector_tabs_for(template_cards) -> list:
@@ -1263,6 +1256,8 @@ def onboarding_industry(request, store_public_id):
     store = _get_owned_store_or_404(request, store_public_id)
     installation = StoreIndustryInstallation.objects.select_related("industry_template").filter(store=store).first()
     templates = provisioning_service.latest_offerable_industry_templates()
+    selected_template_id = ""
+    confirm_error = False
 
     if request.method == "POST":
         # AUTH-001: EVERY mutating POST path through this step (installing a
@@ -1282,28 +1277,36 @@ def onboarding_industry(request, store_public_id):
             return redirect("portal:onboarding-branding", store_public_id=store.public_id)
 
         form = OnboardingIndustryForm(request.POST)
-        template_id = form.cleaned_data["industry_template_id"] if form.is_valid() else None
+        valid = form.is_valid()
+        template_id = form.cleaned_data["industry_template_id"] if valid else None
         if not template_id:
             messages.error(request, "ابتدا یک صنف را انتخاب کنید؛ یا اگر صنفِ شما در فهرست نیست، این مرحله را رد کنید.")
         else:
-            template = IndustryTemplate.objects.filter(pk=template_id).first()
-            if template is None or not template.is_offerable_for_new_installation:
-                # شناسه‌ی جعلی/منسوخ/«نیازمند بازبینی»: هرگز نصب نمی‌شود
-                # (``install_industry_template`` هم همین را تضمین می‌کند)؛ پیامِ
-                # دوستانه به‌جایِ ۴۰۴ تا مالک بتواند صنفِ دیگری انتخاب یا رد کند.
-                messages.error(request, "این صنف در حال حاضر برای نصب در دسترس نیست؛ صنفِ دیگری انتخاب کنید یا این مرحله را رد کنید.")
+            selected_template_id = str(template_id)
+            if not form.cleaned_data["confirm_industry_install"]:
+                # سمتِ سرور مرجعِ تأیید است: بدونِ تأییدِ صریحِ «نصبِ یک‌بارمصرف» هیچ نصبی انجام نمی‌شود
+                # (دکمه‌ی غیرفعال در JS فقط تجربه‌ی کاربری است).
+                confirm_error = True
+                messages.error(request, INDUSTRY_CONFIRM_REQUIRED_MESSAGE)
             else:
-                try:
-                    install_industry_template(store, template)
-                except IndustryInstallationError as exc:
-                    if StoreIndustryInstallation.objects.filter(store=store).exists():
-                        # دابل‌کلیک/درخواستِ هم‌زمان: نصبِ اول موفق بوده؛ خطا نشان نده، فقط جلو ببر.
+                template = IndustryTemplate.objects.filter(pk=template_id).first()
+                if template is None or not template.is_offerable_for_new_installation:
+                    # شناسه‌ی جعلی/منسوخ/«نیازمند بازبینی»: هرگز نصب نمی‌شود
+                    # (``install_industry_template`` هم همین را تضمین می‌کند)؛ پیامِ
+                    # دوستانه به‌جایِ ۴۰۴ تا مالک بتواند صنفِ دیگری انتخاب یا رد کند.
+                    messages.error(request, "این صنف در حال حاضر برای نصب در دسترس نیست؛ صنفِ دیگری انتخاب کنید یا این مرحله را رد کنید.")
+                else:
+                    try:
+                        install_industry_template(store, template)
+                    except IndustryInstallationError as exc:
+                        if StoreIndustryInstallation.objects.filter(store=store).exists():
+                            # دابل‌کلیک/درخواستِ هم‌زمان: نصبِ اول موفق بوده؛ خطا نشان نده، فقط جلو ببر.
+                            _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
+                            return redirect("portal:onboarding-branding", store_public_id=store.public_id)
+                        messages.error(request, str(exc))
+                    else:
                         _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
                         return redirect("portal:onboarding-branding", store_public_id=store.public_id)
-                    messages.error(request, str(exc))
-                else:
-                    _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
-                    return redirect("portal:onboarding-branding", store_public_id=store.public_id)
     elif request.method == "POST":
         # از قبل نصب‌شده — POST دیگری اینجا معنایی ندارد جز عبور به مرحله‌ی بعد.
         _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
@@ -1316,6 +1319,7 @@ def onboarding_industry(request, store_public_id):
     return render(request, "portal/app/onboarding_industry.html", {
         **_onboarding_shell_context(store, Store.OnboardingStage.INDUSTRY),
         "template_cards": template_cards, "installation": installation, "installed_summary": installed_summary,
+        "selected_template_id": selected_template_id, "confirm_error": confirm_error,
         "industry_sector_tabs": _sector_tabs_for(template_cards),
     })
 
