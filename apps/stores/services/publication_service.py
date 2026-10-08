@@ -5,7 +5,9 @@ completed_at``، که مفهومی کاملاً مستقل از Store.status و 
 است) — این سرویس فقط سیگنال‌هایِ از پیش موجود را ترکیب می‌کند:
 
 * ``Store.status`` (provisioning/active/suspended/closed)
-* ``Store.onboarding_completed_at`` (خصوصی تا زمانِ راه‌اندازیِ اولیه)
+* ``Store.onboarding_required_at`` + ``Store.onboarding_completed_at``
+  (فروشگاهِ مدرنِ پورتال تا «انتشار»ِ نهاییِ آنبوردینگ خصوصی است؛ فروشگاهِ
+  قدیمی بدونِ ``onboarding_required_at`` تحت‌تأثیر نیست)
 * وضعیتِ مؤثرِ اشتراک (``apps.subscriptions.services.entitlement_service.
   get_subscription_access_state`` — از پیش موجود، Checkpoint 5A)
 
@@ -53,18 +55,24 @@ def get_store_publication_state(store) -> str:
 
     access = get_subscription_access_state(store)
 
-    if access.state == AccessState.NONE:
-        # No subscription at all exists for this Store — it never went
-        # through apps.portal's provisioning flow (legacy Store, or a Store
-        # created ad hoc, e.g. throughout the test suite). onboarding_
-        # completed_at is only ever set by that same provisioning flow, so
-        # gating on it here would silently restrict every such Store the
-        # moment this field shipped. Fail-open instead, matching ADR-65's
-        # existing "never silently restrict a Store" principle.
-        return PublicationState.ACTIVE_PAID
-
     if access.state in (AccessState.RESTRICTED, AccessState.EXPIRED):
         return PublicationState.RESTRICTED
+
+    if store.onboarding_required_at is not None and store.onboarding_completed_at is None:
+        # A Store created by the modern portal provisioning flow stays private
+        # until the final onboarding Publish — decided BEFORE the "no
+        # subscription" fail-open below, so a missing default plan (ADR-65's
+        # fail-open at provisioning) can never make it public early.
+        # (A genuinely restricted/expired subscription is reported as such above.)
+        return PublicationState.TRIAL_PRIVATE
+
+    if access.state == AccessState.NONE:
+        # No subscription at all exists for this Store. Modern portal Stores
+        # (onboarding_required_at set) were already handled above; what remains
+        # is a legacy Store or one created ad hoc (e.g. throughout the test
+        # suite) with no durable onboarding signal. Fail-open for those,
+        # matching ADR-65's "never silently restrict a Store" principle.
+        return PublicationState.ACTIVE_PAID
 
     if store.onboarding_completed_at is None:
         return PublicationState.TRIAL_PRIVATE

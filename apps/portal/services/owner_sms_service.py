@@ -114,6 +114,40 @@ def _otp_runtime_config(template_event_key: str) -> dict:
     }
 
 
+def otp_delivery_available() -> bool:
+    """Account-independent: can a platform OTP be delivered at all right now? ``False`` only when
+    the effective provider is the console backend and neither the test flag nor the explicit
+    local-QA code allows it — the same decision :func:`send_platform_otp` takes."""
+    if _otp_runtime_config(SmsEvent.PLATFORM_OWNER_OTP)["provider"] != "console":
+        return True
+    return bool(settings.RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP or dev_otp_code())
+
+
+def dev_otp_code() -> str:
+    """The local-QA fixed OTP (``RASTISI_DEV_OTP_CODE``), or ``""`` when not active.
+
+    DEVELOPMENT ONLY. Never active in production mode (the setting is refused at
+    startup there; this is the runtime backstop), and it never replaces a real
+    provider: callers additionally require the effective provider to be ``console``.
+    """
+    code = str(getattr(settings, "RASTISI_DEV_OTP_CODE", "") or "")
+    if not code:
+        return ""
+    if getattr(settings, "RASTISI_PRODUCTION_MODE", False):
+        logger.error("RASTISI_DEV_OTP_CODE is set in production mode; ignoring it.")
+        return ""
+    return code
+
+
+def dev_otp_code_for_console_provider() -> str:
+    """Fixed code to use for a new owner OTP — only when the dev mechanism is on AND the
+    platform OTP would be delivered by the console backend (no real provider configured)."""
+    code = dev_otp_code()
+    if code and _otp_runtime_config(SmsEvent.PLATFORM_OWNER_OTP)["provider"] == "console":
+        return code
+    return ""
+
+
 def send_platform_otp(
     *, to: str, code: str, purpose: str = "otp", expire_minutes: int = 2,
     template_event_key: str = SmsEvent.PLATFORM_OWNER_OTP,
@@ -126,6 +160,10 @@ def send_platform_otp(
         if settings.RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP:
             logger.debug("[OTP:console-test] suppressed real delivery to=%s", to)
             return SmsSendResult(success=True, provider_ref_id="console-test", provider="console")
+        if dev_otp_code():
+            # Explicit local-QA opt-in only (never logs the code; the operator already knows it).
+            logger.debug("[OTP:console-dev] local QA delivery simulated to=%s", to)
+            return SmsSendResult(success=True, provider_ref_id="console-dev", provider="console")
         return SmsSendResult(success=False, error_message="درگاه واقعی OTP پیکربندی نشده است", provider="console")
 
     variables = {

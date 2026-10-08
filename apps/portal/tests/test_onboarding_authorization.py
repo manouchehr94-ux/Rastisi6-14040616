@@ -180,7 +180,7 @@ class OnboardingMutationAuthorizationTests(TestCase):
         self.client.force_login(self.analyst)
         before = self._snapshot()
         response = self.client.post(
-            self._url("industry"), {"industry_template_id": template.pk}, HTTP_HOST=_HOST,
+            self._url("industry"), {"industry_template_id": template.pk, "confirm_industry_install": "1"}, HTTP_HOST=_HOST,
         )
         self.assertEqual(response.status_code, 403)
         self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 0)
@@ -226,9 +226,9 @@ class OnboardingMutationAuthorizationTests(TestCase):
 
         self.client.force_login(self.owner)
         response = self.client.post(self._url("industry"), {}, HTTP_HOST=_HOST)
-        self.assertRedirects(response, self._url("branding"))
+        self.assertRedirects(response, self._url("template"))
         self.store.refresh_from_db()
-        self.assertEqual(self.store.onboarding_stage, Store.OnboardingStage.BRANDING)
+        self.assertEqual(self.store.onboarding_stage, Store.OnboardingStage.TEMPLATE)
 
     def test_analyst_cannot_publish_via_review(self):
         self.client.force_login(self.analyst)

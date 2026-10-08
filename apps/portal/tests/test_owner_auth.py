@@ -246,16 +246,19 @@ class PasswordResetTests(TestCase):
             full_name="Reset Test", email="reset@example.com", password="a-very-strong-pass-1",
         )
 
-    def test_request_for_unknown_email_does_not_error_or_reveal_existence(self):
-        response = self.client.post("/reset-password/", {"email": "nobody@example.com"}, HTTP_HOST=_HOST)
-        self.assertEqual(response.status_code, 302)
+    def test_legacy_service_for_unknown_email_is_silent(self):
+        owner_auth_service.request_password_reset(email="nobody@example.com", base_url="https://rastisi.ir")
         self.assertEqual(len(mail.outbox), 0)
 
-    def test_request_for_known_email_sends_mail(self):
-        response = self.client.post("/reset-password/", {"email": "reset@example.com"}, HTTP_HOST=_HOST)
-        self.assertEqual(response.status_code, 302)
+    def test_legacy_service_for_known_email_sends_mail(self):
+        owner_auth_service.request_password_reset(email="reset@example.com", base_url="https://rastisi.ir")
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("reset@example.com", mail.outbox[0].to)
+
+    def test_public_reset_page_is_mobile_based_and_sends_no_email(self):
+        response = self.client.post("/reset-password/", {"email": "reset@example.com"}, HTTP_HOST=_HOST)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_full_reset_flow_changes_password(self):
         owner_auth_service.request_password_reset(email="reset@example.com", base_url="https://rastisi.ir")

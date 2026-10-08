@@ -51,6 +51,57 @@ class PublicationStateNoSubscriptionTests(TestCase):
         self.assertEqual(get_store_publication_state(store), PublicationState.INACTIVE)
 
 
+class OnboardingRequiredGateTests(TestCase):
+    """``onboarding_required_at`` = the durable "modern portal Store" signal. Such a Store is private
+    until the final Publish whatever the subscription says; Stores without the signal are untouched."""
+
+    def test_modern_store_without_any_subscription_is_private_until_onboarding_completes(self):
+        store = _make_store(onboarding_required_at=timezone.now())
+        self.assertEqual(get_store_publication_state(store), PublicationState.TRIAL_PRIVATE)
+        self.assertFalse(is_publicly_visible(store))
+
+    def test_after_onboarding_completes_the_normal_no_subscription_policy_applies_unchanged(self):
+        store = _make_store(onboarding_required_at=timezone.now(), onboarding_completed_at=timezone.now())
+        self.assertEqual(get_store_publication_state(store), PublicationState.ACTIVE_PAID)
+        self.assertTrue(is_publicly_visible(store))
+
+    def test_modern_store_with_a_subscription_stays_private_then_follows_the_normal_policy(self):
+        store = _make_store(onboarding_required_at=timezone.now())
+        _make_subscription(store, status=StoreSubscription.Status.TRIALING, trial_end_at=timezone.now())
+        self.assertEqual(get_store_publication_state(store), PublicationState.TRIAL_PRIVATE)
+        store.onboarding_completed_at = timezone.now()
+        self.assertEqual(get_store_publication_state(store), PublicationState.TRIAL_PUBLIC)
+
+    def test_a_restricted_subscription_is_still_reported_as_restricted(self):
+        store = _make_store(onboarding_required_at=timezone.now())
+        _make_subscription(store, status=StoreSubscription.Status.SUSPENDED)
+        self.assertEqual(get_store_publication_state(store), PublicationState.RESTRICTED)
+
+    def test_lifecycle_statuses_still_win_over_the_gate(self):
+        for status, expected in (
+            (Store.Status.SUSPENDED, PublicationState.SUSPENDED),
+            (Store.Status.CLOSED, PublicationState.INACTIVE),
+            (Store.Status.PROVISIONING, PublicationState.ONBOARDING),
+        ):
+            with self.subTest(status=status):
+                store = _make_store(status=status, onboarding_required_at=timezone.now())
+                self.assertEqual(get_store_publication_state(store), expected)
+
+    def test_a_legacy_store_with_no_signal_is_not_made_private(self):
+        """No ``onboarding_required_at`` + no subscription + onboarding never completed = a true legacy /
+        ad-hoc Store: it must remain exactly as it was (ADR-65 fail-open)."""
+        store = _make_store()
+        self.assertIsNone(store.onboarding_required_at)
+        self.assertIsNone(store.onboarding_completed_at)
+        self.assertEqual(get_store_publication_state(store), PublicationState.ACTIVE_PAID)
+        self.assertTrue(is_publicly_visible(store))
+
+    def test_the_field_is_nullable_with_no_default_so_history_is_never_fabricated(self):
+        field = Store._meta.get_field("onboarding_required_at")
+        self.assertTrue(field.null)
+        self.assertFalse(field.has_default())
+
+
 class PublicationStateWithSubscriptionTests(TestCase):
     def test_trialing_subscription_without_onboarding_is_trial_private(self):
         store = _make_store()

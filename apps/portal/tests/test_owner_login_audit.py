@@ -426,11 +426,14 @@ class LoginTurnstileTests(_Base, TestCase):
             self.assertFalse(OwnerOtpChallenge.objects.exists())
             self.assertContains(denied, 'data-action="login_otp"')
 
-    def test_reset_request_sends_no_mail_until_turnstile_passes(self):
-        denied = self.client.post("/reset-password/", {"email": "ts@example.com"}, HTTP_HOST=_HOST)
+    def test_reset_request_sends_no_sms_until_turnstile_passes(self):
+        with patch.object(owner_otp_service, "send_platform_otp") as send:
+            denied = self.client.post("/reset-password/", {"phone": "09125550123"}, HTTP_HOST=_HOST)
         self.assertContains(denied, turnstile_service.PUBLIC_ERROR_MESSAGE)
+        send.assert_not_called()
+        self.assertFalse(OwnerOtpChallenge.objects.exists())
         self.assertEqual(mail.outbox, [])
-        self.assertContains(denied, 'value="ts@example.com"')  # the typed value is preserved
+        self.assertContains(denied, 'value="09125550123"')  # the typed value is preserved
 
 
 # ---------------------------------------------------------------------------
@@ -566,34 +569,23 @@ class AdminReturnLoginTests(_Base, TestCase):
 
 @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
 class PasswordResetAuditTests(_Base, TestCase):
+    """LEGACY email-token reset. The public ``/reset-password/`` page is mobile + SMS OTP now (see
+    ``test_password_reset_sms.py``); ``request_password_reset`` is retained for already-issued email
+    links and internal use, so these tests drive the service directly and then the token URL."""
+
     def setUp(self):
         super().setUp()
         self.owner = owner_auth_service.register_owner(full_name="Reset", email="rst@example.com", password=_PASSWORD)
 
     def _request(self, email):
-        return self.client.post("/reset-password/", {"email": email}, HTTP_HOST=_HOST)
+        owner_auth_service.request_password_reset(email=email, base_url=f"http://{_HOST}")
 
     def _link(self):
         return re.search(r"/reset-password/[\w-]+/[\w-]+/", mail.outbox[-1].body).group(0)
 
-    def test_known_and_unknown_emails_get_the_same_public_response(self):
-        known, unknown = self._request("rst@example.com"), self._request("nobody@example.com")
-        self.assertEqual((known.status_code, known["Location"]), (unknown.status_code, unknown["Location"]))
-        self.assertEqual(len(mail.outbox), 1)
-        page = self.client.get(known["Location"], HTTP_HOST=_HOST)
-        self.assertContains(page, "اگر این ایمیل برای حسابی با رمز عبور ثبت شده باشد")
-        self.assertContains(page, 'role="status"')
-
     def test_case_insensitive_email(self):
         self._request("RST@Example.COM")
         self.assertEqual(len(mail.outbox), 1)
-
-    def test_invalid_email_shows_an_error_beside_the_field(self):
-        response = self._request("not-an-email")
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'id="id_email_error"')
-        self.assertContains(response, 'aria-invalid="true"')
-        self.assertEqual(mail.outbox, [])
 
     def test_no_mail_for_customer_only_inactive_otp_only_or_ambiguous_accounts(self):
         customer = User.objects.create_user(username="09127770000", email="cust@example.com", password=_PASSWORD)
@@ -611,7 +603,7 @@ class PasswordResetAuditTests(_Base, TestCase):
         OwnerProfile.objects.create(user=b, full_name="B")
         for email in ("cust@example.com", "off2@example.com", "otp@example.com", "dup@example.com"):
             with self.subTest(email=email):
-                self.assertEqual(self._request(email).status_code, 302)  # still the generic success
+                self._request(email)  # silently nothing
         self.assertEqual(mail.outbox, [])
 
     def test_superuser_and_member_accounts_can_reset(self):
@@ -623,21 +615,29 @@ class PasswordResetAuditTests(_Base, TestCase):
         self.assertEqual(len(mail.outbox), 2)
         self.assertTrue(root.pk)
 
-    def test_per_email_limit_is_silent_and_independent_of_ip(self):
-        for index in range(owner_auth_service.PASSWORD_RESET_EMAIL_MAX_PER_HOUR + 2):
-            response = self.client.post(
-                "/reset-password/", {"email": "rst@example.com"}, HTTP_HOST=_HOST, REMOTE_ADDR=f"10.9.0.{index}",
-            )
-            self.assertEqual(response.status_code, 302)
+    def test_known_email_gets_mail_and_unknown_is_silent(self):
+        self._request("nobody@example.com")
+        self.assertEqual(mail.outbox, [])
+        self._request("rst@example.com")
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_per_email_limit_is_silent(self):
+        for _ in range(owner_auth_service.PASSWORD_RESET_EMAIL_MAX_PER_HOUR + 2):
+            self._request("rst@example.com")
         self.assertEqual(len(mail.outbox), owner_auth_service.PASSWORD_RESET_EMAIL_MAX_PER_HOUR)
 
-    def test_mail_link_host_comes_from_the_validated_request_host(self):
+    def test_mail_link_uses_the_given_base_url(self):
         self._request("rst@example.com")
         self.assertRegex(mail.outbox[-1].body, r"https?://rastisi\.localhost/reset-password/")
 
-    def test_a_forged_host_header_is_rejected_before_any_mail_is_built(self):
-        response = self.client.post("/reset-password/", {"email": "rst@example.com"}, HTTP_HOST="evil.example")
+    def test_a_forged_host_header_is_rejected_before_anything_happens(self):
+        response = self.client.post("/reset-password/", {"phone": "09121234567"}, HTTP_HOST="evil.example")
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(mail.outbox, [])
+
+    def test_the_public_reset_page_no_longer_sends_email_at_all(self):
+        response = self.client.post("/reset-password/", {"email": "rst@example.com"}, HTTP_HOST=_HOST)
+        self.assertEqual(response.status_code, 200)  # email is not a field any more: form re-renders
         self.assertEqual(mail.outbox, [])
 
     def test_full_flow_old_password_dies_new_works_link_is_single_use_and_sessions_are_revoked(self):
@@ -744,7 +744,7 @@ class ResetConfirmReferrerPolicyAndCsrfTests(_Base, TestCase):
     def setUp(self):
         super().setUp()
         self.owner = owner_auth_service.register_owner(full_name="Ref", email="ref@example.com", password=_PASSWORD)
-        self.client.post("/reset-password/", {"email": "ref@example.com"}, HTTP_HOST=_HOST)
+        owner_auth_service.request_password_reset(email="ref@example.com", base_url=f"http://{_HOST}")
         self.link = re.search(r"/reset-password/[\w-]+/[\w-]+/", mail.outbox[-1].body).group(0)
         self.csrf_client = self.client_class(enforce_csrf_checks=True)
 
@@ -894,7 +894,8 @@ class LoginPageMarkupTests(_Base, TestCase):
             html = self.client.get(url, HTTP_HOST=_HOST).content.decode()
             self.assertIn("rs-btn rs-btn-primary", html)
             self.assertNotIn('class="r-wrap"', html)
-            self.assertRegex(html, r'name="email"[^>]*autocomplete="email"')
+            self.assertRegex(html, r'name="phone"[^>]*autocomplete="tel"')
+            self.assertNotIn('name="email"', html)
 
     def test_password_form_class_has_no_creation_validation(self):
         form = OwnerIdentifierLoginForm({"identifier": "someone", "password": "1"})

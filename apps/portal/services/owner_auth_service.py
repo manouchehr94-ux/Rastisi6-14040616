@@ -28,7 +28,7 @@ from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
 from apps.core.phone import InvalidPhoneError, normalize_iranian_phone
 from apps.core.services.rate_limit import RateLimitExceeded, RateLimitUnavailable, enforce_rate_limit
-from apps.portal.models import OwnerProfile
+from apps.portal.models import OwnerProfile, OwnerTermsAcceptance
 
 User = get_user_model()
 
@@ -251,6 +251,10 @@ def _can_use_password_reset(user) -> bool:
 
 
 def request_password_reset(*, email: str, base_url: str) -> None:
+    # LEGACY / INTERNAL: no public view calls this any more. Public password recovery is
+    # mobile + SMS OTP (``/reset-password/`` -> ``/verify/`` -> ``/reset-password/new/``).
+    # Kept (with ``get_user_from_reset_link`` and ``/reset-password/<uidb64>/<token>/``) so
+    # already-issued email links and internal tooling keep working.
     """اگر ایمیل متعلق به **یک** مالکِ فعال باشد ایمیل بازیابی می‌فرستد؛ در غیر
     این صورت بی‌صدا کاری نمی‌کند — تا فرمِ عمومی هرگز فاش نکند کدام ایمیل
     ثبت‌نام کرده (enumeration-safety). چند حسابِ هم‌ایمیل مبهم است و مثلِ ورود
@@ -291,6 +295,29 @@ def request_password_reset(*, email: str, base_url: str) -> None:
         recipient_list=[user.email],
         fail_silently=True,
     )
+
+
+def find_reset_eligible_user_by_phone(phone: str):
+    """Mobile password-recovery eligibility (public SMS-OTP reset).
+
+    Returns the existing, **active** ``User`` that owns an ``OwnerProfile`` with this
+    (already normalised) phone, else ``None``. It only *reads*: it never creates a
+    ``User``/``OwnerProfile``/Store, so an unknown mobile stays unknown. A usable password is
+    deliberately NOT required — an OTP-created owner (unusable password) may set a first one.
+    A customer-only account (no ``OwnerProfile``) is not eligible."""
+    profile = OwnerProfile.objects.select_related("user").filter(phone=phone).first()
+    if profile is None or not profile.user.is_active:
+        return None
+    return profile.user
+
+
+def get_reset_eligible_user_by_id(user_id):
+    """Re-check, at password-setting time, that the OTP-authorised user is still an active
+    owner (the id comes only from the server-side session proof, never from the request)."""
+    user = User.objects.filter(pk=user_id, is_active=True).first()
+    if user is None or not OwnerProfile.objects.filter(user=user).exists():
+        return None
+    return user
 
 
 def get_user_from_reset_link(*, uidb64: str, token: str):
@@ -355,6 +382,7 @@ class OwnerIdentityResult:
 
 def resolve_owner_identity_by_phone(
     *, phone: str, full_name: str = "", allow_new_owner: bool = True, require_active: bool = True,
+    accepted_terms_version: str = "", terms_source: str = "",
 ) -> OwnerIdentityResult:
     """شناسه‌ی اصلیِ ورودِ مالک موبایل+OTP است (Section 3؛ ایمیل+رمز فقط برایِ
     حساب‌هایِ قدیمی/بازیابی/مدیرِ پلتفرم مانده).
@@ -373,7 +401,13 @@ def resolve_owner_identity_by_phone(
 
     هم‌زمانی: یکتاییِ ``User.username`` و ``OwnerProfile.user``/``phone`` در
     دیتابیس تضمین می‌کند دو درخواستِ هم‌زمان حداکثر یک ``OwnerProfile`` بسازند؛
-    فقط برنده ``owner_created=True`` می‌گیرد (و تنها او فروشگاهِ اول را می‌سازد)."""
+    فقط برنده ``owner_created=True`` می‌گیرد (و تنها او فروشگاهِ اول را می‌سازد).
+
+    پذیرشِ قوانین: اگر ``accepted_terms_version`` داده شود، ردیفِ ماندگارِ
+    ``OwnerTermsAcceptance`` **در همان تراکنش و فقط برایِ برنده‌ی ساختِ
+    ``OwnerProfile``** نوشته می‌شود (idempotent با ``get_or_create``)؛ برایِ مالکِ
+    موجود یا بازنده‌ی مسابقه هرگز چیزی ثبت نمی‌شود، و اگر ساختنِ مالک شکست بخورد
+    پذیرشی هم باقی نمی‌ماند."""
     full_name = " ".join(str(full_name or "").split())
 
     with transaction.atomic():
@@ -406,6 +440,11 @@ def resolve_owner_identity_by_phone(
             try:
                 with transaction.atomic():
                     OwnerProfile.objects.create(user=user, phone=phone, full_name=full_name)
+                    if accepted_terms_version:
+                        OwnerTermsAcceptance.objects.get_or_create(
+                            user=user, terms_version=accepted_terms_version,
+                            defaults={"source": terms_source or OwnerTermsAcceptance.Source.REGISTRATION},
+                        )
             except IntegrityError:
                 # برنده‌ی مسابقه کسِ دیگری بود؛ این درخواست «مالکِ تازه» نیست.
                 winner = OwnerProfile.objects.select_related("user").filter(phone=phone).first()

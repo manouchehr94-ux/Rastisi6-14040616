@@ -35,6 +35,7 @@ list with placeholder values. Summary:
 | `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | **Yes** | empty | Required in production |
 | `TURNSTILE_EXPECTED_HOSTNAMES` | **Yes** | empty | Bare hostnames the widget runs on; verified against Siteverify |
 | `TURNSTILE_VERIFY_TIMEOUT_SECONDS` | Optional | `5` | |
+| `RASTISI_DEV_OTP_CODE` | **Must be unset/empty** | empty (off) | **DEVELOPMENT ONLY** local-QA OTP; non-empty with `DJANGO_DEBUG=False` is a startup error and `rastisi.E006` — see §6.3 |
 | `DJANGO_SECURE_HSTS_SECONDS` | Staged — see §7 | `0` | |
 | `DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS` | Staged | `False` | |
 | `DJANGO_SECURE_HSTS_PRELOAD` | Staged, last | `False` | |
@@ -100,15 +101,23 @@ Run this immediately after `migrate`, on every deploy:
 ```
 python manage.py seed_industry_templates
 python manage.py validate_industry_templates
+python manage.py audit_industry_templates --apply   # optional: converge readiness of platform rows
 ```
 
-Both are idempotent (`update_or_create` on stable natural keys) and safe to
+All are idempotent (`update_or_create` on stable natural keys) and safe to
 run on every deploy, including ones that change nothing — re-running
 `seed_industry_templates` creates no duplicate `IndustryTemplate`/category/
 attribute rows. `validate_industry_templates` is read-only by default and
 exits non-zero (failing the deploy, if your pipeline checks exit codes) the
 moment any template fails validation — never skip or silence this step to
 get a deploy through; fix the registry entry instead.
+
+A template is offered to merchants only while `production_ready`. Structural
+validity alone is not enough: the sector-aware completeness gate (ADR-26
+addendum) holds skeletal templates at `review_required`, and a re-seed or
+`audit_industry_templates --apply` converges existing platform rows to it
+(`--format markdown --output …` regenerates the enrichment backlog report).
+Existing stores' installed categories/attributes are never touched by this.
 
 Skipping this step is exactly the production bug this section exists to
 prevent: a fresh database that never runs `seed_industry_templates` silently
@@ -449,6 +458,50 @@ Siteverify timeout/network/parse error fails closed with the generic public erro
 before password authentication, SMS or mail happens. Runtime guards also refuse to
 treat "Turnstile off" or empty hostnames as success while `DJANGO_DEBUG=False`.
 
+### 6.3 Owner password recovery (mobile + SMS OTP) and the local-QA OTP
+
+**Public recovery is mobile + SMS OTP.** `/reset-password/` asks for the owner's mobile
+number, sends an OTP of purpose `reset` through the same hardened owner-OTP service
+(per-phone budget, shared per-IP budget, attempt cap, single use, hashed at rest), then
+`/verify/` -> `/reset-password/new/` lets the verified person choose a password
+(an OTP-created owner with no password sets their first one here). It never logs anyone in,
+never creates a User/OwnerProfile/Store, answers identically for known and unknown numbers
+(the per-IP counters are charged for both), keeps Turnstile on the first request, and fails
+closed when the shared rate-limit store is down. The 10-minute, single-use authorisation lives
+only in the server-side session and is bound to the verified user. The legacy
+`/reset-password/<uidb64>/<token>/` route (already-issued email links) still works;
+`owner_auth_service.request_password_reset` is retained for that/internal use but no public
+view calls it. Public recovery therefore needs a working platform SMS provider in production.
+
+**Enumeration resistance — what is and is not claimed.** The public status, redirect, copy,
+verify-page content and session shape are the same for known and unknown numbers, and the
+per-IP OTP budget is charged for both. It is **not** perfectly enumeration-proof: delivery is
+synchronous, so a request for an eligible owner performs an SMS-provider round trip while an
+unknown number does not, and the *response time* can therefore distinguish them. This is a
+known residual of synchronous SMS sending; the repository deliberately does not paper over it
+with sleeps/jitter or fake sends. Closing it properly means queueing the send (so every request
+returns after the same local work), which is out of scope here. An unexpected provider
+exception during a reset request is caught at the public reset boundary (`Exception` only; the
+class name alone is logged) and answered with the same generic response.
+
+**Local-QA OTP (`RASTISI_DEV_OTP_CODE`) — development only.** On a laptop with no SMS
+provider the console OTP backend is deliberately *not* treated as delivered, so register/login
+OTP cannot be completed in a browser. For local QA only, set a 6-digit code:
+
+```
+# PowerShell
+$env:RASTISI_DEV_OTP_CODE="123456"
+python manage.py runserver
+```
+
+It applies only when `DJANGO_DEBUG=True` and the effective platform provider is `console`
+(never over a real provider, never to non-OTP SMS), the code is stored hashed like any OTP and
+is never logged. Unset it (restart `runserver`) to restore the default. Guards: non-6-digit
+values fail startup; any value with `DJANGO_DEBUG=False` fails startup; system check
+`rastisi.E006` repeats the production check (and refuses
+`RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP=true` outside `manage.py test`); a runtime backstop ignores
+it in production mode. **Never set it in a deployed environment.**
+
 ## 7. Secure cookies and staged HSTS rollout
 
 Production (`DJANGO_DEBUG=False`) is HTTPS-only: `SESSION_COOKIE_SECURE` and
@@ -529,6 +582,7 @@ python manage.py showmigrations
 python manage.py migrate
 python manage.py seed_industry_templates
 python manage.py validate_industry_templates
+python manage.py audit_industry_templates --format table
 python manage.py provision_default_warehouses
 python manage.py verify_inventory_consistency --strict
 python manage.py collectstatic --noinput

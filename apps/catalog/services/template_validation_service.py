@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 from apps.catalog.models import Attribute, IndustryTemplate
 
-VALIDATOR_VERSION = "1"
+VALIDATOR_VERSION = "2"  # 2: sector-aware merchant-completeness gate (REVIEW_REQUIRED)
 
 # وزن هر بُعد در امتیاز کیفیت — نگاه کنید به ADR-26. جمع = 100.
 QUALITY_SCORE_WEIGHTS = {
@@ -35,10 +35,50 @@ _CODE_DIMENSION = {
     "SCHEMA": "schema_quality",
     "RECOMMENDATION": "variant_recommendations",
     "USEFULNESS": "merchant_usefulness",
+    "COMPLETENESS": "merchant_usefulness",
     "INSTALL": "installability",
 }
 
 _WARNING_PENALTY = 5
+#: یک قالبِ دارایِ خلأِ تکمیل هرگز امتیازِ «خوب» نمی‌گیرد (سقفِ امتیاز) — تا عددِ بالا
+#: پشتِ یک اسکلتِ ناقص پنهان نشود.
+_COMPLETENESS_SCORE_CAP = 69
+
+# ---------------------------------------------------------------------------
+# معیارهای «کامل‌بودن برای مرچنت» — سخت‌گیریِ وابسته به رسته (sector-aware)
+#
+# تفاوتِ سه لایه (نگاه کنید به ADR-26 و addendum «Completeness gate»):
+#   1. خطای ساختاری (error)      → VALIDATION_FAILED: قالب اصلاً نصب‌شدنی نیست.
+#   2. خلأِ تکمیل (review gap)   → REVIEW_REQUIRED : ساختار معتبر است ولی برای یک
+#                                   مرچنتِ واقعی ناقص/اسکلتی است؛ پیشنهادِ نصبِ جدید نمی‌شود.
+#   3. هشدار (warning)           → هرگز آمادگی را تغییر نمی‌دهد (مگر strict).
+# فقط قالبی که هیچ خطا و هیچ خلأِ تکمیلی ندارد PRODUCTION_READY می‌شود.
+#
+# پروفایل‌ها:
+#   product   — رسته‌هایِ کالا (retail/digital/food/home/beauty/sport/culture/auto/industry)
+#   service   — رسته‌یِ خدمات (کاتالوگِ «کالا» ندارد؛ ویژگی‌هایِ کالایی لازم نیست)
+#   free_form — «سایر (صنف آزاد)»: عمداً عمومی و بدونِ ویژگی؛ استثنایِ صریح، نه امتیازدهی
+#               به‌عنوانِ یک قالبِ خرده‌فروشیِ غنی.
+# ---------------------------------------------------------------------------
+PRODUCT_SECTORS = frozenset({
+    IndustryTemplate.Sector.RETAIL, IndustryTemplate.Sector.DIGITAL, IndustryTemplate.Sector.FOOD,
+    IndustryTemplate.Sector.HOME, IndustryTemplate.Sector.BEAUTY, IndustryTemplate.Sector.SPORT,
+    IndustryTemplate.Sector.CULTURE, IndustryTemplate.Sector.AUTO, IndustryTemplate.Sector.INDUSTRY,
+})
+#: رسته‌هایی که محورِ تنوعِ پیشنهادی (سایز/رنگ…) برایشان طبیعی و لازم است.
+VARIANT_REQUIRED_SECTORS = frozenset({IndustryTemplate.Sector.RETAIL})
+
+PRODUCT_MIN_CATEGORIES = 4
+PRODUCT_MIN_ATTRIBUTES = 5
+PRODUCT_MIN_MAPPINGS = 8
+PRODUCT_MIN_MAPPED_LEAF_SHARE = 0.5      # دست‌کم نیمی از دسته‌هایِ برگ ویژگی داشته باشند
+PRODUCT_MIN_MAPPED_CATEGORIES = 2
+PRODUCT_MIN_STRUCTURED_ATTRIBUTES = 1    # دست‌کم یک ویژگیِ انتخابیِ دارایِ ≥۲ مقدار (نه فقط متنِ آزاد)
+SERVICE_MIN_CATEGORIES = 3               # دست‌کم سه نوعِ خدمت
+
+PROFILE_PRODUCT = "product"
+PROFILE_SERVICE = "service"
+PROFILE_FREE_FORM = "free_form"
 _MAX_REASONABLE_DEPTH = 4
 _MAX_REASONABLE_REQUIRED_PER_CATEGORY = 6
 
@@ -68,15 +108,25 @@ class TemplateValidationResult:
     metrics: dict = field(default_factory=dict)
     quality_score: int = 0
     duration_ms: int = 0
+    #: خلأهایِ «کامل‌بودن برایِ مرچنت» (severity="review") — ساختار معتبر ولی محتوا ناقص.
+    review_gaps: list = field(default_factory=list)
+    completeness_profile: str = PROFILE_PRODUCT
 
     @property
     def is_valid(self) -> bool:
+        """اعتبارِ *ساختاری* — خلأِ تکمیل آن را نامعتبر نمی‌کند (نصبِ موجود معتبر می‌ماند)."""
         return not self.errors
+
+    @property
+    def is_merchant_complete(self) -> bool:
+        return not self.review_gaps
 
     @property
     def recommended_readiness(self) -> str:
         if self.errors:
             return IndustryTemplate.Readiness.VALIDATION_FAILED
+        if self.review_gaps:
+            return IndustryTemplate.Readiness.REVIEW_REQUIRED
         return IndustryTemplate.Readiness.PRODUCTION_READY
 
     def as_dict(self) -> dict:
@@ -87,6 +137,8 @@ class TemplateValidationResult:
             "quality_score": self.quality_score,
             "metrics": self.metrics,
             "errors": [i.as_dict() for i in self.errors],
+            "review_gaps": [i.as_dict() for i in self.review_gaps],
+            "completeness_profile": self.completeness_profile,
             "warnings": [i.as_dict() for i in self.warnings],
             "infos": [i.as_dict() for i in self.infos],
             "duration_ms": self.duration_ms,
@@ -129,6 +181,72 @@ def _category_depth(category, by_id, _seen=None) -> int:
     return 1 + _category_depth(parent, by_id, _seen)
 
 
+def completeness_profile_for(sector: str) -> str:
+    """پروفایلِ معیارِ کامل‌بودن به‌ازایِ رسته — نگاه کنید به بالایِ همین ماژول."""
+    if sector == IndustryTemplate.Sector.SERVICES:
+        return PROFILE_SERVICE
+    if sector == IndustryTemplate.Sector.OTHER:
+        return PROFILE_FREE_FORM
+    return PROFILE_PRODUCT
+
+
+def evaluate_completeness_gaps(template: IndustryTemplate, metrics: dict, *, profile: str) -> list:
+    """خلأهایِ «کامل‌بودن برایِ مرچنت» را (فقط از رویِ metrics) برمی‌گرداند.
+
+    تابعِ خالص و قطعی است؛ ``free_form`` («سایر») عمداً هیچ خلأیی ندارد — آن قالب
+    باید عمومی باشد و با معیارِ یک قالبِ غنیِ خرده‌فروشی سنجیده نمی‌شود."""
+    gaps: list[ValidationIssue] = []
+
+    def gap(code, message, remediation):
+        gaps.append(ValidationIssue(
+            code=code, severity="review", message=message, model_type="IndustryTemplate",
+            identifier=template.slug, remediation=remediation,
+        ))
+
+    if profile == PROFILE_FREE_FORM:
+        return gaps
+
+    if profile == PROFILE_SERVICE:
+        if metrics["category_count"] < SERVICE_MIN_CATEGORIES:
+            gap("COMPLETENESS_SERVICE_TOO_FEW_CATEGORIES",
+                f"قالبِ خدماتی فقط {metrics['category_count']} دسته‌ی خدمت دارد (حداقل {SERVICE_MIN_CATEGORIES} نوعِ خدمت لازم است).",
+                "انواعِ اصلیِ خدماتِ این صنف را به‌عنوانِ دسته‌بندی اضافه کنید.")
+        return gaps
+
+    if metrics["category_count"] < PRODUCT_MIN_CATEGORIES:
+        gap("COMPLETENESS_TOO_FEW_CATEGORIES",
+            f"فقط {metrics['category_count']} دسته‌بندی (حداقل {PRODUCT_MIN_CATEGORIES} لازم است) — اسکلتِ تک‌دسته‌ای برایِ فروشگاهِ واقعی کافی نیست.",
+            "درختِ دسته‌بندیِ واقعیِ این صنف را بنویسید.")
+    if metrics["attribute_count"] < PRODUCT_MIN_ATTRIBUTES:
+        gap("COMPLETENESS_TOO_FEW_ATTRIBUTES",
+            f"فقط {metrics['attribute_count']} ویژگی (حداقل {PRODUCT_MIN_ATTRIBUTES} لازم است).",
+            "ویژگی‌هایِ توصیفیِ مهمِ این صنف را اضافه کنید.")
+    if metrics["mapping_count"] < PRODUCT_MIN_MAPPINGS:
+        gap("COMPLETENESS_TOO_FEW_MAPPINGS",
+            f"فقط {metrics['mapping_count']} نگاشتِ ویژگی به دسته (حداقل {PRODUCT_MIN_MAPPINGS} لازم است).",
+            "ویژگی‌ها را به دسته‌هایِ مرتبط نگاشت کنید.")
+    leaf_count = metrics.get("leaf_category_count", 0)
+    mapped_leaf = metrics.get("mapped_leaf_category_count", 0)  # شاملِ پوششِ ارثی
+    if (
+        metrics.get("mapped_category_count", 0) < PRODUCT_MIN_MAPPED_CATEGORIES
+        or (leaf_count and mapped_leaf / leaf_count < PRODUCT_MIN_MAPPED_LEAF_SHARE)
+    ):
+        gap("COMPLETENESS_LOW_SCHEMA_COVERAGE",
+            f"فقط {mapped_leaf} از {leaf_count} دسته‌ی برگ (با احتسابِ ارثِ والد) طرحِ ویژگی دارد (حداقل نیمی از دسته‌هایِ برگ و ۲ دسته‌یِ نگاشت‌شده لازم است).",
+            "برایِ دسته‌هایِ اصلی طرحِ ویژگی تعریف کنید.")
+    if metrics.get("structured_attribute_count", 0) < PRODUCT_MIN_STRUCTURED_ATTRIBUTES:
+        gap("COMPLETENESS_NO_STRUCTURED_ATTRIBUTE",
+            "هیچ ویژگیِ انتخابی (با حداقل ۲ مقدار) وجود ندارد؛ فقط فیلدهایِ متنِ آزاد است.",
+            "برایِ ویژگی‌هایِ رایج (جنس، نوع، …) مقدارهایِ استاندارد تعریف کنید.")
+    # عمداً: نبودِ نگاشتِ «قابل‌فیلتر» فقط هشدارِ USEFULNESS_NO_FILTERABLE است، نه خلأِ تکمیل —
+    # قالبی که دسته/ویژگی/نگاشتِ غنی دارد نباید به‌خاطرِ یک پرچمِ ثانویه از پیشنهاد حذف شود.
+    if template.sector in VARIANT_REQUIRED_SECTORS and metrics["recommendation_count"] < 1:
+        gap("COMPLETENESS_NO_VARIANT_RECOMMENDATION",
+            "این رسته معمولاً محورِ تنوع (مثل سایز/رنگ) دارد اما هیچ محورِ پیشنهادی تعریف نشده است.",
+            "محورهایِ تنوعِ پیشنهادیِ هر دسته را تعریف کنید.")
+    return gaps
+
+
 def validate_industry_template(template: IndustryTemplate) -> TemplateValidationResult:
     """اعتبارسنجی کامل ساختاری/معنایی یک قالب صنف — نگاه کنید به ADR-26."""
     import time
@@ -161,6 +279,7 @@ def validate_industry_template(template: IndustryTemplate) -> TemplateValidation
     root_categories = [c for c in categories if c.parent_id is None]
     metrics = {
         "category_count": len(categories), "root_category_count": len(root_categories),
+        "max_category_depth": max((_category_depth(c, by_id) for c in categories), default=0),
     }
 
     if not categories:
@@ -295,6 +414,31 @@ def validate_industry_template(template: IndustryTemplate) -> TemplateValidation
         add(warnings, "USEFULNESS_NO_FILTERABLE", "هیچ‌کدام از نگاشت‌های ویژگی «قابل فیلتر» نیستند.",
             "IndustryTemplate", template.slug)
 
+    # --- 6.6b کامل‌بودن برای مرچنت (sector-aware) ---
+    # طرحِ ویژگی به زیرشاخه‌ها ارث می‌رسد (category_schema_service) — پس یک دسته‌یِ برگ «پوشش‌داده‌شده»
+    # است اگر خودش یا یکی از اجدادش نگاشت داشته باشد.
+    def _covered(category) -> bool:
+        seen = set()
+        current = category
+        while current is not None and current.pk not in seen:
+            if current.code in mapped_category_codes:
+                return True
+            seen.add(current.pk)
+            current = by_id.get(current.parent_id) if current.parent_id else None
+        return False
+
+    mapped_leaf_codes = {c.code for c in leaf_categories if _covered(c)}
+    structured_attribute_count = sum(
+        1 for a in attributes
+        if a.data_type in Attribute.CHOICE_DATA_TYPES and len(list(a.values.all())) >= 2
+    )
+    metrics["leaf_category_count"] = len(leaf_categories)
+    metrics["mapped_category_count"] = len(mapped_category_codes)
+    metrics["mapped_leaf_category_count"] = len(mapped_leaf_codes)
+    metrics["structured_attribute_count"] = structured_attribute_count
+    profile = completeness_profile_for(template.sector)
+    gaps = evaluate_completeness_gaps(template, metrics, profile=profile)
+
     # --- 6.7 قابلیت نصب ---
     installable = bool(categories) and bool(root_categories) and not cycle_codes
     if not installable:
@@ -308,6 +452,9 @@ def validate_industry_template(template: IndustryTemplate) -> TemplateValidation
         dim = _issue_dimension(issue.code)
         dimension_scores[dim] = max(0, dimension_scores.get(dim, 0) - _WARNING_PENALTY)
     quality_score = sum(dimension_scores.values())
+    if gaps:
+        dimension_scores["merchant_usefulness"] = 0
+        quality_score = min(sum(dimension_scores.values()), _COMPLETENESS_SCORE_CAP)
     if errors:
         quality_score = min(quality_score, 40)  # خطای بحرانی هرگز پشت امتیاز بالا پنهان نمی‌شود
 
@@ -316,6 +463,7 @@ def validate_industry_template(template: IndustryTemplate) -> TemplateValidation
     return TemplateValidationResult(
         template=template, errors=errors, warnings=warnings, infos=infos, metrics=metrics,
         quality_score=quality_score, duration_ms=duration_ms,
+        review_gaps=gaps, completeness_profile=profile,
     )
 
 
@@ -424,14 +572,25 @@ def validate_and_persist(template: IndustryTemplate, *, strict: bool = False) ->
             "errors": [i.as_dict() for i in result.errors],
             "warnings": [i.as_dict() for i in result.warnings],
             "infos": [i.as_dict() for i in result.infos],
-            "metrics": result.metrics, "duration_ms": result.duration_ms,
+            # بدونِ تغییرِ اسکیما: خلأهایِ تکمیل کنارِ metrics نگه‌داری می‌شوند.
+            "metrics": {
+                **result.metrics,
+                "completeness": {
+                    "profile": result.completeness_profile,
+                    "merchant_complete": result.is_merchant_complete,
+                    "gaps": [i.as_dict() for i in result.review_gaps],
+                },
+            },
+            "duration_ms": result.duration_ms,
         },
     )
 
     if template.readiness in _READINESS_AUTO_MANAGED:
         if result.errors:
             new_readiness = IndustryTemplate.Readiness.VALIDATION_FAILED
-        elif strict and result.warnings:
+        elif result.review_gaps or (strict and result.warnings):
+            # ساختارِ معتبر ولی برایِ مرچنتِ واقعی ناقص (یا --strict و هشدار): پیشنهادِ نصبِ جدید نمی‌شود.
+            # نصب‌هایِ موجود دست‌نخورده می‌مانند (deep copy مستقل از readiness).
             new_readiness = IndustryTemplate.Readiness.REVIEW_REQUIRED
         else:
             new_readiness = IndustryTemplate.Readiness.PRODUCTION_READY

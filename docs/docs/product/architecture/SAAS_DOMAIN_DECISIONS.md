@@ -1451,6 +1451,43 @@ platform operators need to inspect *why* a template is not
 `production_ready` without re-running validation by hand each time (see
 ADR context in §11 of the Phase 1F report for the persistence policy).
 
+### ADR-26 addendum — Merchant-completeness gate (REVIEW_REQUIRED)
+
+**Context.** Structural validity is necessary but is not "a merchant can start
+selling with this". A template with one generic category and three free-text
+fields passes every structural check yet gives a clothing/food/electronics
+merchant nothing they could not type themselves. Before this addendum 101 of
+107 latest templates were `production_ready`, of which ~75 were that skeletal
+pattern.
+
+**Decision.** `validate_industry_template` additionally evaluates a
+*sector-aware completeness profile* (`completeness_profile_for(sector)`):
+
+| Profile | Sectors | Needs |
+|---|---|---|
+| `product` | retail, digital, food, home, beauty, sport, culture, auto, industry | ≥4 categories, ≥5 attributes, ≥8 category↔attribute mappings, schema coverage (with parent inheritance) on ≥50% of leaf categories and ≥2 mapped categories, ≥1 choice attribute with ≥2 values; **retail** also ≥1 recommended variant axis |
+| `service` | services | ≥3 service categories; product attributes/mappings/variant axes are not required (and not prohibited) |
+| `free_form` | other | deliberately generic; structural validity only |
+
+Gaps are `review`-severity issues (`COMPLETENESS_*`), kept apart from
+`errors`. Recommended readiness: any error → `validation_failed`; else any gap →
+`review_required`; else `production_ready`. The advisory `quality_score` is
+capped at 69 while gaps exist. "No filterable mapping" stays a warning, not a gap.
+Strict global mode is **not** enabled. `validate_and_persist` stores the gap list
+under `metrics["completeness"]`; `deprecated`/`archived` stay operator decisions.
+
+**Consequences.** Merchant-facing selectors (`offerable_industry_templates`,
+onboarding, store creation, public supported-industries page) already offer only
+`production_ready`, so `review_required` templates simply stop being offered
+for **new** installations. Existing `StoreIndustryInstallation` rows and the
+Categories/Attributes copied to a Store are never deleted or rewritten — readiness
+governs new installs only. `seed_industry_templates` runs `validate_and_persist`
+for every entry, and `audit_industry_templates --apply` does the same for
+platform rows already in the database, so an existing environment converges
+without manual DB editing. Enriching a template (editing the registry entry) and
+re-running seed promotes it automatically.
+The backlog is in `docs/docs/product/reports/INDUSTRY_TEMPLATE_COMPLETENESS_AUDIT.md`.
+
 ## ADR-27: Template Versioning Stays on `IndustryTemplate.(slug, version)` — No Separate Version-Family Model
 
 **Context.** Phase 1F requires representing "Industry family identity,
@@ -4397,6 +4434,54 @@ platform_admin_views.store_detail`) reads `store.subscription_invoices`
 `store.platform_invoices`.
 
 ---
+
+
+## ADR-107: New Owners Must Explicitly Accept a Versioned Terms Document — Durable `OwnerTermsAcceptance`, Bound to the Server-Side OTP Session
+
+**Decision.** `apps.portal.terms.CURRENT_TERMS_VERSION` (currently `2026-10-v1`) is the single source of the
+Terms version: shown on `/terms/`, rendered on `/register/` and `/signup/complete/`, and stored on every
+acceptance. `/register/` and `/signup/complete/` require a checkbox (`accept_terms`, only the exact value `"1"`
+counts) validated server-side; unchecked ⇒ no OTP, no challenge, no `User`/`OwnerProfile`/Store. For
+`/register/` the accepted version is written into the server-side OTP session
+(`portal_otp_accepted_terms_version`) — `/verify/` never reads a version from the client and fails closed (clears
+state, redirects to `/register/`, burns no OTP) if it is missing or no longer the current version.
+`OwnerTermsAcceptance(user, terms_version, accepted_at, source)` (unique on `(user, terms_version)`) is written
+inside `resolve_owner_identity_by_phone`'s transaction **only for the request that really creates the
+`OwnerProfile`** (`get_or_create` ⇒ idempotent under replay/races; rolled back with the Owner on failure).
+
+**Not done (by design).** Existing owners are not blocked and no acceptance is fabricated for them; a
+re-acceptance workflow for a future Terms version is a separate task. No IP/User-Agent is collected.
+
+
+## ADR-108: Owner Onboarding Chooses a Ready Template (the ONE 50-template catalog), Applied by Storefront Builder Services, and Final Publish Publishes the Storefront Draft
+
+**Decision.** Onboarding has five steps (معرفی · صنف · قالب فروشگاه · برند · بازبینی); `Store.OnboardingStage.TEMPLATE`
+is new (choices-only migration `stores/0019`, no data change). The Template step is **required** (no skip) and lists exactly
+`layout_preset_registry.list_ready_templates()` through the shared read-only `ready_template_card_service` (extracted from
+`storefront_builder.views`, which re-exports it) — one catalog, one thumbnail authority (`template_preview_service`).
+A POST carries only `template_key`; the version is always the current registry version. Application is orchestrated by
+`storefront_builder.services.store_template_service.select_ready_template`: an untouched first bootstrap Draft gets
+`preset_service.apply_preset` (the exact template, no hybrid with legacy content); any other state goes through
+`r4_mutation_service.switch_template_current` (preservation-first). The portal contains no section/provenance/baseline logic.
+Final onboarding Publish (`portal.services.onboarding_publish_service.complete_onboarding`) is one transaction under a Store row lock:
+require an applied Ready Template (read from the real layout provenance), publish the Draft via `layout_service.publish`, then set
+`onboarding_completed_at`/`DONE`; any failure rolls everything back (still private/incomplete); an already-completed Store is a no-op.
+
+**Compatibility.** Completed Stores are never sent back; an unpublished Store at branding/review with no applied template is routed
+through the Template step by the dispatcher (stored progress untouched); nothing is auto-applied. **Not done:** industry→template
+recommendations (no authoritative mapping exists), live iframe previews (Merchant Admin preview is staff/host-bound).
+
+**Pre-publish privacy (hardening).** A Store created by the modern portal provisioning flow is never public before the final Publish,
+regardless of subscription/billing configuration. The durable modern-vs-legacy signal is the new nullable
+`Store.onboarding_required_at` (migration `stores/0020`, schema only — existing rows stay NULL, no backfill), set only by
+`provisioning_service.provision_trial_store` at creation. `publication_service.get_store_publication_state` returns `TRIAL_PRIVATE`
+when it is set and `onboarding_completed_at` is NULL, **before** the ADR-65 `AccessState.NONE` fail-open (a genuinely restricted/expired
+subscription is still reported as `RESTRICTED`). After Publish the normal policy applies unchanged. Legacy/ad-hoc Stores (no signal) are untouched.
+
+**Historical template UX.** A gallery card is selected/current only when BOTH key and version match the applied template. A Store on a
+historical version (key X, v2) shows an informational «قالب فعلی شما» panel and an «ادامه با همین قالب» (`action=keep_current`) form;
+`keep_current` is accepted only when `store_template_service.get_applied_template` is not None, mutates nothing in the Storefront (only
+`onboarding_stage` advances), and the upgrade to the latest version happens only when the owner explicitly selects that card.
 
 ## Summary Table
 

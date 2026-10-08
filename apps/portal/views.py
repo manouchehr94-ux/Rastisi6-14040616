@@ -1,5 +1,6 @@
 from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
+import logging
 import time
 from urllib.parse import urlencode
 
@@ -19,13 +20,14 @@ from django.views.decorators.http import require_http_methods, require_POST
 from django.conf import settings
 
 from apps.catalog.models import IndustryTemplate
-from apps.catalog.services import industry_catalog_service
+from apps.catalog.services import industry_catalog_service, template_summary_service
+from apps.storefront_builder.services import ready_template_card_service, store_template_service
 from apps.billing.models import SubscriptionPaymentAttempt
 from apps.billing.services import payment_flow_service
 from apps.billing.services import plan_change_billing_service
 from apps.stores.hostnames import build_cross_host_url
 from apps.stores.models import Store, StoreDomain, StoreMembership, StoreOwnershipTransfer
-from apps.stores.services import deletion_service, domain_verification_service, handle_service, ownership_transfer_service
+from apps.stores.services import deletion_service, domain_verification_service, handle_service, ownership_transfer_service, publication_service
 from apps.subscriptions.models import Plan, PlanVersion, StoreSubscription
 from apps.subscriptions.services import entitlement_service as ent
 from apps.subscriptions.services import plan_change_service
@@ -61,12 +63,15 @@ from .forms import (
 )
 from apps.core.services.client_ip import get_client_ip_bucket
 
-from .models import ContactMessage, OwnerOtpChallenge
+from .models import ContactMessage, OwnerOtpChallenge, OwnerTermsAcceptance
 from .phone import InvalidPhoneError, normalize_iranian_phone
+from .terms import CURRENT_TERMS_VERSION, TERMS_ACCEPTANCE_REQUIRED_MESSAGE
 from .services import (
     handoff_service,
+    onboarding_publish_service,
     owner_auth_service,
     owner_otp_service,
+    owner_sms_service,
     platform_config_service,
     provisioning_service,
     session_service,
@@ -74,6 +79,8 @@ from .services import (
     turnstile_service,
 )
 from .services.rate_limit import UNAVAILABLE_MESSAGE, RateLimitExceeded, RateLimitUnavailable, enforce_rate_limit
+
+logger = logging.getLogger(__name__)
 
 _STORE_CREATE_TOKEN_SESSION_KEY = "portal_store_create_token"
 DEFAULT_TRIAL_STORE_NAME = "فروشگاه من"
@@ -84,6 +91,15 @@ _OTP_SESSION_NEXT_KEY = "portal_otp_next"
 _OTP_SESSION_ADMIN_RETURN_KEY = "portal_otp_admin_return"
 _OTP_SESSION_REMEMBER_KEY = "portal_otp_remember_me"
 _OTP_SESSION_FLASH_KEY = "portal_otp_flash"
+_OTP_SESSION_STARTED_KEY = "portal_otp_started_at"
+#: نسخه‌ی قوانینی که /register/ (پس از اعتبارسنجیِ چک‌باکسِ الزامی) در نشستِ *سمتِ سرور*
+#: گذاشته؛ /verify/ هرگز نسخه‌ای از کلاینت نمی‌پذیرد و فقط همین مقدار را می‌خواند.
+_OTP_SESSION_TERMS_VERSION_KEY = "portal_otp_accepted_terms_version"
+#: «اجازه‌ی تعیینِ رمزِ جدید» — فقط سمتِ سرور (نشست)، کوتاه‌عمر و تک‌مصرف؛ تنها پس از
+#: موفقیتِ OTPِ هدفِ «بازیابی رمز» نوشته می‌شود. صفحه‌ی رمزِ جدید کاربر را *فقط* از همین
+#: می‌خواند، هرگز از بدنه‌ی درخواست. این OTP هرگز کسی را وارد نمی‌کند.
+_RESET_PENDING_KEY = "portal_password_reset_pending"
+RESET_PENDING_TTL_SECONDS = 600
 #: «شمارهٔ تأییدشده، منتظرِ تکمیلِ ثبت‌نام» — فقط سمتِ سرور (نشست)، با عمرِ کوتاه،
 #: و تنها پس از موفقیتِ OTP نوشته می‌شود. مرحله‌ی تکمیل شماره را *فقط* از همین
 #: می‌خواند، هرگز از بدنه‌ی درخواست.
@@ -92,7 +108,7 @@ SIGNUP_PENDING_TTL_SECONDS = 600
 _OTP_SESSION_KEYS = (
     _OTP_SESSION_PHONE_KEY, _OTP_SESSION_PURPOSE_KEY, _OTP_SESSION_FULL_NAME_KEY,
     _OTP_SESSION_NEXT_KEY, _OTP_SESSION_ADMIN_RETURN_KEY, _OTP_SESSION_REMEMBER_KEY,
-    _OTP_SESSION_FLASH_KEY,
+    _OTP_SESSION_FLASH_KEY, _OTP_SESSION_STARTED_KEY, _OTP_SESSION_TERMS_VERSION_KEY,
 )
 
 
@@ -153,7 +169,7 @@ def help_center(request):
 
 
 def terms(request):
-    return render(request, "portal/public/terms.html")
+    return render(request, "portal/public/terms.html", {"terms_version": CURRENT_TERMS_VERSION})
 
 
 def privacy(request):
@@ -243,6 +259,7 @@ def _is_safe_next(next_url: str) -> bool:
 def _request_otp_and_go_to_verify(
     request, *, phone_raw: str, full_name: str, purpose: str,
     next_url: str = "", admin_return: str = "", remember_me: bool = False,
+    accepted_terms_version: str = "",
 ):
     try:
         phone = normalize_iranian_phone(phone_raw)
@@ -257,12 +274,18 @@ def _request_otp_and_go_to_verify(
         return None, str(exc)
 
     request.session.pop(_SIGNUP_PENDING_KEY, None)
+    request.session.pop(_RESET_PENDING_KEY, None)
     request.session[_OTP_SESSION_PHONE_KEY] = phone
     request.session[_OTP_SESSION_PURPOSE_KEY] = purpose
     request.session[_OTP_SESSION_FULL_NAME_KEY] = full_name
     request.session[_OTP_SESSION_NEXT_KEY] = next_url
     request.session[_OTP_SESSION_ADMIN_RETURN_KEY] = admin_return
     request.session[_OTP_SESSION_REMEMBER_KEY] = bool(remember_me)
+    request.session[_OTP_SESSION_STARTED_KEY] = int(time.time())
+    if accepted_terms_version:
+        request.session[_OTP_SESSION_TERMS_VERSION_KEY] = accepted_terms_version
+    else:
+        request.session.pop(_OTP_SESSION_TERMS_VERSION_KEY, None)
     return phone, None
 
 
@@ -311,7 +334,7 @@ def register(request):
     if not platform_config_service.is_new_store_registration_enabled():
         return render(
             request, "portal/public/register.html",
-            {"form": OwnerRegistrationRequestForm(), "registration_open": False},
+            {"form": OwnerRegistrationRequestForm(), "registration_open": False, "terms_version": CURRENT_TERMS_VERSION},
         )
 
     if request.method == "POST":
@@ -323,6 +346,8 @@ def register(request):
                 request, phone_raw=form.cleaned_data["phone"],
                 full_name=form.cleaned_data["full_name"], purpose=OwnerOtpChallenge.Purpose.REGISTER,
                 remember_me=form.cleaned_data.get("remember_me", False),
+                # نسخه را سرور می‌داند؛ فقط چون چک‌باکس معتبر بود در نشستِ سرور گذاشته می‌شود.
+                accepted_terms_version=CURRENT_TERMS_VERSION,
             )
             if error:
                 form.add_error(None, error)
@@ -330,7 +355,10 @@ def register(request):
                 return redirect("portal:otp-verify")
     else:
         form = OwnerRegistrationRequestForm()
-    return render(request, "portal/public/register.html", {"form": form, "registration_open": True})
+    return render(
+        request, "portal/public/register.html",
+        {"form": form, "registration_open": True, "terms_version": CURRENT_TERMS_VERSION},
+    )
 
 
 def login_view(request):
@@ -486,20 +514,50 @@ _REGISTRATION_CLOSED_LOGIN_MESSAGE = (
 _INACTIVE_ACCOUNT_MESSAGE = "ورود با این شماره امکان‌پذیر نیست؛ لطفاً با پشتیبانی تماس بگیرید."
 
 
+_RESET_GENERIC_NOTICE = "اگر حساب فعالی با این شماره وجود داشته باشد، کد تأیید برای آن ارسال می‌شود."
+_RESET_RESEND_NOTICE = "اگر حساب فعالی با این شماره وجود داشته باشد، کد جدید برای آن ارسال می‌شود."
+_RESET_OTP_FAILURE_MESSAGE = "کد واردشده نادرست یا منقضی شده است؛ در صورت نیاز کد جدید دریافت کنید."
+_SMS_UNAVAILABLE_MESSAGE = "ارسال پیامک در حال حاضر در دسترس نیست؛ لطفاً کمی بعد دوباره تلاش کنید."
+_RESET_SESSION_EXPIRED_MESSAGE = "زمانِ تعیینِ رمز عبور به پایان رسید؛ لطفاً دوباره کد تأیید بگیرید."
+
+
 def _clear_otp_session(request) -> None:
     for key in _OTP_SESSION_KEYS:
         request.session.pop(key, None)
 
 
+def _reset_otp_timing(request) -> dict:
+    """UX countdowns for the password-reset verify page, computed from the *session* only. The
+    real challenge row exists only for an eligible account, so reading it would leak whether the
+    phone has an account; this makes the page identical for known and unknown numbers."""
+    started = request.session.get(_OTP_SESSION_STARTED_KEY)
+    elapsed = max(0, int(time.time()) - started) if isinstance(started, int) else owner_otp_service.OTP_TTL_SECONDS
+    return {
+        "expires_in": max(0, owner_otp_service.OTP_TTL_SECONDS - elapsed),
+        "resend_in": max(0, owner_otp_service.RESEND_UX_COOLDOWN_SECONDS - elapsed),
+    }
+
+
 def _render_otp_verify(request, form, *, phone: str, purpose: str):
     is_registration = purpose == OwnerOtpChallenge.Purpose.REGISTER
+    is_reset = purpose == OwnerOtpChallenge.Purpose.PASSWORD_RESET
+    if is_registration:
+        change_phone_url = reverse("portal:register")
+    elif is_reset:
+        change_phone_url = reverse("portal:password-reset-request")
+    else:
+        change_phone_url = reverse("portal:login")
     return render(
         request, "portal/public/otp_verify.html",
         {
             "form": form, "phone": phone, "purpose": purpose, "is_registration": is_registration,
+            "is_reset": is_reset,
             "resend_url": reverse("portal:otp-resend"),
-            "change_phone_url": reverse("portal:register" if is_registration else "portal:login"),
-            "timing": owner_otp_service.resend_timing(phone=phone, purpose=purpose),
+            "change_phone_url": change_phone_url,
+            "timing": (
+                _reset_otp_timing(request) if is_reset
+                else owner_otp_service.resend_timing(phone=phone, purpose=purpose)
+            ),
             "otp_ttl_minutes": max(1, owner_otp_service.OTP_TTL_SECONDS // 60),
             "flash": request.session.pop(_OTP_SESSION_FLASH_KEY, None),
         },
@@ -520,9 +578,17 @@ def otp_verify(request):
         return redirect("portal:login")
 
     is_registration = purpose == OwnerOtpChallenge.Purpose.REGISTER
+    is_reset = purpose == OwnerOtpChallenge.Purpose.PASSWORD_RESET
     if is_registration and not request.session.get(_OTP_SESSION_FULL_NAME_KEY):
         # نشستِ ثبت‌نام بدونِ نام معتبر نیست (نباید رخ دهد)؛ از ابتدا شروع شود.
         _clear_otp_session(request)
+        return redirect("portal:register")
+    if is_registration and request.session.get(_OTP_SESSION_TERMS_VERSION_KEY) != CURRENT_TERMS_VERSION:
+        # بدونِ تأییدِ معتبرِ نسخه‌ی *فعلیِ* قوانین در نشستِ سرور (دست‌کاری/حذف، یا نسخه بینِ
+        # درخواستِ کد و تأیید عوض شده) fail-closed: حالت پاک می‌شود، هیچ مالک/فروشگاهی ساخته
+        # نمی‌شود و کدِ OTP هم مصرف نمی‌شود.
+        _clear_otp_session(request)
+        messages.error(request, TERMS_ACCEPTANCE_REQUIRED_MESSAGE)
         return redirect("portal:register")
 
     if request.method != "POST":
@@ -538,10 +604,16 @@ def otp_verify(request):
 
     result = owner_otp_service.check_otp(phone=phone, purpose=purpose, code=form.cleaned_data["code"])
     if result is not owner_otp_service.OtpCheckResult.OK:
-        form.add_error("code", _OTP_CHECK_MESSAGES[result])
+        # Reset: ONE message for every failure kind — a precise one ("wrong" vs "expired") would
+        # tell an attacker whether this phone has an active challenge, i.e. an account.
+        form.add_error("code", _RESET_OTP_FAILURE_MESSAGE if is_reset else _OTP_CHECK_MESSAGES[result])
         return _render_otp_verify(request, form, phone=phone, purpose=purpose)
 
+    if is_reset:
+        return _begin_password_reset_authorization(request, phone=phone)
+
     full_name = request.session.get(_OTP_SESSION_FULL_NAME_KEY, "") if is_registration else ""
+    accepted_terms_version = request.session.get(_OTP_SESSION_TERMS_VERSION_KEY, "") if is_registration else ""
     next_url = request.session.get(_OTP_SESSION_NEXT_KEY, "")
     admin_return = request.session.get(_OTP_SESSION_ADMIN_RETURN_KEY, "")
     remember_me = request.session.get(_OTP_SESSION_REMEMBER_KEY, False)
@@ -555,6 +627,10 @@ def otp_verify(request):
             # Owner now. /login/ never creates one: OTP only proves the phone, and a
             # phone without an Owner continues to the «تکمیل ثبت‌نام» step.
             allow_new_owner=registration_open and is_registration,
+            # فقط مسیرِ /register/؛ ردیفِ پذیرش تنها وقتی نوشته می‌شود که همین درخواست
+            # OwnerProfile را واقعاً ساخته باشد (مالکِ موجود/ورود: هیچ‌چیز).
+            accepted_terms_version=accepted_terms_version,
+            terms_source=OwnerTermsAcceptance.Source.REGISTRATION,
         )
     except owner_auth_service.NewOwnerRegistrationClosedError:
         if not is_registration and registration_open:
@@ -638,7 +714,7 @@ def signup_complete(request):
         return redirect("portal:app-home")
 
     phone = pending["phone"]
-    context = {"phone": phone, "registration_open": True}
+    context = {"phone": phone, "registration_open": True, "terms_version": CURRENT_TERMS_VERSION}
     if not platform_config_service.is_new_store_registration_enabled():
         context.update(form=OwnerSignupCompletionForm(), registration_open=False)
         return render(request, "portal/public/signup_complete.html", context)
@@ -650,6 +726,9 @@ def signup_complete(request):
                 identity = owner_auth_service.resolve_owner_identity_by_phone(
                     phone=phone, full_name=form.cleaned_data["full_name"],
                     allow_new_owner=platform_config_service.is_new_store_registration_enabled(),
+                    # چک‌باکسِ همین فرم معتبر بود؛ نسخه همیشه ثابتِ سرور است نه مقدارِ ارسالی.
+                    accepted_terms_version=CURRENT_TERMS_VERSION,
+                    terms_source=OwnerTermsAcceptance.Source.SIGNUP_COMPLETE,
                 )
             except owner_auth_service.NewOwnerRegistrationClosedError:
                 context.update(form=OwnerSignupCompletionForm(), registration_open=False)
@@ -687,6 +766,18 @@ def otp_resend(request):
     ):
         _clear_otp_session(request)
         return redirect("portal:register")
+
+    if purpose == OwnerOtpChallenge.Purpose.PASSWORD_RESET:
+        # Never the generic sender: that would create/send a reset challenge for ANY phone.
+        # The helper re-checks that this phone belongs to an eligible owner, and answers the
+        # same way for known and unknown numbers.
+        error = _send_reset_otp_if_eligible(request, phone=phone)
+        if error:
+            request.session[_OTP_SESSION_FLASH_KEY] = {"kind": "error", "text": error}
+        else:
+            request.session[_OTP_SESSION_STARTED_KEY] = int(time.time())
+            request.session[_OTP_SESSION_FLASH_KEY] = {"kind": "ok", "text": _RESET_RESEND_NOTICE}
+        return redirect("portal:otp-verify")
 
     try:
         owner_otp_service.request_otp(
@@ -730,7 +821,51 @@ def logout_view(request):
     return redirect("portal:home")
 
 
+def _send_reset_otp_if_eligible(request, *, phone: str) -> str | None:
+    """Issue a password-reset OTP **only** to an existing, active owner — and answer identically
+    for every phone, so the public flow is not an account-enumeration oracle.
+
+    Returns a user-facing error only for *account-independent* failures (SMS not deliverable at
+    all, per-IP budget, shared rate-limit store down). Everything that depends on the account —
+    unknown/ineligible phone, per-phone budget, a provider failure for this send — is swallowed
+    into the same generic success path: no challenge is left active in those cases (the OTP
+    service removes a challenge whose delivery failed) and nothing is ever created for an unknown
+    phone. The per-IP budget is charged for every phone, known or not."""
+    if not owner_sms_service.otp_delivery_available():
+        return _SMS_UNAVAILABLE_MESSAGE
+    client_ip = get_client_ip_bucket(request)
+    try:
+        owner_otp_service.charge_ip_budget(purpose=OwnerOtpChallenge.Purpose.PASSWORD_RESET, client_ip=client_ip)
+    except owner_otp_service.OtpRateLimitError as exc:  # incl. OtpDeliveryError("temporarily unavailable")
+        return str(exc)
+
+    if owner_auth_service.find_reset_eligible_user_by_phone(phone) is None:
+        return None  # unknown / inactive / not an owner: send nothing, create nothing, say nothing
+    try:
+        owner_otp_service.request_otp(
+            phone=phone, purpose=OwnerOtpChallenge.Purpose.PASSWORD_RESET, client_ip=client_ip, charge_ip=False,
+        )
+    except owner_otp_service.OtpRateLimitError:
+        # Per-phone budget or SMS delivery failure. Not shown (it would reveal the account); the
+        # operator-side detail is logged by the SMS layer. No active challenge remains.
+        logger.warning("password-reset OTP was not issued (phone budget or SMS delivery failure)")
+    except Exception as exc:  # noqa: BLE001 — deliberately NOT BaseException (Ctrl-C/SystemExit propagate)
+        # An unexpected provider/infrastructure exception must not become a 500: that would be an
+        # account-dependent response (an unknown phone never reaches the provider). ``request_otp``
+        # has already removed the in-flight challenge (best effort; an un-removed one is the
+        # never-verifiable "pending" row), so no usable reset code and no authorization exist. Only the
+        # exception CLASS is logged: its text may carry credentials, URLs or the code.
+        logger.error("password-reset OTP failed unexpectedly: %s", exc.__class__.__name__)
+    return None
+
+
 def password_reset_request(request):
+    """بازیابی/تعیینِ رمز با **موبایل + کدِ پیامکی** (جایگزینِ ایمیلِ عمومی).
+
+    جریان: شماره → OTPِ هدفِ «بازیابی رمز» → ``/verify/`` → ``/reset-password/new/`` → ورود.
+    هیچ ``User``/``OwnerProfile``/Store ساخته نمی‌شود و پاسخِ عمومی برایِ شمارهٔ ناشناخته،
+    مالکِ فعال و حسابِ بدونِ رمز یکسان است. سقفِ IP همان ``password_reset`` است؛ Turnstile و
+    fail-closed بودنِ شمارنده‌ی مشترک حفظ شده‌اند."""
     if request.method == "POST":
         form = PasswordResetRequestForm(request.POST)
         try:
@@ -746,17 +881,86 @@ def password_reset_request(request):
         if form.is_valid() and _turnstile_form_is_valid(
             request, form, action="password_reset"
         ):
-            base_url = f"{request.scheme}://{request.get_host()}"
-            owner_auth_service.request_password_reset(email=form.cleaned_data["email"], base_url=base_url)
-            messages.success(
-                request,
-                "اگر این ایمیل برای حسابی با رمز عبور ثبت شده باشد، پیوند بازیابی برایش ارسال شد. "
-                "اگر پیامی نرسید، پوشه‌ی هرزنامه را هم بررسی کنید.",
-            )
-            return redirect("portal:password-reset-request")
+            phone = form.cleaned_data["phone"]
+            error = _send_reset_otp_if_eligible(request, phone=phone)
+            if error:
+                form.add_error(None, error)
+            else:
+                for key in _OTP_SESSION_KEYS + (_SIGNUP_PENDING_KEY, _RESET_PENDING_KEY):
+                    request.session.pop(key, None)
+                request.session[_OTP_SESSION_PHONE_KEY] = phone
+                request.session[_OTP_SESSION_PURPOSE_KEY] = OwnerOtpChallenge.Purpose.PASSWORD_RESET
+                request.session[_OTP_SESSION_STARTED_KEY] = int(time.time())
+                request.session[_OTP_SESSION_FLASH_KEY] = {"kind": "ok", "text": _RESET_GENERIC_NOTICE}
+                return redirect("portal:otp-verify")
     else:
         form = PasswordResetRequestForm()
     return render(request, "portal/public/password_reset_request.html", {"form": form})
+
+
+def _get_reset_authorization(request):
+    """اجازه‌ی تعیینِ رمز از نشستِ سرور؛ نبود/خراب/منقضی → پاک و ``None``."""
+    pending = request.session.get(_RESET_PENDING_KEY)
+    if isinstance(pending, dict):
+        uid, verified_at = pending.get("uid"), pending.get("verified_at")
+        if (
+            isinstance(uid, int) and not isinstance(uid, bool) and isinstance(verified_at, int)
+            and 0 <= time.time() - verified_at <= RESET_PENDING_TTL_SECONDS
+        ):
+            return pending
+    request.session.pop(_RESET_PENDING_KEY, None)
+    return None
+
+
+def _begin_password_reset_authorization(request, *, phone: str):
+    """پس از موفقیتِ OTPِ بازیابی: هیچ ورودی انجام نمی‌شود و هیچ‌چیز ساخته نمی‌شود؛ فقط یک
+    مجوزِ کوتاه‌عمر و تک‌مصرفِ سمتِ سرور (متصل به همین کاربر) نوشته و OTP session پاک می‌شود."""
+    user = owner_auth_service.find_reset_eligible_user_by_phone(phone)
+    _clear_otp_session(request)
+    if user is None:  # became ineligible between issue and verify
+        messages.error(request, _RESET_OTP_FAILURE_MESSAGE)
+        return redirect("portal:password-reset-request")
+    request.session.cycle_key()  # fresh session id for the new privilege
+    request.session[_RESET_PENDING_KEY] = {"uid": user.pk, "verified_at": int(time.time())}
+    return redirect("portal:password-reset-new")
+
+
+@never_cache
+def password_reset_new(request):
+    """تعیینِ رمزِ جدید پس از تأییدِ موبایل با OTP.
+
+    کاربر **فقط** از مجوزِ سمتِ سرور (نه از بدنه‌ی درخواست) خوانده و دوباره از نظرِ اهلیت
+    سنجیده می‌شود؛ مجوز ۱۰ دقیقه اعتبار دارد و با موفقیت مصرف می‌شود (تک‌مصرف). رمز فقط از
+    ``owner_auth_service.set_new_password`` (اعتبارسنجی‌هایِ Django) می‌گذرد. خودکار وارد
+    نمی‌کند؛ به صفحه‌ی ورود می‌رود. حسابِ بدونِ رمز (ساخته‌شده با OTP) اولین رمزش را همین‌جا می‌گذارد."""
+    pending = _get_reset_authorization(request)
+    if pending is None:
+        messages.warning(request, _RESET_SESSION_EXPIRED_MESSAGE)
+        return redirect("portal:password-reset-request")
+    user = owner_auth_service.get_reset_eligible_user_by_id(pending["uid"])
+    if user is None:
+        request.session.pop(_RESET_PENDING_KEY, None)
+        messages.warning(request, _RESET_SESSION_EXPIRED_MESSAGE)
+        return redirect("portal:password-reset-request")
+
+    if request.method == "POST":
+        form = PasswordResetConfirmForm(request.POST)
+        if form.is_valid():
+            try:
+                owner_auth_service.set_new_password(user=user, password=form.cleaned_data["password"])
+            except owner_auth_service.PasswordPolicyError as exc:
+                for message in exc.messages:
+                    form.add_error("password", message)
+            else:
+                request.session.pop(_RESET_PENDING_KEY, None)  # single use
+                messages.success(request, "رمز عبور با موفقیت تعیین شد؛ اکنون می‌توانید با شماره موبایل و رمز جدید وارد شوید.")
+                return redirect("portal:login")
+    else:
+        form = PasswordResetConfirmForm()
+    return render(
+        request, "portal/public/password_reset_confirm.html",
+        {"form": form, "password_help": password_validators_help_texts(), "via_sms": True},
+    )
 
 
 #: The reset token lives in the URL path; see ``password_reset_confirm``.
@@ -834,9 +1038,11 @@ def app_home(request):
 
 @owner_required
 def store_create(request):
-    """Section D (lite) + Section G: one-step store name + optional industry
-    choice, then immediate atomic trial provisioning
-    (``provisioning_service.provision_trial_store``). Double-submit
+    """Section D (lite) + Section G: one-step store name, then immediate atomic
+    trial provisioning (``provisioning_service.provision_trial_store``).
+    No industry template is installed here — that irreversible, one-time action
+    lives on the onboarding «صنف» step behind a server-validated
+    acknowledgement. Double-submit
     protection is a per-session, single-use token — a genuine, truly
     concurrent double-submit within the same session is not fully excluded
     (no DB-level mutex), but sequential double-clicks/back-button resubmits
@@ -851,15 +1057,13 @@ def store_create(request):
 
         if form.is_valid():
             request.session[_STORE_CREATE_TOKEN_SESSION_KEY] = get_random_string(32)
-            industry_template = None
-            template_id = form.cleaned_data.get("industry_template_id")
-            if template_id:
-                industry_template = IndustryTemplate.objects.filter(
-                    pk=template_id, is_active=True, readiness=IndustryTemplate.Readiness.PRODUCTION_READY,
-                ).first()
+            # Policy (documented in ONBOARDING_JOURNEY_AUDIT.md): store creation NEVER installs an
+            # industry template. The one-time, irreversible install happens only on the onboarding
+            # «صنف» step, behind a server-validated acknowledgement. A posted
+            # ``industry_template_id`` is deliberately not even read here.
             try:
                 store = provisioning_service.provision_trial_store(
-                    owner=request.user, name=form.cleaned_data["name"], industry_template=industry_template,
+                    owner=request.user, name=form.cleaned_data["name"],
                 )
             except provisioning_service.ProvisioningError as exc:
                 messages.error(request, str(exc))
@@ -869,14 +1073,9 @@ def store_create(request):
         request.session[_STORE_CREATE_TOKEN_SESSION_KEY] = get_random_string(32)
         form = CreateStoreForm()
 
-    industry_templates = provisioning_service.latest_offerable_industry_templates()
     return render(
         request, "portal/app/store_create.html",
-        {
-            "form": form, "industry_templates": industry_templates,
-            "industry_sector_tabs": industry_catalog_service.SECTOR_TABS,
-            "submission_token": request.session[_STORE_CREATE_TOKEN_SESSION_KEY],
-        },
+        {"form": form, "submission_token": request.session[_STORE_CREATE_TOKEN_SESSION_KEY]},
     )
 
 
@@ -922,15 +1121,98 @@ def _get_owned_store_or_404(request, store_public_id) -> Store:
 _ONBOARDING_STAGE_ORDER = [
     Store.OnboardingStage.IDENTITY,
     Store.OnboardingStage.INDUSTRY,
+    Store.OnboardingStage.TEMPLATE,
     Store.OnboardingStage.BRANDING,
     Store.OnboardingStage.REVIEW,
 ]
 _ONBOARDING_STAGE_URL_NAMES = {
     Store.OnboardingStage.IDENTITY: "portal:onboarding-identity",
     Store.OnboardingStage.INDUSTRY: "portal:onboarding-industry",
+    Store.OnboardingStage.TEMPLATE: "portal:onboarding-template",
     Store.OnboardingStage.BRANDING: "portal:onboarding-branding",
     Store.OnboardingStage.REVIEW: "portal:onboarding-review",
 }
+
+
+#: برچسبِ مرحله‌ها در نوارِ پیشرفتِ ویزارد؛ ``True`` یعنی مرحله اختیاری است.
+_ONBOARDING_STEP_META = {
+    Store.OnboardingStage.IDENTITY: ("معرفی", False),
+    Store.OnboardingStage.INDUSTRY: ("صنف", True),
+    Store.OnboardingStage.TEMPLATE: ("قالب فروشگاه", False),
+    Store.OnboardingStage.BRANDING: ("برند", True),
+    Store.OnboardingStage.REVIEW: ("بازبینی", False),
+}
+
+
+def _publication_context(store) -> dict:
+    """وضعیتِ *واقعیِ* انتشار (همان تک‌مرجعِ ``publication_service``) برای صفحه‌هایِ
+    بازبینی/فروشگاهِ آماده — هرگز ادعایی درباره‌ی عمومی‌بودن بدونِ این سیگنال نمی‌شود."""
+    state = publication_service.get_store_publication_state(store)
+    return {
+        "publication_state": state,
+        "publication_state_label": publication_service.PublicationState(state).label,
+        "is_publicly_visible": state not in publication_service.NON_PUBLIC_STATES,
+        "private_until_publish": state == publication_service.PublicationState.TRIAL_PRIVATE,
+        "publication_blocked_by_status": state in (
+            publication_service.PublicationState.RESTRICTED,
+            publication_service.PublicationState.SUSPENDED,
+            publication_service.PublicationState.INACTIVE,
+        ),
+    }
+
+
+INDUSTRY_CONFIRM_REQUIRED_MESSAGE = (
+    "برای نصبِ قالبِ صنف باید تأیید کنید که این نصب یک‌بارمصرف است؛ کادرِ تأیید را علامت بزنید و دوباره تلاش کنید."
+)
+
+
+def _sector_tabs_for(template_cards) -> list:
+    """فقط رسته‌هایی که واقعاً قالبِ قابل‌ارائه دارند (تبِ خالی دیده نمی‌شود)."""
+    present = {card["sector"] for card in template_cards}
+    return [tab for tab in industry_catalog_service.SECTOR_TABS if tab[0] == "all" or tab[0] in present]
+
+
+def _onboarding_shell_context(store, current: str, *, applied_template="__lookup__") -> dict:
+    """زمینه‌ی مشترکِ پوسته‌ی ویزارد (نوارِ پیشرفت، قبلی/بعدی) — فقط نمایشی.
+
+    ``store.onboarding_stage`` دورترین مرحله‌ی رسیده است؛ مرحله‌هایِ قبل از آن
+    «انجام‌شده» و آزادانه قابلِ بازدیدند، مرحله‌هایِ بعد از آن هنوز قفل‌اند
+    (فقط با «ادامه» باز می‌شوند). هیچ منطقِ دسترسی/مجوزی اینجا نیست.
+
+    مرحله‌ی «قالب فروشگاه» فقط وقتی «انجام‌شده» نشان داده می‌شود که قالبِ آماده‌ی
+    معتبری واقعاً روی Draft/نسخه‌ی منتشرشده اعمال شده باشد (نه صرفاً چون
+    ``onboarding_stage`` از آن گذشته — مثلاً فروشگاه‌هایِ قدیمیِ پیش از این مرحله)."""
+    if applied_template == "__lookup__":
+        applied_template = store_template_service.get_applied_template(store)
+    order = _ONBOARDING_STAGE_ORDER
+    if store.onboarding_stage in order:
+        reached = order.index(store.onboarding_stage)
+    elif store.onboarding_stage == Store.OnboardingStage.DONE or store.onboarding_completed_at:
+        reached = len(order) - 1
+    else:
+        reached = 0
+    steps = []
+    for index, stage in enumerate(order):
+        label, optional = _ONBOARDING_STEP_META[stage]
+        is_current = stage == current
+        steps.append({
+            "key": stage, "number": index + 1, "label": label, "optional": optional,
+            "url": reverse(_ONBOARDING_STAGE_URL_NAMES[stage], kwargs={"store_public_id": store.public_id}),
+            "is_current": is_current,
+            "is_done": index < reached and not is_current and (
+                stage != Store.OnboardingStage.TEMPLATE or applied_template is not None
+            ),
+            "is_available": index <= reached,
+        })
+    current_index = order.index(current)
+    return {
+        "store": store,
+        "ob_steps": steps,
+        "ob_current": steps[current_index],
+        "ob_total": len(order),
+        "ob_previous_url": steps[current_index - 1]["url"] if current_index > 0 else None,
+        "template_applied": applied_template is not None,
+    }
 
 
 def _advance_onboarding_stage(store, *, completed: str) -> None:
@@ -960,6 +1242,13 @@ def onboarding(request, store_public_id):
     stage = store.onboarding_stage if store.onboarding_stage in _ONBOARDING_STAGE_URL_NAMES else (
         Store.OnboardingStage.IDENTITY
     )
+    if stage in (Store.OnboardingStage.BRANDING, Store.OnboardingStage.REVIEW) and (
+        store_template_service.get_applied_template(store) is None
+    ):
+        # A Store from before the «قالب فروشگاه» step (or one that skipped past it) that is still
+        # unpublished must choose a Ready Template before it can be published. Stored progress is
+        # left untouched; already-completed Stores returned above and are never sent back.
+        stage = Store.OnboardingStage.TEMPLATE
     return redirect(_ONBOARDING_STAGE_URL_NAMES[stage], store_public_id=store.public_id)
 
 
@@ -999,7 +1288,9 @@ def onboarding_identity(request, store_public_id):
             "contact_email": shop_settings.contact_email, "contact_address": shop_settings.contact_address,
         })
 
-    return render(request, "portal/app/onboarding_identity.html", {"store": store, "form": form})
+    return render(request, "portal/app/onboarding_identity.html", {
+        **_onboarding_shell_context(store, Store.OnboardingStage.IDENTITY), "form": form,
+    })
 
 
 @owner_required
@@ -1015,6 +1306,8 @@ def onboarding_industry(request, store_public_id):
     store = _get_owned_store_or_404(request, store_public_id)
     installation = StoreIndustryInstallation.objects.select_related("industry_template").filter(store=store).first()
     templates = provisioning_service.latest_offerable_industry_templates()
+    selected_template_id = ""
+    confirm_error = False
 
     if request.method == "POST":
         # AUTH-001: EVERY mutating POST path through this step (installing a
@@ -1031,26 +1324,116 @@ def onboarding_industry(request, store_public_id):
         action = request.POST.get("action")
         if action == "skip":
             _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
-            return redirect("portal:onboarding-branding", store_public_id=store.public_id)
+            return redirect("portal:onboarding-template", store_public_id=store.public_id)
 
         form = OnboardingIndustryForm(request.POST)
-        if form.is_valid() and form.cleaned_data["industry_template_id"]:
-            template = get_object_or_404(IndustryTemplate, pk=form.cleaned_data["industry_template_id"])
-            try:
-                install_industry_template(store, template)
-            except IndustryInstallationError as exc:
-                messages.error(request, str(exc))
+        valid = form.is_valid()
+        template_id = form.cleaned_data["industry_template_id"] if valid else None
+        if not template_id:
+            messages.error(request, "ابتدا یک صنف را انتخاب کنید؛ یا اگر صنفِ شما در فهرست نیست، این مرحله را رد کنید.")
+        else:
+            selected_template_id = str(template_id)
+            if not form.cleaned_data["confirm_industry_install"]:
+                # سمتِ سرور مرجعِ تأیید است: بدونِ تأییدِ صریحِ «نصبِ یک‌بارمصرف» هیچ نصبی انجام نمی‌شود
+                # (دکمه‌ی غیرفعال در JS فقط تجربه‌ی کاربری است).
+                confirm_error = True
+                messages.error(request, INDUSTRY_CONFIRM_REQUIRED_MESSAGE)
             else:
-                _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
-                return redirect("portal:onboarding-branding", store_public_id=store.public_id)
+                template = IndustryTemplate.objects.filter(pk=template_id).first()
+                if template is None or not template.is_offerable_for_new_installation:
+                    # شناسه‌ی جعلی/منسوخ/«نیازمند بازبینی»: هرگز نصب نمی‌شود
+                    # (``install_industry_template`` هم همین را تضمین می‌کند)؛ پیامِ
+                    # دوستانه به‌جایِ ۴۰۴ تا مالک بتواند صنفِ دیگری انتخاب یا رد کند.
+                    messages.error(request, "این صنف در حال حاضر برای نصب در دسترس نیست؛ صنفِ دیگری انتخاب کنید یا این مرحله را رد کنید.")
+                else:
+                    try:
+                        install_industry_template(store, template)
+                    except IndustryInstallationError as exc:
+                        if StoreIndustryInstallation.objects.filter(store=store).exists():
+                            # دابل‌کلیک/درخواستِ هم‌زمان: نصبِ اول موفق بوده؛ خطا نشان نده، فقط جلو ببر.
+                            _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
+                            return redirect("portal:onboarding-template", store_public_id=store.public_id)
+                        messages.error(request, str(exc))
+                    else:
+                        _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
+                        return redirect("portal:onboarding-template", store_public_id=store.public_id)
     elif request.method == "POST":
         # از قبل نصب‌شده — POST دیگری اینجا معنایی ندارد جز عبور به مرحله‌ی بعد.
         _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
-        return redirect("portal:onboarding-branding", store_public_id=store.public_id)
+        return redirect("portal:onboarding-template", store_public_id=store.public_id)
 
+    template_cards = template_summary_service.attach_summaries(templates)
+    installed_summary = (
+        template_summary_service.summarize_template(installation.industry_template) if installation else None
+    )
     return render(request, "portal/app/onboarding_industry.html", {
-        "store": store, "templates": templates, "installation": installation,
-        "industry_sector_tabs": industry_catalog_service.SECTOR_TABS,
+        **_onboarding_shell_context(store, Store.OnboardingStage.INDUSTRY),
+        "template_cards": template_cards, "installation": installation, "installed_summary": installed_summary,
+        "selected_template_id": selected_template_id, "confirm_error": confirm_error,
+        "industry_sector_tabs": _sector_tabs_for(template_cards),
+    })
+
+
+@owner_required
+def onboarding_template(request, store_public_id):
+    """مرحله‌ی «قالب فروشگاه»: انتخابِ قالبِ آمادهٔ ظاهریِ فروشگاه (Ready Template) — الزامی و بدونِ رد کردن.
+
+    کاتالوگ فقط همان ۵۰ قالبِ رسمیِ Storefront Builder است
+    (``layout_preset_registry.list_ready_templates()``)، و کارت‌ها از همان projectionِ مشترکِ
+    گالریِ مرچنت (``ready_template_card_service``) می‌آیند — نه کاتالوگ/تصویرِ دومی. POST فقط
+    ``template_key`` را می‌پذیرد؛ نسخه/ظاهر/پالت/مانیفست همیشه سمتِ سرور از کاتالوگِ کانونی
+    resolve می‌شوند و اعمال کاملاً توسطِ سرویس‌هایِ Storefront Builder انجام می‌شود (هیچ منطقِ
+    اعمالِ قالب در پرتال نیست). GET هیچ نوشتنی ندارد (حتی Draft نمی‌سازد)."""
+    store = _get_owned_store_or_404(request, store_public_id)
+    if store.onboarding_stage == Store.OnboardingStage.DONE or store.onboarding_completed_at:
+        # فروشگاهِ منتشرشده هرگز از این مسیر دوباره قالب عوض نمی‌کند؛ تغییرِ قالب در Storefront Builder است.
+        return redirect("portal:store-created", store_public_id=store.public_id)
+
+    error = None
+    if request.method == "POST":
+        if not portal_action_allowed(request, store, SETTINGS_MANAGE):
+            return portal_permission_denied(request)
+        if request.POST.get("action") == "keep_current":
+            # Zero-mutation advance: only valid when the Store REALLY carries a valid
+            # applied Ready Template (read from the Draft/Published provenance, never from
+            # the client). No select/apply/switch is called, so the Storefront Draft, its
+            # history and its revision stay untouched; only the wizard stage moves.
+            if store_template_service.get_applied_template(store) is None:
+                error = "فروشگاهِ شما هنوز قالبِ آماده‌ای ندارد؛ یکی از قالب‌هایِ فهرست را انتخاب کنید."
+                messages.error(request, error)
+            else:
+                _advance_onboarding_stage(store, completed=Store.OnboardingStage.TEMPLATE)
+                return redirect("portal:onboarding-branding", store_public_id=store.public_id)
+        else:
+            try:
+                store_template_service.select_ready_template(
+                    store=store, actor=request.user, template_key=request.POST.get("template_key"),
+                )
+            except store_template_service.ReadyTemplateSelectionError as exc:
+                error = str(exc)
+                messages.error(request, error)
+            except RateLimitExceeded:
+                error = "تعدادِ تغییرِ قالب در این بازه بیش از حدِ مجاز است؛ کمی بعد دوباره تلاش کنید."
+                messages.error(request, error)
+            else:
+                _advance_onboarding_stage(store, completed=Store.OnboardingStage.TEMPLATE)
+                return redirect("portal:onboarding-branding", store_public_id=store.public_id)
+
+    applied = store_template_service.get_applied_template(store)
+    cards = ready_template_card_service.build_ready_template_cards(
+        None,
+        current_template_key=applied.key if applied else None,
+        current_template_version=applied.version if applied else None,
+    )
+    # A gallery card is "selected" only by an explicit choice or when it is the EXACT applied
+    # (key AND version) template. A Store on a historical version of a key never gets the latest
+    # same-key card pre-selected — that would let "Continue" silently upgrade it.
+    exact_current = next((card["preset"].key for card in cards if card["is_current"]), "")
+    selected_key = request.POST.get("template_key", "") if error else exact_current
+    return render(request, "portal/app/onboarding_template.html", {
+        **_onboarding_shell_context(store, Store.OnboardingStage.TEMPLATE, applied_template=applied),
+        "template_cards": cards, "applied_template": applied, "selected_key": selected_key,
+        "applied_is_older_version": bool(applied and not applied.is_current_version),
     })
 
 
@@ -1094,7 +1477,8 @@ def onboarding_branding(request, store_public_id):
         form = OnboardingBrandingForm()
 
     return render(request, "portal/app/onboarding_branding.html", {
-        "store": store, "form": form, "shop_settings": shop_settings,
+        **_onboarding_shell_context(store, Store.OnboardingStage.BRANDING),
+        "form": form, "shop_settings": shop_settings,
     })
 
 
@@ -1117,14 +1501,32 @@ def onboarding_review(request, store_public_id):
         # SETTINGS_MANAGE permission, not merely an ACTIVE membership.
         if not portal_action_allowed(request, store, SETTINGS_MANAGE):
             return portal_permission_denied(request)
-        store.onboarding_completed_at = timezone.now()
-        store.onboarding_stage = Store.OnboardingStage.DONE
-        store.save(update_fields=["onboarding_completed_at", "onboarding_stage", "updated_at"])
-        messages.success(request, "فروشگاه شما منتشر شد!")
+        # One transaction: publish the Storefront Draft through the canonical layout service, and only
+        # then mark onboarding complete. Idempotent (an already-completed Store is a no-op: no second
+        # publish, the first completion timestamp is preserved).
+        try:
+            outcome = onboarding_publish_service.complete_onboarding(store=store, actor=request.user)
+        except onboarding_publish_service.OnboardingPublishError as exc:
+            messages.error(request, str(exc))
+            if exc.code in ("no_template", "no_draft"):
+                return redirect("portal:onboarding-template", store_public_id=store.public_id)
+            return redirect("portal:onboarding-review", store_public_id=store.public_id)
+        if not outcome.already_completed:
+            messages.success(request, "فروشگاه شما منتشر شد!")
         return redirect("portal:store-created", store_public_id=store.public_id)
 
+    installed_summary = (
+        template_summary_service.summarize_template(installation.industry_template) if installation else None
+    )
+    applied = store_template_service.get_applied_template(store)
+    template_card = None
+    if applied is not None:
+        template_card = ready_template_card_service.build_ready_template_card(None, applied.preset, is_current=True)
     return render(request, "portal/app/onboarding_review.html", {
-        "store": store, "shop_settings": shop_settings, "installation": installation, "trial_domain": trial_domain,
+        **_onboarding_shell_context(store, Store.OnboardingStage.REVIEW, applied_template=applied),
+        "shop_settings": shop_settings, "installation": installation, "installed_summary": installed_summary,
+        "trial_domain": trial_domain, "applied_template": applied, "template_card": template_card,
+        **_publication_context(store),
     })
 
 
@@ -1134,7 +1536,11 @@ def store_created(request, store_public_id):
     trial_domain = store.domains.filter(is_primary=True).first()
     if trial_domain is None:
         raise Http404
-    return render(request, "portal/app/store_created.html", {"store": store, "trial_domain": trial_domain})
+    return render(request, "portal/app/store_created.html", {
+        "store": store, "trial_domain": trial_domain,
+        "onboarding_complete": bool(store.onboarding_completed_at), **_publication_context(store),
+        "onboarding_resume_url": reverse("portal:onboarding", kwargs={"store_public_id": store.public_id}),
+    })
 
 
 # ---------------------------------------------------------------------------

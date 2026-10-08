@@ -29,7 +29,8 @@ from apps.catalog.models import Warehouse
 from apps.core.models import ShopSettings
 from apps.customers.models import Customer
 from apps.portal.forms import OwnerPhoneRequestForm, OwnerRegistrationRequestForm
-from apps.portal.models import OwnerOtpChallenge, OwnerProfile, PlatformConfiguration
+from apps.portal.models import OwnerOtpChallenge, OwnerProfile, OwnerTermsAcceptance, PlatformConfiguration
+from apps.portal.tests._ready_template import select_template
 from apps.portal.services import (
     owner_auth_service,
     owner_otp_service,
@@ -73,7 +74,7 @@ class _OtpTestMixin:
 
     def register(self, name=_NAME, phone=_PHONE, client=None, **extra):
         client = client or self.client
-        return client.post("/register/", {"full_name": name, "phone": phone, **extra}, HTTP_HOST=_HOST)
+        return client.post("/register/", {"full_name": name, "phone": phone, **extra, "accept_terms": "1"}, HTTP_HOST=_HOST)
 
     def login_otp(self, phone=_PHONE, client=None):
         client = client or self.client
@@ -188,7 +189,7 @@ class RegistrationNameTests(_OtpTestMixin, TestCase):
         self.register(name="Stale Name")
         self.login_otp(phone="09121230099")
         self.verify()
-        self.client.post("/signup/complete/", {"full_name": "Real Name"}, HTTP_HOST=_HOST)
+        self.client.post("/signup/complete/", {"full_name": "Real Name", "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.assertEqual(OwnerProfile.objects.get(phone="09121230099").full_name, "Real Name")
 
     def test_registration_without_a_session_name_restarts_registration(self):
@@ -393,7 +394,7 @@ class ExistingIdentityTests(_OtpTestMixin, TestCase):
         self.login_otp()
         self.verify()
         self.assertEqual((OwnerProfile.objects.count(), self.stores().count()), (0, 0))
-        self.client.post("/signup/complete/", {"full_name": "Owner Person"}, HTTP_HOST=_HOST)
+        self.client.post("/signup/complete/", {"full_name": "Owner Person", "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.assertEqual((OwnerProfile.objects.count(), self.stores().count()), (1, 1))
 
     def test_existing_owner_registering_again_gets_no_extra_store_and_keeps_their_name(self):
@@ -738,7 +739,7 @@ class AnonymousEmailRegistrationRemovedTests(_OtpTestMixin, TestCase):
         self.assertNotIn("_auth_user_id", self.client.session)
 
     # 7
-    def test_password_reset_for_an_existing_email_owner_still_works_end_to_end(self):
+    def test_legacy_email_token_reset_for_an_existing_email_owner_still_works_end_to_end(self):
         import re
 
         from django.core import mail
@@ -747,8 +748,8 @@ class AnonymousEmailRegistrationRemovedTests(_OtpTestMixin, TestCase):
             full_name="Reset Owner", email="reset-flow@example.com", password="a-very-strong-pass-1",
         )
         mail.outbox.clear()
-        response = self.client.post("/reset-password/", {"email": "reset-flow@example.com"}, HTTP_HOST=_HOST)
-        self.assertEqual(response.status_code, 302)
+        # The public page no longer mails; the legacy service (already-issued links / internal use) does.
+        owner_auth_service.request_password_reset(email="reset-flow@example.com", base_url=f"http://{_HOST}")
         self.assertEqual(len(mail.outbox), 1)
         link = re.search(r"/reset-password/[\w-]+/[\w-]+/", mail.outbox[0].body)
         self.assertIsNotNone(link)
@@ -767,13 +768,15 @@ class AnonymousEmailRegistrationRemovedTests(_OtpTestMixin, TestCase):
         )
         self.assertRedirects(login, "/app/", fetch_redirect_response=False)
 
-    def test_password_reset_for_an_unknown_email_reveals_nothing(self):
+    def test_password_reset_page_for_an_unknown_mobile_creates_nothing(self):
         from django.core import mail
 
         mail.outbox.clear()
-        response = self.client.post("/reset-password/", {"email": "nobody-here@example.com"}, HTTP_HOST=_HOST)
+        users, profiles = User.objects.count(), OwnerProfile.objects.count()
+        response = self.client.post("/reset-password/", {"phone": "09129998877"}, HTTP_HOST=_HOST)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual((User.objects.count(), OwnerProfile.objects.count()), (users, profiles))
 
     # 8 + 9
     def test_the_two_remaining_public_routes_still_create_owners_via_otp_only(self):
@@ -790,7 +793,7 @@ class AnonymousEmailRegistrationRemovedTests(_OtpTestMixin, TestCase):
         verified = self.verify()
         self.assertEqual(verified["Location"], "/signup/complete/")
         self.assertFalse(OwnerProfile.objects.filter(phone=other).exists())
-        completed = self.client.post("/signup/complete/", {"full_name": "Second Owner"}, HTTP_HOST=_HOST)
+        completed = self.client.post("/signup/complete/", {"full_name": "Second Owner", "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.assertIn("/onboarding/", completed["Location"])
         self.assertEqual(OwnerProfile.objects.get(phone=other).full_name, "Second Owner")
         self.assertEqual(self.stores().count(), 2)  # exactly one Store per new Owner
@@ -807,7 +810,7 @@ class SignupCompletionTests(_OtpTestMixin, TestCase):
 
     def complete(self, name=_NAME, client=None, **extra):
         client = client or self.client
-        return client.post(self.URL, {"full_name": name, **extra}, HTTP_HOST=_HOST)
+        return client.post(self.URL, {"full_name": name, **extra, "accept_terms": "1"}, HTTP_HOST=_HOST)
 
     def login_and_verify_new_phone(self, phone=_PHONE):
         self.login_otp(phone=phone)
@@ -1581,7 +1584,7 @@ class OtpVerificationTests(_OtpTestMixin, TestCase):
         )
         strict = Client(enforce_csrf_checks=True)
         self.assertEqual(strict.post("/verify/resend/", HTTP_HOST=_HOST).status_code, 403)
-        self.assertEqual(strict.post("/register/", {"full_name": _NAME, "phone": _PHONE}, HTTP_HOST=_HOST).status_code, 403)
+        self.assertEqual(strict.post("/register/", {"full_name": _NAME, "phone": _PHONE, "accept_terms": "1"}, HTTP_HOST=_HOST).status_code, 403)
         self.assertEqual(strict.post("/verify/", {"code": "123456"}, HTTP_HOST=_HOST).status_code, 403)
         self.assertEqual(self.sent, [])
 
@@ -1641,7 +1644,10 @@ class OnboardingHandoffTests(_OtpTestMixin, TestCase):
             self.client.post(f"{base}/identity/", {"name": "فروشگاه سارا"}, HTTP_HOST=_HOST), f"{base}/industry/",
         )
         self.assertRedirects(
-            self.client.post(f"{base}/industry/", {"action": "skip"}, HTTP_HOST=_HOST), f"{base}/branding/",
+            self.client.post(f"{base}/industry/", {"action": "skip"}, HTTP_HOST=_HOST), f"{base}/template/",
+        )
+        self.assertRedirects(
+            select_template(self.client, f"{base}/template/"), f"{base}/branding/",
         )
         self.assertRedirects(
             self.client.post(f"{base}/branding/", {"action": "skip"}, HTTP_HOST=_HOST), f"{base}/review/",
@@ -1845,7 +1851,7 @@ class ConcurrencyTests(_OtpTestMixin, TransactionTestCase):
             clients.append(c)
 
         results = _run_concurrently(
-            8, lambda i: clients[i].post("/signup/complete/", {"full_name": _NAME}, HTTP_HOST=_HOST),
+            8, lambda i: clients[i].post("/signup/complete/", {"full_name": _NAME, "accept_terms": "1"}, HTTP_HOST=_HOST),
         )
         self.assertEqual([r for r in results if isinstance(r, Exception)], [])
         onboarding = [r for r in results if r.status_code == 302 and "/onboarding/" in r["Location"]]
@@ -1855,6 +1861,8 @@ class ConcurrencyTests(_OtpTestMixin, TransactionTestCase):
         self.assertEqual(Store.objects.exclude(pk__in=self.base_store_ids).count(), 1)
         self.assertEqual(StoreMembership.objects.exclude(store_id__in=self.base_store_ids).count(), 1)
         self.assertEqual(StoreDomain.objects.exclude(store_id__in=self.base_store_ids).count(), 1)
+        # durable terms acceptance is idempotent under the same race: exactly one row, for the one owner
+        self.assertEqual(OwnerTermsAcceptance.objects.count(), 1)
 
     def test_concurrent_completion_for_a_customer_only_phone_reuses_the_user_once(self):
         customer_user = User.objects.create_user(username=_PHONE, password="pw")
@@ -1869,7 +1877,7 @@ class ConcurrencyTests(_OtpTestMixin, TransactionTestCase):
             c.cookies.update(cookies)
             clients.append(c)
         results = _run_concurrently(
-            6, lambda i: clients[i].post("/signup/complete/", {"full_name": _NAME}, HTTP_HOST=_HOST),
+            6, lambda i: clients[i].post("/signup/complete/", {"full_name": _NAME, "accept_terms": "1"}, HTTP_HOST=_HOST),
         )
         self.assertEqual([r for r in results if isinstance(r, Exception)], [])
         self.assertEqual((User.objects.count(), OwnerProfile.objects.count(), Customer.objects.count()), (1, 1, 1))

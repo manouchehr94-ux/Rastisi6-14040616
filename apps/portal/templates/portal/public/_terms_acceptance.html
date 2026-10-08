@@ -1,0 +1,16 @@
+{% comment %}
+  تأییدِ الزامیِ «قوانین و مقررات» (ثبت‌نام و تکمیلِ ثبت‌نام). همیشه بدونِ تیک؛ اعتبارسنجیِ اصلی سمتِ سرور است.
+  نسخه‌ی نمایش‌داده‌شده همان ثابتِ تکِ‌منبعِ سرور (`terms_version`) است. لینک در تبِ جدید باز می‌شود تا فرمِ پرشده از بین نرود.
+{% endcomment %}
+<div class="p-field r-terms-accept{% if form.accept_terms.errors %} has-error{% endif %}">
+  <label class="r-terms-check" for="id_accept_terms">
+    <input type="checkbox" id="id_accept_terms" name="accept_terms" value="1" required aria-required="true"
+      aria-describedby="id_accept_terms_hint{% if form.accept_terms.errors %} id_accept_terms_error{% endif %}"{% if form.accept_terms.errors %} aria-invalid="true"{% endif %}>
+    <span>قوانین و مقررات و قرارداد استفاده از راستی‌سی را خوانده‌ام و می‌پذیرم. <span class="r-required" aria-hidden="true">*</span></span>
+  </label>
+  <div class="r-terms-hint" id="id_accept_terms_hint">
+    <a class="r-terms-link" href="{% url 'portal:terms' %}" target="_blank" rel="noopener noreferrer" data-terms-link>مشاهده قوانین و مقررات<span class="r-sr-only"> (در تب جدید باز می‌شود)</span></a>
+    <span class="r-terms-version">نسخه‌ی <bdi dir="ltr">{{ terms_version }}</bdi></span>
+  </div>
+  {% if form.accept_terms.errors %}<div class="p-error" id="id_accept_terms_error">{{ form.accept_terms.errors.0 }}</div>{% endif %}
+</div>

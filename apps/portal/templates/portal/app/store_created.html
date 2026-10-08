@@ -1,14 +1,47 @@
-{% extends "portal/base_platform.html" %}
-{% block title %}فروشگاه ساخته شد | راستیسی{% endblock %}
-{% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
-{% block content %}
-<div class="p-wrap" style="text-align:center;padding:60px 0">
-  <div style="font-size:52px;margin-bottom:6px">🎉</div>
-  <h2>فروشگاه «{{ store.name }}» آماده است!</h2>
-  <p style="color:var(--p-muted);margin:14px 0 6px">آدرس آزمایشی فروشگاه شما:</p>
-  <p style="direction:ltr;font-weight:700;font-size:18px;color:var(--p-primary);margin-bottom:28px">{{ trial_domain.hostname }}</p>
-  <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-    <a class="p-btn p-btn-primary" href="{% url 'portal:app-home' %}">بازگشت به فروشگاه‌های من</a>
+{% extends "portal/onboarding/base_onboarding.html" %}
+{% block title %}{% if onboarding_complete %}فروشگاه منتشر شد{% else %}فروشگاه ساخته شد{% endif %} | راستی‌سی{% endblock %}
+{% block ob_page_class %} ob-page--narrow{% endblock %}
+{% block ob_body %}
+<section class="ob-card ob-created" aria-labelledby="ob-created-title">
+  <div class="ob-created-mark" aria-hidden="true">✓</div>
+  <h2 id="ob-created-title" dir="auto">{% if onboarding_complete %}فروشگاهِ «{{ store.name }}» منتشر شد{% else %}فروشگاهِ «{{ store.name }}» ساخته شد{% endif %}</h2>
+  <p class="ob-lead">
+    {% if onboarding_complete %}
+      {% if is_publicly_visible %}راه‌اندازی کامل شد و ویترین روی نشانیِ آزمایشی در دسترسِ بازدیدکنندگان است.{% else %}راه‌اندازی کامل شد. وضعیتِ فروشگاه «{{ publication_state_label }}» است و تا رفعِ آن، ویترین برای عموم نمایش داده نمی‌شود.{% endif %}
+    {% else %}
+      فروشگاهِ آزمایشیِ شما آماده است و فعلاً فقط برای شما قابلِ مشاهده است. برای کامل‌کردنِ راه‌اندازی و انتشار، چند مرحله‌ی کوتاه مانده است.
+    {% endif %}
+  </p>
+
+  <div class="ob-host">
+    <span>نشانیِ آزمایشیِ فروشگاه</span>
+    <b class="ob-ltr">{{ trial_domain.hostname }}</b>
   </div>
-</div>
+
+  {% if onboarding_complete %}
+  <ul class="ob-next-list">
+    <li>محصول، دسته‌بندی و قیمت‌ها را از پنلِ مدیریت اضافه کنید.</li>
+    <li>ظاهرِ ویترین را در «سازنده‌ی ویترین» تنظیم کنید.</li>
+    <li>برای دامنه‌ی اختصاصی و پلن، از «فروشگاه‌های من» اقدام کنید.</li>
+  </ul>
+  <div class="ob-cta-row">
+    {% if store.status == "active" %}
+    <form method="post" action="{% url 'portal:enter-admin' store.public_id %}">{% csrf_token %}
+      <button type="submit" class="ob-btn ob-btn-primary">ورود به پنلِ مدیریت</button>
+    </form>
+    {% endif %}
+    <a class="ob-btn" href="{% url 'portal:app-home' %}">بازگشت به فروشگاه‌های من</a>
+  </div>
+  {% else %}
+  <ul class="ob-next-list">
+    <li>نام و اطلاعاتِ تماسِ فروشگاه را کامل کنید.</li>
+    <li>صنفِ فروشگاه را (اختیاری) انتخاب کنید تا دسته‌بندی‌های آماده بسازیم.</li>
+    <li>لوگو را بگذارید و فروشگاه را منتشر کنید.</li>
+  </ul>
+  <div class="ob-cta-row">
+    <a class="ob-btn ob-btn-primary" href="{{ onboarding_resume_url }}">ادامه‌ی راه‌اندازی</a>
+    <a class="ob-btn" href="{% url 'portal:app-home' %}">بازگشت به فروشگاه‌های من</a>
+  </div>
+  {% endif %}
+</section>
 {% endblock %}

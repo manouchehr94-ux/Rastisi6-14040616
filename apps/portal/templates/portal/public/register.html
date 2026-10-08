@@ -40,12 +40,14 @@
           </div>
           <label class="p-remember-me">{{ form.remember_me }} مرا در این دستگاه به خاطر بسپار</label>
 
+          {% include "portal/public/_terms_acceptance.html" %}
+
           {% include "portal/public/_turnstile.html" with turnstile_action="register" %}
           <button type="submit" class="rs-btn rs-btn-primary r-form-submit">دریافت کد تأیید</button>
         </form>
 
         <div class="r-form-links">قبلاً حساب ساخته‌اید؟ <a href="{% url 'portal:login' %}">وارد شوید</a></div>
-        <div class="r-security-note">شماره موبایل فقط برای تأیید حساب و ورود امن استفاده می‌شود. ادامه‌ی ثبت‌نام به معنی پذیرش <a href="{% url 'portal:terms' %}">شرایط استفاده</a> است.</div>
+        <div class="r-security-note">شماره موبایل فقط برای تأیید حساب و ورود امن استفاده می‌شود.</div>
         {% else %}
         <div class="r-auth-closed" role="status">
           <h2>ساخت فروشگاه تازه موقتاً در دسترس نیست</h2>

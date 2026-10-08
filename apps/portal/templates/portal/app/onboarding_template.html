@@ -1,0 +1,85 @@
+{% extends "portal/onboarding/base_onboarding.html" %}
+{% block title %}قالبِ فروشگاه | راه‌اندازی | راستی‌سی{% endblock %}
+{% block ob_page_class %} ob-page--gallery{% endblock %}
+{% block ob_body %}
+{% include "portal/onboarding/_wizard_head.html" %}
+
+<section class="ob-card" aria-labelledby="ob-template-title">
+  <div class="ob-card-head">
+    <h2 id="ob-template-title">ظاهرِ فروشگاهتان را انتخاب کنید</h2>
+    <p>یکی از {{ template_cards|length }} قالبِ آمادهٔ راستی‌سی را انتخاب کنید؛ این مرحله الزامی است تا فروشگاهِ شما با یک طراحیِ مشخص منتشر شود. قالب فقط روی پیش‌نویسِ فروشگاه اعمال می‌شود و تا «انتشار» برای عموم دیده نمی‌شود. بعد از انتشار هم هر زمان می‌توانید آن را در «سازنده‌ی ویترین» عوض کنید.</p>
+  </div>
+
+  {% if applied_template and applied_is_older_version %}
+  <section class="ob-alert ob-alert-info ob-tpl-current" aria-labelledby="ob-tpl-current-title" data-ob-tpl-current>
+    <p id="ob-tpl-current-title" class="ob-tpl-current-title">قالب فعلی شما: «{{ applied_template.preset.label_fa }}»، نسخه {{ applied_template.version }}</p>
+    <p>فروشگاهِ شما از قبل با این نسخهٔ قدیمی‌تر ساخته شده است و بدون انتخابِ شما به نسخهٔ جدید ارتقا نمی‌یابد. می‌توانید با همین قالب ادامه دهید (هیچ چیز تغییر نمی‌کند)، یا از فهرستِ زیر یک قالبِ دیگر — از جمله نسخهٔ جدیدِ همین قالب — را آگاهانه انتخاب کنید.</p>
+    <form method="post" class="ob-tpl-keep" data-ob-once>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="keep_current">
+      <button type="submit" class="ob-btn ob-btn-primary" data-loading-text="در حال ادامه…">ادامه با همین قالب</button>
+    </form>
+  </section>
+  {% endif %}
+
+  <form method="post" id="ob-template-form" novalidate data-ob-once data-ob-templates>
+    {% csrf_token %}
+    <div class="ob-industry-tools">
+      <div class="ob-search">
+        <label class="ob-sr-only" for="ob-template-search">جست‌وجوی قالب</label>
+        <input type="search" id="ob-template-search" data-ob-tpl-search placeholder="جست‌وجوی نامِ قالب؛ مثلاً «بازار» یا «لوکس»…" autocomplete="off">
+      </div>
+      <p class="ob-hint ob-tpl-count" role="status" aria-live="polite"><span data-ob-tpl-visible>{{ template_cards|length }}</span> از {{ template_cards|length }} قالب · «همه قالب‌ها»</p>
+    </div>
+
+    <div class="ob-tpl-grid" role="radiogroup" aria-label="قالب‌هایِ آمادهٔ فروشگاه">
+      {% for card in template_cards %}
+      {% with preset=card.preset %}
+      <article class="ob-tpl-card{% if selected_key == preset.key %} is-selected{% endif %}" data-ob-tpl-card data-name="{{ preset.label_fa }}" data-key="{{ preset.key }}">
+        <label class="ob-tpl-pick">
+          <input type="radio" name="template_key" value="{{ preset.key }}"{% if selected_key == preset.key %} checked{% endif %}>
+          <span class="ob-tpl-shot">
+            {% if card.thumbnail_kind == "screenshot" %}
+            <img src="{{ card.thumbnail_url }}" alt="پیش‌نمایشِ قالبِ {{ preset.label_fa }}" loading="lazy" decoding="async" width="640" height="400">
+            {% else %}
+            <span class="ob-tpl-svg" role="img" aria-label="پیش‌نمایشِ قالبِ {{ preset.label_fa }}">{{ card.thumbnail_svg|safe }}</span>
+            {% endif %}
+            <span class="ob-ic-check" aria-hidden="true">✓</span>
+          </span>
+          <span class="ob-tpl-body">
+            <span class="ob-tpl-name">{{ preset.label_fa }}</span>
+            {% if card.is_current %}<span class="ob-tag ob-tag-required">قالبِ فعلی</span>{% endif %}
+            <span class="ob-tpl-desc">{{ preset.description_fa }}</span>
+            <span class="ob-tpl-meta">
+              {% if card.palette_swatch %}<span class="ob-swatches" aria-label="پالتِ رنگ">{% for color in card.palette_swatch %}<span class="ob-swatch" data-color="{{ color }}"></span>{% endfor %}</span>{% endif %}
+              {% if card.header_variant_label %}<span>هدر: {{ card.header_variant_label }}</span>{% endif %}
+              {% if card.footer_variant_label %}<span>فوتر: {{ card.footer_variant_label }}</span>{% endif %}
+            </span>
+          </span>
+        </label>
+        {% if card.thumbnail_kind == "screenshot" %}
+        <a class="ob-tpl-zoom" href="{{ card.thumbnail_url }}" target="_blank" rel="noopener noreferrer" data-ob-zoom data-title="{{ preset.label_fa }}">مشاهده بزرگ‌تر<span class="ob-sr-only"> قالبِ {{ preset.label_fa }}</span></a>
+        {% endif %}
+      </article>
+      {% endwith %}
+      {% endfor %}
+    </div>
+    <div class="ob-industry-empty" data-ob-tpl-empty hidden>قالبی با این نام پیدا نشد. عبارتِ دیگری را امتحان کنید یا جست‌وجو را پاک کنید.</div>
+    <p class="ob-sr-only" role="status" data-ob-tpl-status></p>
+
+    {% if applied_template and not applied_is_older_version %}
+    <p class="ob-note">قالبِ فعلیِ فروشگاه شما «{{ applied_template.preset.label_fa }}» است؛ می‌توانید آن را نگه دارید یا قالبِ دیگری انتخاب کنید (محتوایی که ساخته‌اید حفظ می‌شود).</p>
+    {% endif %}
+  </form>
+
+  {% include "portal/onboarding/_actions.html" with form_id="ob-template-form" continue_label="اعمالِ قالب و ادامه" loading_text="در حال اعمالِ قالب…" template_mode=True %}
+</section>
+
+<dialog class="ob-lightbox" data-ob-lightbox aria-label="پیش‌نمایشِ بزرگ‌ترِ قالب">
+  <div class="ob-lightbox-bar">
+    <strong data-ob-lightbox-title></strong>
+    <button type="button" class="ob-btn" data-ob-lightbox-close>بستن</button>
+  </div>
+  <img data-ob-lightbox-img alt="">
+</dialog>
+{% endblock %}

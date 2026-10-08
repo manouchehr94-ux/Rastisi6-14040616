@@ -92,6 +92,9 @@ def _create_store_with_unique_platform_code(*, name: str, slug: str) -> Store:
             with transaction.atomic():
                 return Store.objects.create(
                     name=name, slug=slug, status=Store.Status.ACTIVE, platform_code=code,
+                    # Durable "modern portal Store" signal: private until the final
+                    # onboarding Publish, whatever the subscription/billing config is.
+                    onboarding_required_at=timezone.now(),
                 )
         except IntegrityError as exc:
             last_error = exc

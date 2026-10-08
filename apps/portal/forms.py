@@ -91,14 +91,33 @@ class OwnerFullNameForm(_FieldErrorA11yMixin, forms.Form):
             raise forms.ValidationError(str(exc)) from exc
 
 
-class OwnerRegistrationRequestForm(OwnerFullNameForm, OwnerPhoneRequestForm):
+class TermsAcceptanceMixin(_FieldErrorA11yMixin, forms.Form):
+    """تأییدِ الزامیِ «قوانین و مقررات» (فرمِ ثبت‌نام و تکمیلِ ثبت‌نام).
+
+    فقط وجود/صحتِ *علامتِ تأیید* اینجا اعتبارسنجی می‌شود؛ **نسخه‌ی قوانین هرگز از
+    کلاینت نمی‌آید** — نسخه‌ی فعلی را سرور از ``apps.portal.terms`` می‌داند. فقط مقدارِ
+    دقیقِ ``"1"`` (مقدارِ چک‌باکس) تأیید است؛ رشته‌هایی مثلِ ``"0"``/``"false"``/خالی نه."""
+
+    #: چک‌باکس در قالب دستی رندر می‌شود (``name="accept_terms" value="1"``)؛ این فیلد فقط
+    #: مقدارِ خامِ ارسالی را می‌خواند و اعتبارسنجی می‌کند.
+    accept_terms = forms.CharField(required=False)
+
+    def clean_accept_terms(self):
+        from .terms import TERMS_ACCEPTANCE_REQUIRED_MESSAGE
+
+        if (self.data.get("accept_terms") or "").strip() != "1":
+            raise forms.ValidationError(TERMS_ACCEPTANCE_REQUIRED_MESSAGE)
+        return True
+
+
+class OwnerRegistrationRequestForm(TermsAcceptanceMixin, OwnerFullNameForm, OwnerPhoneRequestForm):
     """درخواستِ OTP برایِ **ثبت‌نامِ مالکِ تازه** (``/register/``): نامِ کامل
-    الزامی و نرمال‌شده است."""
+    و تأییدِ صریحِ قوانین الزامی است."""
 
-    field_order = ["full_name", "phone", "remember_me"]
+    field_order = ["full_name", "phone", "remember_me", "accept_terms"]
 
 
-class OwnerSignupCompletionForm(OwnerFullNameForm):
+class OwnerSignupCompletionForm(TermsAcceptanceMixin, OwnerFullNameForm):
     """مرحله‌ی «تکمیل ثبت‌نام» پس از ورودِ OTP با شمارهٔ بدونِ مالک. **هیچ
     فیلدِ شماره‌ای ندارد**: شمارهٔ تأییدشده فقط از نشستِ سمتِ سرور می‌آید."""
 
@@ -192,18 +211,11 @@ class OwnerIdentifierLoginForm(_FieldErrorA11yMixin, forms.Form):
     remember_me = forms.BooleanField(label="مرا به خاطر بسپار", required=False)
 
 
-class PasswordResetRequestForm(_FieldErrorA11yMixin, forms.Form):
-    email = forms.EmailField(
-        label="ایمیل", max_length=LOGIN_IDENTIFIER_MAX_LENGTH,
-        error_messages={
-            "required": "ایمیل را وارد کنید.",
-            "invalid": "ایمیل واردشده معتبر نیست؛ آن را دوباره بررسی کنید.",
-        },
-        widget=forms.EmailInput(attrs={
-            "autocomplete": "email", "dir": "ltr", "autocapitalize": "off", "spellcheck": "false",
-            "inputmode": "email", "placeholder": "name@example.com",
-        }),
-    )
+class PasswordResetRequestForm(OwnerPhoneRequestForm):
+    """درخواستِ بازیابی/تعیینِ رمز با **موبایل** (کدِ پیامکی) — همان اعتبارسنجیِ شماره‌ی
+    ورود با OTP، بدونِ «مرا به خاطر بسپار». ایمیل دیگر در مسیرِ عمومیِ بازیابی نیست."""
+
+    remember_me = None  # a reset never logs anyone in
 
 
 class PasswordResetConfirmForm(_FieldErrorA11yMixin, forms.Form):
@@ -235,8 +247,11 @@ class PasswordResetConfirmForm(_FieldErrorA11yMixin, forms.Form):
 
 
 class CreateStoreForm(forms.Form):
-    name = forms.CharField(label="نام فروشگاه", max_length=200)
-    industry_template_id = forms.IntegerField(label="صنف", required=False)
+    name = forms.CharField(
+        label="نام فروشگاه", max_length=200,
+        help_text="نامی که مشتریان می‌بینند؛ بعداً هم از پنلِ مدیریت قابلِ تغییر است.",
+        widget=forms.TextInput(attrs={"placeholder": "مثلاً: فروشگاه لوازم خانگی رضایی", "autocomplete": "organization"}),
+    )
     submission_token = forms.CharField(widget=forms.HiddenInput, required=False)
 
 
@@ -352,26 +367,34 @@ class OnboardingIdentityForm(forms.Form):
 
     name = forms.CharField(
         label="نام فروشگاه", max_length=150,
-        widget=forms.TextInput(attrs={"placeholder": "مثلاً: فروشگاه لوازم خانگی رضایی"}),
+        help_text="نامی که مشتریان در ویترین و پیام‌های فروشگاه می‌بینند.",
+        widget=forms.TextInput(attrs={"placeholder": "مثلاً: فروشگاه لوازم خانگی رضایی", "autocomplete": "organization"}),
     )
     tagline = forms.CharField(
         label="شعار فروشگاه", max_length=200, required=False,
+        help_text="یک جمله‌ی کوتاه درباره‌ی فروشگاه (حداکثر ۲۰۰ نویسه).",
         widget=forms.TextInput(attrs={"placeholder": "مثلاً: بهترین کیفیت، مناسب‌ترین قیمت"}),
     )
     description = forms.CharField(
         label="درباره‌ی فروشگاه", required=False,
-        widget=forms.Textarea(attrs={"placeholder": "مثلاً: فروشگاه ما از سال ... با هدف ... راه‌اندازی شده است."}),
+        help_text="چند جمله برای معرفیِ کسب‌وکارتان به مشتریان؛ هر زمان قابلِ ویرایش است.",
+        widget=forms.Textarea(attrs={"rows": 5, "placeholder": "مثلاً: فروشگاه ما از سال ... با هدف ... راه‌اندازی شده است."}),
     )
     contact_phone = forms.CharField(
         label="شماره تماس", max_length=30, required=False,
-        widget=forms.TextInput(attrs={"placeholder": "مثلاً: 021-12345678"}),
+        help_text="شماره‌ی ثابت یا موبایل برای تماسِ مشتریان.",
+        widget=forms.TextInput(attrs={
+            "placeholder": "مثلاً: 021-12345678", "dir": "auto", "inputmode": "tel", "autocomplete": "tel",
+        }),
     )
     contact_email = forms.EmailField(
         label="ایمیل فروشگاه", required=False,
-        widget=forms.EmailInput(attrs={"placeholder": "مثلاً: info@example.com"}),
+        help_text="ایمیلی که مشتریان می‌توانند با آن با شما در تماس باشند.",
+        widget=forms.EmailInput(attrs={"placeholder": "مثلاً: info@example.com", "dir": "auto", "autocomplete": "email"}),
     )
     contact_address = forms.CharField(
         label="آدرس", max_length=300, required=False,
+        help_text="نشانیِ فروشگاه یا دفتر (حداکثر ۳۰۰ نویسه).",
         widget=forms.TextInput(attrs={"placeholder": "مثلاً: تهران، خیابان ..."}),
     )
 
@@ -380,6 +403,13 @@ class OnboardingIndustryForm(forms.Form):
     """مرحله‌ی ۲ ویزارد آنبوردینگ: انتخابِ صنف (اختیاری، فقط یک‌بار قابلِ نصب - ADR-25)."""
 
     industry_template_id = forms.IntegerField(required=False)
+    #: تأییدِ صریحِ نصبِ یک‌بارمصرف — فقط وقتی لازم است که واقعاً قرار است قالبی نصب شود
+    #: (رد کردن/ادامه‌ی حالتِ «نصب‌شده» آن را لازم ندارد)؛ مرجعِ اجرایی همین سمتِ سرور است.
+    #: عمداً «فقط مقدارِ دقیقِ ۱» پذیرفته می‌شود (نه هر رشته‌ی غیرخالی؛ مثلاً "0"/"false" تأیید نیست).
+    confirm_industry_install = forms.CharField(required=False)
+
+    def clean_confirm_industry_install(self):
+        return (self.cleaned_data.get("confirm_industry_install") or "").strip() == "1"
 
 
 class OnboardingBrandingForm(forms.Form):
@@ -392,7 +422,13 @@ class OnboardingBrandingForm(forms.Form):
     متأثر نمی‌شود) — پیش‌فرضِ ``ShopSettings.primary_color``/``accent_color``
     هم دست‌نخورده می‌ماند."""
 
-    logo = forms.ImageField(label="لوگو", required=False)
+    logo = forms.ImageField(
+        label="لوگو", required=False,
+        help_text="PNG، JPG یا WebP؛ ترجیحاً کمتر از ۲ مگابایت.",
+        widget=forms.FileInput(attrs={
+            "accept": "image/png,image/jpeg,image/webp,image/gif", "data-ob-logo-input": "",
+        }),
+    )
 
 
 class ContactForm(forms.Form):

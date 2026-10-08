@@ -6,8 +6,10 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from apps.portal.services import provisioning_service
+from apps.portal.tests._ready_template import select_template
 from apps.stores.models import Store, StoreDomain, StoreMembership
 from apps.stores.services.publication_service import PublicationState, get_store_publication_state
+from apps.subscriptions.models import StoreSubscription
 
 User = get_user_model()
 _HOST = "rastisi.localhost"
@@ -64,9 +66,9 @@ class OnboardingViewTests(TestCase):
         )
         self._complete_identity()
         response = self.client.post(
-            self._url("industry"), {"industry_template_id": template.pk}, HTTP_HOST=_HOST,
+            self._url("industry"), {"industry_template_id": template.pk, "confirm_industry_install": "1"}, HTTP_HOST=_HOST,
         )
-        self.assertRedirects(response, self._url("branding"))
+        self.assertRedirects(response, self._url("template"))
         installation = StoreIndustryInstallation.objects.get(store=self.store)
         self.assertEqual(installation.industry_template_id, template.pk)
 
@@ -86,16 +88,16 @@ class OnboardingViewTests(TestCase):
         self.assertContains(response, "کتاب")
 
         response = self.client.post(self._url("industry"), {}, HTTP_HOST=_HOST)
-        self.assertRedirects(response, self._url("branding"))
+        self.assertRedirects(response, self._url("template"))
         self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 1)
 
-    def test_industry_stage_skip_advances_to_branding_without_installing(self):
+    def test_industry_stage_skip_advances_to_template_without_installing(self):
         self._complete_identity()
         response = self.client.post(self._url("industry"), {"action": "skip"}, HTTP_HOST=_HOST)
-        self.assertRedirects(response, self._url("branding"))
+        self.assertRedirects(response, self._url("template"))
         self.assertFalse(hasattr(self.store, "industry_installation"))
         self.store.refresh_from_db()
-        self.assertEqual(self.store.onboarding_stage, Store.OnboardingStage.BRANDING)
+        self.assertEqual(self.store.onboarding_stage, Store.OnboardingStage.TEMPLATE)
 
     def test_branding_stage_skip_advances_to_review(self):
         self._complete_identity()
@@ -141,6 +143,7 @@ class OnboardingViewTests(TestCase):
     def test_review_stage_publishes_and_completes_onboarding(self):
         self._complete_identity()
         self.client.post(self._url("industry"), {"action": "skip"}, HTTP_HOST=_HOST)
+        select_template(self.client, self._url("template"))
         self.client.post(self._url("branding"), {"action": "skip"}, HTTP_HOST=_HOST)
         response = self.client.post(self._url("review"), {}, HTTP_HOST=_HOST)
         self.assertEqual(response.status_code, 302)
@@ -156,6 +159,7 @@ class OnboardingViewTests(TestCase):
     def test_dispatcher_sends_a_completed_store_straight_to_store_created(self):
         self._complete_identity()
         self.client.post(self._url("industry"), {"action": "skip"}, HTTP_HOST=_HOST)
+        select_template(self.client, self._url("template"))
         self.client.post(self._url("branding"), {"action": "skip"}, HTTP_HOST=_HOST)
         self.client.post(self._url("review"), {}, HTTP_HOST=_HOST)
         response = self.client.get(f"/app/stores/{self.store.public_id}/onboarding/", HTTP_HOST=_HOST)
@@ -357,7 +361,7 @@ class OnboardingIndustryTemplateVisibilityTests(TestCase):
         other_store = provisioning_service.provision_trial_store(owner=other_owner, name="فروشگاه دیگر")
 
         response = self.client.post(
-            self._industry_url(), {"industry_template_id": template.pk}, HTTP_HOST=_HOST,
+            self._industry_url(), {"industry_template_id": template.pk, "confirm_industry_install": "1"}, HTTP_HOST=_HOST,
         )
         self.assertEqual(response.status_code, 302)
 
@@ -382,7 +386,7 @@ class RegistrationAutoProvisionsTrialStoreTests(TestCase):
     @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
     def test_first_registration_creates_exactly_one_store(self):
         code = self._fixed_code()
-        self.client.post("/register/", {"full_name": "First Timer", "phone": "09359990001"}, HTTP_HOST=_HOST)
+        self.client.post("/register/", {"full_name": "First Timer", "phone": "09359990001", "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.client.post("/verify/", {"phone": "09359990001", "code": code}, HTTP_HOST=_HOST)
 
         user = User.objects.get(username="09359990001")
@@ -395,7 +399,7 @@ class RegistrationAutoProvisionsTrialStoreTests(TestCase):
     @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
     def test_my_stores_shows_the_auto_provisioned_store_immediately(self):
         code = self._fixed_code()
-        self.client.post("/register/", {"full_name": "Second", "phone": "09359990002"}, HTTP_HOST=_HOST)
+        self.client.post("/register/", {"full_name": "Second", "phone": "09359990002", "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.client.post("/verify/", {"phone": "09359990002", "code": code}, HTTP_HOST=_HOST)
 
         response = self.client.get("/app/", HTTP_HOST=_HOST)
@@ -405,7 +409,7 @@ class RegistrationAutoProvisionsTrialStoreTests(TestCase):
     @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
     def test_trial_store_storefront_is_403_until_onboarding_completes(self):
         code = self._fixed_code()
-        self.client.post("/register/", {"full_name": "Third", "phone": "09359990003"}, HTTP_HOST=_HOST)
+        self.client.post("/register/", {"full_name": "Third", "phone": "09359990003", "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.client.post("/verify/", {"phone": "09359990003", "code": code}, HTTP_HOST=_HOST)
 
         user = User.objects.get(username="09359990003")
@@ -414,18 +418,15 @@ class RegistrationAutoProvisionsTrialStoreTests(TestCase):
 
         with self.settings(ALLOWED_HOSTS=[trial_domain.hostname, _HOST, "testserver"]):
             response = self.client.get("/", HTTP_HOST=trial_domain.hostname)
-        # RASTISI_DEFAULT_PLAN_CODE is unset in this environment (Section 7 —
-        # the four seeded Plans — is not built yet), so provisioning's call
-        # to provision_default_subscription fails open and creates no
-        # subscription at all. With zero subscriptions, publication_service
-        # itself fails open (ADR-65/ADR-103) rather than restrict a Store it
-        # has no entitlement data for — so this is correctly 200 today. Once
-        # a real default plan is configured, this same Store (still not
-        # onboarded) would 403 instead — see test_publication_service.py for
-        # that behavior tested directly against the service, and
-        # test_full_chain_with_real_default_plan_configured below for the
-        # same thing exercised end-to-end.
-        self.assertEqual(response.status_code, 200)
+        # RASTISI_DEFAULT_PLAN_CODE is unset here, so provisioning's call to
+        # provision_default_subscription fails open and creates NO subscription.
+        # That must never make a portal-provisioned Store public early: the
+        # durable ``onboarding_required_at`` signal keeps it private until the
+        # final onboarding Publish, whatever the billing configuration is.
+        # (Legacy Stores without the signal keep the ADR-65 fail-open — see
+        # test_publication_service.py.)
+        self.assertFalse(StoreSubscription.objects.filter(store=store).exists())
+        self.assertEqual(response.status_code, 403)
 
     @override_settings(RASTISI_DEFAULT_PLAN_CODE="trial")
     def test_full_chain_with_real_default_plan_configured(self):
@@ -437,7 +438,7 @@ class RegistrationAutoProvisionsTrialStoreTests(TestCase):
         call_command("seed_default_plans", stdout=StringIO())
 
         code = self._fixed_code()
-        self.client.post("/register/", {"full_name": "Fourth", "phone": "09359990004"}, HTTP_HOST=_HOST)
+        self.client.post("/register/", {"full_name": "Fourth", "phone": "09359990004", "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.client.post("/verify/", {"phone": "09359990004", "code": code}, HTTP_HOST=_HOST)
 
         user = User.objects.get(username="09359990004")
@@ -453,6 +454,7 @@ class RegistrationAutoProvisionsTrialStoreTests(TestCase):
         base = f"/app/stores/{store.public_id}/onboarding"
         self.client.post(f"{base}/identity/", {"name": "فروشگاه چهارم"}, HTTP_HOST=_HOST)
         self.client.post(f"{base}/industry/", {"action": "skip"}, HTTP_HOST=_HOST)
+        select_template(self.client, f"{base}/template/")
         self.client.post(f"{base}/branding/", {"action": "skip"}, HTTP_HOST=_HOST)
         self.client.post(f"{base}/review/", {}, HTTP_HOST=_HOST)
         with self.settings(ALLOWED_HOSTS=[trial_domain.hostname, _HOST, "testserver"]):
@@ -520,27 +522,33 @@ class IndustrySearchInputContrastTests(TestCase):
         placeholder_end = css.index("}", placeholder_start)
         self.assertIn("color:var(--p-muted)", css[placeholder_start:placeholder_end])
 
-    def test_onboarding_industry_page_loads_both_stylesheets_in_the_needed_order(self):
+    def test_onboarding_industry_page_uses_the_light_onboarding_shell_search_input(self):
+        """The onboarding journey no longer renders the legacy dark-themed selector
+        (the original root cause); its own search input pairs a background with a
+        readable foreground token, so typed text can never go invisible."""
         response = self.client.get(
             f"/app/stores/{self.store.public_id}/onboarding/industry/", HTTP_HOST=_HOST,
         )
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
-        tokens_pos = content.find("portal/css/platform-tokens.css")
-        selector_pos = content.find("css/industry_selector.css")
-        self.assertNotEqual(tokens_pos, -1)
-        self.assertNotEqual(selector_pos, -1)
-        # The override in platform-tokens.css only reliably wins the
-        # cascade because it is more specific than industry_selector.css's
-        # own same-property rule — not because of load order — but assert
-        # both are actually present on this exact page regardless.
-        self.assertIn('class="industry-search"', content)
+        self.assertIn("portal/css/onboarding.css", content)
+        self.assertNotIn("css/industry_selector.css", content)
+        self.assertIn("data-ob-search", content)
 
-    def test_store_create_wizard_also_loads_the_fix(self):
-        """The same dark-themed component appears on the new-store wizard
-        (``portal/app/store_create.html``), not just onboarding — the fix
-        lives in the shared ``platform-tokens.css``, so both get it from
-        one place."""
+        from pathlib import Path
+        import apps.portal as portal_app_module
+
+        css = (Path(portal_app_module.__file__).resolve().parent / "static/portal/css/onboarding.css").read_text(
+            encoding="utf-8",
+        )
+        rule = css[css.index(".ob-search input{"):]
+        rule = rule[:rule.index("}")]
+        self.assertIn("background:var(--rs-paper)", rule)
+        self.assertIn("color:var(--rs-ink)", rule)
+
+    def test_store_create_wizard_no_longer_renders_the_selector(self):
+        """Store creation installs nothing (the irreversible install is confirmation-gated on the
+        onboarding «صنف» step), so there is no selector — and no contrast issue — on that page."""
         self.client.logout()
         second_owner = User.objects.create_user(
             username="contrastowner2@example.com", email="contrastowner2@example.com",
@@ -550,5 +558,6 @@ class IndustrySearchInputContrastTests(TestCase):
         response = self.client.get("/app/stores/new/", HTTP_HOST=_HOST)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
-        self.assertIn("portal/css/platform-tokens.css", content)
-        self.assertIn('class="industry-search"', content)
+        self.assertIn("portal/css/onboarding.css", content)
+        self.assertNotIn("css/industry_selector.css", content)
+        self.assertNotIn("data-ob-search", content)

@@ -21,6 +21,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.portal.tests._ready_template import select_template
 from apps.billing.models import SubscriptionPaymentAttempt
 from apps.billing.providers.manual import SIGNATURE_HEADER, TIMESTAMP_HEADER
 from apps.notifications.models import NotificationOutbox
@@ -105,7 +106,7 @@ class JourneyATestCase(TestCase):
 
     def test_full_lifecycle(self):
         # --- Register: phone + OTP, auto-provisions exactly one trial Store ---
-        self.client.post("/register/", {"full_name": "مالکِ اول", "phone": "09121400001"}, HTTP_HOST=_HOST)
+        self.client.post("/register/", {"full_name": "مالکِ اول", "phone": "09121400001", "accept_terms": "1"}, HTTP_HOST=_HOST)
         response = self.client.post("/verify/", {"phone": "09121400001", "code": "111111"}, HTTP_HOST=_HOST)
         self.assertEqual(response.status_code, 302)
         self.assertIn("/onboarding/", response["Location"])
@@ -119,10 +120,11 @@ class JourneyATestCase(TestCase):
         with self.settings(ALLOWED_HOSTS=[trial_domain.hostname, _HOST, "testserver"]):
             self.assertEqual(self.client.get("/", HTTP_HOST=trial_domain.hostname).status_code, 403)
 
-        # --- Complete the onboarding wizard (identity, skip industry/branding, publish) ---
+        # --- Complete the onboarding wizard (identity, skip industry, choose a Ready Template, skip branding, publish) ---
         base = f"/app/stores/{store.public_id}/onboarding"
         self.client.post(f"{base}/identity/", {"name": "فروشگاهِ سفر کامل"}, HTTP_HOST=_HOST)
         self.client.post(f"{base}/industry/", {"action": "skip"}, HTTP_HOST=_HOST)
+        select_template(self.client, f"{base}/template/")
         self.client.post(f"{base}/branding/", {"action": "skip"}, HTTP_HOST=_HOST)
         self.client.post(f"{base}/review/", {}, HTTP_HOST=_HOST)
 

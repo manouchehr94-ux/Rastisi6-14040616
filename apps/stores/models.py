@@ -118,9 +118,25 @@ class Store(StoresTimestampedModel):
         ),
     )
 
+    onboarding_required_at = models.DateTimeField(
+        "زمان الزامِ راه‌اندازیِ اولیه",
+        null=True, blank=True,
+        help_text=(
+            "نشانهٔ پایدارِ «این فروشگاه از مسیرِ مدرنِ ثبت‌نام/ساخت در پورتال "
+            "ساخته شده و باید پیش از عمومی‌شدن، آنبوردینگ را با «انتشار» تمام "
+            "کند». فقط ``provisioning_service.provision_trial_store`` آن را "
+            "هنگامِ ساخت مقداردهی می‌کند؛ فروشگاه‌هایِ قدیمی/ساخته‌شده به‌صورتِ "
+            "دستی NULL می‌مانند و رفتارِ fail-open (ADR-65) آن‌ها دست‌نخورده است. "
+            "تا وقتی این مقدار هست و ``onboarding_completed_at`` خالی است، "
+            "``publication_service`` فروشگاه را غیرعمومی می‌داند — صرف‌نظر از "
+            "وجود یا نبودِ اشتراک."
+        ),
+    )
+
     class OnboardingStage(models.TextChoices):
         IDENTITY = "identity", "معرفیِ فروشگاه"
         INDUSTRY = "industry", "انتخابِ صنف"
+        TEMPLATE = "template", "قالبِ فروشگاه"
         BRANDING = "branding", "هویتِ بصری"
         REVIEW = "review", "بازبینی و انتشار"
         DONE = "done", "تکمیل‌شده"

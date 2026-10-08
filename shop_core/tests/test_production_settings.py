@@ -165,3 +165,36 @@ class ProductionAuthInfrastructureEnforcedEndToEndTests(SimpleTestCase):
     def test_development_still_needs_none_of_it(self):
         result = _run_check({"DJANGO_DEBUG": "True"})
         self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+
+class DevOtpStartupGuardEndToEndTests(SimpleTestCase):
+    """RASTISI_DEV_OTP_CODE is local-QA only: production must refuse to start with it."""
+
+    def test_debug_false_with_a_dev_otp_code_fails_startup(self):
+        result = _run_check({**_PROD_ENV, "RASTISI_DEV_OTP_CODE": "123456"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("RASTISI_DEV_OTP_CODE", result.stderr)
+        self.assertNotIn("123456", result.stderr)
+
+    def test_a_malformed_dev_otp_code_fails_even_in_debug(self):
+        for bad in ("12345", "abcdef", "1234567"):
+            with self.subTest(bad=bad):
+                result = _run_check({"DJANGO_DEBUG": "True", "RASTISI_DEV_OTP_CODE": bad})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("exactly 6 ASCII digits", result.stderr)
+
+    def test_a_valid_dev_otp_code_in_debug_passes_check(self):
+        result = _run_check({"DJANGO_DEBUG": "True", "RASTISI_DEV_OTP_CODE": "123456"})
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+    def test_unset_is_the_default_and_passes(self):
+        self.assertEqual(_run_check({"DJANGO_DEBUG": "True"}).returncode, 0)
+
+    def test_the_console_otp_flag_is_not_a_production_escape_hatch(self):
+        result = _run_check({**_PROD_ENV, "RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP": "true"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP", result.stderr)
+
+    def test_the_console_otp_flag_in_debug_still_works_for_local_use(self):
+        result = _run_check({"DJANGO_DEBUG": "True", "RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP": "true"})
+        self.assertEqual(result.returncode, 0, msg=result.stderr)

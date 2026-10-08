@@ -30,12 +30,26 @@ class SeedIndustryTemplatesCommandTests(TestCase):
         self.assertEqual(IndustryTemplate.objects.count(), len(INDUSTRY_TEMPLATES))
         self.assertGreaterEqual(len(INDUSTRY_TEMPLATES), 30)
 
-    def test_every_template_is_production_ready_after_seed(self):
+    def test_seed_converges_readiness_to_the_merchant_completeness_gate(self):
+        """Structural validity alone is not enough: after seeding, a template
+        is PRODUCTION_READY only when the sector-aware completeness gate
+        (``template_validation_service``) agrees; otherwise it is
+        REVIEW_REQUIRED and therefore never offered to merchants."""
+        from apps.catalog.services import template_validation_service as tvs
+
         _run_seed()
         for template in IndustryTemplate.objects.exclude(slug__in=DEPRECATED_LEGACY_SLUGS):
             with self.subTest(template=template.slug):
-                self.assertEqual(template.readiness, IndustryTemplate.Readiness.PRODUCTION_READY)
+                expected = tvs.validate_industry_template(template).recommended_readiness
+                self.assertEqual(template.readiness, expected)
+                self.assertIn(
+                    template.readiness,
+                    (IndustryTemplate.Readiness.PRODUCTION_READY, IndustryTemplate.Readiness.REVIEW_REQUIRED),
+                )
                 self.assertTrue(template.content_fingerprint)
+        self.assertTrue(
+            IndustryTemplate.objects.filter(readiness=IndustryTemplate.Readiness.PRODUCTION_READY).exists()
+        )
         # صنف‌های قدیمیِ منسوخ‌شده (بدونِ تناظرِ یک‌به‌یک با کاتالوگِ تأییدشده‌ی
         # ۱۰۰ صنفی) عمداً پس از seed غیرفعال/منسوخ می‌شوند — رکوردشان می‌ماند،
         # اما دیگر برای نصبِ جدید پیشنهاد نمی‌شوند (نگاه کنید به بخشِ ۱).
@@ -191,8 +205,12 @@ class InstallEverySeededIndustryTests(TestCase):
         _run_seed()
         self.store = Store.objects.get(slug="akhlaghi")
 
-    def test_every_seeded_industry_installs_cleanly(self):
-        for template in IndustryTemplate.objects.exclude(slug__in=DEPRECATED_LEGACY_SLUGS):
+    def test_every_offerable_industry_installs_cleanly(self):
+        offerable = list(IndustryTemplate.objects.filter(
+            is_active=True, readiness=IndustryTemplate.Readiness.PRODUCTION_READY,
+        ))
+        self.assertGreater(len(offerable), 0)
+        for template in offerable:
             with self.subTest(template=template.slug):
                 store = Store.objects.create(
                     name=f"فروشگاه آزمایشی {template.slug}",
@@ -202,3 +220,29 @@ class InstallEverySeededIndustryTests(TestCase):
                 result = install_industry_template(store, template)
                 self.assertEqual(len(result.categories_created), template.categories.count())
                 self.assertGreater(Category.objects.filter(store=store).count(), 0)
+
+    def test_review_required_templates_are_structurally_installable_but_not_offered(self):
+        """«REVIEW_REQUIRED» یعنی کاملیِ صنفی کم است، نه اینکه ساختار خراب باشد:
+        محتوای آن‌ها هنوز باید بی‌خطا نصب‌پذیر باشد (تا پس از غنی‌سازی فقط
+        readiness تغییر کند)، اما تا آن زمان نصبِ جدید رد می‌شود."""
+        from apps.catalog.services.industry_template_service import IndustryInstallationError
+
+        held_back = list(IndustryTemplate.objects.filter(
+            is_active=True, readiness=IndustryTemplate.Readiness.REVIEW_REQUIRED,
+        ))
+        self.assertGreater(len(held_back), 0)
+        for template in held_back:
+            with self.subTest(template=template.slug):
+                store = Store.objects.create(
+                    name=f"فروشگاه {template.slug}", slug=f"held-{template.slug}",
+                    status=Store.Status.ACTIVE,
+                )
+                with self.assertRaises(IndustryInstallationError):
+                    install_industry_template(store, template)
+                self.assertEqual(Category.objects.filter(store=store).count(), 0)
+                IndustryTemplate.objects.filter(pk=template.pk).update(
+                    readiness=IndustryTemplate.Readiness.PRODUCTION_READY,
+                )
+                template.refresh_from_db()
+                result = install_industry_template(store, template)
+                self.assertEqual(len(result.categories_created), template.categories.count())
