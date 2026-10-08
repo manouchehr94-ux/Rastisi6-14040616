@@ -382,7 +382,7 @@ class RegistrationAutoProvisionsTrialStoreTests(TestCase):
     @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
     def test_first_registration_creates_exactly_one_store(self):
         code = self._fixed_code()
-        self.client.post("/register/", {"full_name": "First Timer", "phone": "09359990001"}, HTTP_HOST=_HOST)
+        self.client.post("/register/", {"full_name": "First Timer", "phone": "09359990001", "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.client.post("/verify/", {"phone": "09359990001", "code": code}, HTTP_HOST=_HOST)
 
         user = User.objects.get(username="09359990001")
@@ -395,7 +395,7 @@ class RegistrationAutoProvisionsTrialStoreTests(TestCase):
     @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
     def test_my_stores_shows_the_auto_provisioned_store_immediately(self):
         code = self._fixed_code()
-        self.client.post("/register/", {"full_name": "Second", "phone": "09359990002"}, HTTP_HOST=_HOST)
+        self.client.post("/register/", {"full_name": "Second", "phone": "09359990002", "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.client.post("/verify/", {"phone": "09359990002", "code": code}, HTTP_HOST=_HOST)
 
         response = self.client.get("/app/", HTTP_HOST=_HOST)
@@ -405,7 +405,7 @@ class RegistrationAutoProvisionsTrialStoreTests(TestCase):
     @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
     def test_trial_store_storefront_is_403_until_onboarding_completes(self):
         code = self._fixed_code()
-        self.client.post("/register/", {"full_name": "Third", "phone": "09359990003"}, HTTP_HOST=_HOST)
+        self.client.post("/register/", {"full_name": "Third", "phone": "09359990003", "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.client.post("/verify/", {"phone": "09359990003", "code": code}, HTTP_HOST=_HOST)
 
         user = User.objects.get(username="09359990003")
@@ -437,7 +437,7 @@ class RegistrationAutoProvisionsTrialStoreTests(TestCase):
         call_command("seed_default_plans", stdout=StringIO())
 
         code = self._fixed_code()
-        self.client.post("/register/", {"full_name": "Fourth", "phone": "09359990004"}, HTTP_HOST=_HOST)
+        self.client.post("/register/", {"full_name": "Fourth", "phone": "09359990004", "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.client.post("/verify/", {"phone": "09359990004", "code": code}, HTTP_HOST=_HOST)
 
         user = User.objects.get(username="09359990004")

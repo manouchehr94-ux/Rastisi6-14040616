@@ -62,8 +62,9 @@ from .forms import (
 )
 from apps.core.services.client_ip import get_client_ip_bucket
 
-from .models import ContactMessage, OwnerOtpChallenge
+from .models import ContactMessage, OwnerOtpChallenge, OwnerTermsAcceptance
 from .phone import InvalidPhoneError, normalize_iranian_phone
+from .terms import CURRENT_TERMS_VERSION, TERMS_ACCEPTANCE_REQUIRED_MESSAGE
 from .services import (
     handoff_service,
     owner_auth_service,
@@ -89,6 +90,9 @@ _OTP_SESSION_ADMIN_RETURN_KEY = "portal_otp_admin_return"
 _OTP_SESSION_REMEMBER_KEY = "portal_otp_remember_me"
 _OTP_SESSION_FLASH_KEY = "portal_otp_flash"
 _OTP_SESSION_STARTED_KEY = "portal_otp_started_at"
+#: نسخه‌ی قوانینی که /register/ (پس از اعتبارسنجیِ چک‌باکسِ الزامی) در نشستِ *سمتِ سرور*
+#: گذاشته؛ /verify/ هرگز نسخه‌ای از کلاینت نمی‌پذیرد و فقط همین مقدار را می‌خواند.
+_OTP_SESSION_TERMS_VERSION_KEY = "portal_otp_accepted_terms_version"
 #: «اجازه‌ی تعیینِ رمزِ جدید» — فقط سمتِ سرور (نشست)، کوتاه‌عمر و تک‌مصرف؛ تنها پس از
 #: موفقیتِ OTPِ هدفِ «بازیابی رمز» نوشته می‌شود. صفحه‌ی رمزِ جدید کاربر را *فقط* از همین
 #: می‌خواند، هرگز از بدنه‌ی درخواست. این OTP هرگز کسی را وارد نمی‌کند.
@@ -102,7 +106,7 @@ SIGNUP_PENDING_TTL_SECONDS = 600
 _OTP_SESSION_KEYS = (
     _OTP_SESSION_PHONE_KEY, _OTP_SESSION_PURPOSE_KEY, _OTP_SESSION_FULL_NAME_KEY,
     _OTP_SESSION_NEXT_KEY, _OTP_SESSION_ADMIN_RETURN_KEY, _OTP_SESSION_REMEMBER_KEY,
-    _OTP_SESSION_FLASH_KEY, _OTP_SESSION_STARTED_KEY,
+    _OTP_SESSION_FLASH_KEY, _OTP_SESSION_STARTED_KEY, _OTP_SESSION_TERMS_VERSION_KEY,
 )
 
 
@@ -163,7 +167,7 @@ def help_center(request):
 
 
 def terms(request):
-    return render(request, "portal/public/terms.html")
+    return render(request, "portal/public/terms.html", {"terms_version": CURRENT_TERMS_VERSION})
 
 
 def privacy(request):
@@ -253,6 +257,7 @@ def _is_safe_next(next_url: str) -> bool:
 def _request_otp_and_go_to_verify(
     request, *, phone_raw: str, full_name: str, purpose: str,
     next_url: str = "", admin_return: str = "", remember_me: bool = False,
+    accepted_terms_version: str = "",
 ):
     try:
         phone = normalize_iranian_phone(phone_raw)
@@ -275,6 +280,10 @@ def _request_otp_and_go_to_verify(
     request.session[_OTP_SESSION_ADMIN_RETURN_KEY] = admin_return
     request.session[_OTP_SESSION_REMEMBER_KEY] = bool(remember_me)
     request.session[_OTP_SESSION_STARTED_KEY] = int(time.time())
+    if accepted_terms_version:
+        request.session[_OTP_SESSION_TERMS_VERSION_KEY] = accepted_terms_version
+    else:
+        request.session.pop(_OTP_SESSION_TERMS_VERSION_KEY, None)
     return phone, None
 
 
@@ -323,7 +332,7 @@ def register(request):
     if not platform_config_service.is_new_store_registration_enabled():
         return render(
             request, "portal/public/register.html",
-            {"form": OwnerRegistrationRequestForm(), "registration_open": False},
+            {"form": OwnerRegistrationRequestForm(), "registration_open": False, "terms_version": CURRENT_TERMS_VERSION},
         )
 
     if request.method == "POST":
@@ -335,6 +344,8 @@ def register(request):
                 request, phone_raw=form.cleaned_data["phone"],
                 full_name=form.cleaned_data["full_name"], purpose=OwnerOtpChallenge.Purpose.REGISTER,
                 remember_me=form.cleaned_data.get("remember_me", False),
+                # نسخه را سرور می‌داند؛ فقط چون چک‌باکس معتبر بود در نشستِ سرور گذاشته می‌شود.
+                accepted_terms_version=CURRENT_TERMS_VERSION,
             )
             if error:
                 form.add_error(None, error)
@@ -342,7 +353,10 @@ def register(request):
                 return redirect("portal:otp-verify")
     else:
         form = OwnerRegistrationRequestForm()
-    return render(request, "portal/public/register.html", {"form": form, "registration_open": True})
+    return render(
+        request, "portal/public/register.html",
+        {"form": form, "registration_open": True, "terms_version": CURRENT_TERMS_VERSION},
+    )
 
 
 def login_view(request):
@@ -567,6 +581,13 @@ def otp_verify(request):
         # نشستِ ثبت‌نام بدونِ نام معتبر نیست (نباید رخ دهد)؛ از ابتدا شروع شود.
         _clear_otp_session(request)
         return redirect("portal:register")
+    if is_registration and request.session.get(_OTP_SESSION_TERMS_VERSION_KEY) != CURRENT_TERMS_VERSION:
+        # بدونِ تأییدِ معتبرِ نسخه‌ی *فعلیِ* قوانین در نشستِ سرور (دست‌کاری/حذف، یا نسخه بینِ
+        # درخواستِ کد و تأیید عوض شده) fail-closed: حالت پاک می‌شود، هیچ مالک/فروشگاهی ساخته
+        # نمی‌شود و کدِ OTP هم مصرف نمی‌شود.
+        _clear_otp_session(request)
+        messages.error(request, TERMS_ACCEPTANCE_REQUIRED_MESSAGE)
+        return redirect("portal:register")
 
     if request.method != "POST":
         return _render_otp_verify(request, OwnerOtpVerifyForm(initial={"phone": phone}), phone=phone, purpose=purpose)
@@ -590,6 +611,7 @@ def otp_verify(request):
         return _begin_password_reset_authorization(request, phone=phone)
 
     full_name = request.session.get(_OTP_SESSION_FULL_NAME_KEY, "") if is_registration else ""
+    accepted_terms_version = request.session.get(_OTP_SESSION_TERMS_VERSION_KEY, "") if is_registration else ""
     next_url = request.session.get(_OTP_SESSION_NEXT_KEY, "")
     admin_return = request.session.get(_OTP_SESSION_ADMIN_RETURN_KEY, "")
     remember_me = request.session.get(_OTP_SESSION_REMEMBER_KEY, False)
@@ -603,6 +625,10 @@ def otp_verify(request):
             # Owner now. /login/ never creates one: OTP only proves the phone, and a
             # phone without an Owner continues to the «تکمیل ثبت‌نام» step.
             allow_new_owner=registration_open and is_registration,
+            # فقط مسیرِ /register/؛ ردیفِ پذیرش تنها وقتی نوشته می‌شود که همین درخواست
+            # OwnerProfile را واقعاً ساخته باشد (مالکِ موجود/ورود: هیچ‌چیز).
+            accepted_terms_version=accepted_terms_version,
+            terms_source=OwnerTermsAcceptance.Source.REGISTRATION,
         )
     except owner_auth_service.NewOwnerRegistrationClosedError:
         if not is_registration and registration_open:
@@ -686,7 +712,7 @@ def signup_complete(request):
         return redirect("portal:app-home")
 
     phone = pending["phone"]
-    context = {"phone": phone, "registration_open": True}
+    context = {"phone": phone, "registration_open": True, "terms_version": CURRENT_TERMS_VERSION}
     if not platform_config_service.is_new_store_registration_enabled():
         context.update(form=OwnerSignupCompletionForm(), registration_open=False)
         return render(request, "portal/public/signup_complete.html", context)
@@ -698,6 +724,9 @@ def signup_complete(request):
                 identity = owner_auth_service.resolve_owner_identity_by_phone(
                     phone=phone, full_name=form.cleaned_data["full_name"],
                     allow_new_owner=platform_config_service.is_new_store_registration_enabled(),
+                    # چک‌باکسِ همین فرم معتبر بود؛ نسخه همیشه ثابتِ سرور است نه مقدارِ ارسالی.
+                    accepted_terms_version=CURRENT_TERMS_VERSION,
+                    terms_source=OwnerTermsAcceptance.Source.SIGNUP_COMPLETE,
                 )
             except owner_auth_service.NewOwnerRegistrationClosedError:
                 context.update(form=OwnerSignupCompletionForm(), registration_open=False)

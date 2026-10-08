@@ -29,6 +29,8 @@
             {{ form.full_name }}
             {% if form.full_name.errors %}<div class="p-error" id="id_full_name_error">{{ form.full_name.errors.0 }}</div>{% endif %}
           </div>
+
+          {% include "portal/public/_terms_acceptance.html" %}
           <button type="submit" class="rs-btn rs-btn-primary r-form-submit">ساخت فروشگاه و ادامه</button>
         </form>
         {% else %}

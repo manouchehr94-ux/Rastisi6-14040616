@@ -176,7 +176,7 @@ class OtpViewFlowTests(TestCase):
     def test_register_request_then_verify_creates_account_and_logs_in(self):
         code = self._fixed_code()
         response = self.client.post(
-            "/register/", {"full_name": "New Owner", "phone": "09121234577"}, HTTP_HOST=_HOST,
+            "/register/", {"full_name": "New Owner", "phone": "09121234577", "accept_terms": "1"}, HTTP_HOST=_HOST,
         )
         self.assertEqual(response.status_code, 302)
         self.assertIn("/verify/", response["Location"])
@@ -192,7 +192,7 @@ class OtpViewFlowTests(TestCase):
         code = self._fixed_code()
         self.client.post(
             "/register/",
-            {"full_name": "Resend Owner", "phone": "09121234582", "remember_me": "on"},
+            {"full_name": "Resend Owner", "phone": "09121234582", "remember_me": "on", "accept_terms": "1"},
             HTTP_HOST=_HOST,
         )
 
@@ -217,7 +217,7 @@ class OtpViewFlowTests(TestCase):
         code = self._fixed_code()
         self.client.post(
             "/register/",
-            {"full_name": "Provision Failure", "phone": "09121234583"},
+            {"full_name": "Provision Failure", "phone": "09121234583", "accept_terms": "1"},
             HTTP_HOST=_HOST,
         )
 
@@ -282,7 +282,7 @@ class OtpViewFlowTests(TestCase):
         self.assertFalse(OwnerProfile.objects.filter(phone="09121234581").exists())
         self.assertEqual(Store.objects.count(), stores_before)
 
-        response = self.client.post("/signup/complete/", {"full_name": "Login Newcomer"}, HTTP_HOST=_HOST)
+        response = self.client.post("/signup/complete/", {"full_name": "Login Newcomer", "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.assertEqual(response.status_code, 302)
         self.assertIn("/onboarding/", response["Location"])
         self.assertEqual(Store.objects.count(), stores_before + 1)
@@ -290,7 +290,7 @@ class OtpViewFlowTests(TestCase):
 
     def test_second_owner_verify_reuses_account_across_login_sessions(self):
         code = self._fixed_code()
-        self.client.post("/register/", {"full_name": "Returning", "phone": "09121234580"}, HTTP_HOST=_HOST)
+        self.client.post("/register/", {"full_name": "Returning", "phone": "09121234580", "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.client.post("/verify/", {"phone": "09121234580", "code": code}, HTTP_HOST=_HOST)
         self.client.post("/logout/", HTTP_HOST=_HOST)
 

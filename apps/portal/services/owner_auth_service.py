@@ -28,7 +28,7 @@ from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
 from apps.core.phone import InvalidPhoneError, normalize_iranian_phone
 from apps.core.services.rate_limit import RateLimitExceeded, RateLimitUnavailable, enforce_rate_limit
-from apps.portal.models import OwnerProfile
+from apps.portal.models import OwnerProfile, OwnerTermsAcceptance
 
 User = get_user_model()
 
@@ -382,6 +382,7 @@ class OwnerIdentityResult:
 
 def resolve_owner_identity_by_phone(
     *, phone: str, full_name: str = "", allow_new_owner: bool = True, require_active: bool = True,
+    accepted_terms_version: str = "", terms_source: str = "",
 ) -> OwnerIdentityResult:
     """شناسه‌ی اصلیِ ورودِ مالک موبایل+OTP است (Section 3؛ ایمیل+رمز فقط برایِ
     حساب‌هایِ قدیمی/بازیابی/مدیرِ پلتفرم مانده).
@@ -400,7 +401,13 @@ def resolve_owner_identity_by_phone(
 
     هم‌زمانی: یکتاییِ ``User.username`` و ``OwnerProfile.user``/``phone`` در
     دیتابیس تضمین می‌کند دو درخواستِ هم‌زمان حداکثر یک ``OwnerProfile`` بسازند؛
-    فقط برنده ``owner_created=True`` می‌گیرد (و تنها او فروشگاهِ اول را می‌سازد)."""
+    فقط برنده ``owner_created=True`` می‌گیرد (و تنها او فروشگاهِ اول را می‌سازد).
+
+    پذیرشِ قوانین: اگر ``accepted_terms_version`` داده شود، ردیفِ ماندگارِ
+    ``OwnerTermsAcceptance`` **در همان تراکنش و فقط برایِ برنده‌ی ساختِ
+    ``OwnerProfile``** نوشته می‌شود (idempotent با ``get_or_create``)؛ برایِ مالکِ
+    موجود یا بازنده‌ی مسابقه هرگز چیزی ثبت نمی‌شود، و اگر ساختنِ مالک شکست بخورد
+    پذیرشی هم باقی نمی‌ماند."""
     full_name = " ".join(str(full_name or "").split())
 
     with transaction.atomic():
@@ -433,6 +440,11 @@ def resolve_owner_identity_by_phone(
             try:
                 with transaction.atomic():
                     OwnerProfile.objects.create(user=user, phone=phone, full_name=full_name)
+                    if accepted_terms_version:
+                        OwnerTermsAcceptance.objects.get_or_create(
+                            user=user, terms_version=accepted_terms_version,
+                            defaults={"source": terms_source or OwnerTermsAcceptance.Source.REGISTRATION},
+                        )
             except IntegrityError:
                 # برنده‌ی مسابقه کسِ دیگری بود؛ این درخواست «مالکِ تازه» نیست.
                 winner = OwnerProfile.objects.select_related("user").filter(phone=phone).first()

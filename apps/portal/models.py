@@ -38,6 +38,39 @@ class OwnerProfile(TimeStampedModel):
         return self.full_name or self.phone or self.user.email
 
 
+class OwnerTermsAcceptance(TimeStampedModel):
+    """سابقه‌ی ماندگار و نسخه‌دارِ پذیرشِ «قوانین و مقررات» توسطِ یک مالکِ *تازه*.
+
+    یک Boolean کافی نیست (متنِ قانونی تغییر می‌کند)، پس هر ردیف «چه کسی، کدام نسخه،
+    چه زمانی، از کدام مسیر» را نگه می‌دارد. ``(user, terms_version)`` یکتاست تا تکرار/
+    هم‌زمانی بی‌اثر (idempotent) باشد. فقط هنگامِ ساخته‌شدنِ واقعیِ ``OwnerProfile`` نوشته
+    می‌شود؛ هرگز برایِ مالکانِ قدیمی «ساختگی» ثبت نمی‌شود و هیچ OTP/IP/User-Agentی
+    اینجا نیست."""
+
+    class Source(models.TextChoices):
+        REGISTRATION = "registration", "ثبت‌نام (/register/)"
+        SIGNUP_COMPLETE = "signup_complete", "تکمیل ثبت‌نام پس از ورودِ OTP"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="کاربر", on_delete=models.CASCADE,
+        related_name="terms_acceptances",
+    )
+    terms_version = models.CharField("نسخه‌ی قوانین", max_length=40)
+    accepted_at = models.DateTimeField("زمانِ پذیرش", default=timezone.now)
+    source = models.CharField("مسیرِ پذیرش", max_length=20, choices=Source.choices)
+
+    class Meta:
+        verbose_name = "پذیرشِ قوانین توسطِ مالک"
+        verbose_name_plural = "پذیرش‌هایِ قوانین توسطِ مالکان"
+        constraints = [
+            models.UniqueConstraint(fields=["user", "terms_version"], name="uniq_owner_terms_acceptance_user_version"),
+        ]
+        indexes = [models.Index(fields=["terms_version"], name="idx_owner_terms_version")]
+
+    def __str__(self):
+        return f"{self.user_id} → {self.terms_version}"
+
+
 class OwnerOtpChallenge(TimeStampedModel):
     """کدِ یکبارمصرفِ ورود/ثبت‌نامِ مالک با موبایل (Section 3).
 

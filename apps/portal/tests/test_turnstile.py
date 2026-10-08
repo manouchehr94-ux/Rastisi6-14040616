@@ -144,7 +144,7 @@ class ProtectedPublicFormsTests(TestCase):
         with self._deny():
             response = self.client.post(
                 "/register/",
-                {"full_name": "Bot Owner", "phone": "09121230001"},
+                {"full_name": "Bot Owner", "phone": "09121230001", "accept_terms": "1"},
                 HTTP_HOST=_HOST,
             )
         self.assertEqual(response.status_code, 200)

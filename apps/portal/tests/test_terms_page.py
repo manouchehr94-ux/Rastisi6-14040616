@@ -144,4 +144,4 @@ class TermsLayoutContractTests(TestCase):
         self.assertRegex(self.css, r"max-width:960px\)\{[^@]*\.r-legal-aside\{position:static")
 
     def test_stylesheet_is_cache_busted_for_this_change(self):
-        self.assertIn("public-site-v2.css?v=20261008-5", self.html)
+        self.assertIn("public-site-v2.css?v=20261008-7", self.html)

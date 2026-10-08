@@ -105,7 +105,7 @@ class JourneyATestCase(TestCase):
 
     def test_full_lifecycle(self):
         # --- Register: phone + OTP, auto-provisions exactly one trial Store ---
-        self.client.post("/register/", {"full_name": "مالکِ اول", "phone": "09121400001"}, HTTP_HOST=_HOST)
+        self.client.post("/register/", {"full_name": "مالکِ اول", "phone": "09121400001", "accept_terms": "1"}, HTTP_HOST=_HOST)
         response = self.client.post("/verify/", {"phone": "09121400001", "code": "111111"}, HTTP_HOST=_HOST)
         self.assertEqual(response.status_code, 302)
         self.assertIn("/onboarding/", response["Location"])

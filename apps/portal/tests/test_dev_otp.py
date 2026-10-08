@@ -101,7 +101,7 @@ class SecureDefaultTests(TestCase):
 
     def test_registration_does_not_proceed_and_leaves_no_challenge(self):
         user_count = User.objects.count()
-        response = self.client.post("/register/", {"full_name": _NAME, "phone": _PHONE}, HTTP_HOST=_HOST)
+        response = self.client.post("/register/", {"full_name": _NAME, "phone": _PHONE, "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("portal_otp_phone", self.client.session)
         self.assertFalse(OwnerOtpChallenge.objects.filter(phone=_PHONE, consumed_at__isnull=True).exclude(
@@ -156,7 +156,7 @@ class ExplicitDevCodeTests(TestCase):
     def test_register_login_and_reset_work_through_the_real_views(self):
         client = self.client
         # 1. register with name + mobile, verify with the configured code
-        response = client.post("/register/", {"full_name": _NAME, "phone": _PHONE}, HTTP_HOST=_HOST)
+        response = client.post("/register/", {"full_name": _NAME, "phone": _PHONE, "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.assertEqual(response["Location"], "/verify/")
         done = client.post("/verify/", {"code": _CODE}, HTTP_HOST=_HOST)
         self.assertIn("/onboarding/", done["Location"])

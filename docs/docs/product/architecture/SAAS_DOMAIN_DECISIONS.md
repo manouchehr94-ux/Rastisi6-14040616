@@ -4435,6 +4435,23 @@ platform_admin_views.store_detail`) reads `store.subscription_invoices`
 
 ---
 
+
+## ADR-107: New Owners Must Explicitly Accept a Versioned Terms Document — Durable `OwnerTermsAcceptance`, Bound to the Server-Side OTP Session
+
+**Decision.** `apps.portal.terms.CURRENT_TERMS_VERSION` (currently `2026-10-v1`) is the single source of the
+Terms version: shown on `/terms/`, rendered on `/register/` and `/signup/complete/`, and stored on every
+acceptance. `/register/` and `/signup/complete/` require a checkbox (`accept_terms`, only the exact value `"1"`
+counts) validated server-side; unchecked ⇒ no OTP, no challenge, no `User`/`OwnerProfile`/Store. For
+`/register/` the accepted version is written into the server-side OTP session
+(`portal_otp_accepted_terms_version`) — `/verify/` never reads a version from the client and fails closed (clears
+state, redirects to `/register/`, burns no OTP) if it is missing or no longer the current version.
+`OwnerTermsAcceptance(user, terms_version, accepted_at, source)` (unique on `(user, terms_version)`) is written
+inside `resolve_owner_identity_by_phone`'s transaction **only for the request that really creates the
+`OwnerProfile`** (`get_or_create` ⇒ idempotent under replay/races; rolled back with the Owner on failure).
+
+**Not done (by design).** Existing owners are not blocked and no acceptance is fabricated for them; a
+re-acceptance workflow for a future Terms version is a separate task. No IP/User-Agent is collected.
+
 ## Summary Table
 
 | Decision | Status |

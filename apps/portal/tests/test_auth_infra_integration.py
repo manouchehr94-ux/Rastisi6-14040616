@@ -136,7 +136,7 @@ class OtherEndpointsUseTheResolverTests(_Base):
     def test_registration_otp_uses_the_resolver(self):
         with patch.object(owner_otp_service, "request_otp") as request_otp:
             self.client.post(
-                "/register/", {"full_name": "Test User", "phone": "09121234567"}, HTTP_HOST=_HOST,
+                "/register/", {"full_name": "Test User", "phone": "09121234567", "accept_terms": "1"}, HTTP_HOST=_HOST,
                 REMOTE_ADDR=_PROXY, HTTP_X_FORWARDED_FOR="203.0.113.77",
             )
         self.assertEqual(request_otp.call_args.kwargs["client_ip"], "203.0.113.77")
@@ -243,7 +243,7 @@ class RateLimitOutageFailsClosedTests(_Base):
     def test_registration_otp_request_sends_no_sms(self):
         with _outage(), patch.object(owner_otp_service, "send_platform_otp") as send:
             response = self.client.post(
-                "/register/", {"full_name": "Test User", "phone": "09121234567"}, HTTP_HOST=_HOST,
+                "/register/", {"full_name": "Test User", "phone": "09121234567", "accept_terms": "1"}, HTTP_HOST=_HOST,
             )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, UNAVAILABLE_MESSAGE)
@@ -393,7 +393,7 @@ class TurnstileOutageFailsClosedTests(_Base):
 
     def test_otp_request_never_reaches_the_sms_provider(self):
         for path, data in (("/login/", {"phone": "09121234567"}),
-                           ("/register/", {"full_name": "Test User", "phone": "09121234567"})):
+                           ("/register/", {"full_name": "Test User", "phone": "09121234567", "accept_terms": "1"})):
             for label, kwargs in self.OUTAGES:
                 with self.subTest(path=path, label=label), _siteverify(**kwargs), \
                         patch.object(owner_otp_service, "send_platform_otp") as send:

@@ -91,14 +91,33 @@ class OwnerFullNameForm(_FieldErrorA11yMixin, forms.Form):
             raise forms.ValidationError(str(exc)) from exc
 
 
-class OwnerRegistrationRequestForm(OwnerFullNameForm, OwnerPhoneRequestForm):
+class TermsAcceptanceMixin(_FieldErrorA11yMixin, forms.Form):
+    """تأییدِ الزامیِ «قوانین و مقررات» (فرمِ ثبت‌نام و تکمیلِ ثبت‌نام).
+
+    فقط وجود/صحتِ *علامتِ تأیید* اینجا اعتبارسنجی می‌شود؛ **نسخه‌ی قوانین هرگز از
+    کلاینت نمی‌آید** — نسخه‌ی فعلی را سرور از ``apps.portal.terms`` می‌داند. فقط مقدارِ
+    دقیقِ ``"1"`` (مقدارِ چک‌باکس) تأیید است؛ رشته‌هایی مثلِ ``"0"``/``"false"``/خالی نه."""
+
+    #: چک‌باکس در قالب دستی رندر می‌شود (``name="accept_terms" value="1"``)؛ این فیلد فقط
+    #: مقدارِ خامِ ارسالی را می‌خواند و اعتبارسنجی می‌کند.
+    accept_terms = forms.CharField(required=False)
+
+    def clean_accept_terms(self):
+        from .terms import TERMS_ACCEPTANCE_REQUIRED_MESSAGE
+
+        if (self.data.get("accept_terms") or "").strip() != "1":
+            raise forms.ValidationError(TERMS_ACCEPTANCE_REQUIRED_MESSAGE)
+        return True
+
+
+class OwnerRegistrationRequestForm(TermsAcceptanceMixin, OwnerFullNameForm, OwnerPhoneRequestForm):
     """درخواستِ OTP برایِ **ثبت‌نامِ مالکِ تازه** (``/register/``): نامِ کامل
-    الزامی و نرمال‌شده است."""
+    و تأییدِ صریحِ قوانین الزامی است."""
 
-    field_order = ["full_name", "phone", "remember_me"]
+    field_order = ["full_name", "phone", "remember_me", "accept_terms"]
 
 
-class OwnerSignupCompletionForm(OwnerFullNameForm):
+class OwnerSignupCompletionForm(TermsAcceptanceMixin, OwnerFullNameForm):
     """مرحله‌ی «تکمیل ثبت‌نام» پس از ورودِ OTP با شمارهٔ بدونِ مالک. **هیچ
     فیلدِ شماره‌ای ندارد**: شمارهٔ تأییدشده فقط از نشستِ سمتِ سرور می‌آید."""
 
