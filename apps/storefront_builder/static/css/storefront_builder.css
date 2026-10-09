@@ -5456,3 +5456,7 @@ html[data-sfb-density="compact"] .feat small{font-size:9.5px}
 .gh--luxury .gh-search.gh-search-compact input,.gh--atelier .gh-search.gh-search-compact input{color:var(--gh-hdr-ink)}
 .gh--premium .gh-search.gh-search-compact input::placeholder,.gh--luxury .gh-search.gh-search-compact input::placeholder,
 .gh--atelier .gh-search.gh-search-compact input::placeholder{color:var(--gh-hdr-muted);opacity:1}
+/* Atelier search panel sits on the page background, not the header role: its field uses the page pair. */
+.gh--atelier .gh-atelier-search-panel .gh-search.gh-search-compact input{color:var(--brand-text,var(--gh-ink))}
+.gh--atelier .gh-atelier-search-panel .gh-search.gh-search-compact input::placeholder{color:var(--brand-muted,var(--gh-muted));opacity:1}
+
