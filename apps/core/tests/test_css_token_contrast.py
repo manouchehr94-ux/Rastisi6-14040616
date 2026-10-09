@@ -212,7 +212,7 @@ class PublicSiteTokenTests(TokenPairTestCase):
             ("var(--rh-on-chrome-muted)", "var(--rh-chrome-2)", AA),
         ], "demo chrome")
         for palette in ("--rh-p-forest", "--rh-p-indigo", "--rh-p-copper", "--rh-p-graphite"):
-            tagged = f"color-mix(in srgb, var({palette}) 85%, #000)"
+            tagged = f"color-mix(in srgb, var({palette}) 85%, var(--rs-ink))"
             self.assertPairs(self.props, [(tagged, "var(--rs-soft)", AA), (tagged, "var(--rs-surface)", AA)], palette)
 
     def test_decorative_numerals_meet_large_text_threshold(self):

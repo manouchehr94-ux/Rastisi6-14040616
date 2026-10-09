@@ -101,7 +101,7 @@ html[data-sfb-density="relaxed"] .pcarousel{--pcarousel-gap:24px}
    while avoiding invalid nested interactive controls (<button> inside <a>). */
 .pcard{position:relative}
 .pcard-hitarea{position:absolute;inset:0;z-index:1;border-radius:inherit}
-.pcard-hitarea:focus-visible{outline:3px solid var(--violet);outline-offset:-3px}
+.pcard-hitarea:focus-visible{outline:3px solid var(--focus-ink,#241c3a);outline-offset:-3px;box-shadow:inset 0 0 0 6px var(--focus-halo,#fff)}  /* two-tone: ink ring + halo, visible over any card image */
 .pcard .heart,.pcard .addbar{z-index:3}
 .pcard .compact-actions{position:relative;z-index:3}
 .pcard:hover{box-shadow:var(--shadow);transform:translateY(-3px);border-color:#ddd2f5}

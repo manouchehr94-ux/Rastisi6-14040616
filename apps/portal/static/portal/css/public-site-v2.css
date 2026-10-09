@@ -114,7 +114,7 @@ img{max-width:100%;display:block}
 h1,h2,h3,h4,p{margin-top:0}
 ::selection{background:var(--rs-accent);color:var(--rs-ink)}
 :focus-visible{outline:3px solid var(--rs-focus-ink);outline-offset:3px;box-shadow:0 0 0 3px var(--rs-focus-halo)}
-/* UA placeholder (#757575) is 4.3:1 on the paper tint; every field on the public/portal surfaces uses the owned muted token. */
+/* The browser-default placeholder colour is ~4.3:1 on the paper tint; every field on the public/portal surfaces uses the owned muted token. */
 input::placeholder,textarea::placeholder{color:var(--rs-muted);opacity:1}
 
 .rs-container{width:calc(100% - 96px);max-width:var(--rs-container);margin-inline:auto}
