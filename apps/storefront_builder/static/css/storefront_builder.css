@@ -5465,4 +5465,3 @@ html[data-sfb-density="compact"] .feat small{font-size:9.5px}
 
 /* The atelier mobile nav row paints --theme-nav-bg, so its links use the nav role's text (the header-role rule above targets the header row). */
 .gh-shell .gh-atelier-mobile-nav .gh-nl,.gh-shell .gh-atelier-mobile-nav .gh-cat-link{color:var(--theme-nav-text,var(--gh-ink))}
-

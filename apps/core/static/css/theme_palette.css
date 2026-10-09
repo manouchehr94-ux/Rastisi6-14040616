@@ -266,4 +266,3 @@ select,textarea{
 /* The bottom bar is a FIXED dark strip (#3d3d45) regardless of the footer palette role. */
 .footer-bottom,.footer-bottom :is(span,a,p,small),
 .footer .footer-bottom :is(span,a,p,small):not(.socials *):not(.pay *):not(.news *){color:#f1f1f4!important}  /* the bar is a FIXED dark strip: its text pair is fixed too, beating the footer-role rule above */
-
