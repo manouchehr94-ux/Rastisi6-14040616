@@ -131,7 +131,7 @@ html[data-sfb-button-style="soft"] .btn-primary:hover{background:var(--violet-so
   }
   .mobile-nav-drawer{
     display:flex;flex-direction:column;position:fixed;inset-block:0;
-    inset-inline-start:0;width:82%;max-width:340px;background:#fff;z-index:120;
+    inset-inline-start:0;width:82%;max-width:340px;background:var(--brand-surface,#fff);color:var(--brand-text,#241c3a);z-index:120;
     box-shadow:0 0 40px rgba(15,23,42,.25);overflow-y:auto;
     transition:transform .25s ease;
   }
