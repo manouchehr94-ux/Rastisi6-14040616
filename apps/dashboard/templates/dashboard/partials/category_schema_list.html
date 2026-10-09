@@ -77,8 +77,8 @@
     <label style="display:flex;align-items:center;gap:5px"><input type="checkbox" name="is_inherited_by_children" checked> ارث‌بری</label>
     <button type="submit" class="btn btn-sm btn-primary">افزودن</button>
   </form>
-  {% for err in form.attribute.errors %}<div style="color:var(--red);font-size:11.5px">{{ err }}</div>{% endfor %}
-  {% for err in form.non_field_errors %}<div style="color:var(--red);font-size:11.5px">{{ err }}</div>{% endfor %}
+  {% for err in form.attribute.errors %}<div style="color:var(--red-ink);font-size:11.5px">{{ err }}</div>{% endfor %}
+  {% for err in form.non_field_errors %}<div style="color:var(--red-ink);font-size:11.5px">{{ err }}</div>{% endfor %}
 
   <hr style="margin:16px 0;border-color:var(--border)">
 

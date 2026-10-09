@@ -8,12 +8,12 @@
   {% csrf_token %}
   <div class="modal-body">
     {% if form.non_field_errors %}
-    <div style="color:var(--red);font-size:12.5px;margin-bottom:10px">{% for err in form.non_field_errors %}<div>{{ err }}</div>{% endfor %}</div>
+    <div style="color:var(--red-ink);font-size:12.5px;margin-bottom:10px">{% for err in form.non_field_errors %}<div>{{ err }}</div>{% endfor %}</div>
     {% endif %}
     <div class="form-group">
       <label>عنوان نمایشی * <span class="help-icon" title="همین عنوان به مشتری و در فرمِ کالا نمایش داده می‌شود، مثلاً «رنگ» یا «جنس».">؟</span></label>
       <input class="inp" name="label" value="{{ form.label.value|default_if_none:'' }}" placeholder="مثلاً: رنگ">
-      {% for err in form.label.errors %}<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ err }}</div>{% endfor %}
+      {% for err in form.label.errors %}<div style="color:var(--red-ink);font-size:11.5px;margin-top:4px">{{ err }}</div>{% endfor %}
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -41,7 +41,7 @@
           <option value="{{ value }}" {% if form.display_type.value == value %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
-        {% for err in form.display_type.errors %}<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ err }}</div>{% endfor %}
+        {% for err in form.display_type.errors %}<div style="color:var(--red-ink);font-size:11.5px;margin-top:4px">{{ err }}</div>{% endfor %}
       </div>
     </div>
     <div class="form-group">

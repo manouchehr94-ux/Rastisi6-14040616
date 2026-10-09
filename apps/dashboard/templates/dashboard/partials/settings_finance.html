@@ -8,12 +8,12 @@
         <div class="form-group">
           <label>نرخ مالیات (٪)</label>
           {{ finance_form.tax_percent }}
-          {% for error in finance_form.tax_percent.errors %}<small style="color:var(--red)">{{ error }}</small>{% endfor %}
+          {% for error in finance_form.tax_percent.errors %}<small style="color:var(--red-ink)">{{ error }}</small>{% endfor %}
         </div>
         <div class="form-group">
           <label>آستانه‌ی ارسال رایگان (تومان)</label>
           {{ finance_form.free_shipping_threshold }}
-          {% for error in finance_form.free_shipping_threshold.errors %}<small style="color:var(--red)">{{ error }}</small>{% endfor %}
+          {% for error in finance_form.free_shipping_threshold.errors %}<small style="color:var(--red-ink)">{{ error }}</small>{% endfor %}
         </div>
       </div>
       <p style="font-size:11.5px;color:var(--muted);margin-bottom:14px">این دو مقدار در سرویس قیمت‌گذاری (سبد خرید و تسویه‌حساب) استفاده می‌شوند.</p>
@@ -30,12 +30,12 @@
       <div class="form-row">
         <div class="form-group">
           <label><input type="checkbox" name="gift_wrap_available" {% if gift_wrap_form.gift_wrap_available.value %}checked{% endif %}> کادوپیچی را در دسترسِ مشتری قرار بده</label>
-          {% for error in gift_wrap_form.gift_wrap_available.errors %}<small style="color:var(--red)">{{ error }}</small>{% endfor %}
+          {% for error in gift_wrap_form.gift_wrap_available.errors %}<small style="color:var(--red-ink)">{{ error }}</small>{% endfor %}
         </div>
         <div class="form-group">
           <label>هزینه‌ی پیش‌فرض کادوپیچی (تومان؛ ۰ = رایگان)</label>
           {{ gift_wrap_form.gift_wrap_price }}
-          {% for error in gift_wrap_form.gift_wrap_price.errors %}<small style="color:var(--red)">{{ error }}</small>{% endfor %}
+          {% for error in gift_wrap_form.gift_wrap_price.errors %}<small style="color:var(--red-ink)">{{ error }}</small>{% endfor %}
         </div>
       </div>
       <div class="form-row">
@@ -62,7 +62,7 @@
         <div class="form-group">
           <label>تصویر نمونه‌ی کادوپیچی</label>
           <input type="file" name="gift_wrap_image" accept="image/*">
-          {% for error in gift_wrap_form.gift_wrap_image.errors %}<small style="color:var(--red)">{{ error }}</small>{% endfor %}
+          {% for error in gift_wrap_form.gift_wrap_image.errors %}<small style="color:var(--red-ink)">{{ error }}</small>{% endfor %}
         </div>
         <div class="form-group">
           <label><input type="checkbox" name="remove_gift_wrap_image"> حذف تصویر فعلی</label>

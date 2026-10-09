@@ -12,11 +12,15 @@
   font-display:swap;
 }
 :root{
-  --bg:#f3f5fb; --card:#ffffff; --text:#1e293b; --muted:#64748b; --border:#e5e9f2;
+  --bg:#f3f5fb; --card:#ffffff; --text:#1e293b; --muted:#59677c; --border:#e5e9f2;
   --primary:#4f46e5; --primary-2:#7c3aed; --primary-soft:#eef0fe; --primary-text:#4338ca;
   --green:#10b981; --green-soft:#d9f6ec; --amber:#f59e0b; --amber-soft:#fdf1da;
   --red:#ef4444; --red-soft:#fde5e5; --blue:#3b82f6; --blue-soft:#e3edfd;
   --cyan:#06b6d4; --cyan-soft:#dcf5fa; --purple:#8b5cf6; --purple-soft:#efe7fd;
+  /* -ink: the TEXT colour of each status hue. The base hues above are fills / dots / chart
+     colours; as text on their own -soft tint or on a card they fell to 1.6-3.5:1. */
+  --green-ink:#0b7955; --amber-ink:#946007; --red-ink:#b91c1c; --blue-ink:#2e66c1; --cyan-ink:#047589; --purple-ink:#754dcf;
+  --disabled-ink:#66738a; --disabled-bg:#e9ecf4;
   --sidebar:#101629; --sidebar-2:#1a2138; --sidebar-text:#9aa3bd; --sidebar-active:#ffffff;
   --shadow:0 1px 3px rgba(16,24,40,.06), 0 6px 18px rgba(16,24,40,.05);
   --radius:16px;
@@ -24,8 +28,10 @@
 body[data-theme="dark"]{
   --bg:#0b1020; --card:#141a30; --text:#e6eaf5; --muted:#8f98b3; --border:#232b47;
   --primary-soft:#26274f; --primary-text:#a5b4fc;
-  --green-soft:#0f3a2c; --amber-soft:#3d2f0d; --red-soft:#431d1d; --red-ink:#fca5a5; --blue-soft:#16304f;
+  --green-soft:#0f3a2c; --amber-soft:#3d2f0d; --red-soft:#431d1d; --blue-soft:#16304f;
   --cyan-soft:#0d3a44; --purple-soft:#2f2450;
+  --green-ink:#10b981; --amber-ink:#f59e0b; --red-ink:#f26363; --blue-ink:#5e99f8; --cyan-ink:#06b6d4; --purple-ink:#a480f8;
+  --disabled-ink:#8f98b3; --disabled-bg:#232b47;
   --shadow:0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
 }
 *{box-sizing:border-box; margin:0; padding:0}
@@ -36,9 +42,15 @@ body.admin-body{
   transition:background .25s, color .25s;
 }
 .admin-body ::-webkit-scrollbar{width:9px;height:9px}
-.admin-body a{color:inherit;text-decoration:none}
+/* zero specificity: a component class (.tab.active, .btn-primary, …) must always be able to set its own colour on an <a> */
+:where(.admin-body a:not(.btn)){color:inherit;text-decoration:none}
+.admin-body a.btn{text-decoration:none}
 .admin-body button{font-family:inherit;cursor:pointer}
 .admin-body input,.admin-body select,.admin-body textarea{font-family:inherit}
+/* Placeholder: the UA default (#757575) fails 4.5:1 on the tinted field backgrounds; use the owned muted token. */
+.admin-body ::placeholder{color:var(--muted);opacity:1}
+/* two-tone default focus ring (text outline + card-coloured halo): visible on light cards, the dark sidebar and tinted rows alike */
+:where(.admin-body) :focus-visible{outline:2px solid var(--text);outline-offset:2px;box-shadow:0 0 0 2px var(--card)}
 
 /* ---------- layout ---------- */
 .app{display:flex; min-height:100vh}
@@ -96,7 +108,7 @@ body.admin-body{
 
 .sidebar-foot{padding:14px;border-top:1px solid rgba(255,255,255,.06)}
 .sidebar-foot .card-mini{background:var(--sidebar-2);border-radius:12px;padding:11px 12px;display:flex;align-items:center;gap:10px}
-.avatar{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ef4444);display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px;flex-shrink:0}
+.avatar{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#b45309,#b91c1c);display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px;flex-shrink:0}
 
 .main{flex:1;margin-right:250px;display:flex;flex-direction:column;min-width:0}
 .topbar{
@@ -142,8 +154,8 @@ body.admin-body{
 .stat .val{font-size:23px;font-weight:800}
 .stat .lbl{font-size:12.5px;color:var(--muted);font-weight:500}
 .stat .trend{font-size:11.5px;font-weight:700;display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:20px;width:fit-content}
-.trend.up{color:var(--green);background:var(--green-soft)}
-.trend.down{color:var(--red);background:var(--red-soft)}
+.trend.up{color:var(--green-ink);background:var(--green-soft)}
+.trend.down{color:var(--red-ink);background:var(--red-soft)}
 .trend.flat{color:var(--muted);background:var(--border)}
 
 .health-tile{
@@ -160,7 +172,8 @@ body.admin-body{
   border:1px solid var(--border);background:var(--card);color:var(--text);transition:.18s;
 }
 .btn:hover{border-color:var(--primary);color:var(--primary)}
-.btn:disabled{opacity:.45;cursor:not-allowed;pointer-events:none}
+.btn:disabled{color:var(--disabled-ink);background:var(--disabled-bg);border-color:var(--border);box-shadow:none;filter:none;cursor:not-allowed;pointer-events:none}
+.btn-primary:disabled{background:var(--disabled-bg);color:var(--disabled-ink)}
 .btn svg{width:16px;height:16px}
 .btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary-2));color:#fff;border:0;box-shadow:0 6px 14px rgba(99,80,238,.35)}
 .btn-primary:hover{color:#fff;filter:brightness(1.07)}
@@ -177,12 +190,12 @@ body.admin-body{
 
 .badge{display:inline-flex;align-items:center;gap:5px;padding:3px 11px;border-radius:20px;font-size:11.5px;font-weight:700}
 .badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
-.b-green{background:var(--green-soft);color:var(--green)}
-.b-amber{background:var(--amber-soft);color:var(--amber)}
-.b-red{background:var(--red-soft);color:var(--red)}
-.b-blue{background:var(--blue-soft);color:var(--blue)}
-.b-cyan{background:var(--cyan-soft);color:var(--cyan)}
-.b-purple{background:var(--purple-soft);color:var(--purple)}
+.b-green{background:var(--green-soft);color:var(--green-ink)}
+.b-amber{background:var(--amber-soft);color:var(--amber-ink)}
+.b-red{background:var(--red-soft);color:var(--red-ink)}
+.b-blue{background:var(--blue-soft);color:var(--blue-ink)}
+.b-cyan{background:var(--cyan-soft);color:var(--cyan-ink)}
+.b-purple{background:var(--purple-soft);color:var(--purple-ink)}
 .b-gray{background:var(--border);color:var(--muted)}
 
 .thumb{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;font-size:19px;background:var(--primary-soft);flex-shrink:0}
@@ -226,7 +239,7 @@ body.admin-body{
 .tabs{display:flex;gap:6px;flex-wrap:wrap}
 .tab{padding:7px 15px;border-radius:10px;font-size:12.5px;font-weight:600;border:1px solid var(--border);background:var(--card);color:var(--muted);transition:.15s}
 .tab.active{background:var(--primary);border-color:var(--primary);color:#fff}
-.tab .cnt{opacity:.75;font-size:11px;margin-right:4px}
+.tab .cnt{font-size:11px;margin-right:4px}
 
 .progress{height:8px;background:var(--bg);border-radius:10px;overflow:hidden}
 .progress i{display:block;height:100%;border-radius:10px;background:linear-gradient(90deg,var(--primary),var(--primary-2))}
@@ -237,7 +250,7 @@ body.admin-body{
 .legend b{margin-right:auto}
 
 .chip{display:inline-flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:5px 11px;font-size:12px;font-weight:600}
-.chip .rm{color:var(--red);cursor:pointer;font-weight:800}
+.chip .rm{color:var(--red-ink);cursor:pointer;font-weight:800}
 
 .switch{position:relative;width:44px;height:24px;flex-shrink:0;display:inline-block}
 .switch input{display:none}
@@ -334,7 +347,7 @@ body.admin-body{
 .modal-body{padding:20px}
 .modal-foot{padding:15px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-start;gap:10px}
 .x-btn{width:32px;height:32px;border-radius:9px;border:0;background:var(--bg);color:var(--muted);font-size:15px;display:grid;place-items:center}
-.x-btn:hover{background:var(--red-soft);color:var(--red)}
+.x-btn:hover{background:var(--red-soft);color:var(--red-ink)}
 
 /* مودالِ «تنظیمِ قیمت» — کالای ساده، قیمتِ پایه‌ی کالای دارای تنوع، و هر ردیفِ جدولِ تنوع */
 .price-modal-overlay{position:fixed;inset:0;background:rgba(10,14,30,.55);backdrop-filter:blur(3px);z-index:1200;display:flex;align-items:center;justify-content:center;padding:16px;white-space:normal}
@@ -417,9 +430,9 @@ body.admin-body{
 /* --- field group --- */
 .field-group{margin-bottom:18px}
 .field-label{display:block;font-size:13px;font-weight:700;margin-bottom:6px;color:var(--text)}
-.field-label.required::after{content:" *";color:var(--red);font-weight:700}
+.field-label.required::after{content:" *";color:var(--red-ink);font-weight:700}
 .field-help{display:block;font-size:11.5px;color:var(--muted);margin-top:5px;line-height:1.5}
-.field-error{display:block;font-size:11.5px;color:var(--red);margin-top:5px;font-weight:600}
+.field-error{display:block;font-size:11.5px;color:var(--red-ink);margin-top:5px;font-weight:600}
 
 /* --- form inputs --- */
 .form-input,.form-select,.form-textarea{
@@ -481,7 +494,7 @@ body.admin-body{
 }
 
 /* --- required/optional field convention (Product Entry wizard) --- */
-.required-star{color:var(--red);font-weight:700;margin-inline-start:2px}
+.required-star{color:var(--red-ink);font-weight:700;margin-inline-start:2px}
 .opt-pill{
   display:inline-block;background:var(--surface2);color:var(--muted);border:1px solid var(--border);
   border-radius:999px;padding:1px 8px;font-size:10.5px;margin-inline-start:6px;font-weight:500;
@@ -504,12 +517,12 @@ body.admin-body{
 
 /* --- empty state --- */
 .empty-state{text-align:center;padding:48px 20px;color:var(--muted)}
-.empty-state .empty-icon{font-size:42px;margin-bottom:12px;display:block;opacity:.6}
+.empty-state .empty-icon{font-size:42px;margin-bottom:12px;display:block}
 .empty-state .empty-title{font-size:15px;font-weight:700;margin-bottom:6px;color:var(--text)}
 .empty-state .empty-desc{font-size:13px;margin-bottom:16px;line-height:1.6}
 
 /* --- validation summary --- */
-.validation-summary{background:var(--red-soft);border:1px solid color-mix(in srgb,var(--red) 20%,transparent);border-radius:12px;padding:14px 16px;margin-bottom:18px;font-size:12.5px;color:var(--red);line-height:1.7}
+.validation-summary{background:var(--red-soft);border:1px solid color-mix(in srgb,var(--red) 20%,transparent);border-radius:12px;padding:14px 16px;margin-bottom:18px;font-size:12.5px;color:var(--red-ink);line-height:1.7}
 .validation-summary ul{margin:6px 0 0 18px;list-style:disc}
 
 /* --- responsive content width --- */
@@ -587,7 +600,7 @@ body.admin-body{
 .pagination a,.pagination span{min-width:34px;height:34px;padding:0 8px;display:inline-flex;align-items:center;justify-content:center;border-radius:9px;font-size:12.5px;font-weight:600;border:1px solid var(--border);color:var(--text)}
 .pagination a:hover{border-color:var(--primary);color:var(--primary)}
 .pagination span.current{background:var(--primary);border-color:var(--primary);color:#fff}
-.pagination span.disabled{color:var(--muted);opacity:.5}
+.pagination span.disabled{color:var(--disabled-ink);background:var(--disabled-bg)}
 @media (max-width:860px){.main{margin-right:0}}
 
 /* ========== THEME EDITOR (settings › appearance, scoped) ========== */
@@ -611,7 +624,7 @@ body.admin-body{
 .color-field .cf-row{display:flex;align-items:center;gap:8px}
 .color-field input[type="color"]{width:44px;height:38px;padding:2px;border-radius:8px;border:1px solid var(--border);cursor:pointer;flex-shrink:0}
 .color-field input[type="text"]{flex:1;font-family:monospace;direction:ltr;text-align:left;min-width:0}
-.color-field .cf-error{font-size:11px;color:var(--red)}
+.color-field .cf-error{font-size:11px;color:var(--red-ink)}
 
 /* live preview — CSS vars scoped to .theme-preview only, never leak to the real page */
 .theme-preview{border:1px solid var(--border);border-radius:16px;padding:20px;background:var(--tp-bg);color:var(--tp-ink);transition:background .15s,color .15s}

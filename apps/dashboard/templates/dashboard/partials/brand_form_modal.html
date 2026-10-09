@@ -8,13 +8,13 @@
   {% csrf_token %}
   <div class="modal-body">
     {% if form.non_field_errors %}
-    <div style="color:var(--red);font-size:12.5px;margin-bottom:10px">{% for err in form.non_field_errors %}<div>{{ err }}</div>{% endfor %}</div>
+    <div style="color:var(--red-ink);font-size:12.5px;margin-bottom:10px">{% for err in form.non_field_errors %}<div>{{ err }}</div>{% endfor %}</div>
     {% endif %}
     <div class="form-group">
       <label>نام برند (فارسی) * <span class="help-icon" title="همین نام روی صفحه‌ی کالا و فیلترِ برند به مشتری نمایش داده می‌شود.">؟</span></label>
       <input class="inp" name="name" value="{{ form.name.value|default_if_none:'' }}" placeholder="مثلاً: دیجی‌لوول">
       <div class="field-help">نامِ رسمیِ برند به فارسی؛ برایِ نمایش در فروشگاه و فیلترها استفاده می‌شود.</div>
-      {% for err in form.name.errors %}<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ err }}</div>{% endfor %}
+      {% for err in form.name.errors %}<div style="color:var(--red-ink);font-size:11.5px;margin-top:4px">{{ err }}</div>{% endfor %}
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -32,7 +32,7 @@
       <label>وب‌سایت (اختیاری) <span class="help-icon" title="آدرس باید با http:// یا https:// شروع شود.">؟</span></label>
       <input class="inp" name="website" dir="ltr" value="{{ form.website.value|default_if_none:'' }}" placeholder="https://example.com">
       <div class="field-help">آدرسِ وب‌سایتِ رسمیِ برند؛ در صفحه‌ی برند به‌صورتِ لینک نمایش داده می‌شود.</div>
-      {% for err in form.website.errors %}<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ err }}</div>{% endfor %}
+      {% for err in form.website.errors %}<div style="color:var(--red-ink);font-size:11.5px;margin-top:4px">{{ err }}</div>{% endfor %}
     </div>
     <div class="form-group" x-data="{ preview: null }">
       <label>{% if brand and brand.logo %}جایگزینی لوگو (اختیاری){% else %}لوگو (اختیاری){% endif %} <span class="help-icon" title="فرمتِ مربعی (مثلاً ۲۰۰×۲۰۰) بهترین نتیجه را می‌دهد.">؟</span></label>

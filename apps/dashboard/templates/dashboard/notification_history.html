@@ -27,7 +27,7 @@
     <td dir="ltr">{{ n.recipient_phone|default:n.recipient_email }}</td>
     <td>{% if n.customer %}<a href="{% url 'dashboard:customer-detail' n.customer_id %}">{{ n.customer.full_name }}</a>{% endif %}{% if n.order %}<br><a dir="ltr" href="{% url 'dashboard:order-detail' n.order.code %}">{{ n.order.code }}</a>{% endif %}</td>
     <td><span class="badge {% if n.status == 'sent' %}b-green{% elif n.status in 'pending sending skipped' %}b-amber{% else %}b-red{% endif %}">{{ n.get_status_display }}</span>
-        {% if n.skip_reason %}<br><small>{{ n.skip_reason }}</small>{% endif %}{% if n.last_error %}<br><small style="color:var(--red)">{{ n.last_error }}</small>{% endif %}</td>
+        {% if n.skip_reason %}<br><small>{{ n.skip_reason }}</small>{% endif %}{% if n.last_error %}<br><small style="color:var(--red-ink)">{{ n.last_error }}</small>{% endif %}</td>
     <td dir="ltr">{{ n.provider|default:"—" }}</td>
     <td>{{ n.attempts }}/{{ n.max_attempts }}</td>
     <td>{% if n.is_legacy_sms_mirror %}{% if n.status == 'dead' %}<a class="btn btn-sm" href="{% url 'dashboard:sms-log-list' %}">گزارشِ پیامک‌ها</a>{% endif %}{% elif n.status == 'failed' or n.status == 'dead' %}

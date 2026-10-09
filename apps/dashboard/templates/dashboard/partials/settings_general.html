@@ -9,7 +9,7 @@
         <div class="form-group">
           <label for="id_name">نام فروشگاه</label>
           {{ shop_form.name }}
-          {% for error in shop_form.name.errors %}<small style="color:var(--red)">{{ error }}</small>{% endfor %}
+          {% for error in shop_form.name.errors %}<small style="color:var(--red-ink)">{{ error }}</small>{% endfor %}
         </div>
         <div class="form-group"><label for="id_tagline">شعار فروشگاه</label>{{ shop_form.tagline }}</div>
       </div>
@@ -25,7 +25,7 @@
         <div class="form-group">
           <label for="id_contact_email">ایمیل فروشگاه</label>
           {{ shop_form.contact_email }}
-          {% for error in shop_form.contact_email.errors %}<small style="color:var(--red)">{{ error }}</small>{% endfor %}
+          {% for error in shop_form.contact_email.errors %}<small style="color:var(--red-ink)">{{ error }}</small>{% endfor %}
         </div>
       </div>
       <div class="form-group"><label for="id_contact_address">آدرس</label>{{ shop_form.contact_address }}</div>

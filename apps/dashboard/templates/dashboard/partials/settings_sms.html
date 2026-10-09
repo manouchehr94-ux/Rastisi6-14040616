@@ -92,7 +92,7 @@
         {% csrf_token %}
         <div class="form-group" style="margin-bottom:0;flex:1;min-width:160px">
           {{ sms_test_form.phone }}
-          {% for error in sms_test_form.phone.errors %}<small style="color:var(--red)">{{ error }}</small>{% endfor %}
+          {% for error in sms_test_form.phone.errors %}<small style="color:var(--red-ink)">{{ error }}</small>{% endfor %}
         </div>
         <select class="inp" name="event_key" style="width:170px">
           {% for row in sms_template_rows %}

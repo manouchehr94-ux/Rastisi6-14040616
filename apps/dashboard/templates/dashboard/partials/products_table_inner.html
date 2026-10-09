@@ -73,7 +73,7 @@
           <b>{{ product|price_range_min|toman }} – {{ product|price_range_max|toman }}</b>
           {% else %}
           <b>{{ product.final_price|toman }}</b>
-          {% if product.discount_percent %}<br><small style="color:var(--red);text-decoration:line-through">{{ product.price|toman }}</small>{% endif %}
+          {% if product.discount_percent %}<br><small style="color:var(--red-ink);text-decoration:line-through">{{ product.price|toman }}</small>{% endif %}
           {% endif %}
         </td>
         <td data-label="موجودی">

@@ -16,7 +16,7 @@
   <tr>
     <td>{{ r.created_at|jalali:"%Y/%m/%d %H:%M" }}</td>
     <td><a dir="ltr" href="{% url 'dashboard:order-detail' r.order.code %}">{{ r.order.code }}</a></td>
-    <td><span class="badge {% if r.evidence_level == 'confirmed' %}b-red{% else %}b-amber{% endif %}">{{ r.get_evidence_level_display }}</span> {{ r.get_kind_display }}{% if r.error_message %}<br><small style="color:var(--red)">{{ r.error_message }}</small>{% endif %}</td>
+    <td><span class="badge {% if r.evidence_level == 'confirmed' %}b-red{% else %}b-amber{% endif %}">{{ r.get_evidence_level_display }}</span> {{ r.get_kind_display }}{% if r.error_message %}<br><small style="color:var(--red-ink)">{{ r.error_message }}</small>{% endif %}</td>
     <td>{{ r.amount|floatformat:0 }}</td>
     <td>{% if r.reported_amount is not None %}{{ r.reported_amount|floatformat:"-1" }}{% else %}—{% endif %}</td>
     <td dir="ltr">{{ r.gateway_ref_id|default:"—" }}</td>

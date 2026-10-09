@@ -8,7 +8,7 @@
     <div class="form-group">
       <label>نام</label>
       <input class="inp" name="name" value="{{ form.name.value|default_if_none:'' }}">
-      {% for err in form.name.errors %}<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ err }}</div>{% endfor %}
+      {% for err in form.name.errors %}<div style="color:var(--red-ink);font-size:11.5px;margin-top:4px">{{ err }}</div>{% endfor %}
     </div>
     <div class="form-group">
       <label>آیکون (ایموجی)</label>

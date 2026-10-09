@@ -12,7 +12,7 @@
 
 <div class="form-card">
   {% if form.non_field_errors %}
-  <div style="color:var(--red);font-size:12.5px;margin-bottom:10px">{% for err in form.non_field_errors %}<div>{{ err }}</div>{% endfor %}</div>
+  <div style="color:var(--red-ink);font-size:12.5px;margin-bottom:10px">{% for err in form.non_field_errors %}<div>{{ err }}</div>{% endfor %}</div>
   {% endif %}
   <form method="post">
     {% csrf_token %}

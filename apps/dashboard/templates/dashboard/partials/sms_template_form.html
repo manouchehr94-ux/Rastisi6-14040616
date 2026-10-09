@@ -7,12 +7,12 @@
   {% csrf_token %}
   <div class="modal-body">
     {% if form.non_field_errors %}
-    <div style="color:var(--red);font-size:12.5px;margin-bottom:10px">{% for err in form.non_field_errors %}<div>{{ err }}</div>{% endfor %}</div>
+    <div style="color:var(--red-ink);font-size:12.5px;margin-bottom:10px">{% for err in form.non_field_errors %}<div>{{ err }}</div>{% endfor %}</div>
     {% endif %}
     <div class="form-group">
       <label>متن قالب</label>
       <textarea class="inp" name="body" rows="5">{{ form.body.value|default_if_none:'' }}</textarea>
-      {% for err in form.body.errors %}<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ err }}</div>{% endfor %}
+      {% for err in form.body.errors %}<div style="color:var(--red-ink);font-size:11.5px;margin-top:4px">{{ err }}</div>{% endfor %}
     </div>
     <p style="font-size:11.5px;color:var(--muted)">متغیرهای مجاز این رویداد (دقیقاً به همین شکل در متن استفاده کنید):</p>
     <p style="font-size:11.5px;margin-top:4px">

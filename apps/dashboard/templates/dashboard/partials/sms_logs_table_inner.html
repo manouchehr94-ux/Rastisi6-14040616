@@ -9,7 +9,7 @@
       <td style="max-width:280px;white-space:normal">{{ log.message|truncatechars:80 }}</td>
       <td>{{ log.created_at|jalali }}</td>
       <td><span class="badge {{ log.status|sms_status_badge }}">{{ log.get_status_display }}</span></td>
-      <td style="color:var(--red);font-size:11.5px">{{ log.error_message|truncatechars:60 }}</td>
+      <td style="color:var(--red-ink);font-size:11.5px">{{ log.error_message|truncatechars:60 }}</td>
       <td>
         {% if log.status == "failed" %}
         <form method="post" action="{% url 'dashboard:sms-log-retry' log.pk %}">
