@@ -4453,6 +4453,24 @@ inside `resolve_owner_identity_by_phone`'s transaction **only for the request th
 re-acceptance workflow for a future Terms version is a separate task. No IP/User-Agent is collected.
 
 
+**Addendum — registration credentials + server-authoritative OTP resend.**
+*Credentials.* A brand-new Owner is created only after OTP verification **and** a required «اطلاعات حساب» step
+(`/signup/complete/`, `OwnerAccountCompletionForm`): email + password + confirmation. `/register/` (Terms + name + phone → OTP) and
+`/login/` with an unknown phone converge on that one step. Email is required, trimmed, lower-cased, validated, max 254 chars, and
+protected case-insensitively (`iexact`) against every other user under the `owner_account_email:` advisory lock. The password goes
+through `AUTH_PASSWORD_VALIDATORS` (Persian messages) and is hashed only when the Owner is created — it is never put in the session,
+a pending row, a log, a URL, a hidden field or client storage. The OTP proof (`_SIGNUP_PENDING_KEY`, 600 s, server-side) survives
+validation errors so a typo never forces a new SMS. No User / OwnerProfile / Store / Terms row exists before the step succeeds, and
+the Terms contract (server-bound version, explicit checkbox, one transaction) is unchanged. A phone that already belongs to a shared
+User (e.g. a storefront customer) keeps its usable password and existing email: only missing credentials are filled in, and an email
+owned by another user is rejected, never reassigned. Existing-Owner OTP login is unchanged. No email-verification flow is added.
+*Resend.* The cooldown is `RESEND_COOLDOWN_SECONDS = OTP_TTL_SECONDS` (120 s), enforced by the server per (phone, purpose) from the
+newest challenge's `created_at` — first outside, then again inside the advisory lock — so a forged POST or a second tab cannot bypass
+the countdown (`OtpCooldownError`, a subclass of `OtpRateLimitError`). A provider failure removes the pending row, so it never starts a
+cooldown; a stale in-flight marker is ignored after 30 s. `resend_timing()` is the only source for the UI countdown (no duplicated
+number); per-phone (3/10 min) and per-IP budgets are unchanged. The password-reset flow judges the cooldown from the session only
+(enumeration-safe).
+
 ## ADR-108: Owner Onboarding Chooses a Ready Template (the ONE 50-template catalog), Applied by Storefront Builder Services, and Final Publish Publishes the Storefront Draft
 
 **Decision.** Onboarding has five steps (معرفی · صنف · قالب فروشگاه · برند · بازبینی); `Store.OnboardingStage.TEMPLATE`
@@ -4488,6 +4506,16 @@ the data-driven composition (hero slides, category rail, product rows) disappear
 Rasti Mode Demo store) were not labelled as sample content. Resolution: non-persistent first-run structural placeholders on the public
 home of modern-portal Stores with no listable product (`first_run_placeholder_service`, tokens-only, never creates records), truthful
 "sample content" labelling, and an unmistakable explicit select/apply UX. Investigation: `ONBOARDING_TEMPLATE_FIDELITY_INVESTIGATION.md`.
+
+**Industry step UX and onboarding density (ADR-108 addendum).** The «صنف» step is one flow: a 4/3/2/1-column card grid (icon, name,
+sector, short authoritative description, category count) with search + sector chips, a strong selected state, and ONE compact
+confirmation («صنف انتخاب‌شده: …», «این صنف را برای فروشگاهم نصب کن») next to the CTA in a footer that is sticky only on wide screens.
+The split master/detail layout, sticky preview and category/attribute dump (and `_template_preview.html`, used only by this step) are
+removed; the server still requires the exact value `"1"` and installs once. Vertical density: compact header (53 px), one-row
+title + stepper on desktop, 16 px page padding, tighter card/head/actions rhythm — no `translateY`, negative margins or fixed heights;
+mobile (≤720 px) keeps a current-step summary and every label for assistive tech. *First-run placeholders* now judge readiness per
+section: hero/category placeholders apply only while the storefront is still the as-delivered composition, and product rows only
+while no product is listable — adding a first product no longer collapses the hero/categories, and a deliberate edit ends them.
 
 ## Summary Table
 
