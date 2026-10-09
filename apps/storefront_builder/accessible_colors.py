@@ -74,7 +74,7 @@ def build_accessible_theme(colors: dict, roles: dict, tones: tuple | list | None
         "gradient_fg": best_foreground(colors["primary"]),
         "gradient_end": ensure_contrast(colors["secondary"], [best_foreground(colors["primary"])], TARGET),
         # the dark header shell (`.gh-shell--dark`) has FIXED chrome colours, independent of the palette
-        "primary_text_on_dark": ensure_contrast(colors["primary"], DARK_SHELL_SURFACES, TARGET),
+        "primary_text_on_dark": ensure_contrast(colors["primary"], DARK_SHELL_SURFACES, HEADER_TARGET),
         "primary_hover": hover_bg,
         "primary_hover_fg": hover_fg,
         "header_text": ensure_contrast(roles["header_text"], [roles["header_bg"]], HEADER_TARGET),

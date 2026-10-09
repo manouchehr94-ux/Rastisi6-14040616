@@ -36,6 +36,7 @@
   --on-gradient:var(--brand-gradient-fg, #fff);
   --gradient-end:var(--brand-gradient-end, var(--violet-3));
   --on-muted:var(--brand-muted-fg, #fff);
+  --on-tone-1:var(--brand-tone-1-fg,#fff);--on-tone-2:var(--brand-tone-2-fg,#fff);--on-tone-3:var(--brand-tone-3-fg,#fff);--on-tone-4:var(--brand-tone-4-fg,#fff);--on-tone-5:var(--brand-tone-5-fg,#fff);
   /* two-tone focus ring: ink outline + surface-coloured halo in the offset gap -> >=3:1 on ANY surroundings */
   --focus-ink:var(--brand-text, #241c3a);
   /* disabled controls: explicit readable colours (>=3:1), never element opacity (which also halves the text contrast) */

@@ -925,7 +925,7 @@ html[data-sfb-density="compact"][data-sfb-type-scale="normal"] .rcontainer .sec-
 .category-fashion-rail-section{margin:2px 0}
 .category-fashion-rail{display:flex;overflow-x:auto;gap:18px;padding-inline:2px 2px;scroll-snap-type:x proximity;scrollbar-width:none}
 .category-fashion-rail::-webkit-scrollbar{display:none}
-.category-fashion-tile{display:flex;flex-direction:column;align-items:center;gap:6px;color:#25282d;text-align:center;flex:0 0 64px;scroll-snap-align:start}
+.category-fashion-tile{display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--brand-text,#25282d);text-align:center;flex:0 0 64px;scroll-snap-align:start}
 .category-fashion-media{width:60px;height:60px;aspect-ratio:1/1;border-radius:50%;overflow:hidden;background:#f4f2f5;display:grid;place-items:center;border:none}
 .category-fashion-media img{width:100%;height:100%;object-fit:cover;object-position:center 20%}
 .category-fashion-fallback{font-size:22px}
@@ -1353,10 +1353,10 @@ html[data-sfb-density="compact"][data-sfb-type-scale="normal"] .rcontainer .sec-
 .hero-atelier{margin:8px 0 18px}
 .hero-atelier-inner{background:var(--palette-tone-4,#EEE4D6);padding:34px 38px 36px;border-radius:0;overflow:hidden}
 .hero-atelier-copy{text-align:right;margin-bottom:22px;position:relative;z-index:2}
-.hero-atelier-copy h1{margin:0;color:var(--ink);font-size:clamp(28px,3vw,48px);line-height:1.35;font-weight:950;letter-spacing:-.025em}
-.hero-atelier-copy p{margin:7px 0 0;color:var(--muted);font-size:13px;line-height:1.8;max-width:760px}
-.hero-atelier-cta{display:inline-flex;align-items:center;justify-content:center;margin-top:12px;min-height:35px;padding:7px 18px;border:1px solid var(--ink);border-radius:2px;color:var(--ink);background:transparent;font-size:11px;font-weight:750}
-.hero-atelier-cta:hover{background:var(--ink);color:var(--card)}
+.hero-atelier-copy h1{margin:0;color:var(--on-tone-4,var(--ink));font-size:clamp(28px,3vw,48px);line-height:1.35;font-weight:950;letter-spacing:-.025em}
+.hero-atelier-copy p{margin:7px 0 0;color:var(--on-tone-4,var(--muted));font-size:13px;line-height:1.8;max-width:760px}
+.hero-atelier-cta{display:inline-flex;align-items:center;justify-content:center;margin-top:12px;min-height:35px;padding:7px 18px;border:1px solid var(--on-tone-4,var(--ink));border-radius:2px;color:var(--on-tone-4,var(--ink));background:transparent;font-size:11px;font-weight:750}
+.hero-atelier-cta:hover{background:var(--on-tone-4,var(--ink));color:var(--palette-tone-4,var(--card))}
 .hero-atelier-arches{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;align-items:end}
 .hero-atelier-arch{margin:0;min-width:0;aspect-ratio:.68/1;overflow:hidden;border:3px solid var(--palette-tone-2,var(--accent));border-radius:999px 999px 0 0;background:var(--card);box-shadow:none}
 .hero-atelier-arch picture,.hero-atelier-arch img{display:block;width:100%;height:100%}
