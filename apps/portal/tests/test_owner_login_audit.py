@@ -147,6 +147,7 @@ class OtpNextEndToEndTests(_Base, TestCase):
         for value in ("//evil.example", "/\\evil.example"):
             with self.subTest(value=value):
                 cache.clear()
+                age_otp_cooldown()  # the previous iteration's request is past its 120 s send cooldown
                 self.assertEqual(self._login(value)["Location"], "/app/")
                 self.client.post("/logout/", HTTP_HOST=_HOST)
 

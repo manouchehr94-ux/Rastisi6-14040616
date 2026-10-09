@@ -134,14 +134,15 @@ def _lock_phone_purpose(phone: str, purpose: str) -> None:
 def resend_cooldown_remaining(phone: str, purpose: str, *, now=None) -> int:
     """ثانیه‌هایِ باقی‌مانده تا مجاز شدنِ درخواستِ تازه برای این (شماره، هدف)؛ ``0`` یعنی آزاد.
 
-    **مرجعِ واحد** برایِ سرور (:func:`request_otp`) و UX (:func:`resend_timing`). مبنا: *تازه‌ترین*
-    چالشِ این (شماره، هدف) — اگر مصرف نشده باشد (کدِ تأییدشده/مصرف‌شده هرگز مانعِ ورودِ بعدی
-    نیست) و ``created_at``اش (لحظه‌یِ پذیرشِ درخواست) هنوز در بازه‌یِ ``RESEND_COOLDOWN_SECONDS``
-    باشد. وضعیتِ تحویل اهمیتی ندارد: در-جریان، فعال و تحویل‌ناموفق (ردیفِ غیرقابل‌تأیید) همه از
-    همان لحظه‌یِ پذیرش می‌شمارند."""
+    **مرجعِ واحد** برایِ سرور (:func:`request_otp`) و UX (:func:`resend_timing`). مبنا فقط
+    ``created_at``ِ *تازه‌ترین* چالشِ این (شماره، هدف) است — لحظه‌یِ پذیرشِ درخواستِ ارسال — و بازه‌یِ
+    ``RESEND_COOLDOWN_SECONDS`` از همان لحظه می‌شمارد. این فاصله دربارهٔ *تکرارِ درخواستِ ارسال* است، نه
+    وضعیتِ کد: در-جریان، فعال، منقضی، تحویل‌ناموفق (ردیفِ غیرقابل‌تأیید) و حتی **تأییدشده/مصرف‌شده** همه از
+    همان لحظه‌یِ پذیرش می‌شمارند. تأییدِ موفقِ کد فاصله را زودتر آزاد **نمی‌کند** (کنترلِ تعدادِ صدور، مستقل
+    از تأیید)؛ ``consumed_at`` در این تصمیم هیچ نقشی ندارد."""
     now = now or timezone.now()
     latest = OwnerOtpChallenge.objects.filter(phone=phone, purpose=purpose).order_by("-pk").first()
-    if latest is None or latest.consumed_at is not None:
+    if latest is None:
         return 0
     age = (now - latest.created_at).total_seconds()
     return max(0, math.ceil(RESEND_COOLDOWN_SECONDS - age))

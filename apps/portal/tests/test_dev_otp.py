@@ -169,7 +169,9 @@ class ExplicitDevCodeTests(TestCase):
         self.assertEqual(client.post("/login/", {"phone": _PHONE}, HTTP_HOST=_HOST)["Location"], "/verify/")
         self.assertEqual(client.post("/verify/", {"code": _CODE}, HTTP_HOST=_HOST)["Location"], "/app/")
         client.post("/logout/", HTTP_HOST=_HOST)
-        # 3. resend works in the same mode (once the server-side resend cooldown has elapsed)
+        # 3. resend works in the same mode (once the server-side cooldown — which a successful verification does not
+        #    release early — has elapsed since the previous login request)
+        age_otp_cooldown(_PHONE)
         client.post("/login/", {"phone": _PHONE}, HTTP_HOST=_HOST)
         age_otp_cooldown(_PHONE)
         client.post("/verify/resend/", HTTP_HOST=_HOST)

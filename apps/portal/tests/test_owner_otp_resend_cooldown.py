@@ -224,6 +224,7 @@ class ServiceCooldownTests(_Base, TestCase):
             OwnerOtpChallenge.objects.create(
                 phone=_PHONE, purpose="login", code_hash="x", consumed_at=timezone.now(), expires_at=timezone.now(),
             )
+        age_otp_cooldown(_PHONE)  # all past the send cooldown but still inside the 10-minute budget window
         before = OwnerOtpChallenge.objects.count()
         with self.assertRaises(svc.OtpRateLimitError) as ctx:
             self.request()
@@ -244,12 +245,50 @@ class ServiceCooldownTests(_Base, TestCase):
         self.request()
         self.assertEqual(len(self.sent), 1)
 
-    def test_a_verified_code_never_blocks_the_next_request(self):
+    def test_verifying_the_code_does_not_cancel_the_request_cooldown(self):
+        """The cooldown limits SEND REQUESTS from acceptance; a successful verification must not release it early."""
+        t0 = timezone.now()
+        clock = self._clock(t0)
         self.request()
+        clock["now"] = t0 + timedelta(seconds=10)
         self.assertTrue(svc.verify_otp(phone=_PHONE, purpose="login", code=self.sent[-1]["code"]))
+        self.assertIsNotNone(OwnerOtpChallenge.objects.get().consumed_at)  # consumed …
+        self.assertEqual(svc.resend_cooldown_remaining(_PHONE, "login"), 110)  # … yet 110 s remain
+        self.assertEqual(svc.resend_timing(phone=_PHONE, purpose="login")["resend_in"], 110)
+        with self.assertRaises(svc.OtpCooldownError) as ctx:
+            self.request()
+        self.assertEqual(ctx.exception.retry_after, 110)
+        self.assertEqual(len(self.sent), 1)
+        clock["now"] = t0 + timedelta(seconds=119)
+        with self.assertRaises(svc.OtpCooldownError):
+            self.request()
+        self.assertEqual(svc.resend_cooldown_remaining(_PHONE, "login"), 1)
+        clock["now"] = t0 + timedelta(seconds=120)
         self.assertEqual(svc.resend_cooldown_remaining(_PHONE, "login"), 0)
         self.request()
         self.assertEqual(len(self.sent), 2)
+
+    def test_after_the_window_a_consumed_code_no_longer_affects_issuance(self):
+        self.request()
+        self.assertTrue(svc.verify_otp(phone=_PHONE, purpose="login", code=self.sent[-1]["code"]))
+        age_otp_cooldown(_PHONE)  # 121 s after the request
+        self.assertEqual(svc.resend_cooldown_remaining(_PHONE, "login"), 0)
+        self.request()
+        self.assertEqual(len(self.sent), 2)
+        self.assertTrue(svc.verify_otp(phone=_PHONE, purpose="login", code=self.sent[-1]["code"]))
+
+    def test_the_rule_is_generic_for_every_purpose_and_isolated_between_them(self):
+        Purpose = OwnerOtpChallenge.Purpose
+        for purpose in (Purpose.LOGIN, Purpose.REGISTER, Purpose.PASSWORD_RESET, Purpose.STEP_UP):
+            with self.subTest(purpose=purpose):
+                phone = f"0912888{len(self.sent):04d}"
+                self.request(phone=phone, purpose=purpose, ip=f"10.9.9.{len(self.sent)}")
+                self.assertTrue(svc.verify_otp(phone=phone, purpose=purpose, code=self.sent[-1]["code"]))
+                self.assertEqual(svc.resend_cooldown_remaining(phone, purpose), svc.RESEND_COOLDOWN_SECONDS)
+                with self.assertRaises(svc.OtpCooldownError):
+                    self.request(phone=phone, purpose=purpose, ip=f"10.9.8.{len(self.sent)}")
+                other = next(p for p in (Purpose.LOGIN, Purpose.REGISTER, Purpose.STEP_UP) if p != purpose)
+                self.assertEqual(svc.resend_cooldown_remaining(phone, other), 0)  # another purpose is unaffected
 
     def test_a_blocked_request_spends_no_ip_budget_and_no_code_hash(self):
         self.request()

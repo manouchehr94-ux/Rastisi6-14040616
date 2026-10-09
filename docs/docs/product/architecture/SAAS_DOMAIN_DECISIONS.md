@@ -4470,7 +4470,8 @@ default happens to be the same) — enforced by the server per (phone, purpose).
 activation, `expires_at` or `updated_at`. T=0 accept, T=15 provider answers ⇒ resend at T=120 (not 135); a delivered code may outlive
 the countdown by the provider latency, which is intended. It is checked first outside and again inside the lock (`OtpCooldownError`,
 an `OtpRateLimitError`), so a forged POST, a second tab or a concurrent request cannot bypass it (at most one accepted send per window);
-`resend_timing()` is the only source of the UI countdown (no second literal in view/template/JS).
+`resend_timing()` is the only source of the UI countdown (no second literal in view/template/JS). The window limits SEND REQUESTS, so a
+successful verification/consumption does **not** release it early (`consumed_at` plays no part in the decision), for every purpose.
 *State transition.* Accepted request → row with `expires_at = PENDING_EXPIRES_AT` (cooldown + per-phone quota start at `created_at`;
 never verifiable) → on delivery success `expires_at = now + OTP_TTL_SECONDS` (active; `created_at` unchanged) → on delivery failure, a
 provider exception or an activation error the row is **kept** as the never-verifiable pending marker, so the 120 s window is not
