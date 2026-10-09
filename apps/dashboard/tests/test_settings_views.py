@@ -438,6 +438,7 @@ class VisualIdentityTests(SettingsViewsTestCase):
         self.assertNotIn("/admin-portal/login/", response.url)
         self.assertIn("admin_return=", response.url)
 import os
+import re
 import tempfile
 import shutil
 
@@ -1012,8 +1013,13 @@ class StorefrontThemeTokenInjectionTests(SettingsViewsTestCase):
         )
         with open(css_path) as f:
             css = f.read()
-        self.assertIn("--green:#16a34a", css)
-        self.assertIn("--amber:#f59e0b", css)
+        # status colours are fixed literals — never derived from the merchant's brand variables…
+        self.assertRegex(css, r"--green:\s*#[0-9a-fA-F]{6}\s*;")
+        self.assertRegex(css, r"--amber:\s*#[0-9a-fA-F]{6}\s*;")
+        # …and the success green is usable both as a fill with white text and as text on white (>= 4.5:1)
+        from apps.core.color_utils import contrast_ratio
+        green = re.search(r"--green:\s*(#[0-9a-fA-F]{6})", css).group(1)
+        self.assertGreaterEqual(contrast_ratio(green, "#FFFFFF"), 4.5)
 
     def test_border_color_derived_from_text_and_surface(self):
         from apps.core.color_utils import mix_hex
@@ -1025,6 +1031,43 @@ class StorefrontThemeTokenInjectionTests(SettingsViewsTestCase):
         expected = mix_hex("#111111", "#FFFFFF", 0.12)
         response = self.client.get(reverse("catalog:home"))
         self.assertContains(response, f"--brand-border:{expected}")
+
+    def _storefront_vars(self):
+        html = self.client.get(reverse("catalog:home")).content.decode()
+        style = re.search(r'<html[^>]*style="([^"]*)"', html).group(1)
+        return dict(item.split(":", 1) for item in style.split(";") if item.startswith("--"))
+
+    def test_unsafe_brand_colours_stay_raw_but_text_usage_variables_are_accessible(self):
+        """Merchant identity is stored/injected untouched (--brand-accent), while the colour text is actually
+        painted with (--brand-accent-text) is derived by WCAG luminance so a pale gold accent is not 2.3:1 text."""
+        from apps.core.color_utils import contrast_ratio
+
+        self.client.post(reverse("dashboard:settings-appearance"), {
+            "primary_color": "#FFE066", "accent_color": "#D3A13B",
+            "background_color": "#FFFFFF", "surface_color": "#FFFFFF",
+            "text_color": "#241C3A", "muted_text_color": "#8B86A3",
+        })
+        css_vars = self._storefront_vars()
+        self.assertEqual(css_vars["--brand-accent"].upper(), "#D3A13B")  # identity untouched
+        self.assertEqual(css_vars["--brand-primary"].upper(), "#FFE066")
+        self.assertNotEqual(css_vars["--brand-accent-text"].upper(), "#D3A13B")
+        for token in ("--brand-accent-text", "--brand-primary-text", "--brand-muted", "--theme-price-text"):
+            self.assertGreaterEqual(contrast_ratio(css_vars[token], "#FFFFFF"), 4.5, token)
+        # a pale primary needs dark label text; the hover state carries its OWN foreground
+        self.assertEqual(css_vars["--brand-primary-fg"].upper(), "#000000")
+        self.assertGreaterEqual(contrast_ratio(css_vars["--brand-primary-hover-fg"], css_vars["--brand-primary-hover"]), 4.5)
+
+    def test_dark_brand_colours_get_light_foregrounds(self):
+        from apps.core.color_utils import contrast_ratio
+
+        self.client.post(reverse("dashboard:settings-appearance"), {
+            "primary_color": "#0A0A23", "accent_color": "#1E1B4B",
+            "background_color": "#FFFFFF", "surface_color": "#FFFFFF", "text_color": "#241C3A", "muted_text_color": "#6B6B80",
+        })
+        css_vars = self._storefront_vars()
+        self.assertEqual(css_vars["--brand-primary-fg"].upper(), "#FFFFFF")
+        self.assertGreaterEqual(contrast_ratio(css_vars["--brand-primary-fg"], css_vars["--brand-primary"]), 4.5)
+        self.assertGreaterEqual(contrast_ratio(css_vars["--brand-gradient-fg"], css_vars["--brand-primary"]), 4.5)
 
 
 # ============================================================ PR3: QUERY PERFORMANCE
