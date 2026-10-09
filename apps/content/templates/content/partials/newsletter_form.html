@@ -12,7 +12,7 @@ div"`` دوباره جایگزینِ خودش می‌شود، دقیقاً هم�
 <form class="newsletter-form" hx-post="{% url 'content:newsletter-subscribe' %}" hx-target="closest div" hx-swap="innerHTML"
       style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;max-width:420px;margin:0 auto">
   {% csrf_token %}
-  {% if error %}<div style="width:100%;color:var(--pink);font-size:12.5px;margin-bottom:6px">{{ error }}</div>{% endif %}
+  {% if error %}<div style="width:100%;color:var(--pink-text,var(--pink));font-size:12.5px;margin-bottom:6px">{{ error }}</div>{% endif %}
   <input type="email" name="email" required placeholder="ایمیل شما" class="form-input" dir="ltr" style="flex:1;min-width:200px">
   <button type="submit" class="btn btn-primary">{{ button_label|default:"عضویت" }}</button>
 </form>
