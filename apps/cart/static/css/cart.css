@@ -3,7 +3,7 @@
   استپر تعداد، خلاصه‌ی سفارش) تا وفاداری بصری کامل حفظ شود.
 */
 .breadcrumb{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);padding:18px 0;flex-wrap:wrap}
-.breadcrumb a:hover{color:var(--violet)}
+.breadcrumb a:hover{color:var(--violet-text,var(--violet))}
 .breadcrumb svg{width:13px;height:13px;opacity:.6}
 
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
@@ -27,19 +27,19 @@
 .citem .lp{font-weight:900;font-size:14px}
 .citem .lp small{display:block;font-size:11px;color:var(--muted);text-decoration:line-through;font-weight:500;text-align:left}
 .citem .rm{color:var(--muted);font-size:11.5px;display:flex;align-items:center;gap:4px}
-.citem .rm:hover{color:var(--pink)}
+.citem .rm:hover{color:var(--pink-text,var(--pink))}
 .citem .rm svg{width:14px;height:14px}
 .stepper{display:flex;align-items:center;border:1.5px solid var(--line);border-radius:11px;overflow:hidden}
-.stepper button{width:34px;height:34px;font-size:16px;color:var(--violet);font-weight:800}
+.stepper button{width:34px;height:34px;font-size:16px;color:var(--violet-text,var(--violet));font-weight:800}
 .stepper button:hover{background:var(--violet-softer)}
 .stepper input{width:38px;height:34px;text-align:center;border:0;outline:0;font-weight:800;background:transparent}
 
 .totals .ln{display:flex;justify-content:space-between;padding:7px 0;font-size:13px}
-.totals .ln.disc{color:var(--pink)}
+.totals .ln.disc{color:var(--pink-text,var(--pink))}
 .totals .ln.free{color:var(--green)}
 .totals .grand{border-top:2px dashed var(--line);margin-top:8px;padding-top:13px;font-size:16px;font-weight:900}
-.totals .grand .v{color:var(--violet)}
-.save-note{background:var(--pink-soft);color:var(--pink);border-radius:11px;padding:9px 13px;font-size:12px;font-weight:700;margin-top:10px;text-align:center}
+.totals .grand .v{color:var(--violet-text,var(--violet))}
+.save-note{background:var(--pink-soft);color:var(--pink-text,var(--pink));border-radius:11px;padding:9px 13px;font-size:12px;font-weight:700;margin-top:10px;text-align:center}
 .trust{display:flex;align-items:center;justify-content:center;gap:6px;color:var(--muted);font-size:11px;margin-top:12px}
 .trust svg{width:14px;height:14px;color:var(--green)}
 .btn-block{width:100%;align-items:center;justify-content:center}

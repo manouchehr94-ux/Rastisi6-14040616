@@ -61,7 +61,7 @@ here — so every future visual variant reads identical business semantics.
     {% if card_settings.show_rating is not False %}
     <div class="rate">
       <span class="stars">{{ card.rating|star_rating }}</span>{{ card.rating|fa_number }}
-      <span style="opacity:.6">({{ card.reviews_count|fa_number }})</span>
+      <span>({{ card.reviews_count|fa_number }})</span>
     </div>
     {% endif %}
     {% if card_settings.show_price is not False %}
@@ -141,7 +141,7 @@ here — so every future visual variant reads identical business semantics.
         {% if card_settings.show_rating is not False %}
         <div class="pcard-qv-rate">
           <span class="stars">{{ card.rating|star_rating }}</span>{{ card.rating|fa_number }}
-          <span style="opacity:.6">({{ card.reviews_count|fa_number }})</span>
+          <span>({{ card.reviews_count|fa_number }})</span>
         </div>
         {% endif %}
         <div class="pcard-qv-price">

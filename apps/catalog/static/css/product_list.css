@@ -1,6 +1,6 @@
 /* صفحه‌ی فهرست/جستجو/فیلتر محصولات — هم‌راستا با توکن‌های طراحی و کلاس ورودی‌های مشترک سه پروتوتایپ (.inp) */
 .breadcrumb{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);padding:18px 0;flex-wrap:wrap}
-.breadcrumb a:hover{color:var(--violet)}
+.breadcrumb a:hover{color:var(--violet-text,var(--violet))}
 .breadcrumb svg{width:13px;height:13px;opacity:.6}
 
 .plp{display:grid;grid-template-columns:260px 1fr;gap:24px;padding-bottom:60px;align-items:start}
@@ -13,13 +13,13 @@
 .plp-price-row{display:flex;gap:8px;align-items:center}
 .plp-check{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer}
 .plp-check input{width:16px;height:16px;accent-color:var(--violet)}
-.plp-reset{color:var(--violet);font-size:12.5px;font-weight:700;text-align:center;padding:8px;border:1.5px solid var(--violet-3);border-radius:11px}
+.plp-reset{color:var(--violet-text,var(--violet));font-size:12.5px;font-weight:700;text-align:center;padding:8px;border:1.5px solid var(--violet-3);border-radius:11px}
 .plp-reset:hover{background:var(--violet-soft)}
 
 .plp-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}
 .plp-count{font-size:13px;color:var(--muted)}
 .plp-count b{color:var(--ink)}
-.plp-loading{font-size:12.5px;color:var(--violet);font-weight:700}
+.plp-loading{font-size:12.5px;color:var(--violet-text,var(--violet));font-weight:700}
 
 .plp-empty{text-align:center;padding:60px 20px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius)}
 .plp-empty .em{font-size:56px;margin-bottom:10px}
@@ -28,9 +28,9 @@
 
 .pagination{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:30px;flex-wrap:wrap}
 .pagination a,.pagination span{min-width:38px;height:38px;padding:0 10px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;border:1px solid var(--line);color:#4b4560}
-.pagination a:hover{border-color:var(--violet-3);color:var(--violet)}
-.pagination .current{background:var(--violet);color:#fff;border-color:var(--violet)}
-.pagination .disabled{opacity:.4;pointer-events:none}
+.pagination a:hover{border-color:var(--violet-3);color:var(--violet-text,var(--violet))}
+.pagination .current{background:var(--violet);color:var(--on-violet,#fff);border-color:var(--violet)}
+.pagination .disabled{color:var(--muted);pointer-events:none}
 /* Task 7 (Browse hardening, Gap #2) — the elided-window separator is a plain,
    non-interactive glyph (no border box, no pointer), distinct from real page
    controls. Keeps the bounded control compact on mobile. */
@@ -70,7 +70,7 @@
   box-shadow:var(--shadow);padding:20px;display:flex;flex-direction:column;gap:14px;
 }
 .plp-applied-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--line);font-size:13.5px;font-weight:800}
-.plp-applied-head .plp-reset{border:0;padding:0;color:var(--violet);font-size:12px}
+.plp-applied-head .plp-reset{border:0;padding:0;color:var(--violet-text,var(--violet));font-size:12px}
 .plp[data-plp-layout="sidebar_dense"] .plp-content{grid-area:results}
 
 @media(max-width:1100px){
@@ -112,7 +112,7 @@
 @media (max-width:640px){.plp-heading{font-size:18px;margin:2px 0 12px}}
 
 .plp-chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px}
-.plp-chip{display:inline-flex;align-items:center;gap:6px;background:var(--violet-softer);color:var(--violet);
+.plp-chip{display:inline-flex;align-items:center;gap:6px;background:var(--violet-softer);color:var(--violet-text,var(--violet));
   border:1.5px solid var(--violet-3);border-radius:999px;padding:5px 12px;font-size:12.5px;font-weight:700;
   line-height:1;transition:.15s;max-width:100%}
 .plp-chip .plp-chip-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60vw}
@@ -120,4 +120,4 @@
 .plp-chip:hover{background:var(--violet-soft);border-color:var(--violet)}
 .plp-chip:hover .plp-chip-x{opacity:1}
 .plp-chip-clear{background:transparent;border-style:dashed;color:var(--muted);border-color:var(--line)}
-.plp-chip-clear:hover{color:var(--violet);border-color:var(--violet-3);background:transparent}
+.plp-chip-clear:hover{color:var(--violet-text,var(--violet));border-color:var(--violet-3);background:transparent}

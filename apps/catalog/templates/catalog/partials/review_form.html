@@ -10,7 +10,7 @@
   <input type="hidden" name="rating" :value="rating">
   <h4>✍️ نظر خود را ثبت کنید</h4>
   {% if errors %}
-  <div style="color:var(--pink);font-size:12.5px;margin-bottom:10px">
+  <div style="color:var(--pink-text,var(--pink));font-size:12.5px;margin-bottom:10px">
     {% for err in errors %}<div>{{ err }}</div>{% endfor %}
   </div>
   {% endif %}

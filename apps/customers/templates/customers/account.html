@@ -35,7 +35,7 @@
     </div>
     <form method="post" action="{% url 'customers:logout' %}">
       {% csrf_token %}
-      <button type="submit" style="display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--violet-3);color:var(--violet);height:38px;padding:0 14px;border-radius:12px;font-weight:700;font-size:12.5px">
+      <button type="submit" style="display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--violet-3);color:var(--violet-text,var(--violet));height:38px;padding:0 14px;border-radius:12px;font-weight:700;font-size:12.5px">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
         خروج
       </button>

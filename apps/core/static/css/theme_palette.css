@@ -22,6 +22,9 @@ body{accent-color:var(--theme-primary)}
 ::-webkit-scrollbar-track{background:var(--theme-page)}
 ::-webkit-scrollbar-thumb{background:var(--theme-border)}
 
+/* Placeholder text: UA default (#757575) is ~4.2:1 on tinted fields; use the (already accessible) muted token. */
+input::placeholder,textarea::placeholder{color:var(--theme-muted);opacity:1}
+
 /* Universal top shell */
 .announce{
   background:var(--theme-primary)!important;
@@ -51,7 +54,7 @@ body{accent-color:var(--theme-primary)}
   border-color:var(--theme-primary)!important;
 }
 .h-btn,.login-btn{background:transparent!important;border-color:var(--theme-border)!important}
-.h-btn:hover,.login-btn:hover{background:var(--theme-page)!important;color:var(--theme-primary)!important}
+.h-btn:hover,.login-btn:hover{background:var(--theme-page)!important;color:var(--brand-primary-text,var(--theme-primary))!important}
 
 .nav{
   background:var(--theme-nav-bg,var(--theme-surface))!important;
@@ -62,8 +65,8 @@ body{accent-color:var(--theme-primary)}
   color:var(--theme-nav-text,var(--theme-text))!important;
 }
 .nav .cat-btn{background:var(--theme-primary)!important;color:var(--brand-primary-fg,#fff)!important}
-.nav a.nl:hover{background:var(--theme-page)!important;color:var(--theme-primary)!important}
-.nav a.nl.hot,.nav .nav-hot{color:var(--theme-accent)!important}
+.nav a.nl:hover{background:var(--theme-page)!important;color:var(--brand-primary-text,var(--theme-primary))!important}
+.nav a.nl.hot,.nav .nav-hot{color:var(--brand-accent-text,var(--theme-accent))!important}
 .cat-mega-panel,.cat-dropdown{
   background:var(--theme-card-bg,var(--theme-surface))!important;
   color:var(--theme-text)!important;border-color:var(--theme-border)!important;
@@ -71,7 +74,7 @@ body{accent-color:var(--theme-primary)}
 .cat-mega-rail{border-color:var(--theme-border)!important}
 .cat-mega-rail-item,.cat-mega-cols a{color:var(--theme-text)!important}
 .cat-mega-rail-item:hover,.cat-mega-rail-item.active{
-  background:var(--theme-page)!important;color:var(--theme-primary)!important;
+  background:var(--theme-page)!important;color:var(--brand-primary-text,var(--theme-primary))!important;
 }
 
 /* Core controls */
@@ -82,7 +85,7 @@ body{accent-color:var(--theme-primary)}
 }
 .btn-ghost{
   background:var(--theme-card-bg,var(--theme-surface))!important;
-  color:var(--theme-primary)!important;border-color:var(--theme-primary)!important;
+  color:var(--brand-primary-text,var(--theme-primary))!important;border-color:var(--theme-primary)!important;
 }
 .inp,.plp-inp,input:not([type="color"]):not([type="checkbox"]):not([type="radio"]),
 select,textarea{
@@ -109,7 +112,7 @@ select,textarea{
   background:var(--theme-card-bg,var(--theme-surface))!important;
   color:var(--theme-muted)!important;
 }
-.pcard .heart:hover{color:var(--theme-accent)!important}
+.pcard .heart:hover{color:var(--brand-accent-text,var(--theme-accent))!important}
 .pcard .brand,.pcard .old,.pcard .rate span,
 .plp-count,.breadcrumb,.maker-region,
 .pinfo .topline,.sku-line,.pricebox .old,
@@ -121,7 +124,7 @@ select,textarea{
   color:var(--theme-text)!important;
 }
 .pcard .price .now,.pricebox .now,.totals .grand .v{
-  color:var(--theme-price,var(--theme-accent))!important;
+  color:var(--theme-price-text,var(--theme-price,var(--theme-accent)))!important;
 }
 .pill-disc{background:var(--theme-accent)!important}
 .pill-new{background:var(--theme-primary)!important}
@@ -141,18 +144,20 @@ select,textarea{
   border-color:var(--theme-border)!important;
 }
 .special-list>button,.promo-grid--strip .promo-overlay{color:var(--theme-text)!important}
-.feat .ic{background:var(--theme-page)!important;color:var(--theme-accent)!important}
+.feat .ic{background:var(--theme-page)!important;color:var(--brand-accent-text,var(--theme-accent))!important}
 .tile-circle-img,.tile-circle-img img{background:var(--theme-card-bg,var(--theme-surface))!important;border-color:var(--theme-border)!important}
 
 /* Palette-linked colored sections keep strong tones while their child cards
    follow the active card surface. */
 .rsec[data-bg-mode="palette"],
 .rsec[data-bg-mode="palette_pattern"]{
-  color:#fff;
+  color:var(--sfb-section-fg,#fff);
 }
-.rsec[data-bg-mode="palette"]>.section>.sec-head h2,
-.rsec[data-bg-mode="palette_pattern"]>.section>.sec-head h2{
-  color:#fff!important;
+/* Heading text follows the band's computed foreground. When the heading is a white pill (pattern bands,
+   `.rsec[data-pattern]>…>.sec-head h2` in home.css) the pill owns its colour — do not force band-white onto it. */
+.rsec[data-bg-mode="palette"]:not([data-pattern])>.section>.sec-head h2,
+.rsec[data-bg-mode="palette_pattern"]:not([data-pattern])>.section>.sec-head h2{
+  color:var(--sfb-section-fg,#fff)!important;
 }
 .rsec[data-bg-mode="palette"] .pcard,
 .rsec[data-bg-mode="palette_pattern"] .pcard{
@@ -175,10 +180,10 @@ select,textarea{
 }
 .size,.guarantee .g,.desc-text,.review p{color:var(--theme-text)!important}
 .tabline{border-color:var(--theme-border)!important}
-.tabline .t.active{color:var(--theme-primary)!important;border-color:var(--theme-primary)!important}
+.tabline .t.active{color:var(--brand-primary-text,var(--theme-primary))!important;border-color:var(--theme-primary)!important}
 /* Phase 5 Task 5 (PDT) — the PDP tabs/accordion moved off .tabline to the
    accordion-native .pdp-acc-header; keep the same theme-primary active color. */
-.pdp-acc-header.active{color:var(--theme-primary)!important;border-color:var(--theme-primary)!important}
+.pdp-acc-header.active{color:var(--brand-primary-text,var(--theme-primary))!important;border-color:var(--theme-primary)!important}
 
 /* Cart / checkout / account */
 .top,.stepper-bar{
@@ -186,13 +191,13 @@ select,textarea{
   color:var(--theme-text)!important;border-color:var(--theme-border)!important;
 }
 .step .num{background:var(--theme-page)!important;border-color:var(--theme-border)!important}
-.step.active,.top .back{color:var(--theme-primary)!important}
+.step.active,.top .back{color:var(--brand-primary-text,var(--theme-primary))!important}
 .step.active .num{background:var(--theme-primary)!important;color:var(--brand-primary-fg,#fff)!important}
 .rc input:checked + .rcb,.addr-card.is-default{
   background:var(--theme-page)!important;border-color:var(--theme-primary)!important;
 }
 .fg label{color:var(--theme-text)!important}
-.acc-stat b,.addr-actions button{color:var(--theme-primary)!important}
+.acc-stat b,.addr-actions button{color:var(--brand-primary-text,var(--theme-primary))!important}
 
 /* Footer is its own editable theme role. */
 .footer{
@@ -205,7 +210,7 @@ select,textarea{
 }
 .footer .news{background:var(--theme-primary)!important;color:var(--brand-primary-fg,#fff)!important}
 .footer .socials a,.footer .copy .pay span{
-  background:var(--theme-page)!important;color:var(--theme-primary)!important;
+  background:var(--theme-page)!important;color:var(--brand-primary-text,var(--theme-primary))!important;
 }
 
 /* Generic modals / overlays */
@@ -214,3 +219,44 @@ select,textarea{
   color:var(--theme-text)!important;
 }
 .modal .mhead{background:var(--theme-primary)!important;color:var(--brand-primary-fg,#fff)!important}
+
+/* Hero copy sits over an arbitrary merchant-uploaded image, so its legibility must not depend on the picture:
+   the copy block is a contained scrim panel (a deterministic worst-case bound — the panel keeps the text >= 4.5:1
+   over a pure-black AND a pure-white pixel). Only the text block is covered, never the whole image. */
+.hero-text{
+  color:#24252a;text-shadow:none;
+  background:rgba(255,255,255,.88);border-radius:var(--radius,8px);
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+}
+.hero-text h1{color:inherit}
+.hero-text p{color:#34363d;opacity:1}
+@media(max-width:680px){
+  .hero-text{color:#fff;background:rgba(18,20,26,.66)}
+  .hero-text p{color:#fff}
+}
+
+/* Hero tab strip: white labels over an arbitrary image. The strip is a scrim that is fully dark behind the labels
+   (>= 4.5:1 over a pure-white pixel) and fades only above them; labels use full colour, never element opacity. */
+.hero-tabs{background:linear-gradient(0deg,rgba(18,20,26,.78) 62%,rgba(18,20,26,0))}
+.hero-tabs button{color:#fff;opacity:1}
+
+/* Default keyboard focus ring for every storefront control: two-tone (text-colour outline + page-colour halo in the offset gap),
+   so it stays >= 3:1 on any surface the control sits on. Zero specificity (:where) — component rules may still refine it. */
+:where(body) :focus-visible{
+  outline:2px solid var(--focus-ink,#241c3a);outline-offset:2px;box-shadow:0 0 0 2px var(--focus-halo,#fff);
+}
+
+/* Footer text: layout.css / storefront_builder.css paint footer copy in fixed white (or a fixed lavender) because the
+   original footers were always dark, but the footer surface is a palette role (`--theme-footer-bg`, forced above), light for
+   many Ready Templates. (The `.gf` footer variants own their surface via `--gf-bg`/`--gf-ink` and are handled in
+   storefront_builder.css.) Every piece of footer text in the legacy `.footer` is therefore bound to the footer role's own accessible pair
+   (`--theme-footer-text` / `--theme-footer-muted-text`, derived server-side). Chips with their own background
+   (newsletter band, social buttons, payment chips) are excluded and keep their own fg/bg pair. */
+.footer :is(h4,h5,p,li,span,a,small,b,strong,address,div):not(.news *):not(.socials *):not(.pay *):not(.btn):not(button *){
+  color:var(--theme-footer-text,var(--theme-text));
+}
+.footer :is(.footer-brand-summary,.footer-address,.footer-working-hours,.copy,.gf-copy,.gf-working-hours,.gf-brand-description,.gf-contact-address,.gf-contact-address *,.footer-credibility-copy span,small):not(.news *):not(.socials *):not(.pay *){
+  color:var(--theme-footer-muted-text,var(--theme-footer-text,var(--theme-text)));
+}
+.footer a:hover{color:var(--theme-footer-text,var(--theme-text));text-decoration:underline}
+

@@ -51,7 +51,7 @@
 .sec-head h2 .bar{width:3px;height:17px;border-radius:1px;background:#111}
 .sec-head .more{color:#333;font-weight:700;font-size:10.5px;display:flex;align-items:center;gap:5px}
 .sec-head .more svg{width:16px;height:16px}
-.sec-head .btn,.product-section .sec-head .btn{height:23px;min-height:23px;padding:0 9px;border-radius:999px;background:#fff;border:1px solid #e3e5e9;color:#ef4760;font-weight:700;box-shadow:none;font-size:10px}
+.sec-head .btn,.product-section .sec-head .btn{height:23px;min-height:23px;padding:0 9px;border-radius:999px;background:#fff;border:1px solid #e3e5e9;color:#c63b50;font-weight:700;box-shadow:none;font-size:10px}
 /* Group C2.5 follow-up (raised by this fix's own independent review):
    `html[data-sfb-density="compact"] .sec-head .btn` had no compact-
    density override at all here — unlike `font-size` on `.sec-head h2`
@@ -75,9 +75,9 @@ html[data-sfb-density="compact"] .product-section .sec-head .btn{font-size:9.4px
    passes, which win over the plain @680px override at compact density
    regardless of source order). */
 .rsec[data-pattern]>.section>.sec-head{margin-bottom:7px;align-items:center}
-.rsec[data-pattern]>.section>.sec-head h2{width:max-content;max-width:75%;padding:4px 10px;border-radius:999px;background:#fff;color:#ef4760;font-size:11.4px;line-height:1.4;font-weight:800;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.rsec[data-pattern]>.section>.sec-head h2{width:max-content;max-width:75%;padding:4px 10px;border-radius:999px;background:#fff;color:#c63b50;font-size:11.4px;line-height:1.4;font-weight:800;box-shadow:0 1px 3px rgba(0,0,0,.05)}
 .rsec[data-pattern]>.section>.sec-head h2 .bar{display:none;background:#ff5a72}
-.rsec[data-pattern]>.section>.sec-head .btn{height:21px;min-height:21px;padding-inline:8px;font-size:9.4px;background:rgba(255,255,255,.96);color:#ef4760;border-color:#fff}
+.rsec[data-pattern]>.section>.sec-head .btn{height:21px;min-height:21px;padding-inline:8px;font-size:9.4px;background:rgba(255,255,255,.96);color:#c63b50;border-color:#fff}
 @media(max-width:680px){
   .rsec[data-pattern]>.section>.sec-head h2{font-size:11px}
 }
@@ -139,22 +139,23 @@ html[data-sfb-card-hover="none"] .pcard:hover .img .emo{transform:none}
 html[data-sfb-card-hover="zoom"] .pcard:hover{transform:none}
 html[data-sfb-card-hover="zoom"] .pcard:hover .img .emo{transform:scale(1.16)}
 .pcard .heart{position:absolute;top:10px;left:10px;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.9);display:grid;place-items:center;color:var(--muted);transition:.15s;backdrop-filter:blur(2px)}
-.pcard .heart:hover{color:var(--pink);background:#fff}
-.pcard .heart.on{color:var(--pink)}
+.pcard .heart:hover{color:var(--pink-text,var(--pink));background:#fff}
+.pcard .heart.on{color:var(--pink-text,var(--pink))}
 .pcard .heart svg{width:17px;height:17px}
 .pcard .badges{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
 .pill{font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:8px}
-.pill-disc{background:var(--pink);color:#fff}
-.pill-new{background:var(--violet);color:#fff}
-.pill-hot{background:var(--amber);color:#fff}
-.pill-outofstock{background:var(--muted);color:#fff}
-.pcard.out-of-stock .img{opacity:.6}
+.pill-disc{background:var(--pink);color:var(--on-pink,#fff)}
+.pill-new{background:var(--violet);color:var(--on-violet,#fff)}
+.pill-hot{background:var(--amber);color:#2b1a00}
+.pill-outofstock{background:var(--muted);color:var(--on-muted,#fff)}
+/* dim the picture only: opacity on the whole .img also faded the badges laid over it (white-on-translucent, ~1.7:1) */
+.pcard.out-of-stock .img :is(img,picture,video){opacity:.6}
 .pcard .addbar{position:absolute;left:0;right:0;bottom:0;transform:translateY(100%);transition:.25s;padding:10px}
 .pcard:hover .addbar{transform:none}
 .pcard.quickadd-hover-fade .addbar{transform:none;opacity:0;transition:opacity .25s}
 .pcard.quickadd-hover-fade:hover .addbar{opacity:1}
 .pcard.quickadd-always .addbar{transform:none;opacity:1}
-.pcard .addbar button{width:100%;background:linear-gradient(135deg,var(--violet),var(--violet-3));color:#fff;height:38px;border-radius:10px;font-weight:700;font-size:12.5px;display:flex;align-items:center;justify-content:center;gap:7px}
+.pcard .addbar button{width:100%;background:linear-gradient(135deg,var(--violet),var(--gradient-end,var(--violet-3)));color:var(--on-gradient,#fff);height:38px;border-radius:10px;font-weight:700;font-size:12.5px;display:flex;align-items:center;justify-content:center;gap:7px}
 .pcard .addbar button svg{width:16px;height:16px}
 .pcard .body{padding:13px 14px 15px;display:flex;flex-direction:column;gap:7px;flex:1}
 html[data-sfb-density="compact"] .pcard .body{padding:8px 10px 10px;gap:4px}
@@ -259,7 +260,7 @@ html[data-sfb-density="relaxed"] .pcard .body{padding:18px 18px 20px;gap:10px}
   min-height:94px;
   text-align:right;
 }
-.pcard.style-compact .brand{font-size:9.5px;color:#8b8f97;min-height:14px}
+.pcard.style-compact .brand{font-size:9.5px;color:#6b6e75;min-height:14px}
 .pcard.style-compact .name{
   font-size:11.5px;
   line-height:1.75;
@@ -278,7 +279,7 @@ html[data-sfb-density="relaxed"] .pcard .body{padding:18px 18px 20px;gap:10px}
 }
 .pcard.style-compact .price .now{font-size:12px;font-weight:600;color:#26292f}
 .pcard.style-compact .price .now small{font-size:8px}
-.pcard.style-compact .price .old{font-size:9px;margin-inline-start:3px;color:#9ca0a8}
+.pcard.style-compact .price .old{font-size:9px;margin-inline-start:3px;color:#6c6e74}
 .pcard.style-compact .compact-actions{
   min-height:34px;
   display:flex;
@@ -305,7 +306,7 @@ html[data-sfb-density="relaxed"] .pcard .body{padding:18px 18px 20px;gap:10px}
   grid-template-columns:27px 26px 27px;
   align-items:center;
   border:1px solid #e2e4e8;
-  color:#8a8e95;
+  color:#6b6f74;
   border-radius:2px;
   font-size:11px;
   background:#f8f9fa;
@@ -409,8 +410,8 @@ html[data-sfb-density="compact"] .pcarousel{--pcarousel-gap:8px}
 .pcard.style-compact .price{padding-top:2px;min-height:23px}
 .pcard.style-compact .price .now{font-size:10.5px;font-weight:700}.pcard.style-compact .price .old{font-size:8px}
 .pcard.style-compact .compact-actions{min-height:31px;padding:0 8px 7px;gap:4px}
-.pcard.style-compact .compact-cart{width:29px;height:26px;background:#17a94d;color:#fff;border-color:#17a94d;border-radius:2px}
-.pcard.style-compact .compact-cart:hover{background:#128c40;border-color:#128c40}
+.pcard.style-compact .compact-cart{width:29px;height:26px;background:var(--green);color:#fff;border-color:var(--green);border-radius:2px}
+.pcard.style-compact .compact-cart:hover{background:#0e6b30;border-color:#0e6b30}
 .pcard.style-compact .compact-qty{height:26px;grid-template-columns:24px 24px 24px;font-size:9px;background:#f8f9fa}
 .pcard.style-compact .pill{font-size:8px;padding:3px 6px}
 .rsec[data-pattern] .pcard.style-compact{border-color:rgba(255,255,255,.82);box-shadow:none}
@@ -426,7 +427,7 @@ html[data-sfb-density="compact"] .pcarousel{--pcarousel-gap:8px}
 .pcard.style-compact .compact-cart{
   width:auto;min-width:58px;height:25px;padding:0 8px;border-radius:999px;
   display:inline-flex;align-items:center;justify-content:center;gap:4px;
-  background:#19a94f;color:#fff;border-color:#19a94f;
+  background:var(--green);color:#fff;border-color:var(--green);
   font-size:8.2px;font-weight:800;white-space:nowrap;
 }
 .pcard.style-compact .compact-cart svg{width:11px;height:11px;flex:none}
@@ -524,7 +525,7 @@ html[data-sfb-density="compact"] .pcarousel{--pcarousel-gap:8px}
 .pcard.style-beauty_retail .stars{font-size:9px}
 .pcard.style-beauty_retail .price{border-top:0;padding-top:1px;min-height:31px}
 .pcard.style-beauty_retail .price .now{
-  color:var(--violet);font-size:12.5px;font-weight:850;
+  color:var(--violet-text,var(--violet));font-size:12.5px;font-weight:850;
   display:flex;align-items:baseline;gap:5px;flex-wrap:wrap
 }
 .pcard.style-beauty_retail .price .old{font-size:9.5px;color:var(--muted);font-weight:500}
@@ -550,7 +551,7 @@ html[data-sfb-density="compact"] .pcarousel{--pcarousel-gap:8px}
    companions for this card style (a palette-background variant and a
    plain one), previously unmirrored (found by this fix's own review). */
 .rsec[data-bg-mode="palette"]:has(.pcard.style-beauty_retail) .sec-head h2{color:#fff}
-.rsec[data-bg-mode="palette"]:has(.pcard.style-beauty_retail) .sec-head .btn{background:#fff;border-color:#fff;color:var(--violet)}
+.rsec[data-bg-mode="palette"]:has(.pcard.style-beauty_retail) .sec-head .btn{background:#fff;border-color:#fff;color:var(--violet-text,var(--violet))}
 .product-section:has(.pcard.style-beauty_retail) .sec-head{margin-bottom:10px}
 .product-section:has(.pcard.style-beauty_retail) .sec-head h2{font-size:15px}
 .product-section:has(.pcard.style-beauty_retail) .sec-head h2 .bar{background:var(--violet);height:17px;width:3px}
@@ -609,7 +610,7 @@ html[data-sfb-density="compact"] .pcarousel{--pcarousel-gap:8px}
   -webkit-line-clamp:2;
 }
 .pcard.style-retail_list .price{padding-top:0;border-top:0;min-height:22px}
-.pcard.style-retail_list .price .now{font-size:11.5px;font-weight:800;color:var(--violet)}
+.pcard.style-retail_list .price .now{font-size:11.5px;font-weight:800;color:var(--violet-text,var(--violet))}
 .pcard.style-retail_list .price .old{font-size:9px}
 .pcard.style-retail_list .badges{top:5px;right:5px}
 .pcard.style-retail_list .pill{font-size:8px;padding:3px 5px}
@@ -627,12 +628,12 @@ html[data-sfb-density="compact"] .pcarousel{--pcarousel-gap:8px}
 .pcard.style-chocolate_retail .badges{top:8px;right:8px;left:auto}
 .pcard.style-chocolate_retail .pill-disc{background:#7B4518;color:#fff}
 .pcard.style-chocolate_retail .body{padding:10px 11px 7px;gap:4px;min-height:114px;text-align:right}
-.pcard.style-chocolate_retail .brand{font-size:9px;color:#8a8178}
+.pcard.style-chocolate_retail .brand{font-size:9px;color:#756d66}
 .pcard.style-chocolate_retail .name{font-size:11.5px;line-height:1.65;height:38px;color:#2b2520}
 .pcard.style-chocolate_retail .rate{font-size:9px}
 .pcard.style-chocolate_retail .price{border-top:0;padding-top:2px;min-height:30px}
 .pcard.style-chocolate_retail .price .now{color:#2b2520;font-size:12.5px;font-weight:800}
-.pcard.style-chocolate_retail .price .old{font-size:9px;color:#8a8178}
+.pcard.style-chocolate_retail .price .old{font-size:9px;color:#756d66}
 .pcard.style-chocolate_retail .chocolate-actions{position:relative;z-index:3;padding:0 11px 11px}
 .pcard.style-chocolate_retail .chocolate-cart{width:100%;min-height:34px;display:flex;align-items:center;justify-content:center;border:0;border-radius:999px;background:#7B4518;color:#fff;font:inherit;font-size:10px;font-weight:800;cursor:pointer;text-decoration:none}
 .pcard.style-chocolate_retail .chocolate-cart:hover{background:#663811}
@@ -658,10 +659,10 @@ html[data-sfb-density="compact"] .pcarousel{--pcarousel-gap:8px}
 .pcard.style-luxury_dark:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--theme-primary,#d4af37) 54%,var(--theme-border,#3a3218));box-shadow:0 16px 36px rgba(0,0,0,.28)}
 .pcard.style-luxury_dark .img{background:linear-gradient(145deg,#1a1813,#0d0d0d)!important;overflow:hidden}.pcard.style-luxury_dark .img:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,transparent 62%,rgba(0,0,0,.16))}
 .pcard.style-luxury_dark .cover-photo,.pcard.style-luxury_dark .cover-photo-2{object-fit:contain!important;padding:8px}
-.pcard.style-luxury_dark .body{padding:11px 12px 9px;gap:5px}.pcard.style-luxury_dark .brand{color:var(--theme-muted,#c6b86a);font-size:9.5px}.pcard.style-luxury_dark .name{color:var(--theme-text,#f8f1cf);font-size:12px;line-height:1.7;height:40px}.pcard.style-luxury_dark .price{border-color:color-mix(in srgb,var(--theme-border,#3a3218) 80%,transparent)}.pcard.style-luxury_dark .price .now{color:var(--theme-price,#ffd54a);font-weight:850}.pcard.style-luxury_dark .price .old{color:var(--theme-muted,#9d9060)}
+.pcard.style-luxury_dark .body{padding:11px 12px 9px;gap:5px}.pcard.style-luxury_dark .brand{color:var(--theme-muted,#c6b86a);font-size:9.5px}.pcard.style-luxury_dark .name{color:var(--theme-text,#f8f1cf);font-size:12px;line-height:1.7;height:40px}.pcard.style-luxury_dark .price{border-color:color-mix(in srgb,var(--theme-border,#3a3218) 80%,transparent)}.pcard.style-luxury_dark .price .now{color:var(--theme-price-text,var(--theme-price,#ffd54a));font-weight:850}.pcard.style-luxury_dark .price .old{color:var(--theme-muted,#9d9060)}
 .pcard.style-luxury_dark .heart{background:rgba(10,10,10,.78);border-color:color-mix(in srgb,var(--theme-primary,#d4af37) 24%,transparent);color:var(--theme-text,#f8f1cf);backdrop-filter:blur(6px)}.pcard.style-luxury_dark .pill{border-radius:999px}.pcard.style-luxury_dark .pill-disc{background:var(--theme-accent,#f59e0b);color:#080603}
 .pcard.style-luxury_dark .addbar{position:absolute;left:10px;right:auto;bottom:10px;width:auto;padding:0;opacity:1;transform:none;background:transparent}.pcard.style-luxury_dark .addbar button{width:36px;height:36px;padding:0;border-radius:10px;background:linear-gradient(135deg,var(--theme-primary,#d4af37),var(--theme-accent,#f59e0b));color:#090703;font-size:0;font-weight:900;box-shadow:0 6px 18px rgba(0,0,0,.28)}.pcard.style-luxury_dark .addbar button svg{width:17px;height:17px}
-.product-section:has(.pcard.style-luxury_dark) .sec-head h2{color:var(--theme-text,#f8f1cf)}.product-section:has(.pcard.style-luxury_dark) .sec-head h2 .bar{background:var(--theme-primary,#d4af37)}.product-section:has(.pcard.style-luxury_dark) .sec-head .btn{border-color:var(--theme-border,#3a3218);color:var(--theme-primary,#d4af37);background:var(--theme-card-bg,#171717)}
+.product-section:has(.pcard.style-luxury_dark) .sec-head h2{color:var(--theme-text,#f8f1cf)}.product-section:has(.pcard.style-luxury_dark) .sec-head h2 .bar{background:var(--theme-primary,#d4af37)}.product-section:has(.pcard.style-luxury_dark) .sec-head .btn{border-color:var(--theme-border,#3a3218);color:var(--brand-primary-text,var(--theme-primary,#d4af37));background:var(--theme-card-bg,#171717)}
 @media(max-width:680px){.pcard.style-luxury_dark{border-radius:14px}.pcard.style-luxury_dark .body{padding:8px 9px 7px}.pcard.style-luxury_dark .name{font-size:10.5px;height:34px}.pcard.style-luxury_dark .addbar{left:7px;bottom:7px}.pcard.style-luxury_dark .addbar button{width:32px;height:32px}.pcard.style-luxury_dark .cover-photo,.pcard.style-luxury_dark .cover-photo-2{padding:5px}}
 
 /* A8 reusable card vocabulary. These selectors only shape presentation;
@@ -677,7 +678,7 @@ html[data-sfb-density="compact"] .pcarousel{--pcarousel-gap:8px}
 .pcard.style-marketplace_price .price,
 .pcard.style-price_first .price{border-top:0;padding-top:2px}
 .pcard.style-marketplace_price .price .now,
-.pcard.style-price_first .price .now{font-size:clamp(14px,1.4vw,18px);color:var(--theme-price,var(--theme-primary,#6848ff))}
+.pcard.style-price_first .price .now{font-size:clamp(14px,1.4vw,18px);color:var(--theme-price-text,var(--theme-price,var(--theme-primary,#6848ff)))}
 .pcard.style-price_first .body{display:grid;grid-template-areas:"price" "name" "brand" "rate"}
 .pcard.style-price_first .price{grid-area:price;margin:0}.pcard.style-price_first .name{grid-area:name}.pcard.style-price_first .brand{grid-area:brand}.pcard.style-price_first .rate{grid-area:rate}
 
@@ -736,7 +737,7 @@ html[data-sfb-density="compact"] .pcarousel{--pcarousel-gap:8px}
   background:var(--theme-card-bg,#111827);color:var(--theme-text,#f8fafc);
   border-color:var(--theme-primary,#22d3ee);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--theme-primary,#22d3ee) 22%,transparent),0 0 24px color-mix(in srgb,var(--theme-primary,#22d3ee) 16%,transparent);
 }
-.pcard.style-tech_neon .name{color:inherit}.pcard.style-tech_neon .price .now{color:var(--theme-primary,#22d3ee)}
+.pcard.style-tech_neon .name{color:inherit}.pcard.style-tech_neon .price .now{color:var(--brand-primary-text,var(--theme-primary,#22d3ee))}
 .pcard.style-tech_neon .price{border-color:color-mix(in srgb,var(--theme-primary,#22d3ee) 34%,transparent)}
 
 .pcard.style-bold_outline{border:3px solid var(--theme-text,#161822);border-radius:0;box-shadow:6px 6px 0 var(--theme-primary,var(--violet));transform:none}
@@ -778,7 +779,7 @@ html[data-sfb-density="compact"] .pcarousel{--pcarousel-gap:8px}
 .pcard:hover .pcard-qv-trigger,
 .pcard-qv-trigger:focus-visible{opacity:1;transform:none}
 .pcard-qv-trigger svg{width:16px;height:16px}
-.pcard-qv-trigger:focus-visible{outline:2px solid var(--theme-primary,var(--violet));outline-offset:2px}
+.pcard-qv-trigger:focus-visible{outline:2px solid var(--focus-ink);outline-offset:2px;box-shadow:0 0 0 2px var(--focus-halo)}
 
 .pcard-qv-backdrop{
   position:fixed;inset:0;z-index:1000;
@@ -813,7 +814,7 @@ html[dir="ltr"] .pcard-qv-dialog{transform:translate(-50%,-50%)}
 .pcard-qv-actions{margin-block-start:auto;display:flex;flex-direction:column;gap:8px}
 .pcard-qv-add{
   border:0;border-radius:10px;padding:12px 14px;cursor:pointer;font:inherit;font-weight:700;
-  background:var(--theme-primary,var(--violet));color:#fff;
+  background:var(--theme-primary,var(--violet));color:var(--on-violet,#fff);
 }
 .pcard-qv-detail{
   text-align:center;text-decoration:none;padding:10px 14px;border-radius:10px;

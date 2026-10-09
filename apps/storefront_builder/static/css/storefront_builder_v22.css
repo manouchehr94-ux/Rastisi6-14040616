@@ -40,7 +40,7 @@
   display:flex;align-items:center;gap:3px;background:#f0f1f5;padding:3px;border-radius:10px;
 }
 .sfb-v22-mode-switch button{
-  border:0;background:transparent;color:#707787;border-radius:8px;padding:6px 12px;
+  border:0;background:transparent;color:#686e7d;border-radius:8px;padding:6px 12px;
   font-size:12px;font-weight:800;cursor:pointer;
 }
 .sfb-v22-mode-switch button.active{
@@ -184,9 +184,9 @@
 .sfb-v22-deep-back{border:1px solid #e1e3ea;background:#fff;border-radius:9px;padding:7px 11px;font:inherit;font-size:12px;font-weight:800;cursor:pointer}
 .sfb-v22-deep-title{display:flex;flex-direction:column;min-width:0}
 .sfb-v22-deep-title strong{font-size:14px;color:#171925}
-.sfb-v22-deep-title small{font-size:10.5px;color:#808696}
+.sfb-v22-deep-title small{font-size:10.5px;color:#6a6e7c}
 .sfb-v22-deep-frame{width:100%;height:calc(100vh - 58px);border:0;background:#fff;flex:1}
-.sfb-v22-entry-hint{font-size:11px;color:#777f90;margin-inline-start:6px}
+.sfb-v22-entry-hint{font-size:11px;color:#686e7d;margin-inline-start:6px}
 
 .sfb-v22-focus-target{
   outline:3px solid rgba(104,72,255,.28) !important;outline-offset:4px;border-radius:10px;

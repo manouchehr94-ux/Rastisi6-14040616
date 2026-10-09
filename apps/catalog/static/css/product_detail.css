@@ -3,7 +3,7 @@
   (بخش PRODUCT PAGE) تا وفاداری بصری کامل حفظ شود.
 */
 .breadcrumb{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);padding:18px 0;flex-wrap:wrap}
-.breadcrumb a:hover{color:var(--violet)}
+.breadcrumb a:hover{color:var(--violet-text,var(--violet))}
 .breadcrumb svg{width:13px;height:13px;opacity:.6}
 .pdp{display:grid;grid-template-columns:1fr 1fr;gap:34px;align-items:start;padding-bottom:10px}
 .gallery{position:sticky;top:140px}
@@ -18,11 +18,11 @@
 .pinfo h1{font-size:21px;font-weight:800;line-height:1.7;margin-bottom:12px}
 .pinfo .topline{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:16px;font-size:12.5px;color:var(--muted)}
 .pinfo .topline .brand{display:flex;align-items:center;gap:6px;font-weight:700;color:var(--ink)}
-.pinfo .topline .brand svg{width:15px;height:15px;color:var(--violet)}
+.pinfo .topline .brand svg{width:15px;height:15px;color:var(--violet-text,var(--violet))}
 .pinfo .topline .rate{display:flex;align-items:center;gap:5px}
 .pinfo .mini-acts{margin-right:auto;display:flex;gap:6px}
 .pinfo .mini-acts button{display:flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:10px;padding:6px 11px;font-size:11.5px;font-weight:600;color:var(--muted);transition:.15s}
-.pinfo .mini-acts button:hover{color:var(--pink);border-color:var(--pink)}
+.pinfo .mini-acts button:hover{color:var(--pink-text,var(--pink));border-color:var(--pink)}
 .pinfo .mini-acts button svg{width:15px;height:15px}
 .opt-block{margin-bottom:16px}
 .opt-block .lbl{font-size:13px;font-weight:700;margin-bottom:9px}
@@ -33,14 +33,14 @@
 .sizes{display:flex;gap:9px;flex-wrap:wrap}
 .size{min-width:46px;height:40px;border:1.5px solid var(--line);border-radius:11px;font-size:13px;font-weight:700;color:#4b4560;transition:.15s;padding:0 12px}
 .size:hover{border-color:var(--violet-3)}
-.size.active{border-color:var(--violet);background:var(--violet-soft);color:var(--violet)}
+.size.active{border-color:var(--violet);background:var(--violet-soft);color:var(--violet-text,var(--violet))}
 .swatch.unavailable,.size.unavailable{opacity:.35;cursor:not-allowed;position:relative}
 .swatch.unavailable::after{content:"";position:absolute;inset:0;border-radius:50%;background:linear-gradient(to top right,transparent 46%,#9993 48%,#9993 52%,transparent 54%)}
 .size.unavailable{text-decoration:line-through}
 .sku-line{font-size:11.5px;color:var(--muted);margin-top:4px}
 .pricebox{background:var(--violet-softer);border:1px solid var(--line);border-radius:18px;padding:18px;margin:6px 0 16px}
 .pricebox .row1{display:flex;align-items:center;gap:10px;margin-bottom:8px}
-.pricebox .save{background:var(--pink-soft);color:var(--pink);font-size:11.5px;font-weight:800;padding:4px 10px;border-radius:8px}
+.pricebox .save{background:var(--pink-soft);color:var(--pink-text,var(--pink));font-size:11.5px;font-weight:800;padding:4px 10px;border-radius:8px}
 .pricebox .old{color:var(--muted);text-decoration:line-through;font-size:13px}
 .pricebox .now{font-size:26px;font-weight:900}
 .pricebox .now small{font-size:13px;font-weight:600;color:var(--muted)}
@@ -49,14 +49,14 @@
 .qty{display:flex;align-items:center;gap:14px;margin-bottom:16px}
 .qty .lbl{font-size:13px;font-weight:700}
 .stepper{display:flex;align-items:center;border:1.5px solid var(--line);border-radius:12px;overflow:hidden}
-.stepper button{width:40px;height:40px;font-size:18px;color:var(--violet);font-weight:800}
+.stepper button{width:40px;height:40px;font-size:18px;color:var(--violet-text,var(--violet));font-weight:800}
 .stepper button:hover{background:var(--violet-softer)}
 .stepper input{width:46px;height:40px;text-align:center;border:0;outline:0;font-weight:800;font-size:15px;background:transparent}
 .pdp-actions{display:flex;gap:10px;margin-bottom:18px}
 .pdp-actions .btn-primary{flex:1;height:50px;font-size:15px}
-.pdp-actions .btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.pdp-actions .btn-primary:disabled{background:var(--disabled-bg,#e5e7eb);color:var(--disabled-ink,#6b7280);border-color:var(--disabled-bg,#e5e7eb);box-shadow:none;filter:none;cursor:not-allowed}
 .pdp-actions .wish{width:50px;height:50px;border:1.5px solid var(--line);border-radius:12px;display:grid;place-items:center;color:var(--muted);transition:.15s}
-.pdp-actions .wish:hover,.pdp-actions .wish.on{color:var(--pink);border-color:var(--pink)}
+.pdp-actions .wish:hover,.pdp-actions .wish.on{color:var(--pink-text,var(--pink));border-color:var(--pink)}
 .pdp-actions .wish svg{width:21px;height:21px}
 .guarantee{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .guarantee .g{border:1px solid var(--line);border-radius:13px;padding:12px;text-align:center;font-size:11.5px;font-weight:600;color:#4b4560}
@@ -75,7 +75,7 @@
   border:0;border-bottom:2.5px solid transparent;white-space:nowrap;
   background:transparent;cursor:pointer;
 }
-.pdp-acc-header.active{color:var(--violet);border-color:var(--violet)}
+.pdp-acc-header.active{color:var(--violet-text,var(--violet));border-color:var(--violet)}
 /* The shared tablist underline: a full-width row rule under the header row. */
 .pdp-tabs::after{content:"";order:1;flex:0 0 100%;height:0;border-bottom:2px solid var(--line);margin-bottom:20px}
 .pdp-tab-panel{order:2;flex:0 0 100%}
@@ -102,7 +102,7 @@
 .spec-table td:first-child{color:var(--muted);font-weight:600;width:38%}
 .review-sum{display:grid;grid-template-columns:240px 1fr;gap:30px;align-items:center;background:var(--violet-softer);border-radius:18px;padding:24px;margin-bottom:22px}
 .review-sum .big{text-align:center}
-.review-sum .big b{font-size:46px;font-weight:900;color:var(--violet);display:block;line-height:1}
+.review-sum .big b{font-size:46px;font-weight:900;color:var(--violet-text,var(--violet));display:block;line-height:1}
 .review-sum .big .stars{font-size:18px;margin:6px 0}
 .review-sum .big small{color:var(--muted);font-size:12px}
 .rbar{display:flex;align-items:center;gap:10px;font-size:12px;margin-bottom:7px}
@@ -110,7 +110,7 @@
 .rbar .track i{display:block;height:100%;background:var(--amber);border-radius:6px}
 .review{border:1px solid var(--line);border-radius:16px;padding:16px 18px;margin-bottom:14px}
 .review .head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
-.review .av{width:40px;height:40px;border-radius:50%;background:var(--violet-soft);color:var(--violet);display:grid;place-items:center;font-weight:800}
+.review .av{width:40px;height:40px;border-radius:50%;background:var(--violet-soft);color:var(--violet-text,var(--violet));display:grid;place-items:center;font-weight:800}
 .review .head b{font-size:13px;display:block}
 .review .head small{color:var(--muted);font-size:11px}
 .review .head .stars{margin-right:auto}
@@ -142,7 +142,7 @@
 .pdp-video-ig-icon{font-size:32px}
 .pdp-video-ig-cta{font-size:12.5px;font-weight:700;background:rgba(255,255,255,.18);padding:6px 14px;border-radius:999px}
 .pdp-video-meta{display:flex;align-items:center;gap:8px;padding:10px 14px;flex-wrap:wrap}
-.pdp-video-badge{font-size:11px;font-weight:700;color:var(--violet);background:var(--violet-softer);padding:3px 10px;border-radius:999px}
+.pdp-video-badge{font-size:11px;font-weight:700;color:var(--violet-text,var(--violet));background:var(--violet-softer);padding:3px 10px;border-radius:999px}
 .pdp-video-title{font-size:12.5px;color:#4b4560;font-weight:600}
 
 /* ========================================================================
@@ -264,7 +264,7 @@
   .pdp-satc-now{font-size:16px;font-weight:900;color:var(--ink);white-space:nowrap}
   .pdp-satc-old{font-size:11.5px;color:var(--muted);text-decoration:line-through;white-space:nowrap}
   .pdp-satc-btn{flex:1;min-width:0;height:48px;font-size:15px}
-  .pdp-satc-btn:disabled{opacity:.5;cursor:not-allowed}
+  .pdp-satc-btn:disabled{background:var(--disabled-bg,#e5e7eb);color:var(--disabled-ink,#6b7280);border-color:var(--disabled-bg,#e5e7eb);box-shadow:none;filter:none;cursor:not-allowed}
   /* Bottom content reserve on the WHOLE-PDP content container (covers every
      PDP section, not just product_main), added only when a SATC is present on
      the page. Real scrollable height (padding-bottom) so the genuine final
