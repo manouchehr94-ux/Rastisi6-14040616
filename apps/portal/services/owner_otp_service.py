@@ -3,6 +3,7 @@
 محدودیت‌ها (مطابق §3.19، و هم‌راستا با ``apps.sms.services.otp_service``ی
 موجود برایِ مشتری):
 * انقضایِ کوتاه (۲ دقیقه)
+* فاصله‌یِ الزامیِ ارسالِ دوباره (۲ دقیقه) — **سمتِ سرور** و به‌ازایِ (شماره، هدف)
 * حداکثر تعداد درخواستِ کد در بازه، هم به‌ازایِ شماره هم به‌ازایِ IP
 * حداکثر تعداد تلاشِ تأییدِ هر کد
 * تک‌مصرفی (replay-proof)
@@ -11,6 +12,7 @@
 
 import enum
 import logging
+import math
 import secrets
 from datetime import datetime, timedelta, timezone as dt_timezone
 
@@ -33,10 +35,14 @@ PHONE_REQUEST_WINDOW_SECONDS = 600
 MAX_VERIFY_ATTEMPTS = 5
 IP_MAX_REQUESTS = 10
 IP_REQUEST_WINDOW_SECONDS = 600
-#: صرفاً برایِ UX (شمارش‌معکوسِ دکمه‌ی «ارسال دوباره»). هیچ اثرِ امنیتی ندارد؛
-#: سقفِ واقعی همان ``MAX_REQUESTS_PER_PHONE_WINDOW``/``IP_MAX_REQUESTS`` است که
-#: سمتِ سرور اعمال می‌شود.
-RESEND_UX_COOLDOWN_SECONDS = 30
+#: **تنها مرجعِ** فاصله‌یِ ارسالِ دوباره (ثانیه) — سمتِ سرور اعمال می‌شود (:func:`request_otp`
+#: زیرِ همان قفلِ (شماره، هدف))، و شمارشِ معکوسِ صفحه (:func:`resend_timing`) و پیامِ خطا هم از
+#: همین مقدار می‌آیند؛ هیچ ``120``ِ دومی در view/template/JS نیست. عمداً برابرِ عمرِ کد است:
+#: کاربر دقیقاً وقتی کدِ جدید می‌گیرد که کدِ قبلی منقضی می‌شود.
+RESEND_COOLDOWN_SECONDS = OTP_TTL_SECONDS
+#: ردیفِ «در-جریان» (هنوز تحویل‌نشده) فقط تا این مدت مانعِ درخواستِ تازه است؛ ردیفِ قدیمی‌تر ماندهٔ یک
+#: worker/پروسه‌یِ ازبین‌رفته (مثلاً ``SystemExit``) است، هرگز قابلِ تأیید نیست و نباید کاربر را قفل کند.
+IN_FLIGHT_GRACE_SECONDS = 30
 
 
 class OtpCheckResult(enum.Enum):
@@ -51,6 +57,15 @@ class OtpCheckResult(enum.Enum):
 
 class OtpRateLimitError(Exception):
     """تعداد درخواست/تلاشِ کد برای این شماره یا IP بیش از حد مجاز است."""
+
+
+class OtpCooldownError(OtpRateLimitError):
+    """هنوز فاصله‌یِ ارسالِ دوبارهٔ همین (شماره، هدف) تمام نشده است؛ ``retry_after`` ثانیه‌یِ باقی‌مانده.
+    زیرکلاسِ ``OtpRateLimitError`` است تا همه‌یِ callerهایِ فعلی آن را خطایِ کنترل‌شده نشان دهند."""
+
+    def __init__(self, retry_after: int):
+        self.retry_after = max(1, int(retry_after))
+        super().__init__(f"برای دریافتِ کدِ جدید {self.retry_after} ثانیه‌یِ دیگر صبر کنید.")
 
 
 class OtpInvalidError(Exception):
@@ -105,6 +120,31 @@ def _lock_phone_purpose(phone: str, purpose: str) -> None:
             )
 
 
+def resend_cooldown_remaining(phone: str, purpose: str, *, now=None) -> int:
+    """ثانیه‌هایِ باقی‌مانده تا مجاز شدنِ درخواستِ تازه برای این (شماره، هدف)؛ ``0`` یعنی آزاد.
+
+    **مرجعِ واحد** برایِ سرور (:func:`request_otp`) و UX (:func:`resend_timing`). مبنا: *تازه‌ترین*
+    چالشِ این (شماره، هدف) — اگر مصرف نشده باشد (کدِ تأییدشده/مصرف‌شده هرگز مانعِ ورودِ بعدی
+    نیست) و ``created_at``اش (لحظه‌یِ پذیرشِ درخواست، که هرگز دیرتر از شمارشِ معکوسِ نشست
+    نیست) هنوز در بازه‌یِ ``RESEND_COOLDOWN_SECONDS`` باشد. ردیفِ «در-جریان» هم می‌شمارد (دو
+    کلیکِ هم‌زمان دو پیامک نمی‌سازد)؛ ردیفی که تحویلش شکست خورده حذف می‌شود، پس هرگز قفلی
+    نمی‌سازد."""
+    now = now or timezone.now()
+    latest = None
+    for row in OwnerOtpChallenge.objects.filter(phone=phone, purpose=purpose).order_by("-pk")[:5]:
+        stale_in_flight = (
+            row.expires_at == PENDING_EXPIRES_AT
+            and (now - row.created_at).total_seconds() > IN_FLIGHT_GRACE_SECONDS
+        )
+        if not stale_in_flight:
+            latest = row
+            break
+    if latest is None or latest.consumed_at is not None:
+        return 0
+    age = (now - latest.created_at).total_seconds()
+    return max(0, math.ceil(RESEND_COOLDOWN_SECONDS - age))
+
+
 def charge_ip_budget(*, purpose: str, client_ip: str) -> None:
     """Spend one unit of the per-IP OTP-request budget (shared rate-limit store, fail-closed).
 
@@ -122,6 +162,12 @@ def charge_ip_budget(*, purpose: str, client_ip: str) -> None:
         # Fail closed: no code is created and no SMS is sent while the shared throttle store is down
         # (an SMS-pumping/brute-force control must not vanish).
         raise OtpDeliveryError(UNAVAILABLE_MESSAGE) from exc
+
+
+def _enforce_resend_cooldown(phone: str, purpose: str) -> None:
+    remaining = resend_cooldown_remaining(phone, purpose)
+    if remaining > 0:
+        raise OtpCooldownError(remaining)
 
 
 def request_otp(
@@ -157,6 +203,10 @@ def request_otp(
     پیامک. تا وقتی درخواستِ جدیدتر در-جریان است، کدِ قدیمیِ تحویل‌شده معتبر
     می‌ماند؛ وقتی جدیدتر موفق شد قدیمی باطل می‌شود؛ و درخواستِ قدیمیِ دیرتمام
     هرگز جدیدتر را پس نمی‌گیرد."""
+    # فاصله‌یِ ارسالِ دوباره (سمتِ سرور): پیش از هر هزینه‌ای (سقفِ IP، هشِ کند، پیامک). درخواستِ
+    # ردشده سهمیه‌ی IP/شماره نمی‌سوزاند. دوباره زیرِ قفل بررسی می‌شود.
+    _enforce_resend_cooldown(phone, purpose)
+
     if charge_ip:
         charge_ip_budget(purpose=purpose, client_ip=client_ip)
 
@@ -169,6 +219,7 @@ def request_otp(
 
     with transaction.atomic():
         _lock_phone_purpose(phone, purpose)
+        _enforce_resend_cooldown(phone, purpose)  # دو درخواستِ هم‌زمان: فقط اولی عبور می‌کند
         if _recent_request_count(phone, purpose) >= MAX_REQUESTS_PER_PHONE_WINDOW:
             raise OtpRateLimitError(_PHONE_LIMIT_MESSAGE)
         challenge = OwnerOtpChallenge.objects.create(
@@ -354,17 +405,18 @@ def verify_otp(*, phone: str, purpose: str, code: str) -> bool:
 
 
 def resend_timing(*, phone: str, purpose: str) -> dict:
-    """زمان‌هایِ باقی‌مانده برایِ نمایشِ UX (اعتبارِ کد و دکمه‌ی ارسال دوباره).
-    فقط اطلاعاتی است؛ هیچ تصمیمِ امنیتی‌ای از آن گرفته نمی‌شود."""
+    """زمان‌هایِ باقی‌مانده برایِ نمایشِ UX: اعتبارِ کدِ فعال و فاصله‌یِ ارسالِ دوباره. هر دو عدد از
+    همان مرجعِ سمتِ سرور می‌آیند (``RESEND_COOLDOWN_SECONDS`` / :func:`resend_cooldown_remaining`)؛
+    خودِ محدودیت را :func:`request_otp` اعمال می‌کند، نه این تابع."""
     now = timezone.now()
     challenge = (
         OwnerOtpChallenge.objects.filter(
             phone=phone, purpose=purpose, consumed_at__isnull=True, expires_at__gt=now,
         ).order_by("-pk").first()
     )
-    if challenge is None:
-        return {"expires_in": 0, "resend_in": 0}
-    expires_in = max(0, int((challenge.expires_at - now).total_seconds()))
-    age = (now - challenge.created_at).total_seconds()
-    resend_in = max(0, int(RESEND_UX_COOLDOWN_SECONDS - age))
-    return {"expires_in": expires_in, "resend_in": resend_in}
+    expires_in = max(0, int((challenge.expires_at - now).total_seconds())) if challenge is not None else 0
+    return {
+        "expires_in": expires_in,
+        "resend_in": resend_cooldown_remaining(phone, purpose, now=now),
+        "cooldown_seconds": RESEND_COOLDOWN_SECONDS,
+    }
