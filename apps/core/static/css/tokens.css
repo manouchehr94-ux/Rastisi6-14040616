@@ -20,7 +20,28 @@
   --secondary:var(--brand-secondary, #7c3aed);
   --ink:var(--brand-text, #241c3a); --muted:var(--brand-muted, #8b86a3); --line:var(--brand-border, #ece8f6);
   --bg:var(--brand-background, #f7f5fc); --card:var(--brand-surface, #ffffff);
-  --green:#16a34a; --green-soft:#e6f6ec; --amber:#f59e0b;
+  /* --green is the platform "success / in-stock" colour used as BOTH a fill (white text) and a text colour on
+     white/tinted surfaces; #16a34a was 3.3:1 for both. #117f3a keeps the hue and reaches >=4.5:1 either way. */
+  --green:#117f3a; --green-soft:#e6f6ec; --amber:#f59e0b; --amber-text:#9c6407;
+  /* Accessible USAGE tokens (derived server-side from the merchant palette, see
+     apps/storefront_builder/accessible_colors.py). --violet/--pink/--secondary remain the raw brand FILL
+     colours; paint TEXT with the -text token and put text on a filled control with the matching on-* token. */
+  --violet-text:var(--brand-primary-text, #6d28d9);
+  --pink-text:var(--brand-accent-text, #c83c5d);
+  --secondary-text:var(--brand-secondary-text, #7c3aed);
+  --price-text:var(--theme-price-text, var(--pink-text));
+  --on-violet:var(--brand-primary-fg, #fff);
+  --on-pink:var(--brand-accent-fg, #fff);
+  --on-secondary:var(--brand-secondary-fg, #fff);
+  --on-gradient:var(--brand-gradient-fg, #fff);
+  --gradient-end:var(--brand-gradient-end, var(--violet-3));
+  --on-muted:var(--brand-muted-fg, #fff);
+  /* two-tone focus ring: ink outline + surface-coloured halo in the offset gap -> >=3:1 on ANY surroundings */
+  --focus-ink:var(--brand-text, #241c3a);
+  /* disabled controls: explicit readable colours (>=3:1), never element opacity (which also halves the text contrast) */
+  --disabled-bg:color-mix(in srgb, var(--brand-text, #241c3a) 8%, var(--brand-surface, #fff));
+  --disabled-ink:color-mix(in srgb, var(--brand-text, #241c3a) 75%, var(--brand-surface, #fff));
+  --focus-halo:var(--brand-background, #fff);
   --shadow:0 2px 6px rgba(80,50,160,.06), 0 10px 30px rgba(80,50,160,.07);
   /* گردی/عرضِ محتوا/تعدادِ ستون از Templateِ فعالِ سازنده بصری می‌آید
      (--sfb-* روی <html>، تزریق‌شده در base.html) — پیش‌فرض دقیقاً همان
@@ -89,11 +110,11 @@ html[data-sfb-card-zoom="1"] .pcard:hover .img img.cover-photo{transform:scale(1
 
 /* Phase 3.8 — semantic palette surfaces.
    Sections opt into these roles as DATA. Custom colours remain independent. */
-.rsec[data-palette-role="tone-1"]{--sfb-section-palette-bg:var(--palette-tone-1)}
-.rsec[data-palette-role="tone-2"]{--sfb-section-palette-bg:var(--palette-tone-2)}
-.rsec[data-palette-role="tone-3"]{--sfb-section-palette-bg:var(--palette-tone-3)}
-.rsec[data-palette-role="tone-4"]{--sfb-section-palette-bg:var(--palette-tone-4)}
-.rsec[data-palette-role="tone-5"]{--sfb-section-palette-bg:var(--palette-tone-5)}
+.rsec[data-palette-role="tone-1"]{--sfb-section-palette-bg:var(--palette-tone-1);--sfb-section-fg:var(--brand-tone-1-fg,#fff)}
+.rsec[data-palette-role="tone-2"]{--sfb-section-palette-bg:var(--palette-tone-2);--sfb-section-fg:var(--brand-tone-2-fg,#fff)}
+.rsec[data-palette-role="tone-3"]{--sfb-section-palette-bg:var(--palette-tone-3);--sfb-section-fg:var(--brand-tone-3-fg,#fff)}
+.rsec[data-palette-role="tone-4"]{--sfb-section-palette-bg:var(--palette-tone-4);--sfb-section-fg:var(--brand-tone-4-fg,#fff)}
+.rsec[data-palette-role="tone-5"]{--sfb-section-palette-bg:var(--palette-tone-5);--sfb-section-fg:var(--brand-tone-5-fg,#fff)}
 .rsec[data-bg-mode="palette"],
 .rsec[data-bg-mode="palette_pattern"]{
   background-color:var(--sfb-section-palette-bg,var(--brand-primary));

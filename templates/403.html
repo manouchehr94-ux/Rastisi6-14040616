@@ -23,14 +23,14 @@
     </div>
     {% else %}
     <div style="font-size:64px;margin-bottom:8px">🔒</div>
-    <div style="font-size:44px;font-weight:800;color:var(--violet);letter-spacing:2px">۴۰۳</div>
+    <div style="font-size:44px;font-weight:800;color:var(--violet-text,var(--violet));letter-spacing:2px">۴۰۳</div>
     <h1 style="font-size:18px;margin:10px 0 6px">دسترسی به این بخش مجاز نیست</h1>
     <p style="color:var(--muted);font-size:13.5px;margin-bottom:26px">
       برای مشاهده‌ی این صفحه اجازه‌ی لازم را ندارید. اگر فکر می‌کنید اشتباهی رخ داده، وارد حساب کاربری شوید.
     </p>
     <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
       <a href="{% url 'catalog:home' %}" style="background:var(--violet);color:#fff;padding:11px 22px;border-radius:12px;font-size:13.5px;font-weight:700">بازگشت به صفحه اصلی</a>
-      <a href="{% url 'customers:account' %}" style="background:var(--violet-soft);color:var(--violet);padding:11px 22px;border-radius:12px;font-size:13.5px;font-weight:700">حساب کاربری</a>
+      <a href="{% url 'customers:account' %}" style="background:var(--violet-soft);color:var(--violet-text,var(--violet));padding:11px 22px;border-radius:12px;font-size:13.5px;font-weight:700">حساب کاربری</a>
     </div>
     {% endif %}
   </div>

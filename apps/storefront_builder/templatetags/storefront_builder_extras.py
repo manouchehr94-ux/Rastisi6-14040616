@@ -5,6 +5,16 @@ register = template.Library()
 
 
 @register.filter
+def contrast_fg(color):
+    """Black or white text colour for an arbitrary merchant background colour
+    (WCAG relative-luminance based — never an RGB-average guess). An invalid /
+    empty value yields white, the historical default for coloured section bands."""
+    from apps.core.color_utils import best_foreground, is_valid_hex
+
+    return best_foreground(color) if is_valid_hex(color) else "#FFFFFF"
+
+
+@register.filter
 def section_label(section_key):
     """برچسب فارسیِ یک section_key از Section Registry — «؟» برای کلید
     ناشناخته (هرگز crash نمی‌کند)."""
