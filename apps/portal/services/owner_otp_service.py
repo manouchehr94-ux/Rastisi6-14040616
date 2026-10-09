@@ -3,7 +3,8 @@
 محدودیت‌ها (مطابق §3.19، و هم‌راستا با ``apps.sms.services.otp_service``ی
 موجود برایِ مشتری):
 * انقضایِ کوتاه (۲ دقیقه)
-* فاصله‌یِ الزامیِ ارسالِ دوباره (۲ دقیقه) — **سمتِ سرور** و به‌ازایِ (شماره، هدف)
+* فاصله‌یِ الزامیِ ارسالِ دوباره (۲ دقیقه) — **سمتِ سرور**، به‌ازایِ (شماره، هدف)، و از لحظه‌یِ
+  *پذیرشِ درخواست* (نه پایانِ تحویلِ پیامک؛ شکستِ Provider هم آن را بازنشانی نمی‌کند)
 * حداکثر تعداد درخواستِ کد در بازه، هم به‌ازایِ شماره هم به‌ازایِ IP
 * حداکثر تعداد تلاشِ تأییدِ هر کد
 * تک‌مصرفی (replay-proof)
@@ -37,12 +38,16 @@ IP_MAX_REQUESTS = 10
 IP_REQUEST_WINDOW_SECONDS = 600
 #: **تنها مرجعِ** فاصله‌یِ ارسالِ دوباره (ثانیه) — سمتِ سرور اعمال می‌شود (:func:`request_otp`
 #: زیرِ همان قفلِ (شماره، هدف))، و شمارشِ معکوسِ صفحه (:func:`resend_timing`) و پیامِ خطا هم از
-#: همین مقدار می‌آیند؛ هیچ ``120``ِ دومی در view/template/JS نیست. عمداً برابرِ عمرِ کد است:
-#: کاربر دقیقاً وقتی کدِ جدید می‌گیرد که کدِ قبلی منقضی می‌شود.
-RESEND_COOLDOWN_SECONDS = OTP_TTL_SECONDS
-#: ردیفِ «در-جریان» (هنوز تحویل‌نشده) فقط تا این مدت مانعِ درخواستِ تازه است؛ ردیفِ قدیمی‌تر ماندهٔ یک
-#: worker/پروسه‌یِ ازبین‌رفته (مثلاً ``SystemExit``) است، هرگز قابلِ تأیید نیست و نباید کاربر را قفل کند.
-IN_FLIGHT_GRACE_SECONDS = 30
+#: همین مقدار می‌آیند؛ هیچ ``120``ِ دومی در view/template/JS نیست.
+#:
+#: **مبدأ = لحظه‌یِ پذیرشِ درخواست در سرور** (``OwnerOtpChallenge.created_at``، که زیرِ قفل و پیش از
+#: ارسالِ پیامک ساخته می‌شود): نه زمانِ کلیکِ مرورگر (قابلِ اعتماد نیست)، نه پایانِ تحویلِ Provider،
+#: نه فعال‌سازی، نه ``expires_at``/``updated_at``. تأخیرِ Provider پس شمارش را جابه‌جا نمی‌کند؛
+#: T=۰ درخواست، T=۱۵ پاسخِ Provider ⇒ ارسالِ دوباره در T≈۱۲۰ (نه ۱۳۵).
+#:
+#: این مقدار مستقل از اعتبارِ کد (``OTP_TTL_SECONDS``) است؛ فقط مقدارِ پیش‌فرضشان یکی است. با تأخیرِ
+#: Provider ممکن است کدِ تحویل‌شده کمی بیشتر از شمارشِ معکوس معتبر بماند و این عمدی است.
+RESEND_COOLDOWN_SECONDS = 120
 
 
 class OtpCheckResult(enum.Enum):
@@ -86,11 +91,17 @@ def _generate_code() -> str:
     return dev_otp_code_for_console_provider() or f"{secrets.randbelow(10 ** OTP_LENGTH):0{OTP_LENGTH}d}"
 
 
-#: ردیفِ «در-جریان» (رزروِ سهمیه‌ای که پیامکش هنوز تحویل نشده): ``expires_at`` روی
-#: این مقدارِ ثابتِ گذشته است. چنین ردیفی در ``_recent_request_count`` شمرده می‌شود
-#: (پس هم‌زمانی از سقف رد نمی‌شود) ولی چون «منقضی» است هرگز توسط ``check_otp``/
-#: ``resend_timing`` انتخاب نمی‌شود، تلاشِ تأیید نمی‌گیرد، و کدِ فعلیِ معتبر را
-#: کنار نمی‌زند. پس از تحویلِ موفق، زیرِ همان قفل با TTLِ تازه فعال می‌شود.
+#: ردیفِ «پذیرفته‌شده ولی تحویل‌نشده»: ``expires_at`` روی این مقدارِ ثابتِ گذشته است. چرخه‌یِ حالت:
+#:
+#: * پذیرش (زیرِ قفل)  → ردیف با ``PENDING_EXPIRES_AT``؛ فاصله‌یِ ارسالِ دوباره و سقفِ شماره از همین لحظه
+#:   (``created_at``) شمرده می‌شوند.
+#: * تحویلِ موفق       → زیرِ همان قفل ``expires_at = now + OTP_TTL_SECONDS`` (فعال)؛ ``created_at`` تغییر نمی‌کند.
+#: * تحویلِ ناموفق / استثنایِ Provider / خطایِ فعال‌سازی → ردیف **حذف نمی‌شود** و همان ``PENDING_EXPIRES_AT``
+#:   می‌ماند: هرگز قابلِ تأیید نیست (``check_otp``/``resend_timing`` فقط ``expires_at > now`` را می‌بینند، تلاشِ
+#:   تأیید نمی‌گیرد، کدِ معتبرِ قبلی را کنار نمی‌زند)، ولی فاصله‌یِ ۱۲۰ ثانیه‌ایِ درخواست را نگه می‌دارد تا
+#:   شکستِ پیاپیِ Provider به حلقه‌یِ فشار روی Provider تبدیل نشود. پس از ۱۲۰ ثانیه از ``created_at`` خودبه‌خود
+#:   مانعی نیست. درخواستی که پیش از صدورِ کد رد شود (اعتبارسنجی/سقف/IP/cooldown) هیچ ردیفی نمی‌سازد.
+#:
 #: بدونِ مایگریشن: فقط از فیلدهایِ موجود استفاده می‌کند.
 PENDING_EXPIRES_AT = datetime(1970, 1, 1, tzinfo=dt_timezone.utc)
 
@@ -125,20 +136,11 @@ def resend_cooldown_remaining(phone: str, purpose: str, *, now=None) -> int:
 
     **مرجعِ واحد** برایِ سرور (:func:`request_otp`) و UX (:func:`resend_timing`). مبنا: *تازه‌ترین*
     چالشِ این (شماره، هدف) — اگر مصرف نشده باشد (کدِ تأییدشده/مصرف‌شده هرگز مانعِ ورودِ بعدی
-    نیست) و ``created_at``اش (لحظه‌یِ پذیرشِ درخواست، که هرگز دیرتر از شمارشِ معکوسِ نشست
-    نیست) هنوز در بازه‌یِ ``RESEND_COOLDOWN_SECONDS`` باشد. ردیفِ «در-جریان» هم می‌شمارد (دو
-    کلیکِ هم‌زمان دو پیامک نمی‌سازد)؛ ردیفی که تحویلش شکست خورده حذف می‌شود، پس هرگز قفلی
-    نمی‌سازد."""
+    نیست) و ``created_at``اش (لحظه‌یِ پذیرشِ درخواست) هنوز در بازه‌یِ ``RESEND_COOLDOWN_SECONDS``
+    باشد. وضعیتِ تحویل اهمیتی ندارد: در-جریان، فعال و تحویل‌ناموفق (ردیفِ غیرقابل‌تأیید) همه از
+    همان لحظه‌یِ پذیرش می‌شمارند."""
     now = now or timezone.now()
-    latest = None
-    for row in OwnerOtpChallenge.objects.filter(phone=phone, purpose=purpose).order_by("-pk")[:5]:
-        stale_in_flight = (
-            row.expires_at == PENDING_EXPIRES_AT
-            and (now - row.created_at).total_seconds() > IN_FLIGHT_GRACE_SECONDS
-        )
-        if not stale_in_flight:
-            latest = row
-            break
+    latest = OwnerOtpChallenge.objects.filter(phone=phone, purpose=purpose).order_by("-pk").first()
     if latest is None or latest.consumed_at is not None:
         return 0
     age = (now - latest.created_at).total_seconds()
@@ -184,19 +186,20 @@ def request_otp(
     می‌شود؛ پس درخواست‌هایِ هم‌زمان نمی‌توانند هم‌زمان همان شمارش را ببینند و
     از سقف عبور کنند. قفل فقط دورِ «شمارش + درج» است، نه دورِ ارسالِ پیامک.
 
-    **سیاستِ سهمیه (صریح):** فقط کدهایی که واقعاً تحویلِ موفق گرفته‌اند — به
-    اضافه‌ی تلاش‌هایِ هنوز-در-جریان — از سقف مصرف می‌کنند. یک تلاشِ در-جریان
-    تا روشن‌شدنِ نتیجه یک سهمیه را نگه می‌دارد (تا هم‌زمانی از سقف رد نشود)؛ اگر
-    تحویل شکست بخورد ردیف حذف و سهمیه آزاد می‌شود. پس شکستِ Provider سهمیه‌ی
-    موفق را نمی‌سوزاند (ولی درخواست‌هایی که همان لحظه رد شده بودند خودکار
-    تکرار نمی‌شوند؛ کاربر دوباره تلاش می‌کند). سقفِ IP جدا و مستقل است.
+    **فاصله‌یِ ارسالِ دوباره (۱۲۰ ثانیه) از لحظه‌یِ پذیرشِ درخواست:** ردیفِ چالش زیرِ قفل و *پیش از*
+    ارسالِ پیامک ساخته می‌شود و ``created_at``ِ آن مبدأِ شمارش است؛ تأخیرِ Provider آن را جابه‌جا نمی‌کند.
+
+    **سیاستِ سهمیه و شکستِ Provider (صریح):** هر درخواستِ پذیرفته‌شده — چه تحویل موفق شود چه نه —
+    هم فاصله‌یِ ۱۲۰ ثانیه را شروع می‌کند و هم از سقفِ شماره مصرف می‌کند. شکستِ Provider/استثنا/خطایِ
+    فعال‌سازی ردیف را **حذف نمی‌کند** (بازنشانیِ بی‌صدایِ تایمر ممنوع است و شکستِ پیاپی نباید Provider را
+    زیرِ فشار بگذارد)، ولی ردیف هرگز قابلِ تأیید نمی‌شود. سقفِ IP جدا و مستقل است. درخواستِ ردشده
+    پیش از صدورِ کد (اعتبارسنجی، سقف، IP، cooldown) هیچ ردیف و هیچ فاصله‌ای نمی‌سازد.
 
     **تا تحویلِ موفق، کد قابلِ‌تأیید نیست:** ردیفِ جدید ابتدا «در-جریان» ساخته
-    می‌شود (``PENDING_EXPIRES_AT``): سهمیه را نگه می‌دارد ولی توسط ``check_otp``
-    دیده نمی‌شود، تلاشِ تأیید نمی‌گیرد و کدِ فعلیِ معتبر را کنار نمی‌زند. اگر
-    تحویل شکست بخورد (یا Provider استثنا بدهد) فقط همان ردیف حذف می‌شود و کدِ
-    قبلی بدونِ وقفه معتبر می‌ماند. پس از موفقیت، :func:`_activate_delivered_challenge`
-    آن را با TTLِ تازه فعال و کدهایِ قدیمی‌تر را باطل می‌کند.
+    می‌شود (``PENDING_EXPIRES_AT``): سهمیه و فاصله را نگه می‌دارد ولی توسط ``check_otp``
+    دیده نمی‌شود، تلاشِ تأیید نمی‌گیرد و کدِ فعلیِ معتبر را کنار نمی‌زند. پس از موفقیت،
+    :func:`_activate_delivered_challenge` آن را با TTLِ تازه فعال و کدهایِ قدیمی‌تر را باطل می‌کند؛
+    در شکست همان ردیفِ غیرقابل‌تأیید می‌ماند (چرخه‌یِ حالت: بالایِ ``PENDING_EXPIRES_AT``).
 
     **قاعده‌یِ ترتیب — «تازه‌ترین درخواستِ موفق برنده است»:** ترتیب = ترتیبِ
     پذیرشِ درخواست‌ها زیرِ قفلِ (هدف، شماره)، یعنی ``pk``؛ نه ترتیبِ رسیدنِ
@@ -230,34 +233,25 @@ def request_otp(
     # message برای سازگاری API قدیمی باقی مانده ولی کد خام دیگر وارد متن
     # آزاد/Console نمی‌شود.
     expire_minutes = max(1, OTP_TTL_SECONDS // 60)
-    try:
-        result = send_platform_otp(
-            to=phone, code=code, purpose=purpose, expire_minutes=expire_minutes,
-        )
-    except Exception:
-        # Only ``Exception``: KeyboardInterrupt/SystemExit must not be intercepted
-        # here. An unexpected provider crash must not leak a quota slot, and the
-        # cleanup must never mask the provider's own exception.
-        _drop_pending_best_effort(challenge)
-        raise
+    # یک استثنایِ Provider بی‌تغییر بالا می‌رود؛ ردیفِ پذیرفته‌شده همان «غیرقابل‌تأیید» می‌ماند (و فاصله‌یِ
+    # ارسالِ دوباره‌اش) — حذف/بازنشانی نمی‌شود.
+    result = send_platform_otp(
+        to=phone, code=code, purpose=purpose, expire_minutes=expire_minutes,
+    )
 
     # ── چرخه‌ی حیاتِ OTP همین‌جا و *پیش از* هر تله‌متری تمام می‌شود ──────────────
     # حالتِ احرازِ هویت هرگز نباید به موفقیتِ نوشتنِ SmsLog وابسته باشد.
     if result.success:
-        try:
-            _activate_delivered_challenge(challenge)
-        except Exception:
-            # فعال‌سازی (دیتابیس) خطای حیاتی است و بلعیده نمی‌شود؛ فقط تلاش
-            # می‌کنیم رزروِ معلق نماند و خطای اصلی همان را بالا می‌دهیم.
-            _drop_pending_best_effort(challenge)
-            raise
+        # فعال‌سازی (دیتابیس) خطای حیاتی است و بلعیده نمی‌شود؛ اگر شکست بخورد ردیف همان «پذیرفته‌شده و
+        # غیرقابل‌تأیید» می‌ماند (فاصله‌یِ ارسالِ دوباره برقرار) و خطا بالا می‌رود.
+        _activate_delivered_challenge(challenge)
         _record_sms_attempt_best_effort(phone=phone, code=code, expire_minutes=expire_minutes, result=result)
         return
 
-    _drop_pending(challenge)
+    # تحویلِ ناموفق: ردیف حذف نمی‌شود (هرگز قابلِ تأیید نیست؛ فاصله‌یِ ۱۲۰ ثانیه از پذیرش برقرار می‌ماند).
     _record_sms_attempt_best_effort(phone=phone, code=code, expire_minutes=expire_minutes, result=result)
     raise OtpDeliveryError(
-        "ارسال کد تأیید موقتاً انجام نشد؛ لطفاً دوباره تلاش کنید."
+        f"ارسال کد تأیید موقتاً انجام نشد؛ پس از {RESEND_COOLDOWN_SECONDS} ثانیه دوباره تلاش کنید."
     )
 
 
@@ -294,19 +288,6 @@ def _record_sms_attempt_best_effort(*, phone: str, code: str, expire_minutes: in
         logger.error(
             "owner OTP SMS telemetry write failed; the OTP lifecycle is unaffected", exc_info=True,
         )
-
-
-def _drop_pending_best_effort(challenge: OwnerOtpChallenge) -> None:
-    """پاک‌سازی در مسیرِ خطا: اگر خودش هم شکست بخورد خطایِ اصلی را نمی‌پوشاند."""
-    try:
-        _drop_pending(challenge)
-    except Exception:
-        logger.error("could not release a pending OTP reservation", exc_info=True)
-
-
-def _drop_pending(challenge: OwnerOtpChallenge) -> None:
-    """رزروِ شکست‌خورده را حذف می‌کند؛ کدِ فعلیِ معتبر هرگز تغییر نمی‌کند."""
-    OwnerOtpChallenge.objects.filter(pk=challenge.pk, expires_at=PENDING_EXPIRES_AT).delete()
 
 
 def _activate_delivered_challenge(challenge: OwnerOtpChallenge) -> None:

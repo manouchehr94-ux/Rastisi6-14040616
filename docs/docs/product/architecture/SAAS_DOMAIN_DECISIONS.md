@@ -4464,12 +4464,20 @@ validation errors so a typo never forces a new SMS. No User / OwnerProfile / Sto
 the Terms contract (server-bound version, explicit checkbox, one transaction) is unchanged. A phone that already belongs to a shared
 User (e.g. a storefront customer) keeps its usable password and existing email: only missing credentials are filled in, and an email
 owned by another user is rejected, never reassigned. Existing-Owner OTP login is unchanged. No email-verification flow is added.
-*Resend.* The cooldown is `RESEND_COOLDOWN_SECONDS = OTP_TTL_SECONDS` (120 s), enforced by the server per (phone, purpose) from the
-newest challenge's `created_at` — first outside, then again inside the advisory lock — so a forged POST or a second tab cannot bypass
-the countdown (`OtpCooldownError`, a subclass of `OtpRateLimitError`). A provider failure removes the pending row, so it never starts a
-cooldown; a stale in-flight marker is ignored after 30 s. `resend_timing()` is the only source for the UI countdown (no duplicated
-number); per-phone (3/10 min) and per-IP budgets are unchanged. The password-reset flow judges the cooldown from the session only
-(enumeration-safe).
+*Resend.* The cooldown is `RESEND_COOLDOWN_SECONDS = 120` — ONE constant, independent of the code's validity (`OTP_TTL_SECONDS`, whose
+default happens to be the same) — enforced by the server per (phone, purpose). **Anchor: the moment the server accepts the request**
+(`OwnerOtpChallenge.created_at`, created under the advisory lock before any SMS is sent); never the browser click, provider completion,
+activation, `expires_at` or `updated_at`. T=0 accept, T=15 provider answers ⇒ resend at T=120 (not 135); a delivered code may outlive
+the countdown by the provider latency, which is intended. It is checked first outside and again inside the lock (`OtpCooldownError`,
+an `OtpRateLimitError`), so a forged POST, a second tab or a concurrent request cannot bypass it (at most one accepted send per window);
+`resend_timing()` is the only source of the UI countdown (no second literal in view/template/JS).
+*State transition.* Accepted request → row with `expires_at = PENDING_EXPIRES_AT` (cooldown + per-phone quota start at `created_at`;
+never verifiable) → on delivery success `expires_at = now + OTP_TTL_SECONDS` (active; `created_at` unchanged) → on delivery failure, a
+provider exception or an activation error the row is **kept** as the never-verifiable pending marker, so the 120 s window is not
+silently reset and a failing provider cannot be hammered (a failed request still counts toward the 3-per-10-minute phone budget; the
+old still-valid code is untouched). A request rejected before issuance (validation, IP/phone budget, cooldown) creates no row and no
+cooldown. No migration. The password-reset flow judges its session countdown from the same acceptance moment and renders the same
+`cooldown_seconds` metadata (enumeration-safe: known and unknown phones render the same page).
 
 ## ADR-108: Owner Onboarding Chooses a Ready Template (the ONE 50-template catalog), Applied by Storefront Builder Services, and Final Publish Publishes the Storefront Draft
 

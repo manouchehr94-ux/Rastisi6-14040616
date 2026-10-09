@@ -1002,4 +1002,8 @@ class OtpLoginThroughViewTests(_Base, TestCase):
             response = self._request("09124440010")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "ارسال کد تأیید موقتاً انجام نشد")
-        self.assertFalse(OwnerOtpChallenge.objects.filter(phone="09124440010").exists())
+        self.assertFalse(  # nothing verifiable: only the never-verifiable request marker may remain
+            OwnerOtpChallenge.objects.filter(phone="09124440010").exclude(
+                expires_at=owner_otp_service.PENDING_EXPIRES_AT,
+            ).exists()
+        )

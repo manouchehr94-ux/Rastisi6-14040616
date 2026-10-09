@@ -20,6 +20,7 @@ from django.utils import timezone
 
 import apps.portal as portal_app_module
 from apps.portal.models import OwnerOtpChallenge, OwnerProfile
+from apps.core.templatetags.persian import fa_number
 from apps.portal.services import owner_otp_service as svc
 from apps.portal.tests._owner_signup import age_otp_cooldown
 from apps.sms.services.backends import SmsSendResult
@@ -111,40 +112,135 @@ class ServiceCooldownTests(_Base, TestCase):
         self.request(phone="09127770002")
         self.assertEqual(len(self.sent), 2)
 
-    def test_a_failed_delivery_does_not_start_a_cooldown(self):
-        self.deliver = False
-        with self.assertRaises(svc.OtpDeliveryError):
+    # ── the anchor is the moment the server ACCEPTS the request — never provider completion ────────────────
+
+    def _clock(self, start):
+        """A controllable server clock (``timezone.now`` is what the service, the model's ``auto_now_add`` and the
+        tests all read)."""
+        state = {"now": start}
+        patcher = patch("django.utils.timezone.now", side_effect=lambda: state["now"])
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return state
+
+    def test_provider_latency_does_not_move_the_cooldown_anchor(self):
+        """T=0 request accepted; T=15 the provider returns success; resend is possible at T=120 — NOT at T=135."""
+        t0 = timezone.now()
+        clock = self._clock(t0)
+
+        def slow_provider(*, to, code, purpose, expire_minutes, **_):
+            self.sent.append({"to": to, "code": code, "purpose": purpose})
+            clock["now"] = t0 + timedelta(seconds=15)  # the provider answers 15 s after the request was accepted
+            return SmsSendResult(success=True, provider_ref_id="slow")
+
+        with patch.object(svc, "send_platform_otp", side_effect=slow_provider):
             self.request()
-        self.assertEqual(OwnerOtpChallenge.objects.count(), 0)  # the reserved row is removed
-        self.assertEqual(svc.resend_cooldown_remaining(_PHONE, "login"), 0)
-        self.deliver = True
-        self.request()  # immediately possible
+        challenge = OwnerOtpChallenge.objects.get()
+        self.assertEqual(challenge.created_at, t0)  # the anchor: acceptance on the server
+        self.assertEqual(
+            challenge.expires_at, t0 + timedelta(seconds=15 + svc.OTP_TTL_SECONDS),
+        )  # validity is activated at delivery — a separate concept; the code may outlive the countdown slightly
+
+        for second, remaining in ((15, 105), (60, 60), (119, 1), (120, 0)):
+            clock["now"] = t0 + timedelta(seconds=second)
+            with self.subTest(second=second):
+                self.assertEqual(svc.resend_cooldown_remaining(_PHONE, "login"), remaining)
+                self.assertEqual(svc.resend_timing(phone=_PHONE, purpose="login")["resend_in"], remaining)
+
+        clock["now"] = t0 + timedelta(seconds=119)
+        with self.assertRaises(svc.OtpCooldownError):
+            self.request()
+        clock["now"] = t0 + timedelta(seconds=120)  # not 135
+        self.request()
         self.assertEqual(len(self.sent), 2)
 
-    def test_a_provider_exception_does_not_start_a_cooldown(self):
-        with patch.object(svc, "send_platform_otp", side_effect=RuntimeError("boom")), self.assertRaises(RuntimeError):
-            self.request()
-        self.assertEqual(svc.resend_cooldown_remaining(_PHONE, "login"), 0)
-        self.request()
-
-    def test_a_failed_resend_does_not_extend_or_reset_the_previous_cooldown(self):
-        self.request()
-        age_otp_cooldown(_PHONE, seconds=svc.RESEND_COOLDOWN_SECONDS + 1)
+    def test_a_failed_delivery_keeps_the_request_cooldown_and_leaves_nothing_verifiable(self):
+        t0 = timezone.now()
+        clock = self._clock(t0)
         self.deliver = False
         with self.assertRaises(svc.OtpDeliveryError):
             self.request()
-        self.deliver = True
-        self.request()  # the earlier code was already past its cooldown, so the retry is allowed at once
-        self.assertEqual(len(self.sent), 3)
+        row = OwnerOtpChallenge.objects.get()  # the accepted request is NOT erased …
+        self.assertEqual(row.expires_at, svc.PENDING_EXPIRES_AT)  # … but it is the never-verifiable marker
+        self.assertIsNone(row.consumed_at)
+        self.assertFalse(row.is_usable)
+        self.assertEqual(svc.check_otp(phone=_PHONE, purpose="login", code=self.sent[-1]["code"]), svc.OtpCheckResult.EXPIRED)
+        self.assertFalse(svc.verify_otp(phone=_PHONE, purpose="login", code=self.sent[-1]["code"]))
+        self.assertEqual(svc.resend_timing(phone=_PHONE, purpose="login")["expires_in"], 0)
 
-    def test_a_fresh_in_flight_request_blocks_but_a_stale_crashed_one_does_not(self):
-        pending = OwnerOtpChallenge.objects.create(
+        self.deliver = True
+        clock["now"] = t0 + timedelta(seconds=1)  # T=1: still blocked by the REQUEST cooldown
+        with self.assertRaises(svc.OtpCooldownError) as ctx:
+            self.request()
+        self.assertEqual(ctx.exception.retry_after, svc.RESEND_COOLDOWN_SECONDS - 1)
+        self.assertEqual(len(self.sent), 1)  # no second provider call
+        clock["now"] = t0 + timedelta(seconds=119)
+        with self.assertRaises(svc.OtpCooldownError):
+            self.request()
+        clock["now"] = t0 + timedelta(seconds=svc.RESEND_COOLDOWN_SECONDS)  # T=120: allowed again
+        self.request()
+        self.assertEqual(len(self.sent), 2)
+        self.assertTrue(svc.verify_otp(phone=_PHONE, purpose="login", code=self.sent[-1]["code"]))
+
+    def test_a_provider_exception_keeps_the_request_cooldown_too(self):
+        with patch.object(svc, "send_platform_otp", side_effect=RuntimeError("boom")), self.assertRaises(RuntimeError):
+            self.request()
+        self.assertEqual(OwnerOtpChallenge.objects.get().expires_at, svc.PENDING_EXPIRES_AT)  # never verifiable
+        self.assertEqual(svc.resend_cooldown_remaining(_PHONE, "login"), svc.RESEND_COOLDOWN_SECONDS)
+        with self.assertRaises(svc.OtpCooldownError):
+            self.request()
+        age_otp_cooldown(_PHONE)
+        self.request()
+        self.assertEqual(len(self.sent), 1)  # only the post-cooldown request reached the (patched-back) provider
+
+    def test_repeated_provider_failures_cannot_hammer_the_provider(self):
+        self.deliver = False
+        attempts = 0
+        for _ in range(10):
+            try:
+                self.request()
+            except (svc.OtpDeliveryError, svc.OtpCooldownError):
+                attempts += 1
+        self.assertEqual(attempts, 10)
+        self.assertEqual(len(self.sent), 1)  # one provider call; the other nine stopped at the server
+
+    def test_a_blocked_request_does_not_invalidate_the_earlier_still_valid_code(self):
+        self.request()
+        earlier = self.sent[-1]["code"]
+        age_otp_cooldown(_PHONE, seconds=60)  # still inside the code's validity, but cooldown not over → blocked
+        with self.assertRaises(svc.OtpCooldownError):
+            self.request()
+        self.assertTrue(svc.verify_otp(phone=_PHONE, purpose="login", code=earlier))
+
+    def test_requests_rejected_before_issuance_start_no_cooldown(self):
+        # per-IP budget exhausted → rejected before any challenge exists
+        with patch.object(svc, "charge_ip_budget", side_effect=svc.OtpRateLimitError("ip")):
+            with self.assertRaises(svc.OtpRateLimitError):
+                self.request()
+        self.assertEqual(OwnerOtpChallenge.objects.count(), 0)
+        self.assertEqual(svc.resend_cooldown_remaining(_PHONE, "login"), 0)
+        # per-phone window already full → rejected, and the rejection itself starts nothing new
+        for index in range(svc.MAX_REQUESTS_PER_PHONE_WINDOW):
+            OwnerOtpChallenge.objects.create(
+                phone=_PHONE, purpose="login", code_hash="x", consumed_at=timezone.now(), expires_at=timezone.now(),
+            )
+        before = OwnerOtpChallenge.objects.count()
+        with self.assertRaises(svc.OtpRateLimitError) as ctx:
+            self.request()
+        self.assertNotIsInstance(ctx.exception, svc.OtpCooldownError)
+        self.assertEqual(OwnerOtpChallenge.objects.count(), before)
+        self.assertEqual(self.sent, [])
+        # a malformed phone never reaches the service at all (view-level)
+        self.assertEqual(OwnerOtpChallenge.objects.filter(phone="123").count(), 0)
+
+    def test_an_in_flight_accepted_request_blocks_until_its_cooldown_ends_then_never_locks(self):
+        OwnerOtpChallenge.objects.create(
             phone=_PHONE, purpose="login", code_hash="x", expires_at=svc.PENDING_EXPIRES_AT,
         )
-        with self.assertRaises(svc.OtpCooldownError):  # a concurrent sender is still delivering
+        with self.assertRaises(svc.OtpCooldownError):  # a concurrent sender (or a failed one) still holds the window
             self.request()
-        age_otp_cooldown(_PHONE, seconds=svc.IN_FLIGHT_GRACE_SECONDS + 5)
-        self.assertEqual(svc.resend_cooldown_remaining(_PHONE, "login"), 0)  # crashed worker: never verifiable, never locks
+        age_otp_cooldown(_PHONE)  # 121 s after acceptance: even a crashed worker's marker is never a lock
+        self.assertEqual(svc.resend_cooldown_remaining(_PHONE, "login"), 0)
         self.request()
         self.assertEqual(len(self.sent), 1)
 
@@ -269,19 +365,26 @@ class ViewEnforcementTests(_Base, TestCase):
         match = re.search(r'data-resend-in="(\d+)"', html)
         self.assertTrue(svc.RESEND_COOLDOWN_SECONDS - 3 <= int(match.group(1)) <= svc.RESEND_COOLDOWN_SECONDS)
         self.assertIn("ارسال دوباره‌ی کد پس از", html)
-        self.assertIn('data-cooldown="120"', html)  # rendered from the service constant, not typed in the template
+        self.assertIn(f'data-cooldown="{svc.RESEND_COOLDOWN_SECONDS}"', html)  # rendered from the service constant, not typed in the template
         age_otp_cooldown(_PHONE)
         html = self.client.get("/verify/", HTTP_HOST=_HOST).content.decode()
         self.assertIn('data-resend-in="0"', html)
         self.assertNotIn("ارسال دوباره‌ی کد پس از", html)
 
-    def test_a_failed_first_delivery_does_not_lock_the_visitor_out(self):
+    def test_a_failed_first_delivery_keeps_the_request_cooldown_and_says_how_long_to_wait(self):
         self.deliver = False
         response = self.start_registration()
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "ارسال کد تأیید موقتاً انجام نشد")
+        self.assertContains(response, f"پس از {svc.RESEND_COOLDOWN_SECONDS} ثانیه")
         self.deliver = True
+        again = self.start_registration()  # the visitor must not hammer the provider: the server still holds the window
+        self.assertEqual(again.status_code, 200)
+        self.assertContains(again, "ثانیه‌یِ دیگر صبر کنید")
+        self.assertEqual(len(self.sent), 1)
+        age_otp_cooldown(_PHONE)  # 120 s after the request was accepted
         self.assertEqual(self.start_registration()["Location"], "/verify/")
+        self.assertEqual(len(self.sent), 2)
 
     def test_the_reset_flow_judges_the_cooldown_from_the_session_so_it_cannot_reveal_an_account(self):
         owner = User.objects.create_user(username=_PHONE)
@@ -333,3 +436,62 @@ class ConcurrentCooldownTests(_Base, TransactionTestCase):
         self.assertEqual(results.count("sent"), 1)
         self.assertEqual(results.count("cooldown"), 7)
         self.assertEqual(len(self.sent), 1)
+
+
+@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
+class PasswordResetVerifyPageCountdownTests(_Base, TestCase):
+    """The reset verify page judges its countdown from the SESSION (enumeration-safe) but must render the same
+    metadata as every other verify page — taken from the one service constant, never a literal."""
+
+    KNOWN = "09127770101"
+    UNKNOWN = "09127770102"
+
+    def setUp(self):
+        super().setUp()
+        user = User.objects.create_user(username=self.KNOWN, password="an-old-strong-pass-1")
+        OwnerProfile.objects.create(user=user, phone=self.KNOWN, full_name="Owner")
+
+    def reset_page(self, phone):
+        client = self.client_class()
+        response = client.post("/reset-password/", {"phone": phone}, HTTP_HOST=_HOST)
+        self.assertEqual((response.status_code, response["Location"]), (302, "/verify/"))
+        return client.get("/verify/", HTTP_HOST=_HOST).content.decode()
+
+    def test_timing_helper_returns_the_cooldown_seconds_from_the_service_constant(self):
+        from apps.portal import views
+
+        class _Req:
+            session = {}
+
+        timing = views._reset_otp_timing(_Req())
+        self.assertEqual(timing["cooldown_seconds"], svc.RESEND_COOLDOWN_SECONDS)
+        self.assertEqual(set(timing), {"expires_in", "resend_in", "cooldown_seconds"})
+
+    def test_the_reset_verify_page_renders_the_real_cooldown_in_the_attribute_and_the_visible_hint(self):
+        for phone in (self.KNOWN, self.UNKNOWN):
+            html = self.reset_page(phone)
+            with self.subTest(phone=phone):
+                self.assertIn(f'data-cooldown="{svc.RESEND_COOLDOWN_SECONDS}"', html)
+                self.assertNotIn('data-cooldown=""', html)
+                self.assertRegex(html, rf"پس از هر ارسال {re.escape(fa_number(svc.RESEND_COOLDOWN_SECONDS))} ثانیه صبر لازم است")
+                match = re.search(r'data-resend-in="(\d+)"', html)
+                self.assertTrue(svc.RESEND_COOLDOWN_SECONDS - 5 <= int(match.group(1)) <= svc.RESEND_COOLDOWN_SECONDS)
+
+    def test_known_and_unknown_reset_phones_stay_publicly_indistinguishable(self):
+        def shape(html):
+            html = re.sub(r'name="csrfmiddlewaretoken" value="[^"]+"', "", html)
+            html = re.sub(r'(data-resend-in|data-otp-expires)="\d+"', r'\1="N"', html)
+            html = re.sub(r"پس از [۰-۹]+ ثانیه ممکن", "پس از N ثانیه ممکن", html)
+            html = re.sub(r"\d{11}|[۰-۹]{11}", "PHONE", html)
+            return html
+
+        self.assertEqual(shape(self.reset_page(self.KNOWN)), shape(self.reset_page(self.UNKNOWN)))
+        self.assertEqual(OwnerOtpChallenge.objects.filter(phone=self.UNKNOWN).count(), 0)  # nothing created for unknown
+
+    def test_a_failed_reset_send_gives_the_same_public_page_as_an_unknown_phone(self):
+        self.deliver = False
+        known = self.reset_page(self.KNOWN)
+        unknown = self.reset_page(self.UNKNOWN)
+        for html in (known, unknown):
+            self.assertIn(f'data-cooldown="{svc.RESEND_COOLDOWN_SECONDS}"', html)
+        self.assertEqual(OwnerOtpChallenge.objects.get().expires_at, svc.PENDING_EXPIRES_AT)  # held, never verifiable

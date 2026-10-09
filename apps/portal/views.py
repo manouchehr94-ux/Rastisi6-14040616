@@ -535,6 +535,7 @@ def _reset_otp_timing(request) -> dict:
     return {
         "expires_in": max(0, owner_otp_service.OTP_TTL_SECONDS - elapsed),
         "resend_in": max(0, owner_otp_service.RESEND_COOLDOWN_SECONDS - elapsed),
+        "cooldown_seconds": owner_otp_service.RESEND_COOLDOWN_SECONDS,
     }
 
 
@@ -843,7 +844,8 @@ def otp_resend(request):
     if purpose == OwnerOtpChallenge.Purpose.PASSWORD_RESET:
         # The resend cooldown for a reset is judged from the SESSION only (``_reset_otp_timing``): the same answer
         # for a known and an unknown phone, so it cannot reveal whether an account exists. The service enforces the
-        # real per-(phone, purpose) cooldown as well; the session clock starts after the send, so it never opens early.
+        # real per-(phone, purpose) cooldown as well. Both clocks start when the request is ACCEPTED (the session stamp is taken
+        # before the send), so provider latency never shifts the countdown.
         wait = _reset_otp_timing(request)["resend_in"]
         if wait > 0:
             request.session[_OTP_SESSION_FLASH_KEY] = {
@@ -853,11 +855,12 @@ def otp_resend(request):
         # Never the generic sender: that would create/send a reset challenge for ANY phone.
         # The helper re-checks that this phone belongs to an eligible owner, and answers the
         # same way for known and unknown numbers.
+        requested_at = int(time.time())
         error = _send_reset_otp_if_eligible(request, phone=phone)
         if error:
             request.session[_OTP_SESSION_FLASH_KEY] = {"kind": "error", "text": error}
         else:
-            request.session[_OTP_SESSION_STARTED_KEY] = int(time.time())
+            request.session[_OTP_SESSION_STARTED_KEY] = requested_at
             request.session[_OTP_SESSION_FLASH_KEY] = {"kind": "ok", "text": _RESET_RESEND_NOTICE}
         return redirect("portal:otp-verify")
 
@@ -910,9 +913,9 @@ def _send_reset_otp_if_eligible(request, *, phone: str) -> str | None:
     Returns a user-facing error only for *account-independent* failures (SMS not deliverable at
     all, per-IP budget, shared rate-limit store down). Everything that depends on the account —
     unknown/ineligible phone, per-phone budget, a provider failure for this send — is swallowed
-    into the same generic success path: no challenge is left active in those cases (the OTP
-    service removes a challenge whose delivery failed) and nothing is ever created for an unknown
-    phone. The per-IP budget is charged for every phone, known or not."""
+    into the same generic success path: no *verifiable* challenge exists in those cases (a failed
+    delivery leaves only a never-verifiable row that still holds the resend cooldown) and nothing is
+    ever created for an unknown phone. The per-IP budget is charged for every phone, known or not."""
     if not owner_sms_service.otp_delivery_available():
         return _SMS_UNAVAILABLE_MESSAGE
     client_ip = get_client_ip_bucket(request)
@@ -934,8 +937,7 @@ def _send_reset_otp_if_eligible(request, *, phone: str) -> str | None:
     except Exception as exc:  # noqa: BLE001 — deliberately NOT BaseException (Ctrl-C/SystemExit propagate)
         # An unexpected provider/infrastructure exception must not become a 500: that would be an
         # account-dependent response (an unknown phone never reaches the provider). ``request_otp``
-        # has already removed the in-flight challenge (best effort; an un-removed one is the
-        # never-verifiable "pending" row), so no usable reset code and no authorization exist. Only the
+        # leaves only the never-verifiable "pending" row, so no usable reset code and no authorization exist. Only the
         # exception CLASS is logged: its text may carry credentials, URLs or the code.
         logger.error("password-reset OTP failed unexpectedly: %s", exc.__class__.__name__)
     return None
@@ -964,6 +966,7 @@ def password_reset_request(request):
             request, form, action="password_reset"
         ):
             phone = form.cleaned_data["phone"]
+            requested_at = int(time.time())  # the cooldown clock starts at acceptance, not after the provider answers
             error = _send_reset_otp_if_eligible(request, phone=phone)
             if error:
                 form.add_error(None, error)
@@ -972,7 +975,7 @@ def password_reset_request(request):
                     request.session.pop(key, None)
                 request.session[_OTP_SESSION_PHONE_KEY] = phone
                 request.session[_OTP_SESSION_PURPOSE_KEY] = OwnerOtpChallenge.Purpose.PASSWORD_RESET
-                request.session[_OTP_SESSION_STARTED_KEY] = int(time.time())
+                request.session[_OTP_SESSION_STARTED_KEY] = requested_at
                 request.session[_OTP_SESSION_FLASH_KEY] = {"kind": "ok", "text": _RESET_GENERIC_NOTICE}
                 return redirect("portal:otp-verify")
     else:

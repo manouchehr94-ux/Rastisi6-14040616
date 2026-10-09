@@ -11,9 +11,16 @@ This module keeps the selected template's composition visible WITHOUT inventing 
 * it is a pure, NON-PERSISTENT render-time substitution — it never creates a Product, Category,
   HeroSlide, Banner, Order or Customer, and never writes to the Storefront Layout;
 * it only applies to the public **home** page of a Store provisioned through the modern portal flow
-  (``Store.onboarding_required_at`` set — legacy/ad-hoc Stores are untouched) that has NO storefront-listable
-  product yet. The moment the first product exists the normal data-driven rules apply again (empty optional
-  product rows are hidden as before);
+  (``Store.onboarding_required_at`` set — legacy/ad-hoc Stores are untouched) and is judged PER SECTION KIND,
+  only for a section that would otherwise render empty:
+
+  - **product rows / catalog wall** depend on the availability of real product data: they are placeholders
+    only while the Store has no storefront-listable product. Once the first product exists the normal
+    data-driven rules apply again (empty optional product rows are hidden as before);
+  - **hero/slider and category rail** may remain placeholders while those sections are still empty AND the
+    storefront is still the *as-delivered composition* (the first layout version ever published — the one
+    onboarding published). Adding the first product therefore does NOT collapse them. A deliberate later
+    published layout ends that as-delivered behaviour, so a merchant's own edit is never covered forever;
 * it replaces only the three data-dependent section kinds that carry a template's visual identity
   (hero/slider, category rail, product rows/wall) and only when that section would otherwise render empty.
   Everything else (static sections, header/footer, appearance) is rendered exactly as before;
