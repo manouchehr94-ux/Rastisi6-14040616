@@ -99,7 +99,8 @@ class ServiceCooldownTests(_Base, TestCase):
 
     def test_purposes_do_not_share_a_cooldown(self):
         self.request(purpose="login")
-        for purpose in ("register", "password_reset", "step_up"):
+        Purpose = OwnerOtpChallenge.Purpose
+        for purpose in (Purpose.REGISTER, Purpose.PASSWORD_RESET, Purpose.STEP_UP):
             with self.subTest(purpose=purpose):
                 self.request(purpose=purpose, ip=f"10.2.2.{len(self.sent)}")
         with self.assertRaises(svc.OtpCooldownError):
