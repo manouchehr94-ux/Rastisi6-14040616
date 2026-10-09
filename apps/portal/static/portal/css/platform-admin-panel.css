@@ -3,16 +3,22 @@
    portal/platform_admin templates only; never loaded by the merchant
    dashboard or storefront. */
 :root{
-  --pa-bg:#f4f6fb;--pa-card:#fff;--pa-ink:#182034;--pa-muted:#6f7a90;--pa-line:#e4e8f0;
-  --pa-nav:#10182f;--pa-purple:#6747e8;--pa-purple2:#8066ff;--pa-soft:#f1eeff;
+  --pa-bg:#f4f6fb;--pa-card:#fff;--pa-ink:#182034;--pa-muted:#656e82;--pa-line:#e4e8f0;
+  --pa-nav:#10182f;--pa-purple:#6747e8;--pa-purple2:#745de7;--pa-soft:#f1eeff;
   --pa-green:#15996a;--pa-greenbg:#eaf8f1;--pa-orange:#c66b14;--pa-orangebg:#fff4e6;
   --pa-red:#cc4a4a;--pa-redbg:#fff0f0;--pa-blue:#2d6cdf;--pa-bluebg:#edf4ff;
+  /* -ink = the TEXT colour of each status hue (the base hues are fills/borders; as text on their own tint they were 3.3-4.4:1) */
+  --pa-green-ink:#117c56;--pa-orange-ink:#a75a11;--pa-red-ink:#bb4444;--pa-blue-ink:#2b67d6;
+  --pa-disabled-ink:#66708a;--pa-disabled-bg:#eceff6;
   --pa-shadow:0 14px 40px rgba(36,43,74,.10);
 }
 .pa *{box-sizing:border-box}
 .pa{background:var(--pa-bg);color:var(--pa-ink);font-family:Tahoma,Arial,sans-serif;line-height:1.7;min-height:100vh}
 .pa button,.pa input,.pa select,.pa textarea{font:inherit}
 .pa button{cursor:pointer}
+.pa input::placeholder,.pa textarea::placeholder{color:var(--pa-muted);opacity:1}
+/* two-tone default focus ring (ink outline + white halo in the gap): visible on the light panel and on the dark sidebar */
+:where(.pa) :focus-visible{outline:2px solid var(--pa-ink);outline-offset:2px;box-shadow:0 0 0 2px #fff}
 .pa .hidden{display:none!important}
 .pa-app{min-height:100vh;display:grid;grid-template-columns:260px 1fr}
 .pa-sidebar{background:var(--pa-nav);color:#fff;min-height:100vh;position:sticky;top:0;height:100vh;overflow:auto;padding:18px 14px}
@@ -39,9 +45,9 @@
 .pa-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--pa-line);background:#fff;color:var(--pa-ink);border-radius:10px;padding:10px 14px;font-weight:800;font-size:13px;text-decoration:none}
 .pa-btn.pa-primary{background:linear-gradient(135deg,var(--pa-purple),var(--pa-purple2));color:#fff;border-color:transparent}
 .pa-btn.pa-soft{background:var(--pa-soft);color:var(--pa-purple);border-color:#ded7ff}
-.pa-btn.pa-danger{background:var(--pa-redbg);color:var(--pa-red);border-color:#ffd1d1}
+.pa-btn.pa-danger{background:var(--pa-redbg);color:var(--pa-red-ink);border-color:#ffd1d1}
 .pa-btn.pa-small{padding:7px 10px;font-size:12px}
-.pa-btn:disabled{opacity:.5;cursor:not-allowed}
+.pa-btn:disabled,.pa-btn.pa-primary:disabled{background:var(--pa-disabled-bg);color:var(--pa-disabled-ink);border-color:var(--pa-line);cursor:not-allowed}
 .pa-grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
 .pa-grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
 .pa-grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
@@ -65,10 +71,10 @@
 .pa-tablewrap th{background:#f8f9fc;color:#556179;position:sticky;top:0}
 .pa-tablewrap tbody tr:last-child td{border-bottom:0}
 .pa-badge{display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;font-size:10px;font-weight:900;white-space:nowrap}
-.pa-badge.pa-ok{background:var(--pa-greenbg);color:var(--pa-green)}
-.pa-badge.pa-warn{background:var(--pa-orangebg);color:var(--pa-orange)}
-.pa-badge.pa-off{background:var(--pa-redbg);color:var(--pa-red)}
-.pa-badge.pa-info{background:var(--pa-bluebg);color:var(--pa-blue)}
+.pa-badge.pa-ok{background:var(--pa-greenbg);color:var(--pa-green-ink)}
+.pa-badge.pa-warn{background:var(--pa-orangebg);color:var(--pa-orange-ink)}
+.pa-badge.pa-off{background:var(--pa-redbg);color:var(--pa-red-ink)}
+.pa-badge.pa-info{background:var(--pa-bluebg);color:var(--pa-blue-ink)}
 .pa-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
 .pa-toolbar .pa-spacer{flex:1}
 .pa-input,.pa select,.pa textarea,.pa-field input,.pa-field select,.pa-field textarea{width:100%;border:1px solid #dbe1eb;border-radius:10px;padding:10px 12px;background:#fff;outline:none;font-size:13px;color:var(--pa-ink)}
@@ -101,8 +107,8 @@
 .pa-empty{text-align:center;padding:40px 20px;color:var(--pa-muted)}
 .pa-empty .pa-empty-icon{font-size:36px;margin-bottom:10px}
 .pa-alert{padding:12px 16px;border-radius:10px;font-size:13px;margin-bottom:14px}
-.pa-alert.pa-alert-success{background:var(--pa-greenbg);color:var(--pa-green)}
-.pa-alert.pa-alert-error{background:var(--pa-redbg);color:var(--pa-red)}
+.pa-alert.pa-alert-success{background:var(--pa-greenbg);color:var(--pa-green-ink)}
+.pa-alert.pa-alert-error{background:var(--pa-redbg);color:var(--pa-red-ink)}
 .pa-pagination{display:flex;gap:6px;justify-content:center;padding:14px;flex-wrap:wrap}
 .pa-support-banner{background:linear-gradient(135deg,#c66b14,#e0a72e);color:#fff;padding:10px 18px;display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:13px;flex-wrap:wrap}
 .pa-support-banner form{margin:0}

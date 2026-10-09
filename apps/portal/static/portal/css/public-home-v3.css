@@ -19,7 +19,7 @@
   --rh-chrome-2:color-mix(in srgb,var(--rs-brand-strong) 84%,var(--rs-surface));
   --rh-chrome-line:color-mix(in srgb,var(--rs-paper) 16%,transparent);
   --rh-on-chrome:var(--rs-paper);
-  --rh-on-chrome-muted:color-mix(in srgb,var(--rs-paper) 72%,var(--rs-brand-strong));
+  --rh-on-chrome-muted:color-mix(in srgb,var(--rs-paper) 78%,var(--rs-brand-strong));
 
   --rh-ok:var(--rs-success);
   --rh-work:var(--rs-warning);
@@ -216,7 +216,7 @@ html{scroll-padding-top:104px}
 .rh-sample[data-palette=indigo] .rh-sample-window{--st:var(--rh-p-indigo)}
 .rh-sample[data-palette=copper] .rh-sample-window{--st:var(--rh-p-copper)}
 .rh-sample[data-palette=graphite] .rh-sample-window{--st:var(--rh-p-graphite)}
-.rh-sample .rh-window-bar .rh-tag{color:var(--st);margin-inline-start:0;font-size:10px;padding-inline:8px}
+.rh-sample .rh-window-bar .rh-tag{color:color-mix(in srgb,var(--st) 85%,#000);margin-inline-start:0;font-size:10px;padding-inline:8px}
 .rh-sample-window .rh-window-bar{color:var(--st)}
 .rh-sample-body{flex:1;display:flex;flex-direction:column;padding:14px}
 .rh-sample-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--st)}

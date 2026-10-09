@@ -44,7 +44,9 @@ a.ob-step-link:hover .ob-step-text{color:var(--rs-brand)}
 .ob-step.is-done .ob-step-dot{border-color:var(--rs-brand);background:var(--rs-brand);color:var(--rs-surface)}
 .ob-step.is-current .ob-step-dot{border-color:var(--rs-brand);background:var(--rs-surface);color:var(--rs-brand);box-shadow:0 0 0 3px color-mix(in srgb,var(--rs-brand) 16%,transparent)}
 .ob-step.is-current .ob-step-text{color:var(--rs-ink);font-weight:700}
-.ob-step.is-locked .ob-step-link{opacity:.62}
+/* locked step = real information the owner must read: keep the full muted text colour (>=4.5:1); the lock is signalled by the dashed dot, not by fading */
+.ob-step.is-locked .ob-step-link,.ob-step.is-locked .ob-step-text small{color:var(--rs-muted)}
+.ob-step.is-locked .ob-step-dot{border-style:dashed;border-color:var(--rs-muted);color:var(--rs-muted);background:var(--rs-paper)}
 .ob-step-text{display:inline-flex;align-items:baseline;gap:6px;line-height:1.5}
 .ob-step-text small{color:var(--rs-muted);font-size:11px;font-weight:400}
 
@@ -75,7 +77,7 @@ a.ob-step-link:hover .ob-step-text{color:var(--rs-brand)}
 .ob-tag-required{background:color-mix(in srgb,var(--rs-brand) 12%,var(--rs-surface));color:var(--rs-brand);font-weight:700}
 .ob-field input[type=text],.ob-field input[type=email],.ob-field input[type=tel],.ob-field input[type=url],.ob-field textarea{display:block;width:100%;min-height:46px;padding:9px 14px;border:1px solid var(--rs-line);border-radius:var(--rs-radius-sm);background:var(--rs-paper);color:var(--rs-ink);font:inherit;font-size:16px;line-height:1.8}
 .ob-field textarea{min-height:140px;resize:vertical}
-.ob-field input::placeholder,.ob-field textarea::placeholder{color:color-mix(in srgb,var(--rs-muted) 75%,var(--rs-surface));opacity:1}
+.ob-field input::placeholder,.ob-field textarea::placeholder{color:var(--rs-muted);opacity:1}
 .ob-field input:focus-visible,.ob-field textarea:focus-visible,.ob-search input:focus-visible{outline:3px solid var(--rs-focus);outline-offset:2px;border-color:var(--rs-brand)}
 .ob-field.has-error input,.ob-field.has-error textarea{border-color:var(--rs-danger)}
 .ob-field input[type=email],.ob-field input[inputmode=tel]{text-align:right}
@@ -93,7 +95,7 @@ a.ob-step-link:hover .ob-step-text{color:var(--rs-brand)}
 .ob-btn-primary{border-color:var(--rs-brand);background:var(--rs-brand);color:var(--rs-surface)}
 .ob-btn-primary:hover{border-color:var(--rs-brand-strong);background:var(--rs-brand-strong);color:var(--rs-surface)}
 .ob-btn-quiet{border-color:transparent;background:transparent;color:var(--rs-muted)}
-.ob-btn[disabled],.ob-btn[aria-disabled=true]{opacity:.5;cursor:not-allowed;pointer-events:none}
+.ob-btn[disabled],.ob-btn[aria-disabled=true]{border-color:var(--rs-line);background:var(--rs-disabled-bg);color:var(--rs-disabled-ink);cursor:not-allowed;pointer-events:none}
 .ob-btn-block{width:100%}
 .ob-btn-install{min-height:54px;padding-inline:28px}
 
