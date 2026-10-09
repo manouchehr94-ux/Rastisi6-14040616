@@ -15,6 +15,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase, TestCase, override_settings
 
 from apps.portal.models import OwnerOtpChallenge, OwnerProfile, PlatformConfiguration
+from apps.portal.tests._owner_signup import age_otp_cooldown, complete_account
 from apps.portal.services import owner_otp_service, owner_sms_service
 from apps.sms.models import SmsLog
 from apps.sms.services.backends import MelipayamakBackend, SmsSendResult, UnavailableBackend
@@ -158,7 +159,9 @@ class ExplicitDevCodeTests(TestCase):
         # 1. register with name + mobile, verify with the configured code
         response = client.post("/register/", {"full_name": _NAME, "phone": _PHONE, "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.assertEqual(response["Location"], "/verify/")
-        done = client.post("/verify/", {"code": _CODE}, HTTP_HOST=_HOST)
+        verified = client.post("/verify/", {"code": _CODE}, HTTP_HOST=_HOST)
+        self.assertEqual(verified["Location"], "/signup/complete/")
+        done = complete_account(client, phone=_PHONE)
         self.assertIn("/onboarding/", done["Location"])
         self.assertTrue(OwnerProfile.objects.filter(phone=_PHONE).exists())
         client.post("/logout/", HTTP_HOST=_HOST)
@@ -166,8 +169,11 @@ class ExplicitDevCodeTests(TestCase):
         self.assertEqual(client.post("/login/", {"phone": _PHONE}, HTTP_HOST=_HOST)["Location"], "/verify/")
         self.assertEqual(client.post("/verify/", {"code": _CODE}, HTTP_HOST=_HOST)["Location"], "/app/")
         client.post("/logout/", HTTP_HOST=_HOST)
-        # 3. resend works in the same mode
+        # 3. resend works in the same mode (once the server-side cooldown — which a successful verification does not
+        #    release early — has elapsed since the previous login request)
+        age_otp_cooldown(_PHONE)
         client.post("/login/", {"phone": _PHONE}, HTTP_HOST=_HOST)
+        age_otp_cooldown(_PHONE)
         client.post("/verify/resend/", HTTP_HOST=_HOST)
         self.assertContains(client.get("/verify/", HTTP_HOST=_HOST), "کد جدید ارسال شد")
         client.post("/logout/", HTTP_HOST=_HOST)

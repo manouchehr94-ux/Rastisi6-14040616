@@ -10,6 +10,8 @@
     <p>یکی از {{ template_cards|length }} قالبِ آمادهٔ راستی‌سی را انتخاب کنید؛ این مرحله الزامی است تا فروشگاهِ شما با یک طراحیِ مشخص منتشر شود. قالب فقط روی پیش‌نویسِ فروشگاه اعمال می‌شود و تا «انتشار» برای عموم دیده نمی‌شود. بعد از انتشار هم هر زمان می‌توانید آن را در «سازنده‌ی ویترین» عوض کنید.</p>
   </div>
 
+  <p class="ob-note ob-sample-note" data-ob-sample-note><strong>پیش‌نمایش‌ها با محتوای نمونه ساخته شده‌اند.</strong> محصول‌ها، عکس‌ها و بنرهای داخل تصویر فقط برای نمایشِ ظاهرِ قالب‌اند و به فروشگاه شما منتقل نمی‌شوند. فروشگاهِ شما با رنگ، سربرگ، پاورقی و چیدمانِ همین قالب منتشر می‌شود و محصولات و تصاویرِ خودتان را بعداً از پنلِ مدیریت اضافه می‌کنید.</p>
+
   {% if applied_template and applied_is_older_version %}
   <section class="ob-alert ob-alert-info ob-tpl-current" aria-labelledby="ob-tpl-current-title" data-ob-tpl-current>
     <p id="ob-tpl-current-title" class="ob-tpl-current-title">قالب فعلی شما: «{{ applied_template.preset.label_fa }}»، نسخه {{ applied_template.version }}</p>
@@ -44,12 +46,14 @@
             {% else %}
             <span class="ob-tpl-svg" role="img" aria-label="پیش‌نمایشِ قالبِ {{ preset.label_fa }}">{{ card.thumbnail_svg|safe }}</span>
             {% endif %}
+            <span class="ob-tpl-sample" aria-hidden="true">محتوای نمونه</span>
             <span class="ob-ic-check" aria-hidden="true">✓</span>
           </span>
           <span class="ob-tpl-body">
             <span class="ob-tpl-name">{{ preset.label_fa }}</span>
             {% if card.is_current %}<span class="ob-tag ob-tag-required">قالبِ فعلی</span>{% endif %}
             <span class="ob-tpl-desc">{{ preset.description_fa }}</span>
+            <span class="ob-tpl-choose" aria-hidden="true"><span class="ob-tpl-choose-off">انتخاب این قالب</span><span class="ob-tpl-choose-on">✓ انتخاب شده</span></span>
             <span class="ob-tpl-meta">
               {% if card.palette_swatch %}<span class="ob-swatches" aria-label="پالتِ رنگ">{% for color in card.palette_swatch %}<span class="ob-swatch" data-color="{{ color }}"></span>{% endfor %}</span>{% endif %}
               {% if card.header_variant_label %}<span>هدر: {{ card.header_variant_label }}</span>{% endif %}
@@ -72,14 +76,18 @@
     {% endif %}
   </form>
 
-  {% include "portal/onboarding/_actions.html" with form_id="ob-template-form" continue_label="اعمالِ قالب و ادامه" loading_text="در حال اعمالِ قالب…" template_mode=True %}
+  {% include "portal/onboarding/_actions.html" with form_id="ob-template-form" continue_label="اعمالِ قالبِ انتخاب‌شده و ادامه" loading_text="در حال اعمالِ قالب…" template_mode=True %}
 </section>
 
 <dialog class="ob-lightbox" data-ob-lightbox aria-label="پیش‌نمایشِ بزرگ‌ترِ قالب">
   <div class="ob-lightbox-bar">
     <strong data-ob-lightbox-title></strong>
-    <button type="button" class="ob-btn" data-ob-lightbox-close>بستن</button>
+    <span class="ob-lightbox-actions">
+      <button type="button" class="ob-btn ob-btn-primary" data-ob-lightbox-choose>انتخاب این قالب</button>
+      <button type="button" class="ob-btn" data-ob-lightbox-close>بستن</button>
+    </span>
   </div>
+  <p class="ob-lightbox-note">این فقط یک پیش‌نمایش است و قالبی را انتخاب یا اعمال نمی‌کند. تصویر با محتوای نمونه ساخته شده؛ فروشگاهِ شما با محصولات و تصاویرِ خودتان پر می‌شود.</p>
   <img data-ob-lightbox-img alt="">
 </dialog>
 {% endblock %}

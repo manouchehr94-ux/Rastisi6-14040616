@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from apps.billing.models import SubscriptionInvoice
 from apps.portal.models import OwnerProfile
+from apps.portal.tests._owner_signup import age_otp_cooldown
 from apps.stores.models import Store, StoreMembership
 from apps.subscriptions.models import Plan, PlanVersion
 from apps.subscriptions.services import subscription_service
@@ -109,6 +110,9 @@ class StepUpBillingTests(TestCase):
         self.client.post(
             f"/app/stores/{self.store.public_id}/billing/step-up/", {"code": self.code}, HTTP_HOST=_HOST,
         )
+        # a verified step-up code does not release the send cooldown early; a new code for another store is only
+        # requested once the 120 s window since the first request has passed
+        age_otp_cooldown(self.owner.username)
         other_store = Store.objects.create(
             name="فروشگاه دیگرِ گام‌دوم", slug="step-up-other-store", admin_subdomain="step-up-other-store",
         )

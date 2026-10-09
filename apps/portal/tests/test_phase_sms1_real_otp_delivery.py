@@ -126,15 +126,20 @@ class OwnerOtpDeliveryInvariantTests(TestCase):
         "apps.portal.services.owner_otp_service.send_platform_otp",
         return_value=SmsSendResult(success=False, error_message="provider down"),
     )
-    def test_failed_delivery_deletes_challenge(self, _send):
+    def test_failed_delivery_leaves_no_verifiable_challenge(self, _send):
         with self.assertRaises(owner_otp_service.OtpDeliveryError):
             owner_otp_service.request_otp(
                 phone="09121234567",
                 purpose="register",
                 client_ip="1.2.3.4",
             )
+        # The accepted request keeps only the never-verifiable pending marker (it holds the 120 s resend cooldown).
+        rows = OwnerOtpChallenge.objects.filter(phone="09121234567")
         self.assertFalse(
-            OwnerOtpChallenge.objects.filter(phone="09121234567").exists()
+            rows.exclude(expires_at=owner_otp_service.PENDING_EXPIRES_AT).exists()
+        )
+        self.assertFalse(
+            owner_otp_service.verify_otp(phone="09121234567", purpose="register", code="000000")
         )
 
     @patch(

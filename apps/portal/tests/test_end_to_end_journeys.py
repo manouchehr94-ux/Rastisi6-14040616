@@ -22,6 +22,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.portal.tests._ready_template import select_template
+from apps.portal.tests._owner_signup import age_otp_cooldown, complete_account
 from apps.billing.models import SubscriptionPaymentAttempt
 from apps.billing.providers.manual import SIGNATURE_HEADER, TIMESTAMP_HEADER
 from apps.notifications.models import NotificationOutbox
@@ -108,6 +109,8 @@ class JourneyATestCase(TestCase):
         # --- Register: phone + OTP, auto-provisions exactly one trial Store ---
         self.client.post("/register/", {"full_name": "مالکِ اول", "phone": "09121400001", "accept_terms": "1"}, HTTP_HOST=_HOST)
         response = self.client.post("/verify/", {"phone": "09121400001", "code": "111111"}, HTTP_HOST=_HOST)
+        self.assertEqual(response["Location"], "/signup/complete/")  # phone verified; the account is not created yet
+        response = complete_account(self.client, phone="09121400001")
         self.assertEqual(response.status_code, 302)
         self.assertIn("/onboarding/", response["Location"])
 

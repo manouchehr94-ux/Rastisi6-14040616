@@ -37,6 +37,17 @@ _NEW = "a-brand-new-strong-pass-7"
 _RESET = OwnerOtpChallenge.Purpose.PASSWORD_RESET
 
 
+def _clock_free(html: str) -> str:
+    """The countdown numbers legitimately count down from the moment the request was ACCEPTED, so they may differ by
+    the seconds a real provider call took; everything else on the page must be identical for known/unknown phones."""
+    html = re.sub(r'(data-otp-expires|data-resend-in)="\d+"', r'\1="N"', html)
+    return re.sub(r"پس از [۰-۹]+ ثانیه ممکن", "پس از N ثانیه ممکن", html)
+
+
+def _session_without_clock(session) -> dict:
+    return {k: v for k, v in dict(session).items() if k != portal_views._OTP_SESSION_STARTED_KEY}
+
+
 class _DownCounter:
     def hit(self, key, window_seconds):
         raise ConnectionError("redis://:topsecret@10.0.0.9:6379/0 unreachable")
@@ -53,6 +64,11 @@ class _Base(TestCase):
         patcher = patch.object(owner_otp_service, "send_platform_otp", side_effect=self._fake_send)
         patcher.start()
         self.addCleanup(patcher.stop)
+        # The SERVER-side 120-second resend cooldown (and how the reset flow hides it) is pinned in
+        # ``test_owner_otp_resend_cooldown.py``; these reset tests send several codes back to back.
+        cooldown = patch.object(owner_otp_service, "RESEND_COOLDOWN_SECONDS", 0)
+        cooldown.start()
+        self.addCleanup(cooldown.stop)
 
     def _fake_send(self, *, to, code, purpose, expire_minutes, **_):
         self.sent.append({"to": to, "code": code, "purpose": purpose})
@@ -99,6 +115,12 @@ class _Base(TestCase):
             "stores": Store.objects.count(), "challenges": OwnerOtpChallenge.objects.count(),
             "smslogs": SmsLog.objects.count(), "mail": len(mail.outbox), "sent": len(self.sent),
         }
+
+    def held_rows_only(self, phone=_PHONE):
+        """A failed send keeps its request-time row (so the 120 s cooldown is not silently reset) but only as the
+        never-verifiable pending marker — no other row exists."""
+        rows = OwnerOtpChallenge.objects.filter(phone=phone)
+        return not rows.exclude(expires_at=owner_otp_service.PENDING_EXPIRES_AT).exists()
 
     def active_challenges(self, phone=_PHONE):
         return OwnerOtpChallenge.objects.filter(
@@ -190,7 +212,7 @@ class ResetEnumerationAndNoCreationTests(_Base):
     def _public_shape(self, response):
         verify_page = self.client.get(response["Location"], HTTP_HOST=_HOST)
         html = re.sub(r'value="[^"]*"', "", verify_page.content.decode())  # csrf tokens etc.
-        return response.status_code, response["Location"], re.sub(r"\s+", " ", html), dict(self.client.session)
+        return response.status_code, response["Location"], _clock_free(re.sub(r"\s+", " ", html)), _session_without_clock(self.client.session)
 
     def test_unknown_phone_creates_nothing_sends_nothing_and_looks_identical(self):
         self.owner(_PHONE)
@@ -436,21 +458,21 @@ class ResetFailurePolicyTests(_Base):
         self.assertEqual((response.status_code, response["Location"]), (302, "/verify/"))  # controlled, no 500
         self.assertEqual(len(self.sent), 1)  # it was attempted…
         self.assertEqual(self.active_challenges().count(), 0)  # …and nothing usable remains
-        self.assertFalse(OwnerOtpChallenge.objects.filter(phone=_PHONE).exists())
+        self.assertTrue(self.held_rows_only())  # only the never-verifiable request marker (holds the cooldown)
         for code in ("000000", "123456"):
             self.assertContains(self.verify(code), portal_views._RESET_OTP_FAILURE_MESSAGE)
         self.assertNotIn("portal_password_reset_pending", self.client.session)
         self.assertEqual(self.client.get("/reset-password/new/", HTTP_HOST=_HOST).status_code, 302)
 
-    def test_service_removes_the_in_flight_challenge_when_the_provider_raises(self):
-        """SERVICE boundary only: ``request_otp`` cleans up and re-raises. (The HTTP behaviour is
-        proven by ``ResetProviderExceptionAtTheViewTests``.)"""
+    def test_service_leaves_only_a_never_verifiable_marker_when_the_provider_raises(self):
+        """SERVICE boundary only: ``request_otp`` re-raises and the accepted request keeps only its never-verifiable
+        pending marker. (The HTTP behaviour is proven by ``ResetProviderExceptionAtTheViewTests``.)"""
         self.owner()
         with patch.object(owner_otp_service, "send_platform_otp", side_effect=RuntimeError("boom")):
             with self.assertRaises(RuntimeError):
                 owner_otp_service.request_otp(phone=_PHONE, purpose=_RESET, client_ip="1.1.1.1")
         self.assertEqual(self.active_challenges().count(), 0)
-        self.assertFalse(OwnerOtpChallenge.objects.filter(phone=_PHONE).exists())
+        self.assertTrue(self.held_rows_only())
 
     def test_shared_store_outage_sends_no_sms_and_shows_the_controlled_message(self):
         self.owner()
@@ -711,7 +733,7 @@ class ResetProviderExceptionAtTheViewTests(_Base):
     def public_shape(self, client, response):
         page = client.get(response["Location"], HTTP_HOST=_HOST)
         html = re.sub(r'value="[^"]*"', "", page.content.decode())
-        return response.status_code, response["Location"], re.sub(r"\s+", " ", html)
+        return response.status_code, response["Location"], _clock_free(re.sub(r"\s+", " ", html))
 
     def test_post_with_a_provider_exception_is_controlled_and_leaves_nothing_behind(self):
         before = {"users": User.objects.count(), "profiles": OwnerProfile.objects.count(), "stores": Store.objects.count()}
@@ -721,8 +743,8 @@ class ResetProviderExceptionAtTheViewTests(_Base):
         send.assert_called_once()  # the provider WAS reached (eligible owner)…
         self.assertEqual((response.status_code, response["Location"]), (302, "/verify/"))  # …and it is no 500
 
-        # no usable or pending reset challenge survives; a code cannot be verified
-        self.assertFalse(OwnerOtpChallenge.objects.filter(phone=_PHONE).exists())
+        # no usable reset challenge survives (only the never-verifiable request marker); a code cannot be verified
+        self.assertTrue(self.held_rows_only())
         self.assertEqual(self.active_challenges().count(), 0)
         self.assertEqual(
             owner_otp_service.check_otp(phone=_PHONE, purpose=_RESET, code="654321"),
@@ -765,8 +787,9 @@ class ResetProviderExceptionAtTheViewTests(_Base):
         self.assertEqual((response.status_code, response["Location"]), (302, "/verify/"))
         self.assertContains(self.client.get("/verify/", HTTP_HOST=_HOST), portal_views._RESET_RESEND_NOTICE)
         self.assertNotIn("portal_password_reset_pending", self.client.session)
-        # only the first (successful) challenge exists: the failed resend left nothing behind
-        self.assertEqual(OwnerOtpChallenge.objects.filter(phone=_PHONE, purpose=_RESET).count(), 1)
+        # the first (successful) challenge stays the only usable one; the failed resend left only its never-verifiable marker
+        self.assertEqual(self.active_challenges().count(), 1)
+        self.assertEqual(OwnerOtpChallenge.objects.filter(phone=_PHONE, purpose=_RESET).count(), 2)
 
     def test_keyboard_interrupt_and_system_exit_are_not_swallowed(self):
         for exc in (KeyboardInterrupt, SystemExit):

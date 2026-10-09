@@ -93,19 +93,34 @@
     });
   });
 
-  // Resend countdown (cosmetic; the backend rate limit is what actually applies).
+  // Resend countdown. The server is the authority (a direct POST inside the cooldown is rejected);
+  // this only counts down the server-rendered value ``data-resend-in`` and states when resend opens.
   const resendForm = document.querySelector('[data-resend-form]');
   const resendButton = document.querySelector('[data-resend-button]');
+  const resendHint = document.querySelector('[data-resend-hint]');
   if (resendForm && resendButton) {
     const label = resendButton.textContent.trim();
+    const idleHint = resendHint ? resendHint.textContent : '';
+    const cooldown = resendHint ? (parseInt(resendHint.dataset.cooldown || '0', 10) || 0) : 0;
     let remaining = parseInt(resendForm.dataset.resendIn || '0', 10) || 0;
+    const clock = (total) => {
+      const m = Math.floor(total / 60);
+      const sec = String(total % 60).padStart(2, '0');
+      return `${fa.format(m)}:${sec.replace(/\d/g, (d) => fa.format(d))}`;
+    };
     const paint = () => {
       if (remaining > 0) {
         resendButton.disabled = true;
-        resendButton.textContent = `${label} (${fa.format(remaining)} ثانیه)`;
+        resendButton.textContent = `${label} (${clock(remaining)})`;
+        if (resendHint) {
+          resendHint.textContent = `کد نرسید؟ ارسال دوباره‌ی کد پس از ${clock(remaining)} ممکن می‌شود` +
+            (cooldown ? ` (پس از هر ارسال ${fa.format(cooldown)} ثانیه صبر لازم است).` : '.');
+        }
       } else {
         resendButton.disabled = false;
         resendButton.textContent = label;
+        if (resendHint) resendHint.textContent = idleHint && !/پس از/.test(idleHint)
+          ? idleHint : 'کد نرسید؟ حالا می‌توانید کد جدید بگیرید؛ کد قبلی باطل می‌شود.';
       }
     };
     paint();

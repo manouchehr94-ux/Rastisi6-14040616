@@ -25,7 +25,7 @@
   {% else %}
   <div class="ob-card-head">
     <h2 id="ob-industry-title">{% if template_cards %}صنفِ فروشگاهتان را انتخاب کنید{% else %}صنفِ فروشگاه{% endif %}</h2>
-    {% if template_cards %}<p>با انتخابِ صنف، دسته‌بندی‌ها و ویژگی‌هایِ پیشنهادیِ همان کسب‌وکار یک‌جا ساخته می‌شود تا از صفر شروع نکنید. این مرحله اختیاری است.</p>{% else %}<p>این مرحله اختیاری است و ادامه دادن بدونِ آن هیچ مشکلی ایجاد نمی‌کند.</p>{% endif %}
+    {% if template_cards %}<p>با انتخابِ صنف، دسته‌بندی‌ها و ویژگی‌هایِ پایه‌یِ همان کسب‌وکار ساخته می‌شود تا از صفر شروع نکنید. این مرحله اختیاری است.</p>{% else %}<p>این مرحله اختیاری است و ادامه دادن بدونِ آن هیچ مشکلی ایجاد نمی‌کند.</p>{% endif %}
   </div>
 
   {% if template_cards %}
@@ -43,46 +43,38 @@
       </div>
     </div>
 
-    <div class="ob-industry-layout">
-      <div>
-        <div class="ob-industry-list" role="radiogroup" aria-label="فهرستِ صنف‌ها">
-          {% for card in template_cards %}
-          <label class="ob-industry-card" data-ob-card data-id="{{ card.id }}" data-name="{{ card.name }}" data-sector="{{ card.sector }}" data-sector-label="{{ card.sector_label }}">
-            <input type="radio" name="industry_template_id" value="{{ card.id }}"{% if selected_template_id == card.id|stringformat:'s' %} checked{% endif %}>
-            <span class="ob-ic-check" aria-hidden="true">✓</span>
-            <span class="ob-ic-icon" aria-hidden="true">{{ card.icon|default:"🏷️" }}</span>
-            <span class="ob-ic-name">{{ card.name }}</span>
-            <span class="ob-ic-sector">{{ card.sector_label }}</span>
-            <span class="ob-ic-meta">{{ card.category_count }} دسته{% if card.attribute_count %} · {{ card.attribute_count }} ویژگی{% endif %}</span>
-          </label>
-          {% endfor %}
-        </div>
-        <div class="ob-industry-empty" data-ob-no-results hidden>صنفی با این جست‌وجو پیدا نشد. عبارتِ دیگری را امتحان کنید یا از فهرست، صنفِ «سایر» را انتخاب کنید.</div>
-      </div>
-
-      <aside class="ob-preview" data-ob-preview aria-label="پیش‌نمایشِ صنفِ انتخاب‌شده" aria-live="polite">
-        <div class="ob-preview-empty" data-ob-preview-empty>یک صنف را از فهرست انتخاب کنید تا دسته‌بندی‌ها، ویژگی‌ها و آنچه نصب می‌سازد را اینجا ببینید.</div>
-        {% for card in template_cards %}
-        <div data-ob-panel="{{ card.id }}" hidden>{% include "portal/onboarding/_template_preview.html" %}</div>
-        {% endfor %}
-      </aside>
+    <div class="ob-industry-list" role="radiogroup" aria-label="فهرستِ صنف‌ها">
+      {% for card in template_cards %}
+      <label class="ob-industry-card" data-ob-card data-id="{{ card.id }}" data-name="{{ card.name }}" data-sector="{{ card.sector }}" data-sector-label="{{ card.sector_label }}">
+        <input type="radio" name="industry_template_id" value="{{ card.id }}"{% if selected_template_id == card.id|stringformat:'s' %} checked{% endif %}>
+        <span class="ob-ic-check" aria-hidden="true">✓</span>
+        <span class="ob-ic-icon" aria-hidden="true">{{ card.icon|default:"🏷️" }}</span>
+        <span class="ob-ic-name">{{ card.name }}</span>
+        <span class="ob-ic-sector">{{ card.sector_label }}</span>
+        {% if card.description %}<span class="ob-ic-desc">{{ card.description|truncatechars:64 }}</span>{% endif %}
+        <span class="ob-ic-meta">{{ card.category_count }} دسته‌بندی</span>
+      </label>
+      {% endfor %}
     </div>
+    <div class="ob-industry-empty" data-ob-no-results hidden>صنفی با این جست‌وجو پیدا نشد. عبارتِ دیگری را امتحان کنید یا از فهرست، صنفِ «سایر» را انتخاب کنید.</div>
     <p class="ob-sr-only" role="status" data-ob-selection-status></p>
 
-    <div class="ob-confirm{% if confirm_error %} has-error{% endif %}">
-      <p class="ob-confirm-title">نصبِ قالبِ «<span data-ob-selected-name>—</span>»</p>
-      <p>نصبِ قالبِ صنف <b>فقط یک‌بار</b> برای هر فروشگاه ممکن است و بعد از آن نمی‌توان قالبِ دیگری نصب کرد. اگر مطمئن نیستید، «فعلاً رد شو» را بزنید و بعداً از پنلِ مدیریت دسته‌بندی‌ها و ویژگی‌ها را خودتان بسازید.</p>
-      <label class="ob-check"><input type="checkbox" name="confirm_industry_install" value="1" data-ob-confirm-check{% if confirm_error %} aria-invalid="true" aria-describedby="ob-confirm-error"{% endif %}> می‌دانم که این نصب یک‌بارمصرف است و می‌خواهم قالبِ انتخاب‌شده نصب شود.</label>
-      {% if confirm_error %}<p class="ob-error" id="ob-confirm-error">برای نصب باید کادرِ تأییدِ بالا را علامت بزنید.</p>{% endif %}
-    </div>
   </form>
 
   <form method="post" id="ob-skip-form" data-ob-once>
     {% csrf_token %}
     <input type="hidden" name="action" value="skip">
   </form>
-  <p class="ob-skip-explain">«فعلاً رد شو» یعنی هیچ دسته‌بندی یا ویژگیِ آماده‌ای ساخته نمی‌شود و فروشگاهِ خالی ادامه می‌دهد؛ تا وقتی قالبی نصب نکرده‌اید، بعداً از تنظیماتِ صنف در پنلِ مدیریت هم می‌توانید یکی را نصب کنید.</p>
-  {% include "portal/onboarding/_actions.html" with form_id="ob-industry-form" continue_label="نصبِ قالبِ انتخاب‌شده" skip_form_id="ob-skip-form" install_mode=True loading_text="در حال نصب…" %}
+  <p class="ob-skip-explain">می‌توانید «فعلاً رد شو» را بزنید: بدونِ قالبِ صنف ادامه می‌دهید و دسته‌بندی‌ها و ویژگی‌ها را بعداً از پنلِ مدیریت می‌سازید.</p>
+  <div class="ob-sticky-foot">
+    <div class="ob-confirm{% if confirm_error %} has-error{% endif %}" data-ob-confirm>
+      <p class="ob-confirm-title" data-ob-confirm-title>صنف انتخاب‌شده: <span data-ob-selected-name>هنوز انتخاب نشده</span></p>
+      <p class="ob-confirm-note">دسته‌بندی‌ها و ویژگی‌های پایه‌ی این صنف برای فروشگاه ساخته می‌شوند. نصب فقط یک‌بار برای هر فروشگاه ممکن است.</p>
+      <label class="ob-check"><input type="checkbox" name="confirm_industry_install" value="1" data-ob-confirm-check form="ob-industry-form"{% if confirm_error %} aria-invalid="true" aria-describedby="ob-confirm-error"{% endif %}> این صنف را برای فروشگاهم نصب کن</label>
+      {% if confirm_error %}<p class="ob-error" id="ob-confirm-error">برای نصب باید کادرِ تأییدِ بالا را علامت بزنید.</p>{% endif %}
+    </div>
+  {% include "portal/onboarding/_actions.html" with form_id="ob-industry-form" continue_label="نصبِ صنفِ انتخاب‌شده" skip_form_id="ob-skip-form" install_mode=True loading_text="در حال نصب…" %}
+  </div>
 
   {% else %}
   {# ── بدونِ قالبِ قابل‌ارائه: بن‌بست نیست؛ رد شدن همیشه ممکن است ── #}

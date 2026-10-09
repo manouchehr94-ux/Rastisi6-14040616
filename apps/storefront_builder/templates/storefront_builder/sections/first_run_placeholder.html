@@ -1,0 +1,27 @@
+{% comment %}
+First-run structural placeholder (first_run_placeholder_service). Non-persistent, neutral and honestly worded: it
+keeps a brand-new Store's selected Ready Template composition visible (hero / category rail / product rows) while the
+catalog is still empty. It uses ONLY the selected template's own palette/radius tokens and never shows fake products,
+prices or images. ``item`` is the render item in the including context.
+{% endcomment %}
+<section class="section frp frp--{{ item.first_run_placeholder }}" data-first-run-placeholder="{{ item.first_run_placeholder }}">
+  {% if item.first_run_placeholder == "hero" %}
+  <div class="frp-hero">
+    <div class="frp-hero-copy">
+      <strong>{{ SHOP_NAME|default:"فروشگاه ما" }}</strong>
+      <span>فروشگاه در حال آماده‌سازی است؛ به‌زودی اینجا بنرها و پیشنهادهای ویژه نمایش داده می‌شود.</span>
+    </div>
+    <div class="frp-hero-art" aria-hidden="true"><i></i><i></i><i></i></div>
+  </div>
+  {% elif item.first_run_placeholder == "categories" %}
+  <div class="frp-head"><h2><span class="bar"></span>{{ item.context.settings.title|default:"دسته‌بندی‌ها" }}</h2></div>
+  <div class="frp-tiles" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  <p class="frp-note">دسته‌بندی‌های فروشگاه پس از افزوده‌شدن، اینجا نمایش داده می‌شوند.</p>
+  {% else %}
+  <div class="frp-head"><h2><span class="bar"></span>{{ item.context.settings.title|default:"محصولات" }}</h2></div>
+  <div class="frp-cards" aria-hidden="true">
+    <i><b></b><u></u><u></u></i><i><b></b><u></u><u></u></i><i><b></b><u></u><u></u></i><i><b></b><u></u><u></u></i>
+  </div>
+  <p class="frp-note">محصولات به‌زودی اضافه می‌شوند.</p>
+  {% endif %}
+</section>

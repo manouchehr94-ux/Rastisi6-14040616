@@ -255,36 +255,33 @@ class IdentityStageTests(JourneyBase):
 
 
 class IndustryStageTests(JourneyBase):
-    def test_cards_and_preview_come_from_real_template_data(self):
+    def test_cards_come_from_real_template_data_and_are_simple(self):
         template = make_rich_template()
         make_skeletal_template()
         html = self.get("industry").content.decode()
         self.assertIn("پوشاک نمونه", html)
         self.assertNotIn("اسکلتیِ نیازمندِ بازبینی", html)  # review-required never offered
-        # real counts: 1 root + 4 leaves = 5 categories, 5 attributes, 12 mappings, 1 axis
-        self.assertIn("5 دسته · 5 ویژگی", html)
-        panel = html[html.index(f'data-ob-panel="{template.pk}"'):]
-        panel = panel[:panel.index("</aside>")]
-        for expected in (
-            "توضیحِ واقعیِ قالب", "زیرگروه 0", "زیرگروه 3", "جنسِ پارچه", "کشور سازنده",
-            "12 نگاشتِ ویژگی", "محورهایِ تنوع", "سایز",
-            "نصب دقیقاً چه چیزی می‌سازد", "هیچ محصول، قیمت یا تصویری ساخته نمی‌شود",
-            "نوار اعلان", "بعداً از «سازنده‌ی ویترین»",
-        ):
-            with self.subTest(expected=expected):
-                self.assertIn(expected, panel)
-        self.assertNotIn("not-a-real-section-key", panel)  # unknown section keys silently dropped
+        # real count only: 1 root + 4 leaves = 5 categories — no attribute/feature count or list
+        self.assertIn("5 دسته‌بندی", html)
+        self.assertNotIn("5 ویژگی", html)
+        card = html[html.index(f'data-id="{template.pk}"'):]
+        card = card[:card.index("</label>")]
+        for detail in ("جنسِ پارچه", "کشور سازنده", "زیرگروه 3", "نگاشتِ ویژگی", "محورهایِ تنوع", "نوار اعلان"):
+            self.assertNotIn(detail, card)
 
     def test_install_cta_is_confirmation_grade_and_skip_is_explained(self):
         make_rich_template()
         html = self.get("industry").content.decode()
         self.assertIn("data-ob-confirm-check", html)
+        self.assertIn('name="confirm_industry_install" value="1"', html)  # the exact server-checked value
+        self.assertIn("صنف انتخاب‌شده:", html)
+        self.assertIn("دسته‌بندی‌ها و ویژگی‌های پایه‌ی این صنف برای فروشگاه ساخته می‌شوند", html)
         self.assertIn("فقط یک‌بار", html)
-        self.assertIn("می‌دانم که این نصب یک‌بارمصرف است", html)
+        self.assertIn("این صنف را برای فروشگاهم نصب کن", html)
         self.assertIn("data-ob-install-submit", html)
         self.assertNotIn("data-ob-install-submit disabled", html)  # JS enables/disables; no-JS can still submit (server decides)
         self.assertIn("فعلاً رد شو", html)
-        self.assertIn("هیچ دسته‌بندی یا ویژگیِ آماده‌ای ساخته نمی‌شود", html)
+        self.assertIn("بدونِ قالبِ صنف ادامه می‌دهید و دسته‌بندی‌ها و ویژگی‌ها را بعداً از پنلِ مدیریت می‌سازید", html)
 
     def test_direct_post_without_confirmation_installs_nothing(self):
         """The one-time-install acknowledgement is enforced SERVER-side: a bare

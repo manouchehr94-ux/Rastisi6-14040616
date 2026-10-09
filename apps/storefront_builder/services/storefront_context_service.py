@@ -37,6 +37,7 @@ arbitrary visual blocks» برایِ صفحاتِ خالی؛ اینجا معاد
 
 from __future__ import annotations
 
+from . import first_run_placeholder_service
 from . import page_resolution_service
 from . import render_service
 
@@ -207,6 +208,12 @@ def _build_published_shell_context(
             store,
             page_context=page_context,
             store_appearance=store_appearance,
+        )
+        # A brand-new modern-portal Store with no catalog yet keeps its selected Ready Template's
+        # composition visible through neutral, non-persistent placeholders (first_run_placeholder_service);
+        # every other Store is unaffected.
+        items = first_run_placeholder_service.apply_first_run_placeholders(
+            items, store, page_type=page_type,
         )
         # Acceptance Batch 1 (post-U11) — see the note on the unresolved-store
         # branch above.

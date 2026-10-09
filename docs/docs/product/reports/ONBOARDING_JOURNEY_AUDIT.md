@@ -84,3 +84,14 @@ publishes the Storefront Draft (then completes onboarding) in one transaction. S
   template/version and offers «ادامه با همین قالب» (zero mutation, server-validated). Choosing a card remains the explicit upgrade.
 * Publish error boundary: only `NoDraftToPublishError`, `RateLimitExceeded` and `DatabaseError` from the canonical publish path become
   controlled Persian errors; programmer errors propagate (and still roll back); `BaseException` is never caught.
+
+## Update — registration credentials, OTP resend, industry UX, density
+
+* Registration is now: `/register/` (Terms + name + phone) → OTP → «اطلاعات حساب» (required email + password + confirmation) → Owner +
+  first Store → onboarding. `/login/` with an unknown phone lands on the same step. See ADR-107 addendum.
+* The OTP resend cooldown is 120 s and server-enforced per (phone, purpose); the countdown in the UI reads the same authority.
+* The industry step is a single-flow card grid with one compact confirmation near the CTA (ADR-108 addendum); `_template_preview.html`
+  was only used by this step and is deleted.
+* Onboarding is denser: at 1366×768 the header, progress, title and the first controls/cards of Identity (first input 546→282 px),
+  Industry (first card 684→403 px) and Template are in the first screen; 390 px has no horizontal overflow. Review is a deliberate
+  long summary (publish at the end) by design.

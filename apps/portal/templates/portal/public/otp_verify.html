@@ -10,8 +10,8 @@
       <aside class="r-auth-story">
         {% if is_registration %}
         <div class="rs-eyebrow">تأیید شماره موبایل</div>
-        <h1>شماره‌تان را تأیید کنید،<br>فروشگاهتان ساخته می‌شود.</h1>
-        <p>بعد از وارد کردن کد، حساب مالک شما ساخته و فروشگاه آزمایشی‌تان آماده‌ی راه‌اندازی می‌شود.</p>
+        <h1>شماره‌تان را تأیید کنید،<br>بعد حسابتان را بسازید.</h1>
+        <p>بعد از وارد کردن کد، در مرحله‌ی بعد ایمیل و رمز عبور حساب را تعیین می‌کنید و سپس فروشگاه آزمایشی‌تان ساخته می‌شود.</p>
         {% elif is_reset %}
         <div class="rs-eyebrow">بازیابی یا تعیین رمز</div>
         <h1>شماره‌تان را تأیید کنید،<br>بعد رمز جدید بگذارید.</h1>
@@ -53,11 +53,11 @@
         <form method="post" action="{{ resend_url }}" class="r-otp-resend" data-resend-form data-resend-in="{{ timing.resend_in }}">
           {% csrf_token %}
           <button type="submit" class="rs-link r-resend-btn" data-resend-button>ارسال دوباره کد</button>
-          <span class="r-otp-hint">کد نرسید؟ پیامک را بررسی کنید و اگر لازم بود کد جدید بگیرید؛ کد قبلی باطل می‌شود.</span>
+          <span class="r-otp-hint" id="id_resend_hint" role="status" data-resend-hint data-cooldown="{{ timing.cooldown_seconds }}">{% if timing.resend_in %}کد نرسید؟ ارسال دوباره‌ی کد پس از {{ timing.resend_in|fa_number }} ثانیه ممکن می‌شود (پس از هر ارسال {{ timing.cooldown_seconds|fa_number }} ثانیه صبر لازم است).{% else %}کد نرسید؟ پیامک را بررسی کنید و اگر لازم بود کد جدید بگیرید؛ کد قبلی باطل می‌شود.{% endif %}</span>
         </form>
       </div>
     </div>
   </div>
 </section>
 {% endblock %}
-{% block extra_js %}{{ block.super }}<script src="{% static 'portal/js/auth-forms.js' %}?v=20261006-3" defer></script>{% endblock %}
+{% block extra_js %}{{ block.super }}<script src="{% static 'portal/js/auth-forms.js' %}?v=20261009-1" defer></script>{% endblock %}
