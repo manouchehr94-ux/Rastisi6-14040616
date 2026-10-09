@@ -165,9 +165,9 @@ class FirstRunPlaceholderTests(FidelityBase):
         self.assertNotIn("first_run", str(published.template_provenance))
         self.assertEqual(StorefrontLayoutVersion.objects.count(), versions + 1)  # only the selected template's own Draft→Published
 
-    def test_the_first_product_switches_the_store_back_to_normal_data_driven_rendering(self):
+    def test_the_first_product_replaces_the_product_rows_but_the_empty_hero_stays_until_slides_exist(self):
         html = self.published_public_html("dark_digital")
-        self.assertIn("data-first-run-placeholder", html)
+        self.assertIn('data-first-run-placeholder="products"', html)
         vendor = Vendor.objects.create(store=self.store, name="v", slug="v-fr")
         category = Category.objects.create(store=self.store, name="c", slug="c-fr")
         Product.objects.create(
@@ -175,8 +175,12 @@ class FirstRunPlaceholderTests(FidelityBase):
             sku="SKU-FR-1", price=Decimal("1000"), status=Product.Status.ACTIVE,
         )
         html = _public_get(self.store).content.decode()
-        self.assertNotIn("data-first-run-placeholder", html)
+        self.assertNotIn('data-first-run-placeholder="products"', html)  # real data replaces the product placeholder
+        self.assertNotIn('data-first-run-placeholder="categories"', html)  # a real category now exists
         self.assertIn("کالای واقعی", html)
+        # The template's Hero is still recognisable: it has no real slides yet, and the merchant has not
+        # published any later layout — adding a first product must not collapse it.
+        self.assertIn('data-first-run-placeholder="hero"', html)
 
     def test_a_legacy_store_without_the_signal_is_unchanged(self):
         legacy = Store.objects.create(

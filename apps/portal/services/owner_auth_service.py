@@ -21,7 +21,8 @@ from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.mail import send_mail
-from django.db import IntegrityError, transaction
+from django.core.validators import validate_email
+from django.db import IntegrityError, connection, transaction
 from django.template.loader import render_to_string
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -65,6 +66,18 @@ class OwnerAccountInactiveError(OwnerAuthError):
     """``User`` این شماره غیرفعال است؛ نه ورود انجام می‌شود نه چیزی ساخته می‌شود."""
 
 
+class OwnerCredentialsError(OwnerAuthError):
+    """ایمیل/رمزِ لازم برایِ ساختنِ مالکِ تازه نیامده یا نامعتبر است؛ هیچ ``User``/مالکی ساخته نمی‌شود."""
+
+
+class OwnerEmailError(OwnerCredentialsError):
+    """ایمیل خالی/نامعتبر/بلندتر از حد است."""
+
+
+class OwnerEmailConflictError(OwnerEmailError):
+    """این ایمیل (بدونِ حساسیت به بزرگی/کوچکیِ حروف) از قبل مالِ ``User``ِ دیگری است."""
+
+
 OWNER_FULL_NAME_MIN_LENGTH = 2
 OWNER_FULL_NAME_MAX_LENGTH = 100
 #: نویسه‌هایِ نامرئی/کنترلی که نباید در نام بمانند (ZWNJ — نیم‌فاصله — عمداً مجاز است).
@@ -95,6 +108,93 @@ def normalize_owner_full_name(raw_value: str) -> str:
 
 def _normalize_email(email: str) -> str:
     return (email or "").strip().lower()
+
+
+#: ``User.email`` در جنگو ``max_length=254`` است (حدِ RFC 5321).
+EMAIL_MAX_LENGTH = 254
+EMAIL_REQUIRED_MESSAGE = "ایمیل را وارد کنید."
+EMAIL_INVALID_MESSAGE = "ایمیل واردشده معتبر نیست؛ مثلاً name@example.com."
+EMAIL_CONFLICT_MESSAGE = "این ایمیل قبلاً برای حساب دیگری ثبت شده است؛ ایمیل دیگری وارد کنید."
+PASSWORD_REQUIRED_MESSAGE = "رمز عبور را وارد کنید."
+
+
+def normalize_and_validate_email(raw_email: str) -> str:
+    """ایمیل را نرمال (trim + حروفِ کوچک) و اعتبارسنجی می‌کند؛ ``OwnerEmailError`` اگر خالی/نامعتبر/
+    بلند باشد. یک منبعِ واحد برایِ فرم و سرویس."""
+    email = _normalize_email(raw_email)
+    if not email:
+        raise OwnerEmailError(EMAIL_REQUIRED_MESSAGE)
+    if len(email) > EMAIL_MAX_LENGTH:
+        raise OwnerEmailError(EMAIL_INVALID_MESSAGE)
+    try:
+        validate_email(email)
+    except DjangoValidationError as exc:
+        raise OwnerEmailError(EMAIL_INVALID_MESSAGE) from exc
+    return email
+
+
+def email_belongs_to_another_user(email: str, *, exclude_user=None) -> bool:
+    """آیا این (نرمال‌شده) ایمیل — بدونِ حساسیت به حروف — از آنِ ``User``ِ دیگری است؟ ایمیلِ خودِ همان
+    ``exclude_user`` تعارض نیست."""
+    queryset = User.objects.filter(email__iexact=email)
+    if exclude_user is not None and exclude_user.pk is not None:
+        queryset = queryset.exclude(pk=exclude_user.pk)
+    return queryset.exists()
+
+
+def _lock_email(email: str) -> None:
+    """درخواست‌هایِ هم‌زمان با یک ایمیل را در PostgreSQL سریال می‌کند (``User.email`` unique نیست؛ این قفل
+    جلوی دو حسابِ هم‌زمان با یک ایمیل را می‌گیرد). SQLite: نوشتن‌ها از پیش سریال‌اند."""
+    if connection.vendor == "postgresql":
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", [f"owner_account_email:{email}"],
+            )
+
+
+@dataclass(frozen=True)
+class SignupRequirements:
+    """آنچه یک شمارهٔ تأییدشده برایِ مالک‌شدن لازم دارد — از وضعیتِ *واقعیِ* همان ``User`` در دیتابیس
+    (نه از کلاینت). ``existing_owner``: ``OwnerProfile`` دارد؛ هیچ مرحله‌ای لازم نیست. وگرنه
+    ``need_email``/``need_password`` می‌گویند اعتبارنامه‌یِ این حساب چه کم دارد: ``User``ِ تازه هر دو؛
+    ``User``ِ موجودِ بدونِ رمزِ قابل‌استفاده رمز؛ ``User``ِ موجودِ بدونِ ایمیل ایمیل. رمزِ قابل‌استفاده یا
+    ایمیلِ ثبت‌شده هرگز بازنویسی نمی‌شود."""
+
+    existing_owner: bool
+    need_email: bool
+    need_password: bool
+    user: "User | None" = None
+
+    @property
+    def needs_credentials(self) -> bool:
+        return self.need_email or self.need_password
+
+
+def signup_requirements_for_phone(phone: str) -> SignupRequirements:
+    if OwnerProfile.objects.filter(phone=phone).exists():
+        return SignupRequirements(existing_owner=True, need_email=False, need_password=False)
+    user = User.objects.filter(username=phone).first()
+    if user is None:
+        return SignupRequirements(existing_owner=False, need_email=True, need_password=True)
+    if OwnerProfile.objects.filter(user=user).exists():
+        return SignupRequirements(existing_owner=True, need_email=False, need_password=False, user=user)
+    return SignupRequirements(
+        existing_owner=False,
+        need_email=not (user.email or "").strip(),
+        need_password=not user.has_usable_password(),
+        user=user,
+    )
+
+
+def validate_new_account_password(password: str, *, user) -> None:
+    """رمزِ تازه را فقط با ``AUTH_PASSWORD_VALIDATORS`` می‌سنجد (سیاستِ جداگانه‌ای نیست). ``user`` می‌تواند
+    نمونه‌یِ ذخیره‌نشده باشد (برایِ اعتبارسنجِ شباهت به نام‌کاربری/ایمیل). ``PasswordPolicyError`` اگر رد شود."""
+    if not password:
+        raise PasswordPolicyError([PASSWORD_REQUIRED_MESSAGE])
+    try:
+        validate_password(password, user=user)
+    except DjangoValidationError as exc:
+        raise PasswordPolicyError(_persian_policy_messages(exc)) from exc
 
 
 def _looks_like_email(identifier: str) -> bool:
@@ -383,6 +483,7 @@ class OwnerIdentityResult:
 def resolve_owner_identity_by_phone(
     *, phone: str, full_name: str = "", allow_new_owner: bool = True, require_active: bool = True,
     accepted_terms_version: str = "", terms_source: str = "",
+    require_credentials: bool = False, email: str = "", password: str = "",
 ) -> OwnerIdentityResult:
     """شناسه‌ی اصلیِ ورودِ مالک موبایل+OTP است (Section 3؛ ایمیل+رمز فقط برایِ
     حساب‌هایِ قدیمی/بازیابی/مدیرِ پلتفرم مانده).
@@ -407,7 +508,13 @@ def resolve_owner_identity_by_phone(
     ``OwnerTermsAcceptance`` **در همان تراکنش و فقط برایِ برنده‌ی ساختِ
     ``OwnerProfile``** نوشته می‌شود (idempotent با ``get_or_create``)؛ برایِ مالکِ
     موجود یا بازنده‌ی مسابقه هرگز چیزی ثبت نمی‌شود، و اگر ساختنِ مالک شکست بخورد
-    پذیرشی هم باقی نمی‌ماند."""
+    پذیرشی هم باقی نمی‌ماند.
+
+    اعتبارنامه (``require_credentials=True``، مسیرهایِ عمومیِ ثبت‌نام): پیش از ساختنِ هر چیز و **در همان
+    تراکنش** — ``User``ِ تازه *باید* ایمیلِ معتبرِ یکتا (بدونِ حساسیت به حروف) و رمزِ معتبر (با
+    ``AUTH_PASSWORD_VALIDATORS``) بگیرد؛ ``User``ِ موجود فقط آنچه ندارد (ایمیلِ خالی / رمزِ غیرِ قابل‌استفاده)
+    را می‌گیرد و رمزِ قابل‌استفاده یا ایمیلِ ثبت‌شده‌اش هرگز بازنویسی نمی‌شود. رمز فقط همین‌جا هش می‌شود و در
+    هیچ نشست/لاگ/ردیفِ میانی نیست. خطا ⇒ rollbackِ کامل (نه User، نه OwnerProfile، نه پذیرشِ قوانین)."""
     full_name = " ".join(str(full_name or "").split())
 
     with transaction.atomic():
@@ -422,11 +529,21 @@ def resolve_owner_identity_by_phone(
         if user is None:
             if not allow_new_owner:
                 raise NewOwnerRegistrationClosedError("ثبت‌نام فروشگاهِ تازه موقتاً بسته است.")
+            clean_email = ""
+            if require_credentials:
+                clean_email = normalize_and_validate_email(email)
+                validate_new_account_password(password, user=User(username=phone, email=clean_email))
+                _lock_email(clean_email)
+                if email_belongs_to_another_user(clean_email):
+                    raise OwnerEmailConflictError(EMAIL_CONFLICT_MESSAGE)
             try:
                 with transaction.atomic():
-                    user = User.objects.create_user(username=phone)
-                    user.set_unusable_password()
-                    user.save(update_fields=["password"])
+                    if require_credentials:
+                        user = User.objects.create_user(username=phone, email=clean_email, password=password)
+                    else:
+                        user = User.objects.create_user(username=phone)
+                        user.set_unusable_password()
+                        user.save(update_fields=["password"])
                 user_created = True
             except IntegrityError:  # درخواستِ هم‌زمانِ دیگری همین شماره را ساخت
                 user = User.objects.select_for_update().get(username=phone)
@@ -437,6 +554,8 @@ def resolve_owner_identity_by_phone(
         if existing_profile is None:
             if not allow_new_owner:
                 raise NewOwnerRegistrationClosedError("ثبت‌نام فروشگاهِ تازه موقتاً بسته است.")
+            if require_credentials and not user_created:
+                _apply_missing_credentials(user, email=email, password=password)
             try:
                 with transaction.atomic():
                     OwnerProfile.objects.create(user=user, phone=phone, full_name=full_name)
@@ -464,6 +583,26 @@ def resolve_owner_identity_by_phone(
                 fields.append("full_name")
             existing_profile.save(update_fields=fields)
         return OwnerIdentityResult(user, user_created=user_created, owner_created=False)
+
+
+def _apply_missing_credentials(user, *, email: str, password: str) -> None:
+    """برایِ ``User``ِ *موجود* (مثلاً مشتریِ فروشگاه) که مالک می‌شود: فقط جاهایِ خالی پر می‌شود. ایمیلِ
+    ثبت‌شده و رمزِ قابل‌استفاده **هرگز** بازنویسی نمی‌شوند؛ ایمیلِ تازه نباید مالِ کسِ دیگری باشد. زیرِ
+    قفلِ سطرِ همین ``User`` (فراخوان ``select_for_update`` کرده) و در تراکنشِ فراخوان."""
+    fields = []
+    if not (user.email or "").strip():
+        clean_email = normalize_and_validate_email(email)
+        _lock_email(clean_email)
+        if email_belongs_to_another_user(clean_email, exclude_user=user):
+            raise OwnerEmailConflictError(EMAIL_CONFLICT_MESSAGE)
+        user.email = clean_email
+        fields.append("email")
+    if not user.has_usable_password():
+        validate_new_account_password(password, user=user)
+        user.set_password(password)
+        fields.append("password")
+    if fields:
+        user.save(update_fields=fields)
 
 
 def get_or_create_owner_by_phone(*, phone: str, full_name: str = "") -> tuple[User, bool]:

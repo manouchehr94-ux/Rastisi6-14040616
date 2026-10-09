@@ -53,6 +53,11 @@ class _Base(TestCase):
         patcher = patch.object(owner_otp_service, "send_platform_otp", side_effect=self._fake_send)
         patcher.start()
         self.addCleanup(patcher.stop)
+        # The SERVER-side 120-second resend cooldown (and how the reset flow hides it) is pinned in
+        # ``test_owner_otp_resend_cooldown.py``; these reset tests send several codes back to back.
+        cooldown = patch.object(owner_otp_service, "RESEND_COOLDOWN_SECONDS", 0)
+        cooldown.start()
+        self.addCleanup(cooldown.stop)
 
     def _fake_send(self, *, to, code, purpose, expire_minutes, **_):
         self.sent.append({"to": to, "code": code, "purpose": purpose})

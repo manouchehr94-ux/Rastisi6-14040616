@@ -57,7 +57,7 @@ from .forms import (
     OwnerOtpVerifyForm,
     OwnerPhoneRequestForm,
     OwnerRegistrationRequestForm,
-    OwnerSignupCompletionForm,
+    OwnerAccountCompletionForm,
     PasswordResetConfirmForm,
     PasswordResetRequestForm,
 )
@@ -534,7 +534,7 @@ def _reset_otp_timing(request) -> dict:
     elapsed = max(0, int(time.time()) - started) if isinstance(started, int) else owner_otp_service.OTP_TTL_SECONDS
     return {
         "expires_in": max(0, owner_otp_service.OTP_TTL_SECONDS - elapsed),
-        "resend_in": max(0, owner_otp_service.RESEND_UX_COOLDOWN_SECONDS - elapsed),
+        "resend_in": max(0, owner_otp_service.RESEND_COOLDOWN_SECONDS - elapsed),
     }
 
 
@@ -621,24 +621,20 @@ def otp_verify(request):
 
     registration_open = platform_config_service.is_new_store_registration_enabled()
     try:
+        # OTP only proves the phone. An EXISTING Owner is recognised (and logged in) here; a phone with
+        # no Owner NEVER gets one created at this step — whether it came from /register/ or /login/ — it
+        # continues to the single «اطلاعات حساب» step where email + password (and, for /login/, name +
+        # Terms) are collected, so no Owner/Store can exist without credentials.
         identity = owner_auth_service.resolve_owner_identity_by_phone(
-            phone=phone, full_name=full_name,
-            # /register/ already captured the name server-side, so it may create the
-            # Owner now. /login/ never creates one: OTP only proves the phone, and a
-            # phone without an Owner continues to the «تکمیل ثبت‌نام» step.
-            allow_new_owner=registration_open and is_registration,
-            # فقط مسیرِ /register/؛ ردیفِ پذیرش تنها وقتی نوشته می‌شود که همین درخواست
-            # OwnerProfile را واقعاً ساخته باشد (مالکِ موجود/ورود: هیچ‌چیز).
-            accepted_terms_version=accepted_terms_version,
-            terms_source=OwnerTermsAcceptance.Source.REGISTRATION,
+            phone=phone, full_name=full_name, allow_new_owner=False,
         )
     except owner_auth_service.NewOwnerRegistrationClosedError:
-        if not is_registration and registration_open:
-            request.session[_SIGNUP_PENDING_KEY] = {
-                "phone": phone, "verified_at": int(time.time()), "next": next_url,
-                "admin_return": admin_return, "remember_me": bool(remember_me),
-            }
-            return redirect("portal:signup-complete")
+        if registration_open:
+            return _begin_account_completion(
+                request, phone=phone, full_name=full_name, terms_version=accepted_terms_version,
+                origin="register" if is_registration else "login",
+                next_url=next_url, admin_return=admin_return, remember_me=bool(remember_me),
+            )
         messages.warning(request, _REGISTRATION_CLOSED_LOGIN_MESSAGE)
         return redirect("portal:login")
     except owner_auth_service.OwnerAccountInactiveError:
@@ -695,17 +691,60 @@ def _get_pending_signup(request):
     return None
 
 
-def signup_complete(request):
-    """«تکمیل ثبت‌نام»: شمارهٔ تأییدشده با OTP هنوز مالک ندارد؛ نامِ کامل را می‌گیرد و
-    سپس (با سرویس‌هایِ سخت‌شده‌ی هویت/راه‌اندازی) دقیقاً یک ``OwnerProfile`` و یک
-    فروشگاهِ آزمایشی می‌سازد.
+def _begin_account_completion(
+    request, *, phone: str, full_name: str, terms_version: str, origin: str,
+    next_url: str, admin_return: str, remember_me: bool,
+):
+    """اثباتِ «این شماره با OTP تأیید شد» را (فقط سمتِ سرور، کوتاه‌عمر) می‌نویسد و به مرحله‌یِ
+    «اطلاعات حساب» می‌رود. **رمز و ایمیل هرگز اینجا نیستند**: آن‌ها فقط در همان POSTِ مرحله‌یِ بعد
+    می‌آیند و بلافاصله در تراکنشِ ساختِ حساب هش/ذخیره می‌شوند. ``full_name``/``terms_version`` فقط
+    وقتی پر هستند که ``/register/`` آن‌ها را پیش‌تر (با چک‌باکسِ معتبر) سمتِ سرور گرفته باشد."""
+    pending = {
+        "phone": phone, "verified_at": int(time.time()), "next": next_url, "admin_return": admin_return,
+        "remember_me": bool(remember_me), "full_name": full_name or "", "terms_version": terms_version or "",
+        "origin": origin,
+    }
+    request.session[_SIGNUP_PENDING_KEY] = pending
+    # A verified phone whose existing User already has an email AND a usable password, coming from /register/
+    # (name + Terms already captured server-side), has nothing left to ask: complete right away. The existing
+    # password/email are preserved untouched. Any hiccup falls back to the visible step (the proof stays valid).
+    requirements = owner_auth_service.signup_requirements_for_phone(phone)
+    if not requirements.existing_owner:
+        form = _signup_form_for(request, pending, requirements, data={})
+        if not form.fields and form.is_valid():
+            response = _finish_account_completion(request, pending, form, _signup_context(pending))
+            if response.status_code == 302:
+                return response
+    return redirect("portal:signup-complete")
 
-    امنیت: شماره **فقط** از نشستِ سمتِ سرور (که تنها پس از موفقیتِ OTP نوشته
-    می‌شود و عمرِ کوتاه دارد) خوانده می‌شود؛ هیچ شماره‌ای از بدنه‌ی درخواست
-    نمی‌آید و بدونِ OTP این آدرس چیزی نمی‌سازد. وضعیت پس از موفقیت پاک می‌شود
-    (تک‌مصرف)؛ تکرار/دابل‌سابمیت/مسابقه را یکتاییِ دیتابیس و قفلِ سرویس‌ها ایمن
-    می‌کند. اگر ``new_store_registration_enabled`` خاموش شده باشد هیچ‌چیز ساخته
-    نمی‌شود."""
+
+def _signup_context(pending) -> dict:
+    return {
+        "phone": pending["phone"], "registration_open": True, "terms_version": CURRENT_TERMS_VERSION,
+        "password_help": password_validators_help_texts(), "full_name": pending.get("full_name", ""),
+        "from_register": pending.get("origin") == "register",
+    }
+
+
+def _signup_form_for(request, pending, requirements, *, data=None):
+    terms_ok = pending.get("terms_version") == CURRENT_TERMS_VERSION
+    return OwnerAccountCompletionForm(
+        data, phone=pending["phone"], need_full_name=not pending.get("full_name"), need_terms=not terms_ok,
+        need_email=requirements.need_email, need_password=requirements.need_password, user=requirements.user,
+    )
+
+
+def signup_complete(request):
+    """«اطلاعات حساب»: شمارهٔ تأییدشده با OTP هنوز مالک ندارد؛ **ایمیل + رمز عبور** (و در مسیرِ
+    ``/login/`` نام و قوانین) را می‌گیرد و سپس — فقط در صورتِ موفقیتِ همه — دقیقاً یک ``User``/
+    ``OwnerProfile``/پذیرشِ قوانین و یک فروشگاهِ آزمایشی می‌سازد.
+
+    امنیت: شماره **فقط** از نشستِ سمتِ سرور (که تنها پس از موفقیتِ OTP نوشته می‌شود و عمرِ کوتاه دارد)
+    خوانده می‌شود؛ هیچ شماره/نسخه‌یِ قوانینی از بدنه نمی‌آید. اثباتِ شماره با خطایِ فرم سوخته نمی‌شود
+    (کاربر می‌تواند اصلاح کند) و فقط پس از موفقیت پاک می‌شود (تک‌مصرف)؛ تکرار/دابل‌سابمیت/مسابقه را
+    یکتاییِ دیتابیس و قفلِ سرویس ایمن می‌کند. اگر ``new_store_registration_enabled`` خاموش شده باشد
+    هیچ‌چیز ساخته نمی‌شود. نیازِ فرم (ایمیل/رمز) از وضعیتِ *واقعیِ* ``User`` می‌آید: رمزِ قابل‌استفاده یا
+    ایمیلِ ثبت‌شده‌یِ یک کاربرِ موجود هرگز خواسته/بازنویسی نمی‌شود."""
     pending = _get_pending_signup(request)
     if pending is None:
         return redirect("portal:login")
@@ -714,36 +753,70 @@ def signup_complete(request):
         return redirect("portal:app-home")
 
     phone = pending["phone"]
-    context = {"phone": phone, "registration_open": True, "terms_version": CURRENT_TERMS_VERSION}
+    context = _signup_context(pending)
     if not platform_config_service.is_new_store_registration_enabled():
-        context.update(form=OwnerSignupCompletionForm(), registration_open=False)
+        context.update(form=None, registration_open=False)
         return render(request, "portal/public/signup_complete.html", context)
 
+    requirements = owner_auth_service.signup_requirements_for_phone(phone)
+    if requirements.existing_owner:
+        # Someone (this phone's owner, another tab) already completed it: the verified phone is the same
+        # proof OTP login uses, so this is just a login. Nothing is created.
+        request.session.pop(_SIGNUP_PENDING_KEY, None)
+        try:
+            identity = owner_auth_service.resolve_owner_identity_by_phone(phone=phone, allow_new_owner=False)
+        except owner_auth_service.OwnerAccountInactiveError:
+            messages.error(request, _INACTIVE_ACCOUNT_MESSAGE)
+            return redirect("portal:login")
+        return _finish_owner_login(
+            request, identity, next_url=pending.get("next", ""),
+            admin_return=pending.get("admin_return", ""), remember_me=bool(pending.get("remember_me")),
+        )
+
     if request.method == "POST":
-        form = OwnerSignupCompletionForm(request.POST)  # a posted "phone" is never read
+        form = _signup_form_for(request, pending, requirements, data=request.POST)  # a posted "phone" is never read
         if form.is_valid():
-            try:
-                identity = owner_auth_service.resolve_owner_identity_by_phone(
-                    phone=phone, full_name=form.cleaned_data["full_name"],
-                    allow_new_owner=platform_config_service.is_new_store_registration_enabled(),
-                    # چک‌باکسِ همین فرم معتبر بود؛ نسخه همیشه ثابتِ سرور است نه مقدارِ ارسالی.
-                    accepted_terms_version=CURRENT_TERMS_VERSION,
-                    terms_source=OwnerTermsAcceptance.Source.SIGNUP_COMPLETE,
-                )
-            except owner_auth_service.NewOwnerRegistrationClosedError:
-                context.update(form=OwnerSignupCompletionForm(), registration_open=False)
-                return render(request, "portal/public/signup_complete.html", context)
-            except owner_auth_service.OwnerAccountInactiveError:
-                request.session.pop(_SIGNUP_PENDING_KEY, None)
-                messages.error(request, _INACTIVE_ACCOUNT_MESSAGE)
-                return redirect("portal:login")
-            request.session.pop(_SIGNUP_PENDING_KEY, None)  # single use
-            return _finish_owner_login(
-                request, identity, next_url=pending.get("next", ""),
-                admin_return=pending.get("admin_return", ""), remember_me=bool(pending.get("remember_me")),
-            )
+            return _finish_account_completion(request, pending, form, context)
     else:
-        form = OwnerSignupCompletionForm()
+        form = _signup_form_for(request, pending, requirements)
+    context["form"] = form
+    return render(request, "portal/public/signup_complete.html", context)
+
+
+def _finish_account_completion(request, pending, form, context):
+    cleaned = form.cleaned_data
+    source = (
+        OwnerTermsAcceptance.Source.REGISTRATION if pending.get("origin") == "register"
+        else OwnerTermsAcceptance.Source.SIGNUP_COMPLETE
+    )
+    try:
+        identity = owner_auth_service.resolve_owner_identity_by_phone(
+            phone=pending["phone"], full_name=pending.get("full_name") or cleaned.get("full_name", ""),
+            allow_new_owner=platform_config_service.is_new_store_registration_enabled(),
+            # قوانین: یا همین فرم چک‌باکسِ معتبر داشت یا نسخه‌یِ فعلی پیش‌تر سمتِ سرور ثبت شده بود؛
+            # نسخه همیشه ثابتِ سرور است نه مقدارِ ارسالی.
+            accepted_terms_version=CURRENT_TERMS_VERSION, terms_source=source,
+            require_credentials=True, email=cleaned.get("email", ""), password=cleaned.get("password", ""),
+        )
+    except owner_auth_service.NewOwnerRegistrationClosedError:
+        context.update(form=None, registration_open=False)
+        return render(request, "portal/public/signup_complete.html", context)
+    except owner_auth_service.OwnerAccountInactiveError:
+        request.session.pop(_SIGNUP_PENDING_KEY, None)
+        messages.error(request, _INACTIVE_ACCOUNT_MESSAGE)
+        return redirect("portal:login")
+    except owner_auth_service.PasswordPolicyError as exc:
+        form.add_error("password" if "password" in form.fields else None, ValidationError(exc.messages))
+    except owner_auth_service.OwnerEmailError as exc:  # incl. a conflict found inside the transaction (race)
+        form.add_error("email" if "email" in form.fields else None, str(exc))
+    except owner_auth_service.OwnerCredentialsError as exc:
+        form.add_error(None, str(exc))
+    else:
+        request.session.pop(_SIGNUP_PENDING_KEY, None)  # single use
+        return _finish_owner_login(
+            request, identity, next_url=pending.get("next", ""),
+            admin_return=pending.get("admin_return", ""), remember_me=bool(pending.get("remember_me")),
+        )
     context["form"] = form
     return render(request, "portal/public/signup_complete.html", context)
 
@@ -768,6 +841,15 @@ def otp_resend(request):
         return redirect("portal:register")
 
     if purpose == OwnerOtpChallenge.Purpose.PASSWORD_RESET:
+        # The resend cooldown for a reset is judged from the SESSION only (``_reset_otp_timing``): the same answer
+        # for a known and an unknown phone, so it cannot reveal whether an account exists. The service enforces the
+        # real per-(phone, purpose) cooldown as well; the session clock starts after the send, so it never opens early.
+        wait = _reset_otp_timing(request)["resend_in"]
+        if wait > 0:
+            request.session[_OTP_SESSION_FLASH_KEY] = {
+                "kind": "error", "text": owner_otp_service.OtpCooldownError(wait).args[0],
+            }
+            return redirect("portal:otp-verify")
         # Never the generic sender: that would create/send a reset challenge for ANY phone.
         # The helper re-checks that this phone belongs to an eligible owner, and answers the
         # same way for known and unknown numbers.

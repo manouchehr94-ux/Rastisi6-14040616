@@ -38,6 +38,7 @@ from apps.portal.services import (
     provisioning_service,
     turnstile_service,
 )
+from apps.portal.tests._owner_signup import GOOD_PASSWORD, complete_account, email_for, finish_signup_if_needed
 from apps.sms.models import SmsLog
 from apps.sms.services.backends import SmsSendResult
 from apps.stores.models import Store, StoreDomain, StoreMembership
@@ -49,13 +50,31 @@ _PHONE = "09121230001"
 _NAME = "سارا احمدی"
 
 
+def _complete_post(client, *, phone, name=_NAME, **extra):
+    """POST the «اطلاعات حساب» step as /login/'s unknown-phone path sees it (name + Terms + email + password)."""
+    data = {
+        "full_name": name, "accept_terms": "1", "email": email_for(phone),
+        "password": GOOD_PASSWORD, "password_confirm": GOOD_PASSWORD, **extra,
+    }
+    return client.post("/signup/complete/", data, HTTP_HOST=_HOST)
+
+
 class _OtpTestMixin:
     """Captures the real OTP code handed to the SMS layer (no monkeypatching of
     the generator), so every request gets a genuinely random code."""
 
+    #: The SERVER-side 120-second resend cooldown is pinned in ``test_owner_otp_resend_cooldown.py``. The lifecycle /
+    #: ordering / concurrency tests in this module deliberately issue several codes back to back, so they run with the
+    #: cooldown neutralised unless a test class sets ``real_resend_cooldown = True``.
+    real_resend_cooldown = False
+
     def setUp(self):
         super().setUp()
         cache.clear()  # OTP IP rate-limit counters are cache-backed
+        if not self.real_resend_cooldown:
+            cooldown = patch.object(owner_otp_service, "RESEND_COOLDOWN_SECONDS", 0)
+            cooldown.start()
+            self.addCleanup(cooldown.stop)
         # Data migrations may leave a pre-existing default Store; every count
         # below is about rows created *by the test*.
         self.base_store_ids = set(Store.objects.values_list("pk", flat=True))
@@ -80,11 +99,21 @@ class _OtpTestMixin:
         client = client or self.client
         return (client).post("/login/", {"phone": phone}, HTTP_HOST=_HOST)
 
-    def verify(self, code=None, client=None, **extra):
+    def verify(self, code=None, client=None, complete=True, **extra):
+        """POST /verify/. By default a brand-new Owner's mandatory «اطلاعات حساب» step (email + password) is
+        completed too, so journey tests keep asserting what happens once the account exists; pass
+        ``complete=False`` to stop at the credential step."""
         client = client or self.client
-        return client.post(
+        phone = client.session.get("portal_otp_phone")
+        registering = client.session.get("portal_otp_purpose") == OwnerOtpChallenge.Purpose.REGISTER
+        response = client.post(
             "/verify/", {"code": code if code is not None else self.last_code, **extra}, HTTP_HOST=_HOST,
         )
+        # Only /register/ journeys are auto-completed (they used to create the Owner right here); the /login/
+        # unknown-phone path always stops at «تکمیل ثبت‌نام» and its tests drive that step themselves.
+        if complete and phone and registering:
+            response = finish_signup_if_needed(client, response, phone=phone)
+        return response
 
     def set_registration(self, enabled: bool):
         config, _ = PlatformConfiguration.objects.get_or_create(pk=1)
@@ -189,7 +218,7 @@ class RegistrationNameTests(_OtpTestMixin, TestCase):
         self.register(name="Stale Name")
         self.login_otp(phone="09121230099")
         self.verify()
-        self.client.post("/signup/complete/", {"full_name": "Real Name", "accept_terms": "1"}, HTTP_HOST=_HOST)
+        _complete_post(self.client, phone="09121230099", name="Real Name")
         self.assertEqual(OwnerProfile.objects.get(phone="09121230099").full_name, "Real Name")
 
     def test_registration_without_a_session_name_restarts_registration(self):
@@ -261,7 +290,9 @@ class FreshSignupTests(_OtpTestMixin, TestCase):
         self.assertEqual(User.objects.count(), 1)
         user = User.objects.get()
         self.assertEqual(user.username, _PHONE)
-        self.assertFalse(user.has_usable_password())
+        self.assertTrue(user.has_usable_password())  # the owner chose a password on the «اطلاعات حساب» step
+        self.assertTrue(user.check_password(GOOD_PASSWORD))
+        self.assertEqual(user.email, email_for(_PHONE))
         self.assertEqual(OwnerProfile.objects.count(), 1)
         profile = OwnerProfile.objects.get()
         self.assertEqual((profile.user_id, profile.phone, profile.full_name), (user.pk, _PHONE, _NAME))
@@ -394,7 +425,7 @@ class ExistingIdentityTests(_OtpTestMixin, TestCase):
         self.login_otp()
         self.verify()
         self.assertEqual((OwnerProfile.objects.count(), self.stores().count()), (0, 0))
-        self.client.post("/signup/complete/", {"full_name": "Owner Person", "accept_terms": "1"}, HTTP_HOST=_HOST)
+        _complete_post(self.client, phone=_PHONE, name="Owner Person")
         self.assertEqual((OwnerProfile.objects.count(), self.stores().count()), (1, 1))
 
     def test_existing_owner_registering_again_gets_no_extra_store_and_keeps_their_name(self):
@@ -793,7 +824,7 @@ class AnonymousEmailRegistrationRemovedTests(_OtpTestMixin, TestCase):
         verified = self.verify()
         self.assertEqual(verified["Location"], "/signup/complete/")
         self.assertFalse(OwnerProfile.objects.filter(phone=other).exists())
-        completed = self.client.post("/signup/complete/", {"full_name": "Second Owner", "accept_terms": "1"}, HTTP_HOST=_HOST)
+        completed = _complete_post(self.client, phone=other, name="Second Owner")
         self.assertIn("/onboarding/", completed["Location"])
         self.assertEqual(OwnerProfile.objects.get(phone=other).full_name, "Second Owner")
         self.assertEqual(self.stores().count(), 2)  # exactly one Store per new Owner
@@ -810,7 +841,13 @@ class SignupCompletionTests(_OtpTestMixin, TestCase):
 
     def complete(self, name=_NAME, client=None, **extra):
         client = client or self.client
-        return client.post(self.URL, {"full_name": name, **extra, "accept_terms": "1"}, HTTP_HOST=_HOST)
+        pending = client.session.get("portal_signup_pending")
+        phone = pending.get("phone", _PHONE) if isinstance(pending, dict) else _PHONE
+        data = {
+            "full_name": name, "email": email_for(phone), "password": GOOD_PASSWORD,
+            "password_confirm": GOOD_PASSWORD, **extra, "accept_terms": "1",
+        }
+        return client.post(self.URL, data, HTTP_HOST=_HOST)
 
     def login_and_verify_new_phone(self, phone=_PHONE):
         self.login_otp(phone=phone)
@@ -843,9 +880,9 @@ class SignupCompletionTests(_OtpTestMixin, TestCase):
         self.assertNotIn("_auth_user_id", self.client.session)
 
         page = self.client.get(self.URL, HTTP_HOST=_HOST)
-        self.assertContains(page, "تکمیل ثبت‌نام")
-        self.assertContains(page, "شماره موبایل شما تأیید شد. برای ساخت فروشگاه، نام و نام خانوادگی خود را وارد کنید.")
-        self.assertContains(page, "ساخت فروشگاه و ادامه")
+        self.assertContains(page, "اطلاعات حساب")
+        self.assertContains(page, "شماره موبایل شما تأیید شد. برای ساخت حساب، ایمیل و رمز عبور خود را تعیین کنید.")
+        self.assertContains(page, "ساخت حساب و فروشگاه")
         self.assertContains(page, _PHONE)
         self.assertNotContains(page, 'name="phone"')  # the phone is never a client field
         self.assertContains(page, "r-auth-shell--form-first")
@@ -1167,11 +1204,14 @@ class OtpVerificationTests(_OtpTestMixin, TestCase):
         self.assertFalse(owner_otp_service.verify_otp(phone="09129999999", purpose="login", code=self.last_code))
 
     def test_resend_timing_is_informational(self):
-        self.assertEqual(owner_otp_service.resend_timing(phone=_PHONE, purpose="login"), {"expires_in": 0, "resend_in": 0})
+        idle = owner_otp_service.resend_timing(phone=_PHONE, purpose="login")
+        self.assertEqual((idle["expires_in"], idle["resend_in"]), (0, 0))
         owner_otp_service.request_otp(phone=_PHONE, purpose="login", client_ip="1.1.1.1")
         timing = owner_otp_service.resend_timing(phone=_PHONE, purpose="login")
         self.assertTrue(0 < timing["expires_in"] <= owner_otp_service.OTP_TTL_SECONDS)
-        self.assertTrue(0 < timing["resend_in"] <= owner_otp_service.RESEND_UX_COOLDOWN_SECONDS)
+        # (this class runs with the cooldown neutralised; the real 120 s behaviour is in test_owner_otp_resend_cooldown)
+        self.assertEqual(timing["resend_in"], 0)
+        self.assertEqual(timing["cooldown_seconds"], owner_otp_service.RESEND_COOLDOWN_SECONDS)
 
     # --- view level -------------------------------------------------------
 
@@ -1788,7 +1828,7 @@ class ConcurrencyTests(_OtpTestMixin, TransactionTestCase):
         self.assertEqual(OwnerOtpChallenge.objects.get().attempt_count, owner_otp_service.MAX_VERIFY_ATTEMPTS)
         self.assertFalse(owner_otp_service.verify_otp(phone=_PHONE, purpose="login", code=code))
 
-    def test_concurrent_signup_verification_yields_one_profile_one_store(self):
+    def test_concurrent_signup_verification_and_completion_yield_one_profile_one_store(self):
         self.register()
         code = self.last_code
         template = self.client  # same server-side session, replayed by N "tabs"
@@ -1804,8 +1844,26 @@ class ConcurrencyTests(_OtpTestMixin, TransactionTestCase):
             8, lambda i: clients[i].post("/verify/", {"code": code}, HTTP_HOST=_HOST),
         )
         self.assertEqual([r for r in results if isinstance(r, Exception)], [])
-        winners = [r for r in results if r.status_code == 302 and "/onboarding/" in r["Location"]]
+        # /verify/ only proves the phone: exactly ONE tab gets the single-use code accepted and is sent to the
+        # «اطلاعات حساب» step; nothing (user / profile / store) exists until the credentials are submitted.
+        winners = [(i, r) for i, r in enumerate(results) if r.status_code == 302 and r["Location"].endswith("/signup/complete/")]
         self.assertEqual(len(winners), 1)
+        self.assertEqual(User.objects.filter(username=_PHONE).count(), 0)
+        self.assertEqual(OwnerProfile.objects.filter(phone=_PHONE).count(), 0)
+        self.assertEqual(self.stores().count(), 0)
+
+        # …and the credential step, replayed concurrently from the winning tab's session, still yields one of each.
+        winner = clients[winners[0][0]]
+        tabs = []
+        for _ in range(8):
+            c = Client()
+            c.cookies = winner.cookies.__class__()
+            c.cookies.update(winner.cookies)
+            tabs.append(c)
+        done = _run_concurrently(8, lambda i: _complete_post(tabs[i], phone=_PHONE))
+        self.assertEqual([r for r in done if isinstance(r, Exception)], [])
+        onboarding = [r for r in done if r.status_code == 302 and "/onboarding/" in r["Location"]]
+        self.assertEqual(len(onboarding), 1)
         self.assertEqual(User.objects.filter(username=_PHONE).count(), 1)
         self.assertEqual(OwnerProfile.objects.filter(phone=_PHONE).count(), 1)
         self.assertEqual(self.stores().count(), 1)
@@ -1851,7 +1909,7 @@ class ConcurrencyTests(_OtpTestMixin, TransactionTestCase):
             clients.append(c)
 
         results = _run_concurrently(
-            8, lambda i: clients[i].post("/signup/complete/", {"full_name": _NAME, "accept_terms": "1"}, HTTP_HOST=_HOST),
+            8, lambda i: _complete_post(clients[i], phone=_PHONE),
         )
         self.assertEqual([r for r in results if isinstance(r, Exception)], [])
         onboarding = [r for r in results if r.status_code == 302 and "/onboarding/" in r["Location"]]
@@ -1877,7 +1935,7 @@ class ConcurrencyTests(_OtpTestMixin, TransactionTestCase):
             c.cookies.update(cookies)
             clients.append(c)
         results = _run_concurrently(
-            6, lambda i: clients[i].post("/signup/complete/", {"full_name": _NAME, "accept_terms": "1"}, HTTP_HOST=_HOST),
+            6, lambda i: _complete_post(clients[i], phone=_PHONE),
         )
         self.assertEqual([r for r in results if isinstance(r, Exception)], [])
         self.assertEqual((User.objects.count(), OwnerProfile.objects.count(), Customer.objects.count()), (1, 1, 1))

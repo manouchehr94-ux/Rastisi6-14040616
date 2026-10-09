@@ -28,6 +28,7 @@ from django.utils import timezone
 
 from apps.customers.models import Customer
 from apps.portal import views as portal_views
+from apps.portal.tests._owner_signup import age_otp_cooldown, complete_account
 from apps.portal.forms import OwnerIdentifierLoginForm
 from apps.portal.models import OwnerOtpChallenge, OwnerProfile
 from apps.portal.services import owner_auth_service, owner_otp_service, turnstile_service
@@ -989,6 +990,7 @@ class OtpLoginThroughViewTests(_Base, TestCase):
     def test_otp_request_budget_per_phone_applies_through_the_login_view(self):
         for _ in range(owner_otp_service.MAX_REQUESTS_PER_PHONE_WINDOW):
             self.assertEqual(self._request("09124440008")["Location"], "/verify/")
+            age_otp_cooldown("09124440008")  # past the per-request resend cooldown; the 10-minute window still counts
             self.client.get("/login/", HTTP_HOST=_HOST)
         blocked = self._request("09124440008")
         self.assertEqual(blocked.status_code, 200)

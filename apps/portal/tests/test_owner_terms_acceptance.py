@@ -17,6 +17,7 @@ from apps.portal import terms as terms_module
 from apps.portal.models import OwnerOtpChallenge, OwnerProfile, OwnerTermsAcceptance, PlatformConfiguration
 from apps.portal.services import owner_auth_service, owner_otp_service, provisioning_service
 from apps.portal.terms import CURRENT_TERMS_VERSION, TERMS_ACCEPTANCE_REQUIRED_MESSAGE
+from apps.portal.tests._owner_signup import GOOD_PASSWORD, age_otp_cooldown, email_for, finish_signup_if_needed
 from apps.sms.services.backends import SmsSendResult
 from apps.stores.models import Store
 
@@ -50,8 +51,15 @@ class _Base(TestCase):
             data["accept_terms"] = accept
         return self.client.post("/register/", data, HTTP_HOST=_HOST)
 
-    def verify(self, code=None):
-        return self.client.post("/verify/", {"code": code or self.sent[-1]["code"]}, HTTP_HOST=_HOST)
+    def verify(self, code=None, complete=True):
+        """POST /verify/. A /register/ journey also finishes the mandatory «اطلاعات حساب» step (email + password) unless
+        ``complete=False``; the /login/ unknown-phone path always stops at «تکمیل ثبت‌نام»."""
+        phone = self.client.session.get("portal_otp_phone")
+        registering = self.client.session.get("portal_otp_purpose") == OwnerOtpChallenge.Purpose.REGISTER
+        response = self.client.post("/verify/", {"code": code or self.sent[-1]["code"]}, HTTP_HOST=_HOST)
+        if complete and registering and phone:
+            response = finish_signup_if_needed(self.client, response, phone=phone)
+        return response
 
     def assertNothingCreated(self, phone=_PHONE):
         self.assertFalse(User.objects.filter(username=phone).exists())
@@ -155,6 +163,17 @@ class RegisterPageTests(_Base):
 
 @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
 class RegistrationFlowTests(_Base):
+    def test_no_acceptance_row_exists_until_the_account_credentials_step_succeeds(self):
+        self.post_register()
+        response = self.verify(complete=False)
+        self.assertRedirects(response, "/signup/complete/", fetch_redirect_response=False)
+        self.assertNothingCreated()  # phone verified, Terms captured server-side, but nothing durable yet
+        self.assertEqual(OwnerTermsAcceptance.objects.count(), 0)
+        page = self.client.get("/signup/complete/", HTTP_HOST=_HOST).content.decode()
+        # /register/ already captured the (version-bound) acceptance: the checkbox is NOT asked a second time
+        self.assertNotIn('id="id_accept_terms"', page)
+        self.assertNotIn('name="full_name"', page)
+
     def test_successful_registration_creates_one_versioned_acceptance_for_the_verified_user(self):
         self.post_register()
         response = self.verify()
@@ -177,6 +196,7 @@ class RegistrationFlowTests(_Base):
         ):
             with self.subTest(case=label):
                 cache.clear()
+                age_otp_cooldown()  # each subtest is a separate user attempt, past the server resend cooldown
                 self.client = self.client_class()
                 self.post_register()
                 session = self.client.session
@@ -281,7 +301,12 @@ class SignupCompleteTests(_Base):
         self.assertRedirects(response, "/signup/complete/", fetch_redirect_response=False)
 
     def complete(self, accept="1", **extra):
-        data = {"full_name": _NAME, **extra}
+        pending = self.client.session.get("portal_signup_pending") or {}
+        phone = pending.get("phone", _PHONE)
+        data = {
+            "full_name": _NAME, "email": email_for(phone), "password": GOOD_PASSWORD,
+            "password_confirm": GOOD_PASSWORD, **extra,
+        }
         if accept is not None:
             data["accept_terms"] = accept
         return self.client.post("/signup/complete/", data, HTTP_HOST=_HOST)

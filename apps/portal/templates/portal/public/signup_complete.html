@@ -9,29 +9,55 @@
       {% if registration_open %}<aside class="r-auth-story">
         <div class="rs-eyebrow">شماره تأیید شد</div>
         <h1>یک قدم تا<br>فروشگاه شما.</h1>
-        <p>با تکمیل ثبت‌نام، حساب مالک و فروشگاه آزمایشی‌تان ساخته می‌شود و راه‌اندازی مرحله‌به‌مرحله ادامه پیدا می‌کند.</p>
+        <p>با تعیین ایمیل و رمز عبور، حساب مالک و فروشگاه آزمایشی‌تان ساخته می‌شود و راه‌اندازی مرحله‌به‌مرحله ادامه پیدا می‌کند.</p>
+        <div class="r-auth-points">
+          <div class="r-auth-point">با ایمیل یا شماره موبایل و همین رمز وارد می‌شوید</div>
+          <div class="r-auth-point">تا این مرحله تمام نشود، حساب و فروشگاهی ساخته نمی‌شود</div>
+        </div>
       </aside>{% endif %}
 
       <div class="r-auth-form">
         {% if registration_open %}
         <div class="r-auth-form-head">
-          <h2>تکمیل ثبت‌نام</h2>
-          <p>شماره موبایل شما تأیید شد. برای ساخت فروشگاه، نام و نام خانوادگی خود را وارد کنید.</p>
+          <h2>اطلاعات حساب</h2>
+          <p>شماره موبایل شما تأیید شد. برای ساخت حساب، ایمیل و رمز عبور خود را تعیین کنید.</p>
         </div>
 
-        <p class="r-verified-phone">شماره تأییدشده: <span class="r-phone-inline">{{ phone }}</span></p>
+        <p class="r-verified-phone">شماره تأییدشده: <span class="r-phone-inline">{{ phone }}</span>{% if full_name %} · <span>{{ full_name }}</span>{% endif %}</p>
 
-        <form method="post" novalidate data-auth-form data-loading-text="در حال ساخت فروشگاه…">
+        <form method="post" novalidate data-auth-form data-loading-text="در حال ساخت حساب و فروشگاه…">
           {% csrf_token %}
           {% if form.non_field_errors %}<div class="p-alert p-alert-error" role="alert">{{ form.non_field_errors.0 }}</div>{% endif %}
+          {% if form.full_name %}
           <div class="p-field">
             <label for="id_full_name">نام و نام خانوادگی <span class="r-required" aria-hidden="true">*</span></label>
             {{ form.full_name }}
             {% if form.full_name.errors %}<div class="p-error" id="id_full_name_error">{{ form.full_name.errors.0 }}</div>{% endif %}
           </div>
+          {% endif %}
+          {% if form.email %}
+          <div class="p-field">
+            <label for="id_email">ایمیل <span class="r-required" aria-hidden="true">*</span></label>
+            {{ form.email }}
+            {% if form.email.errors %}<div class="p-error" id="id_email_error">{{ form.email.errors.0 }}</div>{% else %}<div class="r-field-hint" id="id_email_hint">برای ورود و بازیابی حساب استفاده می‌شود.</div>{% endif %}
+          </div>
+          {% endif %}
+          {% if form.password %}
+          <div class="p-field">
+            <label for="id_password">رمز عبور <span class="r-required" aria-hidden="true">*</span></label>
+            <div class="r-password-field" data-password-field>{{ form.password }}</div>
+            <ul class="r-field-hint r-hint-list" id="id_password_hint">{% for text in password_help %}<li>{{ text }}</li>{% endfor %}</ul>
+            {% if form.password.errors %}<ul class="p-error r-error-list" id="id_password_error">{% for error in form.password.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+          <div class="p-field">
+            <label for="id_password_confirm">تکرار رمز عبور <span class="r-required" aria-hidden="true">*</span></label>
+            <div class="r-password-field" data-password-field>{{ form.password_confirm }}</div>
+            {% if form.password_confirm.errors %}<div class="p-error" id="id_password_confirm_error">{{ form.password_confirm.errors.0 }}</div>{% endif %}
+          </div>
+          {% endif %}
 
-          {% include "portal/public/_terms_acceptance.html" %}
-          <button type="submit" class="rs-btn rs-btn-primary r-form-submit">ساخت فروشگاه و ادامه</button>
+          {% if form.accept_terms %}{% include "portal/public/_terms_acceptance.html" %}{% endif %}
+          <button type="submit" class="rs-btn rs-btn-primary r-form-submit">ساخت حساب و فروشگاه</button>
         </form>
         {% else %}
         <div class="r-auth-closed" role="status">
@@ -47,4 +73,4 @@
   </div>
 </section>
 {% endblock %}
-{% block extra_js %}{{ block.super }}<script src="{% static 'portal/js/auth-forms.js' %}?v=20261006-3" defer></script>{% endblock %}
+{% block extra_js %}{{ block.super }}<script src="{% static 'portal/js/auth-forms.js' %}?v=20261009-1" defer></script>{% endblock %}

@@ -117,13 +117,93 @@ class OwnerRegistrationRequestForm(TermsAcceptanceMixin, OwnerFullNameForm, Owne
     field_order = ["full_name", "phone", "remember_me", "accept_terms"]
 
 
-class OwnerSignupCompletionForm(TermsAcceptanceMixin, OwnerFullNameForm):
-    """مرحله‌ی «تکمیل ثبت‌نام» پس از ورودِ OTP با شمارهٔ بدونِ مالک. **هیچ
-    فیلدِ شماره‌ای ندارد**: شمارهٔ تأییدشده فقط از نشستِ سمتِ سرور می‌آید."""
+class OwnerAccountCompletionForm(TermsAcceptanceMixin, OwnerFullNameForm):
+    """«اطلاعات حساب» — **تنها** فرمِ ساختِ مالکِ تازه پس از تأییدِ موبایل با OTP؛ هم برایِ مسیرِ ``/register/``
+    و هم ``/login/`` ← «تکمیل ثبت‌نام». **هیچ فیلدِ شماره‌ای ندارد**: شمارهٔ تأییدشده فقط از نشستِ
+    سمتِ سرور می‌آید.
 
-    def __init__(self, *args, **kwargs):
+    فیلدها بر اساسِ نیازِ *واقعیِ* همان حساب (سرور) ساخته می‌شوند، نه کلاینت:
+
+    * ``full_name`` — فقط اگر ``/register/`` پیش‌تر آن را نگرفته باشد؛
+    * ``accept_terms`` — فقط اگر پذیرشِ نسخه‌یِ *فعلیِ* قوانین پیش‌تر در نشستِ سرور نیست؛
+    * ``email`` — الزامی برایِ حسابِ بدونِ ایمیل (نرمال‌سازی + تعارضِ بدونِ حساسیت به حروف)؛
+    * ``password`` + ``password_confirm`` — الزامی برایِ حسابِ بدونِ رمزِ قابل‌استفاده؛ فقط با
+      ``AUTH_PASSWORD_VALIDATORS`` (سیاستِ جداگانه‌ای نیست). رمزِ قابل‌استفاده‌یِ حسابِ موجود هرگز
+      خواسته یا بازنویسی نمی‌شود.
+    """
+
+    email = forms.EmailField(
+        label="ایمیل", required=True,  # length is validated by clean_email with our own Persian message
+        error_messages={"required": "ایمیل را وارد کنید.", "invalid": "ایمیل واردشده معتبر نیست؛ مثلاً name@example.com."},
+        widget=forms.EmailInput(attrs={
+            "autocomplete": "email", "inputmode": "email", "dir": "ltr", "autocapitalize": "off",
+            "spellcheck": "false", "maxlength": "254", "placeholder": "name@example.com",
+        }),
+    )
+    password = forms.CharField(
+        label="رمز عبور", max_length=LOGIN_PASSWORD_MAX_LENGTH, strip=False, required=True,
+        error_messages={"required": "رمز عبور را وارد کنید."},
+        widget=forms.PasswordInput(attrs={
+            "autocomplete": "new-password", "dir": "ltr", "aria-describedby": "id_password_hint",
+            "maxlength": str(LOGIN_PASSWORD_MAX_LENGTH),
+        }),
+    )
+    password_confirm = forms.CharField(
+        label="تکرار رمز عبور", max_length=LOGIN_PASSWORD_MAX_LENGTH, strip=False, required=True,
+        error_messages={"required": "رمز عبور را یک بار دیگر وارد کنید."},
+        widget=forms.PasswordInput(attrs={
+            "autocomplete": "new-password", "dir": "ltr", "maxlength": str(LOGIN_PASSWORD_MAX_LENGTH),
+        }),
+    )
+
+    def __init__(
+        self, *args, phone: str, need_full_name: bool = True, need_terms: bool = True,
+        need_email: bool = True, need_password: bool = True, user=None, **kwargs,
+    ):
         super().__init__(*args, **kwargs)
-        self.fields["full_name"].widget.attrs["data-autofocus"] = ""
+        self.phone = phone
+        self.existing_user = user  # ``User``ِ موجودِ همین شماره (یا None)؛ فقط برایِ تعارضِ ایمیل/شباهتِ رمز
+        for name, needed in (
+            ("full_name", need_full_name), ("accept_terms", need_terms),
+            ("email", need_email), ("password", need_password), ("password_confirm", need_password),
+        ):
+            if not needed:
+                del self.fields[name]
+        first = next(iter(self.fields), None)
+        if first:
+            self.fields[first].widget.attrs["data-autofocus"] = ""
+
+    def clean_email(self):
+        from .services import owner_auth_service as auth
+
+        try:
+            email = auth.normalize_and_validate_email(self.cleaned_data.get("email"))
+        except auth.OwnerEmailError as exc:
+            raise forms.ValidationError(str(exc)) from exc
+        if auth.email_belongs_to_another_user(email, exclude_user=self.existing_user):
+            raise forms.ValidationError(auth.EMAIL_CONFLICT_MESSAGE)
+        return email
+
+    def clean(self):
+        from django.contrib.auth import get_user_model
+
+        from .services import owner_auth_service as auth
+
+        cleaned = super().clean()
+        if "password" not in self.fields:
+            return cleaned
+        password, confirm = cleaned.get("password"), cleaned.get("password_confirm")
+        if password and confirm and password != confirm:
+            self.add_error("password_confirm", "رمز عبور و تکرار آن یکسان نیستند.")
+        elif password:
+            candidate = self.existing_user or get_user_model()(
+                username=self.phone, email=cleaned.get("email") or "",
+            )
+            try:
+                auth.validate_new_account_password(password, user=candidate)
+            except auth.PasswordPolicyError as exc:
+                self.add_error("password", forms.ValidationError(exc.messages))
+        return cleaned
 
 
 class OwnerOtpVerifyForm(_FieldErrorA11yMixin, forms.Form):

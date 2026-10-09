@@ -6,6 +6,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from apps.portal.services import provisioning_service
+from apps.portal.tests._owner_signup import age_otp_cooldown, complete_account
 from apps.portal.tests._ready_template import select_template
 from apps.stores.models import Store, StoreDomain, StoreMembership
 from apps.stores.services.publication_service import PublicationState, get_store_publication_state
@@ -388,6 +389,7 @@ class RegistrationAutoProvisionsTrialStoreTests(TestCase):
         code = self._fixed_code()
         self.client.post("/register/", {"full_name": "First Timer", "phone": "09359990001", "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.client.post("/verify/", {"phone": "09359990001", "code": code}, HTTP_HOST=_HOST)
+        complete_account(self.client, phone="09359990001")
 
         user = User.objects.get(username="09359990001")
         memberships = StoreMembership.objects.filter(
@@ -401,6 +403,7 @@ class RegistrationAutoProvisionsTrialStoreTests(TestCase):
         code = self._fixed_code()
         self.client.post("/register/", {"full_name": "Second", "phone": "09359990002", "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.client.post("/verify/", {"phone": "09359990002", "code": code}, HTTP_HOST=_HOST)
+        complete_account(self.client, phone="09359990002")
 
         response = self.client.get("/app/", HTTP_HOST=_HOST)
         self.assertContains(response, "فروشگاه من")
@@ -411,6 +414,7 @@ class RegistrationAutoProvisionsTrialStoreTests(TestCase):
         code = self._fixed_code()
         self.client.post("/register/", {"full_name": "Third", "phone": "09359990003", "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.client.post("/verify/", {"phone": "09359990003", "code": code}, HTTP_HOST=_HOST)
+        complete_account(self.client, phone="09359990003")
 
         user = User.objects.get(username="09359990003")
         store = StoreMembership.objects.get(user=user).store
@@ -440,6 +444,7 @@ class RegistrationAutoProvisionsTrialStoreTests(TestCase):
         code = self._fixed_code()
         self.client.post("/register/", {"full_name": "Fourth", "phone": "09359990004", "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.client.post("/verify/", {"phone": "09359990004", "code": code}, HTTP_HOST=_HOST)
+        complete_account(self.client, phone="09359990004")
 
         user = User.objects.get(username="09359990004")
         membership = StoreMembership.objects.get(user=user)

@@ -8,6 +8,7 @@ from apps.customers.models import Customer
 from apps.portal.models import OwnerOtpChallenge, OwnerProfile
 from apps.portal.phone import InvalidPhoneError, normalize_iranian_phone
 from apps.portal.services import owner_auth_service, owner_otp_service
+from apps.portal.tests._owner_signup import age_otp_cooldown, complete_account
 
 User = get_user_model()
 _HOST = "rastisi.localhost"
@@ -100,6 +101,7 @@ class OwnerOtpServiceTests(TestCase):
     def test_phone_request_rate_limit_blocks_excessive_requests(self):
         for _ in range(owner_otp_service.MAX_REQUESTS_PER_PHONE_WINDOW):
             owner_otp_service.request_otp(phone="09121234571", purpose="login", client_ip="1.2.3.4")
+            age_otp_cooldown("09121234571")  # clear the per-request resend cooldown; the 10-minute window still counts
         with self.assertRaises(owner_otp_service.OtpRateLimitError):
             owner_otp_service.request_otp(phone="09121234571", purpose="login", client_ip="1.2.3.4")
 
@@ -184,6 +186,12 @@ class OtpViewFlowTests(TestCase):
         response = self.client.post(
             "/verify/", {"phone": "09121234577", "full_name": "New Owner", "code": code}, HTTP_HOST=_HOST,
         )
+        # OTP only verifies the phone: the Owner is created by the «اطلاعات حساب» step (email + password).
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/signup/complete/")
+        self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertFalse(User.objects.filter(username="09121234577").exists())
+        response = complete_account(self.client, phone="09121234577")
         self.assertEqual(response.status_code, 302)
         self.assertIn("_auth_user_id", self.client.session)
         self.assertTrue(User.objects.filter(username="09121234577").exists())
@@ -209,6 +217,7 @@ class OtpViewFlowTests(TestCase):
             "/verify/", {"phone": "09121234582", "code": code}, HTTP_HOST=_HOST,
         )
         self.assertEqual(response.status_code, 302)
+        self.assertEqual(complete_account(self.client, phone="09121234582").status_code, 302)
         profile = OwnerProfile.objects.get(phone="09121234582")
         self.assertEqual(profile.full_name, "Resend Owner")
         self.assertFalse(self.client.session.get_expire_at_browser_close())
@@ -231,8 +240,8 @@ class OtpViewFlowTests(TestCase):
                 "/verify/",
                 {"phone": "09121234583", "code": code},
                 HTTP_HOST=_HOST,
-                follow=True,
             )
+            response = complete_account(self.client, phone="09121234583", follow=True)
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "ساخت فروشگاه آزمایشی کامل نشد")
@@ -282,7 +291,9 @@ class OtpViewFlowTests(TestCase):
         self.assertFalse(OwnerProfile.objects.filter(phone="09121234581").exists())
         self.assertEqual(Store.objects.count(), stores_before)
 
-        response = self.client.post("/signup/complete/", {"full_name": "Login Newcomer", "accept_terms": "1"}, HTTP_HOST=_HOST)
+        response = complete_account(
+            self.client, phone="09121234581", full_name="Login Newcomer", accept_terms="1",
+        )
         self.assertEqual(response.status_code, 302)
         self.assertIn("/onboarding/", response["Location"])
         self.assertEqual(Store.objects.count(), stores_before + 1)
@@ -292,7 +303,9 @@ class OtpViewFlowTests(TestCase):
         code = self._fixed_code()
         self.client.post("/register/", {"full_name": "Returning", "phone": "09121234580", "accept_terms": "1"}, HTTP_HOST=_HOST)
         self.client.post("/verify/", {"phone": "09121234580", "code": code}, HTTP_HOST=_HOST)
+        complete_account(self.client, phone="09121234580")
         self.client.post("/logout/", HTTP_HOST=_HOST)
+        age_otp_cooldown("09121234580")  # a second OTP (login) is a different purpose, but keep the clock honest
 
         code2 = self._fixed_code()
         self.client.post("/login/", {"phone": "09121234580"}, HTTP_HOST=_HOST)
