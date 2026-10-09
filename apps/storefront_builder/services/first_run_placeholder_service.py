@@ -38,11 +38,28 @@ _PRODUCT_KEYS = frozenset({
 _PRODUCT_WALL_KEY = "catalog_product_wall"
 
 
+def _is_modern(store) -> bool:
+    return store is not None and getattr(store, "onboarding_required_at", None) is not None
+
+
 def is_first_run_store(store) -> bool:
     """A modern-portal Store whose catalog is still empty (no storefront-listable product)."""
-    if store is None or getattr(store, "onboarding_required_at", None) is None:
+    return _is_modern(store) and not storefront_listing_products(store).exists()
+
+
+def has_as_delivered_composition(store) -> bool:
+    """True while the Store's published layout is still the FIRST version it ever published — the one
+    onboarding published — i.e. the merchant has not published any later (deliberate) layout edit."""
+    from ..models import StorefrontLayout, StorefrontLayoutVersion
+
+    if not _is_modern(store):
         return False
-    return not storefront_listing_products(store).exists()
+    layout = StorefrontLayout.objects.filter(store=store).select_related("published_version").first()
+    if layout is None or layout.published_version is None:
+        return False
+    return not StorefrontLayoutVersion.objects.filter(
+        layout=layout, published_at__isnull=False,
+    ).exclude(pk=layout.published_version_id).exists()
 
 
 def _is_empty(item, kind_key) -> bool:
@@ -71,20 +88,29 @@ def _kind_for(item):
 
 def apply_first_run_placeholders(items: list[dict], store, *, page_type: str) -> list[dict]:
     """Return ``items`` with empty hero/category/product sections swapped for the neutral placeholder
-    partial, for a first-run Store's public home page. Any other input is returned unchanged."""
-    if page_type != "home" or not items or not is_first_run_store(store):
+    partial, for a first-run Store's public home page (see the module docstring for the per-kind rules).
+    Any other input is returned unchanged."""
+    if page_type != "home" or not items or not _is_modern(store):
         return items
+    gates = {}
+
+    def allowed(kind):
+        if kind not in gates:
+            gates[kind] = (
+                is_first_run_store(store) if kind == KIND_PRODUCTS else has_as_delivered_composition(store)
+            )
+        return gates[kind]
+
     result = []
     for item in items:
         kind = _kind_for(item)
-        if kind is None:
+        if kind is None or not allowed(kind):
             result.append(item)
             continue
-        context = dict(item["context"])
         result.append({
             **item,
             "template_name": PLACEHOLDER_TEMPLATE,
-            "context": context,
+            "context": dict(item["context"]),
             "first_run_placeholder": kind,
         })
     return result
