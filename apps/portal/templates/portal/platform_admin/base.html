@@ -24,6 +24,7 @@
       <a href="{% url 'portal_platform_admin:home' %}" class="{% if active_nav == 'dashboard' %}active{% endif %}">🏠 داشبورد</a>
       <a href="{% url 'portal_platform_admin:stores' %}" class="{% if active_nav == 'stores' %}active{% endif %}">🏪 فروشگاه‌ها</a>
       <a href="{% url 'portal_platform_admin:users' %}" class="{% if active_nav == 'users' %}active{% endif %}">👤 کاربران</a>
+      {% if chat_global %}<a href="{% url 'portal_platform_admin:chat-inbox' %}" target="_blank" rel="noopener">💬 صندوق گفتگو</a>{% endif %}
     </nav>
 
     <div class="pa-menu-title">اشتراک‌ها</div>

@@ -14,6 +14,13 @@ class StoreStatusError(Exception):
     """خطای قابل‌نمایش هنگامِ تغییرِ وضعیتِ یک Store."""
 
 
+def _notify_chat(store: Store) -> None:
+    # RastiChat adapter (best effort, after commit, no-op unless chat is enabled for this store)
+    from apps.chat_integration.services import hooks
+
+    hooks.store_status_changed(store)
+
+
 def suspend_store(store: Store, *, actor, reason: str, note: str = "") -> Store:
     if not reason.strip():
         raise StoreStatusError("دلیلِ تعلیق الزامی است.")
@@ -33,6 +40,7 @@ def suspend_store(store: Store, *, actor, reason: str, note: str = "") -> Store:
         before={"status": before_status}, after={"status": store.status},
         metadata={"reason": reason.strip(), "note": note.strip()} if note.strip() else {"reason": reason.strip()},
     )
+    _notify_chat(store)
     return store
 
 
@@ -48,4 +56,5 @@ def activate_store(store: Store, *, actor) -> Store:
         object_type="Store", object_id=store.pk, object_label=store.name,
         before={"status": Store.Status.SUSPENDED}, after={"status": store.status},
     )
+    _notify_chat(store)
     return store

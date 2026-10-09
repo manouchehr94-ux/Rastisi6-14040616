@@ -32,6 +32,8 @@ urlpatterns = [
     path("", include("apps.catalog.urls")),
     path("cart/", include("apps.cart.urls")),
     path("account/", include("apps.customers.urls")),
+    # RastiChat adapter (storefront identity bootstrap) — 404 unless chat is enabled for the Host-resolved store.
+    path("chat/", include("apps.chat_integration.urls")),
     path("checkout/", include("apps.orders.urls")),
     # Canonical Merchant Admin Portal route (Phase 1B, ADR-16). Not to be
     # confused with Django's own "admin/" (apps.stores.admin_permissions

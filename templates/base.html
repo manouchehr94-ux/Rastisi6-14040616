@@ -1,4 +1,4 @@
-{% load static persian %}<!DOCTYPE html>
+{% load static persian rastichat %}<!DOCTYPE html>
 <html lang="fa" dir="rtl"
       {% if SHOP_OCCASION_THEME and SHOP_OCCASION_THEME != 'none' %}data-occasion-theme="{{ SHOP_OCCASION_THEME }}" data-occasion-tone="{{ SHOP_OCCASION_TONE }}" data-occasion-intensity="{{ SHOP_OCCASION_INTENSITY }}" data-occasion-motif="{{ SHOP_OCCASION_MOTIF }}"{% endif %}
       data-sfb-template="{{ SHOP_TEMPLATE_SLUG|default:'modern' }}"
@@ -372,5 +372,6 @@ document.body.addEventListener('htmx:configRequest', (event) => {
 </script>
 
 {% block extra_js %}{% endblock %}
+{% rastichat_widget %}
 </body>
 </html>

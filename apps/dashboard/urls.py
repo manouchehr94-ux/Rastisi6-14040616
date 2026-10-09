@@ -4,6 +4,8 @@ from apps.storefront_builder import media_views as storefront_builder_media_view
 from apps.storefront_builder import r4_views as storefront_builder_r4_views
 from apps.storefront_builder import views as storefront_builder_views
 
+from apps.chat_integration import views as chat_views
+
 from . import cod_views, engagement_views, payment_reconciliation_views, views
 
 app_name = "dashboard"
@@ -13,6 +15,9 @@ urlpatterns = [
     path("handoff/<str:token>/", views.consume_admin_handoff, name="handoff"),
     path("exit-support-mode/", views.exit_support_mode, name="exit-support-mode"),
     path("", views.dashboard_home, name="dashboard"),
+    # RastiChat (404 unless enabled for this store): staff SSO into the chat inboxes.
+    path("chat/customers/", chat_views.merchant_customer_chat, name="chat-customers"),
+    path("chat/support/", chat_views.merchant_platform_support, name="chat-support"),
     path("sales-chart/", views.sales_chart_partial, name="sales-chart"),
 
     path("products/", views.product_list, name="product-list"),

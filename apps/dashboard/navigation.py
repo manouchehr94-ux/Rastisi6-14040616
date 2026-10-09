@@ -94,6 +94,10 @@ def _m(*names, prefix=(), get=None, get_not=None):
     return Match(names=tuple(names), prefixes=tuple(prefix), get=get, get_not=get_not)
 
 
+# Tabs whose visibility also depends on a feature switch, not only on the member's permissions (they are hidden for
+# everyone while the feature is off — e.g. the RastiChat links, see apps.chat_integration.context_processors).
+FEATURE_GATED_FLAGS = frozenset({"can_chat_customers", "can_chat_platform_support"})
+
 SECTIONS: tuple = (
     Section(
         key="dashboard", label="داشبورد", icon="grid",
@@ -166,6 +170,10 @@ SECTIONS: tuple = (
             Tab("segments", "سگمنت‌ها", "segment-list", perms=("can_view_segments",),
                 matches=(_m(prefix="segment-"),), pages=("segments",),
                 keywords="سگمنت بخش بندی مشتریان segment"),
+            Tab("chat-customers", "گفتگوی مشتریان", "chat-customers", perms=("can_chat_customers",),
+                matches=(_m("chat-customers"),), keywords="گفتگو چت پیام مشتری پشتیبانی آنلاین chat"),
+            Tab("chat-support", "پشتیبانی پلتفرم", "chat-support", perms=("can_chat_platform_support",),
+                matches=(_m("chat-support"),), keywords="گفتگو پشتیبانی پلتفرم راستی‌سی چت support"),
         ),
     ),
     Section(

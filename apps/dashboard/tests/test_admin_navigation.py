@@ -33,7 +33,7 @@ EXPECTED_TABS = {
     "products": ["همه کالاها", "دسته‌بندی‌ها", "برندها", "ویژگی‌ها", "موجودی", "انبارها",
                  "رزرو موجودی", "انتقال انبار"],
     "finance": ["فاکتورها", "پرداخت‌ها", "تطبیق پرداخت‌ها"],
-    "customers": ["مشتریان", "سگمنت‌ها"],
+    "customers": ["مشتریان", "سگمنت‌ها", "گفتگوی مشتریان", "پشتیبانی پلتفرم"],
     "marketing": ["کمپین‌ها", "مناسبت‌ها و هدیه‌ها", "کدهای تخفیف", "اعلان‌ها و پیام‌ها"],
     "store": ["ظاهر و طراحی", "سازنده فروشگاه", "قالب‌های آماده", "کالکشن‌ها", "محتوا",
               "صفحه اصلی", "منوها", "فوتر", "شبکه‌های اجتماعی"],
@@ -369,7 +369,11 @@ class NavigationRenderingTests(PermissionEnforcementTestCase):
                 response = self.client.get(href)
                 self.assertIn(response.status_code, (200, 302), href)
                 visited += 1
-        self.assertEqual(visited, sum(len(section.tabs) for section in navigation.SECTIONS))
+        always_visible = sum(
+            1 for section in navigation.SECTIONS for tab in section.tabs
+            if not (tab.perms and set(tab.perms) <= navigation.FEATURE_GATED_FLAGS)
+        )
+        self.assertEqual(visited, always_visible)
 
     def test_embedded_mode_hides_chrome_via_css(self):
         css = open("apps/dashboard/static/css/admin_v2.css", encoding="utf-8").read()

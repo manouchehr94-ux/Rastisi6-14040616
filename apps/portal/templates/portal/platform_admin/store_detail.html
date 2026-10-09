@@ -38,6 +38,7 @@
   <a class="pa-tab {% if tab == 'usage' %}active{% endif %}" href="?tab=usage">مصرف</a>
   <a class="pa-tab {% if tab == 'domains' %}active{% endif %}" href="?tab=domains">دامنه‌ها</a>
   <a class="pa-tab {% if tab == 'sms-credit' %}active{% endif %}" href="?tab=sms-credit">اعتبارِ پیامک</a>
+  {% if chat_global %}<a class="pa-tab {% if tab == 'chat' %}active{% endif %}" href="?tab=chat">گفتگوی آنلاین</a>{% endif %}
   <a class="pa-tab {% if tab == 'notes' %}active{% endif %}" href="?tab=notes">یادداشت‌ها</a>
   <a class="pa-tab {% if tab == 'audit' %}active{% endif %}" href="?tab=audit">حسابرسی</a>
 </div>
@@ -56,6 +57,29 @@
       <div class="pa-field"><textarea class="pa-input" name="body" rows="2" placeholder="یادداشتِ داخلی درباره‌ی این فروشگاه..."></textarea></div>
       <button class="pa-btn pa-primary" style="margin-top:8px" type="submit">ثبتِ یادداشت</button>
     </form>
+  </div>
+</div>
+
+{% elif tab == "chat" and chat_global %}
+<div class="pa-card">
+  <div class="pa-cardhead"><h3>گفتگوی آنلاین (RastiChat)</h3></div>
+  <div class="pa-cardbody">
+    <p class="pa-help">گفتگو برای هر فروشگاه جداگانه و فقط با اقدام صریحِ مدیر پلتفرم فعال می‌شود (فروشگاه آزمایشی). غیرفعال‌کردن آن را بلافاصله از ویترین و پنل پنهان می‌کند؛ سابقه‌ی گفتگوها در RastiChat می‌ماند.</p>
+    {% if chat_store_enabled %}
+    <p><span class="pa-badge pa-ok">فعال برای این فروشگاه</span></p>
+    <div class="pa-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:store-chat-message' store.public_id %}">ارسال پیام به مدیر فروشگاه</a>
+      <a class="pa-btn pa-soft" href="{% url 'portal_platform_admin:chat-inbox' %}" target="_blank" rel="noopener">صندوق گفتگوی پلتفرم</a>
+      <form method="post" action="{% url 'portal_platform_admin:store-chat-disable' store.public_id %}">
+        {% csrf_token %}<button class="pa-btn pa-danger" type="submit">غیرفعال‌سازی برای این فروشگاه</button>
+      </form>
+    </div>
+    {% else %}
+    <p><span class="pa-badge pa-off">غیرفعال</span></p>
+    <form method="post" action="{% url 'portal_platform_admin:store-chat-enable' store.public_id %}" style="margin-top:10px">
+      {% csrf_token %}<button class="pa-btn pa-primary" type="submit" {% if store.status != "active" %}disabled{% endif %}>فعال‌سازی گفتگو برای این فروشگاه</button>
+    </form>
+    {% endif %}
   </div>
 </div>
 

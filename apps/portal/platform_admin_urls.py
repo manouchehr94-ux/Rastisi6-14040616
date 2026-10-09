@@ -1,5 +1,7 @@
 from django.urls import path
 
+from apps.chat_integration import views as chat_views
+
 from . import platform_admin_views as views
 from . import platform_admin_photo_views as photo_views
 
@@ -22,6 +24,11 @@ urlpatterns = [
     path("stores/<uuid:store_public_id>/change-plan/", views.store_change_plan, name="store-change-plan"),
     path("stores/<uuid:store_public_id>/extend-subscription/", views.store_extend_subscription, name="store-extend-subscription"),
     path("stores/<uuid:store_public_id>/add-note/", views.store_add_note, name="store-add-note"),
+    # --- گفتگوی آنلاین (RastiChat) ---
+    path("stores/<uuid:store_public_id>/chat/enable/", chat_views.platform_store_chat_enable, name="store-chat-enable"),
+    path("stores/<uuid:store_public_id>/chat/disable/", chat_views.platform_store_chat_disable, name="store-chat-disable"),
+    path("stores/<uuid:store_public_id>/chat/message/", chat_views.platform_store_chat_message, name="store-chat-message"),
+    path("chat/inbox/", chat_views.platform_chat_inbox, name="chat-inbox"),
 
     # --- کاربران ---
     path("users/", views.users, name="users"),

@@ -150,6 +150,16 @@ def add_staff_member(store, *, phone: str, role: str, invited_by) -> StoreMember
 
 
 @transaction.atomic
+def _notify_chat_if_access_lost(membership: StoreMembership) -> None:
+    """RastiChat adapter: a revoked member, or one whose new role has no chat role, loses chat access promptly
+    (best effort, after commit, no-op unless chat is enabled for the store)."""
+    from apps.chat_integration.services import hooks, identity_service
+
+    if (membership.status != StoreMembership.MembershipStatus.ACTIVE
+            or identity_service.staff_role_for(membership, surface="customers") is None):
+        hooks.membership_removed(membership)
+
+
 def change_role(membership: StoreMembership, *, new_role: str, actor=None) -> StoreMembership:
     if membership.role == StoreMembership.Role.OWNER:
         raise MembershipError("نقشِ مالک را نمی‌توان مستقیماً تغییر داد؛ از «انتقال مالکیت» استفاده کنید.")
@@ -166,6 +176,7 @@ def change_role(membership: StoreMembership, *, new_role: str, actor=None) -> St
         object_type="StoreMembership", object_id=membership.pk, object_label=membership.user.username,
         before={"role": old_role}, after={"role": new_role},
     )
+    _notify_chat_if_access_lost(membership)
     return membership
 
 
@@ -186,6 +197,7 @@ def revoke_membership(membership: StoreMembership, *, actor=None) -> StoreMember
         store=membership.store, actor=actor, action_code="staff.revoked",
         object_type="StoreMembership", object_id=membership.pk, object_label=membership.user.username,
     )
+    _notify_chat_if_access_lost(membership)
     return membership
 
 
