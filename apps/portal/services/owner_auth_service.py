@@ -534,19 +534,23 @@ def resolve_owner_identity_by_phone(
                 clean_email = normalize_and_validate_email(email)
                 validate_new_account_password(password, user=User(username=phone, email=clean_email))
                 _lock_email(clean_email)
-                if email_belongs_to_another_user(clean_email):
+                # ثبتِ هم‌زمانِ همین شماره (دوبار کلیک/دو تب) تا همین‌جا منتظرِ قفلِ ایمیل مانده؛ اگر برنده کارش را
+                # کرده، ایمیلِ او «ایمیلِ دیگری» نیست — همان کاربرِ همین شماره است.
+                user = User.objects.select_for_update().filter(username=phone).first()
+                if user is None and email_belongs_to_another_user(clean_email):
                     raise OwnerEmailConflictError(EMAIL_CONFLICT_MESSAGE)
-            try:
-                with transaction.atomic():
-                    if require_credentials:
-                        user = User.objects.create_user(username=phone, email=clean_email, password=password)
-                    else:
-                        user = User.objects.create_user(username=phone)
-                        user.set_unusable_password()
-                        user.save(update_fields=["password"])
-                user_created = True
-            except IntegrityError:  # درخواستِ هم‌زمانِ دیگری همین شماره را ساخت
-                user = User.objects.select_for_update().get(username=phone)
+            if user is None:
+                try:
+                    with transaction.atomic():
+                        if require_credentials:
+                            user = User.objects.create_user(username=phone, email=clean_email, password=password)
+                        else:
+                            user = User.objects.create_user(username=phone)
+                            user.set_unusable_password()
+                            user.save(update_fields=["password"])
+                    user_created = True
+                except IntegrityError:  # درخواستِ هم‌زمانِ دیگری همین شماره را ساخت
+                    user = User.objects.select_for_update().get(username=phone)
         if require_active and not user.is_active:
             raise OwnerAccountInactiveError("حساب غیرفعال است.")
 
