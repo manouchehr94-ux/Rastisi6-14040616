@@ -1371,7 +1371,7 @@ html[data-sfb-density="compact"][data-sfb-type-scale="normal"] .rcontainer .sec-
 .category-atelier-media img{width:100%;height:100%;object-fit:cover;transition:transform .35s ease}
 .category-atelier-tile:hover .category-atelier-media img{transform:scale(1.025)}
 .category-atelier-fallback{font-size:clamp(42px,6vw,80px);font-weight:900;color:color-mix(in srgb,var(--ink) 34%,transparent)}
-.category-atelier-shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,16,12,.02) 45%,rgba(20,16,12,.64) 100%);pointer-events:none}
+.category-atelier-shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,16,12,.02) 30%,rgba(20,16,12,.74) 78%);pointer-events:none}
 .category-atelier-label{position:absolute;z-index:2;inset-inline:16px;bottom:15px;color:#fff;font-size:clamp(16px,1.8vw,27px);line-height:1.25;font-weight:950;text-shadow:0 1px 8px rgba(0,0,0,.22)}
 
 .promo-grid--atelier-duo{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}

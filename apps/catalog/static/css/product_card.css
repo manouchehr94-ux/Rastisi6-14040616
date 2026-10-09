@@ -799,15 +799,15 @@ html[data-sfb-density="compact"] .pcarousel{--pcarousel-gap:8px}
 html[dir="ltr"] .pcard-qv-dialog{transform:translate(-50%,-50%)}
 .pcard-qv-close{
   position:absolute;inset-block-start:8px;inset-inline-end:12px;
-  border:0;background:transparent;cursor:pointer;
-  font-size:1.6rem;line-height:1;color:inherit;
+  border:0;background:var(--theme-surface,#fff);border-radius:8px;cursor:pointer;
+  font-size:1.6rem;line-height:1;color:var(--theme-text,#161822);
 }
 .pcard-qv-close:focus-visible{outline:2px solid var(--theme-primary,var(--violet));outline-offset:2px}
 .pcard-qv-media{border-radius:12px;overflow:hidden;background:#f4f4f6;display:grid;place-items:center;min-height:160px}
 .pcard-qv-media img{width:100%;height:100%;object-fit:cover}
 .pcard-qv-media-placeholder{font-size:3rem}
 .pcard-qv-info{display:flex;flex-direction:column;gap:10px;min-width:0}
-.pcard-qv-brand{font-size:.82rem;opacity:.7}
+.pcard-qv-brand{font-size:.82rem;color:var(--theme-muted,var(--muted))}
 .pcard-qv-name{margin:0;font-size:1.12rem;font-weight:800}
 .pcard-qv-price{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-weight:800}
 .pcard-qv-price .old{color:var(--theme-muted,var(--muted));text-decoration:line-through;font-weight:500;font-size:.9em}
@@ -821,7 +821,7 @@ html[dir="ltr"] .pcard-qv-dialog{transform:translate(-50%,-50%)}
   border:1px solid color-mix(in srgb,var(--theme-text,#161822) 22%,transparent);
   color:inherit;font-weight:600;
 }
-.pcard-qv-oos{font-weight:700;opacity:.7}
+.pcard-qv-oos{font-weight:700;color:var(--theme-muted,var(--muted))}
 
 @media(max-width:680px){
   .pcard-qv-trigger{opacity:1;transform:none}

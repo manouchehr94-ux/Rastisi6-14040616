@@ -138,7 +138,7 @@ html[data-sfb-button-style="soft"] .btn-primary:hover{background:var(--violet-so
   .mobile-nav-drawer.mobile-nav-drawer--closed{transform:translateX(-105%)}
   html[dir="rtl"] .mobile-nav-drawer.mobile-nav-drawer--closed{transform:translateX(105%)}
   .mobile-nav-drawer__head{display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid var(--line)}
-  .mobile-nav-drawer__close{width:34px;height:34px;border-radius:9px;background:var(--violet-softer,#f3effc);font-size:16px;cursor:pointer}
+  .mobile-nav-drawer__close{width:34px;height:34px;border-radius:9px;background:var(--violet-softer,#f3effc);color:var(--brand-text,#241c3a);font-size:16px;cursor:pointer}
   /* Phase 5 Task 7 (Browse hardening, Gap #1) — the drawer's own scoped
      styling for the reused canonical search form. Kept minimal and local to
      the drawer so the shared search partial fits cleanly even on legacy
