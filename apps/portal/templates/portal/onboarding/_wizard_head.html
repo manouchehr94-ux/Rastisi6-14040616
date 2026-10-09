@@ -1,6 +1,6 @@
 {# عنوان + نوارِ پیشرفتِ ویزارد؛ نیازمندِ ob_steps/ob_current/ob_total از `_onboarding_shell_context` #}
+<div class="ob-wizard">
 <h1 class="ob-title">راه‌اندازی فروشگاه</h1>
-<p class="ob-lead">چند مرحله‌ی کوتاه تا فروشگاهِ آماده‌ی فروش. با «ذخیره و ادامه» در هر مرحله، پیشرفت شما ثبت می‌شود و هر زمان می‌توانید برگردید.</p>
 <nav class="ob-progress" aria-label="مراحل راه‌اندازی">
   <p class="ob-progress-summary">مرحله {{ ob_current.number }} از {{ ob_total }} · <b>{{ ob_current.label }}</b></p>
   <ol class="ob-steps">
@@ -14,3 +14,4 @@
     {% endfor %}
   </ol>
 </nav>
+</div>

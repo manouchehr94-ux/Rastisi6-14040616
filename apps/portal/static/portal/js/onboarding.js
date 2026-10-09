@@ -14,20 +14,18 @@
   /* ── Industry selector ───────────────────────────────────────────────── */
   function initIndustry(root) {
     var cards = Array.prototype.slice.call(root.querySelectorAll('[data-ob-card]'));
-    var panels = Array.prototype.slice.call(root.querySelectorAll('[data-ob-panel]'));
-    var emptyPreview = root.querySelector('[data-ob-preview-empty]');
     var noResults = root.querySelector('[data-ob-no-results]');
     var search = root.querySelector('[data-ob-search]');
     var chips = Array.prototype.slice.call(root.querySelectorAll('[data-ob-sector]'));
-    var confirmBox = root.querySelector('[data-ob-confirm-check]');
-    var confirmName = root.querySelector('[data-ob-selected-name]');
+    // the confirmation + CTA live in the footer next to the action bar (outside the <form>, linked by form="…")
+    var confirmBox = document.querySelector('[data-ob-confirm-check]');
+    var confirmName = document.querySelector('[data-ob-selected-name]');
     var submit = document.querySelector('[data-ob-install-submit]');
     var status = root.querySelector('[data-ob-selection-status]');
     var sector = 'all';
 
     function selectedRadio() {
-      var checked = root.querySelector('input[name="industry_template_id"]:checked');
-      return checked || null;
+      return root.querySelector('input[name="industry_template_id"]:checked') || null;
     }
 
     function refreshSubmit() {
@@ -37,26 +35,17 @@
       submit.setAttribute('aria-disabled', ready ? 'false' : 'true');
     }
 
-    function showSelection(scroll) {
+    function showSelection() {
       var radio = selectedRadio();
       var id = radio ? radio.value : '';
       cards.forEach(function (card) {
         card.classList.toggle('is-selected', !!radio && card.getAttribute('data-id') === id);
       });
-      var anyPanel = false;
-      panels.forEach(function (panel) {
-        var match = panel.getAttribute('data-ob-panel') === id;
-        panel.hidden = !match;
-        if (match) anyPanel = true;
-      });
-      if (emptyPreview) emptyPreview.hidden = anyPanel;
       var card = radio && radio.closest('[data-ob-card]');
-      if (confirmName) confirmName.textContent = card ? card.getAttribute('data-name') : '—';
-      if (status) status.textContent = card ? ('صنف «' + card.getAttribute('data-name') + '» انتخاب شد.') : '';
-      if (scroll && radio && window.matchMedia && window.matchMedia('(max-width: 960px)').matches) {
-        var preview = root.querySelector('[data-ob-preview]');
-        if (preview && preview.scrollIntoView) preview.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      }
+      var name = card ? card.getAttribute('data-name') : '';
+      if (confirmName) confirmName.textContent = name || 'هنوز انتخاب نشده';
+      if (submit) submit.textContent = name ? ('نصبِ صنفِ «' + name + '»') : 'نصبِ صنفِ انتخاب‌شده';
+      if (status) status.textContent = name ? ('صنف «' + name + '» انتخاب شد.') : '';
       refreshSubmit();
     }
 
@@ -75,7 +64,7 @@
 
     cards.forEach(function (card) {
       var radio = card.querySelector('input[type="radio"]');
-      if (radio) radio.addEventListener('change', function () { showSelection(true); });
+      if (radio) radio.addEventListener('change', showSelection);
     });
     if (search) search.addEventListener('input', applyFilter);
     chips.forEach(function (chip) {
@@ -87,7 +76,7 @@
     });
     if (confirmBox) confirmBox.addEventListener('change', refreshSubmit);
 
-    showSelection(false);
+    showSelection();
     applyFilter();
   }
 

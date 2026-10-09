@@ -10,7 +10,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'portal/css/public-site-v2.css' %}?v=20261008-7">
-<link rel="stylesheet" href="{% static 'portal/css/onboarding.css' %}?v=20261009-3">
+<link rel="stylesheet" href="{% static 'portal/css/onboarding.css' %}?v=20261009-6">
 {% endblock %}
 
 {% block header %}
@@ -46,8 +46,8 @@
 
 {% block footer %}
 <footer class="ob-footer">
-  <p>پس از «ذخیره و ادامه» در هر مرحله، پیشرفت شما ثبت می‌شود. <a href="{% url 'portal:terms' %}">قوانین و مقررات</a> · <a href="{% url 'portal:contact' %}">پشتیبانی</a></p>
+  <p>پس از «ذخیره و ادامه» در هر مرحله، پیشرفت شما ثبت می‌شود و هر زمان می‌توانید به مرحله‌های قبل برگردید. <a href="{% url 'portal:terms' %}">قوانین و مقررات</a> · <a href="{% url 'portal:contact' %}">پشتیبانی</a></p>
 </footer>
-<script src="{% static 'portal/js/onboarding.js' %}?v=20261009-1" defer></script>
+<script src="{% static 'portal/js/onboarding.js' %}?v=20261009-2" defer></script>
 {% endblock %}
 {% block messages_toast %}{% endblock %}
