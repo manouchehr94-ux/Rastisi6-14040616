@@ -609,7 +609,7 @@ html[data-sfb-density="relaxed"] .features{gap:22px;margin:54px 0}
 @media(max-width:680px){
   .sfb-preview-sections{padding-top:8px}
   .hero-text{inset-inline:12px;bottom:40px;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.45)}
-  .hero-text p{color:#fff}.hero-text h1{font-size:17px}
+  .hero-text p{color:inherit}.hero-text h1{font-size:17px}  /* inherit: the panel behind decides light vs dark copy (chocolate/beauty hero panels are LIGHT) */
   .promo-grid--promo-4 .promo-card,.promo-grid--wide-single .promo-card{min-height:170px}.promo-grid--mini-4 .promo-card{min-height:110px}
   .special-main{grid-template-columns:1fr 120px;padding:12px}.special-image{height:145px}
 }

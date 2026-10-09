@@ -216,7 +216,7 @@ input::placeholder,textarea::placeholder{color:var(--rs-muted);opacity:1}
 .rs-value-rail>div:last-child{border:0}.rs-value-dot{width:7px;height:7px;background:var(--rs-brand);border-radius:50%}
 
 .rs-intro{display:grid;grid-template-columns:.68fr 1.6fr;gap:100px;align-items:start}
-.rs-intro p{margin:0;color:var(--rs-ink);font-size:25px;line-height:2;letter-spacing:-.5px}.rs-intro p span{color:color-mix(in srgb,var(--rs-brand) 55%,var(--rs-paper))}
+.rs-intro p{margin:0;color:var(--rs-ink);font-size:25px;line-height:2;letter-spacing:-.5px}.rs-intro p span{color:color-mix(in srgb,var(--rs-brand) 65%,var(--rs-paper))}
 
 .rs-gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:23px}
 .rs-gallery-visual{padding:23px 22px 0;background:var(--rs-soft);border-radius:var(--rs-radius-xs);aspect-ratio:1.15;overflow:hidden}

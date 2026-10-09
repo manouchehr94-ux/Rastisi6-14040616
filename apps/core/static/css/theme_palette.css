@@ -232,7 +232,7 @@ select,textarea{
 .hero-text p{color:#34363d;opacity:1}
 @media(max-width:680px){
   .hero-text{color:#fff;background:rgba(18,20,26,.66)}
-  .hero-text p{color:#fff}
+  .hero-text p{color:inherit}
 }
 
 /* Hero tab strip: white labels over an arbitrary image. The strip is a scrim that is fully dark behind the labels

@@ -163,7 +163,7 @@ html[data-sfb-density="relaxed"] .pcard .body{padding:18px 18px 20px;gap:10px}
 .pcard .brand{font-size:11px;color:var(--muted)}
 .pcard .name{font-size:var(--sfb-product-name-size, 13px);font-weight:600;line-height:1.6;height:42px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .pcard .rate{display:flex;align-items:center;gap:5px;font-size:var(--sfb-muted-size, 11px);color:var(--muted)}
-.stars{color:var(--amber);letter-spacing:1px;font-size:12px}
+.stars{color:var(--amber-text,var(--amber));letter-spacing:1px;font-size:12px}
 .pcard .price{margin-top:auto;display:flex;align-items:flex-end;justify-content:space-between;gap:8px;padding-top:8px;border-top:1px dashed var(--line)}
 .pcard .price .now{font-size:var(--sfb-price-size, 15px);font-weight:900}
 .pcard .price .now small{font-size:10px;font-weight:600;color:var(--muted)}
@@ -810,7 +810,7 @@ html[dir="ltr"] .pcard-qv-dialog{transform:translate(-50%,-50%)}
 .pcard-qv-brand{font-size:.82rem;opacity:.7}
 .pcard-qv-name{margin:0;font-size:1.12rem;font-weight:800}
 .pcard-qv-price{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-weight:800}
-.pcard-qv-price .old{opacity:.55;text-decoration:line-through;font-weight:500;font-size:.9em}
+.pcard-qv-price .old{color:var(--theme-muted,var(--muted));text-decoration:line-through;font-weight:500;font-size:.9em}
 .pcard-qv-actions{margin-block-start:auto;display:flex;flex-direction:column;gap:8px}
 .pcard-qv-add{
   border:0;border-radius:10px;padding:12px 14px;cursor:pointer;font:inherit;font-weight:700;
