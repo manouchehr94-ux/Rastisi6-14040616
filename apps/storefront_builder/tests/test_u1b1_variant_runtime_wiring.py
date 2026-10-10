@@ -244,7 +244,7 @@ class PatternBRendererDispatchTests(TestCase):
         self.assertEqual(items[0]["template_name"], synthetic.template_name)
 
     def test_production_registry_gained_no_new_key(self):
-        self.assertEqual(len(SECTION_REGISTRY), 37)
+        self.assertEqual(len(SECTION_REGISTRY), 38)
         self.assertNotIn("synthetic_variant_demo", SECTION_REGISTRY)
 
 
@@ -298,7 +298,7 @@ class ImportTimeVariantValidationStillEnforcedTests(TestCase):
     successfully)."""
 
     def test_section_registry_module_imported_successfully_with_34_keys(self):
-        self.assertEqual(len(section_registry_module.SECTION_REGISTRY), 37)
+        self.assertEqual(len(section_registry_module.SECTION_REGISTRY), 38)
 
     def test_a_malformed_synthetic_variant_list_still_fails_at_validation_time(self):
         from apps.storefront_builder.variant_contract import InvalidVariantDefinitionError, validate_variants

@@ -193,6 +193,22 @@ after each successful global edit.
           <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="{{ key }}" {% if global_design.header|dictget:key %}checked{% endif %}> <span>{{ label }}</span></label>
           {% endfor %}
 
+          {% if global_design.header_geometry %}
+          <h5>ابعاد و رنگ‌های هدر</h5>
+          <div class="r4-geometry-group" data-r4-geometry-region="header">
+            {% for prop in global_design.header_geometry %}
+            <div class="r4-design-prop" data-r4-geometry-prop="{{ prop.key }}">
+              <label class="r4-field-sublabel">{{ prop.label }}</label>
+              {% if prop.kind == "color" %}
+              {% include "dashboard/storefront_builder/r4/partials/color_control.html" with value=prop.value aria_label=prop.label color_choices=global_design.color_choices geometry_key=prop.key %}
+              {% else %}
+              <input type="number" class="r4-control" inputmode="numeric" data-r4-global-field="geometry" data-r4-global-geometry-key="{{ prop.key }}" min="{{ prop.min }}" max="{{ prop.max }}" value="{{ prop.value }}" placeholder="{{ prop.default }}">
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+
           <label class="r4-field-sublabel" for="r4GlobalAnnouncementText">متن نوار اعلان</label>
           <input type="text" id="r4GlobalAnnouncementText" class="r4-control" maxlength="300" data-r4-global-field="announcement_text" value="{{ global_design.header.announcement_text }}">
 
@@ -323,6 +339,22 @@ after each successful global edit.
           {% for key, label in global_design.footer_toggle_fields %}
           <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="{{ key }}" {% if global_design.footer|dictget:key %}checked{% endif %}> <span>{{ label }}</span></label>
           {% endfor %}
+
+          {% if global_design.footer_geometry %}
+          <h5>ابعاد و رنگ‌های فوتر</h5>
+          <div class="r4-geometry-group" data-r4-geometry-region="footer">
+            {% for prop in global_design.footer_geometry %}
+            <div class="r4-design-prop" data-r4-geometry-prop="{{ prop.key }}">
+              <label class="r4-field-sublabel">{{ prop.label }}</label>
+              {% if prop.kind == "color" %}
+              {% include "dashboard/storefront_builder/r4/partials/color_control.html" with value=prop.value aria_label=prop.label color_choices=global_design.color_choices geometry_key=prop.key %}
+              {% else %}
+              <input type="number" class="r4-control" inputmode="numeric" data-r4-global-field="geometry" data-r4-global-geometry-key="{{ prop.key }}" min="{{ prop.min }}" max="{{ prop.max }}" value="{{ prop.value }}" placeholder="{{ prop.default }}">
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
 
           <h5>ستون‌های اضافی فوتر</h5>
           <div class="r4-repeater" data-r4-global-repeater-field="extra_blocks">

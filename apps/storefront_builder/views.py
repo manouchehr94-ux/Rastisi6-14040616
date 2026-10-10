@@ -2976,6 +2976,8 @@ def storefront_header_editor(request):
         raw["responsive"] = _extract_shell_responsive_raw(request, HEADER_RESPONSIVE_AWARE_KEYS)
         raw["extra_blocks"] = _extract_header_extra_blocks_raw(request)
         raw["header_variant"] = request.POST.get("header_variant", "")
+        # The legacy form has no geometry controls: carry the stored block through untouched.
+        raw["geometry"] = draft.effective_header_config().get("geometry")
         try:
             config = layout_service.validate_header_config(raw)
         except layout_service.HeaderConfigValidationError as exc:
@@ -3030,6 +3032,8 @@ def storefront_footer_editor(request):
             "mobile_nav_variant",
             current_footer_config.get("mobile_nav_variant", "hidden"),
         )
+        # The legacy form has no geometry controls: carry the stored block through untouched.
+        raw["geometry"] = current_footer_config.get("geometry")
         try:
             config = layout_service.validate_footer_config(raw)
         except layout_service.FooterConfigValidationError as exc:

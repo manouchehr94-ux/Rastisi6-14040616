@@ -5,23 +5,19 @@ context processor (apps.content.context_processors) — real merchant menu
 data, never hardcoded here. Keyboard-accessible: a two-level item exposes
 ``aria-expanded``/``aria-haspopup`` on its own trigger button and returns
 focus to that trigger on Escape, exactly the existing legacy behavior.
+
+Optional geometry (a variant passes them via ``include ... with``; absent = unchanged behaviour):
+``nav_limit``       show at most N plain links (0/absent = all);
+``nav_chip_count``  render the LAST N items as highlighted chips (``gh-nl--chip``; every chip except
+                    the very last also carries ``gh-nl--chip-alt``). Chips are never dropped by the limit.
 {% endcomment %}
 {% if NAV_HEADER %}
 {% for item in NAV_HEADER.items %}
-{% if item.children %}
-<div class="gh-nav-dropdown" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.window="if(open){open=false;$nextTick(()=>$refs.ghTrigger{{ forloop.counter }}.focus())}">
-  {% if item.url %}
-  <a class="gh-nl" href="{{ item.url }}" {% if item.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.title }}</a>
-  {% endif %}
-  <button x-ref="ghTrigger{{ forloop.counter }}" type="button" class="gh-nav-submenu-trigger" @click="open = !open" :aria-expanded="open.toString()" aria-haspopup="true" aria-label="{% if item.url %}باز کردن زیرمنوی {{ item.title }}{% else %}{{ item.title }}{% endif %}">{% if not item.url %}{{ item.title }} {% endif %}{% include "storefront_builder/partials/global_header/_shared/icon.html" with name="chevron" %}</button>
-  <ul class="gh-nav-submenu" x-show="open" x-cloak>
-    {% for child in item.children %}
-    <li><a href="{{ child.url }}" {% if child.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ child.title }}</a></li>
-    {% endfor %}
-  </ul>
-</div>
-{% elif item.url %}
-<a class="gh-nl" href="{{ item.url }}" {% if item.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.title }}</a>
+{% if nav_chip_count and forloop.revcounter <= nav_chip_count %}
+{% if forloop.revcounter == 1 %}{% include "storefront_builder/partials/global_header/_shared/nav_header_item.html" with chip_class="gh-nl--chip" item_index=forloop.counter %}{% else %}{% include "storefront_builder/partials/global_header/_shared/nav_header_item.html" with chip_class="gh-nl--chip gh-nl--chip-alt" item_index=forloop.counter %}{% endif %}
+{% elif nav_limit and forloop.counter > nav_limit %}
+{% else %}
+{% include "storefront_builder/partials/global_header/_shared/nav_header_item.html" with chip_class="" item_index=forloop.counter %}
 {% endif %}
 {% endfor %}
 {% endif %}

@@ -8,7 +8,7 @@ data partials; nothing is invented — a layer without data renders its structur
 {% endcomment %}
 {% load storefront_builder_extras %}
 {% with fc=footer_config rc=footer_config.responsive %}
-<footer class="gf gf--stationery">
+<footer class="gf gf--stationery"{% with gstyle=fc.geometry|shell_geometry_style:"footer" %}{% if gstyle %} style="{{ gstyle }}"{% endif %}{% endwith %}>
   <div class="wrap">
     {% if NAV_FOOTER_3 %}{% with bar=NAV_FOOTER_3.items %}
     <nav class="gf-st-bar" aria-label="{{ NAV_FOOTER_3.title|default:'پیوندهای فوتر' }}">

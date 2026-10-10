@@ -239,7 +239,7 @@ class UnsupportedWidgetContractTests(R4MutationApiTestCase):
     def test_unsupported_field_type_raises_improperly_configured(self):
         real_definition = section_registry_module.get_definition("hero_banner")
         bad_schema = SettingsSchema(fields=(
-            SettingsField("swatch", "رنگ", "color", "basic"),
+            SettingsField("swatch", "گونه", "variant", "basic"),
         ))
         bad_definition = dataclasses.replace(real_definition, settings_schema=bad_schema)
         with patch(
@@ -501,10 +501,10 @@ class AppearanceOverrideWidgetTests(R4MutationApiTestCase):
         self.assertNotIn("data-r4-appearance-enabled", content)
         self.assertIn('data-r4-field-key="body_html"', content)
 
-    def test_color_field_type_remains_unsupported(self):
+    def test_variant_field_type_remains_unsupported(self):
         real_definition = section_registry_module.get_definition("hero_banner")
         bad_schema = SettingsSchema(fields=(
-            SettingsField("swatch", "رنگ", "color", "basic"),
+            SettingsField("swatch", "گونه", "variant", "basic"),
         ))
         bad_definition = dataclasses.replace(real_definition, settings_schema=bad_schema)
         with patch(

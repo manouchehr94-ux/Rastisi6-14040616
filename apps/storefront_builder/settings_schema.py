@@ -50,6 +50,12 @@ ALLOWED_FIELD_TYPES = frozenset({
     #: choice list into the Inspector context" pattern ``resource_source``
     #: already established below — never a second Menu authority/model.
     "menu_picker",
+    #: Design-block engine — the sparse per-section ``design`` object
+    #: (semantic colours, border, radius, shadow, spacing, layout, image, actions).
+    #: Which sub-properties exist for a section is declared once in
+    #: ``design_block.DESIGN_APPLICABLE``; the AUTHORITY for shape/range stays
+    #: ``design_block.validate_design_settings`` (run by the section's validator).
+    "design",
 })
 
 #: R4 Task 6 (Group D) — a ``repeater`` item's own sub-fields must be
@@ -318,6 +324,24 @@ def _clean_field_value(field: SettingsField, raw_value: object) -> object:
             ) from exc
         return cleaned if cleaned > 0 else None
 
+    if field.field_type == "color":
+        # Semantic colour: "" (automatic) | "token:<role>" | "#RRGGBB".
+        from .semantic_colors import SemanticColorError, clean_semantic_color
+
+        try:
+            return clean_semantic_color(raw_value)
+        except SemanticColorError as exc:
+            raise SettingsSchemaError(str(exc)) from exc
+
+    if field.field_type == "design":
+        # Shape guard only; ``design_block.validate_design_settings`` (called by the
+        # section's own validator via ``_with_design``) is the sole authority.
+        if not isinstance(raw_value, dict):
+            raise SettingsSchemaError(
+                f"{field.key!r} must be an object (got {type(raw_value).__name__})"
+            )
+        return raw_value
+
     if field.field_type == "background":
         # Phase 5 Task 4B — shape guard ONLY (must be a JSON object), exactly
         # like this module's contract for every compound type: THIS module
@@ -348,7 +372,7 @@ def _clean_field_value(field: SettingsField, raw_value: object) -> object:
             raise SettingsSchemaError(str(exc)) from exc
         return resource_source.serialize_resource_source(typed)
 
-    # color / media / variant: opaque, schema-declared but not type-coerced
+    # media / variant: opaque, schema-declared but not type-coerced
     # yet — passed through unchanged for the legacy validator to
     # authoritatively check.
     return raw_value

@@ -1,8 +1,8 @@
 {
   "template_key": "stationery_spectrum",
   "version": "1",
-  "content_hash": "4ad43435ed661c2d1fa670a80c3448e6b9ed4896da18d018e1d6c044d38d3118",
-  "preview_input_fingerprint": "92d0f29e8c04f4171e8b40f61b735ce148dc031e79d29a39ff5bb1a72d17f870",
+  "content_hash": "4bb026c61f709dce4e610250cdb8b40ddd6ada6584d275668f9528ef56bae5fc",
+  "preview_input_fingerprint": "cff3d7e15d1290c8976aa9bea7c09136008a8d7d9f8c95ac3b14fc1cb06fa662",
   "capture_source": "rasti-mode-demo",
   "viewport": {
     "width": 1440,

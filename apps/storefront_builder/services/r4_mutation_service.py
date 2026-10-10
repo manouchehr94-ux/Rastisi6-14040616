@@ -17,6 +17,7 @@ from apps.storefront_builder import (
     layout_preset_registry,
     resource_source,
     section_registry,
+    shell_geometry,
 )
 from apps.storefront_builder.models import (
     APPEARANCE_COLOR_KEYS,
@@ -963,7 +964,7 @@ def _merge_shell_responsive_patch(current: dict, posted) -> dict:
 _HEADER_UPDATE_ALLOWED_PATCH_KEYS = frozenset(
     {
         "header_variant", "announcement_text", "announcement_show_phone",
-        "announcement_links", "extra_blocks", "responsive",
+        "announcement_links", "extra_blocks", "responsive", "geometry",
     }
     | set(HEADER_TOGGLE_FIELDS)
 )
@@ -992,6 +993,8 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
         candidate["extra_blocks"] = patch["extra_blocks"]
     if "responsive" in patch:
         candidate["responsive"] = _merge_shell_responsive_patch(candidate.get("responsive"), patch["responsive"])
+    if "geometry" in patch:
+        candidate["geometry"] = shell_geometry.merge_patch(candidate.get("geometry"), patch["geometry"])
 
     try:
         cleaned = layout_service.validate_header_config(candidate)
@@ -1023,7 +1026,7 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
 #: JSON and was already validated/synced on every save — it simply could
 #: never be CHANGED by a merchant through R4 before this.
 _FOOTER_UPDATE_ALLOWED_PATCH_KEYS = frozenset(
-    {"footer_variant", "mobile_nav_variant", "extra_blocks", "responsive"} | set(FOOTER_TOGGLE_FIELDS)
+    {"footer_variant", "mobile_nav_variant", "extra_blocks", "responsive", "geometry"} | set(FOOTER_TOGGLE_FIELDS)
 )
 
 
@@ -1046,6 +1049,8 @@ def _apply_footer_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
         candidate["extra_blocks"] = patch["extra_blocks"]
     if "responsive" in patch:
         candidate["responsive"] = _merge_shell_responsive_patch(candidate.get("responsive"), patch["responsive"])
+    if "geometry" in patch:
+        candidate["geometry"] = shell_geometry.merge_patch(candidate.get("geometry"), patch["geometry"])
 
     try:
         cleaned = layout_service.validate_footer_config(candidate)

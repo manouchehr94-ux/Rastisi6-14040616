@@ -24,7 +24,7 @@ from django.utils import timezone
 
 from apps.core.services.rate_limit import enforce_rate_limit
 
-from .. import appearance_registry, global_region_registry, layout_preset_registry
+from .. import appearance_registry, global_region_registry, layout_preset_registry, shell_geometry
 from . import container_service
 from ..section_media_contract import (
     ASSET_FK_FIELDS as _ASSET_FK_FIELDS,
@@ -253,6 +253,14 @@ def validate_header_config(config: dict) -> dict:
     except global_region_registry.UnknownGlobalVariantSelectionError as exc:
         raise HeaderConfigValidationError(str(exc)) from exc
 
+    # Optional, sparse: merchant-editable header geometry/colours (shell_geometry.py).
+    try:
+        geometry = shell_geometry.validate_geometry(config.get("geometry"), "header")
+    except shell_geometry.ShellGeometryError as exc:
+        raise HeaderConfigValidationError(str(exc)) from exc
+    if geometry:
+        cleaned["geometry"] = geometry
+
     if not cleaned["show_cart"]:
         raise HeaderConfigValidationError(
             "دسترسی به سبد خرید نمی‌تواند از هدر حذف شود — در حال حاضر هیچ مسیر "
@@ -351,6 +359,14 @@ def validate_footer_config(config: dict) -> dict:
         )
     except global_region_registry.UnknownGlobalVariantSelectionError as exc:
         raise FooterConfigValidationError(str(exc)) from exc
+
+    # Optional, sparse: merchant-editable footer geometry/colours (shell_geometry.py).
+    try:
+        geometry = shell_geometry.validate_geometry(config.get("geometry"), "footer")
+    except shell_geometry.ShellGeometryError as exc:
+        raise FooterConfigValidationError(str(exc)) from exc
+    if geometry:
+        cleaned["geometry"] = geometry
 
     if not any(cleaned[field] for field in FOOTER_TOGGLE_FIELDS):
         raise FooterConfigValidationError(

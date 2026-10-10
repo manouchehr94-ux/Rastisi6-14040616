@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% load static persian %}
+{% load static persian storefront_builder_extras %}
 
 {% block header %}
 {% include header_variant_template with header_config=layout_header_config is_live_storefront=True is_builder_preview=False %}
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/product_card.css' %}">
-<link rel="stylesheet" href="{% static 'css/home.css' %}">
-<link rel="stylesheet" href="{% static 'css/storefront_builder.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/product_card.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/home.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/storefront_builder.css' %}">
 {% endblock %}
 
 {% block content %}

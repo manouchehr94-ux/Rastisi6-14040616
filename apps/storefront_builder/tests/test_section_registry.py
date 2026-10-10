@@ -105,6 +105,9 @@ EXPECTED_KEYS = {
     # surface_panel — structural, content-free surface (reference rebuild of Template 51); covered by
     # test_reference_templates_51_53.py::GenericRebuildPrimitiveTests.
     "surface_panel",
+    # decorative_strip — generic decorative band (engine primitive replacing the Template-51 banner abuse); covered by
+    # test_engine_stabilization.py.
+    "decorative_strip",
     # newsletter — Phase 3 (Home page reusable blocks), dedicated coverage
     # in test_views.py::NewsletterSectionTests and apps.content's own
     # NewsletterSubscriber/subscribe_to_newsletter/view tests.
@@ -1198,7 +1201,10 @@ class SpacingAwareIntegrationTests(TestCase):
             self.assertNotIn("spacing", defaults, key)
 
     def test_background_and_spacing_share_exactly_the_same_allowlist(self):
-        self.assertEqual(BACKGROUND_AWARE_SECTION_KEYS, SPACING_AWARE_SECTION_KEYS)
+        # Spacing is the background-aware set plus the structural/presentation-only sections that own their own fill.
+        self.assertEqual(
+            SPACING_AWARE_SECTION_KEYS, BACKGROUND_AWARE_SECTION_KEYS | {"surface_panel", "decorative_strip"},
+        )
 
 
 class NewsletterSectionRegistryTests(TestCase):
@@ -1331,7 +1337,7 @@ class U1ABackwardsCompatibilityTests(TestCase):
     """Test #1, #13, #14, #15 — nothing about the existing registry moved."""
 
     def test_all_34_definitions_still_construct_and_are_gettable(self):
-        self.assertEqual(len(list_definitions()), 37)
+        self.assertEqual(len(list_definitions()), 38)
         for key in U1A_EXPECTED_SECTION_KEYS:
             definition = get_definition(key)
             self.assertEqual(definition.key, key)

@@ -114,7 +114,7 @@ class ReferenceTemplateRegistryTests(SimpleTestCase):
     def test_recipe_composition_matches_the_reference_section_maps(self):
         spectrum = lpr.get_layout_preset("stationery_spectrum")
         keys = _home_section_keys(spectrum)
-        self.assertEqual(keys[0], "multi_banner")
+        self.assertEqual(keys[0], "decorative_strip")
         self.assertEqual(keys.count("hero_banner"), 1)
         self.assertIn("amazing_offers", keys)
         # five coloured bands in palette tone order 1..5
@@ -132,9 +132,9 @@ class ReferenceTemplateRegistryTests(SimpleTestCase):
                 pair_rows.setdefault(entry.row_key, []).append(entry.row_span)
         self.assertIn([6, 6], pair_rows.values())
 
-        # the strip banner uses the picture-first variant; the four tiles use the near-square variant
+        # the decor strip is the generic decorative_strip primitive; the four tiles use the near-square banner variant
         banners = [e.settings["layout_variant"] for e in spectrum.pages["home"] if e.section_key == "multi_banner"]
-        self.assertEqual(banners, ["strip-art", "tile-4"])
+        self.assertEqual(banners, ["tile-4"])
         self.assertEqual(
             next(e for e in spectrum.pages["home"] if e.section_key == "category_grid").settings["display_mode"],
             "grey_circles",
@@ -203,8 +203,8 @@ class ReferenceVariantContractTests(SimpleTestCase):
         self.assertIn("catalog_grid", section_registry.PRODUCT_SECTION_DISPLAY_MODES)
         for mode in ("pastel_tiles", "grey_circles", "icon_tiles", "gradient_tiles"):
             self.assertIn(mode, section_registry.CATEGORY_GRID_DISPLAY_MODES)
-        for layout in ("tile-4", "strip-art"):
-            self.assertIn(layout, section_registry.MULTI_BANNER_KNOWN_LAYOUT_VARIANTS)
+        self.assertIn("tile-4", section_registry.MULTI_BANNER_KNOWN_LAYOUT_VARIANTS)
+        self.assertNotIn("strip-art", section_registry.MULTI_BANNER_KNOWN_LAYOUT_VARIANTS)
         self.assertIn("poster_wide", section_registry.HERO_STYLE_CHOICES)
         product = section_registry.get_definition("product_section")
         self.assertIn("catalog_grid", {variant.key for variant in product.variants})
@@ -383,7 +383,7 @@ class ReferenceRebuild51Tests(SimpleTestCase):
     def test_home_section_order_is_the_forensic_order(self):
         keys = [e.section_key for e in self._home()]
         expected = (
-            ["multi_banner", "product_section", "hero_banner", "category_grid", "trust_features", "multi_banner"]
+            ["decorative_strip", "product_section", "hero_banner", "category_grid", "trust_features", "multi_banner"]
             + ["product_section", "amazing_offers", "product_section"]       # red band, amazing panel, green band
             + ["surface_panel"] * 2 + ["product_section"]                      # blank pair A, ochre band
             + ["surface_panel"] * 2 + ["product_section"] * 2                  # blank pair B, pair C

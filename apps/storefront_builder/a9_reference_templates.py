@@ -98,8 +98,10 @@ def _spectrum_pair_panel(row_key: str, title: str, data_source: str, *, first: b
         "product_section", row_key=row_key, row_span=6,
         container_settings=({"gap": 20, "mobile_mode": "stack", "height_mode": "equal"} if first else None),
         settings={
-            "title": title, "data_source": data_source, "item_limit": 6,
+            "title": title, "data_source": data_source, "item_limit": 3,
             "display_mode": "carousel", "show_view_all": True, "heading_style": "underlined",
+            # Three fixed cards per panel: a non-scrolling grid on desktop, wrapping (never a scroll rail) below.
+            "desktop_layout": "grid", "overflow_mode": "visible", "show_scrollbar": False,
             "responsive": {"desktop_columns": 3, "tablet_columns": 3, "mobile_columns": 2},
             "card": {**_SPECTRUM_CARD, "card_border": False},
             "background": {"mode": "surface"},
@@ -114,7 +116,7 @@ def _blank_pair(row_key: str, min_height: int, gap_top: int) -> tuple[PresetSect
         PresetSectionEntry(
             "surface_panel", row_key=row_key, row_span=6,
             container_settings=({"gap": 20, "mobile_mode": "stack", "height_mode": "equal"} if index == 0 else None),
-            settings={"min_height": min_height, "spacing": _gap(gap_top)},
+            settings={"min_height": min_height},
         )
         for index in range(2)
     )
@@ -127,7 +129,7 @@ def _blank_slots(row_key: str, count: int, min_height: int, gap_top: int) -> tup
         PresetSectionEntry(
             "surface_panel", row_key=row_key, row_span=span,
             container_settings=({"gap": 20, "mobile_mode": "stack", "height_mode": "equal"} if index == 0 else None),
-            settings={"min_height": min_height, "spacing": _gap(gap_top)},
+            settings={"min_height": min_height},
         )
         for index in range(count)
     )
@@ -137,9 +139,9 @@ def _blank_slots(row_key: str, count: int, min_height: int, gap_top: int) -> tup
 # of the reproduced composition and carry no products, text or actions.
 _SPECTRUM_HOME = (
     # 2 decor strip
-    PresetSectionEntry("multi_banner", settings={
-        "item_limit": 1, "offset": 0, "layout_variant": "strip-art",
-        "responsive": {"desktop_columns": 1, "tablet_columns": 1, "mobile_columns": 1},
+    PresetSectionEntry("decorative_strip", settings={
+        "desktop_height": 52, "tablet_height": 44, "mobile_height": 36,
+        "background_mode": "palette", "background_color": "token:surface", "radius": 8,
         "spacing": _gap(28),
     }),
     # 3 offer card + hero (1 : 3 columns)
@@ -160,7 +162,8 @@ _SPECTRUM_HOME = (
     }),
     # 4 category circles: six visible positions
     PresetSectionEntry("category_grid", settings={
-        "title": "", "display_mode": "grey_circles", "item_limit": 6, "min_slots": 6, "spacing": _gap(32),
+        "title": "", "display_mode": "grey_circles", "item_limit": 6, "min_slots": 6,
+        "category_source": "top_then_descendants", "spacing": _gap(32),
     }),
     # 5 service strip
     PresetSectionEntry("trust_features", settings={
@@ -213,11 +216,12 @@ _SPECTRUM_HOME = (
     }),
     # 19 blog panel: six visible card positions
     PresetSectionEntry("blog_posts", settings={
-        "title": "مجله فروشگاه", "item_limit": 6, "min_slots": 6, "style": "panel_carousel", "spacing": _gap(52),
+        "title": "مجله فروشگاه", "item_limit": 6, "min_slots": 6, "style": "panel_carousel",
+        "design": {"margin_top": 52},
     }),
 )
 _SPECTRUM_NAMES = (
-    "banner_strip", "offer_flash", "hero", "categories", "trust", "banner_tiles",
+    "decorative_strip", "offer_flash", "hero", "categories", "trust", "banner_tiles",
     "products_band_1", "amazing_offers", "products_band_2",
     "surface_pair_a1", "surface_pair_a2", "products_band_3",
     "surface_pair_b1", "surface_pair_b2", "products_pair_c1", "products_pair_c2",
@@ -250,6 +254,9 @@ register_layout_preset(LayoutPresetDefinition(
         "sticky": False, "announcement_enabled": False,
         "show_search": True, "show_account": True, "show_wishlist": False, "show_cart": True,
         "header_variant": "stationery_search",
+        # Reference dimensions are recipe DATA (merchant-editable in Design Studio), not variant CSS.
+        "geometry": {"util_height": 40, "main_height": 50, "nav_height": 73, "search_max_width": 655,
+                     "search_height": 43, "nav_item_limit": 4, "chip_count": 2, "chip_radius": 4, "chip_alt_padding": 90},
     },
     footer={
         "show_about": True, "show_contact": True, "show_categories": True,
@@ -260,6 +267,8 @@ register_layout_preset(LayoutPresetDefinition(
         "extra_blocks": [
             {"type": "badge_slots", "count": 5},
         ],
+        "geometry": {"column_count": 4, "grid_min_height": 440, "bar_height": 78, "divider_spacing": 54,
+                     "brand_spacing": 50, "badge_size": 62, "badge_gap": 14, "badge_row_padding": 10},
     },
     pages={
         "home": authored_legacy_home("stationery_spectrum", _SPECTRUM_HOME, _SPECTRUM_NAMES),

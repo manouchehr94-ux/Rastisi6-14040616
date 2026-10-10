@@ -19,11 +19,14 @@ from apps.stores.resolution import resolve_store_for_service
 
 from . import (
     appearance_registry,
+    design_block,
     global_region_registry,
     layout_preset_registry,
     media_views,
     resource_source,
     section_registry,
+    semantic_colors,
+    shell_geometry,
     variant_contract,
 )
 from .models import (
@@ -63,6 +66,13 @@ _INSPECTOR_SUPPORTED_FIELD_TYPES = frozenset({
     #: settings_field.html and saved through the existing section.update_settings
     #: mutation; never a section-name branch, never a second media authority.
     "background",
+    #: Design-block engine — the sparse per-section ``design`` object and the
+    #: standalone semantic ``color`` control (palette role | custom hex | automatic).
+    "design",
+    "color",
+    #: A Store-scoped Media Library asset picker (value = MediaAsset id or empty). Ownership is
+    #: re-checked at render time (content.services.resolve_background_media_url), never trusted here.
+    "media",
 })
 
 #: Phase 5 Task 6 — the "Storefront Showcase" R4 CREATION FACADE.
@@ -424,6 +434,15 @@ def _build_global_design_context(draft: StorefrontLayoutVersion) -> dict:
         "resolved_theme_roles": appearance_registry.resolve_theme_roles(appearance),
         "color_field_labels": _COLOR_FIELD_LABELS_FA,
         "theme_field_labels": _THEME_FIELD_LABELS_FA,
+        # Merchant-editable geometry/colour of the SELECTED header/footer variant (only the properties that
+        # variant actually draws — shell_geometry.SHELL_GEOMETRY).
+        "header_geometry": shell_geometry.serialize_for_inspector(
+            "header", header.get("header_variant"), header.get("geometry"),
+        ),
+        "footer_geometry": shell_geometry.serialize_for_inspector(
+            "footer", footer.get("footer_variant"), footer.get("geometry"),
+        ),
+        "color_choices": semantic_colors.semantic_color_choices(),
         "header_toggle_fields": [
             (key, _HEADER_TOGGLE_LABELS_FA[key]) for key in HEADER_TOGGLE_FIELDS
         ],
@@ -1315,10 +1334,17 @@ def storefront_r4_section_inspector(request, pk):
     ):
         basic_fields = tuple(f for f in basic_fields if f.key != "show_view_all")
         advanced_fields = tuple(f for f in advanced_fields if f.key != "show_view_all")
-    field_values = {
-        field.key: current_settings.get(field.key, field.default)
-        for field in schema.fields
-    }
+    def _inspector_current_value(field):
+        if field.key in current_settings:
+            return current_settings[field.key]
+        if field.key in ("desktop_columns", "tablet_columns", "mobile_columns"):
+            # The stored column counts of older sections live in the shared ``responsive`` block.
+            stored = (current_settings.get("responsive") or {}).get(field.key)
+            if stored is not None:
+                return stored
+        return field.default
+
+    field_values = {field.key: _inspector_current_value(field) for field in schema.fields}
 
     # R4 Task 7 — the Inspector needs to show what an appearance_override
     # field would inherit while disabled. Pass only the safe typed
@@ -1406,10 +1432,30 @@ def storefront_r4_section_inspector(request, pk):
             "media_assets": picker_context["background_media_assets"],
         }
 
+    # Design-block engine — one shared, registry-driven control set. Built only when a
+    # ``design`` / ``color`` field is present (same "only if this field type is present"
+    # pattern as resource_source/menu_picker/background above).
+    design_groups = None
+    color_choices = None
+    media_assets = None
+    if any(field.field_type == "media" for field in schema.fields):
+        from .views import _background_picker_context
+
+        media_assets = _background_picker_context(request, section)["background_media_assets"]
+    if any(field.field_type in ("design", "color") for field in schema.fields):
+        from .semantic_colors import semantic_color_choices
+
+        color_choices = semantic_color_choices()
+    if any(field.field_type == "design" for field in schema.fields):
+        design_groups = design_block.serialize_registry_for_inspector(section.section_key)
+
     return render(
         request,
         "dashboard/storefront_builder/r4/partials/section_inspector.html",
         {
+            "design_groups": design_groups,
+            "color_choices": color_choices,
+            "media_assets": media_assets,
             "section": section,
             "definition": definition,
             "basic_fields": basic_fields,

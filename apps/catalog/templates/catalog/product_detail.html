@@ -1,5 +1,5 @@
 {% extends "storefront_shell.html" %}
-{% load static persian catalog_extras %}
+{% load static persian catalog_extras storefront_builder_extras %}
 
 {% block title %}{{ product.seo_title|default:product.name }} | {{ SHOP_NAME }}{% endblock %}
 {% block meta_description %}<meta name="description" content="{{ product.seo_description|default:product.name }}">{% endblock %}
@@ -18,7 +18,7 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/product_card.css' %}">
 <link rel="stylesheet" href="{% static 'css/product_detail.css' %}">
-<link rel="stylesheet" href="{% static 'css/storefront_builder.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/storefront_builder.css' %}">
 {% endblock %}
 
 {% block content %}

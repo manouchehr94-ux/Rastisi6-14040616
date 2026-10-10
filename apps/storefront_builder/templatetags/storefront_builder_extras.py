@@ -36,6 +36,31 @@ def sanitize_rich_text(value):
 
 
 @register.filter
+def shell_geometry_style(geometry, region):
+    """Inline custom-property fragment for a header/footer ``geometry`` block (``--gh-*`` / ``--gf-*``)."""
+    from .. import shell_geometry
+
+    return shell_geometry.geometry_style(geometry, region)
+
+
+@register.filter
+def geo(geometry, spec):
+    """``{{ hc.geometry|geo:"chip_count:2" }}`` — an integer geometry value with the variant's own default."""
+    key, _, default = str(spec).partition(":")
+    value = geometry.get(key) if isinstance(geometry, dict) else None
+    try:
+        return int(value) if value is not None else int(default)
+    except (TypeError, ValueError):
+        return int(default or 0)
+
+
+@register.filter
+def startswith(value, prefix):
+    """``{% if value|startswith:"token:" %}`` — string prefix test for template conditions."""
+    return isinstance(value, str) and value.startswith(prefix)
+
+
+@register.filter
 def dictget(d, key):
     """دسترسیِ پویا به یک کلیدِ dict که نامش در یک متغیرِ تمپلیت است —
     برایِ حلقه‌هایِ رنگِ ظاهر (``appearance_panel.html``) که کلید از یک
@@ -268,3 +293,26 @@ def footer_empty_badge_slots(total, badges):
     except TypeError:
         used = 0
     return range(max(0, int(total or 0) - used))
+
+
+@register.simple_tag
+def sfb_static(path):
+    """Static URL with a content-derived cache-busting query (``?v=<mtime>``).
+
+    The storefront stylesheets are loaded by BOTH the published pages and the Design Studio preview. They must
+    share one URL that changes exactly when the file changes — a hand-pinned token (or none at all) lets one
+    surface keep running an older stylesheet than the other. Falls back to the plain static URL when the file
+    cannot be located on disk."""
+    import os
+
+    from django.contrib.staticfiles import finders
+    from django.templatetags.static import static
+
+    url = static(path)
+    try:
+        found = finders.find(path)
+        if found:
+            return f"{url}?v={int(os.stat(found).st_mtime)}"
+    except OSError:
+        pass
+    return url

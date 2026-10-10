@@ -513,6 +513,7 @@ class SchemaEnablementRegistryGuardTests(SimpleTestCase):
         "faq",
         "testimonials",
         "surface_panel",
+        "decorative_strip",
     })
 
     def test_every_registered_section_key_matches_its_expected_schema_state(self):

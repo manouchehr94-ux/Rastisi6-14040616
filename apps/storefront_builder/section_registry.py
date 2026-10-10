@@ -20,6 +20,8 @@ from __future__ import annotations
 import dataclasses
 from typing import Callable
 
+from . import design_block
+from .services.category_selection import CATEGORY_SOURCE_MODES
 from . import resource_source as resource_source_module
 from .settings_schema import (
     CARD_STYLE_EXPLICIT_OVERRIDE_KEY,
@@ -298,6 +300,21 @@ def _clean_positive_int_list(raw_list, *, max_len: int, error_cls=None, error_me
 #: ``underlined`` = plain title + pill with an accent rule under the heading block.
 PRODUCT_SECTION_HEADING_STYLES = ("default", "plain_outline", "underlined")
 
+#: Generic presentation contract of a product section's item row. Every key is optional and written only
+#: when it differs from the default, so existing sections keep their stored shape and look.
+#:  * ``desktop_layout``  — "grid" (non-scrolling N-column grid) / "carousel" from the tablet breakpoint up;
+#:                          absent = follow ``display_mode``.
+#:  * ``overflow_mode``   — carousel row: "scroll" (default, user scroll) / "clip" (no user scroll; arrows and dots
+#:                          still move it) / "visible" (no scrolling at all: items wrap onto further rows).
+#:  * ``show_scrollbar``  — False hides the native scrollbar rail of a scrolling row.
+#:  * ``carousel_navigation`` — "none" (default) / "arrows" / "dots".
+#:  * ``desktop_columns`` / ``tablet_columns`` / ``mobile_columns`` / ``gap`` — columns and item gap (px).
+PRODUCT_SECTION_DESKTOP_LAYOUTS = ("inherit", "grid", "carousel")
+PRODUCT_SECTION_OVERFLOW_MODES = ("scroll", "clip", "visible")
+PRODUCT_SECTION_CAROUSEL_NAVIGATION = ("none", "arrows", "dots")
+_PRODUCT_SECTION_COLUMN_LIMITS = {"desktop_columns": (1, 8), "tablet_columns": (1, 6), "mobile_columns": (1, 4)}
+_PRODUCT_SECTION_MAX_GAP = 60
+
 
 def _validate_product_section_settings(raw: dict) -> dict:
     """قراردادِ تنظیماتِ «بخشِ محصول» (فازِ C) — تنها اعتبارسنجیِ شکل/
@@ -385,7 +402,38 @@ def _validate_product_section_settings(raw: dict) -> dict:
     # Optional presentation (written only when non-default): how the section heading is drawn.
     if heading_style in PRODUCT_SECTION_HEADING_STYLES[1:]:
         cleaned["heading_style"] = heading_style
+    # Item-row presentation contract (all optional; written only when non-default).
+    if raw.get("desktop_layout") in PRODUCT_SECTION_DESKTOP_LAYOUTS[1:]:
+        cleaned["desktop_layout"] = raw["desktop_layout"]
+    if raw.get("overflow_mode") in PRODUCT_SECTION_OVERFLOW_MODES[1:]:
+        cleaned["overflow_mode"] = raw["overflow_mode"]
+    if raw.get("show_scrollbar") is not None and not _truthy_setting(raw.get("show_scrollbar")):
+        cleaned["show_scrollbar"] = False
+    if raw.get("carousel_navigation") in PRODUCT_SECTION_CAROUSEL_NAVIGATION[1:]:
+        cleaned["carousel_navigation"] = raw["carousel_navigation"]
+    for key, (low, high) in _PRODUCT_SECTION_COLUMN_LIMITS.items():
+        value = raw.get(key)
+        if value in (None, ""):
+            continue
+        try:
+            cleaned[key] = max(low, min(high, int(str(value).translate(_ASCII_DIGITS))))
+        except (TypeError, ValueError):
+            raise ProductSectionSettingsError("تعدادِ ستون باید عدد باشد") from None
+    if raw.get("gap") not in (None, ""):
+        try:
+            cleaned["gap"] = max(0, min(_PRODUCT_SECTION_MAX_GAP, int(str(raw["gap"]).translate(_ASCII_DIGITS))))
+        except (TypeError, ValueError):
+            raise ProductSectionSettingsError("فاصله‌ی بین کارت‌ها باید عدد باشد") from None
     return cleaned
+
+
+_ASCII_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+
+def _truthy_setting(value) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() not in ("", "0", "false", "off", "no")
+    return bool(value)
 
 
 def _product_section_defaults() -> dict:
@@ -455,6 +503,23 @@ PRODUCT_SECTION_SCHEMA = SettingsSchema(fields=(
         "heading_style", "سبک عنوان", "choice", "advanced", default="default",
         choices=(("default", "پیش‌فرض"), ("plain_outline", "عنوان ساده + دکمه خط‌دار"), ("underlined", "عنوان ساده + خط تأکید")),
     ),
+    SettingsField(
+        "desktop_layout", "چیدمان از تبلت به بالا", "choice", "advanced", default="inherit",
+        choices=(("inherit", "مطابق نوع نمایش"), ("grid", "گرید ثابت بدون اسکرول"), ("carousel", "کاروسل")),
+    ),
+    SettingsField(
+        "overflow_mode", "رفتار ردیف کارت‌ها", "choice", "advanced", default="scroll",
+        choices=(("scroll", "اسکرول افقی"), ("clip", "بدون اسکرول کاربر (برش)"), ("visible", "همه نمایان (شکستن به ردیف بعد)")),
+    ),
+    SettingsField("show_scrollbar", "نمایش نوار اسکرول", "boolean", "advanced", default=True),
+    SettingsField(
+        "carousel_navigation", "ناوبری کاروسل", "choice", "advanced", default="none",
+        choices=(("none", "بدون ناوبری"), ("arrows", "فلش‌ها"), ("dots", "نقطه‌ها")),
+    ),
+    SettingsField("desktop_columns", "ستون‌ها در دسکتاپ", "integer", "advanced", default=4, min_value=1, max_value=8),
+    SettingsField("tablet_columns", "ستون‌ها در تبلت", "integer", "advanced", default=3, min_value=1, max_value=6),
+    SettingsField("mobile_columns", "ستون‌ها در موبایل", "integer", "advanced", default=2, min_value=1, max_value=4),
+    SettingsField("gap", "فاصله بین کارت‌ها (px)", "integer", "advanced", default=16, min_value=0, max_value=_PRODUCT_SECTION_MAX_GAP),
 ))
 
 
@@ -998,7 +1063,11 @@ BACKGROUND_AWARE_SECTION_KEYS = frozenset({
 #: همان allowlist برایِ «فاصله‌گذاری» (بخشِ ۸ مشخصات) — دقیقاً همان مجموعه،
 #: چون هر دو معنایِ «این section چطور در صفحه جا می‌گیرد» دارند، نه محتوایِ
 #: خودِ section.
-SPACING_AWARE_SECTION_KEYS = BACKGROUND_AWARE_SECTION_KEYS
+SPACING_AWARE_SECTION_KEYS = BACKGROUND_AWARE_SECTION_KEYS | frozenset({
+    #: structural / presentation-only sections: they own their fill, but their place in the page rhythm
+    #: (margin / padding) is the same merchant-editable contract as every other section.
+    "surface_panel", "decorative_strip",
+})
 
 BACKGROUND_MODE_CHOICES = ("theme", "palette", "palette_pattern", "color", "image", "pattern", "surface")
 #: Modes whose fill can optionally extend edge-to-edge behind a section that keeps its content inside the container.
@@ -1165,6 +1234,41 @@ def _with_background(section_key: str, validate_fn, default_fn):
         return {**base, "background": default_background_settings()}
 
     return wrapped_validate, wrapped_default
+
+
+def _with_design(section_key: str, validate_fn, default_fn):
+    """Wrap a section's validator with the sparse ``design`` block (see ``design_block``).
+
+    Only for sections that declare applicable design properties. The block is never
+    materialised by default: it is written only when it holds at least one non-neutral value,
+    so sections without it stay byte-identical."""
+    applicable = design_block.applicable_properties(section_key)
+    if not applicable:
+        return validate_fn, default_fn
+
+    def wrapped_validate(raw: dict) -> dict:
+        if not isinstance(raw, dict):
+            return validate_fn(raw)
+        design_raw = raw.get("design")
+        base_raw = {k: v for k, v in raw.items() if k != "design"}
+        cleaned = validate_fn(base_raw)
+        design = design_block.validate_design_settings(design_raw, applicable)
+        if design:
+            cleaned["design"] = design
+        return cleaned
+
+    return wrapped_validate, default_fn
+
+
+def _with_design_schema_field(section_key: str, schema):
+    """Project the generic ``design`` Inspector field onto an applicable section's schema (idempotent)."""
+    applicable = design_block.applicable_properties(section_key)
+    if schema is None or not applicable or schema.get_field("design") is not None:
+        return schema
+    field = SettingsField(
+        "design", "ظاهر و استایل", "design", "advanced", default={}, widget_hint=",".join(applicable),
+    )
+    return dataclasses.replace(schema, fields=(*schema.fields, field))
 
 
 def _with_background_schema_field(section_key: str, schema):
@@ -1762,6 +1866,10 @@ def _validate_category_grid_settings(raw: dict) -> dict:
         min_slots = 0
     if min_slots > 0:
         cleaned["min_slots"] = max(2, min(12, min_slots))
+    # Optional auto-pick order (written only when not the historical default): which eligible categories fill
+    # the grid when the merchant has not picked any by hand — see services.category_selection.
+    if raw.get("category_source") in CATEGORY_SOURCE_MODES[1:]:
+        cleaned["category_source"] = raw["category_source"]
     return cleaned
 
 
@@ -1795,6 +1903,15 @@ CATEGORY_GRID_SCHEMA = SettingsSchema(fields=(
     SettingsField(
         "min_slots", "حداقل جایگاه‌های نمایشی", "integer", "advanced",
         default=0, min_value=0, max_value=12,
+    ),
+    SettingsField(
+        "category_source", "ترتیب انتخاب خودکار دسته‌ها", "choice", "advanced", default="top_level",
+        choices=(
+            ("top_level", "فقط دسته‌های سطح اول"),
+            ("top_then_descendants", "ابتدا سطح اول، سپس زیردسته‌ها"),
+            ("all", "همه دسته‌ها به ترتیب درختی"),
+            ("leaf", "فقط دسته‌های نهایی (بدون زیردسته)"),
+        ),
     ),
 ))
 
@@ -2376,6 +2493,147 @@ SURFACE_PANEL_SCHEMA = SettingsSchema(fields=(
 ))
 
 
+class DecorativeStripSettingsError(ValueError):
+    """شکلِ خامِ تنظیماتِ «نوار تزئینی» نامعتبر است."""
+
+
+DECORATIVE_STRIP_BACKGROUND_MODES = ("solid", "palette", "image", "pattern")
+DECORATIVE_STRIP_IMAGE_FITS = ("cover", "contain", "stretch", "auto")
+DECORATIVE_STRIP_IMAGE_REPEATS = ("no-repeat", "repeat", "repeat-x", "repeat-y")
+DECORATIVE_STRIP_ALIGNMENTS = ("start", "center", "end")
+_DECORATIVE_STRIP_HEIGHT_LIMITS = (8, 400)
+_DECORATIVE_STRIP_DEFAULTS = {
+    "enabled": True, "desktop_height": 52, "tablet_height": 44, "mobile_height": 36,
+    "background_mode": "palette", "background_color": "token:tone-1", "foreground_color": "",
+    "image_media_asset_id": None, "image_fit": "cover", "image_position_x": 50, "image_position_y": 50,
+    "image_repeat": "no-repeat", "pattern_slug": "", "overlay_color": "", "overlay_opacity": 0,
+    "radius": 8, "border_width": 0, "border_color": "", "shadow_enabled": False, "shadow_color": "",
+    "shadow_blur": 12, "bleed": False, "alignment": "center", "optional_text": "",
+    "visible_desktop": True, "visible_tablet": True, "visible_mobile": True,
+}
+_DECORATIVE_STRIP_COLOR_KEYS = ("background_color", "foreground_color", "overlay_color", "border_color", "shadow_color")
+_DECORATIVE_STRIP_BOOL_KEYS = ("enabled", "shadow_enabled", "bleed", "visible_desktop", "visible_tablet", "visible_mobile")
+_DECORATIVE_STRIP_INT_LIMITS = {
+    "desktop_height": _DECORATIVE_STRIP_HEIGHT_LIMITS, "tablet_height": _DECORATIVE_STRIP_HEIGHT_LIMITS,
+    "mobile_height": _DECORATIVE_STRIP_HEIGHT_LIMITS, "image_position_x": (0, 100), "image_position_y": (0, 100),
+    "overlay_opacity": (0, 100), "radius": (0, 40), "border_width": (0, 8), "shadow_blur": (0, 60),
+}
+_MAX_DECORATIVE_STRIP_TEXT_LENGTH = 120
+
+
+def _validate_decorative_strip_settings(raw: dict) -> dict:
+    """A purely decorative, content-light strip (generic engine primitive).
+
+    Persisted flat and sparse: only keys that differ from the primitive's own defaults are stored, so a
+    strip is exactly its defaults until a merchant (or a Ready Template recipe) overrides something. Colours
+    are semantic (palette role | custom hex | automatic); the image is a Store media asset id whose ownership
+    is enforced at render time."""
+    from .semantic_colors import SemanticColorError, clean_semantic_color
+
+    if not isinstance(raw, dict):
+        raise DecorativeStripSettingsError("تنظیمات باید یک شیء JSON باشد")
+    defaults = _DECORATIVE_STRIP_DEFAULTS
+    cleaned: dict = {}
+    for key, default in defaults.items():
+        value = raw.get(key, default)
+        if key in _DECORATIVE_STRIP_BOOL_KEYS:
+            value = _truthy_setting(value) if value is not None else default
+        elif key in _DECORATIVE_STRIP_INT_LIMITS:
+            low, high = _DECORATIVE_STRIP_INT_LIMITS[key]
+            try:
+                value = max(low, min(high, int(str(value).translate(_ASCII_DIGITS)))) if value not in (None, "") else default
+            except (TypeError, ValueError):
+                raise DecorativeStripSettingsError("مقادیر عددی نوار تزئینی باید عدد باشند") from None
+        elif key in _DECORATIVE_STRIP_COLOR_KEYS:
+            try:
+                value = clean_semantic_color(value)
+            except SemanticColorError as exc:
+                raise DecorativeStripSettingsError(str(exc)) from exc
+        elif key == "background_mode":
+            value = value if value in DECORATIVE_STRIP_BACKGROUND_MODES else default
+        elif key == "image_fit":
+            value = value if value in DECORATIVE_STRIP_IMAGE_FITS else default
+        elif key == "image_repeat":
+            value = value if value in DECORATIVE_STRIP_IMAGE_REPEATS else default
+        elif key == "alignment":
+            value = value if value in DECORATIVE_STRIP_ALIGNMENTS else default
+        elif key == "pattern_slug":
+            value = str(value or "").strip()
+            value = value if value in PATTERN_REGISTRY else ""
+        elif key == "image_media_asset_id":
+            if value in (None, "", "null"):
+                value = None
+            else:
+                try:
+                    value = int(str(value))
+                except (TypeError, ValueError):
+                    raise DecorativeStripSettingsError("رسانه‌ی انتخاب‌شده نامعتبر است") from None
+                if value <= 0:
+                    raise DecorativeStripSettingsError("رسانه‌ی انتخاب‌شده نامعتبر است")
+        elif key == "optional_text":
+            value = str(value or "").strip()[:_MAX_DECORATIVE_STRIP_TEXT_LENGTH]
+        if value != default:
+            cleaned[key] = value
+    # A tablet/mobile height that equals its own default is not stored, but an explicit desktop height always is.
+    return cleaned
+
+
+def default_decorative_strip_settings() -> dict:
+    return {}
+
+
+def _decorative_strip_schema_fields() -> tuple:
+    d = _DECORATIVE_STRIP_DEFAULTS
+    fields = [
+        SettingsField("enabled", "نمایش نوار", "boolean", "basic", default=d["enabled"]),
+        SettingsField("desktop_height", "ارتفاع در دسکتاپ (px)", "integer", "basic", default=d["desktop_height"], min_value=8, max_value=400),
+        SettingsField("tablet_height", "ارتفاع در تبلت (px)", "integer", "basic", default=d["tablet_height"], min_value=8, max_value=400),
+        SettingsField("mobile_height", "ارتفاع در موبایل (px)", "integer", "basic", default=d["mobile_height"], min_value=8, max_value=400),
+        SettingsField(
+            "background_mode", "نوع پس‌زمینه", "choice", "basic", default=d["background_mode"],
+            choices=(("solid", "رنگ ساده"), ("palette", "رنگ از پالت"), ("image", "تصویر"), ("pattern", "الگو")),
+        ),
+        SettingsField("background_color", "رنگ پس‌زمینه", "color", "basic", default=d["background_color"]),
+        SettingsField("foreground_color", "رنگ متن", "color", "basic", default=d["foreground_color"]),
+        SettingsField("image_media_asset_id", "تصویر نوار", "media", "basic", default=None),
+        SettingsField(
+            "image_fit", "نحوه جاگیری تصویر", "choice", "advanced", default=d["image_fit"],
+            choices=(("cover", "پوشش کامل"), ("contain", "کامل دیده شود"), ("stretch", "کشیده"), ("auto", "اندازه اصلی")),
+        ),
+        SettingsField("image_position_x", "موقعیت افقی تصویر (٪)", "integer", "advanced", default=d["image_position_x"], min_value=0, max_value=100),
+        SettingsField("image_position_y", "موقعیت عمودی تصویر (٪)", "integer", "advanced", default=d["image_position_y"], min_value=0, max_value=100),
+        SettingsField(
+            "image_repeat", "تکرار تصویر", "choice", "advanced", default=d["image_repeat"],
+            choices=(("no-repeat", "بدون تکرار"), ("repeat", "تکرار"), ("repeat-x", "تکرار افقی"), ("repeat-y", "تکرار عمودی")),
+        ),
+        SettingsField(
+            "pattern_slug", "الگو", "choice", "advanced", default="",
+            choices=(("", "— بدون الگو —"), *tuple(PATTERN_REGISTRY.items())),
+        ),
+        SettingsField("overlay_color", "رنگ لایه روی تصویر", "color", "advanced", default=d["overlay_color"]),
+        SettingsField("overlay_opacity", "شفافیت لایه (٪)", "integer", "advanced", default=d["overlay_opacity"], min_value=0, max_value=100),
+        SettingsField("radius", "گردیِ گوشه‌ها (px)", "integer", "advanced", default=d["radius"], min_value=0, max_value=40),
+        SettingsField("border_width", "ضخامت حاشیه (px)", "integer", "advanced", default=d["border_width"], min_value=0, max_value=8),
+        SettingsField("border_color", "رنگ حاشیه", "color", "advanced", default=d["border_color"]),
+        SettingsField("shadow_enabled", "سایه", "boolean", "advanced", default=d["shadow_enabled"]),
+        SettingsField("shadow_color", "رنگ سایه", "color", "advanced", default=d["shadow_color"]),
+        SettingsField("shadow_blur", "شدت پخش سایه (px)", "integer", "advanced", default=d["shadow_blur"], min_value=0, max_value=60),
+        SettingsField("bleed", "تا لبه‌ی صفحه ادامه یابد", "boolean", "advanced", default=d["bleed"]),
+        SettingsField(
+            "alignment", "تراز متن", "choice", "advanced", default=d["alignment"],
+            choices=(("start", "ابتدا"), ("center", "وسط"), ("end", "انتها")),
+        ),
+        SettingsField("optional_text", "متن اختیاری", "text", "advanced", default="", max_length=_MAX_DECORATIVE_STRIP_TEXT_LENGTH),
+        SettingsField("visible_desktop", "نمایش در دسکتاپ", "boolean", "advanced", default=True),
+        SettingsField("visible_tablet", "نمایش در تبلت", "boolean", "advanced", default=True),
+        SettingsField("visible_mobile", "نمایش در موبایل", "boolean", "advanced", default=True),
+    ]
+    return tuple(fields)
+
+
+DECORATIVE_STRIP_SCHEMA = SettingsSchema(fields=_decorative_strip_schema_fields())
+
+
 #: R4 Task 6 (Group D) — declarative counterpart of
 #: ``_validate_newsletter_settings``.
 NEWSLETTER_SCHEMA = SettingsSchema(fields=(
@@ -2557,7 +2815,7 @@ PROMO_CARDS_SCHEMA = SettingsSchema(fields=(
 #: state — Django's ``|default:'default'`` template filter treats an
 #: empty string exactly like an absent key, so this is byte-identical to
 #: today's un-set behaviour, never a new "promo-4" default).
-MULTI_BANNER_KNOWN_LAYOUT_VARIANTS = ("promo-4", "wide-single", "mini-4", "strip", "atelier-duo", "atelier-wide", "tile-4", "strip-art")
+MULTI_BANNER_KNOWN_LAYOUT_VARIANTS = ("promo-4", "wide-single", "mini-4", "strip", "atelier-duo", "atelier-wide", "tile-4")
 #: Merchant-facing names for the closed enum above (display only; the stored
 #: value stays the enum key).
 MULTI_BANNER_LAYOUT_VARIANT_LABELS_FA = {
@@ -2568,7 +2826,6 @@ MULTI_BANNER_LAYOUT_VARIANT_LABELS_FA = {
     "atelier-duo": "دو قاب آتلیه",
     "atelier-wide": "قاب عریض آتلیه",
     "tile-4": "چهار کاشی تبلیغاتی (تقریباً مربع)",
-    "strip-art": "نوار تصویری باریک",
 }
 
 
@@ -3023,6 +3280,13 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         max_instances=1, duplicable=False, removable=True, has_settings_form=True, category_fa="محتوا",
         settings_schema=NEWSLETTER_SCHEMA,
     ),
+    "decorative_strip": SectionDefinition(
+        key="decorative_strip", label_fa="نوار تزئینی", icon="minus",
+        template_name="storefront_builder/sections/decorative_strip.html",
+        validate_settings=_validate_decorative_strip_settings, default_settings=default_decorative_strip_settings,
+        duplicable=True, removable=True, has_settings_form=True, category_fa="محتوا",
+        settings_schema=DECORATIVE_STRIP_SCHEMA,
+    ),
     "surface_panel": SectionDefinition(
         key="surface_panel", label_fa="پنل سطح خالی", icon="square",
         template_name="storefront_builder/sections/surface_panel.html",
@@ -3211,13 +3475,15 @@ def _finalize_registry(base: dict[str, SectionDefinition]) -> dict[str, SectionD
         validate_fn, default_fn = _with_layout(key, validate_fn, default_fn)
         validate_fn, default_fn = _with_background(key, validate_fn, default_fn)
         validate_fn, default_fn = _with_spacing(key, validate_fn, default_fn)
+        validate_fn, default_fn = _with_design(key, validate_fn, default_fn)
         validate_fn, default_fn = _with_appearance_overrides(key, validate_fn, default_fn)
         validate_fn = _with_variant_validation(definition, validate_fn)
         # Phase 5 Task 4 (remediation R1b) — project the generic background
         # picker field onto the schema for every schema-enabled background-aware
         # section, the single canonical source (mirrors the _with_background
         # validator wrapper applied above).
-        projected_schema = _with_background_schema_field(key, definition.settings_schema)
+        projected_schema = _with_design_schema_field(key, definition.settings_schema)
+        projected_schema = _with_background_schema_field(key, projected_schema)
         finalized[key] = dataclasses.replace(
             definition, validate_settings=validate_fn, default_settings=default_fn, has_settings_form=True,
             capabilities=definition.capabilities | _derived_capabilities(key),

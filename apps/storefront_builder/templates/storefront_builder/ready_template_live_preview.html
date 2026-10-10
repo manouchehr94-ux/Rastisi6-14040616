@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static storefront_builder_extras %}
 
 {% block title %}پیش‌نمایشِ قالبِ «{{ preset.label_fa }}» — {% if preview_uses_merchant_data %}اطلاعات فروشگاه شما{% else %}داده‌های نمایشی{% endif %}{% endblock %}
 {% block robots_meta %}<meta name="robots" content="noindex,nofollow">{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/product_card.css' %}">
-<link rel="stylesheet" href="{% static 'css/home.css' %}">
-<link rel="stylesheet" href="{% static 'css/storefront_builder.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/product_card.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/home.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/storefront_builder.css' %}">
 <link rel="stylesheet" href="{% static 'css/storefront_builder_preview_v22.css' %}">
 <style>
   .rtpl-demo-banner{background:#312e81;color:#fff;padding:10px 16px;text-align:center;font-size:13.5px;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap}

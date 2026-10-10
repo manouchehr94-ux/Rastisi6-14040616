@@ -158,6 +158,143 @@ window.RastiSiR4 = {
     return R4.queue;
   };
 
+  // ---- Atomic preview refresh. A mutation used to call iframe.contentWindow.location.reload(), which tears
+  // the visible document down and shows the half-parsed new one (sections streaming in, height growing from
+  // ~5.6k to ~8.6k px) — the "jump". The refresh now builds the next canonical preview in a hidden twin
+  // iframe, waits until it is complete (load + fonts + images near the viewport), restores the scroll position
+  // by STABLE SECTION ID + the section's own viewport offset (never an absolute pixel position, because section
+  // geometry may have changed), and only then swaps it in. The visible iframe is never blank or half-built.
+  var previewRefresh = { busy: false, again: false, promise: null };
+  var PREVIEW_READY_TIMEOUT_MS = 2500;
+  var PREVIEW_HARD_TIMEOUT_MS = 20000;
+
+  function capturePreviewAnchor(win) {
+    try {
+      var doc = win.document;
+      var scrollY = win.scrollY || 0;
+      if (!scrollY) return null;
+      var sections = doc.querySelectorAll('[data-section-id]');
+      for (var i = 0; i < sections.length; i += 1) {
+        var rect = sections[i].getBoundingClientRect();
+        if (rect.bottom > 1) {
+          return { id: sections[i].getAttribute('data-section-id'), top: rect.top, scrollY: scrollY };
+        }
+      }
+      return { id: null, top: 0, scrollY: scrollY };
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function restorePreviewAnchor(win, anchor) {
+    if (!anchor) return;
+    try {
+      var el = anchor.id ? win.document.querySelector('[data-section-id="' + anchor.id + '"]') : null;
+      if (el) {
+        win.scrollTo(0, el.getBoundingClientRect().top + win.scrollY - anchor.top);
+      } else {
+        win.scrollTo(0, anchor.scrollY);
+      }
+    } catch (err) { /* cross-document access failed: leave the new document at the top */ }
+  }
+
+  // Resolves when fonts are ready and every image in (or within one screen of) the restored viewport has
+  // loaded or failed. Far-away lazy images are deliberately not awaited (they would never complete before
+  // being scrolled to). Bounded by PREVIEW_READY_TIMEOUT_MS so a slow asset can never block the swap forever.
+  function waitForPreviewReady(win, anchor) {
+    return new Promise(function (resolve) {
+      var finished = false;
+      function done() { if (!finished) { finished = true; resolve(); } }
+      setTimeout(done, PREVIEW_READY_TIMEOUT_MS);
+      try {
+        var doc = win.document;
+        var fontsReady = doc.fonts && doc.fonts.ready ? doc.fonts.ready : Promise.resolve();
+        fontsReady.then(function () {
+          restorePreviewAnchor(win, anchor);
+          win.requestAnimationFrame(function () {
+            var viewport = win.innerHeight || 900;
+            var tasks = [];
+            Array.prototype.forEach.call(doc.images || [], function (img) {
+              if (img.complete) return;
+              var rect = img.getBoundingClientRect();
+              if (!rect.width && !rect.height) return; // not laid out (e.g. inside a closed dialog)
+              if (rect.bottom < -viewport || rect.top > viewport * 2) return;
+              tasks.push(new Promise(function (ok) {
+                img.addEventListener('load', ok, { once: true });
+                img.addEventListener('error', ok, { once: true });
+              }));
+            });
+            Promise.all(tasks).then(done, done);
+          });
+        }, done);
+      } catch (err) { done(); }
+    });
+  }
+
+  function runPreviewRefresh(nextSrc) {
+    var old = previewFrame;
+    var anchor = capturePreviewAnchor(old.contentWindow);
+    var twin = old.cloneNode(false);
+    twin.removeAttribute('id');
+    twin.setAttribute('aria-hidden', 'true');
+    twin.setAttribute('tabindex', '-1');
+    // opacity (not visibility:hidden): a transparent frame is still "rendered", so its lazy images load.
+    twin.style.opacity = '0';
+    twin.style.pointerEvents = 'none';
+    if (nextSrc) twin.setAttribute('src', nextSrc);
+    return new Promise(function (resolve) {
+      var settled = false;
+      function abandon() {
+        if (settled) return;
+        settled = true;
+        if (twin.parentNode) twin.parentNode.removeChild(twin);
+        resolve(false);
+      }
+      var hardTimer = setTimeout(abandon, PREVIEW_HARD_TIMEOUT_MS);
+      twin.addEventListener('load', function () {
+        if (settled) return;
+        waitForPreviewReady(twin.contentWindow, anchor).then(function () {
+          if (settled) return;
+          settled = true;
+          clearTimeout(hardTimer);
+          restorePreviewAnchor(twin.contentWindow, anchor);
+          twin.style.opacity = '';
+          twin.style.pointerEvents = '';
+          twin.removeAttribute('aria-hidden');
+          twin.removeAttribute('tabindex');
+          twin.id = old.id;
+          old.removeAttribute('id');
+          previewFrame = twin;
+          if (old.parentNode) old.parentNode.removeChild(old);
+          try { syncPreviewSelection(); } catch (err) { /* selection sync is best effort */ }
+          resolve(true);
+        });
+      }, { once: true });
+      old.parentNode.insertBefore(twin, old.nextSibling);
+    });
+  }
+
+  // The ONE preview-refresh entry point. Calls made while a refresh is running coalesce into exactly one
+  // follow-up refresh, so a burst of mutations never stacks twin iframes.
+  function reloadPreviewFrame(nextSrc) {
+    if (!previewFrame || !previewFrame.contentWindow || !previewFrame.parentNode) return Promise.resolve(false);
+    if (previewRefresh.busy) {
+      previewRefresh.again = true;
+      return previewRefresh.promise;
+    }
+    previewRefresh.busy = true;
+    previewRefresh.promise = runPreviewRefresh(nextSrc).then(function (ok) {
+      previewRefresh.busy = false;
+      if (previewRefresh.again) {
+        previewRefresh.again = false;
+        return reloadPreviewFrame();
+      }
+      return ok;
+    });
+    return previewRefresh.promise;
+  }
+  R4.reloadPreview = reloadPreviewFrame;
+
   // ---- R4 Task 8 — structural mutations (add/remove/duplicate/move) go
   // through the SAME single queue/endpoint as every other mutation; this
   // wrapper only adds the read-side refresh a successful structural change
@@ -165,9 +302,7 @@ window.RastiSiR4 = {
   // instruction Section 31. No new write endpoint, no fake client DOM
   // renderer, no second renderer.
   function refreshStructureAndPreview() {
-    if (previewFrame && previewFrame.contentWindow) {
-      previewFrame.contentWindow.location.reload();
-    }
+    reloadPreviewFrame();
     if (!structurePanel) return Promise.resolve();
     return fetch(window.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(function (response) { return response.text(); })
@@ -288,6 +423,17 @@ window.RastiSiR4 = {
     });
   }
 
+  // Semantic colour control (palette role | custom hex | automatic) — shared by the Inspector and the
+  // Global Design panel. "" = automatic, "token:<role>" = palette role, "#RRGGBB" = custom.
+  function readSemanticColorControl(control) {
+    var tokenSelect = control.querySelector('[data-r4-color-token]');
+    var customInput = control.querySelector('[data-r4-color-custom]');
+    var token = tokenSelect ? tokenSelect.value : '';
+    if (customInput) customInput.hidden = token !== 'custom';
+    if (token === 'custom') return customInput ? customInput.value.toUpperCase() : '';
+    return token;
+  }
+
   function hydrateFieldValues() {
     if (!inspector) return;
     var script = document.getElementById('r4InspectorFieldValues');
@@ -312,7 +458,7 @@ window.RastiSiR4 = {
       // server-rendered from the current value (its nested controls carry
       // their own selected/value already), so it is excluded from this
       // scalar loop exactly like the other compound field types.
-      if (fieldType === 'appearance_override' || fieldType === 'resource_source' || fieldType === 'repeater' || fieldType === 'background') return;
+      if (fieldType === 'appearance_override' || fieldType === 'resource_source' || fieldType === 'repeater' || fieldType === 'background' || fieldType === 'design' || fieldType === 'color') return;
       var key = control.getAttribute('data-r4-field-key');
       if (!Object.prototype.hasOwnProperty.call(values, key)) return;
       var value = values[key];
@@ -557,7 +703,7 @@ window.RastiSiR4 = {
       // appearance_override is a compound field with its own dedicated
       // listener below too.
       // 'background' (Task 4B) is compound too — handled by its own listener.
-      if (fieldType === 'rich_text' || fieldType === 'appearance_override' || fieldType === 'repeater' || fieldType === 'background') return;
+      if (fieldType === 'rich_text' || fieldType === 'appearance_override' || fieldType === 'repeater' || fieldType === 'background' || fieldType === 'design' || fieldType === 'color') return;
       var key = control.getAttribute('data-r4-field-key');
       var value = fieldType === 'boolean' ? control.checked : control.value;
       var patch = {};
@@ -676,6 +822,42 @@ window.RastiSiR4 = {
         section_id: R4.selected,
         patch: patch,
       });
+    });
+
+    // Semantic colour (standalone ``color`` field and every colour property of the
+    // ``design`` block): "" = automatic, "token:<role>" = palette role, "#RRGGBB" = custom.
+    inspector.addEventListener('change', function (evt) {
+      var wrapper = evt.target.closest('[data-r4-field-type="color"]');
+      if (!wrapper || R4.selected == null) return;
+      var control = evt.target.closest('[data-r4-color-control]');
+      if (!control) return;
+      var patch = {};
+      patch[wrapper.getAttribute('data-r4-field-key')] = readSemanticColorControl(control);
+      R4.enqueueMutation({ type: 'section.update_settings', section_id: R4.selected, patch: patch });
+    });
+
+    // design block: ONE compound {design:{...}} patch built from every property control;
+    // empty controls are omitted so the server resets them to the engine default.
+    inspector.addEventListener('change', function (evt) {
+      var wrapper = evt.target.closest('[data-r4-field-type="design"]');
+      if (!wrapper || R4.selected == null) return;
+      var design = {};
+      wrapper.querySelectorAll('[data-r4-design-prop]').forEach(function (row) {
+        var key = row.getAttribute('data-r4-design-prop');
+        var kind = row.getAttribute('data-r4-design-kind');
+        var value = '';
+        if (kind === 'color') {
+          var control = row.querySelector('[data-r4-color-control]');
+          value = control ? readSemanticColorControl(control) : '';
+        } else {
+          var input = row.querySelector('[data-r4-design-input]');
+          value = input ? String(input.value).trim() : '';
+        }
+        if (value !== '') design[key] = kind === 'int' ? Number(value) : value;
+      });
+      var patch = {};
+      patch[wrapper.getAttribute('data-r4-field-key')] = design;
+      R4.enqueueMutation({ type: 'section.update_settings', section_id: R4.selected, patch: patch });
     });
   }
 
@@ -1092,9 +1274,7 @@ window.RastiSiR4 = {
     }).then(function (result) {
       if (result && result.ok) {
         closeResourcePicker();
-        if (previewFrame && previewFrame.contentWindow) {
-          previewFrame.contentWindow.location.reload();
-        }
+        reloadPreviewFrame();
         // Re-open the Inspector so its summary comes back from the
         // server-authoritative legacy -> ResourceSource projection —
         // never reconstructed client-side.
@@ -1432,6 +1612,18 @@ window.RastiSiR4 = {
     // (section_registry/appearance_registry/global_region_registry), so
     // Product/appearance/header/footer never need their own JS branch.
     globalDesignPanel.addEventListener('change', function (evt) {
+      // Header/footer geometry colour (palette role | custom hex | automatic): one partial geometry patch.
+      var geometryColor = evt.target.closest('[data-r4-color-control][data-r4-global-geometry-key]');
+      if (geometryColor) {
+        var colorGroup = geometryColor.closest('[data-r4-global-mutation]');
+        if (!colorGroup) return;
+        var colorPatch = { geometry: {} };
+        colorPatch.geometry[geometryColor.getAttribute('data-r4-global-geometry-key')] = readSemanticColorControl(geometryColor);
+        R4.enqueueMutation({ type: colorGroup.getAttribute('data-r4-global-mutation'), patch: colorPatch }).then(function (result) {
+          if (result && result.ok) refreshGlobalDesignAndPreview();
+        });
+        return;
+      }
       var field = evt.target.closest('[data-r4-global-field]');
       if (!field) return;
       var group = field.closest('[data-r4-global-mutation]');
@@ -1452,7 +1644,13 @@ window.RastiSiR4 = {
       // ONE-KEY PARTIAL patch of the dict (never the whole 8-key set),
       // matching ``_apply_appearance_update``'s merge-onto-current
       // semantics server-side.
-      if (key === 'color_overrides' || key === 'theme_overrides') {
+      if (key === 'geometry') {
+        var geometryKey = field.getAttribute('data-r4-global-geometry-key');
+        if (!geometryKey) return;
+        var geometryNested = {};
+        geometryNested[geometryKey] = value;
+        patch.geometry = geometryNested;
+      } else if (key === 'color_overrides' || key === 'theme_overrides') {
         var subKeyAttr = key === 'color_overrides' ? 'data-r4-global-color-key' : 'data-r4-global-theme-key';
         var subKey = field.getAttribute(subKeyAttr);
         if (!subKey) return;
@@ -1559,9 +1757,7 @@ window.RastiSiR4 = {
   // reused here for the Global Design panel's own server-authoritative
   // read projection (e.g. a Template switch resetting font/type_scale).
   function refreshGlobalDesignAndPreview() {
-    if (previewFrame && previewFrame.contentWindow) {
-      previewFrame.contentWindow.location.reload();
-    }
+    reloadPreviewFrame();
     if (!globalDesignPanel) return Promise.resolve();
     return fetch(window.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(function (response) { return response.text(); })
@@ -1588,9 +1784,7 @@ window.RastiSiR4 = {
   // write (see r4_studio.js's r4:media-changed listener) don't have to
   // reach for a heavier function or stand up a second preview authority.
   R4.refreshPreview = function () {
-    if (previewFrame && previewFrame.contentWindow) {
-      previewFrame.contentWindow.location.reload();
-    }
+    reloadPreviewFrame();
   };
 
   // ---- Final-QA Defect 1 fix — resync R4's own outer optimistic-concurrency
@@ -1695,9 +1889,7 @@ window.RastiSiR4 = {
         }
         R4.revision = serverRevision;
         if (shell) shell.dataset.editRevision = String(R4.revision);
-        if (previewFrame && previewFrame.contentWindow) {
-          previewFrame.contentWindow.location.reload();
-        }
+        reloadPreviewFrame();
         R4.emit('r4:structure-refreshed');
         R4.emit('r4:global-refreshed', { doc: freshDoc });
       })
@@ -1897,8 +2089,8 @@ window.RastiSiR4 = {
     var next = url || draftSrc;
     R4.previewInteractive = !url;
     previewFrame.setAttribute('data-rastisi-state', (options && options.state) || (url ? 'preview' : 'draft'));
-    if (previewFrame.getAttribute('src') !== next) previewFrame.setAttribute('src', next);
-    else if (options && options.reload && previewFrame.contentWindow) previewFrame.contentWindow.location.reload();
+    if (previewFrame.getAttribute('src') !== next) reloadPreviewFrame(next);
+    else if (options && options.reload && previewFrame.contentWindow) reloadPreviewFrame();
   };
 
   // ---- Phase 5 Task 4C — device preview (Desktop / Tablet / Mobile) + zoom.

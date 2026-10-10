@@ -6,10 +6,11 @@ a prominent account pill + cart at the opposite edge, then a flat navigation
 bar with the category menu and merchant links.  Shared components only; no
 merchant/reference identity and no Ready Template condition.
 {% endcomment %}
+{% load storefront_builder_extras %}
 {% with hc=header_config rc=header_config.responsive %}
 <div class="gh-shell gh-shell--stationery" x-data="{ ghMobileOpen: false }">
 {% include "storefront_builder/partials/global_header/_shared/announcement_bar.html" %}
-<header class="header gh gh--stationery{% if hc.sticky %} sfb-sticky{% endif %}">
+<header class="header gh gh--stationery{% if hc.sticky %} sfb-sticky{% endif %}"{% with gstyle=hc.geometry|shell_geometry_style:"header" %}{% if gstyle %} style="{{ gstyle }}"{% endif %}{% endwith %}>
   {% if SHOP_CONTACT_PHONE or SHOP_CONTACT_EMAIL or SHOP_TAGLINE %}
   <div class="gh-st-util" data-shell-hide-mobile>
     <div class="wrap">
@@ -55,7 +56,7 @@ merchant/reference identity and no Ready Template condition.
     <div class="wrap gh-st-nav-links">
       {% include "storefront_builder/partials/global_header/_shared/category_mega_menu.html" %}
       <div class="gh-nav-links-scroll" style="scrollbar-width:none;-ms-overflow-style:none">
-        {% if NAV_HEADER %}{% include "storefront_builder/partials/global_header/_shared/nav_header_items.html" %}{% else %}{% include "storefront_builder/partials/global_header/_shared/category_link_row.html" %}{% endif %}
+        {% if NAV_HEADER %}{% include "storefront_builder/partials/global_header/_shared/nav_header_items.html" with nav_limit=hc.geometry|geo:"nav_item_limit:0" nav_chip_count=hc.geometry|geo:"chip_count:2" %}{% else %}{% include "storefront_builder/partials/global_header/_shared/category_link_row.html" %}{% endif %}
       </div>
     </div>
   </nav>

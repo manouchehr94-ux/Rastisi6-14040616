@@ -207,6 +207,68 @@ must never silently fall back to a plain text input for an unsupported type.
     <button type="button" class="r4-repeater-add" data-r4-repeater-add>+ افزودن ردیف</button>
   </div>
 
+  {% elif field.field_type == "media" %}
+  {# Store-scoped Media Library picker: scalar value = MediaAsset id ("" = none); hydrated and saved by the generic scalar path. #}
+  <select id="r4Field-{{ field.key }}"
+          class="r4-control"
+          data-r4-field-key="{{ field.key }}"
+          data-r4-field-type="media">
+    <option value="">— بدون تصویر —</option>
+    {% for asset in media_assets %}
+    <option value="{{ asset.pk }}">{{ asset }}</option>
+    {% endfor %}
+  </select>
+  {% if not media_assets %}
+  <p class="r4-field-sublabel">هنوز تصویری در کتابخانه رسانه ندارید — از بخش رسانه‌ها یک تصویر بارگذاری کنید.</p>
+  {% endif %}
+
+  {% elif field.field_type == "color" %}
+  {# Semantic colour: palette role | custom hex | automatic — see color_control.html. #}
+  <div class="r4-color-field"
+       id="r4Field-{{ field.key }}"
+       data-r4-field-key="{{ field.key }}"
+       data-r4-field-type="color">
+    {% include "dashboard/storefront_builder/r4/partials/color_control.html" with value=current_field_value aria_label=field.label %}
+  </div>
+
+  {% elif field.field_type == "design" %}
+  {% comment %}
+  Design-block engine — ONE compound widget for the sparse ``design`` object. Its controls are
+  generated from the section's applicable property registry (design_groups), so a control exists
+  only where the renderer consumes it. Nested controls carry NO data-r4-field-key; a dedicated
+  r4_editor.js listener collects every property into ONE {design:{...}} patch (omitted keys reset
+  to the engine default) through the existing section.update_settings mutation queue.
+  {% endcomment %}
+  <div class="r4-design-block"
+       id="r4Field-{{ field.key }}"
+       data-r4-field-key="{{ field.key }}"
+       data-r4-field-type="design">
+    {% for group in design_groups %}
+    <fieldset class="r4-design-group" data-r4-design-group="{{ group.group }}">
+      <legend>{{ group.label }}</legend>
+      {% for prop in group.properties %}
+      {% with current=current_field_value|dictget:prop.key|default:"" %}
+      <div class="r4-design-prop" data-r4-design-prop="{{ prop.key }}" data-r4-design-kind="{{ prop.kind }}">
+        <label class="r4-field-sublabel">{{ prop.label }}</label>
+        {% if prop.kind == "color" %}
+          {% include "dashboard/storefront_builder/r4/partials/color_control.html" with value=current aria_label=prop.label %}
+        {% elif prop.kind == "int" %}
+          <input type="number" class="r4-control" data-r4-design-input inputmode="numeric"
+                 min="{{ prop.min }}" max="{{ prop.max }}" value="{{ current }}" placeholder="خودکار">
+        {% else %}
+          <select class="r4-control" data-r4-design-input>
+            {% for value, label in prop.choices %}
+            <option value="{{ value }}" {% if current == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        {% endif %}
+      </div>
+      {% endwith %}
+      {% endfor %}
+    </fieldset>
+    {% endfor %}
+  </div>
+
   {% elif field.field_type == "background" %}
   {% comment %}
   Phase 5 Task 4B — a real in-R4 background/media picker, a compound widget

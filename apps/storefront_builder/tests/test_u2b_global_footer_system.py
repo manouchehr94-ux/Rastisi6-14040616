@@ -415,7 +415,7 @@ class U1SectionRegistryUntouchedTests(TestCase):
     """Test Q — U1's SECTION_REGISTRY is completely untouched by U2B."""
 
     def test_section_registry_still_has_exactly_34_keys(self):
-        self.assertEqual(len(SECTION_REGISTRY), 37)
+        self.assertEqual(len(SECTION_REGISTRY), 38)
 
 
 class U2AHeaderBehaviorIntactTests(TestCase):
@@ -768,23 +768,27 @@ class FooterContactAccessibilityRegressionTests(TestCase):
 
 
 class BuilderPreviewCacheBustingTests(TestCase):
-    """Browser-QA cache hardening (post-review passes) — the Builder
-    Preview must reference the CURRENT U2B-specific cache-busting query
-    token for storefront_builder.css, distinct from every prior token, so
-    stale cached CSS from an earlier pass can never be mistaken for the
-    latest corrected U2B footer styles during local browser QA."""
+    """Preview and Published must run the SAME stylesheet. A hand-pinned ``?v=`` token in preview.html (the old
+    contract of this test) let the Studio keep an older ``storefront_builder.css`` than the published page; both
+    surfaces now reference it through ``sfb_static`` (content-derived ``?v=<mtime>``), so one file change busts
+    both caches together."""
 
-    def test_preview_css_cache_token_is_the_current_u2b_v2_token(self):
-        preview_path = (
-            _STOREFRONT_BUILDER_APP / "templates" / "storefront_builder" / "preview.html"
-        )
-        source = preview_path.read_text(encoding="utf-8")
-        match = re.search(r"storefront_builder\.css['\"]\s*%\}\?v=([\w.-]+)", source)
-        self.assertIsNotNone(match, "no storefront_builder.css cache-busting token found in preview.html")
-        token = match.group(1)
-        self.assertEqual(token, "u2b-footer-v3-20260823")
-        self.assertNotEqual(token, "u2a-v5-mobile-20260823")
-        self.assertNotEqual(token, "u2b-footer-v1-20260823")
+    _PAGES = (
+        _STOREFRONT_BUILDER_APP / "templates" / "storefront_builder" / "preview.html",
+        _STOREFRONT_BUILDER_APP.parent / "catalog" / "templates" / "catalog" / "home_visual.html",
+    )
+
+    def test_preview_and_published_load_the_stylesheet_through_the_same_versioned_tag(self):
+        for path in self._PAGES:
+            source = path.read_text(encoding="utf-8")
+            self.assertIn("{% sfb_static 'css/storefront_builder.css' %}", source, path.name)
+            self.assertNotRegex(source, r"storefront_builder\.css['\"]\s*%\}\?v=", path.name)
+
+    def test_sfb_static_url_is_versioned_by_file_content_time(self):
+        from apps.storefront_builder.templatetags.storefront_builder_extras import sfb_static
+
+        url = sfb_static("css/storefront_builder.css")
+        self.assertRegex(url, r"storefront_builder\.css\?v=\d+$")
 
 
 class FooterEmptyStructuralShellRegressionTests(TestCase):

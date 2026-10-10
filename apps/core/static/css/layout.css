@@ -462,6 +462,14 @@ html[data-sfb-density="relaxed"] .rsec[data-width="full"] > .section{margin-inli
    V3 universal shell/footer fidelity pass
    ======================================================================== */
 .wrap{width:min(var(--sfb-content-width,1320px),calc(100% - 28px))}
+/* Storefront canvas. Everything a section paints (full-bleed fills, pop-out art) is
+   bounded by this box, so the canvas edge — not the browser window — is the bleed
+   boundary and no section can widen the document. overflow:clip is deliberate: it
+   does not create a scroll container or a containing block, so position:fixed
+   descendants (quick-view dialog, mobile add-to-cart bar) keep the viewport as their
+   containing block. Real overflow bugs are still caught by the parity test, which
+   audits the page with this clip lifted. */
+main.sfb-storefront-canvas{overflow-x:clip}
 .announce .wrap{height:26px}
 .header .wrap{height:64px}
 .nav .wrap{height:42px}

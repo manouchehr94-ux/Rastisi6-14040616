@@ -56,8 +56,12 @@ html[data-sfb-builder-mode="edit"] .sfb-rsec-toolbar [data-open-settings]::after
 /* Exact child entities (product, slide, banner, category, brand, collection)
    announce themselves on hover. Clicking the visible item opens its REAL
    existing admin editor through the parent deep workspace. */
+/* Zero-specificity positioning hook for the hover label: it only applies when the
+   storefront rule did not already position the element (e.g. .hero-slide is absolute),
+   so edit chrome can never change storefront geometry. */
+:where(html[data-sfb-builder-mode="edit"] [data-admin-edit-kind]){position:relative}
 html[data-sfb-builder-mode="edit"] [data-admin-edit-kind]{
-  position:relative !important;cursor:pointer !important;
+  cursor:pointer !important;
 }
 html[data-sfb-builder-mode="edit"] [data-admin-edit-kind]::after{
   content:"✎ ویرایش";
@@ -72,8 +76,9 @@ html[data-sfb-builder-mode="edit"] [data-admin-edit-kind]:hover::after{
   opacity:1;transform:translateY(0);
 }
 
+:where(html[data-sfb-builder-mode="edit"] header, html[data-sfb-builder-mode="edit"] footer){position:relative}
 html[data-sfb-builder-mode="edit"] header,
-html[data-sfb-builder-mode="edit"] footer{position:relative;cursor:pointer !important}
+html[data-sfb-builder-mode="edit"] footer{cursor:pointer !important}
 html[data-sfb-builder-mode="edit"] header:hover,
 html[data-sfb-builder-mode="edit"] footer:hover{
   outline:2px dashed rgba(104,72,255,.52);outline-offset:-2px;

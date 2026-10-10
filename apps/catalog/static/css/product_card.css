@@ -206,6 +206,29 @@ html[data-sfb-density="relaxed"] .pcard .body{padding:18px 18px 20px;gap:10px}
   .pcarousel.rsec-cols .pcard{flex-basis:calc((100% - (var(--cols-mobile, 2) - 1) * var(--pcarousel-gap, 16px)) / var(--cols-mobile, 2))}
 }
 
+/* ---- Product item-row presentation contract (settings: desktop_layout / overflow_mode / show_scrollbar /
+   carousel_navigation / gap — see section_registry.PRODUCT_SECTION_*). Every rule is selected by an attribute
+   that is written only when the merchant (or a recipe) opts in; the historical single scrolling row is the default. */
+.pcarousel[data-overflow="clip"]{overflow-x:hidden}
+.pcarousel[data-overflow="visible"]{overflow:visible;flex-wrap:wrap}
+.pcarousel[data-scrollbar="off"]{scrollbar-width:none;-ms-overflow-style:none}
+.pcarousel[data-scrollbar="off"]::-webkit-scrollbar{display:none}
+@media(min-width:1001px){
+  .pcarousel[data-desktop-layout="grid"]{display:grid;grid-template-columns:repeat(var(--cols-desktop, 4),minmax(0,1fr));overflow:visible;scroll-snap-type:none}
+  .pcarousel.rsec-cols[data-desktop-layout="grid"] .pcard{flex-basis:auto;min-width:0}
+  .grid[data-desktop-layout="carousel"]{display:flex;overflow-x:auto;scroll-snap-type:x mandatory}
+  .grid.rsec-cols[data-desktop-layout="carousel"] .pcard{flex:0 0 calc((100% - (var(--cols-desktop, 4) - 1) * var(--pcarousel-gap, 16px)) / var(--cols-desktop, 4));scroll-snap-align:start}
+}
+.pcarousel-shell{position:relative}
+.pcarousel-arrow{position:absolute;top:calc(50% - 18px);z-index:3;width:36px;height:36px;display:grid;place-items:center;padding:0;border-radius:50%;border:1px solid var(--brand-border,#d9dde3);background:var(--brand-surface,#fff);color:var(--brand-text,#222);font-size:22px;line-height:1;box-shadow:0 2px 8px color-mix(in srgb,var(--brand-text,#222) 16%,transparent);cursor:pointer}
+.pcarousel-arrow[hidden],.pcarousel-dots[hidden]{display:none}
+.pcarousel-prev{inset-inline-start:6px}
+.pcarousel-next{inset-inline-end:6px}
+html[dir="rtl"] .pcarousel-arrow{transform:scaleX(-1)}
+.pcarousel-dots{display:flex;justify-content:center;gap:6px;margin-top:10px}
+.pcarousel-dots button{width:8px;height:8px;padding:0;border:0;border-radius:99px;background:color-mix(in srgb,var(--brand-text,#222) 55%,var(--brand-surface,#fff));cursor:pointer}
+.pcarousel-dots button.active{width:18px;background:var(--brand-primary-text,var(--brand-primary,#17a94d))}
+
 /* ========================================================================
    Dense universal commerce card
    ------------------------------------------------------------------------

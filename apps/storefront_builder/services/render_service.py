@@ -21,7 +21,7 @@ from apps.catalog.services.product_publish_service import storefront_listing_pro
 from apps.content.models import HeroSlide, PromotionalBanner
 from apps.orders.services import best_seller_service
 
-from .. import appearance_registry
+from .. import appearance_registry, decorative_strip, design_block
 from ..section_registry import (
     CARD_AWARE_SECTION_KEYS,
     UnknownSectionTypeError,
@@ -40,7 +40,7 @@ from ..storefront_appearance.rendering import (
     theme_overlay_state as store_appearance_theme_overlay_state,
 )
 from ..variant_contract import resolve_active_variant, resolve_renderer_template
-from . import section_appearance_service, section_data_service
+from . import category_selection, section_appearance_service, section_data_service
 
 TILE_CLASSES = ["t1", "t2", "t3"]
 
@@ -229,8 +229,8 @@ def _category_grid_context(store, section):
         }
         categories = [by_id[cid] for cid in category_ids if cid in by_id]
     else:
-        categories = list(
-            Category.objects.filter(store=store, parent__isnull=True, is_active=True).order_by("order", "name")
+        categories = category_selection.select_categories(
+            store, (section.settings or {}).get("category_source", "top_level"),
         )
     settings = {**default_category_grid_settings(), **(section.settings or {})}
     try:
@@ -540,6 +540,20 @@ def _static_context(store, section):
     return {}
 
 
+def _decorative_strip_context(store, section):
+    """The strip's view model. The image URL is resolved here (Store-scoped, fail-closed) — never in
+    the template and never from a raw stored URL."""
+    from apps.content.services import resolve_background_media_url
+
+    settings = section.settings or {}
+    image_url = None
+    if settings.get("background_mode") == "image" and settings.get("image_media_asset_id"):
+        image_url = resolve_background_media_url(
+            store, {"mode": "image", "media_asset_id": settings["image_media_asset_id"]},
+        )
+    return {"strip": decorative_strip.build_view(settings, image_url)}
+
+
 def _resolved_destination_context(store, section):
     """بلوکِ ``destination`` این section (اگر داشته باشد) را به URL/تب‌جدید
     واقعی حل می‌کند — برایِ انواعی که در ``DESTINATION_AWARE_SECTION_KEYS``
@@ -579,7 +593,7 @@ def _product_section_context(store, section):
 #: تکرارشده (duplicable) با تنظیماتِ متفاوت (مثلاً دو کالکشنِ متفاوت)
 #: محتوایِ یکسان (نمونه‌ی اول) نشان می‌دهند.
 PER_INSTANCE_SECTION_KEYS = {
-    "product_section", "image_text", "hero_banner", "image_slider", "single_banner", "multi_banner",
+    "decorative_strip", "product_section", "image_text", "hero_banner", "image_slider", "single_banner", "multi_banner",
     "category_grid", "brand_carousel", "collection_tiles", "quick_links", "video_section", "story_rail",
     #: Part 2D — same reason as ``product_section``/``category_grid``
     #: above: this builder's output depends on the section's own
@@ -782,6 +796,7 @@ _CONTEXT_BUILDERS = {
     "video_section": _video_section_context,
     "story_rail": _story_rail_context,
     "surface_panel": _static_context,
+    "decorative_strip": _decorative_strip_context,
 }
 
 
@@ -983,6 +998,16 @@ def _build_items_from_sections(
         context["background_media_url"] = resolve_background_media_url(
             store, context["settings"].get("background"),
         )
+        # Sparse ``design`` block -> data-d flags + --d-* custom properties for the wrapper.
+        context["design_attrs"] = design_block.render_attributes(context["settings"].get("design"))
+        # Column counts: the section's own ``*_columns`` (product-section contract) win over the shared
+        # ``responsive`` block; a ``design`` block may still override them through ``--cols-*``.
+        _responsive = context["settings"].get("responsive") or {}
+        context["columns"] = {
+            "desktop": context["settings"].get("desktop_columns") or _responsive.get("desktop_columns") or 4,
+            "tablet": context["settings"].get("tablet_columns") or _responsive.get("tablet_columns") or 3,
+            "mobile": context["settings"].get("mobile_columns") or _responsive.get("mobile_columns") or 2,
+        }
         # U1B1 — variant runtime wiring (variant_contract.py). Pure metadata
         # lookup, no DB query, no mutation of ``section.settings``. For the
         # 31 section types with no registered ``variants`` (the overwhelming

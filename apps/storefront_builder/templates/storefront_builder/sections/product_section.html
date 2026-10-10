@@ -108,9 +108,39 @@
     {% endif %}
   </div>
   {% else %}
-  <div class="{% if settings.display_mode == "grid" %}grid{% else %}pcarousel{% endif %} rsec-cols">
+  {% comment %}
+  Item-row presentation contract (all optional, see section_registry): desktop_layout / overflow_mode /
+  show_scrollbar / carousel_navigation / gap are exposed as data attributes consumed by generic CSS;
+  arrows and dots are an Alpine controller that scrolls the row (RTL aware). Without any of these
+  settings the markup is the historical single row.
+  {% endcomment %}
+  {% if settings.carousel_navigation and settings.display_mode != "grid" %}
+  <div class="pcarousel-shell" data-nav="{{ settings.carousel_navigation }}"
+       x-data="{ page: 0, pages: 1,
+                 sign() { return getComputedStyle($refs.track).direction === 'rtl' ? -1 : 1 },
+                 measure() { const t = $refs.track; if (!t.clientWidth) return; this.pages = Math.max(1, Math.round(t.scrollWidth / t.clientWidth)); this.page = Math.min(this.pages - 1, Math.round(Math.abs(t.scrollLeft) / t.clientWidth)) },
+                 go(n) { const t = $refs.track; this.page = Math.max(0, Math.min(this.pages - 1, n)); t.scrollTo({ left: this.sign() * this.page * t.clientWidth, behavior: 'smooth' }) } }"
+       x-init="measure(); if (window.ResizeObserver) new ResizeObserver(() => measure()).observe($refs.track); $refs.track.addEventListener('scroll', () => measure(), { passive: true })">
+  {% endif %}
+  <div class="{% if settings.display_mode == "grid" %}grid{% else %}pcarousel{% endif %} rsec-cols"
+       {% if settings.carousel_navigation and settings.display_mode != "grid" %}x-ref="track"{% endif %}
+       {% if settings.desktop_layout %}data-desktop-layout="{{ settings.desktop_layout }}"{% endif %}
+       {% if settings.overflow_mode %}data-overflow="{{ settings.overflow_mode }}"{% endif %}
+       {% if settings.show_scrollbar is False %}data-scrollbar="off"{% endif %}
+       {% if settings.gap is not None %}style="--pcarousel-gap:{{ settings.gap }}px;gap:{{ settings.gap }}px"{% endif %}>
     {% include "catalog/partials/product_grid.html" with products=products card_settings=settings.card %}
   </div>
+  {% if settings.carousel_navigation and settings.display_mode != "grid" %}
+    {% if settings.carousel_navigation == "arrows" %}
+    <button type="button" class="pcarousel-arrow pcarousel-prev" aria-label="قبلی" :hidden="pages <= 1" @click="go(page - 1)">‹</button>
+    <button type="button" class="pcarousel-arrow pcarousel-next" aria-label="بعدی" :hidden="pages <= 1" @click="go(page + 1)">›</button>
+    {% else %}
+    <div class="pcarousel-dots" :hidden="pages <= 1" aria-label="صفحه‌های کاروسل">
+      <template x-for="n in pages" :key="n"><button type="button" :class="{ 'active': page === n - 1 }" :aria-label="'صفحه ' + n" @click="go(n - 1)"></button></template>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
   {% endif %}
   {% endif %}
 </section>
