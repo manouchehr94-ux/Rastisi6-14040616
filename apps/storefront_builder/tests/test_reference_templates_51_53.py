@@ -32,7 +32,7 @@ User = get_user_model()
 
 REFERENCE_TEMPLATES = {
     # 51 / 52 / 53 — key -> (label, header, footer, palette)
-    "stationery_spectrum": ("تحریر رنگی", "stationery_search", "stationery_dark", "marketplace-spectrum"),
+    "stationery_spectrum": ("تحریر رنگی", "stationery_search", "stationery_dark", "spectrum-stationery"),
     "magenta_beauty_retail": ("زیبایی ارغوانی", "beauty_search_nav", "beauty_retail_columns", "orchid-retail"),
     "pastel_kawaii_stationery": ("کاغذ پاستلی", "kawaii_center", "kawaii_minimal", "pastel-lilac"),
 }
@@ -132,21 +132,54 @@ class ReferenceTemplateRegistryTests(SimpleTestCase):
                 pair_rows.setdefault(entry.row_key, []).append(entry.row_span)
         self.assertIn([6, 6], pair_rows.values())
 
+        # the strip banner uses the picture-first variant; the four tiles use the near-square variant
+        banners = [e.settings["layout_variant"] for e in spectrum.pages["home"] if e.section_key == "multi_banner"]
+        self.assertEqual(banners, ["strip-art", "tile-4"])
+        self.assertEqual(
+            next(e for e in spectrum.pages["home"] if e.section_key == "category_grid").settings["display_mode"],
+            "grey_circles",
+        )
+
         beauty = lpr.get_layout_preset("magenta_beauty_retail")
+        # no product row is invented where the reference leaves the recently-viewed area empty
         self.assertEqual(
             _home_section_keys(beauty),
             [
-                "hero_banner", "category_grid", "product_section", "multi_banner", "product_section",
+                "hero_banner", "category_grid", "product_section", "category_grid", "product_section",
                 "brand_carousel", "catalog_product_wall", "multi_banner", "catalog_product_wall",
-                "product_section", "newsletter", "trust_features",
+                "newsletter", "trust_features",
             ],
         )
+        modes = [e.settings["display_mode"] for e in beauty.pages["home"] if e.section_key == "category_grid"]
+        self.assertEqual(modes, ["icon_tiles", "gradient_tiles"])
 
         pastel = lpr.get_layout_preset("pastel_kawaii_stationery")
         grids = [e for e in pastel.pages["home"] if e.section_key == "product_section"]
-        self.assertGreaterEqual(len(grids), 4)
+        self.assertGreaterEqual(len(grids), 8)
         self.assertTrue(all(e.settings["display_mode"] == "catalog_grid" for e in grids))
         self.assertTrue(all(e.settings["card"]["card_style"] == "pastel_flat" for e in grids))
+        # the reference has no quick-view trigger on cards
+        for key in REFERENCE_TEMPLATES:
+            for entry in lpr.get_layout_preset(key).pages["home"]:
+                card = (entry.settings or {}).get("card")
+                if card and card.get("card_style") in {"pastel_flat", "center_stepper", "beauty_retail"}:
+                    self.assertIs(card.get("show_quick_view"), False, (key, entry.section_key))
+        self.assertEqual(pastel.pages["home"][0].settings["hero_style"], "poster_wide")
+        self.assertEqual(
+            [e.settings.get("block_style") for e in pastel.pages["home"] if e.section_key == "image_text"],
+            ["plain", "plain"],
+        )
+        self.assertIn("testimonials", _home_section_keys(pastel))
+
+    def test_no_marketing_copy_is_invented_for_placeholder_blocks(self):
+        """Placeholder text is an instruction, never a marketing message."""
+        pastel = lpr.get_layout_preset("pastel_kawaii_stationery")
+        for entry in pastel.pages["home"]:
+            if entry.section_key == "image_text":
+                self.assertEqual(entry.settings["title"], "عنوان بخش")
+                self.assertIn("ویرایشگر", entry.settings["body_html"])
+            if entry.section_key == "testimonials":
+                self.assertEqual({i["name"] for i in entry.settings["items"]}, {"نام مشتری"})
 
 
 class ReferenceVariantContractTests(SimpleTestCase):
@@ -167,12 +200,15 @@ class ReferenceVariantContractTests(SimpleTestCase):
         self.assertIn("center_stepper", section_registry.CARD_STYLE_CHOICES)
         self.assertIn("pastel_flat", section_registry.CARD_STYLE_CHOICES)
         self.assertIn("catalog_grid", section_registry.PRODUCT_SECTION_DISPLAY_MODES)
-        self.assertIn("pastel_tiles", section_registry.CATEGORY_GRID_DISPLAY_MODES)
-        self.assertIn("grey_circles", section_registry.CATEGORY_GRID_DISPLAY_MODES)
+        for mode in ("pastel_tiles", "grey_circles", "icon_tiles", "gradient_tiles"):
+            self.assertIn(mode, section_registry.CATEGORY_GRID_DISPLAY_MODES)
+        for layout in ("tile-4", "strip-art"):
+            self.assertIn(layout, section_registry.MULTI_BANNER_KNOWN_LAYOUT_VARIANTS)
+        self.assertIn("poster_wide", section_registry.HERO_STYLE_CHOICES)
         product = section_registry.get_definition("product_section")
         self.assertIn("catalog_grid", {variant.key for variant in product.variants})
         category = section_registry.get_definition("category_grid")
-        self.assertTrue({"pastel_tiles", "grey_circles"} <= {variant.key for variant in category.variants})
+        self.assertTrue({"pastel_tiles", "grey_circles", "icon_tiles", "gradient_tiles"} <= {variant.key for variant in category.variants})
 
     def test_orchid_palette_carries_the_brand_price_role(self):
         palette = appearance_registry.get_palette("orchid-retail")

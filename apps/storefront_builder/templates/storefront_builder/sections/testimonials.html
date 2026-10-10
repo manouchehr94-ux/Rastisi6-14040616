@@ -1,12 +1,15 @@
 {% comment %}چکپوینتِ ۱۲: نظرات مشتریان.{% endcomment %}
 {% if settings.items %}
-<section class="section">
+<section class="section{% if settings.style == 'avatar_grid' %} testimonials--avatar-grid{% endif %}">
   <div class="sec-head"><h2><span class="bar"></span>{{ settings.title|default:"نظرات مشتریان" }}</h2></div>
   <div class="testimonial-list">
     {% for item in settings.items %}
     <div class="testimonial-card">
-      <p class="quote">«{{ item.quote }}»</p>
-      <div class="who"><strong>{{ item.name }}</strong>{% if item.role %}<span>{{ item.role }}</span>{% endif %}</div>
+      {% if settings.style == 'avatar_grid' %}<span class="testimonial-avatar" aria-hidden="true"></span>{% endif %}
+      <div class="testimonial-body">
+        <p class="quote">«{{ item.quote }}»</p>
+        <div class="who"><strong>{{ item.name }}</strong>{% if item.role %}<span>{{ item.role }}</span>{% endif %}</div>
+      </div>
     </div>
     {% endfor %}
   </div>

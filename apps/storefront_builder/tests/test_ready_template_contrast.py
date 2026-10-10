@@ -35,7 +35,8 @@ def _resolved(palette_slug, overrides=None, theme_overrides=None):
 class ReadyTemplateContrastTests(SimpleTestCase):
     def test_every_ready_template_palette_satisfies_the_contrast_contract(self):
         templates = lpr.list_ready_templates()
-        self.assertEqual(len(templates), 50, "the A8 catalog is exactly 50 Ready Templates")
+        # 50 token-built A8 identities + the three reference-fidelity templates (51-53)
+        self.assertEqual(len(templates), 53, "the canonical catalog is exactly 53 Ready Templates")
         failures = []
         for template in templates:
             _cfg, colors, roles, tones = _resolved(template.default_palette_slug)

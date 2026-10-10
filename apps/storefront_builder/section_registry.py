@@ -930,6 +930,10 @@ def validate_card_settings(raw) -> dict:
     cleaned["quick_add_reveal"] = reveal if reveal in QUICK_ADD_REVEAL_CHOICES else "hover_slide"
     style = raw.get("card_style")
     cleaned["card_style"] = style if style in CARD_STYLE_CHOICES else "standard"
+    # Optional: hide the quick-view trigger. Written only when explicitly False so the default shape
+    # (and every stored section) is unchanged.
+    if raw.get("show_quick_view") is False:
+        cleaned["show_quick_view"] = False
     return cleaned
 
 
@@ -1490,7 +1494,7 @@ _SLIDER_DEFAULT_INTERVAL_MS = 4500
 #: section that doesn't read it. Keeping the key in one shared validator
 #: (rather than forking a second near-identical function) is the same
 #: reuse choice already made for every other slider-level field.
-HERO_STYLE_CHOICES = ("overlay", "split", "beauty_editorial", "chocolate_carousel", "atelier_triptych", "luxury_showcase")
+HERO_STYLE_CHOICES = ("overlay", "split", "beauty_editorial", "chocolate_carousel", "atelier_triptych", "luxury_showcase", "poster_wide")
 
 #: Phase 5 Task 5 (STRANS) — the CLOSED enum of between-slide transition styles
 #: for the shared hero/image slider. ``cut`` is the historical, byte-identical
@@ -1702,7 +1706,7 @@ _MAX_SECTION_TITLE_LENGTH = 60
 #: compact flat rail (small image, short label, no card chrome) distinct
 #: from ``image_strip``'s own CSS (which ``dense_marketplace`` already
 #: uses) so that template's rendering stays completely untouched.
-CATEGORY_GRID_DISPLAY_MODES = ("grid", "carousel", "circular", "image_strip", "fashion_flat", "fashion_mosaic", "beauty_icons", "chocolate_story", "chocolate_badges", "atelier_mosaic", "luxury_shortcuts", "pastel_tiles", "grey_circles")
+CATEGORY_GRID_DISPLAY_MODES = ("grid", "carousel", "circular", "image_strip", "fashion_flat", "fashion_mosaic", "beauty_icons", "chocolate_story", "chocolate_badges", "atelier_mosaic", "luxury_shortcuts", "pastel_tiles", "grey_circles", "icon_tiles", "gradient_tiles")
 
 
 def _validate_category_grid_settings(raw: dict) -> dict:
@@ -2179,7 +2183,12 @@ def _validate_testimonials_settings(raw: dict) -> dict:
         if not name or not quote:
             continue
         items.append({"name": name, "quote": quote, "role": role})
-    return {"title": title, "items": items}
+    cleaned = {"title": title, "items": items}
+    # Optional presentation (written only when non-default): ``avatar_grid`` = two-column review cards
+    # with a round avatar chip beside the quote.
+    if raw.get("style") == "avatar_grid":
+        cleaned["style"] = "avatar_grid"
+    return cleaned
 
 
 def default_testimonials_settings() -> dict:
@@ -2323,7 +2332,12 @@ def _validate_image_text_settings(raw: dict) -> dict:
         except ValidationError as exc:
             raise ValueError("; ".join(exc.messages)) from exc
     position = raw.get("image_position") if raw.get("image_position") in ("left", "right") else "right"
-    return {"title": title, "body_html": body_html, "image_url": image_url, "image_position": position}
+    cleaned = {"title": title, "body_html": body_html, "image_url": image_url, "image_position": position}
+    # Optional presentation: ``plain`` = flat white split block (image panel + text + action) instead
+    # of the cream card. Written only when non-default so existing sections stay byte-identical.
+    if raw.get("block_style") == "plain":
+        cleaned["block_style"] = "plain"
+    return cleaned
 
 
 #: Task 6 (Group B) — "simple auto-source catalog families, no
@@ -2453,7 +2467,7 @@ PROMO_CARDS_SCHEMA = SettingsSchema(fields=(
 #: state — Django's ``|default:'default'`` template filter treats an
 #: empty string exactly like an absent key, so this is byte-identical to
 #: today's un-set behaviour, never a new "promo-4" default).
-MULTI_BANNER_KNOWN_LAYOUT_VARIANTS = ("promo-4", "wide-single", "mini-4", "strip", "atelier-duo", "atelier-wide")
+MULTI_BANNER_KNOWN_LAYOUT_VARIANTS = ("promo-4", "wide-single", "mini-4", "strip", "atelier-duo", "atelier-wide", "tile-4", "strip-art")
 #: Merchant-facing names for the closed enum above (display only; the stored
 #: value stays the enum key).
 MULTI_BANNER_LAYOUT_VARIANT_LABELS_FA = {
@@ -2463,6 +2477,8 @@ MULTI_BANNER_LAYOUT_VARIANT_LABELS_FA = {
     "strip": "نوار باریک",
     "atelier-duo": "دو قاب آتلیه",
     "atelier-wide": "قاب عریض آتلیه",
+    "tile-4": "چهار کاشی تبلیغاتی (تقریباً مربع)",
+    "strip-art": "نوار تصویری باریک",
 }
 
 
@@ -2595,6 +2611,12 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
                 key="luxury_showcase", label_fa="ویترین لوکس تیره",
                 renderer="storefront_builder/sections/hero_banner_luxury.html",
             ),
+            # Wide poster slide: a contained, softly-rounded ~1.9:1 canvas with edge arrows;
+            # the slide artwork carries the message (same HeroSlide data as every hero).
+            VariantDefinition(
+                key="poster_wide", label_fa="پوستر عریض",
+                renderer="storefront_builder/sections/hero_banner_poster.html",
+            ),
         ),
         default_variant="overlay", variant_setting_key="hero_style",
         settings_schema=HERO_BANNER_SCHEMA,
@@ -2698,6 +2720,12 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
             VariantDefinition(key="pastel_tiles", label_fa="کاشی‌های پاستلی"),
             # Round grey-backed media with bold labels (stationery/art discovery rail).
             VariantDefinition(key="grey_circles", label_fa="دایره‌های خاکستری"),
+            # Brand-colour rounded squares carrying the category glyph (monochrome),
+            # label below — the icon-shortcut rail of beauty/retail storefronts.
+            VariantDefinition(key="icon_tiles", label_fa="کاشی‌های آیکنی"),
+            # Large gradient editorial tiles: bold category name + representative
+            # media anchored to the bottom edge.
+            VariantDefinition(key="gradient_tiles", label_fa="کاشی‌های گرادیانی بزرگ"),
         ),
         default_variant="grid", variant_setting_key="display_mode",
     ),

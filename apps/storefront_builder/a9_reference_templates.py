@@ -41,13 +41,34 @@ from .layout_preset_registry import (
 # 51 — stationery_spectrum
 # ==================================================================
 
+# Tones are the five coloured bands of the reference in order (red, green, amber, indigo, blue);
+# the dark footer role and the white card tiles come from the same palette. Merchant-selectable
+# like every palette; text/fill pairs are derived by the accessible-colour layer.
+register_palette(PaletteDefinition(
+    slug="spectrum-stationery",
+    name_fa="طیف لوازم تحریر",
+    group_fa="پرفروش",
+    colors={
+        "primary": "#169B48", "secondary": "#48484E", "accent": "#E5334B",
+        "background": "#F4F5F9", "surface": "#FFFFFF", "text": "#262A30",
+        "muted": "#5F6670", "border": "#E1E4EA",
+    },
+    theme_roles={
+        "header_bg": "#FFFFFF", "header_text": "#262A30",
+        "nav_bg": "#FFFFFF", "nav_text": "#262A30",
+        "card_bg": "#FFFFFF", "footer_bg": "#48484E",
+        "footer_text": "#FFFFFF", "price": "#169B48",
+    },
+    section_tones=("#EA364E", "#18BA60", "#BA6600", "#301890", "#005496"),
+))
+
 _SPECTRUM_VERSION = "1"
 
 _SPECTRUM_CARD = {
     "card_style": "center_stepper", "show_brand": False, "show_rating": False,
     "show_wishlist": False, "show_quick_add": True, "show_badge": True,
     "show_price": True, "card_border": True, "image_ratio": "square",
-    "quick_add_reveal": "always",
+    "quick_add_reveal": "always", "show_quick_view": False,
 }
 _SPECTRUM_OFFER_CARD = {**_SPECTRUM_CARD, "card_style": "compact", "show_quick_add": False}
 _SPECTRUM_SPACING = {"vertical_spacing": "small"}
@@ -80,9 +101,13 @@ def _spectrum_pair(row_key: str, title: str, data_source: str, *, first: bool) -
     )
 
 
+# Section order follows the reference top to bottom (strip banner, hero + side offer, category circles, service
+# strip, four tiles, five coloured bands interleaved with the amazing-offer block and the white paired rails,
+# brands, blog).  The two blank white panel pairs of the capture are lazy-load gaps, so those slots carry the
+# same paired-rail component the page uses elsewhere.
 _SPECTRUM_HOME = (
     PresetSectionEntry("multi_banner", settings={
-        "item_limit": 1, "offset": 0, "layout_variant": "strip",
+        "item_limit": 1, "offset": 0, "layout_variant": "strip-art",
         "responsive": {"desktop_columns": 1, "tablet_columns": 1, "mobile_columns": 1},
         "spacing": _SPECTRUM_SPACING,
     }),
@@ -116,7 +141,7 @@ _SPECTRUM_HOME = (
         "spacing": _SPECTRUM_SPACING,
     }),
     PresetSectionEntry("multi_banner", settings={
-        "item_limit": 4, "offset": 0, "layout_variant": "promo-4",
+        "item_limit": 4, "offset": 0, "layout_variant": "tile-4",
         "responsive": {"desktop_columns": 4, "tablet_columns": 2, "mobile_columns": 2},
         "spacing": _SPECTRUM_SPACING,
     }),
@@ -126,19 +151,16 @@ _SPECTRUM_HOME = (
         "spacing": _SPECTRUM_SPACING,
     }),
     _spectrum_band("هنر، نقاشی و کاردستی", "newest", "tone-2"),
-    _spectrum_pair("spectrum-pair-a", "ابزار کار هنری و دستی", "discounted", first=True),
-    _spectrum_pair("spectrum-pair-a", "انواع روبان", "most_viewed", first=False),
-    _spectrum_band("دفتر و کاغذ", "most_viewed", "tone-3"),
-    _spectrum_pair("spectrum-pair-b", "ابزار دقیق و کارگاهی", "newest", first=True),
-    _spectrum_pair("spectrum-pair-b", "نخ و پارچه", "most_viewed", first=False),
-    _spectrum_band("چراغ، کابل و لوازم برقی", "discounted", "tone-4"),
-    _spectrum_pair("spectrum-pair-c", "برچسب فانتزی و آموزشی", "most_viewed", first=True),
-    _spectrum_pair("spectrum-pair-c", "کتاب، پوستر و فلش‌کارت", "newest", first=False),
-    PresetSectionEntry("multi_banner", settings={
-        "item_limit": 4, "offset": 2, "layout_variant": "mini-4",
-        "responsive": {"desktop_columns": 4, "tablet_columns": 2, "mobile_columns": 2},
-        "spacing": _SPECTRUM_SPACING,
-    }),
+    _spectrum_pair("spectrum-pair-a", "پیشنهادهای منتخب", "newest", first=True),
+    _spectrum_pair("spectrum-pair-a", "محبوب‌ترین انتخاب‌ها", "most_viewed", first=False),
+    _spectrum_band("دفتر و کاغذ", "discounted", "tone-3"),
+    _spectrum_pair("spectrum-pair-b", "انتخاب روز", "discounted", first=True),
+    _spectrum_pair("spectrum-pair-b", "بیشتر دیده‌شده‌ها", "most_viewed", first=False),
+    _spectrum_pair("spectrum-pair-c", "ابزار کار هنری، ترکیبی و دستی", "newest", first=True),
+    _spectrum_pair("spectrum-pair-c", "انواع روبان", "most_viewed", first=False),
+    _spectrum_band("چراغ، کابل و لوازم برقی", "best_sellers", "tone-4"),
+    _spectrum_pair("spectrum-pair-d", "برچسب فانتزی و آموزشی", "most_viewed", first=True),
+    _spectrum_pair("spectrum-pair-d", "کتاب، پوستر و فلش‌کارت", "newest", first=False),
     _spectrum_band("بازی و آموزش", "newest", "tone-5"),
     PresetSectionEntry("brand_carousel", settings={
         "title": "بهترین برندهای فروشگاه", "display_mode": "carousel", "show_view_all": False,
@@ -147,11 +169,11 @@ _SPECTRUM_HOME = (
     PresetSectionEntry("blog_posts", settings={"title": "مجله فروشگاه", "item_limit": 6}),
 )
 _SPECTRUM_NAMES = (
-    "banner_strip", "offer_flash", "hero", "categories", "trust", "banner_promo",
+    "banner_strip", "offer_flash", "hero", "categories", "trust", "banner_tiles",
     "products_band_1", "amazing_offers", "products_band_2",
     "products_pair_a1", "products_pair_a2", "products_band_3",
-    "products_pair_b1", "products_pair_b2", "products_band_4",
-    "products_pair_c1", "products_pair_c2", "banner_mini", "products_band_5",
+    "products_pair_b1", "products_pair_b2", "products_pair_c1", "products_pair_c2",
+    "products_band_4", "products_pair_d1", "products_pair_d2", "products_band_5",
     "brands", "blog",
 )
 
@@ -165,7 +187,7 @@ register_layout_preset(LayoutPresetDefinition(
         footer="stationery_dark", bottom_nav="hidden",
     ),
     label_fa="تحریر رنگی",
-    description_fa="بازارگاه رنگی لوازم تحریر و هنر با Hero تبلیغاتی، پیشنهاد لحظه‌ای، ردیف‌های رنگی محصول و فوتر تجاری کامل.",
+    description_fa="بازارگاه رنگی لوازم تحریر و هنر با نوار تصویری، Hero و پیشنهاد جانبی، دایره‌های دسته‌بندی، ردیف‌های رنگیِ طرح‌دار و فوتر تجاری کامل.",
     appearance={
         "font": "Vazirmatn", "radius": 7, "button_radius": 4,
         "density": "compact", "motion": "none", "type_scale": "normal",
@@ -174,7 +196,7 @@ register_layout_preset(LayoutPresetDefinition(
         "content_width": 1500, "grid_density": 6,
         "card_shadow": "none", "card_hover": "none", "hero_style": "wide",
     },
-    default_palette_slug="marketplace-spectrum",
+    default_palette_slug="spectrum-stationery",
     header={
         "sticky": False, "announcement_enabled": False,
         "show_search": True, "show_account": True, "show_wishlist": False, "show_cart": True,
@@ -200,15 +222,15 @@ register_layout_preset(LayoutPresetDefinition(
 # 52 — magenta_beauty_retail
 # ==================================================================
 
-# Orchid retail palette: the beauty-magenta identity with the price/footer
-# roles carried by the brand purple (green stays reserved for commerce
-# actions). Generic and merchant-selectable like every other palette.
+# Orchid retail palette: magenta campaign band, mint campaign band and the deep-purple category
+# wall are tones 1-3; the price/footer roles carry the brand purple (green stays reserved for
+# commerce actions). Generic and merchant-selectable like every other palette.
 register_palette(PaletteDefinition(
     slug="orchid-retail",
     name_fa="ارکیده فروشگاهی",
     group_fa="زیبایی",
     colors={
-        "primary": "#8A007A", "secondary": "#C90A8B", "accent": "#63CF70",
+        "primary": "#8A007A", "secondary": "#C00C8A", "accent": "#63CF70",
         "background": "#FFFFFF", "surface": "#FFFFFF", "text": "#26212A",
         "muted": "#77717B", "border": "#E8E3E9",
     },
@@ -218,11 +240,12 @@ register_palette(PaletteDefinition(
         "card_bg": "#FFFFFF", "footer_bg": "#FFFFFF",
         "footer_text": "#4A4350", "price": "#8A007A",
     },
-    section_tones=("#C90A8B", "#8A007A", "#63CF70", "#F7D6E9", "#F2EAF6"),
+    section_tones=("#C00C8A", "#7E006C", "#6CCC6C", "#F7D6E9", "#F2EAF6"),
 ))
 
-_ORCHID_CARD = {**_BEAUTY_RETAIL_CARD, "show_rating": False}
+_ORCHID_CARD = {**_BEAUTY_RETAIL_CARD, "show_rating": False, "show_quick_view": False, "image_ratio": "landscape"}
 _ORCHID_WALL_ROW = _BEAUTY_WALL_ROW
+
 
 def _orchid_row(title: str, data_source: str, *, background: dict) -> PresetSectionEntry:
     return PresetSectionEntry("product_section", settings={
@@ -243,7 +266,7 @@ register_layout_preset(LayoutPresetDefinition(
         footer="beauty_retail_columns", bottom_nav="hidden",
     ),
     label_fa="زیبایی ارغوانی",
-    description_fa="فروشگاه آرایشی و عطر با جستجوی برجسته، دسته‌بندی آیکنی، ردیف‌های کمپینی رنگی و ستون‌های ویژه دسته‌بندی.",
+    description_fa="فروشگاه آرایشی و عطر با جستجوی برجسته، کاشی‌های آیکنی دسته‌بندی، ردیف‌های کمپینی رنگی، کاشی‌های گرادیانی بزرگ و ستون‌های ویژه دسته‌بندی.",
     appearance={
         "font": "Vazirmatn", "radius": 10, "button_radius": 6,
         "density": "normal", "motion": "subtle", "type_scale": "normal",
@@ -269,14 +292,13 @@ register_layout_preset(LayoutPresetDefinition(
                 "show_arrows": False, "show_dots": True,
             }),
             PresetSectionEntry("category_grid", settings={
-                "title": "دسته‌بندی محصولات", "display_mode": "beauty_icons", "item_limit": 6,
+                "title": "دسته‌بندی محصولات", "display_mode": "icon_tiles", "item_limit": 6,
             }),
             _orchid_row("شگفت‌انگیزهای فروشگاه", "discounted", background={
                 "mode": "palette_pattern", "palette_role": "tone-1", "pattern_slug": "commerce-doodle",
             }),
-            PresetSectionEntry("multi_banner", settings={
-                "item_limit": 4, "offset": 0, "layout_variant": "promo-4",
-                "responsive": {"desktop_columns": 4, "tablet_columns": 2, "mobile_columns": 2},
+            PresetSectionEntry("category_grid", settings={
+                "title": "", "display_mode": "gradient_tiles", "item_limit": 4,
             }),
             _orchid_row("جدیدترین‌های فروشگاه", "newest", background={
                 "mode": "palette", "palette_role": "tone-3",
@@ -304,22 +326,17 @@ register_layout_preset(LayoutPresetDefinition(
                 "show_view_all": True, "card": _ORCHID_CARD, **_ORCHID_WALL_ROW,
                 "background": {"mode": "palette_pattern", "palette_role": "tone-2", "pattern_slug": "commerce-doodle"},
             }),
-            PresetSectionEntry("product_section", settings={
-                "title": "آخرین محصولات مشاهده شده", "data_source": "most_viewed",
-                "display_mode": "carousel", "item_limit": 10,
-                "card": _ORCHID_CARD, **_ORCHID_WALL_ROW,
-            }),
             PresetSectionEntry("newsletter", settings={
-                "title": "افسون لاله رخ",
-                "subtitle": "اولین نفری باشید که از جدیدترین محصولات، جشنواره‌ها و فروش‌های ویژه مطلع می‌شود.",
+                "title": "عضویت در خبرنامه",
+                "subtitle": "ایمیل خود را ثبت کنید تا پیشنهادها و محصولات تازه را از دست ندهید.",
                 "button_label": "ثبت نام",
                 "background": {"mode": "color", "color": "#F6F6F6"},
             }),
             PresetSectionEntry("trust_features"),
         ), (
-            "hero", "categories", "products_campaign_discounted", "banner_promo4",
+            "hero", "categories_icons", "products_campaign_discounted", "categories_gradient",
             "products_campaign_newest", "brands", "wall_category_groups", "banner_pair",
-            "wall_collections", "products_recently_viewed", "newsletter", "trust",
+            "wall_collections", "newsletter", "trust",
         )),
         **_u10_standard_non_home_pages(),
     },
@@ -329,38 +346,48 @@ register_layout_preset(LayoutPresetDefinition(
 # 53 — pastel_kawaii_stationery
 # ==================================================================
 
-# Soft lilac / signal-red stationery palette: neutral white page, lilac action
-# colour, red announcement accent. Generic and merchant-selectable.
+# Soft lilac / signal-red stationery palette: neutral white page, lilac action colour, red
+# announcement band (tones 1-2). Generic and merchant-selectable.
 register_palette(PaletteDefinition(
     slug="pastel-lilac",
     name_fa="یاسی پاستلی",
     group_fa="نرم",
     colors={
-        "primary": "#B565E6", "secondary": "#22222A", "accent": "#EE1941",
+        "primary": "#8D50C4", "secondary": "#22222A", "accent": "#EE1941",
         "background": "#FFFFFF", "surface": "#FFFFFF", "text": "#2A2A34",
-        "muted": "#8B8B99", "border": "#ECECF0",
+        "muted": "#6C6C7B", "border": "#ECECF0",
     },
     theme_roles={
         "header_bg": "#FFFFFF", "header_text": "#2A2A34",
-        "nav_bg": "#F4F4F6", "nav_text": "#4A4A55",
+        "nav_bg": "#F6F6F6", "nav_text": "#4A4A55",
         "card_bg": "#FFFFFF", "footer_bg": "#FFFFFF",
         "footer_text": "#55556A", "price": "#6C6C7B",
     },
-    section_tones=("#F9D8EA", "#E2D4F8", "#D7F3DC", "#FDE6D2", "#D8F0FB"),
+    section_tones=("#EA1842", "#A20000", "#D7F3DC", "#FDE6D2", "#D8F0FB"),
 ))
 
 _PASTEL_CARD = {
     "card_style": "pastel_flat", "image_ratio": "square",
     "show_brand": False, "show_rating": False, "show_wishlist": False,
     "show_badge": True, "show_quick_add": False, "card_border": False,
+    "show_quick_view": False,
 }
 
 
-def _pastel_grid(title: str, data_source: str, limit: int = 12) -> PresetSectionEntry:
+def _pastel_grid(title: str, data_source: str, limit: int, *, pager: bool) -> PresetSectionEntry:
+    """A repeated four-column catalogue group; ``pager`` adds the closing bar."""
     return PresetSectionEntry("product_section", settings={
         "title": title, "data_source": data_source, "display_mode": "catalog_grid",
-        "item_limit": limit, "show_view_all": True, "card": _PASTEL_CARD,
+        "item_limit": limit, "show_view_all": pager, "card": _PASTEL_CARD,
         "responsive": {"desktop_columns": 4, "tablet_columns": 3, "mobile_columns": 2},
+    })
+
+
+def _plain_block(position: str, *, title: str = "عنوان بخش") -> PresetSectionEntry:
+    """Editorial split block (picture panel + title/text); copy is an instruction, not marketing text."""
+    return PresetSectionEntry("image_text", settings={
+        "title": title, "body_html": "<p>متن این بخش را از ویرایشگر وارد کنید.</p>",
+        "image_position": position, "block_style": "plain",
     })
 
 
@@ -374,7 +401,7 @@ register_layout_preset(LayoutPresetDefinition(
         footer="kawaii_minimal", bottom_nav="hidden",
     ),
     label_fa="کاغذ پاستلی",
-    description_fa="کاتالوگ لوازم تحریر و کاغذ با کاشی‌های پاستلی تخت، هدر مرکزی با نوار اعلان دوگانه و شبکهٔ چهارستونه.",
+    description_fa="کاتالوگ بلند لوازم تحریر و کاغذ با هدر مرکزی و نوار اعلان دوگانه، پوستر عریض، کاشی‌های پاستلی تخت، گروه‌های چهارستونه با نوار صفحه‌بندی و بلوک‌های محتوایی.",
     appearance={
         "font": "Vazirmatn", "radius": 0, "button_radius": 3,
         "density": "relaxed", "motion": "subtle", "type_scale": "normal",
@@ -396,7 +423,7 @@ register_layout_preset(LayoutPresetDefinition(
     pages={
         "home": authored_legacy_home("pastel_kawaii_stationery", (
             PresetSectionEntry("hero_banner", settings={
-                "hero_style": "overlay", "autoplay": True, "interval_ms": 5000,
+                "hero_style": "poster_wide", "autoplay": True, "interval_ms": 5000,
                 "show_arrows": True, "show_dots": False, "text_position": "start",
             }),
             PresetSectionEntry("multi_banner", settings={
@@ -406,33 +433,30 @@ register_layout_preset(LayoutPresetDefinition(
             PresetSectionEntry("category_grid", settings={
                 "title": "محصولات فروشگاه", "display_mode": "pastel_tiles", "item_limit": 6,
             }),
-            _pastel_grid("لوازم تحریر و کاغذ", "newest", 12),
-            _pastel_grid("محصولات ویژه فروشگاه", "most_viewed", 16),
-            PresetSectionEntry("image_text", settings={
-                "title": "طراحی‌های اختصاصی فروشگاه",
-                "body_html": "<p>در این بخش درباره مجموعه‌ها، کیفیت چاپ و مواد به‌کاررفته در محصولات خود بنویسید. این متن نمونه است و از بخش ویرایش قابل تغییر است.</p>",
-                "image_position": "right",
-            }),
-            _pastel_grid("تخفیف‌های فروشگاه", "discounted", 8),
-            _pastel_grid("پرطرفدارها", "most_viewed", 8),
-            PresetSectionEntry("image_text", settings={
-                "title": "درباره فروشگاه",
-                "body_html": "<p>معرفی کوتاه فروشگاه، داستان برند و ارزش‌هایی که برای مشتریان خود دارید را در این بخش بنویسید. این متن نمونه است و از بخش ویرایش قابل تغییر است.</p>",
-                "image_position": "left",
-            }),
+            _pastel_grid("جدیدترین محصولات", "newest", 12, pager=True),
+            _pastel_grid("پرطرفدارترین‌ها", "most_viewed", 24, pager=False),
+            _pastel_grid("محصولات ویژه فروشگاه", "newest", 16, pager=True),
+            _plain_block("left"),
+            _pastel_grid("تخفیف‌های فروشگاه", "discounted", 8, pager=True),
+            _pastel_grid("پیشنهادهای منتخب", "newest", 8, pager=True),
+            _pastel_grid("محبوب‌ها", "most_viewed", 8, pager=True),
+            _pastel_grid("برگزیده‌ها", "newest", 8, pager=True),
+            _pastel_grid("تازه‌های فروشگاه", "most_viewed", 4, pager=False),
+            _plain_block("left"),
             PresetSectionEntry("blog_posts", settings={"title": "مجله فروشگاه", "item_limit": 6}),
-            PresetSectionEntry("trust_features", settings={
+            PresetSectionEntry("testimonials", settings={
+                "title": "نظرات مشتریان", "style": "avatar_grid",
                 "items": [
-                    {"icon": "●", "title": "ارسال سفارش", "subtitle": "اطلاعات ارسال را در این بخش بنویسید"},
-                    {"icon": "●", "title": "پرداخت", "subtitle": "روش‌های پرداخت فروشگاه"},
-                    {"icon": "●", "title": "بازگشت کالا", "subtitle": "شرایط بازگشت کالا"},
-                    {"icon": "●", "title": "پشتیبانی", "subtitle": "راه‌های ارتباط با فروشگاه"},
+                    {"name": "نام مشتری", "quote": "متن نظر مشتری در این بخش نمایش داده می‌شود."},
+                    {"name": "نام مشتری", "quote": "متن نظر مشتری در این بخش نمایش داده می‌شود."},
+                    {"name": "نام مشتری", "quote": "متن نظر مشتری در این بخش نمایش داده می‌شود."},
+                    {"name": "نام مشتری", "quote": "متن نظر مشتری در این بخش نمایش داده می‌شود."},
                 ],
             }),
         ), (
-            "hero", "banner_strip", "categories", "products_grid_a", "products_grid_b",
-            "feature_block", "products_grid_c", "products_grid_d", "about_block",
-            "blog", "info_boxes",
+            "hero", "banner_strip", "categories", "products_grid_a", "products_grid_b1", "products_grid_b2",
+            "about_block_a", "products_grid_c", "products_grid_d", "products_grid_e", "products_grid_f",
+            "products_grid_g", "about_block_b", "blog", "reviews",
         )),
         **_u10_standard_non_home_pages(),
     },

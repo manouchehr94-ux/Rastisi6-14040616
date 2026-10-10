@@ -112,6 +112,7 @@ here — so every future visual variant reads identical business semantics.
   title all resolve the SAME $id() token because they share this one
   ``sfbOverlay`` scope, so aria-controls/aria-labelledby stay correctly paired
   per instance and no two dialogs ever collide on one page.{% endcomment %}
+  {% if card_settings.show_quick_view is not False %}
   <div class="pcard-quickview" x-data="sfbOverlay()" x-id="['sfb-quick-view', 'sfb-quick-view-title']">
     <button type="button" class="pcard-qv-trigger"
             aria-haspopup="dialog" :aria-controls="$id('sfb-quick-view')"
@@ -163,6 +164,7 @@ here — so every future visual variant reads identical business semantics.
       </div>
     </div>
   </div>
+  {% endif %}
   {% if card_settings.card_style == "center_stepper" and not card.is_out_of_stock %}
   <div class="stp-actions" x-data="{ q: 1 }">
     {% if card_settings.show_quick_add is False %}

@@ -185,6 +185,38 @@ renderer never needs tenant ids inside a global preset.
     </div>
   </section>
   {% endif %}
+{% elif category_grid_settings.display_mode == 'icon_tiles' %}
+  {% if top_categories %}
+  <section class="section category-icontile-section">
+    {% if category_grid_settings.title %}
+    <div class="beauty-section-title"><span></span><h2>{{ category_grid_settings.title }}</h2><span></span></div>
+    {% endif %}
+    <div class="category-icontile-row">
+      {% for cat in top_categories %}
+      <a class="category-icontile" {% if is_builder_preview %}data-admin-edit-kind="category" data-admin-edit-id="{{ cat.pk }}" data-admin-edit-title="{{ cat.name|escape }}" {% endif %}href="{% url 'catalog:product-list' %}?category={{ cat.slug }}">
+        <span class="category-icontile-glyph" aria-hidden="true"><span>{{ cat.icon|default:"✦" }}</span></span>
+        <span class="category-icontile-label">{{ cat.name }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+{% elif category_grid_settings.display_mode == 'gradient_tiles' %}
+  {% if top_categories %}
+  <section class="section category-gradient-section">
+    <div class="category-gradient-grid">
+      {% for cat in top_categories %}
+      <a class="category-gradient-tile" {% if is_builder_preview %}data-admin-edit-kind="category" data-admin-edit-id="{{ cat.pk }}" data-admin-edit-title="{{ cat.name|escape }}" {% endif %}href="{% url 'catalog:product-list' %}?category={{ cat.slug }}">
+        <strong class="category-gradient-title">{{ cat.name }}</strong>
+        <span class="category-gradient-media">
+          {% if cat.representative_media %}<img src="{{ cat.representative_media.image.url }}" alt="{{ cat.name }}" loading="lazy">
+          {% elif cat.image %}<img src="{{ cat.image.url }}" alt="{{ cat.name }}" loading="lazy">{% endif %}
+        </span>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
 {% elif category_grid_settings.display_mode == 'circular' %}
   {% if top_categories %}
   <section class="section category-circle-section">

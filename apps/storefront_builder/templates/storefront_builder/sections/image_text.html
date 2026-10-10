@@ -1,7 +1,7 @@
 {% load storefront_builder_extras %}
-{% with title=settings.title body=settings.body_html image_url=settings.image_url image_position=settings.image_position|default:"right" link=destination %}
+{% with title=settings.title body=settings.body_html image_url=settings.image_url image_position=settings.image_position|default:"right" link=destination block_style=settings.block_style %}
 {% if title or body or image_url %}
-<section class="section">
+<section class="section{% if block_style == 'plain' %} imgtext-plain{% endif %}">
   <div class="cream" style="{% if image_position == 'left' %}flex-direction:row-reverse{% endif %}">
     <div>
       {% if title %}<h3>{{ title }}</h3>{% endif %}
@@ -16,6 +16,8 @@
       <img src="{{ image_url }}" alt="{{ title|default:'تصویر' }}" style="width:100%;height:100%;object-fit:cover;border-radius:12px" loading="lazy">
       {% if link.url %}</a>{% endif %}
     </div>
+    {% elif block_style == 'plain' %}
+    <div class="rack imgtext-placeholder" aria-hidden="true"></div>
     {% endif %}
   </div>
 </section>

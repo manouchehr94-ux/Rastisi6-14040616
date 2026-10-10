@@ -1442,7 +1442,7 @@ class U1AVariantContractTests(TestCase):
         """Test #3 — a definition can declare multiple variants."""
         definition = get_definition("category_grid")
         keys = {v.key for v in list_variants(definition)}
-        self.assertEqual(keys, {"grid", "carousel", "circular", "image_strip", "fashion_flat", "fashion_mosaic", "beauty_icons", "chocolate_story", "chocolate_badges", "atelier_mosaic", "luxury_shortcuts", "pastel_tiles", "grey_circles"})
+        self.assertEqual(keys, {"grid", "carousel", "circular", "image_strip", "fashion_flat", "fashion_mosaic", "beauty_icons", "chocolate_story", "chocolate_badges", "atelier_mosaic", "luxury_shortcuts", "pastel_tiles", "grey_circles", "icon_tiles", "gradient_tiles"})
         self.assertEqual(definition.default_variant, "grid")
         self.assertEqual(definition.variant_setting_key, "display_mode")
 
