@@ -294,3 +294,63 @@ class ReferenceTemplateLifecycleTests(TestCase):
                 html = response.content.decode()
                 for marker in markers[key]:
                     self.assertIn(marker, html)
+
+
+class ReferencePrimitiveRenderTests(SimpleTestCase):
+    """The generic primitives added for 51-53 render through their registered section templates."""
+
+    @staticmethod
+    def _render(template, **context):
+        from django.template.loader import render_to_string
+
+        return render_to_string(f"storefront_builder/sections/{template}.html", context)
+
+    @staticmethod
+    def _category(n):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(pk=n, slug=f"c{n}", name=f"دسته {n}", icon="🏷️", image=None, representative_media=None)
+
+    def test_category_icon_and_gradient_tiles(self):
+        cats = [self._category(1), self._category(2)]
+        html = self._render("category_grid", top_categories=cats, category_grid_settings={"display_mode": "icon_tiles", "title": "T"})
+        self.assertIn("category-icontile-row", html)
+        self.assertEqual(html.count('class="category-icontile"'), 2)
+        html = self._render("category_grid", top_categories=cats, category_grid_settings={"display_mode": "gradient_tiles", "title": ""})
+        self.assertIn("category-gradient-grid", html)
+        self.assertIn("category-gradient-title", html)
+        for mode, marker in (("grey_circles", "category-grey-circles"), ("pastel_tiles", "category-pastel-grid")):
+            html = self._render("category_grid", top_categories=cats, category_grid_settings={"display_mode": mode, "title": "T"})
+            self.assertIn(marker, html)
+
+    def test_catalog_grid_pager_bar_only_when_view_all_is_enabled(self):
+        base = {"display_mode": "catalog_grid", "title": "T", "card": {}}
+        with_bar = self._render("product_section", settings={**base, "show_view_all": True}, products=[])
+        self.assertIn("catalog-grid-bar-row", with_bar)
+        self.assertIn("catalog-grid-more", with_bar)
+        self.assertNotIn("catalog-grid-bar-row", self._render("product_section", settings={**base, "show_view_all": False}, products=[]))
+
+    def test_plain_image_text_block_has_a_geometry_placeholder_but_cream_is_unchanged(self):
+        plain = self._render("image_text", settings={"title": "a", "body_html": "<p>b</p>", "image_url": "", "image_position": "left", "block_style": "plain"})
+        self.assertIn("imgtext-plain", plain)
+        self.assertIn("imgtext-placeholder", plain)
+        cream = self._render("image_text", settings={"title": "a", "body_html": "<p>b</p>", "image_url": "", "image_position": "right"})
+        self.assertNotIn("imgtext-plain", cream)
+        self.assertNotIn("imgtext-placeholder", cream)
+
+    def test_testimonials_avatar_grid_is_opt_in(self):
+        items = [{"name": "n", "quote": "q", "role": ""}]
+        self.assertIn("testimonials--avatar-grid", self._render("testimonials", settings={"title": "t", "items": items, "style": "avatar_grid"}))
+        self.assertNotIn("testimonials--avatar-grid", self._render("testimonials", settings={"title": "t", "items": items}))
+
+    def test_optional_settings_are_written_only_when_non_default(self):
+        image_text = section_registry.get_definition("image_text")
+        self.assertNotIn("block_style", image_text.validate_settings({"title": "a"}))
+        self.assertEqual(image_text.validate_settings({"title": "a", "block_style": "plain"})["block_style"], "plain")
+        self.assertNotIn("block_style", image_text.validate_settings({"title": "a", "block_style": "weird"}))
+        testimonials = section_registry.get_definition("testimonials")
+        self.assertNotIn("style", testimonials.validate_settings({"items": []}))
+        self.assertEqual(testimonials.validate_settings({"items": [], "style": "avatar_grid"})["style"], "avatar_grid")
+        self.assertNotIn("show_quick_view", section_registry.validate_card_settings({}))
+        self.assertIs(section_registry.validate_card_settings({"show_quick_view": False})["show_quick_view"], False)
+        self.assertNotIn("show_quick_view", section_registry.validate_card_settings({"show_quick_view": True}))

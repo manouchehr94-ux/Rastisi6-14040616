@@ -121,7 +121,7 @@ class A8ComponentLibraryTests(SimpleTestCase):
                 # stationery_dark, kawaii_minimal, catalog_grid).
                 "header": 24,
                 "mega_menu": 1,
-                "hero": 19,
+                "hero": 20,
                 "layout": 17,
                 "product_view": 14,
                 "card": 17,
@@ -134,7 +134,7 @@ class A8ComponentLibraryTests(SimpleTestCase):
                 "theme": 8,
             },
         )
-        self.assertEqual(len(COMPONENT_REGISTRY), 132)
+        self.assertEqual(len(COMPONENT_REGISTRY), 133)
 
     def test_mapping_vocabulary_is_registered_once_and_resolves_from_allowlist(self):
         self.assertTrue(

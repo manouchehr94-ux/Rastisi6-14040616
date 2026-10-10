@@ -5094,8 +5094,8 @@ a.sfb-v3-component-item,
 .blog-card{background:#fff;border:1px solid var(--line);border-radius:7px;overflow:hidden;transition:.2s;box-shadow:0 1px 5px rgba(15,23,42,.04)}
 .blog-card:hover{transform:none;box-shadow:0 3px 10px rgba(15,23,42,.08)}
 .blog-card .th{height:150px;display:grid;place-items:center;font-size:38px}
-.blog-card .th-photo{padding:0}
-.blog-card .th-photo img{width:100%;height:100%;object-fit:cover}
+.blog-card .th-photo{padding:0;overflow:hidden}
+.blog-card .th-photo img{display:block;width:100%;height:100%;object-fit:cover}
 .blog-card .bd{padding:10px 11px}
 .blog-card .meta{font-size:8.5px;color:var(--muted);display:flex;gap:10px;margin-bottom:4px}
 .blog-card .meta .cat{color:var(--violet-text,var(--violet));font-weight:700}
@@ -5507,16 +5507,21 @@ html[data-sfb-density="compact"] .feat small{font-size:9.5px}
   padding:14px;border-radius:22px;background-color:var(--sfb-section-palette-bg,var(--brand-primary));
   color:var(--sfb-section-fg,#fff)
 }
-.rsec[data-palette-role="tone-1"]:has(.product-section--campaign-band){--sfb-section-fg:var(--on-tone-1)}
-.rsec[data-palette-role="tone-2"]:has(.product-section--campaign-band){--sfb-section-fg:var(--on-tone-2)}
-.rsec[data-palette-role="tone-3"]:has(.product-section--campaign-band){--sfb-section-fg:var(--on-tone-3)}
-.rsec[data-palette-role="tone-4"]:has(.product-section--campaign-band){--sfb-section-fg:var(--on-tone-4)}
-.rsec[data-palette-role="tone-5"]:has(.product-section--campaign-band){--sfb-section-fg:var(--on-tone-5)}
 .rsec[data-pattern="commerce-doodle"]:has(.product-section--campaign-band) .product-campaign-band{
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='132' height='78' viewBox='0 0 132 78'%3E%3Cg fill='none' stroke='%23fff' stroke-opacity='.12' stroke-width='1.15' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22h15l-1 14H13zM16 22v-3a4 4 0 018 0v3'/%3E%3Cpath d='M52 13l2.2 4.7 5.1.7-3.7 3.6.9 5-4.5-2.4-4.5 2.4.9-5-3.7-3.6 5.1-.7z'/%3E%3Ccircle cx='92' cy='23' r='8'/%3E%3C/g%3E%3C/svg%3E");
   background-size:132px 78px
 }
-.product-campaign-copy{border:0}
+/* the copy column sits on a SOLID panel of the band tone (a contained surface), so the doodle pattern behind it can never
+   make its text unmeasurable; ink = the band tone's derived foreground */
+.rsec[data-bg-mode]:has(.product-section--campaign-band) .product-campaign-copy{
+  border:0;border-radius:12px;color:var(--sfb-section-fg,#fff);
+  background-color:var(--sfb-section-palette-bg,var(--brand-primary))
+}
+.rsec[data-bg-mode]:has(.product-section--campaign-band) .product-campaign-gift{color:inherit}
+/* text on a patterned band sits on a SOLID panel of the band tone (a contained surface): the pattern image can never
+   make it unmeasurable. Panel ink = the band's derived foreground (--sfb-section-fg, tokens.css). */
+.rsec[data-pattern] .catalog-wall-title h2{display:inline-block;padding:4px 18px;border-radius:10px;background-color:var(--sfb-section-palette-bg);color:var(--sfb-section-fg)}
+.rsec[data-pattern] .catalog-wall-featured-tabs{width:max-content;max-width:100%;margin:0 auto 10px;padding:6px 16px;border-radius:10px;background-color:var(--sfb-section-palette-bg);color:var(--sfb-section-fg)}
 .product-campaign-link{background:transparent;border:1px solid currentColor;border-radius:5px;padding:8px 14px;font-size:11px;font-weight:700;color:inherit}
 @media(max-width:680px){.rsec[data-bg-mode]:has(.product-section--campaign-band) .product-campaign-band{padding:9px;border-radius:16px}}
 
@@ -5700,8 +5705,8 @@ html[data-sfb-density="compact"] .feat small{font-size:9.5px}
 .category-gradient-tile:nth-child(4n+2){background:linear-gradient(135deg,#f9e2a1,#fdf1cf)}
 .category-gradient-tile:nth-child(4n+3){background:linear-gradient(135deg,#cfe3f6,#eef5fb)}
 .category-gradient-tile:nth-child(4n+4){background:linear-gradient(135deg,#f8d3bf,#fde9e0)}
-.category-gradient-title{position:absolute;z-index:2;top:16%;inset-inline-start:7%;font-size:clamp(17px,2vw,27px);font-weight:900;line-height:1.35;color:#1d1d2b}
-.category-gradient-media{position:absolute;inset:auto auto 0 0;width:58%;height:78%;display:grid;align-items:end;justify-items:start}
+.category-gradient-title{position:absolute;z-index:2;top:9%;inset-inline-start:7%;font-size:clamp(17px,2vw,27px);font-weight:900;line-height:1.35;color:#1d1d2b}
+.category-gradient-media{position:absolute;inset:auto auto 0 0;width:58%;height:60%;display:grid;align-items:end;justify-items:start}
 .category-gradient-media img{width:100%;height:100%;object-fit:contain;object-position:left bottom}
 @media(max-width:900px){.category-gradient-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}}
 

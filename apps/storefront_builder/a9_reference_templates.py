@@ -232,7 +232,7 @@ register_palette(PaletteDefinition(
     colors={
         "primary": "#8A007A", "secondary": "#C00C8A", "accent": "#63CF70",
         "background": "#FFFFFF", "surface": "#FFFFFF", "text": "#26212A",
-        "muted": "#77717B", "border": "#E8E3E9",
+        "muted": "#6B656F", "border": "#E8E3E9",
     },
     theme_roles={
         "header_bg": "#FFFFFF", "header_text": "#26212A",
