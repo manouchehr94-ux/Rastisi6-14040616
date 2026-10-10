@@ -4545,7 +4545,7 @@ a.sfb-v3-component-item,
 .product-section--spotlight .product-spotlight-dots{border-top:1px solid #f0f1f3}
 .beauty-section-title{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:18px;margin-bottom:24px}
 .beauty-section-title>span{height:1px;background:var(--violet);opacity:.8}
-.beauty-section-title h2{font-size:15px;font-weight:800;color:var(--ink);white-space:nowrap;margin:0}
+.beauty-section-title h2{font-size:15px;font-weight:800;color:var(--sfb-section-fg,var(--ink));white-space:nowrap;margin:0}
 .product-section--campaign-band{margin:22px 0 0}
 .product-campaign-heading{margin:0 34px 22px}
 .product-campaign-heading h2{font-size:18px;font-weight:650;color:var(--ink)}
@@ -4630,7 +4630,7 @@ a.sfb-v3-component-item,
 .special-list>button:hover{border-color:#d9dde3;background:#fff}
 .special-list>button.active{border-color:#fecaca;background:#fff;color:#b91c1c;box-shadow:inset -3px 0 #ef4444}
 .special-list-name{min-width:0;font-size:10.8px;line-height:1.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.special-list-price{font-size:9.8px;color:#6a6f77;white-space:nowrap}
+.special-list-price{font-size:9.8px;color:var(--muted,#6a6f77);white-space:nowrap}
 .special-panels{order:2;min-width:0;display:grid;background:linear-gradient(135deg,#fff 0%,#fbfbfc 100%)}
 .special-main{grid-area:1/1;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,37%);align-items:center;padding:16px 22px;gap:16px}
 .special-copy{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
@@ -5016,7 +5016,7 @@ a.sfb-v3-component-item,
 .category-chocolate-story-label{max-width:102px;font-size:10px;font-weight:650;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .category-chocolate-section{margin:16px 0 24px}
 .chocolate-section-title{text-align:center;margin-bottom:14px}
-.chocolate-section-title h2{font-size:15px;font-weight:800;color:#3c2b1d;margin:0}
+.chocolate-section-title h2{font-size:15px;font-weight:800;color:var(--sfb-section-fg,#3c2b1d);margin:0}
 .category-chocolate-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:18px 16px}
 .category-chocolate-tile{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;min-width:0;color:#3c2b1d}
 .category-chocolate-media{width:124px;height:98px;display:grid;place-items:center;position:relative;border-radius:48% 52% 45% 55%/58% 45% 55% 42%;background:#E7D1B7;overflow:hidden;box-shadow:0 3px 10px rgba(93,54,22,.07)}
@@ -5100,7 +5100,7 @@ a.sfb-v3-component-item,
 .blog-card .meta{font-size:8.5px;color:var(--muted);display:flex;gap:10px;margin-bottom:4px}
 .blog-card .meta .cat{color:var(--violet-text,var(--violet));font-weight:700}
 .blog-card h4{font-size:10.5px;font-weight:700;line-height:1.65;margin-bottom:5px}
-.blog-card .read{color:#444;font-size:9px;font-weight:700;display:flex;align-items:center;gap:4px}
+.blog-card .read{color:var(--ink);font-size:9px;font-weight:700;display:flex;align-items:center;gap:4px}
 .blog-card .read svg{width:14px;height:14px}
 @media(max-width:1000px){
   .blog-grid{grid-template-columns:repeat(3,1fr)}
@@ -5755,4 +5755,14 @@ html[data-sfb-density="compact"] .feat small{font-size:9.5px}
 .rsec[data-pattern]:has(.pcard.style-center_stepper){padding:24px 10px 22px}
 /* paired white rails use a shorter picture than the coloured bands */
 .rcontainer-cell>.rsec:not([data-pattern]) .pcard.style-center_stepper .img{aspect-ratio:1/.88}
+
+/* -- featured-row wall title chip: its surface is derived from the same token as its ink, so a palette change can never
+   leave a fixed pale chip behind light ink -- */
+.catalog-wall-featured-title{background:color-mix(in srgb,var(--violet-text) 7%,var(--card,#fff))}
+/* -- newsletter on a merchant/preset colour band uses the band's derived foreground like every other band heading -- */
+.rsec[data-bg-mode="color"] .newsletter-section h2,.rsec[data-bg-mode="color"] .newsletter-section .newsletter-sub{color:var(--sfb-section-fg,var(--ink))}
+.newsletter-section .newsletter-sub{color:var(--muted);font-size:13px;margin:-6px 0 16px}
+/* -- the empty-state note of a product rail sits on a SOLID panel when the section carries a pattern -- */
+.rsec[data-pattern] .rsec-cols>p{grid-column:1/-1;margin:0 auto;padding:10px 16px;border-radius:10px;
+  background-color:var(--sfb-section-palette-bg,var(--card));color:var(--sfb-section-fg,var(--ink))!important}
 /* REF-TEMPLATES-51-53 END */
