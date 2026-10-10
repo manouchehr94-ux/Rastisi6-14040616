@@ -165,17 +165,17 @@ class ReadyTemplateGallerySeparationTests(TestCase):
         "روایت‌محور", also ``editorial_story``'s label), which would make a
         naive text-absence check false-fail without indicating any real
         separation bug."""
-        self.assertEqual(len(lpr.list_ready_templates()), 50)
+        self.assertEqual(len(lpr.list_ready_templates()), 53)
         self.assertTrue(set(READY_TEMPLATE_KEYS).issubset({p.key for p in lpr.list_ready_templates()}))
         response = self.admin_client.get(self.url)
         cards = response.context["template_cards"]
-        self.assertEqual(len(cards), 50)
+        self.assertEqual(len(cards), 53)
         self.assertTrue(set(READY_TEMPLATE_KEYS).issubset({c["preset"].key for c in cards}))
         for key in READY_TEMPLATE_KEYS:
             self.assertContains(response, lpr.get_layout_preset(key).label_fa)
 
     def test_b_historical_presets_remain_registered_and_directly_applicable(self):
-        self.assertEqual(len(lpr.list_layout_presets()), 55)
+        self.assertEqual(len(lpr.list_layout_presets()), 58)
         for key in HISTORICAL_KEYS:
             preset = lpr.get_layout_preset(key)
             self.assertIsNotNone(preset, key)

@@ -38,7 +38,9 @@ from apps.stores.models import Store, StoreMembership
 # these constants encode. -------------------------------------------------
 W4C_MATRIX_SCHEMA_VERSION = "w4c-matrix-v1"
 W4C_CERTIFIED_BASE_SHA = "3a4fe9070584655548bae5a9bb574f3415bbf580"
-W4C_TOTAL_CELLS_EXPECTED = 704
+# 704 cells for the certified 50 A8 identities + 13 cells for each of the three
+# reference-fidelity templates (51-53) = 743.
+W4C_TOTAL_CELLS_EXPECTED = 743
 W4C_PAGE_CLASSES = ("home", "listing", "pdp", "cart")
 W4C_VIEWPORTS = ("desktop", "tablet", "mobile")
 W4C_TIER1_OCCASION_CYCLE = ("nowruz", "ramadan", "muharram")
@@ -196,7 +198,7 @@ class Command(BaseCommand):
             action="store_true",
             help=(
                 "P5-W4C -- opt-in all-50-Ready-Template browser certification "
-                "campaign (704 cells). Bypasses the legacy R4 sandbox in favor "
+                "campaign (all cells). Bypasses the legacy R4 sandbox in favor "
                 "of a real published-Template fixture. Off by default -- "
                 "existing R4 QA scenarios/behavior are completely unchanged."
             ),
@@ -479,7 +481,7 @@ class Command(BaseCommand):
             )
             if not campaign_complete:
                 if not options["only"]:
-                    raise CommandError(f"W4C: INCOMPLETE -- full run did not record all 704 cells -- {aggregate}")
+                    raise CommandError(f"W4C: INCOMPLETE -- full run did not record all expected cells -- {aggregate}")
                 self.stdout.write(self.style.SUCCESS(
                     "W4C BATCH COMPLETE -- CAMPAIGN INCOMPLETE -- "
                     f"selected_keys={options['only']}, "
@@ -1571,9 +1573,14 @@ class Command(BaseCommand):
 
         presets = lpr.list_ready_templates()
         templates = [{"key": p.key, "version": p.version} for p in presets]
+        # The 50 token-built A8 identities keep their original cycle positions;
+        # any later official Ready Template (e.g. the reference-fidelity
+        # templates 51-53) continues the same cycle after them.
+        ordered_keys = [spec.key for spec in a8_ready_templates._SPECS]
+        ordered_keys += [p.key for p in presets if p.key not in set(ordered_keys)]
         tier1_occasions = {
-            spec.key: W4C_TIER1_OCCASION_CYCLE[i % len(W4C_TIER1_OCCASION_CYCLE)]
-            for i, spec in enumerate(a8_ready_templates._SPECS)
+            key: W4C_TIER1_OCCASION_CYCLE[i % len(W4C_TIER1_OCCASION_CYCLE)]
+            for i, key in enumerate(ordered_keys)
         }
         # The PDP/Cart cells exercise real quantity-adjustment and add-to-cart
         # flows against whichever variant the storefront pre-selects as the
