@@ -1,0 +1,11 @@
+{
+  "template_key": "stationery_spectrum",
+  "version": "1",
+  "content_hash": "1070673d29784287e64a874df2078e48cab149081009db6b0c3e4da025d7b27c",
+  "preview_input_fingerprint": "fea6ba2c6e85c9a29aef1e48e1174e75e839d3348fe8360c86e1ed685432ed9d",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}
