@@ -174,8 +174,8 @@ class AboveFoldIdentityNoLongerMatchesAnchorTests(SimpleTestCase):
 
 
 class CatalogIntegrityAfterRepairTests(SimpleTestCase):
-    def test_canonical_ready_template_count_remains_fifty(self):
-        self.assertEqual(len(lpr.list_ready_templates()), 50)
+    def test_canonical_ready_template_count_is_fifty_plus_three_reference_templates(self):
+        self.assertEqual(len(lpr.list_ready_templates()), 53)
 
     def test_canonical_keys_are_still_exactly_the_same_fifty(self):
         keys = sorted(preset.key for preset in lpr.list_ready_templates())

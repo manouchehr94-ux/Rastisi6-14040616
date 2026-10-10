@@ -12,6 +12,12 @@ from apps.storefront_builder.storefront_appearance.families import COMPONENT_FAM
 from apps.storefront_builder.storefront_appearance.registry import get_component
 
 
+EXPECTED_REFERENCE_VERSIONS = {
+    "stationery_spectrum": "1",
+    "magenta_beauty_retail": "1",
+    "pastel_kawaii_stationery": "1",
+}
+
 EXPECTED_LATEST_VERSIONS = {
     "editorial_jewelry": "3",
     "dense_marketplace": "3",
@@ -122,11 +128,13 @@ class A8ReadyTemplateCatalogTests(SimpleTestCase):
             {preset.key: preset.version for preset in A8_READY_TEMPLATES},
             EXPECTED_LATEST_VERSIONS,
         )
-        self.assertEqual(len(presets), 50)
-        self.assertEqual(len({preset.key for preset in presets}), 50)
+        # The merchant-facing catalog is the 50 A8 identities plus the three
+        # reference-fidelity templates (51-53).
+        self.assertEqual(len(presets), 53)
+        self.assertEqual(len({preset.key for preset in presets}), 53)
         self.assertEqual(
             {preset.key: preset.version for preset in presets},
-            EXPECTED_LATEST_VERSIONS,
+            {**EXPECTED_LATEST_VERSIONS, **EXPECTED_REFERENCE_VERSIONS},
         )
 
     def test_every_latest_recipe_has_complete_resolvable_versioned_dna(self):

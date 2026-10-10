@@ -100,9 +100,9 @@ class GalleryPreviewTriggerTests(TestCase):
         self.url = reverse("dashboard:storefront-builder-templates")
 
     def test_gallery_lists_every_registered_ready_template(self):
-        """Contract A — registry-derived, count == 50, never a second
+        """Contract A — registry-derived, count == 53, never a second
         hand-written 50-key list here."""
-        self.assertEqual(len(REGISTERED_READY_TEMPLATE_KEYS), 50)
+        self.assertEqual(len(REGISTERED_READY_TEMPLATE_KEYS), 53)
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
