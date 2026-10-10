@@ -355,7 +355,7 @@ class AmazingOffersNonHomeCssTests(TestCase):
             "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
             css,
         )
-        self.assertIn(".special-list-price{font-size:9.8px;color:#767b84;white-space:nowrap}", css)
+        self.assertIn('.special-list-price{font-size:9.8px;color:#6a6f77;white-space:nowrap}', css)
         self.assertIn(
             ".special-main{grid-area:1/1;min-width:0;display:grid;"
             "grid-template-columns:minmax(0,1fr) minmax(230px,37%);align-items:center;"
@@ -367,12 +367,10 @@ class AmazingOffersNonHomeCssTests(TestCase):
             "gap:6px;min-width:0}",
             css,
         )
-        self.assertIn(".special-kicker{font-size:10.5px;color:#ef4444;font-weight:800}", css)
+        self.assertIn('.special-kicker{font-size:10.5px;color:#c93939;font-weight:800}', css)
         # The exact selector the CRITICAL merge error landed on.
         self.assertIn(
-            ".special-discount{display:inline-grid;place-items:center;min-width:39px;"
-            "height:22px;border-radius:999px;background:#ef4444;color:#fff;"
-            "font-size:9px;font-weight:900}",
+            '.special-discount{display:inline-grid;place-items:center;min-width:39px;height:22px;border-radius:999px;background:#d53d3d;color:#fff;font-size:9px;font-weight:900}',
             css,
         )
         self.assertIn(
@@ -380,9 +378,9 @@ class AmazingOffersNonHomeCssTests(TestCase):
             "color:#222;margin:0;max-width:520px}",
             css,
         )
-        self.assertIn(".special-brand{font-size:10px;color:#777d86;margin:0}", css)
-        self.assertIn(".special-price strong{font-size:18px;color:#169b62;font-weight:800}", css)
-        self.assertIn(".special-price del{font-size:10px;color:#9aa0a6}", css)
+        self.assertIn('.special-brand{font-size:10px;color:#6a6f77;margin:0}', css)
+        self.assertIn('.special-price strong{font-size:18px;color:#127e50;font-weight:800}', css)
+        self.assertIn('.special-price del{font-size:10px;color:#6b6f74}', css)
         self.assertIn(
             ".special-buy{margin-top:4px;border:1px solid #34383f;background:#fff;"
             "color:#292d33;border-radius:2px;padding:6px 12px;font-size:10.5px;"
@@ -518,9 +516,7 @@ class BannerNonHomeCssTests(TestCase):
             css,
         )
         self.assertIn(
-            ".promo-grid--strip .promo-overlay{inset:0;display:flex;"
-            "align-items:center;justify-content:center;padding:0 14px;"
-            "background:#fff;text-align:center;color:#e4475d}",
+            '.promo-grid--strip .promo-overlay{inset:0;display:flex;align-items:center;justify-content:center;padding:0 14px;background:#fff;text-align:center;color:#c43d50}',
             css,
         )
         # Judgment call 2 (documented in the CSS comment): atelier-duo's
@@ -623,15 +619,13 @@ class CategoryGridTilesNonHomeCssTests(TestCase):
         self.assertIn(".tile:hover{transform:translateY(-3px)}", css)
         self.assertIn(".tile .wm{position:absolute;top:10px;left:14px;font-size:90px;opacity:.22}", css)
         self.assertIn(
-            ".tile::after{content:'';position:absolute;inset:0;"
-            "background:linear-gradient(transparent 30%,rgba(0,0,0,.45))}",
+            ".tile::after{content:'';position:absolute;inset:0;background:linear-gradient(transparent 4%,rgba(0,0,0,.68) 38%)}",
             css,
         )
         self.assertIn(".tile>*{position:relative;z-index:2}", css)
         self.assertIn(".tile h4{font-size:16px;font-weight:800;margin-bottom:10px}", css)
         self.assertIn(
-            ".tile .btn{width:fit-content;padding:8px 16px;font-size:12px;"
-            "background:rgba(255,255,255,.92);color:var(--ink)}",
+            '.tile .btn{width:fit-content;padding:8px 16px;font-size:12px;background:rgba(255,255,255,.92);color:#1d1d24}',
             css,
         )
         self.assertIn(".t1{background:linear-gradient(135deg,#0ea5a3,#13c2c2)}", css)
@@ -902,9 +896,7 @@ class SecHeadSharedBaselineNonHomeCssTests(TestCase):
         )
         self.assertIn(".sec-head .more svg{width:16px;height:16px}", css)
         self.assertIn(
-            ".sec-head .btn,.product-section .sec-head .btn{height:23px;min-height:23px;"
-            "padding:0 9px;border-radius:999px;background:#fff;border:1px solid #e3e5e9;"
-            "color:#ef4760;font-weight:700;box-shadow:none;font-size:10px}",
+            '.sec-head .btn,.product-section .sec-head .btn{height:23px;min-height:23px;padding:0 9px;border-radius:999px;background:#fff;border:1px solid #e3e5e9;color:#c63b50;font-weight:700;box-shadow:none;font-size:10px}',
             css,
         )
         # No @680px override for `.sec-head h2` font-size: that would
@@ -956,17 +948,12 @@ class SecHeadSharedBaselineNonHomeCssTests(TestCase):
         css = _PRODUCT_CARD_CSS.read_text(encoding="utf-8")
         self.assertIn(".rsec[data-pattern]>.section>.sec-head{margin-bottom:7px;align-items:center}", css)
         self.assertIn(
-            ".rsec[data-pattern]>.section>.sec-head h2{width:max-content;max-width:75%;"
-            "padding:4px 10px;border-radius:999px;background:#fff;color:#ef4760;"
-            "font-size:11.4px;line-height:1.4;font-weight:800;"
-            "box-shadow:0 1px 3px rgba(0,0,0,.05)}",
+            '.rsec[data-pattern]>.section>.sec-head h2{width:max-content;max-width:75%;padding:4px 10px;border-radius:999px;background:#fff;color:#c63b50;font-size:11.4px;line-height:1.4;font-weight:800;box-shadow:0 1px 3px rgba(0,0,0,.05)}',
             css,
         )
         self.assertIn(".rsec[data-pattern]>.section>.sec-head h2 .bar{display:none;background:#ff5a72}", css)
         self.assertIn(
-            ".rsec[data-pattern]>.section>.sec-head .btn{height:21px;min-height:21px;"
-            "padding-inline:8px;font-size:9.4px;background:rgba(255,255,255,.96);"
-            "color:#ef4760;border-color:#fff}",
+            '.rsec[data-pattern]>.section>.sec-head .btn{height:21px;min-height:21px;padding-inline:8px;font-size:9.4px;background:rgba(255,255,255,.96);color:#c63b50;border-color:#fff}',
             css,
         )
         # The plain @680px override (11px) only wins at default density —
@@ -991,8 +978,7 @@ class SecHeadSharedBaselineNonHomeCssTests(TestCase):
             css,
         )
         self.assertIn(
-            '.rsec[data-bg-mode="palette"]:has(.pcard.style-beauty_retail) .sec-head .btn'
-            "{background:#fff;border-color:#fff;color:var(--violet)}",
+            '.rsec[data-bg-mode="palette"]:has(.pcard.style-beauty_retail) .sec-head .btn{background:#fff;border-color:#fff;color:var(--violet-text,var(--violet))}',
             css,
         )
         self.assertIn(".product-section:has(.pcard.style-beauty_retail) .sec-head{margin-bottom:10px}", css)
@@ -1318,8 +1304,7 @@ class CategoryGridRemainingModesNonHomeCssTests(TestCase):
             css,
         )
         self.assertIn(
-            ".category-fashion-tile{display:flex;flex-direction:column;align-items:center;"
-            "gap:6px;color:#25282d;text-align:center;flex:0 0 64px;scroll-snap-align:start}",
+            '.category-fashion-tile{display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--brand-text,#25282d);text-align:center;flex:0 0 64px;scroll-snap-align:start}',
             css,
         )
         self.assertIn(
@@ -1492,8 +1477,7 @@ class CategoryGridRemainingModesNonHomeCssTests(TestCase):
             css,
         )
         self.assertIn(
-            ".category-atelier-shade{position:absolute;inset:0;background:linear-gradient"
-            "(180deg,rgba(20,16,12,.02) 45%,rgba(20,16,12,.64) 100%);pointer-events:none}",
+            '.category-atelier-shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,16,12,.02) 30%,rgba(20,16,12,.74) 78%);pointer-events:none}',
             css,
         )
         self.assertIn(
@@ -1573,8 +1557,7 @@ class GroupDNonHomeCssTests(TestCase):
         self.assertIn(".tile .wm{position:absolute;top:10px;left:14px;font-size:90px;opacity:.22}", css)
         self.assertIn(".tile h4{font-size:16px;font-weight:800;margin-bottom:10px}", css)
         self.assertIn(
-            ".tile .btn{width:fit-content;padding:8px 16px;font-size:12px;"
-            "background:rgba(255,255,255,.92);color:var(--ink)}",
+            '.tile .btn{width:fit-content;padding:8px 16px;font-size:12px;background:rgba(255,255,255,.92);color:#1d1d24}',
             css,
         )
 
@@ -1820,8 +1803,7 @@ class GroupENonHomeCssTests(TestCase):
             css,
         )
         self.assertIn(
-            ".feat .ic{width:31px;height:31px;border-radius:4px;background:#fff;color:#f43f5e;"
-            "border:0;display:grid;place-items:center;flex-shrink:0;font-size:15px}",
+            '.feat .ic{width:31px;height:31px;border-radius:4px;background:#fff;color:#cb344e;border:0;display:grid;place-items:center;flex-shrink:0;font-size:15px}',
             css,
         )
         self.assertIn(".feat .ic svg{width:21px;height:21px}", css)
@@ -1940,11 +1922,10 @@ class BrandCarouselBeautyTabsNonHomeCssTests(TestCase):
         )
         self.assertIn(".brand-beauty-tabs .brand-beauty-tab:last-child{border-inline-end:0}", css)
         self.assertIn(
-            ".brand-beauty-tabs .brand-beauty-tab:hover{background:#fff9fc;color:var(--violet)}", css,
+            '.brand-beauty-tabs .brand-beauty-tab:hover{background:#fff9fc;color:var(--violet-text,var(--violet))}', css,
         )
         self.assertIn(
-            ".brand-beauty-tabs .brand-tile-name{color:var(--violet);font-size:10.5px;"
-            "font-weight:700;text-align:center}",
+            '.brand-beauty-tabs .brand-tile-name{color:var(--violet-text,var(--violet));font-size:10.5px;font-weight:700;text-align:center}',
             css,
         )
         self.assertIn(
