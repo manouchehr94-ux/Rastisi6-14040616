@@ -473,7 +473,7 @@ class GalleryStillHasFiftyTemplatesTests(LiveDemoTemplatePreviewTestCase):
     def test_gallery_still_lists_exactly_fifty_ready_templates(self):
         response = self.admin_client.get(reverse("dashboard:storefront-builder-templates"))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.context["template_cards"]), 50)
+        self.assertEqual(len(response.context["template_cards"]), 53)
 
     def test_gallery_cards_link_to_the_new_live_preview_route(self):
         response = self.admin_client.get(reverse("dashboard:storefront-builder-templates"))

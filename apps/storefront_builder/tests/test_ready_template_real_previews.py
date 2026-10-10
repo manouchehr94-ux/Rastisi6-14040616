@@ -53,7 +53,7 @@ class RealScreenshotResolverTests(TestCase):
 
     def test_original_eight_remain_a_subset_of_the_official_catalog(self):
         official_keys = {p.key for p in lpr.list_ready_templates()}
-        self.assertEqual(len(official_keys), 50)
+        self.assertEqual(len(official_keys), 53)
         self.assertTrue(set(READY_TEMPLATE_KEYS).issubset(official_keys))
 
     def test_missing_screenshot_falls_back_to_none(self):

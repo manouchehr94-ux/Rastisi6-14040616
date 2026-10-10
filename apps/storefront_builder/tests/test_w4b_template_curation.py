@@ -186,8 +186,9 @@ class ExactFiftyLatestCatalogTests(SimpleTestCase):
     def test_a8_ready_templates_is_exactly_fifty(self):
         self.assertEqual(len(A8_READY_TEMPLATES), 50)
 
-    def test_list_ready_templates_is_exactly_fifty(self):
-        self.assertEqual(len(lpr.list_ready_templates()), 50)
+    def test_list_ready_templates_is_the_fifty_plus_three_reference_templates(self):
+        # 50 token-built A8 identities + reference templates 51-53.
+        self.assertEqual(len(lpr.list_ready_templates()), 53)
 
 
 # P5-W4C rendered-visual-distinctness repair (source HEAD
@@ -376,8 +377,8 @@ class DiversityContractTests(SimpleTestCase):
 
         presets = lpr.list_ready_templates()
         signatures = [recipe_signature(preset) for preset in presets]
-        self.assertEqual(len(signatures), 50)
-        self.assertEqual(len(set(signatures)), 50)
+        self.assertEqual(len(signatures), 53)
+        self.assertEqual(len(set(signatures)), 53)
 
 
 class AllFiftyCanonicalApplyRegressionTests(TestCase):
@@ -391,7 +392,7 @@ class AllFiftyCanonicalApplyRegressionTests(TestCase):
 
         store = Store.objects.get(slug="akhlaghi")
         presets = lpr.list_ready_templates()
-        self.assertEqual(len(presets), 50)
+        self.assertEqual(len(presets), 53)
         for preset in presets:
             with self.subTest(key=preset.key, version=preset.version):
                 draft = svc.get_or_create_draft(store)

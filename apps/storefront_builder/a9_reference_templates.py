@@ -99,7 +99,7 @@ _SPECTRUM_HOME = (
         },
     ),
     PresetSectionEntry("hero_banner", row_key="spectrum-hero-row", row_span=9, settings={
-        "text_position": "start", "layout": {"height": "standard"}, "spacing": _SPECTRUM_SPACING,
+        "hero_style": "overlay", "text_position": "start", "layout": {"height": "standard"}, "spacing": _SPECTRUM_SPACING,
     }),
     PresetSectionEntry("category_grid", settings={
         "title": "", "display_mode": "grey_circles", "category_ids": [], "item_limit": 6,
