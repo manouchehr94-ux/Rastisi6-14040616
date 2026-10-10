@@ -1057,6 +1057,27 @@ class StorefrontThemeTokenInjectionTests(SettingsViewsTestCase):
         self.assertEqual(css_vars["--brand-primary-fg"].upper(), "#000000")
         self.assertGreaterEqual(contrast_ratio(css_vars["--brand-primary-hover-fg"], css_vars["--brand-primary-hover"]), 4.5)
 
+    def test_mixed_dark_page_and_light_surface_derived_tokens_pass_on_both(self):
+        """Reachable theme: near-black page, white card/surface, mid-grey body text valid on both, saturated primary.
+        Pure black fails on the page and pure white fails on the card, so the derived usage tokens must land in the
+        mid-luminance band that is readable on BOTH (regression for ensure_contrast's multi-backdrop search)."""
+        from apps.core.color_utils import contrast_ratio
+
+        self.client.post(reverse("dashboard:settings-appearance"), {
+            "primary_color": "#FF0000", "accent_color": "#FFE066", "secondary_color": "#00A650",
+            "background_color": "#000000", "surface_color": "#FFFFFF",
+            "text_color": "#767676", "muted_text_color": "#767676",
+        })
+        css_vars = self._storefront_vars()
+        self.assertEqual(css_vars["--brand-background"].upper(), "#000000")  # the mixed theme was really saved
+        self.assertEqual(css_vars["--brand-surface"].upper(), "#FFFFFF")
+        self.assertEqual(css_vars["--brand-primary"].upper(), "#FF0000")     # identity untouched
+        for token in ("--brand-primary-text", "--brand-accent-text", "--brand-secondary-text", "--theme-price-text"):
+            for surface in ("--brand-background", "--brand-surface"):
+                self.assertGreaterEqual(
+                    contrast_ratio(css_vars[token], css_vars[surface]), 4.5, (token, css_vars[token], surface))
+            self.assertNotIn(css_vars[token].upper(), ("#000000", "#FFFFFF"), token)
+
     def test_dark_brand_colours_get_light_foregrounds(self):
         from apps.core.color_utils import contrast_ratio
 

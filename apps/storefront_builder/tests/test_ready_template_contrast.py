@@ -186,6 +186,23 @@ class DynamicBrandColourTests(SimpleTestCase):
         colors, _roles, theme = self._theme("#1E3A8A", secondary="#312E81")
         self.assertEqual(theme["gradient_end"].upper(), colors["secondary"].upper())
 
+    def test_mixed_dark_page_and_light_surface_keep_every_general_usage_token_readable(self):
+        # Reachable merchant config: black page, white card/surface, a mid-grey body text that passes on both,
+        # saturated brand colours. Pure black fails on the page, pure white fails on the card, so the derived
+        # usage tokens must land in the mid-luminance band that clears AA on BOTH (regression for ensure_contrast
+        # requiring an end-point to pass before it searched).
+        colors, roles, theme = self._theme(
+            "#FF0000", secondary="#00A650", accent="#FFE066", background="#000000", surface="#FFFFFF",
+            text="#767676", muted="#8A8A8A", card_bg="#FFFFFF", price="#6D28D9",
+            header_bg="#000000", header_text="#FFFFFF", nav_bg="#000000", nav_text="#FFFFFF",
+            footer_bg="#111111", footer_text="#FFFFFF")
+        for key in ("text", "muted_text", "primary_text", "secondary_text", "accent_text", "price_text"):
+            for surface in ("#000000", "#FFFFFF"):
+                self.assertGreaterEqual(contrast_ratio(theme[key], surface), AA_NORMAL_TEXT, (key, theme[key], surface))
+            self.assertNotIn(theme[key].upper(), ("#000000", "#FFFFFF"), key)
+        self.assertEqual(failing_pairs(colors, roles, theme), [])
+        self.assertEqual(colors["primary"], "#FF0000")  # stored brand colour untouched
+
     def test_translucent_surfaces_are_judged_after_compositing(self):
         # glass cards: a 70%-white card over a dark page is a light grey; white text on it must be judged on the composite
         self.assertLess(ratio_between("#FFFFFF", "rgba(255,255,255,0.7)", backdrop="#0F0F23"), AA_NORMAL_TEXT)

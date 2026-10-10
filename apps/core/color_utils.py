@@ -224,15 +224,64 @@ def best_foreground(bg, candidates=("#FFFFFF", "#000000")) -> str:
     return best
 
 
-def ensure_contrast(fg, backdrops, min_ratio: float = AA_NORMAL_TEXT) -> str:
-    """Smallest change to ``fg`` so it reaches ``min_ratio`` on EVERY backdrop.
+def _backdrop_luminances(backdrops) -> list[float]:
+    return [_luminance_rgb(*flatten(b)) for b in backdrops]
 
-    Hue is preserved by mixing ``fg`` toward black or white (whichever direction
-    can satisfy all backdrops with the least movement) — never a RGB-average
-    brightness guess; every step is measured with WCAG luminance. A colour that
-    already passes is returned unchanged (merchant identity untouched). If
-    ``min_ratio`` cannot be met even by pure black/white the closest achievable
-    colour (pure black or white) is returned.
+
+def _feasible_luminance_intervals(lums: list[float], min_ratio: float) -> list[tuple[float, float]]:
+    """Foreground luminances L in [0, 1] with WCAG ratio >= ``min_ratio`` on EVERY backdrop.
+
+    The ratio depends only on luminance and is V-shaped around each backdrop's own luminance, so per backdrop the
+    allowed set is ``[0, dark]`` plus ``[light, 1]``; the answer is the intersection (a short list of intervals).
+    """
+    intervals = [(0.0, 1.0)]
+    for lb in lums:
+        dark = (lb + 0.05) / min_ratio - 0.05
+        light = min_ratio * (lb + 0.05) - 0.05
+        allowed = []
+        if dark >= 0.0:
+            allowed.append((0.0, min(dark, 1.0)))
+        if light <= 1.0:
+            allowed.append((max(light, 0.0), 1.0))
+        intervals = [
+            (max(a0, b0), min(a1, b1))
+            for a0, a1 in intervals for b0, b1 in allowed
+            if max(a0, b0) <= min(a1, b1)
+        ]
+    return intervals
+
+
+def _t_for_luminance(start: str, target: str, wanted: float) -> float:
+    """Mix amount t in [0, 1] (0 = ``start``, 1 = ``target`` end-point) whose luminance is ``wanted``.
+    Luminance is monotone along the path, so bisection is exact; 30 halvings is far below 8-bit resolution."""
+    l0, l1 = relative_luminance(start), relative_luminance(target)
+    if l0 == l1:
+        return 0.0
+    lo, hi = 0.0, 1.0
+    increasing = l1 > l0
+    for _ in range(30):
+        mid = (lo + hi) / 2.0
+        value = relative_luminance(mix_hex(target, start, mid))
+        if (value < wanted) == increasing:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2.0
+
+
+def ensure_contrast(fg, backdrops, min_ratio: float = AA_NORMAL_TEXT) -> str:
+    """Smallest hue-preserving change to ``fg`` so it reaches ``min_ratio`` on EVERY backdrop.
+
+    Hue is preserved by mixing ``fg`` toward black or white — never an RGB-average brightness guess; every
+    candidate is verified with the WCAG formula on the final 8-bit colour. A colour that already passes is returned
+    unchanged (merchant identity untouched).
+
+    With several backdrops the passing set need not touch an end-point (red on black+white passes only in the
+    mid-luminance band 0.175-0.183 and neither pure black nor pure white passes), so the search does not assume the
+    end-points are feasible. The set of passing luminances is computed analytically, mapped onto each mix path
+    (luminance is monotone along it) and the smallest movement wins. If ``min_ratio`` is impossible on all
+    backdrops at once, the candidate with the best worst-case ratio (maximin) is returned instead of an arbitrary
+    end-point. Cost is O(backdrops^2) luminance maths plus a few bisections — no per-pixel/brute-force loops.
     """
     if isinstance(backdrops, (str, tuple, list)) and not (
         isinstance(backdrops, (tuple, list)) and backdrops and isinstance(backdrops[0], (str, tuple, list))
@@ -247,30 +296,51 @@ def ensure_contrast(fg, backdrops, min_ratio: float = AA_NORMAL_TEXT) -> str:
     if worst(start) >= min_ratio:
         return start.upper()
 
-    best_choice, best_t = None, None
-    for target in ("#000000", "#FFFFFF"):
-        if worst(target) < min_ratio:
-            continue
-        lo, hi = 0.0, 1.0
-        for _ in range(24):
-            mid = (lo + hi) / 2.0
-            if worst(mix_hex(target, start, mid)) >= min_ratio:
-                hi = mid
-            else:
-                lo = mid
-        if best_t is None or hi < best_t:
-            best_choice, best_t = mix_hex(target, start, hi), hi
-    if best_choice is None:
-        black, white = worst("#000000"), worst("#FFFFFF")
-        return "#000000" if black >= white else "#FFFFFF"
-    # mix_hex rounds to 8-bit; nudge one more step if rounding fell below the bar
-    candidate = best_choice
-    target = "#000000" if worst("#000000") >= worst("#FFFFFF") else "#FFFFFF"
-    for _ in range(8):
-        if worst(candidate) >= min_ratio:
-            break
-        candidate = mix_hex(target, candidate, 0.04)
-    return candidate.upper()
+    lums = _backdrop_luminances(backdrops)
+    l_start = relative_luminance(start)
+    paths = []
+    for end in ("#000000", "#FFFFFF"):
+        l_end = relative_luminance(end)
+        paths.append((end, min(l_start, l_end), max(l_start, l_end)))
+
+    best = None  # (movement t, colour) among colours that pass
+    for end, lo_l, hi_l in paths:
+        for a, b in _feasible_luminance_intervals(lums, min_ratio):
+            a, b = max(a, lo_l), min(b, hi_l)
+            if a > b:
+                continue
+            ta, tb = sorted((_t_for_luminance(start, end, a), _t_for_luminance(start, end, b)))
+            # first try the entry edge with a few fine steps (8-bit rounding), then sweep the whole window
+            steps = [ta + i / 510.0 for i in range(24) if ta + i / 510.0 <= tb] + [
+                ta + (tb - ta) * i / 32.0 for i in range(33)
+            ]
+            for t in steps:
+                candidate = mix_hex(end, start, t)
+                if worst(candidate) >= min_ratio:
+                    if best is None or t < best[0]:
+                        best = (t, candidate)
+                    break
+    if best is not None:
+        return best[1].upper()
+
+    # Impossible target: maximise the worst-case ratio. worst(L) is a min of V-shapes, so its maximum is at an
+    # end of the reachable range, at the start, or where two backdrops' ratios cross (geometric mean of their
+    # (L + 0.05) values).
+    pool = [l_start, 0.0, 1.0]
+    for i, la in enumerate(lums):
+        for lb in lums[i + 1:]:
+            pool.append(((la + 0.05) * (lb + 0.05)) ** 0.5 - 0.05)
+    choice = (worst(start), 0.0, start)
+    for end, lo_l, hi_l in paths:
+        for wanted in pool:
+            wanted = max(lo_l, min(hi_l, wanted))
+            t = _t_for_luminance(start, end, wanted)
+            for dt in (-1 / 255.0, 0.0, 1 / 255.0):
+                candidate = mix_hex(end, start, max(0.0, min(1.0, t + dt)))
+                score = worst(candidate)
+                if score > choice[0] + 1e-9 or (abs(score - choice[0]) <= 1e-9 and t < choice[1]):
+                    choice = (score, t, candidate)
+    return choice[2].upper()
 
 
 def state_pair(bg, *, toward: str = "#000000", amount: float = 0.12,

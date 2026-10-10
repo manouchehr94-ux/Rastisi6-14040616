@@ -132,6 +132,74 @@ class DerivationTests(SimpleTestCase):
         for backdrop in backdrops:
             self.assertGreaterEqual(cu.contrast_ratio(fixed, backdrop), cu.AA_NORMAL_TEXT)
 
+    # --- multi-backdrop: the passing set may lie strictly BETWEEN black and white -----------------------------------
+
+    def test_ensure_contrast_black_and_white_backdrops_finds_the_middle_band(self):
+        # Pure black fails on the black backdrop (1:1) and pure white fails on the white one, but a mid-luminance red
+        # (~#EE0000) clears 4.5:1 on BOTH. The old search required an end-point to pass first and collapsed to 1:1.
+        for target in (cu.AA_NORMAL_TEXT, 4.55):
+            fixed = cu.ensure_contrast("#FF0000", ["#000000", "#FFFFFF"], target)
+            self.assertNotIn(fixed, ("#000000", "#FFFFFF"), target)
+            self.assertGreaterEqual(cu.contrast_ratio(fixed, "#000000"), target, (target, fixed))
+            self.assertGreaterEqual(cu.contrast_ratio(fixed, "#FFFFFF"), target, (target, fixed))
+            r, g, b = (int(fixed[i:i + 2], 16) for i in (1, 3, 5))
+            self.assertGreater(r, 200, fixed)        # still unmistakably red
+            self.assertEqual((g, b), (0, 0), fixed)  # hue preserved: only the red channel moved
+
+    def test_ensure_contrast_mixed_dark_and_light_surfaces_for_several_hues(self):
+        surfaces = ["#000000", "#FFFFFF"]
+        for start in ("#FF0000", "#6D28D9", "#00A650", "#FFE066", "#FF4D77", "#2563EB"):
+            for target in (cu.AA_NORMAL_TEXT, 4.55):
+                fixed = cu.ensure_contrast(start, surfaces, target)
+                for surface in surfaces:
+                    self.assertGreaterEqual(cu.contrast_ratio(fixed, surface), target, (start, target, fixed, surface))
+                self.assertEqual(fixed, fixed.upper())
+                self.assertRegex(fixed, r"^#[0-9A-F]{6}$")
+
+    def test_ensure_contrast_near_black_and_near_white_surfaces(self):
+        # a single colour can clear AA on both only when (L_light + 0.05) / (L_dark + 0.05) >= AA**2 (20.25:1), i.e. a
+        # near-black page against a near-white card; such pairs have a (narrow) passing luminance band.
+        for backdrops in (["#000000", "#FFFFFF"], ["#000000", "#FDFDFD"], ["#030303", "#FFFFFF"]):
+            for start in ("#FF0000", "#7C3AED", "#D3A13B", "#00A650"):
+                fixed = cu.ensure_contrast(start, backdrops, cu.AA_NORMAL_TEXT)
+                for backdrop in backdrops:
+                    self.assertGreaterEqual(cu.contrast_ratio(fixed, backdrop), 4.5, (start, backdrops, fixed))
+
+    def test_ensure_contrast_infeasible_realistic_surfaces_return_the_maximin_colour(self):
+        # navy page + near-white card cannot BOTH reach 4.55 with any single colour (best possible is ~4.34:1).
+        # The result must still be the best compromise, not black/white with ~1:1 on one surface.
+        backdrops = ["#0F0F23", "#FFFFFF"]
+        fixed = cu.ensure_contrast("#FF0000", backdrops, 4.55)
+        worst = min(cu.contrast_ratio(fixed, b) for b in backdrops)
+        self.assertGreater(worst, 4.3, fixed)
+
+    def test_ensure_contrast_multi_backdrop_is_deterministic_and_unchanged_when_already_passing(self):
+        self.assertEqual(cu.ensure_contrast("#767676", ["#000000", "#FFFFFF"], 4.5), "#767676")
+        first = cu.ensure_contrast("#FF0000", ["#000000", "#FFFFFF"], 4.55)
+        self.assertEqual(first, cu.ensure_contrast("#FF0000", ["#000000", "#FFFFFF"], 4.55))
+
+    def test_ensure_contrast_impossible_target_returns_best_worst_case_not_an_endpoint(self):
+        # 7:1 on both black and white is mathematically impossible (best possible worst-case is ~4.58:1 at the
+        # luminance crossover). The result must be that maximin colour, never an end-point with 1:1 on one backdrop.
+        backdrops = ["#000000", "#FFFFFF"]
+        fixed = cu.ensure_contrast("#FF0000", backdrops, 7.0)
+        worst = min(cu.contrast_ratio(fixed, b) for b in backdrops)
+        self.assertGreater(worst, 4.5, fixed)
+        self.assertNotIn(fixed, ("#000000", "#FFFFFF"))
+        for endpoint in ("#000000", "#FFFFFF"):
+            self.assertGreater(worst, min(cu.contrast_ratio(endpoint, b) for b in backdrops))
+        # and it is the best achievable on the hue-preserving path: no neighbouring red does better
+        for step in (-1, 1):
+            neighbour = "#%02X0000" % (int(fixed[1:3], 16) + step)
+            self.assertLessEqual(min(cu.contrast_ratio(neighbour, b) for b in backdrops), worst + 1e-9)
+
+    def test_ensure_contrast_is_cheap_enough_for_the_request_path(self):
+        import time
+        started = time.perf_counter()
+        for _ in range(200):
+            cu.ensure_contrast("#FF0000", ["#000000", "#FFFFFF", "#7F7F7F"], 7.0)
+        self.assertLess(time.perf_counter() - started, 2.0)  # ~1-3 ms each in practice
+
     def test_ensure_contrast_large_text_target_is_gentler(self):
         normal = cu.ensure_contrast("#E9A23B", "#FFFFFF", 4.5)
         large = cu.ensure_contrast("#E9A23B", "#FFFFFF", 3.0)
