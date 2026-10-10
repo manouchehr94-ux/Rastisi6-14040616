@@ -43,7 +43,7 @@ here — so every future visual variant reads identical business semantics.
     {% endif %}
     {% if card.is_out_of_stock %}
     <div class="badges badges-stock"><span class="pill pill-outofstock">ناموجود</span></div>
-    {% elif card_settings.show_quick_add is not False and card.is_quick_add_eligible and card_settings.card_style != "compact" and card_settings.card_style != "beauty_retail" and card_settings.card_style != "chocolate_retail" %}
+    {% elif card_settings.show_quick_add is not False and card.is_quick_add_eligible and card_settings.card_style != "compact" and card_settings.card_style != "beauty_retail" and card_settings.card_style != "chocolate_retail" and card_settings.card_style != "center_stepper" %}
     <div class="addbar">
       <button type="button" hx-post="{% url 'cart:add' product.slug %}" hx-vals='{"quantity": 1}' hx-swap="none"
               onclick="event.preventDefault();event.stopPropagation()">
@@ -163,6 +163,27 @@ here — so every future visual variant reads identical business semantics.
       </div>
     </div>
   </div>
+  {% if card_settings.card_style == "center_stepper" and not card.is_out_of_stock %}
+  <div class="stp-actions" x-data="{ q: 1 }">
+    {% if card_settings.show_quick_add is False %}
+    <a class="stp-select" href="{{ card.url }}">مشاهده محصول</a>
+    {% elif card.is_quick_add_eligible %}
+    <div class="stp-row">
+      <button class="stp-cart" type="button" hx-post="{% url 'cart:add' product.slug %}" hx-include="closest .stp-row" hx-swap="none" aria-label="افزودن به سبد خرید"
+              onclick="event.preventDefault();event.stopPropagation()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg>
+      </button>
+      <div class="stp-qty">
+        <button type="button" aria-label="افزودن یک عدد" @click.prevent.stop="q = Math.min(q + 1, 99)">+</button>
+        <input type="number" name="quantity" min="1" max="99" x-model.number="q" aria-label="تعداد" onclick="event.stopPropagation()">
+        <button type="button" aria-label="کاهش یک عدد" @click.prevent.stop="q = Math.max(q - 1, 1)">−</button>
+      </div>
+    </div>
+    {% else %}
+    <a class="stp-select" href="{{ card.url }}">انتخاب گزینه‌ها</a>
+    {% endif %}
+  </div>
+  {% endif %}
   {% if not card.is_out_of_stock and card_settings.show_quick_add is not False and card.is_quick_add_eligible and card_settings.card_style == "compact" %}
   <div class="compact-actions">
     <button class="compact-cart" type="button" hx-post="{% url 'cart:add' product.slug %}" hx-vals='{"quantity": 1}' hx-swap="none" aria-label="افزودن به سبد خرید"

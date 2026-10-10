@@ -255,7 +255,7 @@ PRODUCT_SECTION_DATA_SOURCES = (
 #: این‌ها به ``source_id`` نیاز دارند.
 _SINGLE_REFERENCE_SOURCES = {"collection", "category", "brand"}
 
-PRODUCT_SECTION_DISPLAY_MODES = ("carousel", "grid", "campaign_band")
+PRODUCT_SECTION_DISPLAY_MODES = ("carousel", "grid", "campaign_band", "catalog_grid")
 
 _PRODUCT_SECTION_MIN_LIMIT = 2
 _PRODUCT_SECTION_MAX_LIMIT = 24
@@ -423,6 +423,7 @@ PRODUCT_SECTION_SCHEMA = SettingsSchema(fields=(
             ("carousel", "کاروسل"),
             ("grid", "گرید"),
             ("campaign_band", "نوار کمپینی کنار محصولات"),
+            ("catalog_grid", "گرید کاتالوگی با نوار پایین"),
         ),
     ),
     SettingsField("show_view_all", "نمایش دکمه «مشاهده همه»", "boolean", "basic", default=True),
@@ -896,6 +897,9 @@ CARD_STYLE_CHOICES = (
     "paper_frame", "price_first", "portrait_round", "catalog_index",
     "shipping_label", "shelf_editorial", "technical_spec", "tech_neon",
     "bold_outline",
+    # Reference-fidelity vocabulary (templates 51/53): a centred card with a
+    # quantity stepper + cart action, and a flat card over a pastel tile.
+    "center_stepper", "pastel_flat",
 )
 
 BADGE_TREATMENT_CHOICES = ("none", "sale")
@@ -1698,7 +1702,7 @@ _MAX_SECTION_TITLE_LENGTH = 60
 #: compact flat rail (small image, short label, no card chrome) distinct
 #: from ``image_strip``'s own CSS (which ``dense_marketplace`` already
 #: uses) so that template's rendering stays completely untouched.
-CATEGORY_GRID_DISPLAY_MODES = ("grid", "carousel", "circular", "image_strip", "fashion_flat", "fashion_mosaic", "beauty_icons", "chocolate_story", "chocolate_badges", "atelier_mosaic", "luxury_shortcuts")
+CATEGORY_GRID_DISPLAY_MODES = ("grid", "carousel", "circular", "image_strip", "fashion_flat", "fashion_mosaic", "beauty_icons", "chocolate_story", "chocolate_badges", "atelier_mosaic", "luxury_shortcuts", "pastel_tiles", "grey_circles")
 
 
 def _validate_category_grid_settings(raw: dict) -> dict:
@@ -2690,6 +2694,10 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
             # media, bold labels over imagery, no card chrome.
             VariantDefinition(key="atelier_mosaic", label_fa="موزاییک تصویری آتلیه"),
             VariantDefinition(key="luxury_shortcuts", label_fa="میانبرهای لوکس تصویری"),
+            # Flat rounded pastel tiles with the label beneath each one.
+            VariantDefinition(key="pastel_tiles", label_fa="کاشی‌های پاستلی"),
+            # Round grey-backed media with bold labels (stationery/art discovery rail).
+            VariantDefinition(key="grey_circles", label_fa="دایره‌های خاکستری"),
         ),
         default_variant="grid", variant_setting_key="display_mode",
     ),
@@ -2795,6 +2803,9 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
             # rail beside a real product grid.  Copy, products and destination
             # remain section data; the renderer contains no Ready Template key.
             VariantDefinition(key="campaign_band", label_fa="نوار کمپینی کنار محصولات"),
+            # Catalogue page rhythm: centred heading with a short accent bar,
+            # a flat product grid and a closing bar carrying the view-all action.
+            VariantDefinition(key="catalog_grid", label_fa="گرید کاتالوگی با نوار پایین"),
         ),
         default_variant="carousel", variant_setting_key="display_mode",
         settings_schema=PRODUCT_SECTION_SCHEMA,

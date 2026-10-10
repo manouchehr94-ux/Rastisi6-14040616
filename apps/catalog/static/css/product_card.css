@@ -830,3 +830,93 @@ html[dir="ltr"] .pcard-qv-dialog{transform:translate(-50%,-50%)}
 @media(prefers-reduced-motion:reduce){
   .pcard-qv-trigger{transition:none}
 }
+
+/* ========================================================================
+   Reference-fidelity card styles (REF-TEMPLATES-51-53)
+   ------------------------------------------------------------------------
+   `center_stepper` — centred card with a cart action + quantity stepper.
+   `pastel_flat`    — flat card over a pastel tile (colour cycles by position).
+   Both are selected only through the registered `card_style` setting.
+   ======================================================================== */
+.pcard.style-center_stepper{
+  border-radius:8px;border:1px solid #e6e8ec;background:#fff;box-shadow:none;
+  overflow:hidden;min-width:0;transform:none
+}
+.pcard.style-center_stepper:hover{transform:none;border-color:#d7dbe2;box-shadow:0 4px 14px rgba(15,23,42,.08)}
+.pcard.style-center_stepper .img{aspect-ratio:1/1;background:#fff!important;padding:10px 10px 0;font-size:0}
+.pcard.style-center_stepper .img .cover-photo,
+.pcard.style-center_stepper .img .cover-photo-2{
+  inset:10px 10px 0!important;width:calc(100% - 20px)!important;height:calc(100% - 10px)!important;object-fit:contain!important
+}
+.pcard.style-center_stepper .heart{width:26px;height:26px;top:7px;left:7px;background:#fff;border:1px solid #edf0f3}
+.pcard.style-center_stepper .badges{top:7px;right:7px}
+.pcard.style-center_stepper .pill{font-size:9px;line-height:1.4;padding:3px 7px;border-radius:999px}
+.pcard.style-center_stepper .body{padding:6px 10px 2px;gap:3px;text-align:center;min-height:0}
+.pcard.style-center_stepper .brand:empty{display:none}
+.pcard.style-center_stepper .name{
+  font-size:11px;line-height:1.8;height:40px;font-weight:600;color:#2c3037;text-align:center;-webkit-line-clamp:2
+}
+.pcard.style-center_stepper .rate{justify-content:center;font-size:9px}
+.pcard.style-center_stepper .price{justify-content:center;border-top:0;padding-top:2px;min-height:34px}
+.pcard.style-center_stepper .price .now{font-size:11.5px;font-weight:700;color:#2b2f36;text-align:center}
+.pcard.style-center_stepper .price .old{display:block;font-size:9px;color:#9ca0a8;margin:0}
+.pcard.style-center_stepper .stp-actions{position:relative;z-index:3;padding:4px 10px 10px;margin-top:auto}
+.pcard.style-center_stepper .stp-row{display:flex;align-items:center;gap:6px;direction:ltr}
+.pcard.style-center_stepper .stp-cart{
+  flex:0 0 30px;width:30px;height:30px;border-radius:4px;display:grid;place-items:center;
+  background:var(--brand-primary,#17a94d);color:#fff;border:0
+}
+.pcard.style-center_stepper .stp-cart svg{width:16px;height:16px}
+.pcard.style-center_stepper .stp-qty{
+  flex:1;min-width:0;height:30px;display:grid;grid-template-columns:24px minmax(0,1fr) 24px;align-items:stretch;
+  border:1px solid #e3e5e9;border-radius:4px;background:#f4f5f7;overflow:hidden;color:#7a7f87
+}
+.pcard.style-center_stepper .stp-qty button{display:grid;place-items:center;font-size:14px;line-height:1;color:inherit;background:none;border:0}
+.pcard.style-center_stepper .stp-qty input{
+  width:100%;min-width:0;border:0;border-inline:1px solid #e3e5e9;background:#fff;text-align:center;
+  font-size:11px;color:#444;padding:0;-moz-appearance:textfield;appearance:textfield
+}
+.pcard.style-center_stepper .stp-qty input::-webkit-outer-spin-button,
+.pcard.style-center_stepper .stp-qty input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.pcard.style-center_stepper .stp-select{
+  display:flex;align-items:center;justify-content:center;height:30px;border-radius:4px;
+  background:var(--brand-primary,#17a94d);color:#fff;font-size:10.5px;font-weight:700;text-decoration:none
+}
+.rsec[data-pattern] .pcard.style-center_stepper{border-color:rgba(255,255,255,.82)}
+@media(max-width:680px){
+  .pcard.style-center_stepper .name{font-size:10.5px;height:38px}
+  .pcard.style-center_stepper .stp-actions{padding:4px 8px 8px}
+}
+
+.pcard.style-pastel_flat{
+  border:0;border-radius:0;background:transparent;box-shadow:none;transform:none;overflow:visible;min-width:0
+}
+.pcard.style-pastel_flat:hover{transform:none;box-shadow:none}
+.pcard.style-pastel_flat .img{aspect-ratio:1/1;border-radius:0;font-size:0;background:#f9d8ea!important}
+.pcard.style-pastel_flat .img .cover-photo,
+.pcard.style-pastel_flat .img .cover-photo-2{
+  inset:7%!important;width:86%!important;height:86%!important;object-fit:contain!important;mix-blend-mode:multiply
+}
+.pcard.style-pastel_flat .heart,.pcard.style-pastel_flat .addbar{display:none}
+.pcard.style-pastel_flat .badges{top:0;right:0;left:auto}
+.pcard.style-pastel_flat .pill{border-radius:0;font-size:9px;padding:3px 8px;background:var(--brand-primary,#a855f7);color:#fff}
+.pcard.style-pastel_flat .body{padding:12px 4px 0;gap:6px;text-align:center;min-height:0}
+.pcard.style-pastel_flat .brand:empty{display:none}
+.pcard.style-pastel_flat .name{
+  font-size:11.5px;line-height:1.9;height:auto;min-height:44px;font-weight:500;color:#3a3a46;text-align:center;-webkit-line-clamp:2
+}
+.pcard.style-pastel_flat .rate{justify-content:center}
+.pcard.style-pastel_flat .price{justify-content:center;border-top:0;padding:0;min-height:0}
+.pcard.style-pastel_flat .price .now{font-size:11.5px;font-weight:500;color:#6c6c7b;text-align:center}
+.pcard.style-pastel_flat .price .old{display:inline;font-size:10px;margin-inline-start:6px}
+.grid>.pcard.style-pastel_flat:nth-child(8n+1) .img,.pcarousel>.pcard.style-pastel_flat:nth-child(8n+1) .img{background:#f9d8ea!important}
+.grid>.pcard.style-pastel_flat:nth-child(8n+2) .img,.pcarousel>.pcard.style-pastel_flat:nth-child(8n+2) .img{background:#e0d2f8!important}
+.grid>.pcard.style-pastel_flat:nth-child(8n+3) .img,.pcarousel>.pcard.style-pastel_flat:nth-child(8n+3) .img{background:#d7f3dc!important}
+.grid>.pcard.style-pastel_flat:nth-child(8n+4) .img,.pcarousel>.pcard.style-pastel_flat:nth-child(8n+4) .img{background:#fde6d2!important}
+.grid>.pcard.style-pastel_flat:nth-child(8n+5) .img,.pcarousel>.pcard.style-pastel_flat:nth-child(8n+5) .img{background:#d8f0fb!important}
+.grid>.pcard.style-pastel_flat:nth-child(8n+6) .img,.pcarousel>.pcard.style-pastel_flat:nth-child(8n+6) .img{background:#fdf6c9!important}
+.grid>.pcard.style-pastel_flat:nth-child(8n+7) .img,.pcarousel>.pcard.style-pastel_flat:nth-child(8n+7) .img{background:#f9d3dd!important}
+.grid>.pcard.style-pastel_flat:nth-child(8n+8) .img,.pcarousel>.pcard.style-pastel_flat:nth-child(8n+8) .img{background:#d6defa!important}
+@media(max-width:680px){
+  .pcard.style-pastel_flat .name{font-size:10.5px;min-height:40px}
+}

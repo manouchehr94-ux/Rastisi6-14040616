@@ -1693,3 +1693,7 @@ register_layout_preset(LayoutPresetDefinition(
 # Importing the data-only A8 catalog registers its material revisions only
 # after all eight complete historical identities above have been retained.
 from . import a8_ready_templates as _a8_ready_templates  # noqa: E402,F401
+
+# Reference-fidelity Ready Templates 51-53 (data-only recipes) register after
+# the A8 catalog so the 50 token-built identities keep their import order.
+from . import a9_reference_templates as _a9_reference_templates  # noqa: E402,F401

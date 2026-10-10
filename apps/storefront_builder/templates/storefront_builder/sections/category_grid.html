@@ -149,6 +149,42 @@ renderer never needs tenant ids inside a global preset.
     </div>
   </section>
   {% endif %}
+{% elif category_grid_settings.display_mode == 'pastel_tiles' %}
+  {% if top_categories %}
+  <section class="section category-pastel-section">
+    {% if category_grid_settings.title %}<div class="pastel-section-title"><h2>{{ category_grid_settings.title }}</h2></div>{% endif %}
+    <div class="category-pastel-grid">
+      {% for cat in top_categories %}
+      <a class="category-pastel-tile" {% if is_builder_preview %}data-admin-edit-kind="category" data-admin-edit-id="{{ cat.pk }}" data-admin-edit-title="{{ cat.name|escape }}" {% endif %}href="{% url 'catalog:product-list' %}?category={{ cat.slug }}">
+        <span class="category-pastel-media">
+          {% if cat.representative_media %}<img src="{{ cat.representative_media.image.url }}" alt="{{ cat.name }}" loading="lazy">
+          {% elif cat.image %}<img src="{{ cat.image.url }}" alt="{{ cat.name }}" loading="lazy">
+          {% else %}<span class="category-pastel-fallback" aria-hidden="true">{{ cat.icon|default:"✦" }}</span>{% endif %}
+        </span>
+        <span class="category-pastel-label">{{ cat.name }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+{% elif category_grid_settings.display_mode == 'grey_circles' %}
+  {% if top_categories %}
+  <section class="section category-grey-section">
+    {% if category_grid_settings.title %}<div class="sec-head"><h2><span class="bar"></span>{{ category_grid_settings.title }}</h2></div>{% endif %}
+    <div class="category-grey-circles">
+      {% for cat in top_categories %}
+      <a class="category-grey-item" {% if is_builder_preview %}data-admin-edit-kind="category" data-admin-edit-id="{{ cat.pk }}" data-admin-edit-title="{{ cat.name|escape }}" {% endif %}href="{% url 'catalog:product-list' %}?category={{ cat.slug }}">
+        <span class="category-grey-media">
+          {% if cat.representative_media %}<img src="{{ cat.representative_media.image.url }}" alt="{{ cat.name }}" loading="lazy">
+          {% elif cat.image %}<img src="{{ cat.image.url }}" alt="{{ cat.name }}" loading="lazy">
+          {% else %}<span class="category-grey-fallback" aria-hidden="true">{{ cat.icon|default:"🏷️" }}</span>{% endif %}
+        </span>
+        <strong class="category-grey-label">{{ cat.name }}</strong>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
 {% elif category_grid_settings.display_mode == 'circular' %}
   {% if top_categories %}
   <section class="section category-circle-section">
