@@ -116,22 +116,25 @@ class A8ComponentLibraryTests(SimpleTestCase):
         self.assertEqual(
             component_counts_by_family(),
             {
-                "header": 22,
+                # +2 header / +2 footer / +1 product_view variants registered for
+                # the reference templates 51-53 (stationery_search, kawaii_center,
+                # stationery_dark, kawaii_minimal, catalog_grid).
+                "header": 24,
                 "mega_menu": 1,
                 "hero": 19,
                 "layout": 17,
-                "product_view": 13,
+                "product_view": 14,
                 "card": 17,
                 "badge": 2,
                 "motion": 3,
-                "footer": 16,
+                "footer": 18,
                 "bottom_nav": 9,
                 # P5-W2 — 8 occasion themes (none + 7 occasions) from the
                 # single theme_catalog, adapted into the central registry.
                 "theme": 8,
             },
         )
-        self.assertEqual(len(COMPONENT_REGISTRY), 127)
+        self.assertEqual(len(COMPONENT_REGISTRY), 132)
 
     def test_mapping_vocabulary_is_registered_once_and_resolves_from_allowlist(self):
         self.assertTrue(

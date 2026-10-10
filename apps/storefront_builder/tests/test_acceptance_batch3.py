@@ -148,14 +148,14 @@ class GalleryPreviewIntegrationTests(TestCase):
         response = self.admin_client.get(self.url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
-        self.assertEqual(content.count('<div class="tpl-thumb"'), 50)
+        self.assertEqual(content.count('<div class="tpl-thumb"'), 53)
         # Every card must carry its own thumbnail — an inline SVG or a screenshot
         # image. (This used to count every "<svg" on the page, which only reached 50
         # because the admin sidebar's nav icons were included in the total.)
         from bs4 import BeautifulSoup
 
         thumbs = BeautifulSoup(content, "html.parser").select(".tpl-thumb")
-        self.assertEqual(len(thumbs), 50)
+        self.assertEqual(len(thumbs), 53)
         missing = [t.get("aria-label") for t in thumbs if not (t.find("svg") or t.find("img"))]
         self.assertEqual(missing, [], "template cards without a thumbnail")
 

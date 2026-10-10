@@ -102,7 +102,7 @@ _SPECTRUM_HOME = (
         "hero_style": "overlay", "text_position": "start", "layout": {"height": "standard"}, "spacing": _SPECTRUM_SPACING,
     }),
     PresetSectionEntry("category_grid", settings={
-        "title": "", "display_mode": "grey_circles", "category_ids": [], "item_limit": 6,
+        "title": "", "display_mode": "grey_circles", "item_limit": 6,
         "spacing": _SPECTRUM_SPACING,
     }),
     PresetSectionEntry("trust_features", settings={
@@ -141,7 +141,7 @@ _SPECTRUM_HOME = (
     }),
     _spectrum_band("بازی و آموزش", "newest", "tone-5"),
     PresetSectionEntry("brand_carousel", settings={
-        "title": "بهترین برندهای فروشگاه", "display_mode": "carousel", "show_view_all": False, "brand_ids": [],
+        "title": "بهترین برندهای فروشگاه", "display_mode": "carousel", "show_view_all": False,
         "spacing": _SPECTRUM_SPACING,
     }),
     PresetSectionEntry("blog_posts", settings={"title": "مجله فروشگاه", "item_limit": 6}),

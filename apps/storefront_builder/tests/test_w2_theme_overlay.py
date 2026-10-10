@@ -290,7 +290,7 @@ class ThemeReadyTemplateCompatibilityTests(SimpleTestCase):
         )
 
         presets = lpr.list_ready_templates()
-        self.assertEqual(len(presets), 50)
+        self.assertEqual(len(presets), 53)
         required = set(COMPONENT_FAMILIES)
         for preset in presets:
             with self.subTest(preset=preset.key):

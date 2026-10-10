@@ -946,8 +946,8 @@ class DesignLabR4UITests(DesignLabBaseTestCase):
 
 
 class DesignLabRegistrySafetyTests(DesignLabBaseTestCase):
-    def test_exactly_50_ready_templates_remain(self):
-        self.assertEqual(len(layout_preset_registry.list_ready_templates()), 50)
+    def test_exactly_53_ready_templates_remain(self):
+        self.assertEqual(len(layout_preset_registry.list_ready_templates()), 53)
 
     def test_design_lab_never_registers_a_ready_template(self):
         from apps.storefront_builder.services import design_lab_service
@@ -963,7 +963,7 @@ class DesignLabRegistrySafetyTests(DesignLabBaseTestCase):
         design_lab_service.resolve_candidate_appearance(self.draft, candidate)
         after = len(layout_preset_registry.list_ready_templates())
         self.assertEqual(after, before)
-        self.assertEqual(after, 50)
+        self.assertEqual(after, 53)
 
 
 

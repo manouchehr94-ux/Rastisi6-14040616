@@ -9,8 +9,12 @@ from apps.storefront_builder.services import layout_service
 
 
 class Palette64RegistryContractTests(SimpleTestCase):
-    def test_public_palette_library_has_exactly_64_release_palettes(self):
-        self.assertEqual(len(appearance_registry.list_palettes()), 64)
+    def test_public_palette_library_has_the_release_palettes(self):
+        # 64 release palettes + the two reference-template palettes
+        # (``orchid-retail`` for template 52, ``pastel-lilac`` for template 53).
+        self.assertEqual(len(appearance_registry.list_palettes()), 66)
+        for slug in ("orchid-retail", "pastel-lilac"):
+            self.assertIsNotNone(appearance_registry.get_palette(slug))
 
     def test_curated_pack_adds_26_stable_palettes(self):
         self.assertEqual(len(CURATED_PALETTE_PACK_64_ADDITIONS), 26)
