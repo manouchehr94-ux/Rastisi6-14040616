@@ -1,0 +1,18 @@
+{% load storefront_builder_extras %}
+{% comment %}
+Credential squares: the Store's real, uploaded trust badges first, then neutral empty squares up to the count of the
+footer's ``badge_slots`` block. Nothing is invented — an empty square carries no image, text or link. When the footer
+carries no ``badge_slots`` block this is exactly the shared trust/payment region.
+{% endcomment %}
+{% footer_badge_slot_total fc.extra_blocks as slot_total %}
+{% if slot_total %}
+{% footer_empty_badge_slots slot_total FOOTER_TRUST_BADGES as empty_slots %}
+<div class="gf-credibility gf-credibility--slots">
+  {% if fc.show_trust_badges %}{% for badge in FOOTER_TRUST_BADGES %}
+  <div class="gf-trust-badge-item">{% if badge.destination_url %}<a href="{{ badge.destination_url }}" target="_blank" rel="noopener noreferrer"><img src="{{ badge.image.url }}" alt="{{ badge.title }}"></a>{% else %}<img src="{{ badge.image.url }}" alt="{{ badge.title }}">{% endif %}</div>
+  {% endfor %}{% endif %}
+  {% for _ in empty_slots %}<span class="gf-trust-badge-item gf-trust-badge-item--empty" aria-hidden="true"></span>{% endfor %}
+</div>
+{% else %}
+{% include "storefront_builder/partials/global_footer/_shared/trust_payment.html" %}
+{% endif %}

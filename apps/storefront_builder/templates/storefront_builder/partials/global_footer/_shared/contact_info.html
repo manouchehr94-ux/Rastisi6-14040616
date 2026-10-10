@@ -13,7 +13,7 @@ purely decorative next to real link/address text, so they carry
   {% if FOOTER_SETTINGS.phone %}<li><a href="tel:{{ FOOTER_SETTINGS.phone }}" dir="ltr"><span aria-hidden="true">☎</span> {{ FOOTER_SETTINGS.phone }}</a></li>{% elif SHOP_CONTACT_PHONE %}<li><a href="tel:{{ SHOP_CONTACT_PHONE }}" dir="ltr"><span aria-hidden="true">☎</span> {{ SHOP_CONTACT_PHONE }}</a></li>{% endif %}
   {% if FOOTER_SETTINGS.secondary_phone %}<li><a href="tel:{{ FOOTER_SETTINGS.secondary_phone }}" dir="ltr"><span aria-hidden="true">☎</span> {{ FOOTER_SETTINGS.secondary_phone }}</a></li>{% endif %}
   {% if FOOTER_SETTINGS.email %}<li><a href="mailto:{{ FOOTER_SETTINGS.email }}" dir="ltr"><span aria-hidden="true">✉</span> {{ FOOTER_SETTINGS.email }}</a></li>{% elif SHOP_CONTACT_EMAIL %}<li><a href="mailto:{{ SHOP_CONTACT_EMAIL }}" dir="ltr"><span aria-hidden="true">✉</span> {{ SHOP_CONTACT_EMAIL }}</a></li>{% endif %}
-  {% if FOOTER_SETTINGS.address %}<li class="gf-contact-address"><span aria-hidden="true">⌖</span> {{ FOOTER_SETTINGS.address }}</li>{% endif %}
+  {% if FOOTER_SETTINGS.address and not hide_address %}<li class="gf-contact-address"><span aria-hidden="true">⌖</span> {{ FOOTER_SETTINGS.address }}</li>{% endif %}
 </ul>
 {% if FOOTER_SETTINGS.working_hours %}<p class="gf-working-hours">{{ FOOTER_SETTINGS.working_hours }}</p>{% endif %}
 {% endif %}

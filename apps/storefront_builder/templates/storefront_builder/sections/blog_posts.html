@@ -3,7 +3,7 @@ Phase 3 — بلوکِ جدیدِ «مطالب وبلاگ»، ساده و قاب
 یک رندرکننده‌ی مختصِ V5). صفحه‌ی جزئیاتِ مطلب هنوز در پروژه وجود ندارد
 — دقیقاً همان محدودیتِ ``catalog/home.html``ی قدیمی (``href="#"``).
 {% endcomment %}
-{% if posts and settings.style == "panel_carousel" %}
+{% if settings.style == "panel_carousel" and posts or settings.style == "panel_carousel" and blog_empty_slots %}
 <section class="section blog-panel">
   <div class="blog-panel-head"><h2>{{ settings.title|default:"آخرین مطالب وبلاگ" }}</h2></div>
   <div class="blog-panel-row">
@@ -19,6 +19,9 @@ Phase 3 — بلوکِ جدیدِ «مطالب وبلاگ»، ساده و قاب
         <span class="read">ادامه مطلب</span>
       </div>
     </a>
+    {% endfor %}
+    {% for _ in blog_empty_slots %}
+    <span class="blog-card blog-card--panel blog-card--empty" aria-hidden="true"><span class="th"></span></span>
     {% endfor %}
   </div>
 </section>

@@ -249,11 +249,14 @@ def _category_grid_context(store, section):
     if settings.get("display_mode") in {"fashion_mosaic", "beauty_icons", "atelier_mosaic", "luxury_shortcuts", "grey_circles", "pastel_tiles", "gradient_tiles"}:
         for category in top_categories:
             category.representative_media = section_data_service.resolve_category_representative_media(category)
+    # ``min_slots`` reserves visible positions: the positions without a category render as neutral empty slots.
+    empty_slots = range(max(0, int(settings.get("min_slots") or 0) - len(top_categories)))
     return {
         "tiles": list(zip(categories[:3], TILE_CLASSES)),
         "cream_category": categories[3] if len(categories) > 3 else None,
         "top_categories": top_categories,
         "category_grid_settings": settings,
+        "category_empty_slots": empty_slots,
     }
 
 
@@ -410,7 +413,9 @@ def _blog_posts_context(store, section):
 
     item_limit = (section.settings or {}).get("item_limit", 5)
     posts = list(BlogPost.objects.order_by("-published_at")[:item_limit])
-    return {"posts": posts}
+    # ``min_slots`` reserves visible card positions in the panel presentation (empty positions stay neutral).
+    empty_slots = range(max(0, int((section.settings or {}).get("min_slots") or 0) - len(posts)))
+    return {"posts": posts, "blog_empty_slots": empty_slots}
 
 
 def _featured_products_context(store, section):
@@ -776,6 +781,7 @@ _CONTEXT_BUILDERS = {
     "testimonials": _static_context,
     "video_section": _video_section_context,
     "story_rail": _story_rail_context,
+    "surface_panel": _static_context,
 }
 
 

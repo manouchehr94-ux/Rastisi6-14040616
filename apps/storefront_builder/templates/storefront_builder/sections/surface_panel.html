@@ -1,0 +1,5 @@
+{% comment %}
+Structural, content-free surface panel: a rounded surface with a controlled minimum height. It reserves a visible area in
+the page composition (half of a pair row, one box of a slot row, ...) and renders no text, product or action of its own.
+{% endcomment %}
+<section class="section surface-panel" style="min-height:{{ settings.min_height|default:160 }}px" aria-hidden="true"></section>

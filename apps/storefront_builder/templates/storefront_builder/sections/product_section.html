@@ -1,4 +1,4 @@
-<section class="section product-section{% if settings.carousel_autoplay and settings.display_mode == 'carousel' %} product-section--spotlight{% endif %}{% if settings.display_mode == 'campaign_band' %} product-section--campaign-band{% elif settings.display_mode == 'catalog_grid' %} product-section--catalog-grid{% endif %}">
+<section class="section product-section{% if settings.carousel_autoplay and settings.display_mode == 'carousel' %} product-section--spotlight{% endif %}{% if settings.display_mode == 'campaign_band' %} product-section--campaign-band{% elif settings.display_mode == 'catalog_grid' %} product-section--catalog-grid{% endif %}{% if settings.heading_style == 'plain_outline' %} product-section--hs-plain{% elif settings.heading_style == 'underlined' %} product-section--hs-underlined{% endif %}">
   {% if settings.display_mode == "campaign_band" %}
   <div class="beauty-section-title product-campaign-heading" aria-hidden="true">
     <span></span><h2>{{ settings.title|default:"پیشنهادهای فروشگاه" }}</h2><span></span>
@@ -43,6 +43,11 @@
     <h2><span class="bar"></span>{{ settings.title|default:"محصولات" }}</h2>
     {% if view_all_url and settings.show_view_all %}
     <a href="{{ view_all_url }}" class="btn btn-sm">مشاهده همه</a>
+    {% elif settings.show_view_all and settings.heading_style %}
+    {% comment %}Headings with an explicit style always show the outlined "view all" pill; an automatic source has no
+    dedicated destination, so it points at the Store's product listing.{% endcomment %}
+    {% url 'catalog:product-list' as catalog_all_url %}
+    <a href="{{ catalog_all_url }}" class="btn btn-sm">مشاهده همه</a>
     {% endif %}
   </div>
   {% endif %}

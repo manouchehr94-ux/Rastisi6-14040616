@@ -246,3 +246,25 @@ def media_default_state(section, config):
     if model is None:
         return media_defaults_service.DefaultMediaState()
     return media_defaults_service.default_media_state(section, model)
+
+
+@register.simple_tag
+def footer_badge_slot_total(extra_blocks):
+    """Total square count requested by the footer's ``badge_slots`` block (0 when the block is absent)."""
+    for block in extra_blocks or []:
+        if isinstance(block, dict) and block.get("type") == "badge_slots":
+            try:
+                return max(0, int(block.get("count", 0)))
+            except (TypeError, ValueError):
+                return 0
+    return 0
+
+
+@register.simple_tag
+def footer_empty_badge_slots(total, badges):
+    """Range of neutral empty squares left after the real trust badges took their places."""
+    try:
+        used = len(badges or [])
+    except TypeError:
+        used = 0
+    return range(max(0, int(total or 0) - used))

@@ -294,6 +294,11 @@ def _clean_positive_int_list(raw_list, *, max_len: int, error_cls=None, error_me
     return cleaned[:max_len]
 
 
+#: ``default`` keeps each context's own heading look; ``plain_outline`` = plain title + outlined "view all" pill;
+#: ``underlined`` = plain title + pill with an accent rule under the heading block.
+PRODUCT_SECTION_HEADING_STYLES = ("default", "plain_outline", "underlined")
+
+
 def _validate_product_section_settings(raw: dict) -> dict:
     """قراردادِ تنظیماتِ «بخشِ محصول» (فازِ C) — تنها اعتبارسنجیِ شکل/
     enum/بازه‌یِ ایمن؛ هیچ کوئریِ دیتابیس/چکِ مالکیتِ Store اینجا انجام
@@ -342,6 +347,7 @@ def _validate_product_section_settings(raw: dict) -> dict:
     header_position = raw.get("header_position", "above")
     if header_position not in ("above", "inside"):
         header_position = "above"
+    heading_style = raw.get("heading_style")
 
     # source_id/product_ids فقط برایِ منبعِ متناظرشان معنا دارند — برایِ
     # بقیه همیشه به مقدارِ خنثی (None/[]) بازنشانی می‌شوند تا تنظیماتِ
@@ -362,7 +368,7 @@ def _validate_product_section_settings(raw: dict) -> dict:
         if not product_ids:
             raise ProductSectionSettingsError("برایِ «کالاهایِ دستی» باید حداقل یک کالا انتخاب شود")
 
-    return {
+    cleaned = {
         "data_source": data_source,
         "source_id": source_id,
         "product_ids": product_ids,
@@ -376,6 +382,10 @@ def _validate_product_section_settings(raw: dict) -> dict:
         "carousel_show_arrows": carousel_show_arrows,
         "header_position": header_position,
     }
+    # Optional presentation (written only when non-default): how the section heading is drawn.
+    if heading_style in PRODUCT_SECTION_HEADING_STYLES[1:]:
+        cleaned["heading_style"] = heading_style
+    return cleaned
 
 
 def _product_section_defaults() -> dict:
@@ -440,6 +450,10 @@ PRODUCT_SECTION_SCHEMA = SettingsSchema(fields=(
     SettingsField(
         "header_position", "جایگاه عنوان", "choice", "advanced", default="above",
         choices=(("above", "بالای بخش"), ("inside", "داخل بخش")),
+    ),
+    SettingsField(
+        "heading_style", "سبک عنوان", "choice", "advanced", default="default",
+        choices=(("default", "پیش‌فرض"), ("plain_outline", "عنوان ساده + دکمه خط‌دار"), ("underlined", "عنوان ساده + خط تأکید")),
     ),
 ))
 
@@ -986,7 +1000,9 @@ BACKGROUND_AWARE_SECTION_KEYS = frozenset({
 #: خودِ section.
 SPACING_AWARE_SECTION_KEYS = BACKGROUND_AWARE_SECTION_KEYS
 
-BACKGROUND_MODE_CHOICES = ("theme", "palette", "palette_pattern", "color", "image", "pattern")
+BACKGROUND_MODE_CHOICES = ("theme", "palette", "palette_pattern", "color", "image", "pattern", "surface")
+#: Modes whose fill can optionally extend edge-to-edge behind a section that keeps its content inside the container.
+BACKGROUND_BLEED_MODES = ("palette", "palette_pattern", "color", "pattern")
 BACKGROUND_PALETTE_ROLE_CHOICES = ("tone-1", "tone-2", "tone-3", "tone-4", "tone-5")
 
 #: G2.3 (Defect C) — وقتی مرچنت «رنگ از پالت» را انتخاب می‌کند اما نقشِ
@@ -1110,10 +1126,15 @@ def validate_background_settings(raw) -> dict:
         else:
             mode = "theme"
 
-    return {
+    cleaned = {
         "mode": mode, "color": color, "media_asset_id": media_asset_id,
         "pattern_slug": pattern_slug, "palette_role": palette_role,
     }
+    # Optional presentation (written only when set): the fill spans the whole viewport width while the
+    # section's content stays inside the container.
+    if raw.get("bleed") is True and mode in BACKGROUND_BLEED_MODES:
+        cleaned["bleed"] = True
+    return cleaned
 
 
 def default_background_settings() -> dict:
@@ -1732,7 +1753,16 @@ def _validate_category_grid_settings(raw: dict) -> dict:
     except (TypeError, ValueError):
         raise CategoryGridSettingsError("تعداد دسته‌بندی باید عدد باشد") from None
     item_limit = max(2, min(12, item_limit))
-    return {"title": title, "display_mode": display_mode, "category_ids": category_ids, "item_limit": item_limit}
+    cleaned = {"title": title, "display_mode": display_mode, "category_ids": category_ids, "item_limit": item_limit}
+    # Optional presentation (written only when set): reserve this many visible positions; positions without a
+    # category render as neutral empty slots (never an invented category).
+    try:
+        min_slots = int(raw.get("min_slots", 0))
+    except (TypeError, ValueError):
+        min_slots = 0
+    if min_slots > 0:
+        cleaned["min_slots"] = max(2, min(12, min_slots))
+    return cleaned
 
 
 def default_category_grid_settings() -> dict:
@@ -1761,6 +1791,10 @@ CATEGORY_GRID_SCHEMA = SettingsSchema(fields=(
     SettingsField(
         "item_limit", "حداکثر تعداد", "integer", "advanced",
         default=12, min_value=2, max_value=12,
+    ),
+    SettingsField(
+        "min_slots", "حداقل جایگاه‌های نمایشی", "integer", "advanced",
+        default=0, min_value=0, max_value=12,
     ),
 ))
 
@@ -1914,6 +1948,13 @@ def validate_blog_posts_settings(raw: dict) -> dict:
     item_limit = max(_MIN_BLOG_POST_ITEMS, min(_MAX_BLOG_POST_ITEMS, item_limit))
     title = str(raw.get("title", "")).strip()[:_MAX_SECTION_TITLE_LENGTH]
     cleaned = {"item_limit": item_limit, "title": title}
+    # Optional: reserve this many visible card positions in the panel presentation (empty positions stay neutral).
+    try:
+        min_slots = int(raw.get("min_slots", 0))
+    except (TypeError, ValueError):
+        min_slots = 0
+    if min_slots > 0:
+        cleaned["min_slots"] = max(_MIN_BLOG_POST_ITEMS, min(_MAX_BLOG_POST_ITEMS, min_slots))
     # Optional presentation (written only when non-default): ``panel_carousel`` = one surface panel holding a
     # single row of square-image cards with a category badge and an action pill.
     if raw.get("style") == "panel_carousel":
@@ -1939,6 +1980,10 @@ BLOG_POSTS_SCHEMA = SettingsSchema(fields=(
     SettingsField(
         "style", "نوع نمایش", "choice", "basic", default="grid",
         choices=(("grid", "گرید"), ("panel_carousel", "پنل با ردیف کارت")),
+    ),
+    SettingsField(
+        "min_slots", "حداقل جایگاه‌های نمایشی", "integer", "advanced",
+        default=0, min_value=0, max_value=_MAX_BLOG_POST_ITEMS,
     ),
 ))
 
@@ -2293,6 +2338,42 @@ def _validate_newsletter_settings(raw: dict) -> dict:
 
 def default_newsletter_settings() -> dict:
     return {"title": "عضویت در خبرنامه", "subtitle": "", "button_label": "عضویت"}
+
+
+class SurfacePanelSettingsError(ValueError):
+    """شکلِ خامِ تنظیماتِ «پنل سطح» نامعتبر است."""
+
+
+_SURFACE_PANEL_MIN_HEIGHT = 40
+_SURFACE_PANEL_MAX_HEIGHT = 600
+_SURFACE_PANEL_DEFAULT_HEIGHT = 160
+
+
+def _validate_surface_panel_settings(raw: dict) -> dict:
+    """A structural, content-free surface (rounded white panel with a controlled minimum height).
+
+    It reserves a visible area in the page composition — for example one half of a pair row or one box of a slot
+    row that the merchant fills later — and never renders text, products or actions of its own."""
+    if not isinstance(raw, dict):
+        raise SurfacePanelSettingsError("تنظیمات باید یک شیء JSON باشد")
+    try:
+        min_height = int(raw.get("min_height", _SURFACE_PANEL_DEFAULT_HEIGHT))
+    except (TypeError, ValueError):
+        raise SurfacePanelSettingsError("حداقل ارتفاع باید عدد باشد") from None
+    return {"min_height": max(_SURFACE_PANEL_MIN_HEIGHT, min(_SURFACE_PANEL_MAX_HEIGHT, min_height))}
+
+
+def default_surface_panel_settings() -> dict:
+    return {"min_height": _SURFACE_PANEL_DEFAULT_HEIGHT}
+
+
+SURFACE_PANEL_SCHEMA = SettingsSchema(fields=(
+    SettingsField(
+        "min_height", "حداقل ارتفاع (پیکسل)", "integer", "basic",
+        default=_SURFACE_PANEL_DEFAULT_HEIGHT,
+        min_value=_SURFACE_PANEL_MIN_HEIGHT, max_value=_SURFACE_PANEL_MAX_HEIGHT,
+    ),
+))
 
 
 #: R4 Task 6 (Group D) — declarative counterpart of
@@ -2941,6 +3022,13 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         # story_rail، تکرارِ آن (دو فرمِ مستقل روی یک صفحه) گیج‌کننده است.
         max_instances=1, duplicable=False, removable=True, has_settings_form=True, category_fa="محتوا",
         settings_schema=NEWSLETTER_SCHEMA,
+    ),
+    "surface_panel": SectionDefinition(
+        key="surface_panel", label_fa="پنل سطح خالی", icon="square",
+        template_name="storefront_builder/sections/surface_panel.html",
+        validate_settings=_validate_surface_panel_settings, default_settings=default_surface_panel_settings,
+        duplicable=True, removable=True, has_settings_form=True, category_fa="محتوا",
+        settings_schema=SURFACE_PANEL_SCHEMA,
     ),
     # -------------------------------------------------- Phase 5: بخش‌های context-aware صفحه محصول
     # هر چهار نوعِ زیر فقط رویِ product_detail قابل‌افزودن‌اند (page_types)

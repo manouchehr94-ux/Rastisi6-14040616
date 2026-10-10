@@ -168,7 +168,7 @@ renderer never needs tenant ids inside a global preset.
   </section>
   {% endif %}
 {% elif category_grid_settings.display_mode == 'grey_circles' %}
-  {% if top_categories %}
+  {% if top_categories or category_empty_slots %}
   <section class="section category-grey-section">
     {% if category_grid_settings.title %}<div class="sec-head"><h2><span class="bar"></span>{{ category_grid_settings.title }}</h2></div>{% endif %}
     <div class="category-grey-circles">
@@ -181,6 +181,9 @@ renderer never needs tenant ids inside a global preset.
         </span>
         <strong class="category-grey-label">{{ cat.name }}</strong>
       </a>
+      {% endfor %}
+      {% for _ in category_empty_slots %}
+      <span class="category-grey-item category-grey-item--empty" aria-hidden="true"><span class="category-grey-media"></span></span>
       {% endfor %}
     </div>
   </section>

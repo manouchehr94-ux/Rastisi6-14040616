@@ -652,7 +652,7 @@ window.RastiSiR4 = {
     inspector.addEventListener('change', function (evt) {
       var wrapper = evt.target.closest('[data-r4-field-type="background"]');
       if (!wrapper || R4.selected == null) return;
-      if (!evt.target.closest('[data-r4-background-mode],[data-r4-background-color],[data-r4-background-palette-role],[data-r4-background-pattern],[data-r4-background-media]')) return;
+      if (!evt.target.closest('[data-r4-background-mode],[data-r4-background-color],[data-r4-background-palette-role],[data-r4-background-pattern],[data-r4-background-media],[data-r4-background-bleed]')) return;
       var key = wrapper.getAttribute('data-r4-field-key');
       var modeSelect = wrapper.querySelector('[data-r4-background-mode]');
       var colorInput = wrapper.querySelector('[data-r4-background-color]');
@@ -666,6 +666,8 @@ window.RastiSiR4 = {
       if (patternSelect) background.pattern_slug = patternSelect.value;
       var mediaValue = mediaSelect ? mediaSelect.value : '';
       background.media_asset_id = mediaValue ? Number(mediaValue) : null;
+      var bleedInput = wrapper.querySelector('[data-r4-background-bleed]');
+      if (bleedInput && bleedInput.checked) background.bleed = true;
 
       var patch = {};
       patch[key] = background;

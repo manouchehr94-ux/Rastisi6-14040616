@@ -70,66 +70,99 @@ _SPECTRUM_CARD = {
     "show_price": True, "card_border": True, "image_ratio": "square",
     "quick_add_reveal": "always", "show_quick_view": False,
 }
-_SPECTRUM_OFFER_CARD = {**_SPECTRUM_CARD, "card_style": "compact", "show_quick_add": False}
-_SPECTRUM_SPACING = {"vertical_spacing": "small"}
+_SPECTRUM_OFFER_CARD = {**_SPECTRUM_CARD, "card_style": "compact", "show_quick_add": False, "image_ratio": "landscape"}
 
 
-def _spectrum_band(title: str, data_source: str, tone: str) -> PresetSectionEntry:
-    """A coloured, doodle-patterned six-card rail (palette tone 1..5)."""
+def _gap(top: int, *, pad_top: int | None = 0, pad_bottom: int | None = 0, size: str = "normal") -> dict:
+    """Vertical rhythm of the reference: the gap above a section is its margin-top (px)."""
+    return {"vertical_spacing": size, "advanced": {
+        "padding_top": pad_top, "padding_bottom": pad_bottom, "margin_top": top, "margin_bottom": 0,
+    }}
+
+
+def _spectrum_band(title: str, data_source: str, tone: str, gap_top: int) -> PresetSectionEntry:
+    """A full-bleed, doodle-patterned six-card rail (palette tone 1..5)."""
     return PresetSectionEntry("product_section", settings={
         "title": title, "data_source": data_source, "item_limit": 6,
-        "display_mode": "carousel", "show_view_all": True,
+        "display_mode": "carousel", "show_view_all": True, "heading_style": "plain_outline",
         "responsive": {"desktop_columns": 6, "tablet_columns": 3, "mobile_columns": 2},
         "card": _SPECTRUM_CARD,
-        "background": {"mode": "palette_pattern", "pattern_slug": "commerce-doodle", "palette_role": tone},
-        "spacing": _SPECTRUM_SPACING,
+        "background": {"mode": "palette_pattern", "pattern_slug": "commerce-doodle", "palette_role": tone, "bleed": True},
+        "spacing": _gap(gap_top, pad_top=46, pad_bottom=36),
     })
 
 
-def _spectrum_pair(row_key: str, title: str, data_source: str, *, first: bool) -> PresetSectionEntry:
-    """One half of a 6/6 pair of white three-card rails."""
+def _spectrum_pair_panel(row_key: str, title: str, data_source: str, *, first: bool, gap_top: int) -> PresetSectionEntry:
+    """One half of a 6/6 pair of white surface panels holding a three-card rail."""
     return PresetSectionEntry(
         "product_section", row_key=row_key, row_span=6,
-        container_settings=({"gap": 12, "mobile_mode": "stack", "height_mode": "equal"} if first else None),
+        container_settings=({"gap": 20, "mobile_mode": "stack", "height_mode": "equal"} if first else None),
         settings={
             "title": title, "data_source": data_source, "item_limit": 6,
-            "display_mode": "carousel", "show_view_all": True,
+            "display_mode": "carousel", "show_view_all": True, "heading_style": "underlined",
             "responsive": {"desktop_columns": 3, "tablet_columns": 3, "mobile_columns": 2},
             "card": {**_SPECTRUM_CARD, "card_border": False},
-            "spacing": _SPECTRUM_SPACING,
+            "background": {"mode": "surface"},
+            "spacing": _gap(gap_top, pad_top=None, pad_bottom=None),
         },
     )
 
 
-# Section order follows the reference top to bottom (strip banner, hero + side offer, category circles, service
-# strip, four tiles, five coloured bands interleaved with the amazing-offer block and the white paired rails,
-# brands, blog).  The two blank white panel pairs of the capture are lazy-load gaps, so those slots carry the
-# same paired-rail component the page uses elsewhere.
+def _blank_pair(row_key: str, min_height: int, gap_top: int) -> tuple[PresetSectionEntry, PresetSectionEntry]:
+    """Two blank white surface panels (the reference shows these areas empty)."""
+    return tuple(
+        PresetSectionEntry(
+            "surface_panel", row_key=row_key, row_span=6,
+            container_settings=({"gap": 20, "mobile_mode": "stack", "height_mode": "equal"} if index == 0 else None),
+            settings={"min_height": min_height, "spacing": _gap(gap_top)},
+        )
+        for index in range(2)
+    )
+
+
+def _blank_slots(row_key: str, count: int, min_height: int, gap_top: int) -> tuple[PresetSectionEntry, ...]:
+    """A row of equal blank surface boxes (the reference shows four empty slots)."""
+    span = 12 // count
+    return tuple(
+        PresetSectionEntry(
+            "surface_panel", row_key=row_key, row_span=span,
+            container_settings=({"gap": 20, "mobile_mode": "stack", "height_mode": "equal"} if index == 0 else None),
+            settings={"min_height": min_height, "spacing": _gap(gap_top)},
+        )
+        for index in range(count)
+    )
+
+
+# Section order is the one of the forensic specification (REFERENCE_SPEC_51.md, 20 sections).  Blank panels are part
+# of the reproduced composition and carry no products, text or actions.
 _SPECTRUM_HOME = (
+    # 2 decor strip
     PresetSectionEntry("multi_banner", settings={
         "item_limit": 1, "offset": 0, "layout_variant": "strip-art",
         "responsive": {"desktop_columns": 1, "tablet_columns": 1, "mobile_columns": 1},
-        "spacing": _SPECTRUM_SPACING,
+        "spacing": _gap(28),
     }),
+    # 3 offer card + hero (1 : 3 columns)
     PresetSectionEntry(
         "product_section", row_key="spectrum-hero-row", row_span=3,
-        container_settings={"gap": 8, "mobile_mode": "stack", "vertical_align": "start", "height_mode": "equal"},
+        container_settings={"gap": 20, "mobile_mode": "stack", "vertical_align": "start", "height_mode": "equal"},
         settings={
             "title": "پیشنهادهای لحظه‌ای", "data_source": "discounted", "item_limit": 4,
             "display_mode": "carousel", "show_view_all": False,
             "carousel_autoplay": True, "carousel_interval_ms": 3500,
             "carousel_show_arrows": True, "header_position": "inside",
             "responsive": {"desktop_columns": 1, "tablet_columns": 1, "mobile_columns": 1},
-            "card": _SPECTRUM_OFFER_CARD, "spacing": _SPECTRUM_SPACING,
+            "card": _SPECTRUM_OFFER_CARD, "spacing": _gap(42),
         },
     ),
     PresetSectionEntry("hero_banner", row_key="spectrum-hero-row", row_span=9, settings={
-        "hero_style": "overlay", "text_position": "start", "layout": {"height": "standard"}, "spacing": _SPECTRUM_SPACING,
+        "hero_style": "overlay", "text_position": "start", "layout": {"height": "standard"}, "spacing": _gap(42),
     }),
+    # 4 category circles: six visible positions
     PresetSectionEntry("category_grid", settings={
-        "title": "", "display_mode": "grey_circles", "item_limit": 6,
-        "spacing": _SPECTRUM_SPACING,
+        "title": "", "display_mode": "grey_circles", "item_limit": 6, "min_slots": 6, "spacing": _gap(32),
     }),
+    # 5 service strip
     PresetSectionEntry("trust_features", settings={
         "items": [
             {"icon": "↙", "title": "تضمین بهترین قیمت", "subtitle": "خرید مطمئن"},
@@ -138,44 +171,59 @@ _SPECTRUM_HOME = (
             {"icon": "⌂", "title": "تحویل حضوری", "subtitle": "دریافت آسان"},
             {"icon": "⇢", "title": "ارسال سریع", "subtitle": "به سراسر کشور"},
         ],
-        "spacing": _SPECTRUM_SPACING,
+        "spacing": _gap(56, size="small"),
     }),
+    # 6 four tiles
     PresetSectionEntry("multi_banner", settings={
         "item_limit": 4, "offset": 0, "layout_variant": "tile-4",
         "responsive": {"desktop_columns": 4, "tablet_columns": 2, "mobile_columns": 2},
-        "spacing": _SPECTRUM_SPACING,
+        "spacing": _gap(53),
     }),
-    _spectrum_band("لوازم‌التحریر و اداری", "most_viewed", "tone-1"),
+    # 7 red band
+    _spectrum_band("لوازم‌التحریر و اداری", "most_viewed", "tone-1", 41),
+    # 8 amazing-offer panel
     PresetSectionEntry("amazing_offers", settings={
         "item_limit": 4, "deadline_hours": 8, "title": "پیشنهاد شگفت‌انگیز",
-        "spacing": _SPECTRUM_SPACING,
+        "background": {"mode": "surface"}, "spacing": _gap(40, pad_top=14, pad_bottom=14),
     }),
-    _spectrum_band("هنر، نقاشی و کاردستی", "newest", "tone-2"),
-    _spectrum_pair("spectrum-pair-a", "پیشنهادهای منتخب", "newest", first=True),
-    _spectrum_pair("spectrum-pair-a", "محبوب‌ترین انتخاب‌ها", "most_viewed", first=False),
-    _spectrum_band("دفتر و کاغذ", "discounted", "tone-3"),
-    _spectrum_pair("spectrum-pair-b", "انتخاب روز", "discounted", first=True),
-    _spectrum_pair("spectrum-pair-b", "بیشتر دیده‌شده‌ها", "most_viewed", first=False),
-    _spectrum_pair("spectrum-pair-c", "ابزار کار هنری، ترکیبی و دستی", "newest", first=True),
-    _spectrum_pair("spectrum-pair-c", "انواع روبان", "most_viewed", first=False),
-    _spectrum_band("چراغ، کابل و لوازم برقی", "best_sellers", "tone-4"),
-    _spectrum_pair("spectrum-pair-d", "برچسب فانتزی و آموزشی", "most_viewed", first=True),
-    _spectrum_pair("spectrum-pair-d", "کتاب، پوستر و فلش‌کارت", "newest", first=False),
-    _spectrum_band("بازی و آموزش", "newest", "tone-5"),
+    # 9 green band
+    _spectrum_band("هنر، نقاشی و کاردستی", "newest", "tone-2", 48),
+    # 10 blank pair row A
+    *_blank_pair("spectrum-pair-a", 256, 42),
+    # 11 ochre band
+    _spectrum_band("دفتر و کاغذ", "discounted", "tone-3", 41),
+    # 12 blank pair row B
+    *_blank_pair("spectrum-pair-b", 237, 46),
+    # 13 pair row C
+    _spectrum_pair_panel("spectrum-pair-c", "ابزار کار هنری، ترکیبی و دستی", "newest", first=True, gap_top=54),
+    _spectrum_pair_panel("spectrum-pair-c", "انواع روبان", "most_viewed", first=False, gap_top=54),
+    # 14 violet band
+    _spectrum_band("چراغ، کابل و لوازم برقی", "most_viewed", "tone-4", 28),
+    # 15 pair row D
+    _spectrum_pair_panel("spectrum-pair-d", "برچسب فانتزی و آموزشی", "newest", first=True, gap_top=40),
+    _spectrum_pair_panel("spectrum-pair-d", "کتاب، پوستر و فلش‌کارت", "most_viewed", first=False, gap_top=40),
+    # 16 blank four-box slot row
+    *_blank_slots("spectrum-slots", 4, 119, 71),
+    # 17 blue band
+    _spectrum_band("بازی و آموزش", "newest", "tone-5", 53),
+    # 18 brand panel
     PresetSectionEntry("brand_carousel", settings={
         "title": "بهترین برندهای فروشگاه", "display_mode": "carousel", "show_view_all": False,
-        "background": {"mode": "color", "color": "#FFFFFF"},
-        "spacing": _SPECTRUM_SPACING,
+        "background": {"mode": "surface"}, "spacing": _gap(42, pad_top=12, pad_bottom=12),
     }),
-    PresetSectionEntry("blog_posts", settings={"title": "مجله فروشگاه", "item_limit": 6, "style": "panel_carousel"}),
+    # 19 blog panel: six visible card positions
+    PresetSectionEntry("blog_posts", settings={
+        "title": "مجله فروشگاه", "item_limit": 6, "min_slots": 6, "style": "panel_carousel", "spacing": _gap(52),
+    }),
 )
 _SPECTRUM_NAMES = (
     "banner_strip", "offer_flash", "hero", "categories", "trust", "banner_tiles",
     "products_band_1", "amazing_offers", "products_band_2",
-    "products_pair_a1", "products_pair_a2", "products_band_3",
-    "products_pair_b1", "products_pair_b2", "products_pair_c1", "products_pair_c2",
-    "products_band_4", "products_pair_d1", "products_pair_d2", "products_band_5",
-    "brands", "blog",
+    "surface_pair_a1", "surface_pair_a2", "products_band_3",
+    "surface_pair_b1", "surface_pair_b2", "products_pair_c1", "products_pair_c2",
+    "products_band_4", "products_pair_d1", "products_pair_d2",
+    "surface_slot_1", "surface_slot_2", "surface_slot_3", "surface_slot_4",
+    "products_band_5", "brands", "blog",
 )
 
 register_layout_preset(LayoutPresetDefinition(
@@ -210,7 +258,7 @@ register_layout_preset(LayoutPresetDefinition(
         "show_newsletter": False, "show_copyright": True,
         "footer_variant": "stationery_dark",
         "extra_blocks": [
-            {"type": "custom_text", "title": "خدمات فروشگاه", "text": "ارسال سریع • ضمانت اصالت • پرداخت امن • پشتیبانی خرید"},
+            {"type": "badge_slots", "count": 5},
         ],
     },
     pages={

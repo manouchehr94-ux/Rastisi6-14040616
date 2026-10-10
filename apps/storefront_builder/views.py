@@ -1248,6 +1248,8 @@ def _extract_background_raw(request, section) -> dict:
         "pattern_slug": (request.POST.get("background_pattern_slug") or "").strip(),
         "palette_role": (request.POST.get("background_palette_role") or "").strip(),
         "media_asset_id": request.POST.get("background_media_asset_id") or None,
+        # The classic form has no edge-to-edge control: keep whatever the section already carries.
+        "bleed": bool(((section.settings or {}).get("background") or {}).get("bleed")),
     }
 
 

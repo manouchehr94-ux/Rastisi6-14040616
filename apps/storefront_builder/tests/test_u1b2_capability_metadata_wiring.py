@@ -357,7 +357,7 @@ class RegistryInvariantsUnchangedByU1B2Tests(TestCase):
     conditional was introduced anywhere in ``section_registry.py``."""
 
     def test_section_registry_still_has_exactly_34_keys(self):
-        self.assertEqual(len(SECTION_REGISTRY), 36)
+        self.assertEqual(len(SECTION_REGISTRY), 37)
 
     def test_hero_banner_and_image_slider_both_still_present(self):
         self.assertIn("hero_banner", SECTION_REGISTRY)

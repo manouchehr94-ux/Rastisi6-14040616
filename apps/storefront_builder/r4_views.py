@@ -157,6 +157,7 @@ _BACKGROUND_MODE_LABELS_FA = {
     "color": "رنگ دلخواه",
     "image": "تصویر",
     "pattern": "رنگ + الگو",
+    "surface": "پنل سفید (سطح کارت)",
 }
 _BACKGROUND_PALETTE_ROLE_LABELS_FA = {
     "tone-1": "طیف ۱",
@@ -357,6 +358,7 @@ _FOOTER_EXTRA_BLOCK_TYPE_LABELS_FA = {
     "custom_text": "متن دلخواه (عنوان + متن)",
     "link": "لینک تکی (برچسب + آدرس)",
     "social": "شبکه‌های اجتماعی",
+    "badge_slots": "جایگاه‌های نشان اعتماد (مربع‌های خالی تا بارگذاری نشان)",
 }
 
 

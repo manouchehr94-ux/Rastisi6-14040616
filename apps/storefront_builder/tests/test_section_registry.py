@@ -102,6 +102,9 @@ EXPECTED_KEYS = {
     # list_definitions()/ResponsiveIntegrationAcrossRegistryTests. This
     # fixture was simply never updated when story_rail was added.
     "story_rail",
+    # surface_panel — structural, content-free surface (reference rebuild of Template 51); covered by
+    # test_reference_templates_51_53.py::GenericRebuildPrimitiveTests.
+    "surface_panel",
     # newsletter — Phase 3 (Home page reusable blocks), dedicated coverage
     # in test_views.py::NewsletterSectionTests and apps.content's own
     # NewsletterSubscriber/subscribe_to_newsletter/view tests.
@@ -1328,7 +1331,7 @@ class U1ABackwardsCompatibilityTests(TestCase):
     """Test #1, #13, #14, #15 — nothing about the existing registry moved."""
 
     def test_all_34_definitions_still_construct_and_are_gettable(self):
-        self.assertEqual(len(list_definitions()), 36)
+        self.assertEqual(len(list_definitions()), 37)
         for key in U1A_EXPECTED_SECTION_KEYS:
             definition = get_definition(key)
             self.assertEqual(definition.key, key)

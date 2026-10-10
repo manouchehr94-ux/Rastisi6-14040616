@@ -369,5 +369,117 @@ class BlogPanelPrimitiveTests(SimpleTestCase):
         spectrum = lpr.get_layout_preset("stationery_spectrum")
         blog = [e for e in spectrum.pages["home"] if e.section_key == "blog_posts"][0]
         self.assertEqual(blog.settings["style"], "panel_carousel")
+        self.assertEqual(blog.settings["min_slots"], 6)
         brands = [e for e in spectrum.pages["home"] if e.section_key == "brand_carousel"][0]
-        self.assertEqual(brands.settings["background"], {"mode": "color", "color": "#FFFFFF"})
+        self.assertEqual(brands.settings["background"], {"mode": "surface"})
+
+
+class ReferenceRebuild51Tests(SimpleTestCase):
+    """Template 51 follows the 20-section order of docs/qa_evidence/ready_templates_51_53/REFERENCE_SPEC_51.md."""
+
+    def _home(self):
+        return lpr.get_layout_preset("stationery_spectrum").pages["home"]
+
+    def test_home_section_order_is_the_forensic_order(self):
+        keys = [e.section_key for e in self._home()]
+        expected = (
+            ["multi_banner", "product_section", "hero_banner", "category_grid", "trust_features", "multi_banner"]
+            + ["product_section", "amazing_offers", "product_section"]       # red band, amazing panel, green band
+            + ["surface_panel"] * 2 + ["product_section"]                      # blank pair A, ochre band
+            + ["surface_panel"] * 2 + ["product_section"] * 2                  # blank pair B, pair C
+            + ["product_section"] + ["product_section"] * 2                    # violet band, pair D
+            + ["surface_panel"] * 4 + ["product_section"]                      # blank slot row, blue band
+            + ["brand_carousel", "blog_posts"]
+        )
+        self.assertEqual(keys, expected)
+
+    def test_five_full_bleed_bands_use_the_five_palette_tones(self):
+        bands = [e for e in self._home() if e.section_key == "product_section"
+                 and (e.settings.get("background") or {}).get("mode") == "palette_pattern"]
+        self.assertEqual([b.settings["background"]["palette_role"] for b in bands],
+                         ["tone-1", "tone-2", "tone-3", "tone-4", "tone-5"])
+        for band in bands:
+            self.assertIs(band.settings["background"]["bleed"], True)
+            self.assertEqual(band.settings["item_limit"], 6)
+            self.assertEqual(band.settings["responsive"]["desktop_columns"], 6)
+            self.assertEqual(band.settings["heading_style"], "plain_outline")
+            # a structural band must never depend on a source that can be empty in a fresh store
+            self.assertIn(band.settings["data_source"], {"newest", "most_viewed", "discounted"})
+
+    def test_blank_rows_are_structural_surfaces_without_content(self):
+        blanks = [e for e in self._home() if e.section_key == "surface_panel"]
+        self.assertEqual(len(blanks), 8)
+        self.assertEqual([b.row_span for b in blanks], [6, 6, 6, 6, 3, 3, 3, 3])
+        self.assertEqual([b.settings["min_height"] for b in blanks], [256, 256, 237, 237, 119, 119, 119, 119])
+
+    def test_category_row_reserves_six_visible_slots(self):
+        cat = [e for e in self._home() if e.section_key == "category_grid"][0]
+        self.assertEqual((cat.settings["display_mode"], cat.settings["min_slots"]), ("grey_circles", 6))
+
+    def test_footer_carries_the_badge_slot_block_and_no_invented_copy(self):
+        footer = lpr.get_layout_preset("stationery_spectrum").footer
+        self.assertEqual(footer["extra_blocks"], [{"type": "badge_slots", "count": 5}])
+        self.assertEqual(footer["footer_variant"], "stationery_dark")
+
+
+class GenericRebuildPrimitiveTests(SimpleTestCase):
+    def test_background_bleed_and_surface_mode(self):
+        from apps.storefront_builder import section_registry as sr
+
+        self.assertIn("surface", sr.BACKGROUND_MODE_CHOICES)
+        bleed = sr.validate_background_settings({"mode": "palette_pattern", "palette_role": "tone-1",
+                                                 "pattern_slug": "commerce-doodle", "bleed": True})
+        self.assertIs(bleed["bleed"], True)
+        self.assertNotIn("bleed", sr.validate_background_settings({"mode": "palette", "palette_role": "tone-1"}))
+        # edge-to-edge only makes sense for a fill; a surface/theme background never carries it
+        self.assertNotIn("bleed", sr.validate_background_settings({"mode": "surface", "bleed": True}))
+        self.assertEqual(sr.validate_background_settings({"mode": "surface"})["mode"], "surface")
+
+    def test_product_heading_style_is_optional_and_closed(self):
+        from apps.storefront_builder import section_registry as sr
+
+        base = {"data_source": "newest"}
+        validate = sr.get_definition("product_section").validate_settings
+        self.assertNotIn("heading_style", validate(base))
+        self.assertNotIn("heading_style", validate({**base, "heading_style": "default"}))
+        self.assertNotIn("heading_style", validate({**base, "heading_style": "nonsense"}))
+        self.assertEqual(validate({**base, "heading_style": "underlined"})["heading_style"], "underlined")
+        self.assertEqual(validate({**base, "heading_style": "plain_outline"})["heading_style"], "plain_outline")
+
+    def test_min_slots_are_optional_and_bounded(self):
+        from apps.storefront_builder import section_registry as sr
+
+        cat = sr.get_definition("category_grid").validate_settings
+        self.assertNotIn("min_slots", cat({"display_mode": "grey_circles"}))
+        self.assertEqual(cat({"display_mode": "grey_circles", "min_slots": 6})["min_slots"], 6)
+        self.assertEqual(cat({"display_mode": "grey_circles", "min_slots": 99})["min_slots"], 12)
+        blog = sr.get_definition("blog_posts").validate_settings
+        self.assertNotIn("min_slots", blog({"title": "x"}))
+        self.assertEqual(blog({"title": "x", "min_slots": 6})["min_slots"], 6)
+
+    def test_surface_panel_section_contract(self):
+        from apps.storefront_builder import section_registry as sr
+
+        definition = sr.get_definition("surface_panel")
+        self.assertEqual(definition.validate_settings({})["min_height"], 160)
+        self.assertEqual(definition.validate_settings({"min_height": 5})["min_height"], 40)
+        self.assertEqual(definition.validate_settings({"min_height": 9999})["min_height"], 600)
+        html = get_template(definition.template_name).render({"settings": {"min_height": 237}})
+        self.assertIn("min-height:237px", html)
+        self.assertIn("surface-panel", html)
+        self.assertNotIn("<h", html)          # content-free by contract
+
+    def test_footer_badge_slots_block_is_validated(self):
+        from apps.storefront_builder.services import layout_service
+
+        cleaned = layout_service.validate_footer_config({"extra_blocks": [{"type": "badge_slots", "count": 5}]})
+        self.assertEqual(cleaned["extra_blocks"], [{"type": "badge_slots", "count": 5}])
+        clamped = layout_service.validate_footer_config({"extra_blocks": [{"type": "badge_slots", "count": 99}]})
+        self.assertEqual(clamped["extra_blocks"][0]["count"], 8)
+
+    def test_footer_empty_badge_slots_tag(self):
+        from apps.storefront_builder.templatetags import storefront_builder_extras as ex
+
+        self.assertEqual(ex.footer_badge_slot_total([{"type": "badge_slots", "count": 5}]), 5)
+        self.assertEqual(ex.footer_badge_slot_total([{"type": "custom_text"}]), 0)
+        self.assertEqual(len(ex.footer_empty_badge_slots(5, [object(), object()])), 3)

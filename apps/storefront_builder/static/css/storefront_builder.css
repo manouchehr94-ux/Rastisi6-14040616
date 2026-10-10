@@ -5534,33 +5534,36 @@ html[data-sfb-density="compact"] .feat small{font-size:9.5px}
 @media(max-width:680px){.hero--poster .hero-inner{aspect-ratio:1.6/1;min-height:0}}
 
 /* ---- multi_banner: tile-4 (near-square) and strip-art -------------- */
-.promo-grid--tile-4 .promo-card{min-height:0;aspect-ratio:1/.99;border:0;border-radius:6px;box-shadow:none}
+html[data-sfb-density] .promo-grid.promo-grid--tile-4{gap:20px}
+.promo-grid--tile-4 .promo-card{min-height:0;aspect-ratio:1/1;border:0;border-radius:12px;box-shadow:none}
 .promo-grid--tile-4 .promo-media img{width:100%;height:100%;object-fit:cover}
 .promo-grid--strip-art{grid-template-columns:1fr}
-.promo-grid--strip-art .promo-card{min-height:0;height:64px;border:0;border-radius:4px;box-shadow:none;background:none}
+.promo-grid--strip-art .promo-card{min-height:0;height:52px;border:0;border-radius:8px;box-shadow:none;background:var(--brand-surface,#fff)}
 .promo-grid--strip-art .promo-media{opacity:1;pointer-events:auto}
 .promo-grid--strip-art .promo-media img{width:100%;height:100%;object-fit:cover}
 .promo-grid--strip-art .promo-overlay{display:none}
-.banner-section--strip-art{margin-block:26px 0}
+.banner-section--strip-art{margin-block:0}
 
 /* ---- service strip: compact one-line boxes under data-spacing=small -- */
-.rsec[data-spacing="small"] .features{gap:10px;margin:4px 0}
+.rsec[data-spacing="small"] .features{gap:10px;margin:0}
 .rsec[data-spacing="small"] .features:has(.feat:nth-child(5)){grid-template-columns:repeat(5,minmax(0,1fr))}
-.rsec[data-spacing="small"] .features .feat{padding:8px 12px;min-height:0}
-.rsec[data-spacing="small"] .features .feat .ic{width:26px;height:26px}
-.rsec[data-spacing="small"] .features .feat small{display:none}
+.rsec[data-spacing="small"] .features .feat{padding:10px 14px;min-height:66px;border-radius:12px;align-items:center}
+.rsec[data-spacing="small"] .features .feat .ic{width:28px;height:28px}
+.rsec[data-spacing="small"] .features .feat b{font-size:11.5px}
+.rsec[data-spacing="small"] .features .feat small{display:block;font-size:10px}
 
 /* ---- 51: stationery_search header ---------------------------------- */
 .gh-shell--stationery{--gh-bg:var(--brand-background,#f3f4f8)}
 .gh--stationery.header{border-bottom:0}
 .gh-st-util{background:var(--brand-surface,#fff);border-bottom:1px solid var(--brand-border,#eef0f3);font-size:10.5px;color:var(--brand-muted)}
-.gh-st-util .wrap{display:flex;align-items:center;justify-content:space-between;height:30px;gap:12px}
+.gh-st-util .wrap{display:flex;align-items:center;justify-content:space-between;height:40px;gap:12px}
 .gh-st-util a{color:inherit;text-decoration:none}
 .gh-st-util-contact{display:flex;gap:14px;direction:ltr}
 .gh--stationery .gh-st-main{display:flex;align-items:center;gap:18px;height:78px}
+@media(min-width:1001px){.gh--stationery .gh-st-main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,655px) minmax(0,1fr);height:50px}.gh-st-logo{justify-self:start}.gh-st-actions{justify-self:end;margin-inline-start:0}}
 .gh-st-logo{flex:0 0 auto}
 .gh-st-search{display:block;flex:1;min-width:0}
-.gh--stationery .gh-st-search .gh-search{height:42px;border-radius:999px;background:color-mix(in srgb,var(--brand-text,#222) 6%,var(--brand-surface,#fff));border:1px solid transparent;padding-inline:6px;flex-direction:row-reverse}
+.gh--stationery .gh-st-search .gh-search{height:40px;border-radius:999px;background:color-mix(in srgb,var(--brand-text,#222) 6%,var(--brand-surface,#fff));border:1px solid transparent;padding-inline:6px;flex-direction:row-reverse}
 .gh--stationery .gh-st-search .gh-search input{padding-inline:14px;font-size:14px}
 .gh--stationery .gh-st-search .gh-search button{display:grid;place-items:center;width:34px;height:34px;padding:0;border-radius:50%;background:var(--brand-primary);color:var(--brand-primary-fg,#fff)}
 .gh--stationery .gh-st-search .gh-search button svg{color:var(--brand-primary-fg,#fff)}
@@ -5568,11 +5571,12 @@ html[data-sfb-density="compact"] .feat small{font-size:9.5px}
 .gh-st-account .gh-account-link{height:36px;padding-inline:16px;border-radius:999px;border:0;background:var(--brand-accent);color:var(--brand-accent-fg,#fff);font-size:12px;font-weight:700}
 .gh-st-account .gh-account-link:hover{background:var(--brand-accent);color:var(--brand-accent-fg,#fff);filter:brightness(.92)}
 .gh--stationery .gh-btn{border-radius:50%;min-width:38px;width:38px;height:38px;padding:0;background:transparent;border-color:transparent}
-.gh-st-nav{background:var(--brand-surface,#fff);border-top:1px solid var(--brand-border,#eef0f3);border-bottom:1px solid var(--brand-border,#e6e8ec)}
-.gh-st-nav-links{display:flex;align-items:center;gap:8px;height:52px}
+.gh-st-nav{background:color-mix(in srgb,var(--brand-background,#f4f5f9) 45%,var(--brand-surface,#fff));border-top:1px solid var(--brand-border,#eef0f3);border-bottom:1px solid var(--brand-border,#e6e8ec)}
+.gh--stationery .gh-st-nav-links{display:flex;align-items:center;gap:8px;height:73px}
 .gh--stationery .gh-cat-btn{background:transparent;color:var(--brand-text);font-size:12px}
 .gh--stationery .gh-nl,.gh--stationery .gh-cat-link{font-size:12px;font-weight:600;height:34px;padding-inline:10px;border-radius:6px}
-.gh--stationery .gh-nav-links-scroll>.gh-nl:nth-last-child(-n+2),.gh--stationery .gh-nav-links-scroll>.gh-nav-dropdown:nth-last-child(-n+2) .gh-nl{background:var(--brand-primary);color:var(--brand-primary-fg,#fff)}
+.gh--stationery .gh-nav-links-scroll>.gh-nl:nth-last-child(-n+2),.gh--stationery .gh-nav-links-scroll>.gh-nav-dropdown:nth-last-child(-n+2) .gh-nl{height:56px;display:inline-flex;align-items:center;padding-inline:18px;border-radius:4px;background:var(--brand-primary);color:var(--brand-primary-fg,#fff)}
+.gh--stationery .gh-nav-links-scroll>.gh-nl:nth-last-child(2),.gh--stationery .gh-nav-links-scroll>.gh-nav-dropdown:nth-last-child(2) .gh-nl{padding-inline:56px;background:color-mix(in srgb,var(--brand-accent,#e5334b) 52%,#fff);color:var(--brand-text,#262a30)}
 .gh--stationery .gh-burger{display:none}
 @media(max-width:1000px){.gh--stationery .gh-st-main{gap:10px;height:62px}}
 @media(max-width:680px){
@@ -5594,15 +5598,19 @@ html[data-sfb-density="compact"] .feat small{font-size:9.5px}
   background:var(--theme-footer-bg,#4b4d57);color:var(--theme-footer-text,#eceef2);padding:0 0 18px;margin-top:20px;border-top:0}
 .gf--stationery b,.gf--stationery h5,.gf--stationery strong,.gf--stationery .gf-brand-text b{color:var(--theme-footer-text,#fff)}
 .gf--stationery p,.gf--stationery small,.gf--stationery .gf-copy,.gf--stationery .gf-col a,.gf--stationery .gf-col span{color:var(--theme-footer-muted-text,#dcdee4)}
-.gf-st-strip{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px 26px;margin:0;padding:22px 0;border-bottom:1px solid var(--gf-border);font-size:11.5px;font-weight:600;color:var(--theme-footer-text,#fff);text-align:center}
-.gf-st-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:34px;padding:34px 0 18px}
+.gf--stationery{margin-top:52px}
+.gf-st-bar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px 26px;margin:0;padding:26px 0 24px;border-bottom:1px solid var(--gf-border);font-size:12px;font-weight:600;text-align:center}
+.gf--stationery .gf-st-bar a,.gf--stationery .gf-st-bar span{color:var(--theme-footer-text,#fff);text-decoration:none}
+.gf-st-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:34px;padding:48px 0 52px;min-height:440px;align-content:start}
+.gf--stationery .gf-address-text{font-size:11.5px;line-height:2.1;margin:0}
 .gf--stationery .gf-col h5,.gf--stationery h5{font-size:12.5px;font-weight:800;margin:0 0 16px}
 .gf--stationery ul{list-style:none;margin:0;padding:0;display:grid;gap:11px;font-size:11.5px}
-.gf-st-identity{display:flex;border-top:1px solid var(--gf-border);margin-top:26px;padding:26px 0 8px}
+.gf-st-identity{display:grid;gap:18px;border-top:1px solid var(--gf-border);margin-top:0;padding:44px 0 40px}
+.gf-st-paragraph{margin:0;font-size:11.5px;line-height:2.2;text-align:justify}
 .gf--stationery .gf-brand-text b{font-size:26px;letter-spacing:.2px}
 .gf--stationery .gf-brand-description{font-size:11.5px;line-height:2.2;max-width:none;margin-top:12px}
-.gf--stationery .gf-credibility{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;padding:18px 0}
-.gf--stationery .gf-trust-badge-item{background:#fff;border-radius:8px;padding:8px;width:84px;height:84px;display:grid;place-items:center}
+.gf--stationery .gf-credibility{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;padding:18px 0 22px;border-top:1px solid var(--gf-border)}
+.gf--stationery .gf-trust-badge-item{background:#fff;border-radius:8px;padding:8px;width:64px;height:64px;display:grid;place-items:center}
 .gf--stationery .gf-trust-badge-item img{max-width:100%;max-height:100%;object-fit:contain}
 .gf--stationery .gf-legal-row{display:flex;justify-content:space-between;align-items:center;gap:12px;border-top:1px solid var(--gf-border);padding-top:16px;font-size:11px}
 @media(max-width:900px){.gf-st-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -5658,13 +5666,13 @@ html[data-sfb-density="compact"] .feat small{font-size:9.5px}
 @media(max-width:680px){.gf-kw-main{flex-direction:column;align-items:center}.gf-kw-legal{justify-items:center;text-align:center}}
 
 /* ---- category_grid: grey circles (51) — text on the PAGE/band, circle is its own tile -- */
-.category-grey-section{margin:50px 0 44px}
-.category-grey-circles{display:flex;justify-content:center;gap:14px;overflow-x:auto;padding:4px 6px;scrollbar-width:none}
+.category-grey-section{margin:0}
+.category-grey-circles{display:flex;justify-content:center;gap:14px;overflow-x:auto;overflow-y:visible;padding:30px 6px 0;scrollbar-width:none}
 .category-grey-circles::-webkit-scrollbar{display:none}
-.category-grey-item{flex:0 0 calc((100% - 70px) / 6);min-width:96px;display:grid;justify-items:center;gap:12px;text-decoration:none;color:var(--sfb-section-fg,var(--brand-text,var(--ink)))}
-.category-grey-media{width:min(156px,100%);aspect-ratio:1/1;border-radius:50%;background:#e4e6ea;display:grid;place-items:center;overflow:hidden;position:relative}
-.category-grey-media img{width:84%;height:84%;object-fit:contain;mix-blend-mode:multiply}
-.category-grey-fallback{font-size:34px;opacity:.7}
+.category-grey-item{flex:0 0 calc((100% - 70px) / 6);min-width:96px;display:grid;justify-items:center;align-content:start;gap:18px;text-decoration:none;color:var(--sfb-section-fg,var(--brand-text,var(--ink)))}
+.category-grey-media{width:min(160px,100%);aspect-ratio:1/1;border-radius:50%;background:#e6e7eb;display:block;overflow:visible;position:relative}
+.category-grey-media img{position:absolute;left:-8%;top:-14%;width:116%;height:116%;object-fit:contain;mix-blend-mode:multiply}
+.category-grey-fallback{position:absolute;inset:0;display:grid;place-items:center;font-size:34px;opacity:.7}
 .category-grey-label{font-size:13px;font-weight:700;text-align:center;color:var(--sfb-section-fg,var(--brand-text,var(--ink)))}
 
 /* ---- category_grid: pastel tiles (53) ------------------------------ */
@@ -5769,8 +5777,8 @@ html[data-sfb-density="compact"] .feat small{font-size:9.5px}
   background-color:var(--sfb-section-palette-bg,var(--card));color:var(--sfb-section-fg,var(--ink))!important}
 
 /* -- blog_posts panel_carousel (surface panel + one row of square-image cards) -- */
-.blog-panel{background:var(--card,#fff);border-radius:14px;box-shadow:0 1px 8px rgba(15,23,42,.06);padding:16px 22px 22px;margin:14px 0}
-.blog-panel-head{margin-bottom:14px}
+.blog-panel{background:var(--card,#fff);border-radius:14px;box-shadow:0 1px 8px rgba(15,23,42,.06);padding:34px 22px 40px;margin:0}
+.blog-panel-head{margin-bottom:34px}
 .blog-panel-head h2{display:inline-block;margin:0;padding-bottom:5px;border-bottom:2px solid var(--pink);font-size:13px;font-weight:800;color:var(--ink)}
 .blog-panel-row{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px}
 .blog-panel .blog-card--panel{display:grid;gap:8px;align-content:start;background:transparent;border:0;box-shadow:none;text-align:center}
@@ -5778,12 +5786,71 @@ html[data-sfb-density="compact"] .feat small{font-size:9.5px}
 .blog-panel .blog-card--panel .blog-badge{position:absolute;top:8px;inset-inline-start:8px;padding:2px 9px;border-radius:99px;background:var(--pink);color:var(--on-pink);font-size:9px;font-weight:700;line-height:1.6}
 .blog-panel .blog-card--panel .bd{padding:0}
 .blog-panel .blog-card--panel h4{margin:0 0 8px;min-height:3.4em;font-size:11px;line-height:1.7;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.blog-panel .blog-card--panel .read{justify-content:center;padding:6px 10px;border-radius:99px;background:var(--green);color:#fff;font-size:10px}
+.blog-panel .blog-card--panel .read{justify-content:center;margin-top:14px;padding:6px 10px;border-radius:99px;background:var(--green);color:#fff;font-size:10px}
 @media(max-width:1000px){.blog-panel-row{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:680px){.blog-panel-row{grid-template-columns:repeat(2,minmax(0,1fr))}.blog-panel{padding:14px 12px 16px}}
-/* -- a brand carousel on a WHITE colour band reads as a surface panel (centred title with an accent underline) -- */
-.rsec[data-bg-mode="color"][style*="#FFFFFF" i]:has(>.section>.brand-carousel){border-radius:14px;box-shadow:0 1px 8px rgba(15,23,42,.06);padding:16px 22px;margin:14px 0}
-.rsec[data-bg-mode="color"][style*="#FFFFFF" i]:has(>.section>.brand-carousel)>.section>.sec-head{justify-content:center}
-.rsec[data-bg-mode="color"][style*="#FFFFFF" i]:has(>.section>.brand-carousel)>.section>.sec-head h2{padding-bottom:5px;border-bottom:2px solid var(--pink)}
-.rsec[data-bg-mode="color"][style*="#FFFFFF" i]:has(>.section>.brand-carousel)>.section>.sec-head h2 .bar{display:none}
+/* -- brand carousel inside a surface panel: centred title with an accent underline, compact tiles -- */
+.rsec[data-bg-mode="surface"]:has(>.section>.brand-carousel)>.section>.sec-head{justify-content:center}
+.rsec[data-bg-mode="surface"]:has(>.section>.brand-carousel)>.section>.sec-head h2{padding-bottom:5px;border-bottom:2px solid var(--pink,#e5334b)}
+.rsec[data-bg-mode="surface"]:has(>.section>.brand-carousel)>.section>.sec-head h2 .bar{display:none}
+.rsec[data-bg-mode="surface"] .brand-carousel{justify-content:center}
+.rsec[data-bg-mode="surface"] .brand-tile{min-height:0;height:44px;padding:0 18px;display:grid;place-items:center}
+/* -- amazing-offer image zone reads as its own tinted tile instead of a white-on-white ghost -- */
+.rsec[data-bg-mode="surface"] .special-image{background:color-mix(in srgb,var(--brand-text,#222) 7%,var(--brand-surface,#fff));border-radius:10px}
+.rsec[data-bg-mode="surface"] .special-image img{object-fit:contain;padding:10px;mix-blend-mode:multiply}
+/* -- blog panel cards keep an inset so the square thumbnails do not touch the panel edge -- */
+.blog-panel .blog-card--panel{padding-inline:12px}
+.blog-card--empty .th{background:color-mix(in srgb,var(--brand-text,#222) 5%,var(--brand-surface,#fff));border-radius:10px;display:block;aspect-ratio:1/1}
+
+/* ======================================================================
+   Generic presentation primitives (reference rebuild of 51) — every rule is selected by registered settings,
+   never by a template key.
+   ====================================================================== */
+/* -- background.bleed: the fill spans the whole viewport width, the section content stays in the container -- */
+.rsec[data-pattern="commerce-doodle"]{--sfb-pattern-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='132' height='78' viewBox='0 0 132 78'%3E%3Cg fill='none' stroke='%23fff' stroke-opacity='.13' stroke-width='1.15' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22h15l-1 14H13zM16 22v-3a4 4 0 018 0v3'/%3E%3Cpath d='M52 13l2.2 4.7 5.1.7-3.7 3.6.9 5-4.5-2.4-4.5 2.4.9-5-3.7-3.6 5.1-.7z'/%3E%3Ccircle cx='92' cy='23' r='8'/%3E%3Cpath d='M88 23h8M92 19v8'/%3E%3Cpath d='M112 50h11l2 14h-15zM114 50l2-6h5l2 6'/%3E%3Cpath d='M39 53c5-6 12-6 17 0M47 48v12'/%3E%3Ccircle cx='75' cy='59' r='3.5'/%3E%3Cpath d='M71 59h8'/%3E%3C/g%3E%3C/svg%3E");--sfb-pattern-size:132px 78px}
+body:has(.rsec[data-bg-bleed]){overflow-x:clip}
+.rsec[data-bg-bleed]{position:relative;isolation:isolate;background:none!important}
+.rsec[data-bg-bleed]::before{content:"";position:absolute;z-index:-1;top:0;bottom:0;left:50%;width:100vw;transform:translateX(-50%);
+  background-color:var(--sfb-section-bg-color,var(--sfb-section-palette-bg,var(--brand-primary)));
+  background-image:var(--sfb-pattern-image,none);background-size:var(--sfb-pattern-size,auto);background-repeat:repeat;pointer-events:none}
+
+/* -- background.mode = surface: a rounded card-surface panel -- */
+.rsec[data-bg-mode="surface"]{background:var(--brand-surface,#fff);border-radius:14px;box-shadow:0 1px 8px rgba(15,23,42,.07);padding:18px 22px;color:var(--brand-text,inherit)}
+.rsec[data-bg-mode="surface"]>.section{margin:0}
+
+/* -- surface_panel section: structural, content-free surface with a controlled minimum height -- */
+.rsec .section.surface-panel{display:block;margin:0;background:var(--brand-surface,#fff);border-radius:14px;box-shadow:0 1px 8px rgba(15,23,42,.07);height:100%}
+
+/* -- product_section heading styles -- */
+.rsec[data-pattern]>.section.product-section--hs-plain>.sec-head{display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:16px;margin:0 0 24px}
+.rsec[data-pattern]>.section.product-section--hs-plain>.sec-head h2{width:auto;max-width:none;margin:0;padding:2px 6px;border-radius:0;box-shadow:none;
+  background:var(--sfb-section-palette-bg,transparent)!important;color:var(--sfb-section-fg,#fff)!important;font-size:18px;line-height:1.5;font-weight:800}
+.rsec[data-pattern]>.section.product-section--hs-plain>.sec-head h2 .bar{display:none}
+.rsec[data-pattern]>.section.product-section--hs-plain>.sec-head .btn{height:30px;min-height:30px;padding-inline:16px;border:1px solid currentColor;border-radius:999px;
+  background:var(--sfb-section-palette-bg,transparent)!important;color:var(--sfb-section-fg,#fff)!important;font-size:11.5px;font-weight:700}
+.product-section--hs-underlined>.sec-head{display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:14px;width:max-content;max-width:100%;
+  margin:0 0 16px;padding:0 0 7px;border-bottom:2px solid var(--pink,#e5334b)}
+.product-section--hs-underlined>.sec-head h2{margin:0;font-size:15px;font-weight:800;color:var(--ink)}
+.product-section--hs-underlined>.sec-head h2 .bar{display:none}
+.product-section--hs-underlined>.sec-head .btn{height:26px;min-height:26px;padding-inline:12px;border:1px solid var(--pink-text,#c83c5d);border-radius:999px;background:transparent;color:var(--pink-text,#c83c5d);font-size:10.5px}
+
+/* -- category_grid min_slots: neutral empty positions keep the visible column count -- */
+.category-grey-item--empty .category-grey-media{background:#e9eaee}
+
+/* -- brand carousel inside a surface panel: centred title with an accent underline, compact tiles -- */
+.rsec[data-bg-mode="surface"]:has(>.section>.brand-carousel)>.section>.sec-head{justify-content:center;margin-bottom:22px}
+.rsec[data-bg-mode="surface"]:has(>.section>.brand-carousel)>.section>.sec-head h2{padding-bottom:5px;border-bottom:2px solid var(--pink,#e5334b)}
+.rsec[data-bg-mode="surface"]:has(>.section>.brand-carousel)>.section>.sec-head h2 .bar{display:none}
+.rsec[data-bg-mode="surface"] .brand-carousel{justify-content:center}
+.rsec[data-bg-mode="surface"] .brand-tile{min-height:0;height:44px;padding:0 18px;display:grid;place-items:center}
+/* -- amazing-offer panel on a surface: the image zone reads as its own tinted tile instead of a white-on-white ghost -- */
+.rsec[data-bg-mode="surface"] .amazing-offers-section .special-wrap{min-height:260px}
+.rsec[data-bg-mode="surface"] .amazing-offers-section .special-image{height:260px}
+.rsec[data-bg-mode="surface"] .special-image{background:color-mix(in srgb,var(--brand-text,#222) 7%,var(--brand-surface,#fff));border-radius:10px}
+.rsec[data-bg-mode="surface"] .special-image img{object-fit:contain;padding:10px;mix-blend-mode:multiply}
+/* -- blog panel cards keep an inset so the square thumbnails do not touch the panel edge -- */
+.blog-panel .blog-card--panel{padding-inline:12px}
+.blog-card--empty .th{background:color-mix(in srgb,var(--brand-text,#222) 5%,var(--brand-surface,#fff));border-radius:10px;display:block;aspect-ratio:1/1}
+/* -- patterned rails: card gutter of the reference rhythm -- */
+.rsec[data-pattern] .pcarousel.rsec-cols{--pcarousel-gap:22px}
 /* REF-TEMPLATES-51-53 END */

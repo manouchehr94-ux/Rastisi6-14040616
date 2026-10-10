@@ -266,7 +266,10 @@ def validate_header_config(config: dict) -> dict:
 #: هویتِ زنده (``SOCIAL_LINKS_FOOTER``) می‌خواند که ``show_social``ی
 #: موجود هم استفاده می‌کند — تکرارِ همان بلوک، مثلاً برایِ نمایشِ آن در
 #: هر دو انتهای فوتر.
-FOOTER_EXTRA_BLOCK_TYPES = ("custom_text", "link", "social")
+#: ``badge_slots`` reserves N visible credential squares (real uploaded trust badges fill the first slots; the
+#: remaining slots stay neutral and empty) — it never invents a badge.
+FOOTER_EXTRA_BLOCK_TYPES = ("custom_text", "link", "social", "badge_slots")
+_MAX_FOOTER_BADGE_SLOTS = 8
 _MAX_FOOTER_EXTRA_BLOCKS = 4
 _MAX_FOOTER_BLOCK_TITLE_LENGTH = 40
 _MAX_FOOTER_BLOCK_TEXT_LENGTH = 400
@@ -304,6 +307,12 @@ def _validate_footer_extra_blocks(raw) -> list[dict]:
                 except DjangoValidationError as exc:
                     raise ShellBlockError("; ".join(exc.messages)) from exc
             block["url"] = url
+        elif block_type == "badge_slots":
+            try:
+                count = int(entry.get("count", 5))
+            except (TypeError, ValueError):
+                raise ShellBlockError("تعدادِ جایگاه‌هایِ نشان باید عدد باشد") from None
+            block["count"] = max(1, min(_MAX_FOOTER_BADGE_SLOTS, count))
         cleaned.append(block)
     return cleaned
 
