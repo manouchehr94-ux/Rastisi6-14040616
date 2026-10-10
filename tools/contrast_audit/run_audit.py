@@ -621,9 +621,10 @@ SWITCH_MATRIX = ("editorial_jewelry", "night_catalog", "warm_boutique", "kite_pl
 SWITCH_PATH = (0, 1, 2, 3, 0, 1, 0, 1)
 #: category-rail presentations a merchant may already have on the page when the template changes; a non-pristine
 #: page keeps its sections (and so their presentation) while the palette is replaced
-SWITCH_CATEGORY_MODES = ("image_strip", "chocolate_story", "circular", "beauty_icons", "fashion_flat", "fashion_mosaic", "grid")
+SWITCH_CATEGORY_MODES = ("image_strip", "chocolate_story", "circular", "beauty_icons", "fashion_flat", "fashion_mosaic", "grid",
+                          "grey_circles", "pastel_tiles", "icon_tiles", "gradient_tiles")
 #: presentations whose text sits directly on the page / band are additionally tried on an opposite-luminance band
-SWITCH_BAND_MODES = ("image_strip", "beauty_icons", "chocolate_story")
+SWITCH_BAND_MODES = ("image_strip", "beauty_icons", "chocolate_story", "grey_circles", "pastel_tiles", "icon_tiles")
 #: derived usage tokens that must always equal what the server derives from the CURRENT appearance
 SWITCH_TOKENS = ("--brand-background", "--brand-surface", "--brand-primary", "--brand-text", "--brand-muted",
                  "--brand-primary-text", "--brand-accent-text", "--brand-secondary-text", "--brand-primary-fg",
