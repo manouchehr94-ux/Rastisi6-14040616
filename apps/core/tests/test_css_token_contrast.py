@@ -15,7 +15,7 @@ import re
 from django.test import SimpleTestCase
 
 from apps.core.color_utils import AA_NON_TEXT, AA_NORMAL_TEXT, DISABLED_TEXT_TARGET, contrast_ratio
-from apps.core.tests.css_tokens import custom_properties, iter_rules, read_css, resolve
+from apps.core.tests.css_tokens import custom_properties, iter_rules, ratio, read_css, resolve
 
 AA = AA_NORMAL_TEXT
 
@@ -346,3 +346,88 @@ class KnownRegressionTests(SimpleTestCase):
         for pixel in ("#000000", "#ffffff"):
             self.assertGreaterEqual(ratio_between("#ffffff", "rgba(18,20,26,.78)", backdrop=pixel), AA)
             self.assertGreaterEqual(ratio_between("#ffffff", "rgba(14,16,22,.66)", backdrop=pixel), AA)
+
+
+# --------------------------------------------------------------------------- surface ownership (live template switching)
+
+
+class CategoryComponentSurfaceOwnershipTests(SimpleTestCase):
+    """A Template switch replaces the palette but keeps the merchant's sections, so any section presentation can meet
+    any palette. Every component therefore has to name the surface its text sits on:
+
+    * text directly on the PAGE (or on a merchant/palette BAND) uses ``--sfb-section-fg`` when a band defines it and the
+      accessible page-text token otherwise — never a fixed dark or white literal;
+    * a component that paints its OWN fixed tile uses a fixed colour that is verified on that tile.
+    """
+
+    FILES = ("apps/catalog/static/css/home.css", "apps/storefront_builder/static/css/storefront_builder.css")
+    #: text sits directly on the page / band
+    PAGE_OWNED = (".category-image-tile", ".category-fashion-tile", ".category-beauty-tile", ".category-chocolate-story-item",
+                  ".tile-circle", ".tile-circle-label")
+    #: own fixed surface: (selector, surface colour)
+    TILE_OWNED = ((".category-mosaic-tile", "#ffffff"), (".category-mosaic-chevron", "#ffffff"),
+                  (".category-chocolate-label", "#7B4518"))
+    #: (page background, accessible page text, band background or None, band foreground or None)
+    SCENARIOS = (
+        ("dark page", "#070707", "#FFE76A", None, None),
+        ("light page", "#FFFDF9", "#201B17", None, None),
+        ("dark page, light band", "#070707", "#FFE76A", "#FFFFFF", "#000000"),
+        ("light page, dark band", "#FFFDF9", "#201B17", "#1A1A2E", "#FFFFFF"),
+        ("saturated page", "#FF4D77", "#000000", None, None),
+    )
+
+    @staticmethod
+    def final_colour(css, selector):
+        """The ``color`` of the LAST rule that sets one on exactly ``selector`` (later rules win at equal specificity)."""
+        found = None
+        for sel, decls in iter_rules(css):
+            if selector in [s.strip() for s in sel.split(",")] and "color" in decls:
+                found = decls["color"]
+        return found
+
+    def test_page_owned_text_follows_the_surface_it_sits_on(self):
+        failures = []
+        for path in self.FILES:
+            css = read_css(path)
+            for selector in self.PAGE_OWNED:
+                value = self.final_colour(css, selector)
+                if value is None:
+                    continue  # inherits from a component that is itself checked
+                for name, page, text, band, band_fg in self.SCENARIOS:
+                    props = {"--brand-text": text, "--ink": text}
+                    surface = page
+                    if band:
+                        props["--sfb-section-fg"] = band_fg
+                        surface = band
+                    got = ratio(value, surface, props)
+                    if got + 1e-9 < AA:
+                        failures.append(f"{path}: {selector} {{color:{value}}} on {name} ({surface}) = {got:.2f}:1")
+        self.assertFalse(failures, "\n".join(failures))
+
+    def test_own_surface_components_use_a_colour_verified_on_their_own_tile(self):
+        failures = []
+        for path in self.FILES:
+            css = read_css(path)
+            for selector, surface in self.TILE_OWNED:
+                value = self.final_colour(css, selector)
+                if value is None:
+                    continue
+                for name, _page, text, _band, _fg in self.SCENARIOS:
+                    # palette tokens change per scenario; a tile with its own surface must not depend on them
+                    got = ratio(value, surface, {"--brand-text": text, "--muted": text, "--ink": text, "--brand-muted": text})
+                    if got + 1e-9 < AA:
+                        failures.append(f"{path}: {selector} {{color:{value}}} on its own {surface} under {name} = {got:.2f}:1")
+        self.assertFalse(failures, "\n".join(failures))
+
+    def test_the_two_stylesheets_agree_on_category_text_colours(self):
+        """home.css (public) and storefront_builder.css (Builder preview) both ship these rules; they must not diverge."""
+        home, builder = (read_css(p) for p in self.FILES)
+        for selector in self.PAGE_OWNED + tuple(s for s, _ in self.TILE_OWNED):
+            a, b = self.final_colour(home, selector), self.final_colour(builder, selector)
+            if a is not None and b is not None:
+                self.assertEqual(a, b, selector)
+
+    def test_filled_admin_shortcut_keeps_its_own_foreground_inside_every_header(self):
+        css = read_css("apps/storefront_builder/static/css/storefront_builder.css")
+        rule = next(d for s, d in iter_rules(css) if ".gh a.store-admin-shortcut" in s)
+        self.assertEqual(rule["color"], "var(--brand-primary-fg,#fff)")

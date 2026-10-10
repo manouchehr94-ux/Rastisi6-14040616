@@ -58,6 +58,7 @@ python manage.py runserver 127.0.0.1:8765 --noreload &   # static+templates are 
 python tools/contrast_audit/run_audit.py --suite all --viewport 1366x768 --out /tmp/audit.json
 python tools/contrast_audit/run_audit.py --suite dashboard --viewport 390
 python tools/contrast_audit/run_audit.py --suite storefront-templates           # all 50 Ready Templates (publishes each to the demo store)
+python tools/contrast_audit/run_audit.py --suite template-switch                 # live switching inside Design Studio (see below)
 python tools/contrast_audit/run_audit.py --suite dashboard --only dashboard:products --dump badge   # print every measurement of a selector
 python tools/contrast_audit/explain.py URL ".selector" [--text STR] [--hover] [--anon]             # which rule/file wins the colour
 ```
@@ -83,3 +84,19 @@ Use `explain.py` to find the winning rule, then fix the **token or pairing**, no
   (`apps/storefront_builder/accessible_colors.py`), as a fill → the matching `*-fg`;
 * text over a merchant image → a contained scrim panel behind the text, not `text-shadow` and not hope;
 * link reset beating a component class → zero-specificity resets (`:where(...)`), never `!important`.
+
+## `template-switch` — live Template switching in Design Studio
+
+Opening a template fresh is not the same contract as *switching* to it on an existing Draft: the switch replaces the
+palette but preserves merchant-modified sections and their presentation, so an old presentation can meet a new palette.
+This suite drives the real Design Studio UI on one Draft (light -> dark -> warm -> saturated -> light -> dark -> light -> dark;
+override the four keys with `--switch-matrix light,dark,warm,saturated`). After every switch it
+
+* measures the candidate preview and the applied preview iframe (rest), and hover/active/Tab focus on the same draft;
+* checks that every derived usage token the page emits equals what the server derives from the Draft's CURRENT
+  appearance (`stale_tokens` — nothing carried over from the previous template);
+* cross-checks every category-rail presentation (and a band of opposite luminance behind the page-surface ones) on the palette
+  just applied;
+* at the end publishes the dark template and verifies the anonymous storefront and that preview tokens == published tokens.
+
+It exits non-zero on any text/focus failure, stale token, step error or preview/published difference.

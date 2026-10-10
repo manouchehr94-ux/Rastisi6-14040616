@@ -738,7 +738,7 @@ class CategoryGridCircularNonHomeCssTests(TestCase):
         )
         self.assertIn(
             ".tile-circle{display:flex;flex-direction:column;align-items:center;"
-            "text-align:center;color:var(--ink);gap:5px;width:auto;min-width:0;"
+            "text-align:center;color:var(--sfb-section-fg,var(--brand-text,var(--ink)));gap:5px;width:auto;min-width:0;"
             "flex:0 1 145px}",
             css,
         )
@@ -759,7 +759,7 @@ class CategoryGridCircularNonHomeCssTests(TestCase):
             css,
         )
         self.assertIn(".tile-circle-wm{font-size:38px}", css)
-        self.assertIn(".tile-circle-label{font-size:11.8px;font-weight:600;color:#333}", css)
+        self.assertIn(".tile-circle-label{font-size:11.8px;font-weight:600;color:var(--sfb-section-fg,var(--brand-text,#333))}", css)
         self.assertIn(
             "@media(max-width:1000px){\n"
             "  .tiles-circular{overflow-x:auto;justify-content:flex-start;gap:14px}\n"
@@ -1104,7 +1104,7 @@ class CategoryGridImageStripNonHomeCssTests(TestCase):
         )
         self.assertIn(
             ".category-image-tile{min-width:0;display:flex;flex-direction:column;"
-            "align-items:center;gap:4px;color:#25282d;text-align:center}",
+            "align-items:center;gap:4px;color:var(--sfb-section-fg,var(--brand-text,#25282d));text-align:center}",
             css,
         )
         self.assertIn(
@@ -1304,7 +1304,7 @@ class CategoryGridRemainingModesNonHomeCssTests(TestCase):
             css,
         )
         self.assertIn(
-            '.category-fashion-tile{display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--brand-text,#25282d);text-align:center;flex:0 0 64px;scroll-snap-align:start}',
+            '.category-fashion-tile{display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--sfb-section-fg,var(--brand-text,#25282d));text-align:center;flex:0 0 64px;scroll-snap-align:start}',
             css,
         )
         self.assertIn(
@@ -1372,7 +1372,7 @@ class CategoryGridRemainingModesNonHomeCssTests(TestCase):
         )
         self.assertIn(
             ".category-beauty-tile{display:flex;flex-direction:column;align-items:center;"
-            "gap:7px;text-align:center;color:var(--ink);min-width:0}",
+            "gap:7px;text-align:center;color:var(--sfb-section-fg,var(--brand-text,var(--ink)));min-width:0}",
             css,
         )
         self.assertIn(

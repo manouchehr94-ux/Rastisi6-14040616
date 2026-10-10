@@ -165,3 +165,32 @@ Hover, active and keyboard focus were measured in every audit above (rest/hover/
 - Evidence JSON/screenshots were produced under the session's scratch area and are not committed (the repo keeps the tool and the tests that regenerate them). Re-run with `tools/contrast_audit/README.md`.
 - **Mixed dark/light surfaces.** A merchant may legitimately choose a dark page background with a light card surface. One colour can then clear AA on both only when `(L_light + 0.05) / (L_dark + 0.05) >= 4.5^2` (a near-black page against a near-white card). `ensure_contrast()` now finds that narrow mid-luminance band (an earlier version required pure black or pure white to pass first and could return a 1:1 colour; corrected after independent review, with regression tests). For surface pairs where no single colour can reach the target, it returns the best worst-case (maximin) hue-preserving colour, which can be below 4.5:1 on one surface (e.g. about 4.34:1 for `#0F0F23` + `#FFFFFF`). Such a theme is accepted as-is, not rejected, and the body text colour the merchant chose is still validated by the existing form rules.
 - Delivery: the branch was pushed to `origin` for independent review. No pull request has been opened, nothing has been merged and nothing has been deployed.
+
+## 13. Follow-up: live Template switching in Design Studio
+
+An owner QA of Design Studio found a defect the static/per-template audit could not: switching an existing light Draft to a dark
+Template left the category labels nearly black on the black page.
+
+**Switch semantics (existing contract, unchanged).** `r4_mutation_service.switch_template` -> `preset_service.switch_ready_template_preserving`
+on the SAME Draft: appearance (palette slug, colour/role overrides, template slug, typed manifest), header/footer config, provenance and baseline
+are REPLACED by the target Ready Template's (old colour overrides are dropped); a proven-pristine page is replaced by the target composition, a
+merchant-modified page keeps its sections together with their presentation settings (e.g. `display_mode`).
+
+**Reproduced in the real browser** (Design Studio, `?panel=appearance`; light `editorial_jewelry`, home category rail set to `image_strip`, then Apply `night_catalog`):
+persisted palette `atelier-ivory` -> `theme-black-gold`, `color_overrides {}`, rail presentation still `image_strip`; preview tokens were all correct
+(`--brand-text #FFE76A`, `--brand-background #070707`) but `.category-image-label` computed `rgb(37,40,45)` on `rgb(7,7,7)` = **1.36:1**.
+
+**Root cause: wrong semantic token, exposed by preservation (not a stale-token bug).** Tokens refreshed correctly; the components hard-coded dark text
+(`.category-image-tile{color:#25282d}`, `.category-chocolate-story-item{color:#33271d}`, `.tile-circle-label{color:#333}`) or used the page-only `--ink`/`--brand-text`
+while sitting on a page that a Template switch had made dark (or on a merchant band). Also found: the owner's admin shortcut label inherited the header ink
+on the primary fill (3.4:1 on `atelier-ivory`, equal-specificity reset in `.gh :where(a,button)`), and the mosaic chevron used palette muted text on its fixed white tile (1.2:1 on dark).
+
+**Fix (surface ownership).** Text on the page or a band: `color:var(--sfb-section-fg,var(--brand-text,<fallback>))` (band foreground when a band defines it, accessible page text otherwise);
+own fixed tile: a fixed colour verified on that tile; filled control: its own `-fg` token at every state. No global white/forced section colour. Applied identically in `home.css` and `storefront_builder.css`.
+
+**Evidence.** `run_audit.py --suite template-switch` (new; 7 switches, 4 template classes, every category presentation, band cases, publish): before the fix 46 distinct failures
+(worst 1.0:1, includes the reported 1.36:1); after: **0 text failures, 0 focus failures, 0 stale tokens, 0 errors, preview tokens == published tokens**. Published anonymous storefront for the formerly failing rail:
+`rgb(255,231,106)` on `rgb(7,7,7)` = 16.2:1, identical to the preview. Deterministic regression tests: `test_template_switch_contrast` (11: light<->dark, custom mixed-surface palette -> template, A->B->A, 8-step walk, preserved presentations on the new palette),
+`CategoryComponentSurfaceOwnershipTests` (5 scenarios incl. bands). These fail on the previous CSS (1.36:1).
+
+**Limitation.** The cross-product (preserved presentation x new palette) was audited for the category rail, which the defect concerned; other section types were measured on whole-page switches only, not per presentation variant.

@@ -3529,6 +3529,10 @@ a.sfb-v3-component-item,
    to outrank a component's own semantic color token, regardless of
    palette. Not scoped to any Store/Template/palette. */
 .gh :where(a,button){color:inherit}
+/* The owner's admin shortcut is a FILLED control (--brand-primary fill + --brand-primary-fg label, layout.css). The reset above has the same
+   specificity (0,1,0) as `.store-admin-shortcut` and loads later, so inside any header it used to hand the label the header's text colour
+   (dark ink on the primary fill = 3.4:1 on atelier-ivory). A filled control owns its foreground; keep the pair together at every state. */
+.gh a.store-admin-shortcut,.gh a.store-admin-shortcut:hover{color:var(--brand-primary-fg,#fff)}
 .gh a:focus-visible,.gh button:focus-visible,.gh input:focus-visible{outline:2px solid var(--theme-header-text,var(--focus-ink));outline-offset:2px;box-shadow:0 0 0 2px var(--theme-header-bg,var(--focus-halo))}
 
 /* correction pass — these five containers use horizontal overflow-scroll
@@ -4853,12 +4857,12 @@ a.sfb-v3-component-item,
 .category-circle-section{margin:9px 0 7px}
 .category-circle-section .sec-head{margin-bottom:6px}
 .tiles-circular{display:flex;flex-wrap:nowrap;justify-content:space-around;gap:28px;overflow:visible;padding:2px 12px 5px}
-.tile-circle{display:flex;flex-direction:column;align-items:center;text-align:center;color:var(--ink);gap:5px;width:auto;min-width:0;flex:0 1 145px}
+.tile-circle{display:flex;flex-direction:column;align-items:center;text-align:center;color:var(--sfb-section-fg,var(--brand-text,var(--ink)));gap:5px;width:auto;min-width:0;flex:0 1 145px}
 .tile-circle:hover .tile-circle-img{transform:none;box-shadow:0 2px 8px rgba(15,23,42,.08)}
 .tile-circle-img{width:112px;height:112px;border-radius:50%;overflow:hidden;background:transparent;border:0;box-shadow:none;display:grid;place-items:center;transition:.2s}
 .tile-circle-img img{width:100%;height:100%;object-fit:contain;background:#fff;border-radius:50%;border:1px solid #e3e5e8;padding:4px}
 .tile-circle-wm{font-size:38px}
-.tile-circle-label{font-size:11.8px;font-weight:600;color:#333}
+.tile-circle-label{font-size:11.8px;font-weight:600;color:var(--sfb-section-fg,var(--brand-text,#333))}
 @media(max-width:1000px){
   .tiles-circular{overflow-x:auto;justify-content:flex-start;gap:14px}
   .tile-circle{flex:0 0 110px}
@@ -4920,7 +4924,7 @@ a.sfb-v3-component-item,
 .category-image-strip-section .sec-head{margin-bottom:4px}
 .rcontainer:has(.category-image-strip-section){margin-bottom:5px}
 .category-image-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:14px;align-items:start;padding:2px 6px 4px}
-.category-image-tile{min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;color:#25282d;text-align:center}
+.category-image-tile{min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--sfb-section-fg,var(--brand-text,#25282d));text-align:center}
 .category-image-media{width:100%;height:106px;display:grid;place-items:center;overflow:hidden;background:transparent}
 .category-image-media img{display:block;width:100%;height:100%;object-fit:contain;border:0;border-radius:0;padding:0;box-shadow:none}
 .category-image-fallback{font-size:42px;line-height:1}
@@ -4951,7 +4955,7 @@ a.sfb-v3-component-item,
 .category-fashion-rail-section{margin:2px 0}
 .category-fashion-rail{display:flex;overflow-x:auto;gap:18px;padding-inline:2px 2px;scroll-snap-type:x proximity;scrollbar-width:none}
 .category-fashion-rail::-webkit-scrollbar{display:none}
-.category-fashion-tile{display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--brand-text,#25282d);text-align:center;flex:0 0 64px;scroll-snap-align:start}
+.category-fashion-tile{display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--sfb-section-fg,var(--brand-text,#25282d));text-align:center;flex:0 0 64px;scroll-snap-align:start}
 .category-fashion-media{width:60px;height:60px;aspect-ratio:1/1;border-radius:50%;overflow:hidden;background:#f4f2f5;display:grid;place-items:center;border:none}
 .category-fashion-media img{width:100%;height:100%;object-fit:cover;object-position:center 20%}
 .category-fashion-fallback{font-size:22px}
@@ -4966,7 +4970,7 @@ a.sfb-v3-component-item,
 .category-fashion-mosaic{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
 .category-mosaic-tile{display:flex;flex-direction:column;gap:8px;color:#25282d;background:#fff;border-radius:10px;overflow:hidden}
 .category-mosaic-heading{display:flex;align-items:center;gap:4px;font-size:12.5px;font-weight:800;padding-inline:2px}
-.category-mosaic-chevron{color:var(--muted);font-size:11px}
+.category-mosaic-chevron{color:#5f646b;font-size:11px}  /* sits on the tile's own fixed white surface, so a fixed grey (6:1), not the palette's muted text */
 .category-mosaic-media{aspect-ratio:1/1;border-radius:8px;overflow:hidden;background:#f6f4f5}
 .category-mosaic-media img{width:100%;height:100%;object-fit:cover}
 .category-mosaic-fallback{font-size:30px}
@@ -4982,7 +4986,7 @@ a.sfb-v3-component-item,
    above (Group A2); only the icon-strip-specific classes are new. */
 .category-beauty-strip-section{margin:24px 0 30px}
 .category-beauty-strip{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:28px;align-items:start}
-.category-beauty-tile{display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;color:var(--ink);min-width:0}
+.category-beauty-tile{display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;color:var(--sfb-section-fg,var(--brand-text,var(--ink)));min-width:0}
 .category-beauty-media{width:96px;height:96px;border-radius:14px;padding:7px;overflow:hidden;display:grid;place-items:center;background:linear-gradient(145deg,var(--violet),color-mix(in srgb,var(--violet) 70%,#ef41ba));box-shadow:0 4px 10px color-mix(in srgb,var(--violet) 18%,transparent)}
 .category-beauty-media img{width:100%;height:100%;object-fit:contain;border-radius:9px;background:#fff;padding:12px}
 .category-beauty-fallback{font-size:29px;color:#fff}
@@ -5005,7 +5009,7 @@ a.sfb-v3-component-item,
 .category-chocolate-story-section{margin:12px 0 10px}
 .category-chocolate-story-rail{display:flex;align-items:flex-start;justify-content:center;gap:14px;overflow-x:auto;padding:2px 6px 8px;scrollbar-width:none}
 .category-chocolate-story-rail::-webkit-scrollbar{display:none}
-.category-chocolate-story-item{flex:0 0 104px;display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;color:#33271d;min-width:0}
+.category-chocolate-story-item{flex:0 0 104px;display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;color:var(--sfb-section-fg,var(--brand-text,#33271d));min-width:0}
 .category-chocolate-story-media{width:82px;height:82px;border-radius:50%;padding:3px;background:#fff;border:2px solid #C85C72;box-shadow:0 3px 10px rgba(74,48,25,.08);display:grid;place-items:center;overflow:hidden}
 .category-chocolate-story-media img{width:100%;height:100%;object-fit:cover;border-radius:50%}
 .category-chocolate-story-fallback{font-size:30px}
