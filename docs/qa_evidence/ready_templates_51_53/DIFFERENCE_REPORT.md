@@ -24,9 +24,9 @@ The seeded demo store only has 3 categories, fashion photos and no brands/badges
 
 | | reference | render | main cause of the difference |
 |---|---|---|---|
-| 51 page height | 7978 | ≈ 6630 | footer 913 vs ≈ 500 (DATA: badges/paragraph), blog/brand panel (ENGINE), top block 1492 vs ≈ 1334 |
-| 52 page height | 5571 | ≈ 4263 | footer/newsletter block and "recently viewed" panel (DATA/INTENT), campaign bands +13 % |
-| 53 page height | 15484 | ≈ 14492 | content column 1169 px (ref) vs 1148 px (render); image rhythm |
+| 51 page height | 7978 | ≈ 6800 | footer 913 vs ≈ 500 (DATA: badges/paragraph), two lazy-load gaps in the capture (INTENTIONAL), top block 1492 vs ≈ 1334 |
+| 52 page height | 5571 | ≈ 4260 | footer/newsletter block and "recently viewed" panel (DATA/INTENT), campaign bands +13 % |
+| 53 page height | 15484 | ≈ 14410 | content column 1169 px (ref) vs 1148 px (render); image rhythm; reference blog/about blocks |
 
 ## Template 51 — `stationery_spectrum` ("تحریر رنگی")
 
@@ -49,7 +49,8 @@ brand carousel (126) · blog grid (264) · `stationery_dark` footer (≈ 500).
 | centre-stepper product cards, no quick view | matched | — |
 | strip banner | image banner of 64 px, but demo image, no artwork | DATA |
 | paired rails | two lazy-load gaps in the capture are filled with the same rail component | INTENT |
-| blog and brand panels (white panel + title chip + 6 carded items with a button) | **not reproduced**: plain grid / carousel | ENGINE |
+| brand panel: white rounded surface, centred title with accent underline | reproduced (white colour band + generic panel look); brand tiles show names | ASSET (no logos) |
+| blog panel: white rounded surface, one row of square-image cards with category badge, 2-line title, action pill | reproduced via the new generic `blog_posts` option `style: panel_carousel`; 4 cards (4 demo posts) instead of 6; no side arrows, no heading icon | DATA (post count) / ENGINE (arrows, icon) |
 | footer (links bar, 4th column, paragraph, 5 badge tiles) | structure present, badge row/paragraph absent | DATA |
 | header proportions | close, not measured per element | — |
 
@@ -68,7 +69,7 @@ wall `featured_row` (563) · newsletter (146) · features (70) · `beauty_retail
 |---|---|---|
 | hero height/ratio, dots only | matched (506 vs 521) | — |
 | icon tiles: purple glyph tiles, no photos, 6-track geometry | matched; 3 tiles shown | DATA |
-| gradient tiles: gradient + text + picture, 4 columns | matched; 3 tiles shown | DATA |
+| gradient tiles: 4 columns, gap ≈ 32 px, ratio ≈ 1.35, radius 22 px, pink/blue/yellow/indigo order, bold title top-start, picture bottom-end | matched; 3 tiles shown; picture is a rectangular photo (the reference uses cut-out PNGs); the reference's second text line (category description) is not rendered because categories have no description field | ASSET / DATA |
 | campaign bands | matched in structure; ≈ 13 % taller than reference | ENGINE (card height) |
 | wall / banner pair / featured row | matched in structure and order | — |
 | "recently viewed" heading with empty body | omitted — the region is empty in the capture | INTENT |
@@ -89,7 +90,7 @@ blog (376) · avatar testimonials (340) · `kawaii_minimal` footer (79).
 | aspect | status | class |
 |---|---|---|
 | group count/rhythm, 4 columns, square tinted images | matched | — |
-| pager bar (button, page number, next) | built as a real bar; styling approximated | ENGINE (reference blurred) |
+| pager bar | order, proportions and states now follow the reference (disabled previous-page control at the start edge, page box with «صفحه … از ۱» in the centre, purple action button at the end edge, ≈ 56 px bar); colours come from palette tokens | — |
 | plain image/text block | plain image box + placeholder structure | — |
 | content column width | 1148 px vs 1169 px (−2 %) | ENGINE (width presets) |
 | hero offset above first section | ≈ 50 px larger than reference | not tuned |
@@ -101,28 +102,45 @@ blog (376) · avatar testimonials (340) · `kawaii_minimal` footer (79).
 | # | v1 approximation | v2 |
 |---|---|---|
 | 51 | decorative strip no longer text-only | **YES** (64 px image banner via `strip-art`; demo image) |
-| 51 | blog / brand boxes closer to reference | **NO** (only the thumbnail-overflow bug that hid blog text was fixed; panel wrapper not built) |
+| 51 | blog / brand boxes closer to reference | **PARTIAL → YES for structure** (both panels reproduced in the closure pass; arrows, heading icon, card count and brand logos still differ) |
 | 51 | band heights / order / patterns closer | **YES** |
 | 52 | purple icon category tiles | **YES** (`icon_tiles`, no photos) |
-| 52 | four coloured editorial tiles | **PARTIAL** (`gradient_tiles` text + picture, 4-column geometry; 3 tiles with demo data) |
+| 52 | four coloured editorial tiles | **PARTIAL** (geometry, gap, radius, colour order, text placement matched in the closure pass; cut-out artwork and subtitle line are missing) |
 | 52 | unrelated final product row removed | **YES** |
-| 53 | pager closer | **PARTIAL** |
+| 53 | pager closer | **YES** (closure pass) |
 | 53 | image/text blocks no longer generic tan boxes | **YES** |
-| 53 | invented placeholder marketing copy removed/reduced | **PARTIAL** (no marketing claims; neutral placeholder lines such as «نام مشتری» and instruction-style block text remain) |
+| 53 | invented placeholder marketing copy removed/reduced | **YES** (closure pass: testimonials now carry only the neutral labels «مشتری» / «نظر مشتری»; block placeholders are editor instructions «عنوان بخش» / «متن این بخش را از ویرایشگر وارد کنید.»; no person names or marketing sentences) |
 | 53 | generic extra feature boxes removed | **YES** |
 | 53 | quick-view buttons suppressed | **YES** (generic `show_quick_view` card option, set false only in 51/52/53) |
 
+## Final closure pass (this commit)
+
+| item | status |
+|---|---|
+| Template 51 blog/brand panels | **PARTIAL** (structure fixed; arrows/heading icon = ENGINE, 4 of 6 cards = DATA, brand logos = ASSET) |
+| Template 52 editorial tiles | **PARTIAL** (cut-out artwork = ASSET, category subtitle = DATA) |
+| Template 53 pager | **FIXED** |
+| Template 53 placeholder copy | **FIXED** (neutral structural labels only) |
+| Template-switch step-5 failure | **FIXED** (real defect, not an artifact — see below) |
+
+New generic primitive in this pass: `blog_posts.style = "panel_carousel"` (written only when selected; exposed as a choice in the settings schema).
+Brand panel uses the existing white colour band (no new setting).
+
+### Step-5 root cause
+Transition `stationery_spectrum → night_catalog`, category presentation `chocolate_story`, rest state, page `#070707`:
+selector `section.category-chocolate-story-section > div.chocolate-section-title > h2`, foreground `#3C2B1D`, background
+`#070707`, ratio 1.49:1 (need 4.5). It is a real, pre-existing defect class: `.chocolate-section-title h2` painted a fixed brown on the
+**page** surface. It only appeared at step 5 because a preserved title-bearing category section (templates 52/53 carry a category title;
+template 51 has none) met a dark palette. Fixed by painting the title with the page ink token (`--sfb-section-fg`, else `--ink`).
+Reproduced and re-verified with only that transition (steps 1–5 replayed at service level, step 5 measured with all 11 category
+presentations plus the 6 band presentations on the published page): **0 failures**.
+
 ## Contrast verification (honest status)
 
-* Runtime `storefront-templates` audit (home, listing, product, cart; rest + hover + active + focus + toggles) on the
-  v2 code, 1440 px: **51 = 0 failures, 52 = 0 failures, 53 = 0 failures** (run before the last two small CSS commits:
-  category-row geometry and band-aware title/newsletter/empty-note colours).
-* Deterministic contrast tests (`test_css_token_contrast`, `test_contrast_utils`, `test_ready_template_contrast`,
-  `test_template_switch_contrast`) were part of a 976-test focused run; only two failures, neither caused by this work
-  (`test_u8_template_gallery` fails identically on the contrast base; the palette-count contract was updated afterwards).
-* `template-switch` suite with matrix `stationery_spectrum, night_catalog, magenta_beauty_retail, pastel_kawaii_stationery`:
-  first run found real defects that were fixed (band-aware `beauty-section-title`/`chocolate-section-title`, `blog-card .read`,
-  `special-list-price`, featured wall title chip, newsletter on a colour band, empty-state note over patterns,
-  blog thumbnail overflow). The rerun **was stopped after step 3 (steps 1–3 clean; 0 stale tokens; 0 errors) because it was taking
-  too long**. Its log showed `failures_so_far=1` at step 5 (stationery_spectrum → night_catalog); that single finding was
-  **not diagnosed**. Steps 4–7, the final published-vs-preview token check and the post-fix rest audits were not re-run.
+* Runtime `storefront-templates` audit (home, listing, product, cart; rest state) on the final code, 1440 px:
+  **51 = 0 failures, 52 = 0 failures, 53 = 0 failures**. Hover/active/focus/toggle sweeps were not repeated in the closure pass
+  (they passed in the previous full runs; no interactive-state CSS changed except the pager, which is not interactive on a single page).
+* Deterministic tests (`test_css_token_contrast`, `test_ready_template_contrast`, `test_template_switch_contrast`, `test_section_registry`,
+  `test_reference_templates_51_53`): 349 tests OK.
+* Full 7-step `template-switch` suite: **not completed**. Its second run was stopped after step 3 (steps 1–3 clean); the only finding it
+  had logged by step 5 is the one diagnosed and fixed above. Steps 4–7 and the final preview-vs-published token comparison were not re-run.

@@ -164,9 +164,10 @@ _SPECTRUM_HOME = (
     _spectrum_band("بازی و آموزش", "newest", "tone-5"),
     PresetSectionEntry("brand_carousel", settings={
         "title": "بهترین برندهای فروشگاه", "display_mode": "carousel", "show_view_all": False,
+        "background": {"mode": "color", "color": "#FFFFFF"},
         "spacing": _SPECTRUM_SPACING,
     }),
-    PresetSectionEntry("blog_posts", settings={"title": "مجله فروشگاه", "item_limit": 6}),
+    PresetSectionEntry("blog_posts", settings={"title": "مجله فروشگاه", "item_limit": 6, "style": "panel_carousel"}),
 )
 _SPECTRUM_NAMES = (
     "banner_strip", "offer_flash", "hero", "categories", "trust", "banner_tiles",
@@ -447,10 +448,10 @@ register_layout_preset(LayoutPresetDefinition(
             PresetSectionEntry("testimonials", settings={
                 "title": "نظرات مشتریان", "style": "avatar_grid",
                 "items": [
-                    {"name": "نام مشتری", "quote": "متن نظر مشتری در این بخش نمایش داده می‌شود."},
-                    {"name": "نام مشتری", "quote": "متن نظر مشتری در این بخش نمایش داده می‌شود."},
-                    {"name": "نام مشتری", "quote": "متن نظر مشتری در این بخش نمایش داده می‌شود."},
-                    {"name": "نام مشتری", "quote": "متن نظر مشتری در این بخش نمایش داده می‌شود."},
+                    {"name": "مشتری", "quote": "نظر مشتری"},
+                    {"name": "مشتری", "quote": "نظر مشتری"},
+                    {"name": "مشتری", "quote": "نظر مشتری"},
+                    {"name": "مشتری", "quote": "نظر مشتری"},
                 ],
             }),
         ), (

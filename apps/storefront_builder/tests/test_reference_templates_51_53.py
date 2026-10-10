@@ -172,14 +172,15 @@ class ReferenceTemplateRegistryTests(SimpleTestCase):
         self.assertIn("testimonials", _home_section_keys(pastel))
 
     def test_no_marketing_copy_is_invented_for_placeholder_blocks(self):
-        """Placeholder text is an instruction, never a marketing message."""
+        """Placeholder text is a neutral structural label, never a marketing message or a person name."""
         pastel = lpr.get_layout_preset("pastel_kawaii_stationery")
         for entry in pastel.pages["home"]:
             if entry.section_key == "image_text":
                 self.assertEqual(entry.settings["title"], "عنوان بخش")
                 self.assertIn("ویرایشگر", entry.settings["body_html"])
             if entry.section_key == "testimonials":
-                self.assertEqual({i["name"] for i in entry.settings["items"]}, {"نام مشتری"})
+                self.assertEqual({i["name"] for i in entry.settings["items"]}, {"مشتری"})
+                self.assertEqual({i["quote"] for i in entry.settings["items"]}, {"نظر مشتری"})
 
 
 class ReferenceVariantContractTests(SimpleTestCase):
@@ -354,3 +355,19 @@ class ReferencePrimitiveRenderTests(SimpleTestCase):
         self.assertNotIn("show_quick_view", section_registry.validate_card_settings({}))
         self.assertIs(section_registry.validate_card_settings({"show_quick_view": False})["show_quick_view"], False)
         self.assertNotIn("show_quick_view", section_registry.validate_card_settings({"show_quick_view": True}))
+
+
+class BlogPanelPrimitiveTests(SimpleTestCase):
+    def test_blog_panel_style_is_written_only_when_selected(self):
+        from apps.storefront_builder import section_registry as sr
+
+        self.assertNotIn("style", sr.validate_blog_posts_settings({"title": "x", "item_limit": 5}))
+        self.assertNotIn("style", sr.validate_blog_posts_settings({"style": "grid"}))
+        self.assertEqual(sr.validate_blog_posts_settings({"style": "panel_carousel"})["style"], "panel_carousel")
+
+    def test_spectrum_recipe_uses_the_generic_panel_presentations(self):
+        spectrum = lpr.get_layout_preset("stationery_spectrum")
+        blog = [e for e in spectrum.pages["home"] if e.section_key == "blog_posts"][0]
+        self.assertEqual(blog.settings["style"], "panel_carousel")
+        brands = [e for e in spectrum.pages["home"] if e.section_key == "brand_carousel"][0]
+        self.assertEqual(brands.settings["background"], {"mode": "color", "color": "#FFFFFF"})

@@ -1913,7 +1913,12 @@ def validate_blog_posts_settings(raw: dict) -> dict:
         raise BlogPostsSettingsError("تعدادِ مطالب باید عدد باشد") from None
     item_limit = max(_MIN_BLOG_POST_ITEMS, min(_MAX_BLOG_POST_ITEMS, item_limit))
     title = str(raw.get("title", "")).strip()[:_MAX_SECTION_TITLE_LENGTH]
-    return {"item_limit": item_limit, "title": title}
+    cleaned = {"item_limit": item_limit, "title": title}
+    # Optional presentation (written only when non-default): ``panel_carousel`` = one surface panel holding a
+    # single row of square-image cards with a category badge and an action pill.
+    if raw.get("style") == "panel_carousel":
+        cleaned["style"] = "panel_carousel"
+    return cleaned
 
 
 def default_blog_posts_settings() -> dict:
@@ -1930,6 +1935,10 @@ BLOG_POSTS_SCHEMA = SettingsSchema(fields=(
         "item_limit", "تعداد مطالب", "integer", "advanced",
         default=_DEFAULT_BLOG_POST_ITEMS,
         min_value=_MIN_BLOG_POST_ITEMS, max_value=_MAX_BLOG_POST_ITEMS,
+    ),
+    SettingsField(
+        "style", "نوع نمایش", "choice", "basic", default="grid",
+        choices=(("grid", "گرید"), ("panel_carousel", "پنل با ردیف کارت")),
     ),
 ))
 
