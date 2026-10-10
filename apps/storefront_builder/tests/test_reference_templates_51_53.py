@@ -1,0 +1,260 @@
+"""Reference-fidelity Ready Templates 51-53.
+
+Focused contracts for the three templates added on top of the token-built
+A8 catalog: registry identity, complete resolvable Store Appearance DNA, the
+narrowly-scoped variants they rely on, and the real merchant lifecycle
+(gallery card -> select/apply on a Draft -> switch -> publish -> public Home).
+"""
+
+from __future__ import annotations
+
+import dataclasses
+
+from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.template.loader import get_template
+from django.test import Client, SimpleTestCase, TestCase, override_settings
+from django.urls import reverse
+from django.utils import timezone
+
+from apps.storefront_builder import appearance_registry, global_region_registry
+from apps.storefront_builder import layout_preset_registry as lpr
+from apps.storefront_builder import section_registry
+from apps.storefront_builder.a8_ready_templates import A8_READY_TEMPLATES
+from apps.storefront_builder.services import layout_service as svc
+from apps.storefront_builder.services import ready_template_card_service, store_template_service
+from apps.storefront_builder.services import template_preview_service
+from apps.storefront_builder.storefront_appearance.families import COMPONENT_FAMILIES
+from apps.storefront_builder.storefront_appearance.registry import get_component
+from apps.stores.models import Store, StoreDomain
+
+User = get_user_model()
+
+REFERENCE_TEMPLATES = {
+    # 51 / 52 / 53 — key -> (label, header, footer, palette)
+    "stationery_spectrum": ("تحریر رنگی", "stationery_search", "stationery_dark", "marketplace-spectrum"),
+    "magenta_beauty_retail": ("زیبایی ارغوانی", "beauty_search_nav", "beauty_retail_columns", "orchid-retail"),
+    "pastel_kawaii_stationery": ("کاغذ پاستلی", "kawaii_center", "kawaii_minimal", "pastel-lilac"),
+}
+HOST = "sfb-ref-51-53.example.com"
+
+
+def _home_section_keys(preset):
+    return [entry.section_key for entry in preset.pages["home"]]
+
+
+class ReferenceTemplateRegistryTests(SimpleTestCase):
+    def test_three_new_official_templates_extend_the_fifty_key_catalog(self):
+        latest = {preset.key: preset for preset in lpr.list_ready_templates()}
+        self.assertEqual(len(A8_READY_TEMPLATES), 50)
+        self.assertEqual(len(latest), 53)
+        a8_keys = {preset.key for preset in A8_READY_TEMPLATES}
+        for key, (label, *_rest) in REFERENCE_TEMPLATES.items():
+            with self.subTest(key=key):
+                self.assertNotIn(key, a8_keys)
+                preset = latest[key]
+                self.assertTrue(preset.is_ready_template)
+                self.assertEqual(preset.version, "1")
+                self.assertEqual(preset.label_fa, label)
+                self.assertIs(lpr.get_layout_preset_version(key, "1"), preset)
+
+    def test_recipes_carry_the_reference_identity(self):
+        for key, (_label, header, footer, palette) in REFERENCE_TEMPLATES.items():
+            with self.subTest(key=key):
+                preset = lpr.get_layout_preset(key)
+                self.assertEqual(preset.header["header_variant"], header)
+                self.assertEqual(preset.footer["footer_variant"], footer)
+                self.assertEqual(preset.default_palette_slug, palette)
+                self.assertIsNotNone(appearance_registry.get_palette(palette))
+                self.assertEqual(
+                    preset.store_appearance["selections"]["header"], f"header.{header}.v1",
+                )
+                self.assertEqual(
+                    preset.store_appearance["selections"]["footer"], f"footer.{footer}.v1",
+                )
+                # Section-local card / product-view / hero variants must stay in
+                # force: a non-default manifest selection would override them
+                # on every section at render time.
+                for family in ("card", "product_view", "hero"):
+                    self.assertEqual(
+                        preset.store_appearance["selections"][family], f"{family}.legacy_default.v1",
+                    )
+
+    def test_every_recipe_has_complete_resolvable_dna(self):
+        for key in REFERENCE_TEMPLATES:
+            with self.subTest(key=key):
+                selections = lpr.get_layout_preset(key).store_appearance["selections"]
+                self.assertEqual(set(selections), set(COMPONENT_FAMILIES))
+                for family_key, component_key in selections.items():
+                    component = get_component(component_key)
+                    self.assertIsNotNone(component, component_key)
+                    self.assertEqual(component.family_key, family_key)
+
+    def test_every_home_row_has_a_unique_explicit_semantic_role(self):
+        for key in REFERENCE_TEMPLATES:
+            with self.subTest(key=key):
+                roles = [entry.semantic_slot_key for entry in lpr.get_layout_preset(key).pages["home"]]
+                self.assertTrue(all(roles))
+                self.assertEqual(len(roles), len(set(roles)))
+
+    def test_new_templates_are_structurally_distinct_from_the_whole_catalog(self):
+        def signature(preset):
+            return (
+                preset.header["header_variant"], preset.footer["footer_variant"],
+                tuple(_home_section_keys(preset)),
+                tuple(sorted((preset.store_appearance["selections"]).items())),
+            )
+
+        signatures = {}
+        for preset in lpr.list_ready_templates():
+            signatures.setdefault(signature(preset), []).append(preset.key)
+        for key in REFERENCE_TEMPLATES:
+            self.assertEqual(signatures[signature(lpr.get_layout_preset(key))], [key])
+
+    def test_recipe_composition_matches_the_reference_section_maps(self):
+        spectrum = lpr.get_layout_preset("stationery_spectrum")
+        keys = _home_section_keys(spectrum)
+        self.assertEqual(keys[0], "multi_banner")
+        self.assertEqual(keys.count("hero_banner"), 1)
+        self.assertIn("amazing_offers", keys)
+        # five coloured bands in palette tone order 1..5
+        roles = [
+            entry.settings["background"]["palette_role"]
+            for entry in spectrum.pages["home"]
+            if entry.section_key == "product_section"
+            and entry.settings.get("background", {}).get("mode") == "palette_pattern"
+        ]
+        self.assertEqual(roles, ["tone-1", "tone-2", "tone-3", "tone-4", "tone-5"])
+        # paired white rails share a 6/6 row
+        pair_rows = {}
+        for entry in spectrum.pages["home"]:
+            if entry.row_key:
+                pair_rows.setdefault(entry.row_key, []).append(entry.row_span)
+        self.assertIn([6, 6], pair_rows.values())
+
+        beauty = lpr.get_layout_preset("magenta_beauty_retail")
+        self.assertEqual(
+            _home_section_keys(beauty),
+            [
+                "hero_banner", "category_grid", "product_section", "multi_banner", "product_section",
+                "brand_carousel", "catalog_product_wall", "multi_banner", "catalog_product_wall",
+                "product_section", "newsletter", "trust_features",
+            ],
+        )
+
+        pastel = lpr.get_layout_preset("pastel_kawaii_stationery")
+        grids = [e for e in pastel.pages["home"] if e.section_key == "product_section"]
+        self.assertGreaterEqual(len(grids), 4)
+        self.assertTrue(all(e.settings["display_mode"] == "catalog_grid" for e in grids))
+        self.assertTrue(all(e.settings["card"]["card_style"] == "pastel_flat" for e in grids))
+
+
+class ReferenceVariantContractTests(SimpleTestCase):
+    def test_new_global_variants_resolve_to_real_renderers(self):
+        for region, key in (
+            (global_region_registry.GLOBAL_HEADER_REGION, "stationery_search"),
+            (global_region_registry.GLOBAL_HEADER_REGION, "kawaii_center"),
+            (global_region_registry.GLOBAL_FOOTER_REGION, "stationery_dark"),
+            (global_region_registry.GLOBAL_FOOTER_REGION, "kawaii_minimal"),
+        ):
+            with self.subTest(region=region.key, variant=key):
+                variant = global_region_registry.get_global_variant(region, key)
+                self.assertIsNotNone(variant)
+                self.assertTrue(variant.renderer.startswith(global_region_registry.GLOBAL_RENDERER_NAMESPACE))
+                get_template(variant.renderer)
+
+    def test_new_card_styles_and_display_modes_are_registered(self):
+        self.assertIn("center_stepper", section_registry.CARD_STYLE_CHOICES)
+        self.assertIn("pastel_flat", section_registry.CARD_STYLE_CHOICES)
+        self.assertIn("catalog_grid", section_registry.PRODUCT_SECTION_DISPLAY_MODES)
+        self.assertIn("pastel_tiles", section_registry.CATEGORY_GRID_DISPLAY_MODES)
+        self.assertIn("grey_circles", section_registry.CATEGORY_GRID_DISPLAY_MODES)
+        product = section_registry.get_definition("product_section")
+        self.assertIn("catalog_grid", {variant.key for variant in product.variants})
+        category = section_registry.get_definition("category_grid")
+        self.assertTrue({"pastel_tiles", "grey_circles"} <= {variant.key for variant in category.variants})
+
+    def test_orchid_palette_carries_the_brand_price_role(self):
+        palette = appearance_registry.get_palette("orchid-retail")
+        self.assertEqual(palette.theme_roles["price"], palette.colors["primary"])
+        self.assertEqual(len(palette.section_tones), 5)
+
+    def test_every_reference_recipe_section_validates_with_its_variant_settings(self):
+        for key in REFERENCE_TEMPLATES:
+            preset = lpr.get_layout_preset(key)
+            for page_type, entries in preset.pages.items():
+                for entry in entries:
+                    with self.subTest(key=key, page=page_type, section=entry.section_key):
+                        definition = section_registry.get_definition(entry.section_key)
+                        cleaned = (
+                            definition.default_settings() if entry.settings is None
+                            else definition.validate_settings(entry.settings)
+                        )
+                        if entry.section_key == "product_section" and entry.settings:
+                            self.assertEqual(
+                                cleaned["display_mode"], entry.settings["display_mode"],
+                            )
+
+    def test_recipes_contain_no_script_or_template_payload(self):
+        for key in REFERENCE_TEMPLATES:
+            serialized = str(dataclasses.asdict(lpr.get_layout_preset(key))).lower()
+            for needle in ("<script", "javascript:", "{%", "{{"):
+                self.assertNotIn(needle, serialized, key)
+
+
+@override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
+class ReferenceTemplateLifecycleTests(TestCase):
+    """Gallery card -> first apply -> preservation-first switch -> publish ->
+    public Home, for each of the three templates, through the real services."""
+
+    def setUp(self):
+        cache.clear()
+        self.store = Store.objects.get(slug="akhlaghi")
+        StoreDomain.objects.create(
+            store=self.store, hostname=HOST, is_primary=True,
+            verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=timezone.now(),
+        )
+        self.actor = User.objects.create_user(username="ref_51_53_owner", password="pass12345", is_staff=True)
+
+    def test_gallery_cards_exist_for_the_three_templates_with_a_thumbnail(self):
+        draft = svc.get_or_create_draft(self.store)
+        cards = ready_template_card_service.build_ready_template_cards(
+            draft, current_template_key=None, current_template_version=None,
+        )
+        by_key = {card["preset"].key: card for card in cards}
+        self.assertEqual(len(cards), 53)
+        for key in REFERENCE_TEMPLATES:
+            with self.subTest(key=key):
+                card = by_key[key]
+                self.assertTrue(card["thumbnail_svg"] or card["thumbnail_url"])
+                self.assertTrue(card["header_variant_label"])
+                self.assertTrue(card["footer_variant_label"])
+                self.assertTrue(card["palette_swatch"])
+                svg = template_preview_service.resolve_gallery_thumbnail(card["preset"])
+                self.assertIn("<svg", svg)
+
+    def test_each_template_applies_switches_publishes_and_renders_publicly(self):
+        client = Client(HTTP_HOST=HOST)
+        markers = {
+            "stationery_spectrum": ("gh--stationery", "gf--stationery"),
+            "magenta_beauty_retail": ("gh--beauty", "gf--beauty"),
+            "pastel_kawaii_stationery": ("gh--kawaii", "gf--kawaii"),
+        }
+        first = True
+        for key in REFERENCE_TEMPLATES:
+            with self.subTest(key=key):
+                result = store_template_service.select_ready_template(
+                    store=self.store, actor=self.actor, template_key=key,
+                )
+                self.assertEqual(result.action, "initial" if first else "switched")
+                first = False
+                applied = store_template_service.get_applied_template(self.store)
+                self.assertEqual((applied.key, applied.version), (key, "1"))
+                self.assertTrue(applied.is_current_version)
+                svc.publish(self.store, user=self.actor)
+                cache.clear()
+                response = client.get(reverse("catalog:home"))
+                self.assertEqual(response.status_code, 200)
+                html = response.content.decode()
+                for marker in markers[key]:
+                    self.assertIn(marker, html)

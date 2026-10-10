@@ -1,0 +1,11 @@
+{
+  "template_key": "magenta_beauty_retail",
+  "version": "1",
+  "content_hash": "e8c49722b4327a9d6c4429ddba27797dc2a370af8597f48cf8ca0eab264cf00a",
+  "preview_input_fingerprint": "7b9033951401e45760a998cb786da35e838a1ac0ff4ac7775d22ac4478fe116b",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}
