@@ -603,8 +603,9 @@ class GlobalHeaderCssVariableScopeTests(TestCase):
 
     def test_css_defines_shell_scoped_variables_not_header_scoped(self):
         css = _GLOBAL_HEADER_CSS_PATH.read_text(encoding="utf-8")
-        self.assertIn(".gh-shell{--gh-ink:", css)
-        self.assertIn(".gh-shell--dark{--gh-ink:", css)
+        # the shell rule also scopes the mobile drawer; the dark shell additionally derives an accent *text* token
+        self.assertIn(".gh-shell,.mobile-nav-drawer{--gh-ink:", css)
+        self.assertRegex(css, r"\.gh-shell--dark\{[^}]*--gh-ink:#f1f0f5")
         self.assertNotIn(".gh{--gh-ink:", css)
         self.assertNotIn(".gh--dark{--gh-ink:", css)
 
