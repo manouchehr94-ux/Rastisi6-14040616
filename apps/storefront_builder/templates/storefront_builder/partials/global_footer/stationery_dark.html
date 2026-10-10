@@ -1,0 +1,63 @@
+{% comment %}
+Dense dark retail footer with a service strip (key: stationery_dark).
+Structure: a one-row strip of the merchant's service highlights, a four-column
+information grid (quick links, categories, contact, store identity), the store
+statement with its credibility badges and a legal row.  Reuses only the shared
+merchant/footer data partials; the service strip is the merchant's own custom-text footer block
+(never fabricated copy) and is hidden when the store has none.
+{% endcomment %}
+{% load storefront_builder_extras %}
+{% has_real_footer_contact_data FOOTER_SETTINGS SHOP_CONTACT_PHONE SHOP_CONTACT_EMAIL as gf_has_contact_data %}
+{% with fc=footer_config rc=footer_config.responsive %}
+<footer class="gf gf--stationery">
+  <div class="wrap">
+    {% for block in fc.extra_blocks %}{% if block.type == "custom_text" and block.text %}
+    <p class="gf-st-strip">{{ block.text }}</p>
+    {% endif %}{% endfor %}
+    <div class="gf-st-grid">
+      {% if fc.show_quick_links %}
+      <div {% if rc.show_quick_links.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_quick_links.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+        {% include "storefront_builder/partials/global_footer/_shared/nav_column.html" %}
+      </div>
+      {% endif %}
+      {% if fc.show_categories %}
+      <div {% if rc.show_categories.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_categories.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+        {% include "storefront_builder/partials/global_footer/_shared/categories_column.html" %}
+      </div>
+      {% endif %}
+      {% if fc.show_contact %}
+      <div class="gf-col gf-col-contact" {% if rc.show_contact.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_contact.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+        {% include "storefront_builder/partials/global_footer/_shared/contact_column.html" %}
+      </div>
+      {% endif %}
+      {% for block in fc.extra_blocks %}
+      {% if block.type == "link" and block.url %}
+      <div class="gf-col gf-col-extra"><h5>{{ block.label|default:"پیوند" }}</h5><a href="{{ block.url }}" target="_blank" rel="noopener noreferrer">{{ block.label|default:block.url }}</a></div>
+      {% endif %}
+      {% endfor %}
+    </div>
+    <div class="gf-st-identity">
+      {% if fc.show_about %}
+      <div class="gf-col gf-col-brand" {% if rc.show_about.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_about.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+        {% include "storefront_builder/partials/global_footer/_shared/brand.html" %}
+      </div>
+      {% endif %}
+    </div>
+    {% include "storefront_builder/partials/global_footer/_shared/trust_payment.html" %}
+    {% if fc.show_copyright or fc.show_social and SOCIAL_LINKS_FOOTER %}
+    <div class="gf-legal-row">
+      {% if fc.show_copyright %}
+      <div {% if rc.show_copyright.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_copyright.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+        {% include "storefront_builder/partials/global_footer/_shared/legal_row.html" %}
+      </div>
+      {% endif %}
+      {% if fc.show_social %}
+      <div {% if rc.show_social.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_social.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+        {% include "storefront_builder/partials/global_footer/_shared/social_links.html" %}
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</footer>
+{% endwith %}

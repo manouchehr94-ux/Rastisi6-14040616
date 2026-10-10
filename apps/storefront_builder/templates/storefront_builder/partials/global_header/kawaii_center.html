@@ -1,0 +1,66 @@
+{% comment %}
+Soft stationery boutique header (key: kawaii_center).
+Structure: a two-tone announcement band (utility links over the message), a
+white main row with the merchant brand centred, the account pill + menu at the
+RTL edge and quiet icon actions at the opposite edge, then a light grey
+navigation bar.  Shared components only; no Ready Template condition.
+{% endcomment %}
+{% with hc=header_config rc=header_config.responsive %}
+<div class="gh-shell gh-shell--kawaii" x-data="{ ghMobileOpen: false }">
+{% if hc.announcement_enabled %}
+<div class="gh-kw-announce{% if is_builder_preview %} sfb-builder-announcement{% endif %}"
+     {% if is_builder_preview %}data-builder-announcement{% endif %}
+     {% if rc.announcement_enabled.hide_on_tablet %}data-shell-hide-tablet{% endif %}
+     {% if rc.announcement_enabled.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+  <div class="gh-kw-announce-top">
+    <div class="wrap">
+      {% if is_builder_preview %}<button type="button" class="sfb-announcement-edit-button" data-open-header-settings title="ویرایش نوار اعلان">⚙ ویرایش</button>{% endif %}
+      {% for link in hc.announcement_links %}<a href="{{ link.url|default:'#' }}">{{ link.label }}</a>{% endfor %}
+      {% if hc.announcement_show_phone and SHOP_CONTACT_PHONE %}<a href="tel:{{ SHOP_CONTACT_PHONE }}" dir="ltr">{{ SHOP_CONTACT_PHONE }}</a>{% endif %}
+      {% if not hc.announcement_links and not hc.announcement_show_phone and SHOP_TAGLINE %}<span>{{ SHOP_TAGLINE }}</span>{% endif %}
+    </div>
+  </div>
+  <div class="gh-kw-announce-msg"><div class="wrap"><span>{{ hc.announcement_text|default:"🚚 ارسال رایگان برای سفارش‌های بالای ۵۰۰,۰۰۰ تومان" }}</span></div></div>
+</div>
+{% endif %}
+<header class="header gh gh--kawaii{% if hc.sticky %} sfb-sticky{% endif %}">
+  <div class="wrap gh-kw-main">
+    <div class="gh-kw-start">
+      <button class="gh-btn gh-burger" @click="ghMobileOpen = !ghMobileOpen" :aria-expanded="ghMobileOpen.toString()" aria-controls="gh-kw-nav" aria-label="منو">
+        {% include "storefront_builder/partials/global_header/_shared/icon.html" with name="burger" %}
+      </button>
+      {% if hc.show_account %}
+      <div class="gh-inline-block gh-kw-account" {% if rc.show_account.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_account.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+        {% include "storefront_builder/partials/global_header/_shared/account_action.html" %}
+      </div>
+      {% endif %}
+    </div>
+    <div class="gh-kw-logo">{% include "storefront_builder/partials/global_header/_shared/logo.html" with show_tagline=False %}</div>
+    <div class="gh-actions gh-kw-actions">
+      {% include "storefront_builder/partials/global_header/_shared/admin_shortcut.html" %}
+      {% if hc.show_search %}
+      <div class="gh-kw-search" x-data="{ searchOpen: false }" {% if rc.show_search.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+        <button type="button" class="gh-btn" @click="searchOpen = !searchOpen" :aria-expanded="searchOpen.toString()" aria-label="جستجو">
+          {% include "storefront_builder/partials/global_header/_shared/icon.html" with name="search" %}
+        </button>
+        <div class="gh-kw-search-panel" x-show="searchOpen" x-cloak @click.outside="searchOpen = false">
+          {% include "storefront_builder/partials/global_header/_shared/search_form.html" with compact=True icon_in_button=True field_id="gh-search-input-kw" %}
+        </div>
+      </div>
+      {% endif %}
+      {% if hc.show_wishlist %}
+      <div class="gh-inline-block" {% if rc.show_wishlist.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_wishlist.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+        {% include "storefront_builder/partials/global_header/_shared/wishlist_action.html" %}
+      </div>
+      {% endif %}
+      {% if hc.show_cart %}{% include "storefront_builder/partials/global_header/_shared/cart_action.html" %}{% endif %}
+    </div>
+  </div>
+  <nav id="gh-kw-nav" class="gh-kw-nav" :class="{ 'gh-nav-hidden': !ghMobileOpen }">
+    <div class="wrap gh-kw-nav-links">
+      {% if NAV_HEADER %}{% include "storefront_builder/partials/global_header/_shared/nav_header_items.html" %}{% else %}{% include "storefront_builder/partials/global_header/_shared/category_link_row.html" %}{% endif %}
+    </div>
+  </nav>
+</header>
+</div>
+{% endwith %}

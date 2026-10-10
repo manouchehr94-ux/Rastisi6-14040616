@@ -1,4 +1,4 @@
-<section class="section product-section{% if settings.carousel_autoplay and settings.display_mode == 'carousel' %} product-section--spotlight{% endif %}{% if settings.display_mode == 'campaign_band' %} product-section--campaign-band{% endif %}">
+<section class="section product-section{% if settings.carousel_autoplay and settings.display_mode == 'carousel' %} product-section--spotlight{% endif %}{% if settings.display_mode == 'campaign_band' %} product-section--campaign-band{% elif settings.display_mode == 'catalog_grid' %} product-section--catalog-grid{% endif %}">
   {% if settings.display_mode == "campaign_band" %}
   <div class="beauty-section-title product-campaign-heading" aria-hidden="true">
     <span></span><h2>{{ settings.title|default:"پیشنهادهای فروشگاه" }}</h2><span></span>
@@ -20,6 +20,18 @@
       {% include "catalog/partials/product_grid.html" with products=products card_settings=settings.card %}
     </div>
   </div>
+  {% elif settings.display_mode == "catalog_grid" %}
+  <div class="catalog-grid-head">
+    <span class="catalog-grid-bar" aria-hidden="true"></span>
+    <h2>{{ settings.title|default:"محصولات" }}</h2>
+    {% if settings.subtitle %}<p>{{ settings.subtitle }}</p>{% endif %}
+  </div>
+  <div class="grid rsec-cols catalog-grid-products">
+    {% include "catalog/partials/product_grid.html" with products=products card_settings=settings.card %}
+  </div>
+  {% if view_all_url and settings.show_view_all %}
+  <div class="catalog-grid-bar-row"><a href="{{ view_all_url }}" class="catalog-grid-more">مشاهده همه</a></div>
+  {% endif %}
   {% else %}
   {% if settings.header_position != "inside" %}
   <div class="sec-head">

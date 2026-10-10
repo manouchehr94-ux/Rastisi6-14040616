@@ -261,6 +261,22 @@ _LUXURY_SEARCH_VARIANT = GlobalVariantDefinition(
     renderer="storefront_builder/partials/global_header/luxury_search.html",
 )
 
+#: Stationery / art-supply retail header: utility strip, wide pill search,
+#: prominent account pill and a flat category + link navigation bar.
+_STATIONERY_SEARCH_VARIANT = GlobalVariantDefinition(
+    key="stationery_search",
+    label_fa="لوازم تحریر (جستجوی عریض + نوار ناوبری)",
+    renderer="storefront_builder/partials/global_header/stationery_search.html",
+)
+
+#: Soft stationery boutique header: two-tone announcement band, centred brand,
+#: account pill and quiet icon actions, light grey navigation bar.
+_KAWAII_CENTER_VARIANT = GlobalVariantDefinition(
+    key="kawaii_center",
+    label_fa="بوتیک ملایم (برند مرکزی + نوار اعلان دوگانه)",
+    renderer="storefront_builder/partials/global_header/kawaii_center.html",
+)
+
 # A8 semantic header vocabulary.  Several identities deliberately reuse a
 # proven renderer when the inventory found the same topology; the identity is
 # still useful to recipes while renderer paths remain platform-owned.
@@ -296,6 +312,8 @@ GLOBAL_HEADER_REGION = GlobalRegionDefinition(
         _CHOCOLATE_CENTERED_SEARCH_VARIANT,
         _ATELIER_NAV_VARIANT,
         _LUXURY_SEARCH_VARIANT,
+        _STATIONERY_SEARCH_VARIANT,
+        _KAWAII_CENTER_VARIANT,
         *_A8_HEADER_VARIANTS,
     ),
     default_variant="legacy_default",
@@ -363,6 +381,21 @@ _FOOTER_CHOCOLATE_DARK_VARIANT = GlobalVariantDefinition(
     renderer="storefront_builder/partials/global_footer/chocolate_dark_columns.html",
 )
 
+#: Dense dark retail footer with a service strip (merchant custom-text block),
+#: four information columns, store statement and credibility badges.
+_FOOTER_STATIONERY_DARK_VARIANT = GlobalVariantDefinition(
+    key="stationery_dark",
+    label_fa="لوازم تحریر (تیره با نوار خدمات)",
+    renderer="storefront_builder/partials/global_footer/stationery_dark.html",
+)
+
+#: Light link-strip footer: pale quick-link strip plus one quiet identity row.
+_FOOTER_KAWAII_MINIMAL_VARIANT = GlobalVariantDefinition(
+    key="kawaii_minimal",
+    label_fa="بوتیک ملایم (نوار پیوند روشن)",
+    renderer="storefront_builder/partials/global_footer/kawaii_minimal.html",
+)
+
 _A8_FOOTER_VARIANTS = tuple(
     GlobalVariantDefinition(key=key, label_fa=label, renderer=renderer)
     for key, label, renderer in (
@@ -389,6 +422,8 @@ GLOBAL_FOOTER_REGION = GlobalRegionDefinition(
         _FOOTER_PROMO_COLUMNS_VARIANT,
         _FOOTER_BEAUTY_RETAIL_VARIANT,
         _FOOTER_CHOCOLATE_DARK_VARIANT,
+        _FOOTER_STATIONERY_DARK_VARIANT,
+        _FOOTER_KAWAII_MINIMAL_VARIANT,
         *_A8_FOOTER_VARIANTS,
     ),
     default_variant="legacy_default",

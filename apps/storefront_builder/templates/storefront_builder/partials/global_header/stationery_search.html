@@ -1,0 +1,64 @@
+{% comment %}
+Stationery / art-supply retail header (key: stationery_search).
+Structure: thin utility strip (store contact at one edge, tagline at the other),
+a main row with the brand at the RTL edge, a wide pill search in the middle and
+a prominent account pill + cart at the opposite edge, then a flat navigation
+bar with the category menu and merchant links.  Shared components only; no
+merchant/reference identity and no Ready Template condition.
+{% endcomment %}
+{% with hc=header_config rc=header_config.responsive %}
+<div class="gh-shell gh-shell--stationery" x-data="{ ghMobileOpen: false }">
+{% include "storefront_builder/partials/global_header/_shared/announcement_bar.html" %}
+<header class="header gh gh--stationery{% if hc.sticky %} sfb-sticky{% endif %}">
+  {% if SHOP_CONTACT_PHONE or SHOP_CONTACT_EMAIL or SHOP_TAGLINE %}
+  <div class="gh-st-util" data-shell-hide-mobile>
+    <div class="wrap">
+      <span class="gh-st-util-tag">{{ SHOP_TAGLINE }}</span>
+      <span class="gh-st-util-contact">
+        {% if SHOP_CONTACT_PHONE %}<a href="tel:{{ SHOP_CONTACT_PHONE }}" dir="ltr">{{ SHOP_CONTACT_PHONE }}</a>{% endif %}
+        {% if SHOP_CONTACT_EMAIL %}<a href="mailto:{{ SHOP_CONTACT_EMAIL }}" dir="ltr">{{ SHOP_CONTACT_EMAIL }}</a>{% endif %}
+      </span>
+    </div>
+  </div>
+  {% endif %}
+  <div class="wrap gh-st-main">
+    <button class="gh-btn gh-burger" @click="ghMobileOpen = !ghMobileOpen" :aria-expanded="ghMobileOpen.toString()" aria-controls="gh-st-nav" aria-label="منو">
+      {% include "storefront_builder/partials/global_header/_shared/icon.html" with name="burger" %}
+    </button>
+    <div class="gh-st-logo">{% include "storefront_builder/partials/global_header/_shared/logo.html" with show_tagline=False %}</div>
+    {% if hc.show_search %}
+    <div class="gh-st-search gh-inline-block" {% if rc.show_search.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_search.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+      {% include "storefront_builder/partials/global_header/_shared/search_form.html" with placeholder_text="جستجو در محصولات..." compact=True icon_in_button=True field_id="gh-search-input-st" %}
+    </div>
+    {% endif %}
+    <div class="gh-actions gh-st-actions">
+      {% include "storefront_builder/partials/global_header/_shared/admin_shortcut.html" %}
+      {% if hc.show_account %}
+      <div class="gh-inline-block gh-st-account" {% if rc.show_account.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_account.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+        {% include "storefront_builder/partials/global_header/_shared/account_action.html" %}
+      </div>
+      {% endif %}
+      {% if hc.show_wishlist %}
+      <div class="gh-inline-block" {% if rc.show_wishlist.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_wishlist.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+        {% include "storefront_builder/partials/global_header/_shared/wishlist_action.html" %}
+      </div>
+      {% endif %}
+      {% if hc.show_cart %}{% include "storefront_builder/partials/global_header/_shared/cart_action.html" %}{% endif %}
+    </div>
+  </div>
+  {% if hc.show_search %}
+  <div class="gh-mobile-search gh-st-mobile-search" {% if rc.show_search.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+    {% include "storefront_builder/partials/global_header/_shared/search_form.html" with placeholder_text="جستجو در محصولات..." compact=True icon_in_button=True field_id="gh-search-input-st-mobile" %}
+  </div>
+  {% endif %}
+  <nav id="gh-st-nav" class="gh-st-nav" :class="{ 'gh-nav-hidden': !ghMobileOpen }">
+    <div class="wrap gh-st-nav-links">
+      {% include "storefront_builder/partials/global_header/_shared/category_mega_menu.html" %}
+      <div class="gh-nav-links-scroll" style="scrollbar-width:none;-ms-overflow-style:none">
+        {% if NAV_HEADER %}{% include "storefront_builder/partials/global_header/_shared/nav_header_items.html" %}{% else %}{% include "storefront_builder/partials/global_header/_shared/category_link_row.html" %}{% endif %}
+      </div>
+    </div>
+  </nav>
+</header>
+</div>
+{% endwith %}
