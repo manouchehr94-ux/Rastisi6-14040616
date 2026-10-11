@@ -22,8 +22,10 @@ from django.test import Client, override_settings
 from django.utils import timezone
 
 from apps.catalog.models import Category, Product, Vendor
+from apps.content.models import MediaAsset
 from apps.core.models import ShopSettings
 from apps.storefront_builder import layout_preset_registry as lpr
+from apps.storefront_builder.models import StorefrontSection
 from apps.storefront_builder.qa import geometry_parity as gp
 from apps.storefront_builder.services import layout_service, preset_service
 from apps.stores.models import Store, StoreDomain, StoreMembership
@@ -117,6 +119,7 @@ class EngineGeometryParityBrowserTests(StaticLiveServerTestCase):
         self.base = f"http://{HOST}:{port}"
         self.public_base = f"http://{PUBLIC_HOST}:{port}"
         self.cookie = {"name": "sessionid", "value": client.cookies["sessionid"].value, "domain": HOST, "path": "/"}
+        self.user = user
 
     # -------------------------------------------------------------------------------------------- helpers
     def _page(self, width, path, *, authed=False, height=900):
@@ -267,3 +270,97 @@ class EngineGeometryParityBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(after["iframes"], 1)
         self.assertEqual(after["sections"], before["sections"])
         self.assertAlmostEqual(after["top"], before["top"], delta=2)  # anchored by section id, not pixels
+
+
+    # ------------------------------------------------- Template 51 designability + display type wiring
+    def _band_in_draft(self):
+        draft = layout_service.get_or_create_draft(self.store, user=self.user)
+        bands = draft.sections.filter(section_key="product_section", page__page_type="home").order_by("order")
+        return draft, next(b for b in bands if (b.settings.get("background") or {}).get("mode") == "palette_pattern")
+
+    def test_image_background_band_has_no_overflow_and_preview_equals_published(self):
+        import io
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        buf = io.BytesIO()
+        Image.new("RGB", (1600, 400), (30, 90, 200)).save(buf, "PNG")
+        asset = MediaAsset.objects.create(store=self.store, image=SimpleUploadedFile("band.png", buf.getvalue(), "image/png"))
+        _draft, band = self._band_in_draft()
+        band.settings = {**band.settings, "background": {
+            "mode": "image", "color": "", "media_asset_id": asset.pk, "pattern_slug": "", "palette_role": "",
+            "bleed": True, "image_fit": "cover", "image_position_x": "left", "overlay_color": "token:text", "overlay_opacity": 35}}
+        band.save()
+        layout_service.publish(self.store)
+        for width in WIDTHS:
+            published, published_audit = self._probe(width, "/")
+            preview, preview_audit = self._probe(width, "/admin-portal/storefront-builder/preview/?page=home", authed=True)
+            self.assertEqual(gp.compare(published, preview), [], f"{width}px")
+            for label, audit in (("published", published_audit), ("preview", preview_audit)):
+                self.assertEqual(audit["scrollWidth"], audit["clientWidth"], f"{width}px {label}: {audit['offenders']}")
+                self.assertEqual(audit["offenders"], [], f"{width}px {label}")
+        context, page = self._page(1440, "/")
+        try:
+            image_layers = page.evaluate("""()=>[...document.querySelectorAll('.rsec-bleed')].filter(e=>getComputedStyle(e).backgroundImage.includes('band'))
+                .map(e=>[Math.round(e.getBoundingClientRect().width),getComputedStyle(e).backgroundSize,getComputedStyle(e).backgroundPosition])""")
+        finally:
+            context.close()
+        self.assertEqual(len(image_layers), 1)
+
+    def test_inspector_background_and_display_type_changes_show_in_the_preview_immediately(self):
+        _draft, band = self._band_in_draft()
+        context, page = self._page(1600, "/admin-portal/storefront-builder/r4/", authed=True, height=900)
+        try:
+            page.wait_for_selector("#r4PreviewFrame")
+            page.wait_for_timeout(1500)
+
+            def preview():
+                return next(f for f in page.frames if f != page.main_frame and "preview" in f.url)
+
+            def wait_preview(expression, timeout=15000):
+                # the test DB is in-process SQLite: let the previous refresh/status requests finish first
+                page.wait_for_load_state("networkidle")
+                page.wait_for_function(
+                    """(args)=>{const f=[...document.querySelectorAll('iframe')].find(i=>i.id==='r4PreviewFrame');
+                    try{return !!f.contentWindow.eval(args)}catch(e){return false}}""", arg=expression, timeout=timeout)
+
+            sel = f'[data-section-id="{band.pk}"]'
+            preview().locator(sel).first.scroll_into_view_if_needed()
+            preview().locator(sel).first.click(position={"x": 20, "y": 20})
+            page.wait_for_selector('select[data-r4-field-key="display_mode"]')
+            # the background control is in the Basic tab, discoverable without opening Advanced
+            self.assertTrue(page.locator(".r4-background-picker").first.is_visible())
+            # red -> blue (custom colour), visible in the Preview straight away
+            page.select_option(".r4-background-picker [data-r4-background-mode]", "color")
+            page.wait_for_load_state("networkidle")
+            page.fill(".r4-background-picker [data-r4-background-color]", "#2f6fed")
+            wait_preview(f"getComputedStyle(document.querySelector('{sel} .rsec-bleed')).backgroundColor==='rgb(47, 111, 237)'")
+            page.wait_for_load_state("networkidle")
+            page.fill(".r4-background-picker [data-r4-background-color]", "#d62828")
+            wait_preview(f"getComputedStyle(document.querySelector('{sel} .rsec-bleed')).backgroundColor==='rgb(214, 40, 40)'")
+            # display type: every option changes the visible composition
+            expected = {
+                "campaign_band": f"!!document.querySelector('{sel} .product-campaign-band')",
+                "catalog_grid": f"!!document.querySelector('{sel} .catalog-grid-bar-row')",
+                "grid": f"!!document.querySelector('{sel} .grid.rsec-cols') && !document.querySelector('{sel} .pcarousel')",
+                "carousel": f"!!document.querySelector('{sel} .pcarousel') && !document.querySelector('{sel} .product-campaign-band')",
+            }
+            for mode, expression in expected.items():
+                page.wait_for_load_state("networkidle")
+                page.select_option('select[data-r4-field-key="display_mode"]', mode)
+                wait_preview(expression)
+                # nothing hidden by the engine can leave the Inspector showing a control that does nothing
+                page.wait_for_selector(f'select[data-r4-field-key="display_mode"] >> nth=0')
+                hidden = page.evaluate("()=>[...document.querySelectorAll('[data-r4-field-row][hidden]')].map(r=>r.dataset.r4FieldKey)")
+                if mode in ("grid", "campaign_band", "catalog_grid"):
+                    self.assertIn("overflow_mode", hidden, mode)
+                    self.assertIn("carousel_navigation", hidden, mode)
+                else:
+                    self.assertNotIn("overflow_mode", hidden)
+            self.assertEqual(preview().evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth"), 0)
+        finally:
+            context.close()
+        band.refresh_from_db()
+        self.assertEqual(band.settings["display_mode"], "carousel")
+        self.assertEqual(band.settings["background"]["color"].lower(), "#d62828")

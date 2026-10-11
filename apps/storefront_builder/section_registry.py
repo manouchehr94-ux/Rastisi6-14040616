@@ -522,6 +522,56 @@ PRODUCT_SECTION_SCHEMA = SettingsSchema(fields=(
     SettingsField("gap", "فاصله بین کارت‌ها (px)", "integer", "advanced", default=16, min_value=0, max_value=_PRODUCT_SECTION_MAX_GAP),
 ))
 
+# Context-sensitive Inspector: the display type (variant) is the PRIMARY structural choice; the lower-level row
+# controls are offered only for the compositions that actually consume them (a hidden controlling field is dormant,
+# i.e. it contributes no value, so ``carousel_autoplay`` left on in a stale grid never hides the column controls).
+_PS_CAROUSEL = (("display_mode", ("carousel",)),)
+_PS_ROW = _PS_CAROUSEL + (("carousel_autoplay", ("false",)),)
+_PS_GRIDDED = (
+    ("display_mode", ("carousel", "grid", "campaign_band", "catalog_grid")),
+    ("carousel_autoplay", ("false", "")),
+)
+PRODUCT_SECTION_VISIBLE_WHEN = {
+    "carousel_autoplay": _PS_CAROUSEL,
+    "carousel_interval_ms": _PS_CAROUSEL + (("carousel_autoplay", ("true",)),),
+    "carousel_show_arrows": _PS_CAROUSEL + (("carousel_autoplay", ("true",)),),
+    "desktop_layout": _PS_ROW,
+    "overflow_mode": _PS_ROW,
+    "carousel_navigation": _PS_ROW,
+    "show_scrollbar": _PS_ROW + (("overflow_mode", ("scroll",)),),
+    "header_position": (("display_mode", ("carousel", "grid")),),
+    "heading_style": (("display_mode", ("carousel", "grid")),),
+    "desktop_columns": _PS_GRIDDED,
+    "tablet_columns": _PS_GRIDDED,
+    "mobile_columns": _PS_GRIDDED,
+    "gap": _PS_GRIDDED,
+}
+PRODUCT_SECTION_SCHEMA = dataclasses.replace(PRODUCT_SECTION_SCHEMA, fields=tuple(
+    dataclasses.replace(f, visible_when=PRODUCT_SECTION_VISIBLE_WHEN[f.key]) if f.key in PRODUCT_SECTION_VISIBLE_WHEN else f
+    for f in PRODUCT_SECTION_SCHEMA.fields
+))
+
+
+def effective_product_section_settings(settings: dict) -> dict:
+    """The settings the renderer actually consumes for a ``product_section``.
+
+    The variant (``display_mode``) is the primary structural choice: a row-level setting that belongs to another
+    composition is DORMANT, never silently reinterpreted — a stale ``desktop_layout="grid"`` or an old autoplay flag
+    can neither turn a campaign band into the ordinary grid nor make a grid scroll. The stored value is left untouched
+    (switching back restores it); only this render-time projection ignores it."""
+    mode = settings.get("display_mode") or "carousel"  # a legacy row without the key renders as a carousel
+    if mode == "carousel" and not settings.get("carousel_autoplay"):
+        return settings
+    effective = dict(settings)
+    if mode != "carousel":
+        for key in ("carousel_autoplay", "carousel_interval_ms", "carousel_show_arrows", "desktop_layout",
+                    "overflow_mode", "show_scrollbar", "carousel_navigation"):
+            effective.pop(key, None)
+    else:  # autoplay spotlight: a single-slide stage, no scrolling row
+        for key in ("desktop_layout", "overflow_mode", "show_scrollbar", "carousel_navigation"):
+            effective.pop(key, None)
+    return effective
+
 
 class CatalogProductWallSettingsError(ValueError):
     """شکلِ خامِ تنظیماتِ ``catalog_product_wall`` نامعتبر است — پیامِ
@@ -1071,7 +1121,11 @@ SPACING_AWARE_SECTION_KEYS = BACKGROUND_AWARE_SECTION_KEYS | frozenset({
 
 BACKGROUND_MODE_CHOICES = ("theme", "palette", "palette_pattern", "color", "image", "pattern", "surface")
 #: Modes whose fill can optionally extend edge-to-edge behind a section that keeps its content inside the container.
-BACKGROUND_BLEED_MODES = ("palette", "palette_pattern", "color", "pattern")
+BACKGROUND_BLEED_MODES = ("palette", "palette_pattern", "color", "pattern", "image")
+#: Presentation of an ``image`` background (all optional, written only when not the default).
+BACKGROUND_IMAGE_FITS = ("cover", "contain")
+BACKGROUND_IMAGE_POSITION_X = ("left", "center", "right")
+BACKGROUND_IMAGE_POSITION_Y = ("top", "center", "bottom")
 BACKGROUND_PALETTE_ROLE_CHOICES = ("tone-1", "tone-2", "tone-3", "tone-4", "tone-5")
 
 #: G2.3 (Defect C) — وقتی مرچنت «رنگ از پالت» را انتخاب می‌کند اما نقشِ
@@ -1203,6 +1257,30 @@ def validate_background_settings(raw) -> dict:
     # section's content stays inside the container.
     if raw.get("bleed") is True and mode in BACKGROUND_BLEED_MODES:
         cleaned["bleed"] = True
+    if mode == "image":
+        # Image presentation lives in the SAME block as the asset (one persistence authority): fit, focal position
+        # and an optional colour overlay. Anything left at its default is not stored.
+        if raw.get("image_fit") == "contain":
+            cleaned["image_fit"] = "contain"
+        if raw.get("image_position_x") in ("left", "right"):
+            cleaned["image_position_x"] = raw["image_position_x"]
+        if raw.get("image_position_y") in ("top", "bottom"):
+            cleaned["image_position_y"] = raw["image_position_y"]
+        try:
+            overlay_opacity = int(raw.get("overlay_opacity") or 0)
+        except (TypeError, ValueError):
+            raise BackgroundSettingsError("شفافیت پوشش تصویر باید عدد باشد") from None
+        overlay_opacity = max(0, min(100, overlay_opacity))
+        from .semantic_colors import SemanticColorError, clean_semantic_color
+
+        try:
+            overlay_color = clean_semantic_color(raw.get("overlay_color"))
+        except SemanticColorError as exc:
+            raise BackgroundSettingsError(str(exc)) from exc
+        if overlay_color:
+            cleaned["overlay_color"] = overlay_color
+        if overlay_opacity:
+            cleaned["overlay_opacity"] = overlay_opacity
     return cleaned
 
 
@@ -1271,6 +1349,9 @@ def _with_design_schema_field(section_key: str, schema):
     return dataclasses.replace(schema, fields=(*schema.fields, field))
 
 
+BACKGROUND_FIELD_BASIC_SECTION_KEYS = frozenset({"product_section"})
+
+
 def _with_background_schema_field(section_key: str, schema):
     """Phase 5 Task 4 (remediation R1b) — the R4-Inspector counterpart of
     ``_with_background`` above.
@@ -1295,7 +1376,10 @@ def _with_background_schema_field(section_key: str, schema):
     if schema.get_field("background") is not None:
         return schema
     background_field = SettingsField(
-        "background", "پس‌زمینه این بخش", "background", "advanced",
+        "background", "پس‌زمینه این بخش", "background",
+        # The fill is the primary design decision of a product band, so it sits in the Basic tab there; every other
+        # background-aware section keeps it under Advanced.
+        "basic" if section_key in BACKGROUND_FIELD_BASIC_SECTION_KEYS else "advanced",
         default=default_background_settings(),
         widget_hint="background_picker",
     )

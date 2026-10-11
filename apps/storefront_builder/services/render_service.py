@@ -21,13 +21,14 @@ from apps.catalog.services.product_publish_service import storefront_listing_pro
 from apps.content.models import HeroSlide, PromotionalBanner
 from apps.orders.services import best_seller_service
 
-from .. import appearance_registry, decorative_strip, design_block
+from .. import appearance_registry, decorative_strip, design_block, semantic_colors
 from ..section_registry import (
     CARD_AWARE_SECTION_KEYS,
     UnknownSectionTypeError,
     default_brand_carousel_settings,
     default_category_grid_settings,
     default_quick_links_settings,
+    effective_product_section_settings,
     get_definition,
 )
 from ..storefront_appearance.rendering import (
@@ -800,6 +801,35 @@ _CONTEXT_BUILDERS = {
 }
 
 
+_BACKGROUND_FOCAL = {"left": "0%", "top": "0%", "center": "50%", "right": "100%", "bottom": "100%"}
+
+
+def _background_view(background, media_url) -> dict:
+    """Presentation of an ``image`` background, resolved server-side so Preview and Published share one result.
+
+    ``image_extra`` is appended to the wrapper's inline ``background-image`` (the historical ``cover``/``center``
+    output when nothing was customised); ``layer_style`` is the same image for the edge-to-edge ``.rsec-bleed`` layer;
+    ``overlay_style`` paints the optional colour overlay (a semantic colour: palette role or custom hex)."""
+    view = {"image_extra": ";background-size:cover;background-position:center", "layer_style": "", "overlay_style": ""}
+    background = background or {}
+    if background.get("mode") != "image" or not media_url:
+        return view
+    fit = "contain" if background.get("image_fit") == "contain" else "cover"
+    x = _BACKGROUND_FOCAL.get(background.get("image_position_x") or "center", "50%")
+    y = _BACKGROUND_FOCAL.get(background.get("image_position_y") or "center", "50%")
+    if fit != "cover" or (x, y) != ("50%", "50%"):
+        view["image_extra"] = f";background-size:{fit};background-position:{x} {y};background-repeat:no-repeat"
+    view["layer_style"] = (
+        f"background-color:transparent;background-image:url('{media_url}');"
+        f"background-size:{fit};background-position:{x} {y};background-repeat:no-repeat"
+    )
+    opacity = background.get("overlay_opacity") or 0
+    if opacity:
+        colour = semantic_colors.semantic_color_css(background.get("overlay_color")) or "#000000"
+        view["overlay_style"] = f"background-color:{colour};opacity:{opacity / 100:g}"
+    return view
+
+
 def build_page_render_items(
     page,
     store,
@@ -947,6 +977,9 @@ def _build_items_from_sections(
             # Context builders consistently read ``section.settings``. A
             # shallow model copy preserves PK/FK identity for Store-scoped
             # queries while keeping this overlay strictly in-memory.
+        if section.section_key == "product_section":
+            # The display type is the primary structural choice; row settings of another composition are dormant.
+            effective_settings = effective_product_section_settings(effective_settings)
         if effective_settings != (section.settings or {}):
             render_section = copy(section)
             render_section.settings = effective_settings
@@ -997,6 +1030,9 @@ def _build_items_from_sections(
         # هر چیزی غیر از mode="image" یا هر ارجاعِ نامعتبر/خارجی — هرگز کرش.
         context["background_media_url"] = resolve_background_media_url(
             store, context["settings"].get("background"),
+        )
+        context["background_view"] = _background_view(
+            context["settings"].get("background"), context["background_media_url"],
         )
         # Sparse ``design`` block -> data-d flags + --d-* custom properties for the wrapper.
         context["design_attrs"] = design_block.render_attributes(context["settings"].get("design"))

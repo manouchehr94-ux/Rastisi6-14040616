@@ -107,6 +107,13 @@ window.RastiSiR4 = {
     shell.prepend(banner);
   }
 
+  // Mutation types whose result is visible in the Preview and that have no dedicated read-side refresh of their own.
+  var PREVIEW_REFRESH_MUTATIONS = {
+    'section.update_settings': true,
+    'container.update_settings': true,
+    'section.reset_setting_to_baseline': true,
+  };
+
   // ---- Task 5's single mutate endpoint: one serialized queue, one sender.
   R4.sendMutation = function (mutation) {
     if (R4.conflict) return Promise.resolve();
@@ -130,6 +137,9 @@ window.RastiSiR4 = {
           R4.revision = result.body.new_revision;
           if (shell) shell.dataset.editRevision = String(R4.revision);
           setSaveState('saved');
+          // Every accepted Inspector write is shown in the Preview straight away: the twin-iframe refresh below is
+          // atomic (no blank/half-built document) and coalesces bursts, so a control never "does nothing".
+          if (PREVIEW_REFRESH_MUTATIONS[mutation.type]) reloadPreviewFrame();
           return result.body;
         }
         if (result.status === 409) {
@@ -434,6 +444,61 @@ window.RastiSiR4 = {
     return token;
   }
 
+  // The whole background widget as ONE compound value (mode / colour / palette / pattern / media / bleed / image look).
+  function readBackgroundWidget(wrapper) {
+    function el(name) { return wrapper.querySelector('[data-r4-background-' + name + ']'); }
+    var mode = el('mode'), color = el('color'), palette = el('palette-role'), pattern = el('pattern'), media = el('media');
+    var background = { mode: mode ? mode.value : 'theme' };
+    if (color) background.color = color.value;
+    if (palette) background.palette_role = palette.value;
+    if (pattern) background.pattern_slug = pattern.value;
+    background.media_asset_id = media && media.value ? Number(media.value) : null;
+    if (el('bleed') && el('bleed').checked) background.bleed = true;
+    if (el('image-fit')) background.image_fit = el('image-fit').value;
+    if (el('position-x')) background.image_position_x = el('position-x').value;
+    if (el('position-y')) background.image_position_y = el('position-y').value;
+    var overlay = wrapper.querySelector('[data-r4-background-overlay-color] [data-r4-color-control]');
+    if (overlay) background.overlay_color = readSemanticColorControl(overlay);
+    if (el('overlay-opacity')) background.overlay_opacity = Number(el('overlay-opacity').value) || 0;
+    return background;
+  }
+
+  function applyBackgroundGroupVisibility(wrapper, mode) {
+    wrapper.querySelectorAll('[data-r4-bg-modes]').forEach(function (group) {
+      group.hidden = group.getAttribute('data-r4-bg-modes').split(' ').indexOf(mode) === -1;
+    });
+  }
+
+  // Context-sensitive Inspector: ``data-r4-visible-when`` ({controlKey: [allowed values]}, AND across keys) is
+  // re-evaluated live from the controls' CURRENT values, in document order; a hidden controlling field is dormant.
+  // Mirrors settings_schema.compute_field_visibility (the server renders the initial ``hidden``).
+  function fieldControlValue(row) {
+    var control = row.querySelector('select[data-r4-field-key],input[data-r4-field-key],textarea[data-r4-field-key]');
+    if (!control) return '';
+    if (control.getAttribute('data-r4-field-type') === 'boolean') return control.checked ? 'true' : 'false';
+    return String(control.value);
+  }
+
+  function applyFieldVisibility() {
+    if (!inspector) return;
+    var effective = {};
+    inspector.querySelectorAll('[data-r4-field-row]').forEach(function (row) {
+      var key = row.getAttribute('data-r4-field-key');
+      var rule = row.getAttribute('data-r4-visible-when');
+      var visible = true;
+      if (rule) {
+        var parsed = {};
+        try { parsed = JSON.parse(rule) || {}; } catch (err) { parsed = {}; }
+        Object.keys(parsed).forEach(function (controlKey) {
+          var current = Object.prototype.hasOwnProperty.call(effective, controlKey) ? effective[controlKey] : '';
+          if (parsed[controlKey].indexOf(current) === -1) visible = false;
+        });
+      }
+      row.hidden = !visible;
+      effective[key] = visible ? fieldControlValue(row) : '';
+    });
+  }
+
   function hydrateFieldValues() {
     if (!inspector) return;
     var script = document.getElementById('r4InspectorFieldValues');
@@ -600,6 +665,7 @@ window.RastiSiR4 = {
         // BEFORE Alpine mounts CKEditor, so it initializes from the real
         // current body_html rather than an empty source element.
         hydrateFieldValues();
+        applyFieldVisibility();
         // Alpine 3's own MutationObserver auto-initializes x-data elements
         // added anywhere in the document (verified against this build) —
         // it already mounts storefrontRichTextEditor()'s CKEditor here.
@@ -624,6 +690,8 @@ window.RastiSiR4 = {
   R4.closeInspector = closeInspector;
 
   if (inspector) {
+    // Context-sensitive controls follow the values the merchant just changed (display type, autoplay, overflow...).
+    inspector.addEventListener('change', function () { applyFieldVisibility(); });
     // One delegated field-change path — no per-section save handler.
     inspector.addEventListener('click', function (evt) {
       var tabButton = evt.target.closest('[data-r4-tab]');
@@ -798,22 +866,12 @@ window.RastiSiR4 = {
     inspector.addEventListener('change', function (evt) {
       var wrapper = evt.target.closest('[data-r4-field-type="background"]');
       if (!wrapper || R4.selected == null) return;
-      if (!evt.target.closest('[data-r4-background-mode],[data-r4-background-color],[data-r4-background-palette-role],[data-r4-background-pattern],[data-r4-background-media],[data-r4-background-bleed]')) return;
+      if (!evt.target.closest('[data-r4-background-mode],[data-r4-background-color],[data-r4-background-palette-role],[data-r4-background-pattern],[data-r4-background-media],[data-r4-background-bleed],[data-r4-background-image-fit],[data-r4-background-position-x],[data-r4-background-position-y],[data-r4-background-overlay-color],[data-r4-background-overlay-opacity]')) return;
       var key = wrapper.getAttribute('data-r4-field-key');
-      var modeSelect = wrapper.querySelector('[data-r4-background-mode]');
-      var colorInput = wrapper.querySelector('[data-r4-background-color]');
-      var paletteSelect = wrapper.querySelector('[data-r4-background-palette-role]');
-      var patternSelect = wrapper.querySelector('[data-r4-background-pattern]');
-      var mediaSelect = wrapper.querySelector('[data-r4-background-media]');
-
-      var background = { mode: modeSelect ? modeSelect.value : 'theme' };
-      if (colorInput) background.color = colorInput.value;
-      if (paletteSelect) background.palette_role = paletteSelect.value;
-      if (patternSelect) background.pattern_slug = patternSelect.value;
-      var mediaValue = mediaSelect ? mediaSelect.value : '';
-      background.media_asset_id = mediaValue ? Number(mediaValue) : null;
-      var bleedInput = wrapper.querySelector('[data-r4-background-bleed]');
-      if (bleedInput && bleedInput.checked) background.bleed = true;
+      var background = readBackgroundWidget(wrapper);
+      applyBackgroundGroupVisibility(wrapper, background.mode);
+      // "Image" without a chosen asset is not storable (falls back to theme): wait for the Media Library pick.
+      if (background.mode === 'image' && !background.media_asset_id) return;
 
       var patch = {};
       patch[key] = background;
@@ -1274,7 +1332,6 @@ window.RastiSiR4 = {
     }).then(function (result) {
       if (result && result.ok) {
         closeResourcePicker();
-        reloadPreviewFrame();
         // Re-open the Inspector so its summary comes back from the
         // server-authoritative legacy -> ResourceSource projection —
         // never reconstructed client-side.

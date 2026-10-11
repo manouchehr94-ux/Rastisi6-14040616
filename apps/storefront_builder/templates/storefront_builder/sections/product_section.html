@@ -16,7 +16,7 @@
       {% if settings.subtitle %}<p>{{ settings.subtitle }}</p>{% endif %}
       {% if view_all_url and settings.show_view_all %}<a href="{{ view_all_url }}" class="product-campaign-link">مشاهده همه محصولات</a>{% endif %}
     </aside>
-    <div class="product-campaign-products grid rsec-cols">
+    <div class="product-campaign-products grid rsec-cols"{% if settings.gap is not None %} style="gap:{{ settings.gap }}px"{% endif %}>
       {% include "catalog/partials/product_grid.html" with products=products card_settings=settings.card %}
     </div>
   </div>
@@ -26,7 +26,7 @@
     <h2>{{ settings.title|default:"محصولات" }}</h2>
     {% if settings.subtitle %}<p>{{ settings.subtitle }}</p>{% endif %}
   </div>
-  <div class="grid rsec-cols catalog-grid-products">
+  <div class="grid rsec-cols catalog-grid-products"{% if settings.gap is not None %} style="gap:{{ settings.gap }}px"{% endif %}>
     {% include "catalog/partials/product_grid.html" with products=products card_settings=settings.card %}
   </div>
   {% if settings.show_view_all %}

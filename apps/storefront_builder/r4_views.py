@@ -26,6 +26,7 @@ from . import (
     resource_source,
     section_registry,
     semantic_colors,
+    settings_schema,
     shell_geometry,
     variant_contract,
 )
@@ -1345,6 +1346,12 @@ def storefront_r4_section_inspector(request, pk):
         return field.default
 
     field_values = {field.key: _inspector_current_value(field) for field in schema.fields}
+    # Context-sensitive Inspector: controls whose ``visible_when`` rule does not hold for the current values are
+    # rendered hidden (and re-evaluated live by r4_editor.js); nothing hidden is ever deleted from the settings.
+    field_hidden_map = {
+        key: True for key, visible in settings_schema.compute_field_visibility(schema.fields, field_values).items()
+        if not visible
+    }
 
     # R4 Task 7 — the Inspector needs to show what an appearance_override
     # field would inherit while disabled. Pass only the safe typed
@@ -1430,6 +1437,10 @@ def storefront_r4_section_inspector(request, pk):
             ],
             "patterns": picker_context["background_patterns"],
             "media_assets": picker_context["background_media_assets"],
+            "color_choices": semantic_colors.semantic_color_choices(),
+            "fit_choices": (("cover", "پوشش کامل (برش لبه‌ها)"), ("contain", "کامل دیده شود")),
+            "position_x_choices": (("left", "چپ"), ("center", "وسط"), ("right", "راست")),
+            "position_y_choices": (("top", "بالا"), ("center", "وسط"), ("bottom", "پایین")),
         }
 
     # Design-block engine — one shared, registry-driven control set. Built only when a
@@ -1453,6 +1464,7 @@ def storefront_r4_section_inspector(request, pk):
         request,
         "dashboard/storefront_builder/r4/partials/section_inspector.html",
         {
+            "field_hidden_map": field_hidden_map,
             "design_groups": design_groups,
             "color_choices": color_choices,
             "media_assets": media_assets,

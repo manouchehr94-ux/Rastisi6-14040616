@@ -316,3 +316,17 @@ def sfb_static(path):
     except OSError:
         pass
     return url
+
+
+@register.filter
+def visible_when_json(field):
+    """The Inspector's context-sensitive visibility rule of a schema field as compact JSON ("" when unconditional)."""
+    from ..settings_schema import visible_when_json as _visible_when_json
+
+    return _visible_when_json(field)
+
+
+@register.filter
+def mode_not_in(mode, csv):
+    """True when ``mode`` is NOT one of the comma separated ``csv`` modes (drives the server-rendered ``hidden``)."""
+    return str(mode or "theme") not in {item.strip() for item in str(csv).split(",")}

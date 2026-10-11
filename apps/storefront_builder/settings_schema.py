@@ -107,6 +107,11 @@ class SettingsField:
     #: any per-item value), reusing the existing integer-bounds attributes
     #: rather than adding new ones.
     repeater_item_fields: tuple["SettingsField", ...] = ()
+    #: Context-sensitive Inspector visibility: ``((controlling_key, (allowed value, ...)), ...)``, AND across
+    #: entries. The control is offered only while every controlling field currently holds one of the allowed
+    #: values (booleans compare as ``"true"``/``"false"``). Display metadata ONLY — the stored value of a hidden
+    #: field is never touched or validated differently; the renderer ignores dormant values on its own.
+    visible_when: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
     def __post_init__(self) -> None:
         if not self.key:
@@ -493,6 +498,7 @@ def _serialize_field(field: SettingsField) -> dict:
         "max_length": field.max_length,
         "widget_hint": field.widget_hint,
         "repeater_item_fields": [_serialize_field(item_field) for item_field in field.repeater_item_fields],
+        "visible_when": {key: list(values) for key, values in field.visible_when},
     }
 
 
@@ -595,3 +601,31 @@ def mark_explicit_card_style_override(*, settings: dict) -> dict:
     overrides[CARD_STYLE_EXPLICIT_OVERRIDE_KEY] = True
     updated["appearance_overrides"] = overrides
     return updated
+
+
+def _comparable(value) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return "" if value is None else str(value)
+
+
+def compute_field_visibility(fields, values: dict) -> dict:
+    """``{field key: visible}`` for the CURRENT ``values``, evaluated in declared order. A hidden controlling field
+    is dormant (contributes ``None``), so a stale value of a control that is not on screen can never steer another
+    control's visibility. Mirrors the live evaluation in ``r4_editor.js``."""
+    effective: dict = {}
+    visibility: dict = {}
+    for field in fields:
+        visible = all(_comparable(effective.get(key)) in allowed for key, allowed in field.visible_when)
+        visibility[field.key] = visible
+        effective[field.key] = (values[field.key] if field.key in values else field.default) if visible else None
+    return visibility
+
+
+def visible_when_json(field: SettingsField) -> str:
+    """The rule as the JSON the Inspector JS re-evaluates live (empty string when the field is unconditional)."""
+    import json
+
+    if not field.visible_when:
+        return ""
+    return json.dumps({key: list(values) for key, values in field.visible_when}, ensure_ascii=False, separators=(",", ":"))

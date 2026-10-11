@@ -1091,7 +1091,9 @@ class BackgroundCapabilityProjectionTests(SimpleTestCase):
             field = definition.settings_schema.get_field("background")
             self.assertIsNotNone(field, f"{key} is background-aware + schema-enabled but has no background field")
             self.assertEqual(field.field_type, "background", key)
-            self.assertEqual(field.group, "advanced", key)
+            # a product band's fill is its primary design decision -> Basic tab; every other section: Advanced
+            expected_group = "basic" if key in section_registry.BACKGROUND_FIELD_BASIC_SECTION_KEYS else "advanced"
+            self.assertEqual(field.group, expected_group, key)
 
     def test_background_field_default_is_canonical_default_background_settings(self):
         for key in self._schema_enabled_background_aware_keys():

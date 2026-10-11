@@ -592,3 +592,7 @@ button.r4-picker-row--result:hover {
 .r4-showcase-choice-label{font-weight:700;font-size:13px}
 .r4-showcase-choice-desc{font-size:11.5px;color:var(--r4-muted);line-height:1.6}
 @media(prefers-reduced-motion:reduce){.r4-showcase-summary::before{transition:none}}
+
+/* Context-sensitive Inspector: a control that cannot affect the current rendered state is not offered. */
+.r4-field[hidden], .r4-bg-group[hidden] { display: none !important; }
+.r4-bg-group { display: contents; }

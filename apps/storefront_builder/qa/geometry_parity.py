@@ -57,7 +57,7 @@ PROBE_JS = r"""
 OVERFLOW_AUDIT_JS = r"""
 () => {
   const style = document.createElement('style');
-  style.textContent = 'main.sfb-storefront-canvas{overflow-x:visible!important}.rsec-bleed{display:none!important}';
+  style.textContent = 'main.sfb-storefront-canvas{overflow-x:visible!important}.rsec-bleed,.rsec-overlay{display:none!important}';
   document.head.appendChild(style);
   const de = document.documentElement;
   const out = { clientWidth: de.clientWidth, scrollWidth: de.scrollWidth, offenders: [] };
