@@ -23,11 +23,21 @@ sender). This whole element is re-fetched by R4 after structural mutations.
          data-rs-section-label="{{ item.label }}" data-rs-section-locked="{{ item.is_locked|yesno:'true,false' }}" data-rs-section-active="{{ item.is_active|yesno:'true,false' }}"
          data-rs-section-duplicable="{{ item.duplicable|yesno:'true,false' }}" data-rs-section-removable="{{ item.removable|yesno:'true,false' }}"
          data-rs-section-baseline="{{ item.has_baseline|yesno:'true,false' }}" data-rs-position="{{ forloop.counter }}">
-      <button type="button" class="r4-structure-label" data-rastisi-action="select-section" data-id="{{ item.id }}">
+      <button type="button" class="rs-row-select" data-rastisi-action="row-select" data-id="{{ item.id }}" aria-label="انتخاب {{ item.label }}">
         <span class="tree-symbol">{% rs_section_icon item.section_key %}</span>
         <span class="tree-copy"><strong>{{ item.label }}</strong><small>جایگاه {{ forloop.counter|fa_number }}{% if item.is_locked %} · قفل‌شده{% endif %}{% if not item.is_active %} · پنهان{% endif %}</small></span>
       </button>
-      <button type="button" class="r4-structure-label" data-rastisi-action="select-section" data-id="{{ item.id }}" aria-label="تنظیمات {{ item.label }}">{% if item.is_locked %}{% rs_icon "lock" %}{% else %}{% rs_icon "dots" %}{% endif %}</button>
+      <button type="button" class="r4-structure-label rs-row-settings" data-rastisi-action="select-section" data-id="{{ item.id }}" aria-label="تنظیمات {{ item.label }}" title="باز کردن تنظیمات این بخش">{% rs_icon "sliders" %}</button>
+      {% comment %}Quick structure actions: the SAME data-r4-structure-* hooks the existing structure listener in r4_editor.js
+      already handles (one sender, one mutation path) — they were previously reachable only inside the docked Inspector.{% endcomment %}
+      <div class="rs-row-actions" role="group" aria-label="اقدام‌های {{ item.label }}">
+        <button type="button" data-r4-structure-move="up" aria-label="یک جایگاه بالاتر" title="بالاتر" {% if forloop.first or item.is_locked %}disabled{% endif %}>{% rs_icon "up" %}</button>
+        <button type="button" data-r4-structure-move="down" aria-label="یک جایگاه پایین‌تر" title="پایین‌تر" {% if forloop.last or item.is_locked %}disabled{% endif %}>{% rs_icon "down" %}</button>
+        <button type="button" data-r4-structure-toggle-active aria-pressed="{{ item.is_active|yesno:'true,false' }}" aria-label="{% if item.is_active %}پنهان کردن از صفحه{% else %}نمایش در صفحه{% endif %}" title="{% if item.is_active %}پنهان کردن{% else %}نمایش در صفحه{% endif %}" {% if item.is_locked %}disabled{% endif %}>{% rs_icon "eye" %}</button>
+        <button type="button" data-r4-structure-toggle-locked aria-pressed="{{ item.is_locked|yesno:'true,false' }}" aria-label="{% if item.is_locked %}باز کردن قفل{% else %}قفل کردن ویرایش{% endif %}" title="{% if item.is_locked %}باز کردن قفل{% else %}قفل ویرایش{% endif %}">{% if item.is_locked %}{% rs_icon "lock" %}{% else %}{% rs_icon "unlock" %}{% endif %}</button>
+        <button type="button" data-r4-structure-duplicate aria-label="تکثیر این بخش" title="تکثیر" {% if item.is_locked or not item.duplicable %}disabled{% endif %}>{% rs_icon "copy" %}</button>
+        <button type="button" data-r4-structure-remove class="danger" aria-label="حذف این بخش" title="حذف" {% if item.is_locked or not item.removable %}disabled{% endif %}>{% rs_icon "trash" %}</button>
+      </div>
     </div>
     {% endfor %}
   </div>

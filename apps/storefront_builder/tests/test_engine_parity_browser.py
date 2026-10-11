@@ -387,12 +387,13 @@ class EngineGeometryParityBrowserTests(StaticLiveServerTestCase):
 
     def _preview_geometry(self, page, section_id):
         """The Preview iframe's measured box + effective breakpoint + one section's geometry (in the frame's own px)."""
+        page.wait_for_function("""(sid)=>{const f=document.getElementById('r4PreviewFrame');
+          try{return !!f.contentDocument.querySelector('[data-section-id="'+sid+'"]')}catch(e){return false}}""", arg=section_id, timeout=20000)
         return page.evaluate("""(sid)=>{const f=document.getElementById('r4PreviewFrame'); const r=f.getBoundingClientRect();
           const w=f.contentWindow; const sec=f.contentDocument.querySelector('[data-section-id="'+sid+'"]'); const sr=sec&&sec.getBoundingClientRect();
-          const panel=document.querySelector('[data-rs-context-panel]').getBoundingClientRect();
           return {frameW:r.width, frameH:r.height, frameX:r.x, frameY:r.y, viewport:w.innerWidth, styleW:f.style.width, transform:f.style.transform,
             bp1024:w.matchMedia('(min-width:1024px)').matches, bp768:w.matchMedia('(min-width:768px)').matches,
-            secW:sr&&sr.width, secH:sr&&sr.height, secTop:sr&&sr.top+w.scrollY, panelW:panel.width,
+            secW:sr&&sr.width, secH:sr&&sr.height, secTop:sr&&sr.top+w.scrollY,
             pageOverflow:document.documentElement.scrollWidth-document.documentElement.clientWidth}}""", section_id)
 
     def test_settings_workspace_is_a_large_overlay_that_never_changes_the_preview_geometry(self):
@@ -439,11 +440,132 @@ class EngineGeometryParityBrowserTests(StaticLiveServerTestCase):
                 finally:
                     context.close()
 
+    def test_structure_drawer_and_settings_workspace_float_above_a_full_width_preview(self):
+        """Default state = the storefront owns the whole canvas (no docked panel). The page-structure drawer and the
+        settings workspace are on-demand overlays: A (none) / B (drawer) / C (workspace) leave the Preview iframe's
+        width, height, x/y, breakpoint and the section's own geometry byte-identical at every viewport; the two overlays
+        are mutually exclusive, the selected section survives drawer -> settings, Escape closes the active overlay and
+        focus returns to its opener."""
+        nav = lambda action: f'.top-nav [data-rastisi-action="{action}"]'
+        for viewport in ((1920, 1080), (1440, 900), (1280, 720), (1024, 768), (390, 844)):
+            with self.subTest(viewport=viewport):
+                context, page, band = self._studio_with_band(viewport=viewport, open_settings=False, display_mode="campaign_band")
+                try:
+                    page.wait_for_load_state("networkidle")
+                    state = lambda: page.evaluate("""()=>({drawer:document.querySelector('.rs-studio').dataset.rsDrawer,
+                        workspace:!document.querySelector('[data-rs-workspace]').hidden,
+                        drawerShown:getComputedStyle(document.querySelector('[data-rs-context-panel]')).display!=='none',
+                        panelPos:getComputedStyle(document.querySelector('[data-rs-context-panel]')).position,
+                        layoutW:document.querySelector('.studio-layout').getBoundingClientRect().width,
+                        canvasW:document.querySelector('.canvas').getBoundingClientRect().width})""")
+                    # A — default: nothing open, nothing docked, the canvas spans the whole Studio width
+                    a_ui = state()
+                    self.assertEqual((a_ui["drawer"], a_ui["workspace"], a_ui["drawerShown"]), ("closed", False, False))
+                    self.assertEqual(a_ui["panelPos"], "fixed")
+                    self.assertLessEqual(a_ui["layoutW"] - a_ui["canvasW"], 60, "something is still docked beside the canvas")
+                    geo_a = self._preview_geometry(page, band.pk)
+                    # B — page structure drawer
+                    page.click(nav("structure"))
+                    page.wait_for_selector('[data-rs-context-panel].panel-visible')
+                    page.wait_for_timeout(300)
+                    b_ui = state()
+                    self.assertEqual((b_ui["drawer"], b_ui["workspace"], b_ui["drawerShown"]), ("structure", False, True))
+                    self.assertEqual(self._preview_geometry(page, band.pk), geo_a, "the structure drawer changed the Preview geometry")
+                    row_gear = f'[data-r4-structure-row][data-r4-structure-section-id="{band.pk}"] .rs-row-settings'
+                    # select (no settings yet), then open its settings from the drawer
+                    page.click(f'[data-rastisi-action="row-select"][data-id="{band.pk}"]')
+                    page.wait_for_timeout(300)
+                    self.assertTrue(page.evaluate(f"document.querySelector('[data-r4-structure-section-id=\"{band.pk}\"]').classList.contains('selected')"))
+                    self.assertFalse(state()["workspace"], "selecting a row must not open settings by itself")
+                    geo_a = self._preview_geometry(page, band.pk)   # selecting scrolled the Preview document (not the frame box)
+                    page.click(row_gear)
+                    page.wait_for_selector('[data-rs-workspace]:not([hidden]) input[data-r4-field-key="title"]')
+                    page.wait_for_timeout(500)
+                    c_ui = state()
+                    self.assertEqual((c_ui["drawer"], c_ui["workspace"], c_ui["drawerShown"]), ("closed", True, False),
+                                     "the drawer and the settings workspace must never be open together")
+                    self.assertEqual(page.evaluate("document.querySelector('[data-r4-section-inspector]').dataset.r4SectionId"), str(band.pk))
+                    geo_c = self._preview_geometry(page, band.pk)
+                    for key in ("frameW", "frameH", "frameX", "frameY", "viewport", "styleW", "transform", "bp1024", "bp768", "secW", "secH", "pageOverflow"):
+                        self.assertEqual(geo_a[key], geo_c[key], f"{key}: the settings workspace changed the Preview geometry")
+                    # mutual exclusion the other way round: asking for the drawer while settings are open closes settings
+                    page.evaluate("document.querySelector('.top-nav [data-rastisi-action=\"structure\"]').click()")
+                    page.wait_for_timeout(500)
+                    d_ui = state()
+                    self.assertEqual((d_ui["drawer"], d_ui["workspace"]), ("structure", False))
+                    # Escape closes the drawer; focus returns to the button that opened it
+                    page.keyboard.press("Escape")
+                    page.wait_for_timeout(400)
+                    self.assertEqual((state()["drawer"], state()["workspace"]), ("closed", False))
+                    page.click(nav("structure"))
+                    page.keyboard.press("Escape")
+                    page.wait_for_timeout(300)
+                    self.assertEqual(page.evaluate("document.activeElement.dataset.rastisiAction"), "structure")
+                    # top-bar "تنظیمات بخش" reopens the SAME selected section; Escape closes it and returns focus
+                    page.click(nav("section-settings"))
+                    page.wait_for_selector('[data-rs-workspace]:not([hidden])')
+                    self.assertEqual(page.evaluate("document.querySelector('[data-r4-section-inspector]').dataset.r4SectionId"), str(band.pk))
+                    page.keyboard.press("Escape")
+                    page.wait_for_timeout(500)
+                    self.assertEqual(page.evaluate("document.activeElement.dataset.rastisiAction"), "section-settings")
+                    final = self._preview_geometry(page, band.pk)
+                    for key in ("frameW", "frameH", "frameX", "frameY", "viewport", "transform", "bp1024", "bp768", "secW", "secH"):
+                        self.assertEqual(geo_a[key], final[key], f"{key}: back on the full canvas the geometry differs")
+                    self.assertEqual(state()["canvasW"], a_ui["canvasW"])
+                    self.assertEqual(self.errors, [])
+                finally:
+                    context.close()
+
+    def test_structure_drawer_keeps_every_structure_capability_and_partial_refresh_still_works(self):
+        context, page, band = self._studio_with_band(viewport=(1440, 900), open_settings=False, display_mode="campaign_band")
+        try:
+            page.wait_for_load_state("networkidle")
+            page.click('.top-nav [data-rastisi-action="structure"]')
+            row = f'[data-r4-structure-row][data-r4-structure-section-id="{band.pk}"]'
+            page.wait_for_selector(row)
+            # every quick action exists on the row, wired to the existing structure hooks (move / show / lock / duplicate / remove)
+            for hook in ("data-r4-structure-move=\"up\"", "data-r4-structure-move=\"down\"", "data-r4-structure-toggle-active",
+                         "data-r4-structure-toggle-locked", "data-r4-structure-duplicate", "data-r4-structure-remove"):
+                self.assertEqual(page.locator(f"{row} [{hook}]").count(), 1, hook)
+            self.assertEqual(page.locator('[data-rastisi-action="add-section"]').count(), 1)
+            geo = self._preview_geometry(page, band.pk)
+            self.assertEqual(page.evaluate("document.querySelector('.rs-studio').dataset.rsDrawer"), "structure")
+            # filter, then open settings from the drawer and make a partial-refresh edit
+            page.fill("[data-rs-structure-search]", "zzzz-no-match")
+            self.assertEqual(page.evaluate(f"document.querySelector('{row}').classList.contains('ws-filtered-out')"), True)
+            page.fill("[data-rs-structure-search]", "")
+            page.click(f"{row} .rs-row-settings")
+            page.wait_for_selector('[data-rs-workspace]:not([hidden]) input[data-r4-field-key="title"]')
+            page.evaluate("RastiSiR4.metrics.length = 0")
+            page.fill('input[data-r4-field-key="title"]', "عنوان از کشو")
+            page.dispatch_event('input[data-r4-field-key="title"]', "change")
+            page.wait_for_function("(RastiSiR4.metrics||[]).some(m=>m.path==='fragment')", timeout=10000)
+            self.assertEqual(self._preview_geometry(page, band.pk)["frameW"], geo["frameW"])
+            # a drawer quick action really mutates the draft (hide the section). It is the LAST browser step on purpose: the
+            # structure mutation fires concurrent preview + status GETs that race on the in-process SQLite test database
+            # ("no such savepoint"), so nothing is read back through the UI afterwards; the DB is checked after the browser closes.
+            page.keyboard.press("Escape")
+            page.wait_for_function("document.querySelector('[data-rs-workspace]').hidden")
+            page.click('.top-nav [data-rastisi-action="structure"]')
+            before_revision = page.evaluate("RastiSiR4.revision")
+            page.click(f"{row} [data-r4-structure-toggle-active]")
+            page.wait_for_function(f"RastiSiR4.revision>{before_revision}", timeout=15000)
+            # let the refresh GETs this mutation triggers finish before the test database is torn down
+            page.wait_for_timeout(2500)
+            page.wait_for_load_state("networkidle")
+            page.wait_for_function("document.querySelectorAll('.r4-preview-canvas iframe').length===1", timeout=20000)
+            page.wait_for_load_state("networkidle")
+        finally:
+            context.close()
+        band.refresh_from_db()
+        self.assertEqual(band.settings["title"], "عنوان از کشو")
+        self.assertFalse(band.is_active, "the drawer's show/hide quick action did not reach the draft")
+
     def test_settings_workspace_live_view_follows_the_same_fragment_as_the_main_preview(self):
         context, page, band = self._studio_with_band(viewport=(1440, 900), display_mode="campaign_band", campaign_panel_title="هنر")
         try:
-            page.wait_for_load_state("networkidle")
-            page.wait_for_selector("[data-r4-ws-live-stage] iframe")
+            page.wait_for_function(f"""()=>{{const f=document.querySelector('[data-r4-ws-live-frame]');
+              try{{return !!f.contentDocument.querySelector('[data-section-id="{band.pk}"]')}}catch(e){{return false}}}}""", timeout=30000)
             page.click('[data-r4-tab="design"]')
             page.fill('input[data-r4-field-key="campaign_panel_title"]', "عنوان زنده")
             page.dispatch_event('input[data-r4-field-key="campaign_panel_title"]', "change")

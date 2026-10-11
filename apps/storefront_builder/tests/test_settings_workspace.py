@@ -168,11 +168,10 @@ class WorkspaceShellTests(_BandBase):
         self.assertIn("z-index:40", match.group(0))
 
     def test_opening_settings_never_changes_the_studio_grid(self):
-        # the right-edge panel keeps showing the lightweight page structure while the workspace is open
-        self.assertIn("!(name === 'structure' && ui.mode === 'inspector')", STUDIO_JS)
+        # the right edge is a floating drawer (see test_studio_structure_drawer): the Studio grid is ONE column in every state
+        grid = re.findall(r"\.rs-studio \.studio-layout\{[^}]*grid-template-columns:([^;}]*)", STUDIO_CSS)
+        self.assertEqual(grid[-1].strip(), "minmax(0,1fr)")
         self.assertNotIn("data-r4-inspector-open", STUDIO_CSS.replace("body:has(.rs-studio[data-r4-sidebar-expanded", ""))
-        grid = re.findall(r"\.studio-layout\{[^}]*grid-template-columns[^}]*\}", STUDIO_CSS)
-        self.assertTrue(all("inspector" not in g for g in grid))
         # the Studio handles Escape / focus return / focus trap for the overlay
         for needle in ("trapWorkspaceFocus", "workspaceReturnFocus", "R4.closeInspector()"):
             self.assertIn(needle, STUDIO_JS)
@@ -192,3 +191,33 @@ class WorkspaceShellTests(_BandBase):
     def test_the_last_used_tab_is_remembered_across_sections(self):
         self.assertIn("lastWorkspaceTab", EDITOR_JS)
         self.assertNotIn("activateTab('basic')", EDITOR_JS)
+
+
+class WorkspaceRefinementTests(_BandBase):
+    def _inspector(self):
+        return self.client.get(reverse("dashboard:storefront-builder-r4-section-inspector", args=[self.band.pk])).content.decode()
+
+    def test_footer_copy_and_save_feedback(self):
+        html = self._inspector()
+        footer = html[html.index('<footer class="r4-ws-footer"'):]
+        self.assertIn("انجام شد</button>", footer)
+        self.assertIn("تغییرات به‌صورت خودکار ذخیره می‌شوند", footer)
+        self.assertNotIn("تمام؛ بازگشت به صفحه", html)
+        self.assertIn("data-r4-ws-save", html)             # save-state feedback stays (subtle, in the header)
+
+    def test_header_tabs_and_live_column_stay_put_and_columns_stack_naturally(self):
+        css = STUDIO_CSS
+        self.assertRegex(css, r"\.rs-studio \.r4-ws-live\{[^}]*position:sticky;top:0")
+        self.assertRegex(css, r"\.rs-studio \.r4-ws-live-stage\{[^}]*flex:0 1 auto")     # natural height, no big empty stage
+        cols = re.search(r"\.rs-studio \.r4-ws-cols\{([^}]*)\}", css).group(1)
+        self.assertIn("align-items:start", cols)                                           # columns are NOT stretched to equal heights
+        # only the body scrolls; header + tabs + footer are fixed flex rows of the workspace
+        self.assertIn("overflow-y:auto", re.search(r"\.rs-studio \.r4-ws-body\{([^}]*)\}", css).group(1))
+        self.assertIn("flex:0 0 auto", re.search(r"\.rs-studio \.r4-ws-tabs\{([^}]*)\}", css).group(1))
+
+    def test_live_frame_is_display_only_with_a_subtle_selection_ring(self):
+        block = EDITOR_JS[EDITOR_JS.index("function focusLive()"):EDITOR_JS.index("function closeLive()")]
+        for hidden in (".sfb-rsec-toolbar", ".sfb-rsec-drag-handle", ".sfb-rcontainer-toolbar", ".sfb-cell-add-more"):
+            self.assertIn(hidden, block)
+        self.assertIn("body{pointer-events:none!important}", block)
+        self.assertIn("outline:2px solid rgba(44,98,81,.34)", block)

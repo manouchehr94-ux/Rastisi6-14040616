@@ -1,0 +1,8 @@
+A {'w': 1440, 'h': 847, 'x': 241, 'y': 204, 'vp': 1440, 'tr': 'scale(1)', 'bp1024': True, 'bp768': True, 'secW': 1378, 'secH': 499.25, 'canvasW': 1860, 'drawer': 'closed', 'ws': False}
+B {'w': 1440, 'h': 847, 'x': 241, 'y': 204, 'vp': 1440, 'tr': 'scale(1)', 'bp1024': True, 'bp768': True, 'secW': 1378, 'secH': 499.25, 'canvasW': 1860, 'drawer': 'structure', 'ws': False}
+selected row: 8548 drawer still open: structure
+C {'w': 1440, 'h': 847, 'x': 241, 'y': 204, 'vp': 1440, 'tr': 'scale(1)', 'bp1024': True, 'bp768': True, 'secW': 1378, 'secH': 499.25, 'canvasW': 1860, 'drawer': 'closed', 'ws': True}
+drawer closed & workspace open: closed True selected section in workspace: 8548
+after Esc closed False focus: section-settings
+GEOM EQUAL A/B/C/A2: True []
+errs []

@@ -29,9 +29,13 @@ single shared #r4PreviewFrame renderer. r4_studio.js holds UI-only state
     <header class="app-top">
       <a class="brand" href="{% url 'dashboard:dashboard' %}" title="بازگشت به پنل مدیریت"><i class="brand-mark">r</i><strong class="rs-brand-name">راستی‌سی<small>DESIGN STUDIO</small></strong></a>
       <nav class="top-nav" aria-label="محیط طراحی">
-        <button type="button" data-rastisi-action="structure" class="active" aria-pressed="true">{% rs_icon "layers" %}ویرایش صفحه</button>
-        <button type="button" id="r4GlobalDesignToggle" data-rastisi-action="global" aria-pressed="false" aria-expanded="false">{% rs_icon "sliders" %}طراحی سراسری</button>
-        {% if design_lab.families %}<button type="button" data-rastisi-action="lab" aria-pressed="false">{% rs_icon "spark" %}آزمایشگاه</button>{% endif %}
+        {% comment %}Top-level Studio actions. The page structure and global design open as temporary floating drawers; section settings
+        open the large workspace. Nothing here is docked: with every overlay closed the Preview owns the whole canvas.{% endcomment %}
+        <button type="button" data-rastisi-action="structure" aria-pressed="false" aria-expanded="false" aria-controls="rsStructureDrawer" title="ساختار صفحه">{% rs_icon "layers" %}<span class="nav-label">ساختار صفحه</span></button>
+        <button type="button" data-rastisi-action="section-settings" aria-pressed="false" title="تنظیمات بخش">{% rs_icon "card" %}<span class="nav-label">تنظیمات بخش</span></button>
+        <button type="button" data-rastisi-action="templates" aria-pressed="false" title="قالب‌ها">{% rs_icon "grid" %}<span class="nav-label">قالب‌ها</span></button>
+        <button type="button" id="r4GlobalDesignToggle" data-rastisi-action="global" aria-pressed="false" aria-expanded="false" aria-controls="rsStructureDrawer" title="طراحی سراسری">{% rs_icon "sliders" %}<span class="nav-label">طراحی سراسری</span></button>
+        {% if design_lab.families %}<button type="button" data-rastisi-action="lab" aria-pressed="false" title="آزمایشگاه">{% rs_icon "spark" %}<span class="nav-label">آزمایشگاه</span></button>{% endif %}
       </nav>
       <div class="user-menu">
         <button type="button" data-rastisi-action="help" aria-label="راهنمای استودیو">{% rs_icon "help" %}راهنما</button>
@@ -93,8 +97,6 @@ single shared #r4PreviewFrame renderer. r4_studio.js holds UI-only state
               <button type="button" data-rastisi-action="show-candidate" class="active" aria-pressed="true">طرح آزمایشی</button>
             </div>
             <button type="button" data-rastisi-action="lab-diffs" class="diff-trigger" data-rs-lab-only hidden aria-label="مشاهده تفاوت‌ها">{% rs_icon "layers" %}<span data-rs-diff-count>۰ تغییر</span></button>
-            <button type="button" data-rastisi-action="templates" data-rs-edit-only>{% rs_icon "grid" %}<span class="hide-small">قالب‌ها</span></button>
-            <button type="button" data-rastisi-action="panel-toggle" class="mobile-only" data-rs-edit-only aria-label="نمایش تنظیمات">{% rs_icon "sliders" %}</button>
           </div>
         </div>
         <div class="canvas">
@@ -115,17 +117,19 @@ single shared #r4PreviewFrame renderer. r4_studio.js holds UI-only state
         <div class="stage-caption"><div class="row">{% rs_icon "eye" %}<span data-rs-caption>برای ویرایش، روی بخش موردنظر کلیک کنید.</span></div><span data-rs-caption-side>{% for value, label in page_types %}{% if value == page_type %}{{ label }}{% endif %}{% endfor %} · پیش‌نویس</span></div>
       </main>
 
-      <div class="context-panel panel-visible" data-rastisi-panel="structure" data-rs-context-panel>
+      <div class="rs-drawer-backdrop" data-rastisi-action="panel-close" aria-hidden="true"></div>
+      <div class="context-panel" id="rsStructureDrawer" role="complementary" aria-label="ساختار صفحه" data-rastisi-panel="structure" data-rs-context-panel>
         {# ---- Page structure view ---- #}
         <div class="rs-panel-view" data-rs-view="structure">
-          <div class="panel-head"><div class="row space-between"><span class="eyebrow">صفحه / ساختار و محتوا</span><button type="button" data-rastisi-action="panel-close" class="icon-btn mobile-only" aria-label="بستن پنل">{% rs_icon "close" %}</button></div><h2>روایت صفحه را بچینید.</h2><p>هر بخش، بخشی از داستان فروشگاه شماست.</p></div>
+          <div class="panel-head"><div class="row space-between"><span class="eyebrow">صفحه / ساختار و محتوا</span><button type="button" data-rastisi-action="panel-close" class="icon-btn" aria-label="بستن ساختار صفحه">{% rs_icon "close" %}</button></div><h2>ساختار صفحه</h2><p>ترتیب بخش‌ها را بچینید؛ برای ویرایش یک بخش، چرخ‌دندهٔ همان ردیف را بزنید.</p>
+            <label class="rs-structure-search">{% rs_icon "search" %}<span class="visually-hidden">جستجو در بخش‌های صفحه</span><input type="search" data-rs-structure-search placeholder="جستجوی بخش…" autocomplete="off"></label></div>
           <aside id="r4Structure" aria-label="ساختار صفحه">{% include "dashboard/storefront_builder/r4/partials/studio_structure.html" %}</aside>
           <div class="panel-foot"><div class="row small muted">{% rs_icon "lock" %} تغییرات فقط در پیش‌نویس ذخیره می‌شوند.</div></div>
         </div>
 
         {# ---- Global design view ---- #}
         <div class="rs-panel-view" data-rs-view="global" hidden>
-          <div class="panel-head"><div class="row space-between"><span class="eyebrow">تمام فروشگاه / هویت بصری</span><button type="button" data-rastisi-action="panel-close" class="icon-btn mobile-only" aria-label="بستن پنل">{% rs_icon "close" %}</button></div><h2>امضای فروشگاه شما</h2><p>یک هویت یکپارچه در همهٔ صفحه‌ها.</p></div>
+          <div class="panel-head"><div class="row space-between"><span class="eyebrow">تمام فروشگاه / هویت بصری</span><button type="button" data-rastisi-action="panel-close" class="icon-btn" aria-label="بستن پنل">{% rs_icon "close" %}</button></div><h2>امضای فروشگاه شما</h2><p>یک هویت یکپارچه در همهٔ صفحه‌ها.</p></div>
           <div class="global-tabs" role="tablist" aria-label="بخش‌های طراحی سراسری">
             <button type="button" data-rastisi-action="global-tab" data-tab="visual" class="active" aria-pressed="true">رنگ و تایپ</button>
             <button type="button" data-rastisi-action="global-tab" data-tab="template" aria-pressed="false">قالب</button>
@@ -139,7 +143,7 @@ single shared #r4PreviewFrame renderer. r4_studio.js holds UI-only state
 
         {# ---- Ready Template temporary preview view (UI-only; no Draft write) ---- #}
         <div class="rs-panel-view" data-rs-view="template-preview" hidden>
-          <div class="panel-head"><div class="row space-between"><span class="eyebrow">قالب / فقط پیش‌نمایش</span></div><h2 data-rs-peek-title></h2><p data-rs-peek-sub></p></div>
+          <div class="panel-head"><div class="row space-between"><span class="eyebrow">قالب / فقط پیش‌نمایش</span><button type="button" data-rastisi-action="panel-close" class="icon-btn" aria-label="بستن و بازگشت بدون تغییر">{% rs_icon "close" %}</button></div><h2 data-rs-peek-title></h2><p data-rs-peek-sub></p></div>
           <div class="panel-scroll">
             <span class="pill purple">هنوز اعمال نشده</span>
             <div class="template-peek-summary"><h3>با محتوای خودتان ببینید</h3><p>پیش‌نمایش روبه‌رو همان متن‌ها، تصاویر و محصولات شماست؛ با ظاهر این قالب.</p><div class="note">هیچ تغییری در پیش‌نویس یا نسخه عمومی ایجاد نشده.</div></div>

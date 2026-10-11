@@ -77,7 +77,7 @@
 
   var ui = {
     mode: 'structure',
-    panelVisible: true,
+    panelVisible: false,   // the right-edge drawer (page structure / global design / template peek): closed by default
     modal: null,
     lastFocus: null,
     media: null,
@@ -141,9 +141,14 @@
     // top navigation
     $all('.top-nav [data-rastisi-action]').forEach(function (b) {
       var action = b.getAttribute('data-rastisi-action');
-      var active = ui.mode === action || (action === 'structure' && (ui.mode === 'inspector' || ui.mode === 'template-preview'));
+      var active = action === 'structure' ? (ui.mode === 'structure' && ui.panelVisible)
+        : action === 'section-settings' ? ui.mode === 'inspector'
+        : action === 'global' ? (ui.mode === 'global' && ui.panelVisible)
+        : action === 'templates' ? false
+        : ui.mode === action;
       b.classList.toggle('active', active);
       b.setAttribute('aria-pressed', active ? 'true' : 'false');
+      if (action === 'structure' || action === 'global') b.setAttribute('aria-expanded', active ? 'true' : 'false');
       b.disabled = ui.busy;
     });
 
@@ -155,7 +160,8 @@
     }
     if (contextPanel) {
       contextPanel.hidden = !showPanel;
-      contextPanel.classList.toggle('panel-visible', ui.panelVisible);
+      contextPanel.classList.toggle('panel-visible', ui.panelVisible && showPanel);
+      root.dataset.rsDrawer = ui.panelVisible && showPanel ? ui.mode : 'closed';
       // Section settings live in the workspace overlay, never in this side panel: while they are open the panel keeps
       // showing the (lightweight) page structure, so the Preview column never changes width.
       contextPanel.setAttribute('data-rastisi-panel', ui.mode === 'global' ? 'global-design' : 'structure');
@@ -164,6 +170,7 @@
       var name = view.getAttribute('data-rs-view');
       view.hidden = name !== ui.mode && !(name === 'structure' && ui.mode === 'inspector');
     });
+    renderDrawerFocus();
     renderWorkspace();
     if (labDock) labDock.hidden = !isLab;
 
@@ -264,6 +271,47 @@
       .catch(function () { /* status stays as last known; nothing is lost */ });
   }
 
+  // ---- page-structure drawer (temporary overlay) ------------------------------------------------------------
+  // The right-edge panel is a floating drawer (position:fixed): it never takes layout width, so the Preview, the Studio
+  // canvas and the storefront breakpoint are identical whether it is open or closed. It is closed by default, and
+  // mutually exclusive with the settings workspace (opening either closes the other).
+  var drawerReturnFocus = null;
+  var drawerWasOpen = false;
+
+  function renderDrawerFocus() {
+    if (!contextPanel) return;
+    var open = ui.panelVisible && !contextPanel.hidden && ui.mode !== 'inspector' && ui.mode !== 'lab';
+    if (open && !drawerWasOpen) {
+      drawerWasOpen = true;
+      var active = document.activeElement;
+      if (active && active !== document.body && !contextPanel.contains(active)) drawerReturnFocus = active;
+      contextPanel.setAttribute('tabindex', '-1');
+      contextPanel.focus({ preventScroll: true });
+    } else if (!open && drawerWasOpen) {
+      drawerWasOpen = false;
+      var back = drawerReturnFocus;
+      drawerReturnFocus = null;
+      // returning from the settings workspace: that overlay restores its own opener
+      if (ui.mode !== 'inspector' && back && document.contains(back) && typeof back.focus === 'function') back.focus({ preventScroll: true });
+    }
+  }
+
+  function closeDrawer() {
+    if (ui.mode === 'template-preview') { cancelTemplatePreview(); return; }
+    if (ui.mode === 'global') { setMode('structure'); return; }
+    ui.panelVisible = false;
+    renderChrome();
+  }
+
+  function filterStructure(query) {
+    query = (query || '').trim().toLowerCase();
+    ui.structureQuery = query;
+    $all('[data-r4-structure-row]', structurePanel || root).forEach(function (row) {
+      var label = (row.getAttribute('data-rs-section-label') || '').toLowerCase();
+      row.classList.toggle('ws-filtered-out', !!query && label.indexOf(query) === -1);
+    });
+  }
+
   // ---- settings workspace (large overlay) ---------------------------------
   // The overlay is presentation only: r4_editor.js still owns the Inspector body (fetch, hydrate, visibility rules,
   // mutations). The Studio decides when the overlay is shown (mode === 'inspector') and handles focus, Escape and the
@@ -283,7 +331,9 @@
       workspaceWasOpen = false;
       var back = workspaceReturnFocus;
       workspaceReturnFocus = null;
-      if (back && document.contains(back) && typeof back.focus === 'function') back.focus({ preventScroll: true });
+      // an opener that lived inside the (now closed) drawer is not focusable any more: use the top-bar button instead
+      if (!back || !document.contains(back) || back.getClientRects().length === 0) back = $('.top-nav [data-rastisi-action="section-settings"]');
+      if (back && typeof back.focus === 'function') back.focus({ preventScroll: true });
     }
     if (open) renderWorkspaceSave();
   }
@@ -358,6 +408,8 @@
   }
 
   document.addEventListener('input', function (evt) {
+    var structureSearch = evt.target && evt.target.closest && evt.target.closest('[data-rs-structure-search]');
+    if (structureSearch) { filterStructure(structureSearch.value); return; }
     var input = evt.target && evt.target.closest && evt.target.closest('[data-r4-ws-search]');
     if (!input) return;
     clearTimeout(searchTimer);
@@ -374,7 +426,8 @@
       ui.previewTemplate = null;
       R4.showPreview(null);
     }
-    ui.panelVisible = true;
+    // the structure view is the DEFAULT mode and means "no drawer"; the drawer is opened explicitly (options.drawer)
+    var drawerWanted = mode === 'global' || (mode === 'structure' && Boolean(options && options.drawer));
     if (mode === 'global') {
       R4.openGlobalDesign();
       if (options && options.tab) setGlobalTab(options.tab);
@@ -387,6 +440,8 @@
       if (R4.inspectorOpen) R4.closeInspector();
       if (zoomSelect) { zoomSelect.value = 'width'; R4.setZoom && R4.setZoom('width'); }
     }
+    // set AFTER the closing calls above: closing the settings workspace fires r4:inspector-closed, whose handler resets the drawer
+    ui.panelVisible = drawerWanted;
     ui.mode = mode;
     renderChrome();
   }
@@ -418,7 +473,7 @@
 
   function markSelectedRow() {
     $all('[data-r4-structure-row]', structurePanel || root).forEach(function (row) {
-      row.classList.toggle('selected', ui.mode === 'inspector' && String(ui.selectedSectionId) === row.getAttribute('data-r4-structure-section-id'));
+      row.classList.toggle('selected', ui.selectedSectionId != null && String(ui.selectedSectionId) === row.getAttribute('data-r4-structure-section-id'));
     });
   }
 
@@ -1020,17 +1075,34 @@
     var action = el.getAttribute('data-rastisi-action');
     if (ui.busy && ['panel-toggle', 'panel-close', 'show-base', 'show-candidate', 'close-modal'].indexOf(action) === -1) return;
     switch (action) {
-      case 'structure': setMode('structure'); break;
+      case 'structure':
+        // the top-bar button toggles the drawer; the same action elsewhere always opens it
+        if (el.closest('.top-nav') && ui.mode === 'structure' && ui.panelVisible) closeDrawer();
+        else setMode('structure', { drawer: true });
+        break;
+      case 'section-settings':
+        if (R4.inspectorOpen) break;
+        if (ui.selectedSectionId != null && rowFor(ui.selectedSectionId)) R4.openSection(Number(ui.selectedSectionId));
+        else { notify('ابتدا یک بخش را در پیش‌نمایش یا فهرست «ساختار صفحه» انتخاب کنید.'); setMode('structure', { drawer: true }); }
+        break;
+      case 'row-select': {
+        var rowEl = el.closest('[data-r4-structure-row]');
+        if (!rowEl) break;
+        ui.selectedSectionId = rowEl.getAttribute('data-r4-structure-section-id');
+        markSelectedRow();
+        if (R4.previewSelect) R4.previewSelect(Number(ui.selectedSectionId));
+        break;
+      }
       case 'workspace-backdrop': if (R4.inspectorOpen) R4.closeInspector(); break;
       case 'global':
         if (el.hasAttribute('data-rs-global-focus')) focusGlobalRegion(el.getAttribute('data-rs-global-focus'));
+        else if (el.closest('.top-nav') && ui.mode === 'global' && ui.panelVisible) closeDrawer();
         else setMode('global');
         break;
       case 'lab': setMode('lab'); break;
       case 'help': openModal('help'); break;
       case 'templates': openTemplateGallery(); break;
-      case 'panel-toggle': ui.panelVisible = !ui.panelVisible; renderChrome(); break;
-      case 'panel-close': ui.panelVisible = false; renderChrome(); break;
+      case 'panel-close': closeDrawer(); break;
       case 'global-tab': setGlobalTab(el.getAttribute('data-tab')); break;
       case 'add-section': openModal('add-section'); break;
       case 'section-enable': sectionCommand('toggle_active'); break;
@@ -1181,6 +1253,11 @@
     }
     if (evt.key === 'Tab' && !ui.modal && ui.mode === 'inspector' && !(pickerOpen && !pickerOpen.hidden)) {
       trapWorkspaceFocus(evt);
+      return;
+    }
+    if (evt.key === 'Escape' && !ui.modal && ui.panelVisible && ui.mode !== 'inspector' && ui.mode !== 'lab' && root.dataset.r4SidebarExpanded !== 'true') {
+      evt.preventDefault();
+      closeDrawer();
       return;
     }
     if (evt.key === 'Escape' && !ui.modal && root.dataset.r4SidebarExpanded === 'true') {
@@ -1367,6 +1444,7 @@
     ui.selectedSectionId = evt.detail.sectionId;
     if (ui.mode === 'template-preview') { ui.previewTemplate = null; R4.showPreview(null); }
     ui.mode = 'inspector';
+    ui.panelVisible = false; // the drawer and the settings workspace are mutually exclusive
     renderInspectorChrome();
     markSelectedRow();
     renderChrome();
@@ -1375,6 +1453,7 @@
   root.addEventListener('r4:inspector-closed', function () {
     if (ui.mode === 'inspector') {
       ui.mode = 'structure';
+      ui.panelVisible = false; // closing settings returns to the full canvas
       renderChrome();
     }
     markSelectedRow();
@@ -1383,6 +1462,7 @@
   root.addEventListener('r4:global-opened', function () {
     if (ui.mode !== 'global' && !ui.lab.active) {
       ui.mode = 'global';
+      ui.panelVisible = true;
       renderChrome();
     }
   });
@@ -1390,6 +1470,7 @@
   root.addEventListener('r4:structure-refreshed', function () {
     var countPill = $('[data-rs-section-count]');
     if (countPill) countPill.textContent = num($all('[data-r4-structure-row]', structurePanel).length) + ' بخش';
+    if (ui.structureQuery) filterStructure(ui.structureQuery);
     if (ui.mode === 'inspector') renderInspectorChrome();
     markSelectedRow();
   });

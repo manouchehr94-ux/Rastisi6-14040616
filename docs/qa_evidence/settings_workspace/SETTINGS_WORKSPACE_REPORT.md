@@ -39,7 +39,7 @@ Measured in real Chromium (Playwright) on the Rasti Mode Demo draft, `#r4Preview
 
 (The frame's logical viewport stays the chosen device width — 1440 — scaled into the canvas, so the section geometry in frame px is identical too.) Raw numbers: `measure_*.txt`.
 
-**Decision to confirm:** the right-edge column still shows the lightweight *page structure* list (navigation, not a settings form). It is present with the workspace open or closed, which is why the iframe cannot change width. If you want the Preview to span the full Studio width when nothing is open, that list would need to become an on-demand drawer; I did not change the page-structure workflow in this pass.
+**Superseded:** the remaining right-edge page-structure column was removed in the follow-up pass — see `STUDIO_LAYOUT_DRAWER_REPORT.md` (structure is now an on-demand floating drawer; the Preview spans the full canvas). The geometry table above was measured with that column present; the A/B/C table in the follow-up report is the current measurement.
 
 ## Evidence
 

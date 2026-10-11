@@ -200,7 +200,11 @@ window.RastiSiR4 = {
         'html,body{overflow:hidden!important}' +
         'body>:not(main):not(script):not(style):not(link){display:none!important}' +
         '.sfb-preview-sections>.rcontainer:not(:has(.rsec[data-section-id="' + live.sectionId + '"])){display:none!important}' +
-        '.sfb-storefront-canvas{margin:0!important;padding-top:0!important}';
+        '.sfb-storefront-canvas{margin:0!important;padding-top:0!important}' +
+        // a display-only copy: no edit chrome of any kind, never interactive; the open section is only subtly ringed
+        '.sfb-rsec-toolbar,.sfb-rsec-drag-handle,.sfb-rcontainer-toolbar,.sfb-rcontainer-select,.sfb-rcontainer-remove,.sfb-cell-add-more,.sfb-empty-cell-add{display:none!important}' +
+        'body{pointer-events:none!important}' +
+        '.rsec[data-section-id="' + live.sectionId + '"]{outline:2px solid rgba(44,98,81,.34)!important;outline-offset:3px!important;border-radius:10px}';
       var loading = live.aside.querySelector('[data-r4-ws-live-loading]');
       if (loading) loading.hidden = true;
     } catch (err) { /* best effort: the live view is an aid, never a dependency */ }
@@ -237,7 +241,9 @@ window.RastiSiR4 = {
     aside.hidden = false;
     live = { frame: frame, sizer: sizer, stage: stage, aside: aside, sectionId: sectionId, ro: null, timers: [] };
     if (window.ResizeObserver) { live.ro = new ResizeObserver(fitLive); live.ro.observe(stage); }
-    frame.setAttribute('src', src); // the same canonical draft preview page the main Preview shows
+    // The same canonical draft preview page the main Preview shows. Started a beat after the Inspector fetch/hydration
+    // so the second page render never competes with the controls becoming interactive.
+    live.timers.push(setTimeout(function () { if (live.frame === frame) frame.setAttribute('src', src); }, 300));
   }
 
   function mirrorFragmentToLive(fragment) {
@@ -905,6 +911,22 @@ window.RastiSiR4 = {
       sectionId: R4.selected,
     }, window.location.origin);
   }
+
+  // Highlight one section in the Preview (and bring it into view) WITHOUT opening its settings — the structure drawer's
+  // "select". Presentation only: it never touches R4.selected (the settings workspace's authority).
+  R4.previewSelect = function (sectionId) {
+    if (!previewFrame || !previewFrame.contentWindow) return;
+    previewFrame.contentWindow.postMessage({ type: 'sfb:setSelection', sectionId: sectionId }, window.location.origin);
+    try {
+      var target = previewFrame.contentDocument.querySelector('[data-section-id="' + sectionId + '"]');
+      if (target) {
+        // scroll the PREVIEW document only (scrollIntoView could also scroll the Studio shell around the frame)
+        var win = previewFrame.contentWindow;
+        var box = target.getBoundingClientRect();
+        win.scrollTo({ top: Math.max(0, box.top + win.scrollY - (win.innerHeight - box.height) / 2) });
+      }
+    } catch (err) { /* cross-document access is best effort */ }
+  };
 
   R4.openSection = function (sectionId) {
     if (!inspector || !sectionId) return Promise.resolve();
