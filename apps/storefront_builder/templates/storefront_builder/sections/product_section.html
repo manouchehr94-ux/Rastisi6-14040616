@@ -1,4 +1,4 @@
-<section class="section product-section{% if settings.carousel_autoplay and settings.display_mode == 'carousel' %} product-section--spotlight{% endif %}{% if settings.display_mode == 'campaign_band' %} product-section--campaign-band{% elif settings.display_mode == 'catalog_grid' %} product-section--catalog-grid{% endif %}{% if settings.heading_style == 'plain_outline' %} product-section--hs-plain{% elif settings.heading_style == 'underlined' %} product-section--hs-underlined{% endif %}">
+<section class="section product-section{% if settings.carousel_autoplay and settings.display_mode == 'carousel' %} product-section--spotlight{% endif %}{% if settings.display_mode == 'campaign_band' %} product-section--campaign-band{% elif settings.display_mode == 'catalog_grid' %} product-section--catalog-grid{% endif %}{% if settings.heading_style == 'plain_outline' %} product-section--hs-plain{% elif settings.heading_style == 'underlined' %} product-section--hs-underlined{% endif %}"{% if settings.carousel_autoplay and settings.display_mode == 'carousel' %} data-sfb-section-surface="ink"{% endif %}>
   {% if settings.display_mode == "campaign_band" %}
   {% comment %}
   Campaign band: heading (the section's own title — never invented copy), then the band holding an OPTIONAL promotional
@@ -67,7 +67,7 @@
   {% endif %}
 
   {% if settings.display_mode == "carousel" and settings.carousel_autoplay %}
-  <div class="product-spotlight-slider"
+  <div class="product-spotlight-slider" data-sfb-section-surface="ink"
        x-data="{ active: 0, count: {{ products|length }}, timer: null,
                   next() { this.active = (this.active + 1) % this.count },
                   prev() { this.active = (this.active - 1 + this.count) % this.count },
@@ -78,13 +78,13 @@
        @mouseleave="start()">
 
     {% if settings.header_position == "inside" %}
-    <div class="product-spotlight-head">
+    <div class="product-spotlight-head" data-sfb-section-surface="ink">
       <h2><span class="bar"></span>{{ settings.title|default:"محصولات" }}</h2>
       {% if settings.subtitle %}<p>{{ settings.subtitle }}</p>{% endif %}
     </div>
     {% endif %}
 
-    <div class="product-spotlight-track">
+    <div class="product-spotlight-track" data-sfb-section-surface="ink">
       {% if products %}
       {% for product in products %}
       <div class="product-spotlight-slide"

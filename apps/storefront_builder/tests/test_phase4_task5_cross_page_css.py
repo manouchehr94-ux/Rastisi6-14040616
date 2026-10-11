@@ -103,8 +103,9 @@ class HeroSliderNonHomeCssCompletenessTests(TestCase):
         self.assertIn(".hero-slide{position:absolute;inset:0;width:100%;height:100%}", css)
         self.assertIn(".hero-media{display:block;width:100%;height:100%}", css)
         self.assertIn(
-            '.hero-inner{position:relative;overflow:hidden;border:1px solid #e2e5ea;'
-            'border-radius:8px;background:#fff;aspect-ratio:1053/420;min-height:0;'
+            # surface / border are semantic tokens (primary-surface contract), not fixed #fff / #e2e5ea
+            '.hero-inner{position:relative;overflow:hidden;border:1px solid var(--brand-border,#e2e5ea);'
+            'border-radius:8px;background:var(--brand-surface,#fff);aspect-ratio:1053/420;min-height:0;'
             'color:#fff;box-shadow:0 2px 10px rgba(15,23,42,.05)}',
             css,
         )
@@ -242,7 +243,7 @@ class ProductSectionSpotlightAndCampaignBandNonHomeCssTests(TestCase):
         )
         self.assertIn(
             ".product-spotlight-track{position:relative;display:grid;"
-            "grid-template-columns:minmax(0,1fr);flex:1;min-height:0;background:#fff}",
+            "grid-template-columns:minmax(0,1fr);flex:1;min-height:0;background:var(--brand-surface,#fff)}",
             css,
         )
         self.assertIn(
@@ -264,7 +265,7 @@ class ProductSectionSpotlightAndCampaignBandNonHomeCssTests(TestCase):
         self.assertIn(".beauty-section-title{gap:10px;margin-bottom:14px}", css)
         self.assertLess(
             css.index(".product-spotlight-track{position:relative;display:grid;"
-                       "grid-template-columns:minmax(0,1fr);flex:1;min-height:0;background:#fff}"),
+                       "grid-template-columns:minmax(0,1fr);flex:1;min-height:0;background:var(--brand-surface,#fff)}"),
             css.index(".product-spotlight-head h2{font-size:13.5px}"),
         )
 
@@ -329,26 +330,20 @@ class AmazingOffersNonHomeCssTests(TestCase):
         self.assertIn(".amazing-offers-section{margin:7px 0}", css)
         self.assertIn(
             ".special-wrap{display:grid;grid-template-columns:290px minmax(0,1fr);"
-            "gap:0;background:#fff;border:1px solid #e0e3e8;border-radius:5px;"
+            "gap:0;background:var(--brand-surface,#fff);border:1px solid var(--brand-border,#e0e3e8);border-radius:5px;"
             "overflow:hidden;box-shadow:0 1px 6px rgba(15,23,42,.05);min-height:250px}",
             css,
         )
         self.assertIn(
-            ".special-list{order:1;background:#f7f8fa;border-inline-end:1px solid #e5e7eb;"
-            "padding:8px;display:flex;flex-direction:column;gap:4px;min-width:0}",
+            ".special-list{order:1;background:color-mix(in srgb,var(--brand-text,#24272c) 4%,transparent);border-inline-end:1px solid color-mix(in srgb,currentColor 12%,transparent);padding:8px;display:flex;flex-direction:column;gap:4px;min-width:0}",
             css,
         )
         self.assertIn(
-            ".special-list-title{display:flex;flex-direction:column;gap:5px;"
-            "padding:2px 3px 6px;border-bottom:1px solid #e2e5e9;font-weight:800;"
-            "font-size:12px;color:#24272c}",
+            ".special-list-title{display:flex;flex-direction:column;gap:5px;padding:2px 3px 6px;border-bottom:1px solid color-mix(in srgb,currentColor 14%,transparent);font-weight:800;font-size:12px;color:inherit}",
             css,
         )
         self.assertIn(
-            ".special-list>button{display:grid;grid-template-columns:minmax(0,1fr) auto;"
-            "align-items:center;gap:8px;width:100%;min-height:42px;padding:6px 8px;"
-            "border:1px solid transparent;border-radius:3px;background:#fff;"
-            "color:#4b4f56;text-align:right;cursor:pointer}",
+            ".special-list>button{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;width:100%;min-height:42px;padding:6px 8px;border:1px solid transparent;border-radius:3px;background:var(--brand-surface,#fff);color:var(--brand-text,#4b4f56);text-align:right;cursor:pointer}",
             css,
         )
         self.assertIn(
@@ -356,7 +351,10 @@ class AmazingOffersNonHomeCssTests(TestCase):
             "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
             css,
         )
-        self.assertIn('.special-list-price{font-size:9.8px;color:var(--muted,#6a6f77);white-space:nowrap}', css)
+        self.assertIn(
+            ".special-list-price{font-size:9.8px;color:var(--brand-muted,var(--muted,#6a6f77));white-space:nowrap}",
+            css,
+        )
         self.assertIn(
             ".special-main{grid-area:1/1;min-width:0;display:grid;"
             "grid-template-columns:minmax(0,1fr) minmax(230px,37%);align-items:center;"
@@ -368,29 +366,37 @@ class AmazingOffersNonHomeCssTests(TestCase):
             "gap:6px;min-width:0}",
             css,
         )
-        self.assertIn('.special-kicker{font-size:10.5px;color:#c93939;font-weight:800}', css)
+        self.assertIn(
+            ".special-kicker{font-size:10.5px;color:var(--ssf-accent,var(--d-accent,#c93939));font-weight:800}",
+            css,
+        )
         # The exact selector the CRITICAL merge error landed on.
         self.assertIn(
             '.special-discount{display:inline-grid;place-items:center;min-width:39px;height:22px;border-radius:999px;background:#d53d3d;color:#fff;font-size:9px;font-weight:900}',
             css,
         )
         self.assertIn(
-            ".special-copy h3{font-size:18px;line-height:1.55;font-weight:800;"
-            "color:#222;margin:0;max-width:520px}",
-            css,
-        )
-        self.assertIn('.special-brand{font-size:10px;color:#6a6f77;margin:0}', css)
-        self.assertIn('.special-price strong{font-size:18px;color:#127e50;font-weight:800}', css)
-        self.assertIn('.special-price del{font-size:10px;color:#6b6f74}', css)
-        self.assertIn(
-            ".special-buy{margin-top:4px;border:1px solid #34383f;background:#fff;"
-            "color:#292d33;border-radius:2px;padding:6px 12px;font-size:10.5px;"
-            "font-weight:700}",
+            ".special-copy h3{font-size:18px;line-height:1.55;font-weight:800;color:inherit;margin:0;max-width:520px}",
             css,
         )
         self.assertIn(
-            ".special-image{height:215px;display:grid;place-items:center;"
-            "overflow:hidden;border-radius:4px;background:#fff}",
+            ".special-brand{font-size:10px;color:var(--ssf-muted,var(--brand-muted,#6a6f77));margin:0}",
+            css,
+        )
+        self.assertIn(
+            ".special-price strong{font-size:18px;color:var(--ssf-price,var(--brand-success,#127e50));font-weight:800}",
+            css,
+        )
+        self.assertIn(
+            ".special-price del{font-size:10px;color:var(--ssf-muted,var(--brand-muted,#6b6f74))}",
+            css,
+        )
+        self.assertIn(
+            ".special-buy{margin-top:4px;border:1px solid var(--brand-text,#34383f);background:var(--brand-surface,#fff);color:var(--brand-text,#292d33);border-radius:2px;padding:6px 12px;font-size:10.5px;font-weight:700}",
+            css,
+        )
+        self.assertIn(
+            ".special-image{height:215px;display:grid;place-items:center;overflow:hidden;border-radius:4px;background:var(--brand-surface,#fff)}",
             css,
         )
         self.assertIn(
@@ -1798,7 +1804,7 @@ class GroupENonHomeCssTests(TestCase):
             css,
         )
         self.assertIn(
-            ".feat{background:#fff;border:1px solid var(--line);border-radius:5px;padding:6px 9px;"
+            ".feat{background:var(--brand-surface,#fff);border:1px solid var(--line);border-radius:5px;padding:6px 9px;"
             "display:flex;align-items:center;gap:8px;min-height:54px;"
             "box-shadow:0 1px 5px rgba(15,23,42,.04)}",
             css,
@@ -1809,7 +1815,7 @@ class GroupENonHomeCssTests(TestCase):
         )
         self.assertIn(".feat .ic svg{width:21px;height:21px}", css)
         self.assertIn(".feat b{font-size:11px;font-weight:600;line-height:1.45;display:block}", css)
-        self.assertIn(".feat small{color:var(--muted);font-size:9.5px;line-height:1.5}", css)
+        self.assertIn(".feat small{color:var(--ssf-muted,var(--muted));font-size:9.5px;line-height:1.5}", css)
         self.assertIn(
             'html[data-sfb-density="compact"] .features{gap:10px;margin:18px 0}', css,
         )

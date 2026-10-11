@@ -1,30 +1,17 @@
 {% load persian %}
 {% if products %}
-<script>
-document.addEventListener('alpine:init', () => {
-  Alpine.data('countdown', (deadlineIso) => ({
-    h: '۰۰', m: '۰۰', s: '۰۰', _timer: null,
-    start() {
-      const faDigits = '۰۱۲۳۴۵۶۷۸۹';
-      const toFa = (n) => String(n).padStart(2, '0').replace(/\d/g, (d) => faDigits[d]);
-      const deadline = new Date(deadlineIso).getTime();
-      const tick = () => {
-        const diff = Math.max(0, Math.floor((deadline - Date.now()) / 1000));
-        this.h = toFa(Math.floor(diff / 3600));
-        this.m = toFa(Math.floor((diff % 3600) / 60));
-        this.s = toFa(diff % 60);
-      };
-      tick(); this._timer = setInterval(tick, 1000);
-    },
-  }));
-});
-</script>
+{% comment %}The countdown is an inline Alpine component (no <script> in this fragment): a settings edit swaps just this section
+instead of reloading the Preview document; Alpine's destroy() clears the timer when the fragment is replaced.{% endcomment %}
 <section class="section amazing-offers-section" id="sec-amazing">
-  <div class="special-wrap" x-data="{ active: 0 }">
+  <div class="special-wrap" data-sfb-section-surface="ink" x-data="{ active: 0 }">
     <aside class="special-list" aria-label="محصولات پیشنهاد ویژه">
       <div class="special-list-title">
         <span>{{ settings.title|default:"پیشنهاد شگفت‌انگیز" }}</span>
-        <span class="special-count" x-data="countdown('{{ deadline }}')" x-init="start()">
+        <span class="special-count" x-init="start()" x-data="{ h: '۰۰', m: '۰۰', s: '۰۰', _t: null,
+            start() { const fa = '۰۱۲۳۴۵۶۷۸۹'; const toFa = (n) => String(n).padStart(2, '0').replace(/\d/g, (d) => fa[d]); const end = new Date('{{ deadline }}').getTime();
+                      const tick = () => { const diff = Math.max(0, Math.floor((end - Date.now()) / 1000)); this.h = toFa(Math.floor(diff / 3600)); this.m = toFa(Math.floor((diff % 3600) / 60)); this.s = toFa(diff % 60); };
+                      tick(); this._t = setInterval(tick, 1000); },
+            destroy() { clearInterval(this._t); } }">
           <b x-text="h"></b>:<b x-text="m"></b>:<b x-text="s"></b>
         </span>
       </div>

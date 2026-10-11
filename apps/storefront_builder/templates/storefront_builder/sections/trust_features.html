@@ -6,12 +6,12 @@ Phase 3 — Universal: settings.items (data-driven, up to 6 items) نمایش
 <div class="features">
   {% if settings.items %}
   {% for item in settings.items %}
-  <div class="feat"><span class="ic">{% if item.icon %}{{ item.icon }}{% else %}✅{% endif %}</span><div><b>{{ item.title }}</b>{% if item.subtitle %}<small>{{ item.subtitle }}</small>{% endif %}</div></div>
+  <div class="feat" data-sfb-section-surface="ink"><span class="ic">{% if item.icon %}{{ item.icon }}{% else %}✅{% endif %}</span><div><b>{{ item.title }}</b>{% if item.subtitle %}<small>{{ item.subtitle }}</small>{% endif %}</div></div>
   {% endfor %}
   {% else %}
-  <div class="feat"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span><div><b>ارسال سریع</b><small>به سراسر کشور</small></div></div>
-  <div class="feat"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span><div><b>ضمانت اصالت</b><small>کالای اورجینال</small></div></div>
-  <div class="feat"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></span><div><b>پشتیبانی ۲۴/۷</b><small>پاسخگویی همه‌روزه</small></div></div>
-  <div class="feat"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M9 22V12h6v10"/></svg></span><div><b>۷ روز ضمانت بازگشت</b><small>بدون دردسر</small></div></div>
+  <div class="feat" data-sfb-section-surface="ink"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span><div><b>ارسال سریع</b><small>به سراسر کشور</small></div></div>
+  <div class="feat" data-sfb-section-surface="ink"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span><div><b>ضمانت اصالت</b><small>کالای اورجینال</small></div></div>
+  <div class="feat" data-sfb-section-surface="ink"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></span><div><b>پشتیبانی ۲۴/۷</b><small>پاسخگویی همه‌روزه</small></div></div>
+  <div class="feat" data-sfb-section-surface="ink"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M9 22V12h6v10"/></svg></span><div><b>۷ روز ضمانت بازگشت</b><small>بدون دردسر</small></div></div>
   {% endif %}
 </div>

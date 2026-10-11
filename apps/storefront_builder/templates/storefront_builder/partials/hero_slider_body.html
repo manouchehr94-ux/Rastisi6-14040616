@@ -19,7 +19,7 @@ banners without introducing a preset-specific template.
   collapses fade/slide to an instant cut at the CSS layer (see home.css) without
   changing slide state. No new slider, no new renderer, no animation library.
   {% endcomment %}
-  <div class="hero-inner" data-text-position="{{ slider_settings.text_position|default:'end' }}"
+  <div class="hero-inner" data-sfb-section-surface data-text-position="{{ slider_settings.text_position|default:'end' }}"
        data-hero-transition="{{ slider_settings.transition|default:'cut' }}"
        {% if effective_section_typography %}style="--sfb-hero-heading-size:{{ effective_section_typography.heading }}px;--sfb-hero-body-size:{{ effective_section_typography.body }}px;--sfb-hero-font:'{{ effective_section_appearance.font }}';"{% endif %}
        x-data="{ slide: 0, count: {{ hero_slides|length }}, autoplay: {{ slider_settings.autoplay|yesno:'true,false' }}, interval: {{ slider_settings.interval_ms|default:4500 }}, loop: {{ slider_settings.loop|yesno:'true,false' }}, transition: '{{ slider_settings.transition|default:'cut' }}', _timer: null,
@@ -64,7 +64,7 @@ banners without introducing a preset-specific template.
   </div>
   {% else %}
   {% with slide=hero_slides.0 %}
-  <div class="hero-inner" data-text-position="{{ slider_settings.text_position|default:'end' }}"
+  <div class="hero-inner" data-sfb-section-surface data-text-position="{{ slider_settings.text_position|default:'end' }}"
        {% if effective_section_typography %}style="--sfb-hero-heading-size:{{ effective_section_typography.heading }}px;--sfb-hero-body-size:{{ effective_section_typography.body }}px;--sfb-hero-font:'{{ effective_section_appearance.font }}';"{% endif %}>
     <article class="hero-slide single"{% if is_builder_preview %} data-admin-edit-kind="media" data-admin-edit-id="{{ slide.pk }}" data-admin-edit-title="{{ slide.title|default:'اسلاید'|escape }}" data-admin-media-kind="hero-slides"{% endif %}>
       <picture class="hero-media">

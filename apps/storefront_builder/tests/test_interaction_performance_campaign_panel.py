@@ -560,7 +560,7 @@ class DesignControlsOfferedOnlyWhereTheyActTests(_CampaignBase):
             ".rsec.rsec[data-d~=\"shadow\"] .product-campaign-band{box-shadow:var(--d-shadow)}",
             ".rsec.rsec[data-d~=\"surface\"]:has(.product-campaign-band) .product-campaign-band{background:var(--d-surface)",
             "border-radius:var(--d-radius,0)}",
-            '.rsec[data-d~="surface"][data-bg-mode="color"]:not(:has(.product-campaign-band)){background-color:var(--d-surface)!important}',
+            '.rsec[data-d~="surface"][data-bg-mode="color"]:not(:has(.product-campaign-band)):not(:has(.special-wrap)){background-color:var(--d-surface)!important}',
             '.rsec[data-d~="ratio"] .pcard .img,.rsec[data-d~="ratio"] .blog-card .th{aspect-ratio:var(--d-ratio)!important}',
         ):
             self.assertIn(needle, BUILDER_CSS)

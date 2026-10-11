@@ -4400,7 +4400,7 @@ a.sfb-v3-component-item,
    Home never loads storefront_builder.css (only product_card.css and
    home.css; see catalog/templates/catalog/home.html). */
 .hero{padding:0;margin:0}
-.hero-inner{position:relative;overflow:hidden;border:1px solid #e2e5ea;border-radius:8px;background:#fff;aspect-ratio:1053/420;min-height:0;color:#fff;box-shadow:0 2px 10px rgba(15,23,42,.05)}
+.hero-inner{position:relative;overflow:hidden;border:1px solid var(--brand-border,#e2e5ea);border-radius:8px;background:var(--brand-surface,#fff);aspect-ratio:1053/420;min-height:0;color:#fff;box-shadow:0 2px 10px rgba(15,23,42,.05)}
 .hero-slide{position:absolute;inset:0;width:100%;height:100%}
 .hero-slide.single{display:block}
 .hero-media{display:block;width:100%;height:100%}
@@ -4490,12 +4490,12 @@ a.sfb-v3-component-item,
    refinements, not the display/position gap this fix closes. */
 .product-section-subtitle{color:var(--muted);font-size:13px;margin:-8px 0 14px}
 .product-section--spotlight{height:100%;display:flex;flex-direction:column}
-.product-spotlight-slider{position:relative;display:flex;flex-direction:column;flex:1;min-height:0;background:#fff;border:1px solid #e0e3e8;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(15,23,42,.05)}
-.product-spotlight-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 13px 8px;border-bottom:1px solid #eef0f3;background:#fff;z-index:3}
+.product-spotlight-slider{position:relative;display:flex;flex-direction:column;flex:1;min-height:0;background:var(--brand-surface,#fff);border:1px solid var(--brand-border,#e0e3e8);border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(15,23,42,.05)}
+.product-spotlight-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 13px 8px;border-bottom:1px solid color-mix(in srgb,currentColor 9%,transparent);background:var(--brand-surface,#fff);z-index:3}
 .product-spotlight-head h2{display:flex;align-items:center;gap:7px;font-size:14px;font-weight:800;margin:0}
 .product-spotlight-head .bar{width:3px;height:18px;border-radius:2px;background:linear-gradient(#16a36b,#7c3aed)}
 .product-spotlight-head p{font-size:9.5px;color:var(--muted);margin:0}
-.product-spotlight-track{position:relative;display:grid;grid-template-columns:minmax(0,1fr);flex:1;min-height:0;background:#fff}
+.product-spotlight-track{position:relative;display:grid;grid-template-columns:minmax(0,1fr);flex:1;min-height:0;background:var(--brand-surface,#fff)}
 .product-spotlight-empty{grid-area:1/1;align-self:center;justify-self:center;margin:0;padding:24px 16px;text-align:center;color:var(--muted);font-size:12px}
 .product-spotlight-slide{grid-area:1/1;min-width:0;display:flex;padding:9px}
 .product-spotlight-slide>.pcard{width:100%;height:100%;min-height:0;box-shadow:none}
@@ -4601,37 +4601,36 @@ a.sfb-v3-component-item,
    `html[data-sfb-density="compact"]` variants are deliberately excluded,
    consistent with Groups A1/A2. */
 .amazing-offers-section{margin:7px 0}
-.special-wrap{display:grid;grid-template-columns:290px minmax(0,1fr);gap:0;background:#fff;border:1px solid #e0e3e8;border-radius:5px;overflow:hidden;box-shadow:0 1px 6px rgba(15,23,42,.05);min-height:250px}
-.special-list{order:1;background:#f7f8fa;border-inline-end:1px solid #e5e7eb;padding:8px;display:flex;flex-direction:column;gap:4px;min-width:0}
-.special-list-title{display:flex;flex-direction:column;gap:5px;padding:2px 3px 6px;border-bottom:1px solid #e2e5e9;font-weight:800;font-size:12px;color:#24272c}
-.special-count{display:flex;align-items:center;gap:3px;color:#c93939;font-size:12px;font-weight:800;direction:ltr}
-.special-list>button{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;width:100%;min-height:42px;padding:6px 8px;border:1px solid transparent;border-radius:3px;background:#fff;color:#4b4f56;text-align:right;cursor:pointer}
-.special-list>button:hover{border-color:#d9dde3;background:#fff}
-.special-list>button.active{border-color:#fecaca;background:#fff;color:#b91c1c;box-shadow:inset -3px 0 #ef4444}
+.special-wrap{display:grid;grid-template-columns:290px minmax(0,1fr);gap:0;background:var(--brand-surface,#fff);border:1px solid var(--brand-border,#e0e3e8);border-radius:5px;overflow:hidden;box-shadow:0 1px 6px rgba(15,23,42,.05);min-height:250px}
+.special-list{order:1;background:color-mix(in srgb,var(--brand-text,#24272c) 4%,transparent);border-inline-end:1px solid color-mix(in srgb,currentColor 12%,transparent);padding:8px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.special-list-title{display:flex;flex-direction:column;gap:5px;padding:2px 3px 6px;border-bottom:1px solid color-mix(in srgb,currentColor 14%,transparent);font-weight:800;font-size:12px;color:inherit}
+.special-count{display:flex;align-items:center;gap:3px;color:var(--ssf-accent,var(--d-accent,#c93939));font-size:12px;font-weight:800;direction:ltr}
+.special-list>button{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;width:100%;min-height:42px;padding:6px 8px;border:1px solid transparent;border-radius:3px;background:var(--brand-surface,#fff);color:var(--brand-text,#4b4f56);text-align:right;cursor:pointer}
+.special-list>button:hover{border-color:color-mix(in srgb,var(--brand-text,#222) 16%,transparent);background:var(--brand-surface,#fff)}
+.special-list>button.active{border-color:color-mix(in srgb,var(--d-accent,#ef4444) 30%,var(--brand-surface,#fff));background:var(--brand-surface,#fff);color:color-mix(in srgb,var(--d-accent,#b91c1c) 85%,#000);box-shadow:inset -3px 0 var(--d-accent,#ef4444)}
 .special-list-name{min-width:0;font-size:10.8px;line-height:1.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.special-list-price{font-size:9.8px;color:var(--muted,#6a6f77);white-space:nowrap}
-.special-panels{order:2;min-width:0;display:grid;background:linear-gradient(135deg,#fff 0%,#fbfbfc 100%)}
+.special-list-price{font-size:9.8px;color:var(--brand-muted,var(--muted,#6a6f77));white-space:nowrap}
+.special-panels{order:2;min-width:0;display:grid}
 .special-main{grid-area:1/1;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,37%);align-items:center;padding:16px 22px;gap:16px}
 .special-copy{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
-.special-kicker{font-size:10.5px;color:#c93939;font-weight:800}
+.special-kicker{font-size:10.5px;color:var(--ssf-accent,var(--d-accent,#c93939));font-weight:800}
 .special-discount{display:inline-grid;place-items:center;min-width:39px;height:22px;border-radius:999px;background:#d53d3d;color:#fff;font-size:9px;font-weight:900}
-.special-copy h3{font-size:18px;line-height:1.55;font-weight:800;color:#222;margin:0;max-width:520px}
-.special-brand{font-size:10px;color:#6a6f77;margin:0}
+.special-copy h3{font-size:18px;line-height:1.55;font-weight:800;color:inherit;margin:0;max-width:520px}
+.special-brand{font-size:10px;color:var(--ssf-muted,var(--brand-muted,#6a6f77));margin:0}
 .special-price{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-.special-price strong{font-size:18px;color:#127e50;font-weight:800}
-.special-price del{font-size:10px;color:#6b6f74}
-.special-buy{margin-top:4px;border:1px solid #34383f;background:#fff;color:#292d33;border-radius:2px;padding:6px 12px;font-size:10.5px;font-weight:700}
-.special-buy:hover{background:#292d33;color:#fff}
-.special-image{height:215px;display:grid;place-items:center;overflow:hidden;border-radius:4px;background:#fff}
+.special-price strong{font-size:18px;color:var(--ssf-price,var(--brand-success,#127e50));font-weight:800}
+.special-price del{font-size:10px;color:var(--ssf-muted,var(--brand-muted,#6b6f74))}
+.special-buy{margin-top:4px;border:1px solid var(--brand-text,#34383f);background:var(--brand-surface,#fff);color:var(--brand-text,#292d33);border-radius:2px;padding:6px 12px;font-size:10.5px;font-weight:700}
+.special-buy:hover{background:var(--brand-text,#292d33);color:var(--brand-surface,#fff)}
+.special-image{height:215px;display:grid;place-items:center;overflow:hidden;border-radius:4px;background:var(--brand-surface,#fff)}
 .special-image img{width:100%;height:100%;object-fit:contain;padding:10px}
-.special-image .product-placeholder{width:130px;height:130px;color:#c5cad0;display:grid;place-items:center}
+.special-image .product-placeholder{width:130px;height:130px;color:color-mix(in srgb,var(--brand-text,#222) 25%,var(--brand-surface,#fff));display:grid;place-items:center}
 .special-image .product-placeholder svg{width:84px;height:84px}
 /* The approved special-offer module is list-left / content-centre /
    image-right on desktop, unconditionally (not a merchant setting) —
    direction is set only on these layout containers; Persian content
    inside them stays RTL via the nested direction:rtl resets below. */
-.amazing-offers-section .special-list{background:#f7f8fa}
-.amazing-offers-section .special-list>button{background:#fff;border-color:#e7e9ec}
+.amazing-offers-section .special-list>button{border-color:color-mix(in srgb,var(--brand-text,#222) 9%,transparent)}
 .amazing-offers-section .special-list>button.active{box-shadow:inset -3px 0 #ef4444}
 @media(min-width:1001px){
   .amazing-offers-section .special-wrap{direction:ltr;grid-template-columns:270px minmax(0,1fr)}
@@ -4643,7 +4642,7 @@ a.sfb-v3-component-item,
 }
 @media(max-width:1000px){
   .special-wrap{grid-template-columns:1fr;min-height:0}
-  .special-list{order:2;border-inline-end:0;border-top:1px solid #e5e7eb;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .special-list{order:2;border-inline-end:0;border-top:1px solid color-mix(in srgb,currentColor 12%,transparent);display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
   .special-list-title{grid-column:1/-1}
   .special-main{order:1;grid-template-columns:1fr minmax(190px,35%);padding:22px}
 }
@@ -5151,11 +5150,11 @@ a.sfb-v3-component-item,
 /* trust_features — merged-final values (later pass wins per
    property). */
 .features{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin:7px 0 8px}
-.feat{background:#fff;border:1px solid var(--line);border-radius:5px;padding:6px 9px;display:flex;align-items:center;gap:8px;min-height:54px;box-shadow:0 1px 5px rgba(15,23,42,.04)}
+.feat{background:var(--brand-surface,#fff);border:1px solid var(--line);border-radius:5px;padding:6px 9px;display:flex;align-items:center;gap:8px;min-height:54px;box-shadow:0 1px 5px rgba(15,23,42,.04)}
 .feat .ic{width:31px;height:31px;border-radius:4px;background:#fff;color:#cb344e;border:0;display:grid;place-items:center;flex-shrink:0;font-size:15px}
 .feat .ic svg{width:21px;height:21px}
 .feat b{font-size:11px;font-weight:600;line-height:1.45;display:block}
-.feat small{color:var(--muted);font-size:9.5px;line-height:1.5}
+.feat small{color:var(--ssf-muted,var(--muted));font-size:9.5px;line-height:1.5}
 html[data-sfb-density="compact"] .features{gap:10px;margin:18px 0}
 html[data-sfb-density="relaxed"] .features{gap:22px;margin:54px 0}
 @media(max-width:1000px){
@@ -5854,8 +5853,8 @@ html[data-sfb-density] .promo-grid.promo-grid--tile-4{gap:20px}
    ====================================================================== */
 .rsec.rsec[data-d~="text"]{color:var(--d-text)}
 .rsec[data-d~="text"] :is(.product-section-subtitle,.catalog-grid-head p,.pcard .name){color:var(--d-text)}
-.rsec[data-d~="surface"]{background:var(--d-surface);color:var(--d-surface-fg)}
-.rsec[data-d~="surface"]>.rsec-bleed{background-color:var(--d-surface)}
+.rsec[data-d~="surface"]:not(:has(.special-wrap)){background:var(--d-surface);color:var(--d-surface-fg)}
+.rsec[data-d~="surface"]:not(:has(.special-wrap))>.rsec-bleed{background-color:var(--d-surface)}
 .rsec[data-d~="surface"] :is(.section.surface-panel,.blog-panel){background:var(--d-surface);color:var(--d-surface-fg)}
 .rsec[data-d~="border"]{border:var(--d-border-w) solid var(--d-border-c)}
 .rsec[data-d~="border"]:has(>.section.surface-panel),.rsec[data-d~="border"]:has(.blog-panel){border:0}
@@ -5871,7 +5870,7 @@ html[data-sfb-density] .promo-grid.promo-grid--tile-4{gap:20px}
 /* theme_palette.css forces the band ink on a palette heading with !important; the merchant's explicit heading colour outranks it */
 .rsec[data-d~="heading"][data-bg-mode]:not([data-pattern])>.section>.sec-head h2{color:var(--d-heading)!important}
 /* an explicit surface colour is the section fill even over a custom/palette colour band */
-.rsec[data-d~="surface"][data-bg-mode="color"]:not(:has(.product-campaign-band)){background-color:var(--d-surface)!important}
+.rsec[data-d~="surface"][data-bg-mode="color"]:not(:has(.product-campaign-band)):not(:has(.special-wrap)){background-color:var(--d-surface)!important}
 .rsec[data-bg-mode="image"][data-d~="heading"]>.section>.sec-head h2{color:var(--d-heading)}
 .rsec[data-d~="accent"] :is(.sec-head h2 .bar,.catalog-grid-bar,.product-campaign-heading>span){background:var(--d-accent)}
 /* campaign band: the box that is filled is the band, so surface / outline / radius / shadow style it */
@@ -5927,3 +5926,31 @@ html[data-sfb-density] .promo-grid.promo-grid--tile-4{gap:20px}
 @media(min-width:1001px){.decor-strip[data-hide~="desktop"]{display:none}}
 @media(min-width:681px) and (max-width:1000px){.decor-strip[data-hide~="tablet"]{display:none}}
 @media(max-width:680px){.decor-strip[data-hide~="mobile"]{display:none}}
+
+
+/* ======================================================================
+   PRIMARY-SURFACE CONTRACT (generic — no template / section key)
+   Two layers exist in a section: the SECTION BACKGROUND (the wrapper's fill / pattern / picture, chosen in
+   «پس‌زمینه این بخش») and COMPONENT SURFACES (cards, panels). A component whose main visual surface IS the section
+   (a single big panel/card) marks it data-sfb-section-surface. Rules:
+     * with no explicit section fill (theme / surface mode) the component keeps its own default surface;
+     * with an explicit fill (colour / palette / pattern / palette+pattern) the marked surface becomes transparent, so
+       the merchant's fill is the visible surface — never hidden under a fixed #fff panel;
+     * with a picture fill the marked surface becomes a translucent scrim so the picture stays visible and text readable;
+     * data-sfb-section-surface="ink" also hands the surface's text the fill's accessible foreground (--sfb-section-fg,
+       derived server-side from the fill) plus muted / accent / price inks that follow it.
+   Inner cards, list buttons and product-media tiles are NOT marked: they stay independent semantic surfaces
+   (var(--brand-surface) / var(--brand-text)). An explicit design «رنگ سطح» (data-d~=surface) still wins over the fill.
+   ====================================================================== */
+.rsec:is([data-bg-mode="color"],[data-bg-mode="pattern"],[data-bg-mode="palette"],[data-bg-mode="palette_pattern"]):not([data-d~="surface"]) [data-sfb-section-surface]{
+  background-color:transparent!important;background-image:none!important;
+  --ssf-fg:var(--sfb-section-fg,currentColor);--ssf-accent:currentColor;--ssf-price:currentColor;
+  --ssf-muted:color-mix(in srgb,var(--sfb-section-fg,currentColor) 72%,transparent)}
+.rsec[data-bg-mode="image"]:not([data-d~="surface"]) [data-sfb-section-surface]{
+  background-color:color-mix(in srgb,var(--brand-surface,#fff) 84%,transparent)!important;background-image:none!important;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+  --ssf-fg:var(--brand-text,#222)}
+[data-sfb-section-surface="ink"]{color:var(--ssf-fg,inherit)}
+/* The palette sheet (theme_palette.css) paints shared homepage cards with !important; under an explicit section fill the
+   marked surface's ink must beat it too (this selector is more specific than that rule). */
+.rsec:is([data-bg-mode="color"],[data-bg-mode="pattern"],[data-bg-mode="palette"],[data-bg-mode="palette_pattern"],[data-bg-mode="image"]):not([data-d~="surface"]) [data-sfb-section-surface="ink"]{color:var(--ssf-fg)!important}
+.rsec[data-d~="surface"] .special-wrap{background:var(--d-surface);color:var(--d-surface-fg)}
