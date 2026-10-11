@@ -61,6 +61,8 @@
   var toast = $('[data-rs-toast]');
   var structurePanel = document.getElementById('r4Structure');
   var inspectorAside = document.getElementById('r4Inspector');
+  var workspace = $('[data-rs-workspace]');
+  var workspaceDialog = $('[data-rs-workspace-dialog]');
   var undoButton = document.getElementById('r4UndoButton');
   var redoButton = document.getElementById('r4RedoButton');
   var publishButton = document.getElementById('r4PublishButton');
@@ -154,11 +156,15 @@
     if (contextPanel) {
       contextPanel.hidden = !showPanel;
       contextPanel.classList.toggle('panel-visible', ui.panelVisible);
-      contextPanel.setAttribute('data-rastisi-panel', ui.mode === 'global' ? 'global-design' : ui.mode === 'inspector' ? 'inspector' : 'structure');
+      // Section settings live in the workspace overlay, never in this side panel: while they are open the panel keeps
+      // showing the (lightweight) page structure, so the Preview column never changes width.
+      contextPanel.setAttribute('data-rastisi-panel', ui.mode === 'global' ? 'global-design' : 'structure');
     }
     $all('[data-rs-view]').forEach(function (view) {
-      view.hidden = view.getAttribute('data-rs-view') !== ui.mode;
+      var name = view.getAttribute('data-rs-view');
+      view.hidden = name !== ui.mode && !(name === 'structure' && ui.mode === 'inspector');
     });
+    renderWorkspace();
     if (labDock) labDock.hidden = !isLab;
 
     // stage toolbar
@@ -258,6 +264,106 @@
       .catch(function () { /* status stays as last known; nothing is lost */ });
   }
 
+  // ---- settings workspace (large overlay) ---------------------------------
+  // The overlay is presentation only: r4_editor.js still owns the Inspector body (fetch, hydrate, visibility rules,
+  // mutations). The Studio decides when the overlay is shown (mode === 'inspector') and handles focus, Escape and the
+  // search / save-state chrome. Nothing here reads or writes the Preview iframe or its size.
+  var workspaceReturnFocus = null;
+  var workspaceWasOpen = false;
+
+  function renderWorkspace() {
+    if (!workspace) return;
+    var open = ui.mode === 'inspector';
+    workspace.hidden = !open;
+    if (open && !workspaceWasOpen) {
+      workspaceReturnFocus = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
+      workspaceWasOpen = true;
+      if (workspaceDialog) workspaceDialog.focus({ preventScroll: true });
+    } else if (!open && workspaceWasOpen) {
+      workspaceWasOpen = false;
+      var back = workspaceReturnFocus;
+      workspaceReturnFocus = null;
+      if (back && document.contains(back) && typeof back.focus === 'function') back.focus({ preventScroll: true });
+    }
+    if (open) renderWorkspaceSave();
+  }
+
+  function renderWorkspaceSave() {
+    var box = $('[data-r4-ws-save]', inspectorAside || document);
+    if (!box) return;
+    var text = box.querySelector('[data-r4-ws-save-text]');
+    box.setAttribute('data-state', ui.saveState);
+    if (text) text.textContent = SAVE_LABELS[ui.saveState] || '';
+  }
+
+  var searchTimer = null;
+  function runWorkspaceSearch(input) {
+    var query = (input.value || '').trim().toLowerCase();
+    var root_ = $('.r4-ws', inspectorAside || document);
+    if (!root_) return;
+    var rows = $all('[data-r4-field-row]', root_);
+    var firstTabWithHits = null;
+    var counts = {};
+    rows.forEach(function (row) {
+      var label = row.querySelector('.r4-field-label');
+      var hay = ((label ? label.textContent : '') + ' ' + (row.getAttribute('data-r4-field-key') || '')).toLowerCase();
+      var hit = !row.hidden && (!query || hay.indexOf(query) !== -1);
+      row.classList.toggle('ws-filtered-out', !hit);
+      row.classList.toggle('ws-hit', !!query && hit);
+      var panel = row.closest('[data-r4-tab-panel]');
+      if (hit && query && panel) {
+        var name = panel.getAttribute('data-r4-tab-panel');
+        counts[name] = (counts[name] || 0) + 1;
+        if (!firstTabWithHits) firstTabWithHits = name;
+      }
+    });
+    $all('[data-r4-ws-card]', root_).forEach(function (card) {
+      var cardRows = $all('[data-r4-field-row]', card);
+      // manage / media cards hold no schema field rows: they only stay while there is no query
+      card.classList.toggle('ws-filtered-out', !!query && (!cardRows.length || cardRows.every(function (r) { return r.classList.contains('ws-filtered-out'); })));
+    });
+    $all('[data-r4-tab]', root_).forEach(function (tab) {
+      var count = counts[tab.getAttribute('data-r4-tab')] || 0;
+      var badge = tab.querySelector('[data-r4-ws-tab-count]');
+      if (!badge) return;
+      badge.hidden = !query || !count;
+      badge.textContent = query && count ? num(count) : '';
+    });
+    $all('[data-r4-ws-noresults]', root_).forEach(function (note) {
+      var panel = note.closest('[data-r4-tab-panel]');
+      var name = panel ? panel.getAttribute('data-r4-tab-panel') : '';
+      note.hidden = !query || !!counts[name];
+    });
+    if (query && firstTabWithHits) {
+      var activeTab = $('[data-r4-tab][aria-selected="true"]', root_);
+      var activeName = activeTab ? activeTab.getAttribute('data-r4-tab') : '';
+      if (!counts[activeName]) {
+        var target = $('[data-r4-tab="' + firstTabWithHits + '"]', root_);
+        if (target) target.click();
+      }
+    }
+  }
+
+  function trapWorkspaceFocus(evt) {
+    if (!workspaceDialog) return;
+    var focusable = $all('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex="0"], a[href]', workspaceDialog).filter(function (el) {
+      return el.getClientRects().length > 0 && !el.closest('[hidden]') && !el.closest('[inert]');
+    });
+    if (!focusable.length) return;
+    var first = focusable[0], last = focusable[focusable.length - 1];
+    var inside = document.activeElement && workspaceDialog.contains(document.activeElement);
+    if (!inside) { evt.preventDefault(); (evt.shiftKey ? last : first).focus(); return; }
+    if (evt.shiftKey && document.activeElement === first) { evt.preventDefault(); last.focus(); }
+    else if (!evt.shiftKey && document.activeElement === last) { evt.preventDefault(); first.focus(); }
+  }
+
+  document.addEventListener('input', function (evt) {
+    var input = evt.target && evt.target.closest && evt.target.closest('[data-r4-ws-search]');
+    if (!input) return;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () { runWorkspaceSearch(input); }, 80);
+  });
+
   // ---- modes -------------------------------------------------------------
   function setMode(mode, options) {
     if (ui.lab.active && mode !== 'lab') {
@@ -343,7 +449,7 @@
     if (title) title.textContent = label;
     if (scope) scope.textContent = pageLabel + ' / ' + label;
     if (lockedNote) lockedNote.hidden = !locked;
-    if (inspectorAside) inspectorAside.inert = locked;
+    $all('[data-r4-ws-fields]', inspectorAside || document).forEach(function (area) { area.inert = locked; });
     if (!actions) return;
     var dis = locked ? 'disabled' : '';
     var html = '<div class="section-divider"></div>' +
@@ -915,6 +1021,7 @@
     if (ui.busy && ['panel-toggle', 'panel-close', 'show-base', 'show-candidate', 'close-modal'].indexOf(action) === -1) return;
     switch (action) {
       case 'structure': setMode('structure'); break;
+      case 'workspace-backdrop': if (R4.inspectorOpen) R4.closeInspector(); break;
       case 'global':
         if (el.hasAttribute('data-rs-global-focus')) focusGlobalRegion(el.getAttribute('data-rs-global-focus'));
         else setMode('global');
@@ -1066,6 +1173,16 @@
     // Escape only closes presentation layers (dialog first, then the admin
     // navigation overlay). It never mutates, never discards, never exits the
     // Design Lab and never answers a confirmation with "yes".
+    var pickerOpen = document.getElementById('r4ResourcePicker');
+    if (evt.key === 'Escape' && !ui.modal && ui.mode === 'inspector' && R4.inspectorOpen && !(pickerOpen && !pickerOpen.hidden) && root.dataset.r4SidebarExpanded !== 'true') {
+      evt.preventDefault();
+      R4.closeInspector();
+      return;
+    }
+    if (evt.key === 'Tab' && !ui.modal && ui.mode === 'inspector' && !(pickerOpen && !pickerOpen.hidden)) {
+      trapWorkspaceFocus(evt);
+      return;
+    }
     if (evt.key === 'Escape' && !ui.modal && root.dataset.r4SidebarExpanded === 'true') {
       var sidebarToggle = document.getElementById('r4SidebarToggle');
       if (sidebarToggle) { sidebarToggle.click(); sidebarToggle.focus(); }
@@ -1250,14 +1367,12 @@
     ui.selectedSectionId = evt.detail.sectionId;
     if (ui.mode === 'template-preview') { ui.previewTemplate = null; R4.showPreview(null); }
     ui.mode = 'inspector';
-    ui.panelVisible = true;
     renderInspectorChrome();
     markSelectedRow();
     renderChrome();
   });
 
   root.addEventListener('r4:inspector-closed', function () {
-    if (inspectorAside) inspectorAside.inert = false;
     if (ui.mode === 'inspector') {
       ui.mode = 'structure';
       renderChrome();

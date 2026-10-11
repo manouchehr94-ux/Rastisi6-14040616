@@ -29,6 +29,7 @@ from . import (
     settings_schema,
     shell_geometry,
     variant_contract,
+    workspace_layout,
 )
 from .models import (
     FOOTER_RESPONSIVE_AWARE_KEYS,
@@ -1196,6 +1197,13 @@ def _random_design_lab_seed() -> int:
 _BRAND_VIEW_ALL_SUPPORTING_VARIANTS = frozenset({"grid", "carousel"})
 
 
+def _schema_ordered_fields(schema, *processed_groups):
+    """The Inspector's final (label-projected, filtered) fields, in SCHEMA order — the settings workspace arranges them
+    into cards by type/key, so the order inside a card must follow the schema, not the basic/advanced split."""
+    processed = {f.key: f for group in processed_groups for f in group}
+    return [processed[f.key] for f in schema.fields if f.key in processed]
+
+
 def _with_variant_choice_labels(fields, definition):
     """Display-only: replace a choice label that is just its raw key with the
     registered variant's ``label_fa`` from the same section definition."""
@@ -1497,6 +1505,10 @@ def storefront_r4_section_inspector(request, pk):
             "definition": definition,
             "basic_fields": basic_fields,
             "advanced_fields": advanced_fields,
+            "workspace_tabs": workspace_layout.build_workspace_tabs(
+                _schema_ordered_fields(schema, basic_fields, advanced_fields),
+                has_media_manager=bool(media_manage_url),
+            ),
             "field_values": field_values,
             "appearance_font_choices": appearance_registry.FONT_CHOICES,
             "appearance_type_scale_choices": [

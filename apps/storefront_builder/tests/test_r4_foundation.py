@@ -133,9 +133,15 @@ class R4DevicePreviewMarkupTests(StorefrontBuilderViewsTestCase):
     def test_device_switcher_does_not_introduce_a_second_preview_frame(self):
         response = self._editor()
         content = response.content.decode()
-        # Still exactly one preview iframe, the canonical #r4PreviewFrame.
-        self.assertEqual(content.count("<iframe"), 1)
-        self.assertIn('id="r4PreviewFrame"', content)
+        # Still exactly one PREVIEW iframe, the canonical #r4PreviewFrame. The only other frame is the settings
+        # workspace's live view of the same section: a static element with no src in the markup (r4_editor.js points
+        # it at the SAME draft preview URL when a section's settings open) — never a second renderer.
+        self.assertEqual(content.count("<iframe"), 2)
+        self.assertEqual(content.count('id="r4PreviewFrame"'), 1)
+        live = content[content.index("<iframe data-r4-ws-live-frame"):]
+        live = live[:live.index(">")]
+        self.assertNotIn("src=", live)
+        self.assertNotIn("srcdoc", live)
         # No srcdoc / fake preview markup.
         self.assertNotIn("srcdoc", content)
 

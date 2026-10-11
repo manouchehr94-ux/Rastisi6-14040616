@@ -329,7 +329,9 @@ class EngineGeometryParityBrowserTests(StaticLiveServerTestCase):
             preview().locator(sel).first.scroll_into_view_if_needed()
             preview().locator(sel).first.click(position={"x": 20, "y": 20})
             page.wait_for_selector('select[data-r4-field-key="display_mode"]')
-            # the background control is in the Basic tab, discoverable without opening Advanced
+            # the background control lives in the workspace's «طراحی» (Design) tab
+            self.assertFalse(page.locator(".r4-background-picker").first.is_visible())
+            page.click('[data-r4-tab="design"]')
             self.assertTrue(page.locator(".r4-background-picker").first.is_visible())
             # red -> blue (custom colour), visible in the Preview straight away
             page.select_option(".r4-background-picker [data-r4-background-mode]", "color")
@@ -346,6 +348,7 @@ class EngineGeometryParityBrowserTests(StaticLiveServerTestCase):
                 "grid": f"!!document.querySelector('{sel} .grid.rsec-cols') && !document.querySelector('{sel} .pcarousel')",
                 "carousel": f"!!document.querySelector('{sel} .pcarousel') && !document.querySelector('{sel} .product-campaign-band')",
             }
+            page.click('[data-r4-tab="content"]')
             for mode, expression in expected.items():
                 page.wait_for_load_state("networkidle")
                 page.select_option('select[data-r4-field-key="display_mode"]', mode)
@@ -366,20 +369,97 @@ class EngineGeometryParityBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(band.settings["background"]["color"].lower(), "#d62828")
 
     # ------------------------------------------------ interaction performance (partial refresh) + campaign panel
-    def _studio_with_band(self, **settings_over):
+    def _studio_with_band(self, *, viewport=(1600, 900), open_settings=True, **settings_over):
         """Open the Studio on the first palette band, optionally pre-configured; returns (context, page, section id)."""
         _draft, band = self._band_in_draft()
         band.settings = {**band.settings, **settings_over}
         band.save()
-        context, page = self._page(1600, "/admin-portal/storefront-builder/r4/", authed=True, height=900)
+        context, page = self._page(viewport[0], "/admin-portal/storefront-builder/r4/", authed=True, height=viewport[1])
         page.wait_for_selector("#r4PreviewFrame")
         page.wait_for_timeout(1500)
         frame = next(f for f in page.frames if f != page.main_frame and "preview" in f.url)
         selector = f'[data-section-id="{band.pk}"]'
         frame.locator(selector).first.scroll_into_view_if_needed()
-        frame.locator(selector).first.click(position={"x": 20, "y": 20})
-        page.wait_for_selector('input[data-r4-field-key="title"]')
+        if open_settings:
+            frame.locator(selector).first.click(position={"x": 20, "y": 20})
+            page.wait_for_selector('input[data-r4-field-key="title"]')
         return context, page, band
+
+    def _preview_geometry(self, page, section_id):
+        """The Preview iframe's measured box + effective breakpoint + one section's geometry (in the frame's own px)."""
+        return page.evaluate("""(sid)=>{const f=document.getElementById('r4PreviewFrame'); const r=f.getBoundingClientRect();
+          const w=f.contentWindow; const sec=f.contentDocument.querySelector('[data-section-id="'+sid+'"]'); const sr=sec&&sec.getBoundingClientRect();
+          const panel=document.querySelector('[data-rs-context-panel]').getBoundingClientRect();
+          return {frameW:r.width, frameH:r.height, frameX:r.x, frameY:r.y, viewport:w.innerWidth, styleW:f.style.width, transform:f.style.transform,
+            bp1024:w.matchMedia('(min-width:1024px)').matches, bp768:w.matchMedia('(min-width:768px)').matches,
+            secW:sr&&sr.width, secH:sr&&sr.height, secTop:sr&&sr.top+w.scrollY, panelW:panel.width,
+            pageOverflow:document.documentElement.scrollWidth-document.documentElement.clientWidth}}""", section_id)
+
+    def test_settings_workspace_is_a_large_overlay_that_never_changes_the_preview_geometry(self):
+        """The section settings workspace opens ABOVE the Studio: the Preview iframe (width, height, position), its
+        effective breakpoint, the right-edge column and the section's own geometry are byte-identical before / while
+        open / after closing — on desktop, laptop, tablet and phone — and it is a big, internally scrolling surface
+        (desktop 86–94vw x 86–92vh, capped at 1550px) that is full-screen on a phone."""
+        for viewport in ((1440, 900), (1280, 720), (1024, 768), (390, 844)):
+            with self.subTest(viewport=viewport):
+                context, page, band = self._studio_with_band(viewport=viewport, open_settings=False, display_mode="campaign_band")
+                try:
+                    page.wait_for_load_state("networkidle")
+                    before = self._preview_geometry(page, band.pk)
+                    frame = next(f for f in page.frames if f != page.main_frame and "preview" in f.url)
+                    frame.locator(f'[data-section-id="{band.pk}"]').first.click(position={"x": 20, "y": 20})
+                    page.wait_for_selector('[data-rs-workspace]:not([hidden]) input[data-r4-field-key="title"]')
+                    page.wait_for_timeout(600)
+                    during = self._preview_geometry(page, band.pk)
+                    self.assertEqual(before, during, "opening the settings workspace changed the Preview geometry")
+                    box = page.evaluate("""()=>{const d=document.querySelector('[data-rs-workspace-dialog]'); const r=d.getBoundingClientRect(); const cs=getComputedStyle(document.querySelector('[data-rs-workspace]'));
+                      const body=document.querySelector('.r4-ws-body'); return {w:r.width,h:r.height,vw:innerWidth,vh:innerHeight,pos:cs.position,
+                        insidePanel:!!document.getElementById('r4Inspector').closest('[data-rs-context-panel]'), scrolls:body.scrollHeight>=body.clientHeight,
+                        bodyOverflowY:getComputedStyle(body).overflowY, docScroll:document.documentElement.scrollHeight>innerHeight}}""")
+                    self.assertEqual(box["pos"], "fixed")
+                    self.assertFalse(box["insidePanel"], "the settings form must not live in the right-edge panel")
+                    self.assertEqual(box["bodyOverflowY"], "auto")
+                    if viewport[0] > 850:
+                        self.assertGreaterEqual(box["h"] / box["vh"], 0.86)
+                        self.assertLessEqual(box["h"] / box["vh"], 0.92)
+                        self.assertLessEqual(box["w"], 1550)
+                        self.assertTrue(0.86 <= box["w"] / box["vw"] <= 0.94 or box["w"] >= 1500, box)
+                    else:
+                        self.assertEqual((round(box["w"]), round(box["h"])), (viewport[0], viewport[1]))
+                    # the same three primary tabs, whatever the device
+                    tabs = page.evaluate("[...document.querySelectorAll('.r4-ws-tab')].map(t=>t.dataset.r4Tab)")
+                    self.assertEqual(tabs, ["content", "design", "advanced"])
+                    page.click('[data-r4-tab="design"]')
+                    page.wait_for_timeout(200)
+                    self.assertEqual(self._preview_geometry(page, band.pk), before)
+                    page.keyboard.press("Escape")
+                    page.wait_for_timeout(500)
+                    self.assertTrue(page.evaluate("document.querySelector('[data-rs-workspace]').hidden"))
+                    self.assertEqual(self._preview_geometry(page, band.pk), before, "closing the workspace changed the Preview geometry")
+                finally:
+                    context.close()
+
+    def test_settings_workspace_live_view_follows_the_same_fragment_as_the_main_preview(self):
+        context, page, band = self._studio_with_band(viewport=(1440, 900), display_mode="campaign_band", campaign_panel_title="هنر")
+        try:
+            page.wait_for_load_state("networkidle")
+            page.wait_for_selector("[data-r4-ws-live-stage] iframe")
+            page.click('[data-r4-tab="design"]')
+            page.fill('input[data-r4-field-key="campaign_panel_title"]', "عنوان زنده")
+            page.dispatch_event('input[data-r4-field-key="campaign_panel_title"]', "change")
+            page.wait_for_function("(RastiSiR4.metrics||[]).some(m=>m.path==='fragment')", timeout=10000)
+            sel = f'[data-section-id="{band.pk}"] .product-campaign-copy h2'
+            page.wait_for_function("""(sel)=>{const frames=[...document.querySelectorAll('iframe')].filter(f=>f.contentDocument&&f.contentDocument.querySelector(sel));
+              return frames.length===2&&frames.every(f=>f.contentDocument.querySelector(sel).textContent==='عنوان زنده')}""", arg=sel, timeout=10000)
+            # the live view is the SAME canonical server page: one rendering authority, no JS storefront renderer
+            self.assertEqual(page.evaluate("document.querySelectorAll('[data-r4-ws-live-stage] iframe').length"), 1)
+            page.keyboard.press("Escape")
+            page.wait_for_timeout(400)
+            # closed: the live column is hidden and its (static) frame no longer points at any page
+            self.assertTrue(page.evaluate("document.querySelector('[data-r4-ws-live]').hidden"))
+            self.assertEqual(page.evaluate("document.querySelector('[data-r4-ws-live-frame]').getAttribute('src')"), "about:blank")
+        finally:
+            context.close()
 
     def test_partial_refresh_swaps_only_the_section_keeps_the_document_and_reinitialises_alpine(self):
         context, page, band = self._studio_with_band(
@@ -459,9 +539,11 @@ class EngineGeometryParityBrowserTests(StaticLiveServerTestCase):
                 samples[bucket].append(latency)
                 page.wait_for_timeout(250)
 
+            page.click('[data-r4-tab="design"]')
             for i in range(8):
                 measure(lambda i=i: (page.fill('input[data-r4-field-key="campaign_panel_title"]', f"پنل {i}"),
                                      page.dispatch_event('input[data-r4-field-key="campaign_panel_title"]', "change")), "simple")
+            page.click('[data-r4-tab="content"]')
             for i, mode in enumerate(["grid", "catalog_grid", "campaign_band", "carousel"] * 2):
                 measure(lambda mode=mode: page.select_option('select[data-r4-field-key="display_mode"]', mode), "structural")
         finally:

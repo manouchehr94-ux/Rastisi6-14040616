@@ -128,33 +128,131 @@ window.RastiSiR4 = {
     return (!state || state === 'draft') && src.indexOf('design_lab=') === -1 && src.indexOf('preview_template=') === -1;
   }
 
-  // Replace one section/container inside the Preview document with its canonical HTML, re-initialising Alpine on the
+  // Replace one section/container inside a Preview document with its canonical HTML, re-initialising Alpine on the
   // swapped subtree (the old subtree is destroyed first so timers/observers of a replaced carousel never leak).
+  function swapFragmentIn(frame, fragment) {
+    var doc = frame.contentDocument;
+    var win = frame.contentWindow;
+    if (!doc || !win) return false;
+    var selector = fragment.kind === 'container'
+      ? '.rcontainer[data-container-id="' + fragment.id + '"]'
+      : '.rsec[data-section-id="' + fragment.id + '"]';
+    var current = doc.querySelector(selector);
+    if (!current) return false;
+    var holder = doc.createElement('template');
+    holder.innerHTML = fragment.html;
+    var next = holder.content.firstElementChild;
+    if (!next) return false;
+    var alpine = win.Alpine;
+    if (alpine && alpine.destroyTree) alpine.destroyTree(current);
+    current.replaceWith(next);
+    if (alpine && alpine.initTree) alpine.initTree(next);
+    return true;
+  }
+
   function applyPreviewFragment(fragment) {
     try {
       if (!fragment || !fragment.html || !canPartialRefresh()) return false;
       if (/<script[\s>]/i.test(fragment.html)) return false; // scripts do not run when inserted: use the full refresh
-      var doc = previewFrame.contentDocument;
-      var win = previewFrame.contentWindow;
-      var selector = fragment.kind === 'container'
-        ? '.rcontainer[data-container-id="' + fragment.id + '"]'
-        : '.rsec[data-section-id="' + fragment.id + '"]';
-      var current = doc.querySelector(selector);
-      if (!current) return false;
-      var holder = doc.createElement('template');
-      holder.innerHTML = fragment.html;
-      var next = holder.content.firstElementChild;
-      if (!next) return false;
-      var alpine = win.Alpine;
-      if (alpine && alpine.destroyTree) alpine.destroyTree(current);
-      current.replaceWith(next);
-      if (alpine && alpine.initTree) alpine.initTree(next);
+      if (!swapFragmentIn(previewFrame, fragment)) return false;
       try { syncPreviewSelection(); } catch (err) { /* selection sync is best effort */ }
+      mirrorFragmentToLive(fragment);
       return true;
     } catch (err) {
       return false;
     }
   }
+
+  // ---- Settings-workspace live view of the SAME section ---------------------------------------------------------
+  // Not a second renderer: a second frame of the very same server-rendered draft page, isolated (CSS, in that frame
+  // only) to the open section, scaled to fit, and swapped with the exact fragment the main Preview just received. A full
+  // refresh of the main Preview reloads it too. The main Preview behind the overlay is never touched by any of this.
+  var live = { frame: null, sizer: null, stage: null, aside: null, sectionId: null, ro: null, timers: [] };
+  var LIVE_MIN_WIDTH = 1101; // below this the workspace is full-screen and has no room for a second column
+
+  function liveRoot() { return document.querySelector('[data-r4-ws-live]'); }
+
+  function fitLive() {
+    if (!live.frame || !live.stage) return;
+    try {
+      var doc = live.frame.contentDocument;
+      if (!doc || !doc.body) return;
+      var logicalWidth = parseInt(previewFrame && previewFrame.style.width, 10) || 1440;
+      var avail = live.stage.clientWidth;
+      if (!avail) return;
+      var scale = Math.min(1, avail / logicalWidth);
+      var mainEl = doc.querySelector('main');
+      var contentHeight = Math.max(80, Math.ceil(mainEl ? mainEl.getBoundingClientRect().bottom + (doc.defaultView.scrollY || 0) : doc.documentElement.scrollHeight));
+      live.frame.style.width = logicalWidth + 'px';
+      live.frame.style.height = contentHeight + 'px';
+      live.frame.style.transform = 'scale(' + scale + ')';
+      live.sizer.style.height = Math.ceil(contentHeight * scale) + 'px';
+    } catch (err) { /* same-origin frame still loading */ }
+  }
+
+  function focusLive() {
+    try {
+      var doc = live.frame.contentDocument;
+      if (!doc || !doc.head || !doc.querySelector('.rsec[data-section-id="' + live.sectionId + '"]')) return;
+      var style = doc.getElementById('r4-ws-focus');
+      if (!style) { style = doc.createElement('style'); style.id = 'r4-ws-focus'; doc.head.appendChild(style); }
+      style.textContent =
+        'html,body{overflow:hidden!important}' +
+        'body>:not(main):not(script):not(style):not(link){display:none!important}' +
+        '.sfb-preview-sections>.rcontainer:not(:has(.rsec[data-section-id="' + live.sectionId + '"])){display:none!important}' +
+        '.sfb-storefront-canvas{margin:0!important;padding-top:0!important}';
+      var loading = live.aside.querySelector('[data-r4-ws-live-loading]');
+      if (loading) loading.hidden = true;
+    } catch (err) { /* best effort: the live view is an aid, never a dependency */ }
+    fitLive();
+    live.timers.push(setTimeout(fitLive, 450), setTimeout(fitLive, 1600));
+  }
+
+  function closeLive() {
+    live.timers.forEach(clearTimeout);
+    live.timers = [];
+    if (live.ro) { live.ro.disconnect(); live.ro = null; }
+    if (live.frame) { try { live.frame.removeAttribute('src'); live.frame.src = 'about:blank'; } catch (err) { /* ignore */ } }
+    if (live.aside) live.aside.hidden = true;
+    live = { frame: null, sizer: null, stage: null, aside: null, sectionId: null, ro: null, timers: [] };
+  }
+
+  function openLive(sectionId) {
+    var aside = liveRoot();
+    if (!aside || !previewFrame) return;
+    if (live.frame && live.sectionId === sectionId) { live.aside.hidden = false; return; } // Inspector re-render: keep the frame
+    closeLive();
+    var draft = previewFrame.getAttribute('data-rastisi-state');
+    if ((draft && draft !== 'draft') || !window.matchMedia('(min-width:' + LIVE_MIN_WIDTH + 'px)').matches) return;
+    var src = previewFrame.getAttribute('data-rs-draft-src') || previewFrame.getAttribute('src');
+    var stage = aside.querySelector('[data-r4-ws-live-stage]');
+    var sizer = aside.querySelector('[data-r4-ws-live-sizer]');
+    var frame = aside.querySelector('[data-r4-ws-live-frame]');
+    if (!src || !stage || !sizer || !frame) return;
+    var loading = aside.querySelector('[data-r4-ws-live-loading]');
+    if (loading) loading.hidden = false;
+    sizer.style.height = '';
+    frame.style.transform = '';
+    frame.onload = function () { if (live.frame === frame && frame.getAttribute('src') && frame.getAttribute('src') !== 'about:blank') focusLive(); };
+    aside.hidden = false;
+    live = { frame: frame, sizer: sizer, stage: stage, aside: aside, sectionId: sectionId, ro: null, timers: [] };
+    if (window.ResizeObserver) { live.ro = new ResizeObserver(fitLive); live.ro.observe(stage); }
+    frame.setAttribute('src', src); // the same canonical draft preview page the main Preview shows
+  }
+
+  function mirrorFragmentToLive(fragment) {
+    if (!live.frame) return;
+    try {
+      if (swapFragmentIn(live.frame, fragment)) { fitLive(); live.timers.push(setTimeout(fitLive, 350)); }
+      else if (live.frame.contentWindow) live.frame.contentWindow.location.reload();
+    } catch (err) { /* ignore */ }
+  }
+
+  function reloadLive() {
+    if (!live.frame || !live.frame.contentWindow) return;
+    try { live.frame.contentWindow.location.reload(); } catch (err) { /* ignore */ }
+  }
+  R4.liveFrame = function () { return live.frame; };
 
   // ---- Task 5's single mutate endpoint: one serialized queue, one sender.
   R4.sendMutation = function (mutation) {
@@ -399,6 +497,7 @@ window.RastiSiR4 = {
           previewFrame = twin;
           if (old.parentNode) old.parentNode.removeChild(old);
           try { syncPreviewSelection(); } catch (err) { /* selection sync is best effort */ }
+          reloadLive();
           resolve(true);
         });
       }, { once: true });
@@ -504,8 +603,14 @@ window.RastiSiR4 = {
   };
 
   // ---- Inspector: schema-driven, two tabs, current-value hydration.
+  // The primary workspace tab (content | design | advanced) the owner last used: opening another section lands on the
+  // same tab, so editing "design" across several sections does not restart at "content" every time.
+  var lastWorkspaceTab = 'content';
+
   function activateTab(name) {
     if (!inspector) return;
+    if (!inspector.querySelector('[data-r4-tab="' + name + '"]')) name = 'content';
+    lastWorkspaceTab = name;
     inspector.querySelectorAll('[data-r4-tab]').forEach(function (tabButton) {
       var isActive = tabButton.getAttribute('data-r4-tab') === name;
       tabButton.setAttribute('aria-selected', isActive ? 'true' : 'false');
@@ -644,6 +749,38 @@ window.RastiSiR4 = {
     var displayMode = displayRow ? fieldControlValue(displayRow) : '';
     inspector.querySelectorAll('[data-r4-design-modes]').forEach(function (row) {
       row.hidden = displayRow ? row.getAttribute('data-r4-design-modes').split(' ').indexOf(displayMode) === -1 : false;
+    });
+    syncWorkspaceCards();
+  }
+
+  // A workspace card whose every control is currently dormant (visible_when) is hidden, so the owner never sees an
+  // empty titled box; a tab left with no card says so instead of showing a blank page. Cards that hold more than
+  // schema rows (the inline media manager, section management) always stay.
+  function syncWorkspaceCards() {
+    if (!inspector) return;
+    inspector.querySelectorAll('[data-r4-ws-card]').forEach(function (card) {
+      if (card.hasAttribute('data-r4-ws-manage') || card.querySelector('[data-r4-media-manager]')) return;
+      var rows = card.querySelectorAll('[data-r4-field-row]');
+      var anyVisible = false;
+      rows.forEach(function (row) { if (!row.hidden) anyVisible = true; });
+      card.hidden = !anyVisible;
+    });
+    inspector.querySelectorAll('.r4-ws-cols').forEach(function (cols) {
+      var shown = 0;
+      cols.querySelectorAll('.r4-ws-col').forEach(function (col) {
+        var any = false;
+        col.querySelectorAll('[data-r4-ws-card]').forEach(function (card) { if (!card.hidden) any = true; });
+        col.hidden = !any;
+        if (any) shown += 1;
+      });
+      cols.classList.toggle('r4-ws-cols--single', shown <= 1);
+    });
+    inspector.querySelectorAll('[data-r4-tab-panel]').forEach(function (panel) {
+      var empty = panel.querySelector('[data-r4-ws-tab-empty]');
+      if (!empty) return;
+      var anyCard = false;
+      panel.querySelectorAll('[data-r4-ws-card]').forEach(function (card) { if (!card.hidden) anyCard = true; });
+      empty.hidden = anyCard;
     });
   }
 
@@ -808,8 +945,9 @@ window.RastiSiR4 = {
         // reimplements that logic. Uses the existing section identity;
         // targeted to this window's origin.
         syncPreviewSelection();
-        activateTab('basic');
+        activateTab(lastWorkspaceTab);
         R4.emit('r4:inspector-opened', { sectionId: sectionId });
+        openLive(sectionId);
         // Hydrate the raw backing values (incl. the rich_text textarea)
         // BEFORE Alpine mounts CKEditor, so it initializes from the real
         // current body_html rather than an empty source element.
@@ -834,6 +972,7 @@ window.RastiSiR4 = {
     if (shell) shell.dataset.r4InspectorOpen = 'false';
     R4.selected = null;
     R4.inspectorOpen = false;
+    closeLive();
     syncPreviewSelection();
     R4.emit('r4:inspector-closed');
   }

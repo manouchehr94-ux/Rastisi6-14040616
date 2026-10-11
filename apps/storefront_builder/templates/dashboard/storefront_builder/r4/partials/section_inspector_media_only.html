@@ -7,15 +7,22 @@ button, section id) so the JS/QA-harness side needs no branching — only the
 body differs: a link to the existing, unmodified legacy media management
 screen instead of Inspector fields.
 {% endcomment %}
-<div class="r4-inspector-panel" data-r4-section-inspector data-r4-section-id="{{ section.pk }}">
-  <header class="r4-inspector-header">
-    <strong class="r4-inspector-title">{{ definition.label_fa }}</strong>
-    <button type="button" class="r4-icon-btn" data-r4-inspector-close aria-label="بستن تنظیمات">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-    </button>
+{% load storefront_builder_extras %}
+<div class="r4-inspector-panel r4-ws" data-r4-section-inspector data-r4-section-id="{{ section.pk }}">
+  <header class="r4-ws-header">
+    <div class="r4-ws-identity">
+      <span class="r4-ws-glyph" aria-hidden="true">{% rs_icon "image" %}</span>
+      <div class="r4-ws-titles">
+        <div class="r4-ws-crumb" data-rs-inspector-scope><span>{{ definition.label_fa }}</span></div>
+        <div class="r4-ws-titlerow"><h2 class="r4-inspector-title r4-ws-title" data-rs-inspector-title>{{ definition.label_fa }}</h2><span class="r4-ws-scope" data-r4-ws-scope>فقط این بخش</span></div>
+      </div>
+    </div>
+    <div class="r4-ws-save" data-r4-ws-save role="status" aria-live="polite">{% rs_icon "check" %}<span data-r4-ws-save-text>پیش‌نویس ذخیره شد</span></div>
+    <button type="button" class="r4-ws-close" data-r4-inspector-close aria-label="بستن تنظیمات">{% rs_icon "close" %}<span>بستن</span></button>
   </header>
 
-  <div class="r4-inspector-body">
+  <div class="r4-ws-main">
+  <div class="r4-inspector-body r4-ws-body r4-ws-body--solo">
     <p class="r4-inspector-media-only-note">این بخش تنظیمِ مستقیمی ندارد — محتوای آن از طریق مدیریتِ رسانه‌ی زیر تعیین می‌شود.</p>
     {% comment %}
     Phase 5 Task 4 (remediation R1a) — R4-native inline media manager for a
@@ -26,5 +33,14 @@ screen instead of Inspector fields.
       <div class="r4-inspector-media-heading">مدیریت {{ media_label_plural }}</div>
       {% include "dashboard/storefront_builder/partials/section_media_manager_body.html" %}
     </div>
+    <section class="r4-ws-card" data-r4-ws-manage>
+      <header class="r4-ws-card-head"><h3>مدیریت بخش</h3><p>نمایش، قفل، جایگاه و حذف</p></header>
+      <div class="r4-ws-card-body"><div data-rs-section-actions></div></div>
+    </section>
   </div>
+  </div>
+  <footer class="r4-ws-footer">
+    <span class="r4-ws-footnote">{% rs_icon "lock" %}تغییرات بلافاصله در پیش‌نویس ذخیره می‌شوند.</span>
+    <button type="button" class="r4-ws-done primary" data-r4-inspector-close>{% rs_icon "check" %}تمام؛ بازگشت به صفحه</button>
+  </footer>
 </div>

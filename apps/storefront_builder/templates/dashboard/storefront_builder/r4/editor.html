@@ -123,18 +123,6 @@ single shared #r4PreviewFrame renderer. r4_studio.js holds UI-only state
           <div class="panel-foot"><div class="row small muted">{% rs_icon "lock" %} تغییرات فقط در پیش‌نویس ذخیره می‌شوند.</div></div>
         </div>
 
-        {# ---- Section inspector view (body fetched from the existing inspector endpoint) ---- #}
-        <div class="rs-panel-view" data-rs-view="inspector" hidden>
-          <div class="panel-head"><button type="button" data-rastisi-action="structure" class="back-link">{% rs_icon "arrow" %}ساختار صفحه</button><div class="row space-between"><h2 data-rs-inspector-title>تنظیمات بخش</h2><span class="pill purple">فقط این بخش</span></div></div>
-          <div class="panel-scroll">
-            <div class="inspector-scope" data-rs-inspector-scope>{% rs_icon "image" %}<span></span></div>
-            <div class="note warn" data-rs-inspector-locked hidden>برای ویرایش، ابتدا قفل این بخش را باز کنید.</div>
-            <aside id="r4Inspector" hidden aria-label="تنظیمات بخش"></aside>
-            <div data-rs-section-actions></div>
-          </div>
-          <div class="panel-foot"><button type="button" data-rastisi-action="global" class="full quiet small">{% rs_icon "sliders" %}رنگ و فونتِ تمام فروشگاه</button></div>
-        </div>
-
         {# ---- Global design view ---- #}
         <div class="rs-panel-view" data-rs-view="global" hidden>
           <div class="panel-head"><div class="row space-between"><span class="eyebrow">تمام فروشگاه / هویت بصری</span><button type="button" data-rastisi-action="panel-close" class="icon-btn mobile-only" aria-label="بستن پنل">{% rs_icon "close" %}</button></div><h2>امضای فروشگاه شما</h2><p>یک هویت یکپارچه در همهٔ صفحه‌ها.</p></div>
@@ -200,6 +188,27 @@ single shared #r4PreviewFrame renderer. r4_studio.js holds UI-only state
         </div>
       </section>
       {% endif %}
+    </div>
+  </div>
+
+  {% comment %}---- Settings WORKSPACE: a large overlay ABOVE the Studio (position:fixed — it never takes layout width from the
+       Preview). The section's settings form (fetched from the existing inspector endpoint) renders into #r4Inspector. ----{% endcomment %}
+  <div class="rs-workspace" data-rs-workspace hidden>
+    <div class="rs-workspace-backdrop" data-rastisi-action="workspace-backdrop" aria-hidden="true"></div>
+    <div class="rs-workspace-dialog" role="dialog" aria-modal="true" aria-label="تنظیمات بخش" data-rs-workspace-dialog tabindex="-1">
+      <aside id="r4Inspector" class="rs-workspace-body" hidden aria-label="تنظیمات بخش"></aside>
+      {% comment %}Optional live view of the SAME section: a second frame of the canonical server-rendered draft page, isolated to this
+         section and kept current with the very same fragments the main Preview receives (r4_editor.js). Lives OUTSIDE the
+         Inspector body so a re-rendered Inspector (display-type change) never reloads it.{% endcomment %}
+      <aside class="r4-ws-live" data-r4-ws-live hidden aria-label="پیش‌نمایش زندهٔ این بخش">
+        <div class="r4-ws-live-head"><strong>{% rs_icon "eye" %}پیش‌نمایش زندهٔ این بخش</strong><small>همان نمایش اصلی صفحه؛ با هر تغییر، همین‌جا هم به‌روز می‌شود.</small></div>
+        <div class="r4-ws-live-stage" data-r4-ws-live-stage>
+          <div class="r4-ws-live-sizer" data-r4-ws-live-sizer>
+            <iframe data-r4-ws-live-frame title="پیش‌نمایش زندهٔ بخش" tabindex="-1" aria-hidden="true"></iframe>
+            <div class="r4-ws-live-loading" data-r4-ws-live-loading>در حال آماده‌سازی…</div>
+          </div>
+        </div>
+      </aside>
     </div>
   </div>
 

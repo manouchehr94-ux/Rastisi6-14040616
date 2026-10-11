@@ -42,7 +42,7 @@ body:has(.rs-studio) .content>:not(:has(.rs-studio)):not(.rs-studio){display:non
    panel-head / panel-scroll / panel-foot column. */
 .rs-studio .rs-panel-view{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
 .rs-studio #r4Structure{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
-.rs-studio #r4Inspector,.rs-studio #r4GlobalDesign{display:block;position:static;width:auto;border:0;background:none;box-shadow:none;overflow:visible;padding:0}
+.rs-studio #r4GlobalDesign{display:block;position:static;width:auto;border:0;background:none;box-shadow:none;overflow:visible;padding:0}
 
 /* Global Design tabs (UI-only state on the Studio root). */
 .rs-studio .rs-tab-pane{display:none}
@@ -91,13 +91,7 @@ body:has(.rs-studio) .content>:not(:has(.rs-studio)):not(.rs-studio){display:non
 .rs-studio .r4-icon-btn{padding:6px;border:1px solid var(--line);border-radius:8px;background:#fff}
 .rs-studio .r4-field-scope{display:none}
 
-/* Inspector body (server partial). The Studio head replaces its own header. */
-.rs-studio .r4-inspector-panel{border:0;padding:0;background:none;box-shadow:none}
-.rs-studio .r4-inspector-header{display:none}
-.rs-studio .r4-inspector-tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;background:#f1f3ef;border-radius:10px;margin:0 0 14px}
-.rs-studio .r4-inspector-tab{padding:7px 8px;border-radius:8px;border:0;background:transparent;color:var(--muted);font-weight:600}
-.rs-studio .r4-inspector-tab[aria-selected="true"]{background:#fff;color:var(--ink);box-shadow:0 1px 3px #2c3a3014}
-.rs-studio .r4-inspector-body{padding:0}
+/* Inspector body: the large settings WORKSPACE styles live at the end of this file. */
 .rs-studio .r4-field{margin-bottom:14px}
 .rs-studio .r4-field-label{display:block;font-weight:650;font-size:12px;margin-bottom:6px;color:var(--ink)}
 .rs-studio .r4-inspector-media{margin:0 0 16px;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fbfcfa}
@@ -214,3 +208,136 @@ body:has(.rs-studio[data-r4-sidebar-expanded="true"]) .sidebar{display:flex!impo
 }
 /* two-tone default focus ring for the Design Studio chrome */
 :where(.rs-studio) :focus-visible{outline:2px solid var(--ink);outline-offset:2px;box-shadow:0 0 0 2px var(--surface)}
+
+/* =====================================================================
+   Settings WORKSPACE — the large overlay that hosts one section's settings.
+   position:fixed on the Studio root: it sits ABOVE the Studio and never takes layout width from the Preview
+   (the Preview iframe is measured identical before/while open). Desktop, tablet and phone share ONE structure
+   (header / tabs / two-column cards / footer); only the responsive layout differs.
+   Layers: workspace 40 < dialogs 50 < resource picker 60 < toast 90.
+   ===================================================================== */
+.rs-studio .rs-workspace{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:0}
+.rs-studio .rs-workspace-backdrop{position:absolute;inset:0;background:rgba(22,33,28,.46);backdrop-filter:blur(3px);animation:rs-ws-fade .18s ease-out}
+.rs-studio .rs-workspace-dialog{position:relative;display:flex;width:min(92vw,1520px);height:90vh;height:min(90vh,calc(100dvh - 24px));background:#fff;border-radius:20px;overflow:hidden;
+  box-shadow:0 36px 120px rgba(18,30,24,.42),0 0 0 1px rgba(255,255,255,.55);animation:rs-ws-rise .22s cubic-bezier(.2,.8,.2,1);outline:0}
+.rs-studio .rs-workspace-body{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0;position:static;width:auto;border:0;background:#fff;box-shadow:none;overflow:hidden;padding:0}
+@keyframes rs-ws-fade{from{opacity:0}to{opacity:1}}
+@keyframes rs-ws-rise{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+
+.rs-studio .r4-ws{display:flex;flex-direction:column;height:100%;min-height:0;background:#fff;color:var(--ink);font-size:13px;container:ws-shell/inline-size}
+
+/* header: identity · breadcrumb · search · save state · close */
+.rs-studio .r4-ws-header{display:flex;align-items:center;gap:20px;padding:16px 26px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#fff,#fafcf8);flex:0 0 auto}
+.rs-studio .r4-ws-identity{display:flex;align-items:center;gap:14px;min-width:0;flex:1 1 auto}
+.rs-studio .r4-ws-glyph{display:grid;place-items:center;width:46px;height:46px;flex:0 0 auto;border-radius:13px;background:var(--primary-soft);color:var(--primary)}
+.rs-studio .r4-ws-glyph .icon{width:22px;height:22px}
+.rs-studio .r4-ws-titles{flex:1 1 auto;min-width:130px}
+.rs-studio .r4-ws-titlerow{display:flex;align-items:center;gap:10px;min-width:0}
+.rs-studio .r4-ws-crumb{font-size:11px;line-height:1.5;color:var(--muted-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rs-studio .r4-ws-title{margin:0;max-width:100%;font-size:21px;font-weight:750;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rs-studio .r4-ws-scope{flex:0 0 auto;padding:0 8px;border-radius:999px;background:var(--lab-soft);color:#725888;font-size:10.5px;line-height:19px;white-space:nowrap}
+.rs-studio .r4-ws-search{display:flex;align-items:center;gap:8px;flex:0 1 250px;min-width:150px;height:42px;padding:0 13px;border:1px solid var(--line);border-radius:11px;background:#fff;color:var(--muted)}
+.rs-studio .r4-ws-search:focus-within{border-color:var(--primary);box-shadow:0 0 0 3px #2c62511f}
+.rs-studio .r4-ws-search input{flex:1 1 auto;min-width:0;width:100%;border:0;outline:0;background:none;font-size:13px;padding:0}
+.rs-studio .r4-ws-save{display:flex;align-items:center;gap:6px;flex:0 0 auto;font-size:12px;color:var(--muted)}
+.rs-studio .r4-ws-save .icon{width:15px;height:15px;color:#509a7a}
+.rs-studio .r4-ws-save[data-state="saving"] .icon,.rs-studio .r4-ws-save[data-state="error"] .icon,.rs-studio .r4-ws-save[data-state="conflict"] .icon{color:#b07a2a}
+.rs-studio .r4-ws-save[data-state="error"],.rs-studio .r4-ws-save[data-state="conflict"]{color:var(--danger)}
+.rs-studio .r4-ws-close{flex:0 0 auto;gap:6px;height:42px;padding:0 16px;border:1px solid var(--line);border-radius:11px;background:#fff;font-weight:600}
+.rs-studio .r4-ws-close:hover{background:#f1f5ee}
+.rs-studio .r4-ws-locked{padding:10px 26px;background:#fff6e6;color:#846537;font-size:12px;border-bottom:1px solid #f0e2c4}
+
+/* primary tabs: محتوا / طراحی / پیشرفته */
+.rs-studio .r4-ws-tabs{display:flex;gap:4px;padding:0 22px;margin:0;border-bottom:1px solid var(--line);background:#fff;flex:0 0 auto}
+.rs-studio .r4-ws-tab{position:relative;gap:8px;min-height:50px;padding:0 24px;border:0;border-radius:0;border-bottom:3px solid transparent;background:transparent;color:var(--muted);font-size:14.5px;font-weight:650;margin-bottom:-1px}
+.rs-studio .r4-ws-tab:hover{background:#f6f9f3;color:var(--ink)}
+.rs-studio .r4-ws-tab[aria-selected="true"]{color:var(--primary);border-bottom-color:var(--primary);background:transparent;box-shadow:none}
+.rs-studio .r4-ws-tab-count{min-width:20px;padding:0 6px;border-radius:999px;background:var(--primary);color:#fff;font-size:10.5px;line-height:20px;text-align:center}
+
+/* body: scrolls internally; footer + header stay put */
+.rs-studio .r4-ws-main{display:flex;flex:1 1 auto;min-height:0}
+.rs-studio .r4-ws-body{flex:1 1 0;min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;padding:24px 26px 36px;background:#f5f7f2;container:ws-body/inline-size;scrollbar-width:thin;scrollbar-color:#cfd9ca transparent}
+.rs-studio .r4-ws-body--solo{max-width:880px;margin:0 auto}
+.rs-studio .r4-ws-cols{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:22px;align-items:start}
+.rs-studio .r4-ws-cols--single{grid-template-columns:minmax(0,1fr)}
+.rs-studio .r4-ws-cols--single .r4-ws-col{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:20px;align-items:start}
+.rs-studio .r4-ws-col{display:flex;flex-direction:column;gap:20px;min-width:0}
+.rs-studio .r4-ws-empty,.rs-studio .r4-ws-noresults{margin:40px 0;text-align:center;color:var(--muted);font-size:13px}
+@container ws-body (max-width:680px){.rs-studio .r4-ws-cols{grid-template-columns:minmax(0,1fr)}}
+
+/* cards */
+.rs-studio .r4-ws-card{background:#fff;border:1px solid #e1e8dd;border-radius:16px;box-shadow:0 1px 2px #1d2f2410;min-width:0}
+.rs-studio .r4-ws-card-head{padding:16px 20px 12px;border-bottom:1px solid #eef2ea}
+.rs-studio .r4-ws-card-head h3{margin:0;font-size:15px;font-weight:700;color:#233a31;line-height:1.5}
+.rs-studio .r4-ws-card-head p{margin:2px 0 0;font-size:11.5px;color:var(--muted-ink)}
+.rs-studio .r4-ws-card-body{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:2px 20px;padding:10px 20px 16px;align-items:start}
+.rs-studio .r4-ws-card-body>*{min-width:0}
+.rs-studio .r4-ws-card-body>.r4-field{margin:0;padding:12px 0;border-bottom:1px solid #f0f3ec}
+.rs-studio .r4-ws-card-body>.r4-field:last-child{border-bottom:0}
+.rs-studio .r4-ws-card-body>:is(.r4-field--design,.r4-field--background,.r4-field--rich_text,.r4-field--repeater,.r4-field--resource_source,.r4-field--media,.r4-field--appearance_override,.r4-field--menu_picker,.r4-field--text,.r4-field--color),
+.rs-studio .r4-ws-card-body>:is([data-rs-section-actions],.r4-inspector-media){grid-column:1/-1}
+.rs-studio .r4-ws-card-body .r4-field--boolean{grid-column:1/-1}
+.rs-studio .r4-ws-card-body .r4-inspector-media{margin:4px 0 8px}
+
+/* the design block (one compound widget): its registry groups become a responsive grid of mini-cards */
+.rs-studio .r4-design-block{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:14px}
+.rs-studio .r4-design-group{margin:0;min-width:0;padding:12px 14px 6px;border:1px solid #e7ede3;border-radius:12px;background:#fbfcfa}
+.rs-studio .r4-design-group legend{padding:0 8px;font-size:12.5px;font-weight:700;color:#2f5342}
+
+/* search */
+.rs-studio .r4-ws .ws-filtered-out{display:none!important}
+.rs-studio .r4-ws .ws-hit>.r4-field-label{background:#fff3b8;border-radius:5px;padding:0 4px}
+
+/* footer */
+.rs-studio .r4-ws-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 26px;border-top:1px solid var(--line);background:#fff;flex:0 0 auto}
+.rs-studio .r4-ws-footnote{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted-ink)}
+.rs-studio .r4-ws-footnote .icon{width:14px;height:14px}
+.rs-studio .r4-ws-done{height:42px;padding:0 24px;font-weight:650}
+
+/* optional live view of the same section (sibling of the Inspector column, so a re-rendered Inspector never reloads it) */
+.rs-studio .r4-ws-live{flex:0 0 39%;max-width:620px;min-width:0;display:flex;flex-direction:column;border-inline-end:1px solid var(--line);background:#e6ebe2}
+.rs-studio .r4-ws-live[hidden]{display:none!important}
+.rs-studio .r4-ws-live-head{padding:18px 20px 12px;flex:0 0 auto}
+.rs-studio .r4-ws-live-head strong{display:flex;align-items:center;gap:7px;font-size:13.5px;color:#27443a}
+.rs-studio .r4-ws-live-head small{display:block;margin-top:3px;font-size:11px;color:var(--muted-ink);line-height:1.7}
+.rs-studio .r4-ws-live-stage{position:relative;flex:1 1 auto;min-height:0;margin:0 18px 18px;overflow-x:hidden;overflow-y:auto;scrollbar-width:thin;background-image:radial-gradient(#cfd8ca .7px,transparent .7px);background-size:14px 14px;border-radius:12px}
+.rs-studio .r4-ws-live-sizer{position:relative;width:100%;min-height:60px;overflow:hidden;background:#fff;border:1px solid #d5ddd0;border-radius:10px;box-shadow:0 8px 26px #1b2f2418}
+.rs-studio .r4-ws-live-stage iframe{position:absolute;top:0;left:0;border:0;display:block;background:#fff;transform-origin:top left;pointer-events:none}
+.rs-studio .r4-ws-live-loading{position:absolute;inset:0;display:grid;place-items:center;font-size:12px;color:var(--muted-ink);background:#fff}
+
+/* narrow windows (tablet/phone): the SAME workspace becomes full-screen */
+@media (max-width:1100px){
+  .rs-studio .r4-ws-live{display:none!important}
+}
+@media (max-width:850px){
+  .rs-studio .rs-workspace-dialog{width:100vw;height:100vh;height:100dvh;border-radius:0;animation:none}
+  .rs-studio .r4-ws-header{flex-wrap:wrap;gap:10px 12px;padding:12px 14px}
+  .rs-studio .r4-ws-identity{flex:1 1 0;order:1}
+  .rs-studio .r4-ws-close{order:2;margin-inline-start:auto;padding:0 12px}
+  .rs-studio .r4-ws-close span{display:none}
+  .rs-studio .r4-ws-search{order:3;flex:1 1 0;min-width:0}
+  .rs-studio .r4-ws-save{order:4}
+  .rs-studio .r4-ws-save-text{display:none}
+  .rs-studio .r4-ws-title{font-size:17px}
+  .rs-studio .r4-ws-tabs{padding:0 6px}
+  .rs-studio .r4-ws-tab{flex:1 1 0;padding:0 8px;font-size:13.5px}
+  .rs-studio .r4-ws-body{padding:14px 12px 28px}
+  .rs-studio .r4-ws-cols{grid-template-columns:minmax(0,1fr)}
+  .rs-studio .r4-ws-footer{padding:10px 14px}
+  .rs-studio .r4-ws-footnote{display:none}
+  .rs-studio .r4-ws-done{flex:1 1 auto}
+}
+@media (prefers-reduced-motion:reduce){.rs-studio .rs-workspace-backdrop,.rs-studio .rs-workspace-dialog{animation:none!important}}
+.rs-studio .r4-ws .r4-ws-tab{flex:0 0 auto;min-width:150px}
+.rs-studio .r4-ws .switch{min-height:0;width:42px;height:24px;padding:3px}
+.rs-studio .r4-ws .switch:before{width:18px;height:18px}
+.rs-studio .r4-ws .r4-field--design>.r4-field-label,.rs-studio .r4-ws .r4-field--background>.r4-field-label{display:none}
+.rs-studio .r4-ws-cols[hidden],.rs-studio .r4-ws-card[hidden]{display:none!important}
+@media (max-width:850px){.rs-studio .r4-ws .r4-ws-tab{flex:1 1 0;min-width:0}}
+
+/* a narrow controls column (laptop with the live view beside it): keep identity readable, drop secondary header text */
+@container ws-shell (max-width:900px){
+  .rs-studio .r4-ws-save-text,.rs-studio .r4-ws-scope{display:none}
+  .rs-studio .r4-ws-search{flex-basis:210px}
+  .rs-studio .r4-ws-header{gap:14px;padding:14px 20px}
+}
