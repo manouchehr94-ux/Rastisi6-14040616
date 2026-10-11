@@ -132,6 +132,39 @@
     return (host || DATA.store_name || '') + (page ? ' / ' + page : ' /');
   }
 
+  // Direct-edit discoverability: wording follows the primary pointer (touch-first devices press-and-hold; mouse double-clicks).
+  function editHint() {
+    var coarse = false;
+    try { coarse = window.matchMedia('(pointer: coarse)').matches; } catch (err) { coarse = false; }
+    return coarse ? 'لمس برای انتخاب؛ نگه‌داشتن برای تنظیمات' : 'یک‌بار کلیک برای انتخاب؛ دوبار کلیک برای تنظیمات';
+  }
+
+  // ---- the drawer's single presentation authority -------------------------------------------------------------
+  // Invariant (checked on every renderChrome): the drawer is either CLOSED (no panel-visible class, data-rs-drawer="closed",
+  // every view hidden, backdrop hidden) or shows EXACTLY ONE view that has real content (structure / global / template peek).
+  // A requested view whose content is missing or stale (e.g. Global Design closed underneath us by R4, a structure refresh
+  // that produced nothing) never renders a blank shell: the request is dropped, i.e. the drawer closes.
+  function drawerViewHasContent(name) {
+    if (name === 'structure') return Boolean(structurePanel && structurePanel.querySelector('[data-rs-structure-scroll] .tree-row, [data-rs-structure-scroll] .empty'));
+    if (name === 'global') {
+      var aside = document.getElementById('r4GlobalDesign');
+      return Boolean(R4.isGlobalDesignOpen() && aside && aside.children.length);
+    }
+    if (name === 'template-preview') return Boolean(ui.previewTemplate);
+    return false;
+  }
+
+  function resolveDrawerView() {
+    if (!ui.panelVisible || ui.lab.active || ui.mode === 'lab' || ui.mode === 'inspector') return null;
+    var name = ui.mode === 'global' ? 'global' : ui.mode === 'template-preview' ? 'template-preview' : 'structure';
+    if (drawerViewHasContent(name)) return name;
+    // unavailable/empty: drop the request instead of showing an empty white shell
+    ui.panelVisible = false;
+    if (name === 'global') ui.mode = 'structure';
+    else if (name === 'template-preview') { ui.previewTemplate = null; ui.mode = 'structure'; R4.showPreview(null); }
+    return null;
+  }
+
   function renderChrome() {
     var isLab = ui.mode === 'lab';
     var lab = ui.lab;
@@ -152,23 +185,22 @@
       b.disabled = ui.busy;
     });
 
-    // layout + panel views
+    // layout + the drawer — ONE presentation authority: resolveDrawerView() decides which single view (if any) is shown;
+    // everything below (panel class, data-rs-drawer, the views' hidden flags, the backdrop via CSS) derives from it.
     var showPanel = !isLab;
     if (layout) {
       layout.classList.toggle('lab-layout', isLab);
       layout.classList.toggle('no-panel', !showPanel);
     }
+    var drawerView = resolveDrawerView();
     if (contextPanel) {
       contextPanel.hidden = !showPanel;
-      contextPanel.classList.toggle('panel-visible', ui.panelVisible && showPanel);
-      root.dataset.rsDrawer = ui.panelVisible && showPanel ? ui.mode : 'closed';
-      // Section settings live in the workspace overlay, never in this side panel: while they are open the panel keeps
-      // showing the (lightweight) page structure, so the Preview column never changes width.
-      contextPanel.setAttribute('data-rastisi-panel', ui.mode === 'global' ? 'global-design' : 'structure');
+      contextPanel.classList.toggle('panel-visible', drawerView !== null);
+      root.dataset.rsDrawer = drawerView || 'closed';
+      contextPanel.setAttribute('data-rastisi-panel', drawerView === 'global' ? 'global-design' : 'structure');
     }
     $all('[data-rs-view]').forEach(function (view) {
-      var name = view.getAttribute('data-rs-view');
-      view.hidden = name !== ui.mode && !(name === 'structure' && ui.mode === 'inspector');
+      view.hidden = view.getAttribute('data-rs-view') !== drawerView;   // exactly one view is visible, or none
     });
     renderDrawerFocus();
     renderWorkspace();
@@ -194,7 +226,7 @@
       caption.textContent = lab.active
         ? (lab.compareBase ? 'طرح هنگام شروع؛ برای مقایسه ثابت می‌ماند.' : 'فقط ظاهر تغییر می‌کند؛ محصولات و متن‌ها محفوظ‌اند.')
         : ui.previewTemplate ? 'همان محتوای فروشگاه شما، با ظاهر این قالب؛ هنوز چیزی تغییر نکرده.'
-          : 'برای ویرایش، روی بخش موردنظر کلیک کنید.';
+          : editHint();
     }
     var captionIcon = caption && caption.parentElement ? caption.parentElement.querySelector('.icon') : null;
     if (captionIcon && caption) captionIcon.outerHTML = icon(lab.active ? 'spark' : 'eye');
@@ -332,7 +364,8 @@
       var back = workspaceReturnFocus;
       workspaceReturnFocus = null;
       // an opener that lived inside the (now closed) drawer is not focusable any more: use the top-bar button instead
-      if (!back || !document.contains(back) || back.getClientRects().length === 0) back = $('.top-nav [data-rastisi-action="section-settings"]');
+      // …and so is a Preview-originated opener (the frame itself, after a double-click / press-and-hold on a section)
+      if (!back || !document.contains(back) || back.getClientRects().length === 0 || back.id === 'r4PreviewFrame') back = $('.top-nav [data-rastisi-action="section-settings"]');
       if (back && typeof back.focus === 'function') back.focus({ preventScroll: true });
     }
     if (open) renderWorkspaceSave();
@@ -1440,6 +1473,19 @@
     renderChrome();
   });
 
+  // Selection from the Preview (single click / tap): highlight the structure row, nothing else changes.
+  root.addEventListener('r4:section-selected', function (evt) {
+    ui.selectedSectionId = String(evt.detail.sectionId);
+    markSelectedRow();
+  });
+
+  // A direct-edit gesture (double-click / press-and-hold) is about to open settings: the drawer, if open, closes first.
+  root.addEventListener('r4:direct-edit', function (evt) {
+    ui.selectedSectionId = String(evt.detail.sectionId);
+    if (ui.panelVisible && ui.mode !== 'inspector') closeDrawer();
+    markSelectedRow();
+  });
+
   root.addEventListener('r4:inspector-opened', function (evt) {
     ui.selectedSectionId = evt.detail.sectionId;
     if (ui.mode === 'template-preview') { ui.previewTemplate = null; R4.showPreview(null); }
@@ -1457,6 +1503,16 @@
       renderChrome();
     }
     markSelectedRow();
+  });
+
+  // R4 closes Global Design on its own (e.g. R4.openSection hides it before the Inspector arrives): follow it, otherwise the
+  // drawer would stay open over an emptied view.
+  root.addEventListener('r4:global-closed', function () {
+    if (ui.mode === 'global') {
+      ui.mode = 'structure';
+      ui.panelVisible = false;
+      renderChrome();
+    }
   });
 
   root.addEventListener('r4:global-opened', function () {
@@ -1519,7 +1575,7 @@
   (function init() {
     // Deep links (?panel=appearance|header|footer) already opened Global
     // Design inside R4; follow it.
-    if (R4.isGlobalDesignOpen && R4.isGlobalDesignOpen()) ui.mode = 'global';
+    if (R4.isGlobalDesignOpen && R4.isGlobalDesignOpen()) { ui.mode = 'global'; ui.panelVisible = true; }
     renderSaveFeedback();
     setGlobalTab(root.dataset.rsGlobalTab || 'visual');
     renderChrome();

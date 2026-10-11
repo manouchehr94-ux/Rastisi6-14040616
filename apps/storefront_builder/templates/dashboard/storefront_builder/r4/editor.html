@@ -20,7 +20,7 @@ single shared #r4PreviewFrame renderer. r4_studio.js holds UI-only state
 (mode, panel, device, zoom, dialogs, gallery filter) and never writes anything.
 {% endcomment %}
 <div class="r4-builder rs-studio" data-r4-shell="true" data-r4-inspector-open="false"
-     data-r4-sidebar-expanded="false" data-r4-structure-open="true" data-edit-revision="{{ r4_edit_revision }}"
+     data-r4-sidebar-expanded="false" data-edit-revision="{{ r4_edit_revision }}"
      data-r4-draft-id="{{ draft.pk }}" data-r4-page-type="{{ page_type }}"
      data-rs-mode="structure" data-rs-global-tab="visual" data-rs-device="desktop"
      data-rs-draft-changed="{{ studio.draft_changed|yesno:'true,false' }}"
@@ -114,7 +114,7 @@ single shared #r4PreviewFrame renderer. r4_studio.js holds UI-only state
             </iframe>
           </div>
         </div>
-        <div class="stage-caption"><div class="row">{% rs_icon "eye" %}<span data-rs-caption>برای ویرایش، روی بخش موردنظر کلیک کنید.</span></div><span data-rs-caption-side>{% for value, label in page_types %}{% if value == page_type %}{{ label }}{% endif %}{% endfor %} · پیش‌نویس</span></div>
+        <div class="stage-caption"><div class="row">{% rs_icon "eye" %}<span data-rs-caption>یک‌بار کلیک برای انتخاب؛ دوبار کلیک برای تنظیمات</span></div><span data-rs-caption-side>{% for value, label in page_types %}{% if value == page_type %}{{ label }}{% endif %}{% endfor %} · پیش‌نویس</span></div>
       </main>
 
       <div class="rs-drawer-backdrop" data-rastisi-action="panel-close" aria-hidden="true"></div>

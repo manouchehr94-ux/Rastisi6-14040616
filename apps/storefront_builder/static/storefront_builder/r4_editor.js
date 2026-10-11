@@ -16,7 +16,6 @@ window.RastiSiR4 = {
   var saveStateEl = document.getElementById('r4SaveState');
   var sidebarToggle = document.getElementById('r4SidebarToggle');
   var structurePanel = document.getElementById('r4Structure');
-  var structureToggle = document.getElementById('r4StructureToggle');
   // R4 Task 10 — the shared Resource Picker overlay root is created here
   // (never added to editor.html's own markup, which Task 10 leaves
   // untouched) so it always exists as a direct child of the R4 shell.
@@ -49,17 +48,6 @@ window.RastiSiR4 = {
       r4SidebarExpanded = !r4SidebarExpanded;
       shell.dataset.r4SidebarExpanded = r4SidebarExpanded ? 'true' : 'false';
       sidebarToggle.setAttribute('aria-expanded', r4SidebarExpanded ? 'true' : 'false');
-    });
-  }
-
-  // ---- Structure panel: R4 Task 8, CLOSED by default on every fresh load
-  // (nothing persisted), same toggle pattern as the admin sidebar above.
-  if (structureToggle && shell) {
-    structureToggle.addEventListener('click', function () {
-      var open = shell.dataset.r4StructureOpen === 'true';
-      open = !open;
-      shell.dataset.r4StructureOpen = open ? 'true' : 'false';
-      structureToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     });
   }
 
@@ -547,7 +535,8 @@ window.RastiSiR4 = {
       .then(function (html) {
         var freshDoc = new DOMParser().parseFromString(html, 'text/html');
         var freshStructure = freshDoc.getElementById('r4Structure');
-        if (freshStructure) structurePanel.innerHTML = freshStructure.innerHTML;
+        // never swap in an empty / error shell: the structure list must stay available for the drawer
+        if (freshStructure && freshStructure.querySelector('[data-rs-structure-scroll]')) structurePanel.innerHTML = freshStructure.innerHTML;
         R4.emit('r4:structure-refreshed');
       })
       .catch(function () {
@@ -556,6 +545,9 @@ window.RastiSiR4 = {
         // the merchant sees the stale list until their next action.
       });
   }
+
+  // Re-read the structure list (the drawer's content) without any write: used by the Studio/QA to prove the list survives a refresh.
+  R4.refreshStructure = function () { return refreshStructureAndPreview({ skipPreview: true }); };
 
   R4.enqueueStructuralMutation = function (mutation) {
     return R4.enqueueMutation(mutation).then(function (result) {
@@ -904,17 +896,24 @@ window.RastiSiR4 = {
   // message shape/type mirror the legacy editor's own outbound selection
   // sync exactly; origin-targeted, never "*".
   function syncPreviewSelection() {
-    // A null selection clears the preview highlight (Inspector closed).
+    // The highlight follows the open section, else the last selected one (it stays after the workspace closes).
     if (!previewFrame || !previewFrame.contentWindow) return;
     previewFrame.contentWindow.postMessage({
       type: 'sfb:setSelection',
-      sectionId: R4.selected,
+      sectionId: R4.selected != null ? R4.selected : (R4.previewSelected || null),
     }, window.location.origin);
+  }
+
+  // Selection WITHOUT settings (single click / tap in the Preview). One selection id, announced to the Studio chrome.
+  function selectPreviewSection(sectionId) {
+    R4.previewSelected = sectionId;
+    R4.emit('r4:section-selected', { sectionId: sectionId });
   }
 
   // Highlight one section in the Preview (and bring it into view) WITHOUT opening its settings — the structure drawer's
   // "select". Presentation only: it never touches R4.selected (the settings workspace's authority).
   R4.previewSelect = function (sectionId) {
+    R4.previewSelected = sectionId;
     if (!previewFrame || !previewFrame.contentWindow) return;
     previewFrame.contentWindow.postMessage({ type: 'sfb:setSelection', sectionId: sectionId }, window.location.origin);
     try {
@@ -956,6 +955,7 @@ window.RastiSiR4 = {
         }
         if (shell) shell.dataset.r4InspectorOpen = 'true';
         R4.selected = sectionId;
+        R4.previewSelected = sectionId;
         R4.inspectorOpen = true;
         // Phase 5 Task 4D — sidebar/structure -> preview selection sync.
         // openSection is the single selection entry point (a sidebar row
@@ -1826,10 +1826,21 @@ window.RastiSiR4 = {
     // or a Ready Template live preview) its sections are not the Draft's
     // editable targets, so edit commands from it are ignored.
     if (R4.previewInteractive === false) return;
-    if (type === 'sfb:selectSection' || type === 'sfb:openSectionSettings') {
-      var sectionId = evt.data.sectionId;
+    // Direct editing of the Preview (gestures live in the Preview document, see preview.html): a single click / tap SELECTS
+    // (sfb:selectSection); a double-click / press-and-hold OPENS settings (sfb:openSectionSettings). Both carry the section id
+    // from [data-section-id]; opening goes through the same canonical R4.openSection() the structure drawer's gear uses.
+    if (type === 'sfb:selectSection') {
+      var selectedId = Number(evt.data.sectionId);
+      if (!selectedId) return;
+      selectPreviewSection(selectedId);
+      return;
+    }
+    if (type === 'sfb:openSectionSettings') {
+      var sectionId = Number(evt.data.sectionId);
       if (!sectionId) return;
-      R4.openSection(Number(sectionId));
+      selectPreviewSection(sectionId);
+      R4.emit('r4:direct-edit', { sectionId: sectionId });   // the Studio closes any open drawer first
+      R4.openSection(sectionId);
       return;
     }
     if (type === 'sfb:sectionCommand') {
@@ -2266,7 +2277,8 @@ window.RastiSiR4 = {
         // above was).
         if (structurePanel) {
           var freshStructure = freshDoc.getElementById('r4Structure');
-          if (freshStructure) structurePanel.innerHTML = freshStructure.innerHTML;
+          // never swap in an empty / error shell: the structure list must stay available for the drawer
+        if (freshStructure && freshStructure.querySelector('[data-rs-structure-scroll]')) structurePanel.innerHTML = freshStructure.innerHTML;
         }
         if (globalDesignPanel) {
           var freshGlobal = freshDoc.getElementById('r4GlobalDesign');

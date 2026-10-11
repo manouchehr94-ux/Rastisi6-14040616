@@ -1,0 +1,71 @@
+{
+ "1 single-click band": {
+  "ws": false,
+  "sec": null,
+  "title": null,
+  "drawer": "closed",
+  "sel": "8548"
+ },
+ "2 double-click band": {
+  "ws": true,
+  "sec": "8548",
+  "title": "بخش محصولات",
+  "drawer": "closed",
+  "sel": "8548"
+ },
+ "3 closed": {
+  "ws": false,
+  "sec": null,
+  "title": null,
+  "drawer": "closed",
+  "sel": "8548"
+ },
+ "hero surface point": {
+  "x": 60,
+  "y": 24
+ },
+ "4 double-click hero": {
+  "ws": true,
+  "sec": "8542",
+  "title": "اسلایدر اصلی",
+  "drawer": "closed",
+  "sel": "8542"
+ },
+ "category surface point": {
+  "x": 204,
+  "y": 24
+ },
+ "5 double-click category": {
+  "ws": true,
+  "sec": "8543",
+  "title": "گرید دسته‌بندی",
+  "drawer": "closed",
+  "sel": "8543"
+ },
+ "7 dblclick carousel arrow": {
+  "ws": false,
+  "sec": null,
+  "title": null,
+  "drawer": "closed",
+  "sel": "8541"
+ },
+ "7 dblclick product link": {
+  "ws": false,
+  "sec": null,
+  "title": null,
+  "drawer": "closed",
+  "sel": "8541"
+ },
+ "7 still in preview": true,
+ "8 drawer toggles checked": 40,
+ "8 blank/invalid states": 0,
+ "errors": [],
+ "6 long-press band (touch)": {
+  "ws": true,
+  "sec": "8548",
+  "title": "بخش محصولات",
+  "drawer": "closed",
+  "sel": "8548"
+ },
+ "errors touch": []
+}

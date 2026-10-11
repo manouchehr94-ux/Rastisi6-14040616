@@ -327,7 +327,7 @@ class EngineGeometryParityBrowserTests(StaticLiveServerTestCase):
 
             sel = f'[data-section-id="{band.pk}"]'
             preview().locator(sel).first.scroll_into_view_if_needed()
-            preview().locator(sel).first.click(position={"x": 20, "y": 20})
+            preview().locator(sel).first.dblclick(position={"x": 20, "y": 20})   # double-click opens settings (a single click only selects)
             page.wait_for_selector('select[data-r4-field-key="display_mode"]')
             # the background control lives in the workspace's «طراحی» (Design) tab
             self.assertFalse(page.locator(".r4-background-picker").first.is_visible())
@@ -381,7 +381,7 @@ class EngineGeometryParityBrowserTests(StaticLiveServerTestCase):
         selector = f'[data-section-id="{band.pk}"]'
         frame.locator(selector).first.scroll_into_view_if_needed()
         if open_settings:
-            frame.locator(selector).first.click(position={"x": 20, "y": 20})
+            frame.locator(selector).first.dblclick(position={"x": 20, "y": 20})   # double-click opens settings (a single click only selects)
             page.wait_for_selector('input[data-r4-field-key="title"]')
         return context, page, band
 
@@ -408,7 +408,7 @@ class EngineGeometryParityBrowserTests(StaticLiveServerTestCase):
                     page.wait_for_load_state("networkidle")
                     before = self._preview_geometry(page, band.pk)
                     frame = next(f for f in page.frames if f != page.main_frame and "preview" in f.url)
-                    frame.locator(f'[data-section-id="{band.pk}"]').first.click(position={"x": 20, "y": 20})
+                    frame.locator(f'[data-section-id="{band.pk}"]').first.dblclick(position={"x": 20, "y": 20})   # double-click opens settings (a single click only selects)
                     page.wait_for_selector('[data-rs-workspace]:not([hidden]) input[data-r4-field-key="title"]')
                     page.wait_for_timeout(600)
                     during = self._preview_geometry(page, band.pk)
