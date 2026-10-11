@@ -4526,13 +4526,17 @@ a.sfb-v3-component-item,
 .product-campaign-heading h2{font-size:18px;font-weight:650;color:var(--ink)}
 .product-campaign-heading>span{background:var(--violet);height:2px;opacity:1}
 .rsec[data-palette-role="tone-3"] .product-campaign-heading>span{background:var(--accent)}
-.product-campaign-band{display:grid;grid-template-columns:minmax(168px,2.05fr) minmax(0,9.95fr);gap:12px;align-items:stretch;min-width:0}
-.product-campaign-copy{min-height:100%;padding:18px 12px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;border:1px solid rgba(255,255,255,.32);border-radius:10px}
-.product-campaign-gift{width:64px;height:64px;display:grid;place-items:center;margin-bottom:8px;color:#fff;filter:drop-shadow(0 5px 10px rgba(45,0,36,.16))}
+.product-campaign-band{display:grid;grid-template-columns:minmax(168px,var(--cp-w,2.05fr)) minmax(0,9.95fr);gap:12px;align-items:stretch;min-width:0}
+.product-campaign-band--no-panel{grid-template-columns:minmax(0,1fr)}
+.product-campaign-copy{min-height:100%;padding:var(--cp-pad,18px) var(--cp-pad,12px);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--cp-fg,#fff);border:var(--cp-bw,1px) solid var(--cp-bc,rgba(255,255,255,.32));border-radius:var(--cp-radius,10px)}
+.product-campaign-copy[data-align="start"]{align-items:flex-start;text-align:start}
+.product-campaign-copy[data-align="end"]{align-items:flex-end;text-align:end}
+.product-campaign-gift{width:var(--cp-visual,64px);height:var(--cp-visual,64px);display:grid;place-items:center;margin-bottom:8px;color:var(--cp-accent,inherit);filter:drop-shadow(0 5px 10px rgba(45,0,36,.16))}
+.product-campaign-media img{width:100%;height:100%;object-fit:contain;border-radius:inherit}
 .product-campaign-gift svg{width:100%;height:100%}
 .product-campaign-copy h2{font-size:16px;line-height:1.6;margin:0;font-weight:900;color:inherit}
 .product-campaign-copy p{font-size:10.5px;line-height:1.7;opacity:.88;margin:4px 0 0}
-.product-campaign-link{margin-top:13px;border:1px solid currentColor;border-radius:4px;padding:7px 12px;font-size:10px;font-weight:800;color:inherit;text-decoration:none}
+.product-campaign-link{margin-top:13px;border:1px solid var(--cp-accent,currentColor);border-radius:4px;padding:7px 12px;font-size:10px;font-weight:800;color:var(--cp-accent,inherit);text-decoration:none}
 .product-campaign-products{align-content:stretch;min-width:0;gap:8px}
 .product-campaign-products>.pcard{height:100%}
 @media(max-width:680px){
@@ -4544,12 +4548,12 @@ a.sfb-v3-component-item,
 @media(max-width:1000px){
   .product-campaign-band{grid-template-columns:minmax(145px,1.8fr) minmax(0,8.2fr)}
   .product-campaign-copy{padding:14px 9px}
-  .product-campaign-gift{width:52px;height:52px}
+  .product-campaign-gift{width:var(--cp-visual,52px);height:var(--cp-visual,52px)}
 }
 @media(max-width:680px){
   .product-campaign-band{grid-template-columns:1fr;gap:9px}
   .product-campaign-copy{min-height:92px;display:grid;grid-template-columns:auto 1fr auto;grid-template-rows:auto auto;column-gap:10px;text-align:start;padding:10px 11px}
-  .product-campaign-gift{grid-row:1/3;width:42px;height:42px;margin:0}
+  .product-campaign-gift{grid-row:1/3;width:var(--cp-visual,42px);height:var(--cp-visual,42px);margin:0}
   .product-campaign-copy h2{font-size:13px;align-self:end}
   .product-campaign-copy p{font-size:9px;margin:0;align-self:start}
   .product-campaign-link{grid-row:1/3;grid-column:3;margin:0;align-self:center;white-space:nowrap;padding:6px 8px;font-size:9px}
@@ -5477,22 +5481,24 @@ html[data-sfb-density="compact"] .feat small{font-size:9.5px}
 /* -- campaign band: heading sits on the page, only the band is coloured -- */
 .rsec[data-bg-mode]:has(.product-section--campaign-band){background:none!important;padding:0;border-radius:0;color:inherit}
 .rsec:has(.product-section--campaign-band) .product-campaign-heading{margin:34px 0 18px}
-.rsec:has(.product-section--campaign-band) .product-campaign-heading h2{color:var(--brand-text)!important;font-size:17px}
+.rsec:has(.product-section--campaign-band) .product-campaign-heading h2{color:var(--d-heading,var(--brand-text))!important;font-size:17px}
 .rsec[data-bg-mode]:has(.product-section--campaign-band) .product-campaign-band{
-  padding:14px;border-radius:22px;background-color:var(--sfb-section-palette-bg,var(--brand-primary));
-  color:var(--sfb-section-fg,#fff)
+  padding:14px;border-radius:22px;color:var(--sfb-section-fg,#fff);
+  background-color:var(--sfb-section-bg-color,var(--sfb-section-palette-bg,var(--brand-primary)));
+  background-image:linear-gradient(var(--sfb-overlay,transparent),var(--sfb-overlay,transparent)),var(--sfb-bg-image,var(--sfb-pattern-image,none));
+  background-size:auto,var(--sfb-bg-size,var(--sfb-pattern-size,auto));background-position:center,var(--sfb-bg-position,center);
+  background-repeat:no-repeat,var(--sfb-bg-repeat,repeat)
 }
-.rsec[data-pattern="commerce-doodle"]:has(.product-section--campaign-band) .product-campaign-band{
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='132' height='78' viewBox='0 0 132 78'%3E%3Cg fill='none' stroke='%23fff' stroke-opacity='.12' stroke-width='1.15' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22h15l-1 14H13zM16 22v-3a4 4 0 018 0v3'/%3E%3Cpath d='M52 13l2.2 4.7 5.1.7-3.7 3.6.9 5-4.5-2.4-4.5 2.4.9-5-3.7-3.6 5.1-.7z'/%3E%3Ccircle cx='92' cy='23' r='8'/%3E%3C/g%3E%3C/svg%3E");
-  background-size:132px 78px
-}
-/* the copy column sits on a SOLID panel of the band tone (a contained surface), so the doodle pattern behind it can never
-   make its text unmeasurable; ink = the band tone's derived foreground */
+/* with bleed the edge-to-edge layer is the fill; without it the band box itself carries it, overlay included */
+.rsec[data-bg-bleed]:has(.product-section--campaign-band) .product-campaign-band{background:none}
+.rsec:has(.product-section--campaign-band):not([data-bg-bleed])>.rsec-overlay{display:none}
+/* the copy panel is a contained surface of its own: the merchant's panel colours, else the band's tone, so a pattern behind
+   it can never make its text unmeasurable; ink = the panel colour's derived foreground */
 .rsec[data-bg-mode]:has(.product-section--campaign-band) .product-campaign-copy{
-  border:0;border-radius:12px;color:var(--sfb-section-fg,#fff);
-  background-color:var(--sfb-section-palette-bg,var(--brand-primary))
+  border:var(--cp-bw,0) solid var(--cp-bc,currentColor);border-radius:var(--cp-radius,12px);color:var(--cp-fg,var(--d-text,var(--sfb-section-fg,#fff)));
+  background-color:var(--cp-bg,var(--sfb-section-bg-color,var(--sfb-section-palette-bg,var(--brand-primary))))
 }
-.rsec[data-bg-mode]:has(.product-section--campaign-band) .product-campaign-gift{color:inherit}
+.rsec[data-bg-mode]:has(.product-section--campaign-band) .product-campaign-gift{color:var(--cp-accent,inherit)}
 /* text on a patterned band sits on a SOLID panel of the band tone (a contained surface): the pattern image can never
    make it unmeasurable. Panel ink = the band's derived foreground (--sfb-section-fg, tokens.css). */
 .rsec[data-pattern] .catalog-wall-title h2{display:inline-block;padding:4px 18px;border-radius:10px;background-color:var(--sfb-section-palette-bg);color:var(--sfb-section-fg)}
@@ -5800,18 +5806,18 @@ html[data-sfb-density] .promo-grid.promo-grid--tile-4{gap:20px}
 
 /* -- a product section on ANY band background (palette role / custom colour / picture, with or without a pattern) lays out as the
       same band: the merchant can swap the fill without the section changing geometry. -- */
-.rsec:is([data-bg-mode="palette"],[data-bg-mode="color"],[data-bg-mode="image"]):has(>.section.product-section){padding:12px 10px;border-radius:0}
+.rsec:is([data-bg-mode="palette"],[data-bg-mode="color"],[data-bg-mode="image"]):has(>.section.product-section){padding:12px 10px;border-radius:var(--d-radius,0)}
 .rsec:is([data-bg-mode="palette"],[data-bg-mode="color"],[data-bg-mode="image"])>.section.product-section{margin:0}
 .rsec:is([data-bg-mode="palette"],[data-bg-mode="color"],[data-bg-mode="image"]):has(>.section.product-section .pcard.style-center_stepper){padding:24px 10px 22px}
 .rsec:is([data-bg-mode="palette"],[data-bg-mode="color"],[data-bg-mode="image"])>.section.product-section .pcarousel.rsec-cols{--pcarousel-gap:22px}
 
 /* -- product_section heading styles -- */
-.rsec:is([data-pattern],[data-bg-mode="palette"],[data-bg-mode="color"])>.section.product-section--hs-plain>.sec-head{display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:16px;margin:0 0 24px}
+.rsec:is([data-pattern],[data-bg-mode="palette"],[data-bg-mode="color"])>.section.product-section--hs-plain>.sec-head{display:flex;flex-direction:row;align-items:center;justify-content:var(--d-align,flex-start);gap:16px;margin:0 0 24px}
 .rsec:is([data-pattern],[data-bg-mode="palette"],[data-bg-mode="color"])>.section.product-section--hs-plain>.sec-head h2{width:auto;max-width:none;margin:0;padding:2px 6px;border-radius:0;box-shadow:none;
-  background:var(--sfb-section-palette-bg,transparent)!important;color:var(--sfb-section-fg,#fff)!important;font-size:18px;line-height:1.5;font-weight:800}
+  background:var(--sfb-section-palette-bg,transparent)!important;color:var(--d-heading,var(--sfb-section-fg,#fff))!important;font-size:18px;line-height:1.5;font-weight:800}
 .rsec:is([data-pattern],[data-bg-mode="palette"],[data-bg-mode="color"])>.section.product-section--hs-plain>.sec-head h2 .bar{display:none}
 .rsec:is([data-pattern],[data-bg-mode="palette"],[data-bg-mode="color"])>.section.product-section--hs-plain>.sec-head .btn{height:30px;min-height:30px;padding-inline:16px;border:1px solid currentColor;border-radius:999px;
-  background:var(--sfb-section-palette-bg,transparent)!important;color:var(--sfb-section-fg,#fff)!important;font-size:11.5px;font-weight:700}
+  background:var(--sfb-section-palette-bg,transparent)!important;color:var(--d-accent,var(--sfb-section-fg,#fff))!important;font-size:11.5px;font-weight:700}
 .product-section--hs-underlined>.sec-head{display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:14px;width:max-content;max-width:100%;
   margin:0 0 16px;padding:0 0 7px;border-bottom:2px solid var(--d-accent,var(--pink,#e5334b))}
 .product-section--hs-underlined>.sec-head h2{margin:0;font-size:15px;font-weight:800;color:var(--ink)}
@@ -5846,7 +5852,8 @@ html[data-sfb-density] .promo-grid.promo-grid--tile-4{gap:20px}
    flag is present, so a section without a design block renders exactly as before. Colours are
    semantic tokens resolved by the engine (palette role | custom hex), never literals.
    ====================================================================== */
-.rsec[data-d~="text"]{color:var(--d-text)}
+.rsec.rsec[data-d~="text"]{color:var(--d-text)}
+.rsec[data-d~="text"] :is(.product-section-subtitle,.catalog-grid-head p,.pcard .name){color:var(--d-text)}
 .rsec[data-d~="surface"]{background:var(--d-surface);color:var(--d-surface-fg)}
 .rsec[data-d~="surface"]>.rsec-bleed{background-color:var(--d-surface)}
 .rsec[data-d~="surface"] :is(.section.surface-panel,.blog-panel){background:var(--d-surface);color:var(--d-surface-fg)}
@@ -5860,6 +5867,20 @@ html[data-sfb-density] .promo-grid.promo-grid--tile-4{gap:20px}
 .rsec[data-d~="shadow"] :is(.section.surface-panel,.blog-panel){box-shadow:var(--d-shadow)}
 .rsec[data-d~="minh"]{min-height:var(--d-minh)}
 .rsec[data-d~="heading"] :is(.sec-head h2,.section>h2,.blog-panel-head h2,.catalog-grid-head h2,.beauty-section-title h2,.pastel-section-title h2,.product-campaign-copy h2,.amazing-offers-section h2){color:var(--d-heading)}
+.rsec[data-d~="heading"][data-bg-mode]>.section>.sec-head h2{color:var(--d-heading)}
+/* theme_palette.css forces the band ink on a palette heading with !important; the merchant's explicit heading colour outranks it */
+.rsec[data-d~="heading"][data-bg-mode]:not([data-pattern])>.section>.sec-head h2{color:var(--d-heading)!important}
+/* an explicit surface colour is the section fill even over a custom/palette colour band */
+.rsec[data-d~="surface"][data-bg-mode="color"]:not(:has(.product-campaign-band)){background-color:var(--d-surface)!important}
+.rsec[data-bg-mode="image"][data-d~="heading"]>.section>.sec-head h2{color:var(--d-heading)}
+.rsec[data-d~="accent"] :is(.sec-head h2 .bar,.catalog-grid-bar,.product-campaign-heading>span){background:var(--d-accent)}
+/* campaign band: the box that is filled is the band, so surface / outline / radius / shadow style it */
+.rsec.rsec[data-d~="surface"]:has(.product-campaign-band) .product-campaign-band{background:var(--d-surface);color:var(--d-surface-fg)}
+.rsec[data-d~="border"]:has(.product-campaign-band){border:0}
+.rsec.rsec[data-d~="border"] .product-campaign-band{border:var(--d-border-w) solid var(--d-border-c)}
+.rsec.rsec[data-d~="radius"] .product-campaign-band{border-radius:var(--d-radius)}
+.rsec[data-d~="shadow"]:has(.product-campaign-band){box-shadow:none}
+.rsec.rsec[data-d~="shadow"] .product-campaign-band{box-shadow:var(--d-shadow)}
 .rsec[data-d~="align"]{text-align:var(--d-text-align)}
 .rsec[data-d~="align"] :is(.sec-head,.blog-panel-head,.catalog-grid-head,.pastel-section-title){justify-content:var(--d-align);justify-items:var(--d-align)}
 .rsec[data-d~="gap"] :is(.brand-carousel,.blog-panel-row,.blog-grid,.category-pastel-grid){gap:var(--d-gap)}
@@ -5875,10 +5896,13 @@ html[data-sfb-density] .promo-grid.promo-grid--tile-4{gap:20px}
   .rsec[data-d~="cols"] .blog-panel-row{grid-template-columns:repeat(var(--cols-mobile),minmax(0,1fr))}
   .rsec[data-d~="cols"] .category-grey-item{flex-basis:calc((100% - (var(--cols-mobile) - 1) * var(--d-gap,14px)) / var(--cols-mobile))}
 }
-.rsec[data-d~="ratio"] .pcard .img,.rsec[data-d~="ratio"] .blog-card .th{aspect-ratio:var(--d-ratio)}
+.rsec[data-d~="ratio"] .pcard .img,.rsec[data-d~="ratio"] .blog-card .th{aspect-ratio:var(--d-ratio)!important}
+.rsec[data-d~="fit"]{--sfb-image-fit:var(--d-fit)}
 .rsec[data-d~="fit"] :is(.pcard .img img,.blog-card .th img,.category-grey-media img){object-fit:var(--d-fit)}
+/* a card style may force its own fit (!important); the merchant's explicit section choice outranks it */
+.rsec[data-d~="fit"] .pcard .img :is(img.cover-photo,img.cover-photo-2){object-fit:var(--d-fit)!important}
 .rsec[data-d~="pos"] :is(.pcard .img img,.blog-card .th img,.category-grey-media img){object-position:var(--d-pos)}
-.rsec[data-d~="price"] .pcard :is(.price .now,.price .now *){color:var(--d-price)}
+.rsec[data-d~="price"] .pcard :is(.price .now,.price .now *){color:var(--d-price)!important}
 .rsec[data-d~="btnfill"] :is(.pcard .stp-select,.pcard .stp-cart,.pcard .btn-primary,.blog-card .read,.special-wrap .btn){background:var(--d-btn-bg);color:var(--d-btn-fg,var(--brand-primary-fg,#fff))}
 .rsec[data-d~="btntext"] :is(.pcard .stp-select,.pcard .stp-cart,.pcard .btn-primary,.blog-card .read,.special-wrap .btn){color:var(--d-btn-fg)}
 .rsec[data-d~="btnborder"] :is(.pcard .stp-select,.pcard .stp-cart,.pcard .btn-primary,.blog-card .read,.special-wrap .btn){border:1px solid var(--d-btn-bd)}

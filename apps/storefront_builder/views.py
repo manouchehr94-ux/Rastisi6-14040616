@@ -388,6 +388,79 @@ def storefront_preview(request):
     })
 
 
+def render_preview_fragment(request, store, draft, *, section_id=None, container_id=None):
+    """Canonical server-rendered HTML of ONE section (or ONE container) of the Draft Preview.
+
+    Partial refresh architecture: the Studio never re-implements storefront rendering in JavaScript. After an accepted
+    ``section.update_settings`` / ``container.update_settings`` the mutation response carries this fragment — produced by
+    the SAME ``build_page_render_items`` / wrapper / container templates as the full Preview, restricted to the affected
+    sections — and the Studio swaps only that region inside the Preview iframe.
+
+    Returns ``{"kind", "id", "html"}``, or ``None`` when a fragment cannot be produced faithfully (legacy row layout, a
+    hidden/inactive block, an unknown id): the caller then falls back to the atomic full-frame refresh."""
+    from django.template.loader import render_to_string
+
+    if section_id is not None:
+        section = StorefrontSection.objects.select_related("page").filter(
+            pk=section_id, page__version=draft, is_active=True).first()
+        if section is None:
+            return None
+        page = section.page
+    elif container_id is not None:
+        container = StorefrontContainer.objects.select_related("page").filter(pk=container_id, page__version=draft).first()
+        if container is None:
+            return None
+        page = container.page
+    else:
+        return None
+    if not page.containers.exists():
+        return None  # legacy direct-row layout: only the full refresh is faithful
+
+    request.storefront_appearance_version = draft
+    request.storefront_appearance_page = page
+    store_appearance = resolved_store_appearance_for_request(request, draft)
+    structure = build_container_render_items(page, [], include_empty=True)
+    wanted = None
+    for composition in structure:
+        for cell_entry in composition["cells"]:
+            block_ids = {block.pk for block in cell_entry["blocks"]}
+            if section_id is not None and section_id in block_ids:
+                wanted = (composition, cell_entry)
+            if container_id is not None and composition["container"].pk == container_id:
+                wanted = (composition, cell_entry)
+    if wanted is None:
+        return None
+    if container_id is not None:
+        only_ids = {block.pk for entry in wanted[0]["cells"] for block in entry["blocks"]}
+    else:
+        only_ids = {section_id}
+    items = build_page_render_items(
+        page, store, page_context=_preview_page_context(request, store, page.page_type),
+        store_appearance=store_appearance, only_section_ids=only_ids,
+    )
+    compositions = build_container_render_items(page, items, include_empty=True)
+    context = {"store": store, "version": draft, "page": page, "page_type": page.page_type,
+               "store_appearance": store_appearance, "is_preview": True, "is_builder_preview": True}
+    if container_id is not None:
+        composition = next((c for c in compositions if c["container"].pk == container_id), None)
+        if composition is None:
+            return None
+        html = render_to_string("storefront_builder/partials/render_containers.html",
+                                {**context, "render_containers": [composition]}, request=request)
+        return {"kind": "container", "id": container_id, "html": html.strip()}
+    composition = next(c for c in compositions if c["container"].pk == wanted[0]["container"].pk)
+    cell_entry = next(ce for ce in composition["cells"] if ce["cell"].pk == wanted[1]["cell"].pk)
+    item = next((i for i in cell_entry["items"] if i["section"].pk == section_id), None)
+    if item is None:
+        return None  # e.g. the block is hidden: the placeholder differs, use the full refresh
+    html = render_to_string(
+        "storefront_builder/partials/preview_section_fragment.html",
+        {**context, "item": item, "placement_cell": cell_entry["cell"], "placement_container": composition["container"]},
+        request=request,
+    )
+    return {"kind": "section", "id": section_id, "html": html.strip()}
+
+
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
 def storefront_section_list_partial(request, page_type=None):

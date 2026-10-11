@@ -1,21 +1,31 @@
 <section class="section product-section{% if settings.carousel_autoplay and settings.display_mode == 'carousel' %} product-section--spotlight{% endif %}{% if settings.display_mode == 'campaign_band' %} product-section--campaign-band{% elif settings.display_mode == 'catalog_grid' %} product-section--catalog-grid{% endif %}{% if settings.heading_style == 'plain_outline' %} product-section--hs-plain{% elif settings.heading_style == 'underlined' %} product-section--hs-underlined{% endif %}">
   {% if settings.display_mode == "campaign_band" %}
+  {% comment %}
+  Campaign band: heading (the section's own title — never invented copy), then the band holding an OPTIONAL promotional
+  panel and the product grid. The panel, its copy, its visual (registered icon key or a Store-scoped media asset) and its
+  colours are all engine configuration (``campaign`` context, see render_service._campaign_panel_view).
+  {% endcomment %}
+  {% if settings.title %}
   <div class="beauty-section-title product-campaign-heading" aria-hidden="true">
-    <span></span><h2>{{ settings.title|default:"پیشنهادهای فروشگاه" }}</h2><span></span>
+    <span></span><h2>{{ settings.title }}</h2><span></span>
   </div>
-  <div class="product-campaign-band">
-    <aside class="product-campaign-copy">
-      <span class="product-campaign-gift" aria-hidden="true">
-        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M10 27h44v29H10z"/><path d="M7 18h50v11H7z"/><path d="M32 18v38"/>
-          <path d="M32 18c-6 0-14-2-14-8 0-4 3-6 7-6 6 0 7 8 7 14z"/>
-          <path d="M32 18c6 0 14-2 14-8 0-4-3-6-7-6-6 0-7 8-7 14z"/>
-        </svg>
-      </span>
-      <h2>{{ settings.title|default:"پیشنهادهای فروشگاه" }}</h2>
-      {% if settings.subtitle %}<p>{{ settings.subtitle }}</p>{% endif %}
-      {% if view_all_url and settings.show_view_all %}<a href="{{ view_all_url }}" class="product-campaign-link">مشاهده همه محصولات</a>{% endif %}
+  {% endif %}
+  <div class="product-campaign-band{% if not campaign.enabled %} product-campaign-band--no-panel{% endif %}"{% if campaign.band_style %} style="{{ campaign.band_style }}"{% endif %}>
+    {% if campaign.enabled %}
+    <aside class="product-campaign-copy" data-align="{{ campaign.align }}"{% if campaign.style %} style="{{ campaign.style }}"{% endif %}>
+      {% if campaign.visual == "icon" %}
+      <span class="product-campaign-gift" aria-hidden="true">{{ campaign.icon_svg }}</span>
+      {% elif campaign.visual == "media" %}
+      <span class="product-campaign-gift product-campaign-media" aria-hidden="true"><img src="{{ campaign.media_url }}" alt="" loading="lazy"></span>
+      {% endif %}
+      {% if campaign.title %}<h2>{{ campaign.title }}</h2>{% endif %}
+      {% if campaign.subtitle %}<p>{{ campaign.subtitle }}</p>{% endif %}
+      {% if settings.show_view_all %}
+      {% url 'catalog:product-list' as campaign_all_url %}
+      <a href="{{ view_all_url|default:campaign_all_url }}" class="product-campaign-link">مشاهده همه محصولات</a>
+      {% endif %}
     </aside>
+    {% endif %}
     <div class="product-campaign-products grid rsec-cols"{% if settings.gap is not None %} style="gap:{{ settings.gap }}px"{% endif %}>
       {% include "catalog/partials/product_grid.html" with products=products card_settings=settings.card %}
     </div>
@@ -23,7 +33,7 @@
   {% elif settings.display_mode == "catalog_grid" %}
   <div class="catalog-grid-head">
     <span class="catalog-grid-bar" aria-hidden="true"></span>
-    <h2>{{ settings.title|default:"محصولات" }}</h2>
+    {% if settings.title %}<h2>{{ settings.title }}</h2>{% endif %}
     {% if settings.subtitle %}<p>{{ settings.subtitle }}</p>{% endif %}
   </div>
   <div class="grid rsec-cols catalog-grid-products"{% if settings.gap is not None %} style="gap:{{ settings.gap }}px"{% endif %}>

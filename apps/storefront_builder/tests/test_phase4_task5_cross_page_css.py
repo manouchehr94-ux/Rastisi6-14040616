@@ -246,8 +246,9 @@ class ProductSectionSpotlightAndCampaignBandNonHomeCssTests(TestCase):
             css,
         )
         self.assertIn(
+            # the panel width is now a merchant setting (--cp-w); unset it is the historical 2.05fr column
             ".product-campaign-band{display:grid;"
-            "grid-template-columns:minmax(168px,2.05fr) minmax(0,9.95fr);"
+            "grid-template-columns:minmax(168px,var(--cp-w,2.05fr)) minmax(0,9.95fr);"
             "gap:12px;align-items:stretch;min-width:0}",
             css,
         )
@@ -355,7 +356,7 @@ class AmazingOffersNonHomeCssTests(TestCase):
             "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
             css,
         )
-        self.assertIn('.special-list-price{font-size:9.8px;color:#6a6f77;white-space:nowrap}', css)
+        self.assertIn('.special-list-price{font-size:9.8px;color:var(--muted,#6a6f77);white-space:nowrap}', css)
         self.assertIn(
             ".special-main{grid-area:1/1;min-width:0;display:grid;"
             "grid-template-columns:minmax(0,1fr) minmax(230px,37%);align-items:center;"
@@ -1426,7 +1427,7 @@ class CategoryGridRemainingModesNonHomeCssTests(TestCase):
         self.assertIn(".category-chocolate-section{margin:16px 0 24px}", css)
         self.assertIn(".chocolate-section-title{text-align:center;margin-bottom:14px}", css)
         self.assertIn(
-            ".chocolate-section-title h2{font-size:15px;font-weight:800;color:#3c2b1d;margin:0}",
+            ".chocolate-section-title h2{font-size:15px;font-weight:800;color:var(--sfb-section-fg,var(--ink,#3c2b1d));margin:0}",
             css,
         )
         self.assertIn(
@@ -1647,7 +1648,7 @@ class GroupDNonHomeCssTests(TestCase):
             css,
         )
         self.assertIn(
-            ".blog-card .read{color:#444;font-size:9px;font-weight:700;display:flex;"
+            ".blog-card .read{color:var(--ink);font-size:9px;font-weight:700;display:flex;"
             "align-items:center;gap:4px}",
             css,
         )

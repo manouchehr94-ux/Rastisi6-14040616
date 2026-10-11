@@ -200,6 +200,13 @@ def _apply_section_update_settings(*, store, draft: StorefrontLayoutVersion, mut
     # it is never persisted even as a dangling id.
     if "background" in patch:
         _validate_background_asset_ownership(store=store, background=cleaned.get("background"))
+    # The same write-time tenant isolation for every standalone ``media`` field of the schema (campaign panel image,
+    # decorative strip picture, ...): a foreign-Store asset id is rejected before anything is saved.
+    for field in definition.settings_schema.fields:
+        if field.field_type == "media" and field.key in patch and cleaned.get(field.key):
+            _validate_background_asset_ownership(
+                store=store, background={"mode": "image", "media_asset_id": cleaned.get(field.key)},
+            )
 
     # Phase 3 (V02) — Brand "View-all" capability truth. A merchant may only
     # turn the "مشاهده همه" anchor ON when the RESULTING rendered state can

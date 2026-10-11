@@ -596,3 +596,4 @@ button.r4-picker-row--result:hover {
 /* Context-sensitive Inspector: a control that cannot affect the current rendered state is not offered. */
 .r4-field[hidden], .r4-bg-group[hidden] { display: none !important; }
 .r4-bg-group { display: contents; }
+.r4-design-prop[hidden], .r4-design-group[hidden] { display: none !important; }

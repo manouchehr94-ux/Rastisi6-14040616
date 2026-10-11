@@ -810,7 +810,7 @@ def _background_view(background, media_url) -> dict:
     ``image_extra`` is appended to the wrapper's inline ``background-image`` (the historical ``cover``/``center``
     output when nothing was customised); ``layer_style`` is the same image for the edge-to-edge ``.rsec-bleed`` layer;
     ``overlay_style`` paints the optional colour overlay (a semantic colour: palette role or custom hex)."""
-    view = {"image_extra": ";background-size:cover;background-position:center", "layer_style": "", "overlay_style": ""}
+    view = {"image_extra": ";background-size:cover;background-position:center", "layer_style": "", "overlay_style": "", "vars": ""}
     background = background or {}
     if background.get("mode") != "image" or not media_url:
         return view
@@ -823,10 +823,67 @@ def _background_view(background, media_url) -> dict:
         f"background-color:transparent;background-image:url('{media_url}');"
         f"background-size:{fit};background-position:{x} {y};background-repeat:no-repeat"
     )
+    variables = [f"--sfb-bg-image:url('{media_url}')", f"--sfb-bg-size:{fit}", f"--sfb-bg-position:{x} {y}", "--sfb-bg-repeat:no-repeat"]
     opacity = background.get("overlay_opacity") or 0
     if opacity:
         colour = semantic_colors.semantic_color_css(background.get("overlay_color")) or "#000000"
         view["overlay_style"] = f"background-color:{colour};opacity:{opacity / 100:g}"
+        variables.append(f"--sfb-overlay:color-mix(in srgb,{colour} {opacity}%,transparent)")
+    view["vars"] = ";" + ";".join(variables)
+    return view
+
+
+def _campaign_panel_view(store, settings: dict) -> dict:
+    """Everything the campaign band's promotional panel needs, resolved server-side (never hard-coded in the template).
+
+    The panel's copy is the merchant's (``campaign_panel_title``/``_subtitle``; a legacy section follows its own
+    title/subtitle) — the engine never invents marketing copy. The visual is a registered icon KEY or a Store-scoped
+    MediaAsset (ownership re-checked at resolve time); colours are semantic (palette role or custom hex) with an
+    accessible automatic foreground."""
+    from apps.content.services import resolve_background_media_url
+
+    from .. import icon_registry
+    from ..section_registry import effective_campaign_copy
+
+    title, subtitle = effective_campaign_copy(settings)
+    mode = settings.get("campaign_visual_mode", "icon")
+    view = {
+        "enabled": settings.get("campaign_panel_enabled", True) is not False,
+        "title": title, "subtitle": subtitle, "visual": mode, "icon_svg": "", "media_url": "",
+    }
+    if mode == "icon":
+        view["icon_svg"] = icon_registry.icon_svg(settings.get("campaign_icon_key", icon_registry.DEFAULT_ICON_KEY))
+        if not view["icon_svg"]:
+            view["visual"] = "none"
+    elif mode == "media":
+        view["media_url"] = resolve_background_media_url(
+            store, {"mode": "image", "media_asset_id": settings.get("campaign_media_asset_id")},
+        ) or ""
+        if not view["media_url"]:
+            view["visual"] = "none"  # a missing / foreign asset renders no visual rather than a broken image
+    css: list[str] = []
+    band_css = f"--cp-w:{int(settings['campaign_panel_width'])}%" if settings.get("campaign_panel_width") else ""
+    if settings.get("campaign_visual_size"):
+        css.append(f"--cp-visual:{int(settings['campaign_visual_size'])}px")
+    for key, var in (("campaign_panel_radius", "--cp-radius"), ("campaign_panel_border_width", "--cp-bw"),
+                     ("campaign_panel_padding", "--cp-pad")):
+        if settings.get(key) is not None:
+            css.append(f"{var}:{int(settings[key])}px")
+    bg = settings.get("campaign_panel_bg", "")
+    fg = settings.get("campaign_panel_fg", "")
+    if bg:
+        css.append(f"--cp-bg:{semantic_colors.semantic_color_css(bg)}")
+        if not fg:  # automatic, accessible ink for the chosen fill
+            css.append(f"--cp-fg:{semantic_colors.semantic_foreground_css(bg)}")
+    if fg:
+        css.append(f"--cp-fg:{semantic_colors.semantic_color_css(fg)}")
+    if settings.get("campaign_panel_accent"):
+        css.append(f"--cp-accent:{semantic_colors.semantic_color_css(settings['campaign_panel_accent'])}")
+    if settings.get("campaign_panel_border_color"):
+        css.append(f"--cp-bc:{semantic_colors.semantic_color_css(settings['campaign_panel_border_color'])}")
+    view["style"] = ";".join(css)
+    view["band_style"] = band_css
+    view["align"] = settings.get("campaign_panel_align", "center")
     return view
 
 
@@ -836,6 +893,7 @@ def build_page_render_items(
     page_context: dict | None = None,
     *,
     store_appearance: ResolvedStoreAppearance | None = None,
+    only_section_ids=None,
 ) -> list[dict]:
     """فهرست بخش‌های فعالِ **یک ``StorefrontPage`` مشخص**، هرکدام با
     template_name + context آماده — Phase 1B: نسخه‌یِ صفحه‌آگاهِ عمومیِ
@@ -887,6 +945,7 @@ def build_page_render_items(
         page_context,
         global_appearance=global_appearance,
         store_appearance=store_appearance,
+        only_section_ids=only_section_ids,
     )
 
 
@@ -896,6 +955,7 @@ def _build_items_from_sections(
     page_context: dict,
     global_appearance: dict | None = None,
     store_appearance: ResolvedStoreAppearance | None = None,
+    only_section_ids=None,
 ) -> list[dict]:
     """پیاده‌سازیِ مشترکِ واقعی — رویِ هر iterableای از آبجکت‌هایِ
     ``StorefrontSection``-شکل کار می‌کند، نه فقط یک QuerySetِ ذخیره‌شده در
@@ -922,6 +982,10 @@ def _build_items_from_sections(
         for s in _sections_list
     )
     for section in _sections_list:
+        # Partial refresh: build ONLY the requested sections (page-wide facts such as ``has_sibling_trust_features``
+        # above were computed from the full list, so a fragment renders exactly like the full page would).
+        if only_section_ids is not None and section.pk not in only_section_ids:
+            continue
         try:
             definition = get_definition(section.section_key)
         except UnknownSectionTypeError:
@@ -1034,6 +1098,8 @@ def _build_items_from_sections(
         context["background_view"] = _background_view(
             context["settings"].get("background"), context["background_media_url"],
         )
+        if section.section_key == "product_section" and context["settings"].get("display_mode") == "campaign_band":
+            context["campaign"] = _campaign_panel_view(store, context["settings"])
         # Sparse ``design`` block -> data-d flags + --d-* custom properties for the wrapper.
         context["design_attrs"] = design_block.render_attributes(context["settings"].get("design"))
         # Column counts: the section's own ``*_columns`` (product-section contract) win over the shared

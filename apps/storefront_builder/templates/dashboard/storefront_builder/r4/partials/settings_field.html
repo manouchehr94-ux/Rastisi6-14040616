@@ -248,7 +248,7 @@ must never silently fall back to a plain text input for an unsupported type.
       <legend>{{ group.label }}</legend>
       {% for prop in group.properties %}
       {% with current=current_field_value|dictget:prop.key|default:"" %}
-      <div class="r4-design-prop" data-r4-design-prop="{{ prop.key }}" data-r4-design-kind="{{ prop.kind }}">
+      <div class="r4-design-prop" data-r4-design-prop="{{ prop.key }}" data-r4-design-kind="{{ prop.kind }}"{% if prop.box %} data-r4-design-box{% if design_box_hidden %} hidden{% endif %}{% endif %}{% if prop.modes %} data-r4-design-modes="{{ prop.modes|join:' ' }}"{% if design_display_mode not in prop.modes %} hidden{% endif %}{% endif %}>
         <label class="r4-field-sublabel">{{ prop.label }}</label>
         {% if prop.kind == "color" %}
           {% include "dashboard/storefront_builder/r4/partials/color_control.html" with value=current aria_label=prop.label %}

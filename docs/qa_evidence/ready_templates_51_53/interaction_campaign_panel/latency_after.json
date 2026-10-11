@@ -1,0 +1,62 @@
+{
+ "title (text)": {
+  "n": 12,
+  "median": 157,
+  "p95": 171,
+  "max": 183,
+  "paths": [
+   "fragment"
+  ],
+  "failures": 0
+ },
+ "campaign panel title": {
+  "n": 12,
+  "median": 162,
+  "p95": 187,
+  "max": 219,
+  "paths": [
+   "fragment"
+  ],
+  "failures": 0
+ },
+ "icon choice": {
+  "n": 12,
+  "median": 157,
+  "p95": 170,
+  "max": 271,
+  "paths": [
+   "fragment"
+  ],
+  "failures": 0
+ },
+ "panel toggle": {
+  "n": 12,
+  "median": 171,
+  "p95": 197,
+  "max": 222,
+  "paths": [
+   "fragment"
+  ],
+  "failures": 0
+ },
+ "custom colour": {
+  "n": 12,
+  "median": 157,
+  "p95": 203,
+  "max": 256,
+  "paths": [
+   "fragment"
+  ],
+  "failures": 0
+ },
+ "display mode (structural)": {
+  "n": 8,
+  "median": 155,
+  "p95": 161,
+  "max": 308,
+  "paths": [
+   "fragment"
+  ],
+  "failures": 0
+ }
+}

@@ -364,3 +364,111 @@ class EngineGeometryParityBrowserTests(StaticLiveServerTestCase):
         band.refresh_from_db()
         self.assertEqual(band.settings["display_mode"], "carousel")
         self.assertEqual(band.settings["background"]["color"].lower(), "#d62828")
+
+    # ------------------------------------------------ interaction performance (partial refresh) + campaign panel
+    def _studio_with_band(self, **settings_over):
+        """Open the Studio on the first palette band, optionally pre-configured; returns (context, page, section id)."""
+        _draft, band = self._band_in_draft()
+        band.settings = {**band.settings, **settings_over}
+        band.save()
+        context, page = self._page(1600, "/admin-portal/storefront-builder/r4/", authed=True, height=900)
+        page.wait_for_selector("#r4PreviewFrame")
+        page.wait_for_timeout(1500)
+        frame = next(f for f in page.frames if f != page.main_frame and "preview" in f.url)
+        selector = f'[data-section-id="{band.pk}"]'
+        frame.locator(selector).first.scroll_into_view_if_needed()
+        frame.locator(selector).first.click(position={"x": 20, "y": 20})
+        page.wait_for_selector('input[data-r4-field-key="title"]')
+        return context, page, band
+
+    def test_partial_refresh_swaps_only_the_section_keeps_the_document_and_reinitialises_alpine(self):
+        context, page, band = self._studio_with_band(
+            display_mode="carousel", carousel_navigation="arrows", desktop_columns=3, item_limit=6)
+        try:
+            frame_script = "document.getElementById('r4PreviewFrame').contentWindow"
+            page.evaluate(f"{frame_script}.__marker = 'same-document'; window.__frameEl = document.getElementById('r4PreviewFrame')")
+            sel = f'[data-section-id="{band.pk}"]'
+            page.wait_for_load_state("networkidle")
+            page.fill('input[data-r4-field-key="title"]', "عنوان جزئی")
+            page.dispatch_event('input[data-r4-field-key="title"]', "change")
+            page.wait_for_function("(RastiSiR4.metrics||[]).some(m=>m.path==='fragment')", timeout=10000)
+            state = page.evaluate(f"""()=>{{const w={frame_script};return {{marker:w.__marker, same:window.__frameEl===document.getElementById('r4PreviewFrame'),
+              title:(w.document.querySelector('{sel} .sec-head h2')||{{}}).textContent||'', frames:document.querySelectorAll('.r4-preview-canvas iframe').length}}}}""")
+            self.assertEqual(state["marker"], "same-document")   # the document was NOT reloaded
+            self.assertTrue(state["same"])                       # nor was a twin frame swapped in
+            self.assertIn("عنوان جزئی", state["title"])
+            self.assertEqual(state["frames"], 1)
+            # Alpine was re-initialised on the swapped subtree: its component methods run (the builder chrome intercepts
+            # real clicks inside the Studio preview, so the component is driven through its own API)
+            page.wait_for_timeout(300)
+            moved = page.evaluate(f"""()=>{{const w={frame_script};const shell=w.document.querySelector('{sel} .pcarousel-shell');
+              if(!shell||!shell._x_dataStack) return null; const data=shell._x_dataStack[0]; const before=data.page;
+              data.go(before+1); return [before,data.page,data.pages,shell.querySelector('.pcarousel-next')!==null]}}""")
+            self.assertIsNotNone(moved, "the swapped carousel has no Alpine state: not re-initialised")
+            self.assertEqual(moved[0], 0)
+            self.assertGreaterEqual(moved[2], 2)
+            self.assertEqual(moved[1], 1)
+        finally:
+            context.close()
+
+    def test_rapid_input_is_coalesced_into_one_write_and_the_last_value_wins(self):
+        context, page, band = self._studio_with_band(display_mode="campaign_band")
+        requests = []
+        page.on("request", lambda r: requests.append(r.post_data) if r.method == "POST" and "/r4/mutate/" in r.url else None)
+        try:
+            page.wait_for_load_state("networkidle")
+            page.evaluate("""()=>{const t=document.querySelector('input[data-r4-field-key="title"]');
+              for(let i=1;i<=25;i++){t.value='عنوان '+i;t.dispatchEvent(new Event('input',{bubbles:true}))}}""")
+            page.wait_for_function("(RastiSiR4.metrics||[]).length>=1", timeout=10000)
+            page.wait_for_timeout(600)
+            title_writes = [r for r in requests if '"title"' in (r or "")]
+            self.assertLessEqual(len(title_writes), 2, title_writes)
+            self.assertIn("عنوان 25", title_writes[-1])
+            # a colour drag: dozens of input events, one write, last colour wins
+            requests.clear()
+            page.evaluate("""()=>{const c=document.querySelector('.r4-background-picker [data-r4-background-color]');
+              const modeSel=document.querySelector('.r4-background-picker [data-r4-background-mode]'); modeSel.value='color'; modeSel.dispatchEvent(new Event('change',{bubbles:true}));
+              const palette=['#101010','#202020','#303030','#404040','#505050','#606060','#707070','#808080'];
+              for(let i=0;i<40;i++){c.value=palette[i%8];c.dispatchEvent(new Event('input',{bubbles:true}))}c.value='#2f6fed';c.dispatchEvent(new Event('input',{bubbles:true}))}""")
+            page.wait_for_timeout(900)
+            colour_writes = [r for r in requests if '"background"' in (r or "")]
+            self.assertLessEqual(len(colour_writes), 3, len(colour_writes))
+            self.assertIn("#2f6fed", colour_writes[-1])
+        finally:
+            context.close()
+        band.refresh_from_db()
+        self.assertEqual(band.settings["title"], "عنوان 25")
+        self.assertEqual(band.settings["background"]["color"], "#2f6fed")
+
+    def test_measured_latency_of_inspector_edits_reaching_the_preview(self):
+        import statistics
+
+        context, page, band = self._studio_with_band(display_mode="campaign_band", campaign_panel_title="هنر")
+        try:
+            page.wait_for_load_state("networkidle")
+            samples = {"simple": [], "structural": []}
+
+            def measure(action, bucket):
+                page.evaluate("()=>{window.__m0=(RastiSiR4.metrics||[]).length;window.__t0=performance.now();window.__lat=null;"
+                              "const tick=()=>{const m=RastiSiR4.metrics||[];if(m.length>window.__m0&&m[m.length-1].path==='fragment'){window.__lat=performance.now()-window.__t0;return}"
+                              "if(performance.now()-window.__t0<8000)setTimeout(tick,1)};tick()}")
+                action()
+                page.wait_for_function("window.__lat!==null||performance.now()-window.__t0>8000", timeout=10000)
+                latency = page.evaluate("window.__lat")
+                self.assertIsNotNone(latency, "the Preview never reached the new state")
+                samples[bucket].append(latency)
+                page.wait_for_timeout(250)
+
+            for i in range(8):
+                measure(lambda i=i: (page.fill('input[data-r4-field-key="campaign_panel_title"]', f"پنل {i}"),
+                                     page.dispatch_event('input[data-r4-field-key="campaign_panel_title"]', "change")), "simple")
+            for i, mode in enumerate(["grid", "catalog_grid", "campaign_band", "carousel"] * 2):
+                measure(lambda mode=mode: page.select_option('select[data-r4-field-key="display_mode"]', mode), "structural")
+        finally:
+            context.close()
+        report = {k: (round(statistics.median(v)), round(sorted(v)[max(0, int(len(v) * .95) - 1)])) for k, v in samples.items()}
+        print("latency (median, p95) ms:", report)
+        # Local QA targets are 200/500 ms (simple) and 350/800 ms (structural); the assertion leaves headroom for a loaded
+        # CI box. The measured numbers are printed above and recorded in the report.
+        self.assertLessEqual(report["simple"][0], 450, report)
+        self.assertLessEqual(report["structural"][0], 600, report)

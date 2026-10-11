@@ -20,7 +20,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Callable
 
-from . import design_block
+from . import design_block, icon_registry
 from .services.category_selection import CATEGORY_SOURCE_MODES
 from . import resource_source as resource_source_module
 from .settings_schema import (
@@ -150,6 +150,12 @@ class SectionDefinition:
     #: همچنان تنها مرجعِ معتبرسازی می‌مانند؛ Task 3 فقط زیرساخت را اضافه
     #: می‌کند، هیچ سکشنی را اینجا schema-enabled نمی‌کند.
     settings_schema: SettingsSchema | None = None
+    #: Optional ``(raw_patch, current_settings) -> raw_patch`` applied by the R4 schema bridge BEFORE cleaning — used to
+    #: pin a legacy "follow another setting" default the first time the merchant edits the setting it follows.
+    normalize_patch: "Callable[[dict, dict], dict] | None" = None
+    #: Optional ``(current_settings) -> {key: value}`` — display values the Inspector shows for keys that are absent from
+    #: the stored settings but have a legacy effective value (so the control shows what the renderer actually uses).
+    inspector_projection: "Callable[[dict], dict] | None" = None
 
     def __post_init__(self) -> None:
         """External-review correction (U1A pre-commit pass, item 1) — same
@@ -313,6 +319,90 @@ PRODUCT_SECTION_DESKTOP_LAYOUTS = ("inherit", "grid", "carousel")
 PRODUCT_SECTION_OVERFLOW_MODES = ("scroll", "clip", "visible")
 PRODUCT_SECTION_CAROUSEL_NAVIGATION = ("none", "arrows", "dots")
 _PRODUCT_SECTION_COLUMN_LIMITS = {"desktop_columns": (1, 8), "tablet_columns": (1, 6), "mobile_columns": (1, 4)}
+
+#: Campaign panel contract (``display_mode == "campaign_band"``): the promotional side panel is ENGINE configuration, never
+#: hard-coded markup or copy. Every key is optional and written only when it differs from the default; the copy keys are
+#: written whenever the merchant (or a recipe) sets them, because "absent" means "legacy: follow the section title/subtitle".
+#:  * ``campaign_panel_enabled``  — False removes the whole panel (the product region takes the freed width).
+#:  * ``campaign_panel_title`` / ``campaign_panel_subtitle`` — the panel's OWN copy, independent of the section heading.
+#:  * ``campaign_visual_mode``    — "icon" (default, a key of ``icon_registry``) / "media" (Store-scoped MediaAsset) / "none".
+#:  * ``campaign_icon_key`` / ``campaign_media_asset_id`` / ``campaign_visual_size`` (px).
+#:  * ``campaign_panel_width`` (% of the band), ``campaign_panel_align``, ``campaign_panel_radius`` / ``_border_width`` /
+#:    ``_padding`` (px) and the semantic colours ``campaign_panel_bg`` / ``_fg`` / ``_accent`` / ``_border_color``.
+CAMPAIGN_VISUAL_MODES = ("icon", "media", "none")
+CAMPAIGN_PANEL_ALIGNS = ("center", "start", "end")
+_CAMPAIGN_INT_LIMITS = {
+    "campaign_visual_size": (24, 160), "campaign_panel_width": (10, 40), "campaign_panel_radius": (0, 40),
+    "campaign_panel_border_width": (0, 8), "campaign_panel_padding": (0, 60),
+}
+_CAMPAIGN_COLOR_KEYS = ("campaign_panel_bg", "campaign_panel_fg", "campaign_panel_accent", "campaign_panel_border_color")
+_MAX_CAMPAIGN_TITLE = 80
+_MAX_CAMPAIGN_SUBTITLE = 200
+
+
+def _clean_campaign_panel_settings(raw: dict) -> dict:
+    out: dict = {}
+    if raw.get("campaign_panel_enabled") is not None and not _truthy_setting(raw.get("campaign_panel_enabled")):
+        out["campaign_panel_enabled"] = False
+    if raw.get("campaign_panel_title") is not None:
+        out["campaign_panel_title"] = str(raw["campaign_panel_title"]).strip()[:_MAX_CAMPAIGN_TITLE]
+    if raw.get("campaign_panel_subtitle") is not None:
+        out["campaign_panel_subtitle"] = str(raw["campaign_panel_subtitle"]).strip()[:_MAX_CAMPAIGN_SUBTITLE]
+    if raw.get("campaign_visual_mode") in CAMPAIGN_VISUAL_MODES[1:]:
+        out["campaign_visual_mode"] = raw["campaign_visual_mode"]
+    from . import icon_registry
+
+    if icon_registry.is_valid_icon_key(raw.get("campaign_icon_key")) and raw["campaign_icon_key"] != icon_registry.DEFAULT_ICON_KEY:
+        out["campaign_icon_key"] = raw["campaign_icon_key"]
+    media_id = raw.get("campaign_media_asset_id")
+    if media_id not in (None, "", 0, "0"):
+        try:
+            media_id = int(str(media_id).translate(_ASCII_DIGITS))
+        except (TypeError, ValueError):
+            raise ProductSectionSettingsError("رسانه‌ی انتخاب‌شده نامعتبر است") from None
+        if media_id <= 0:
+            raise ProductSectionSettingsError("رسانه‌ی انتخاب‌شده نامعتبر است")
+        out["campaign_media_asset_id"] = media_id
+    for key, (low, high) in _CAMPAIGN_INT_LIMITS.items():
+        if raw.get(key) in (None, ""):
+            continue
+        try:
+            out[key] = max(low, min(high, int(str(raw[key]).translate(_ASCII_DIGITS))))
+        except (TypeError, ValueError):
+            raise ProductSectionSettingsError("مقدار عددیِ پنل کمپین نامعتبر است") from None
+    if raw.get("campaign_panel_align") in CAMPAIGN_PANEL_ALIGNS[1:]:
+        out["campaign_panel_align"] = raw["campaign_panel_align"]
+    from .semantic_colors import SemanticColorError, clean_semantic_color
+
+    for key in _CAMPAIGN_COLOR_KEYS:
+        try:
+            value = clean_semantic_color(raw.get(key))
+        except SemanticColorError as exc:
+            raise ProductSectionSettingsError(str(exc)) from exc
+        if value:
+            out[key] = value
+    return out
+
+
+def effective_campaign_copy(settings: dict) -> tuple[str, str]:
+    """(title, subtitle) the campaign panel shows. A section saved before the panel had its own copy keys follows the
+    section title/subtitle (the historical behaviour); once a key exists it is the panel's own value, even when empty."""
+    title = settings["campaign_panel_title"] if "campaign_panel_title" in settings else settings.get("title", "")
+    subtitle = settings["campaign_panel_subtitle"] if "campaign_panel_subtitle" in settings else settings.get("subtitle", "")
+    return title or "", subtitle or ""
+
+
+def pin_campaign_copy(raw_patch: dict, current_settings: dict) -> dict:
+    """Make the section heading and the panel title independent from the FIRST edit on: when a patch changes the
+    heading/subtitle of a campaign section that still follows them, the panel's current copy is pinned first, so editing
+    one text never silently rewrites the other."""
+    if not {"title", "subtitle"} & set(raw_patch):
+        return raw_patch
+    pinned = dict(raw_patch)
+    for own, followed in (("campaign_panel_title", "title"), ("campaign_panel_subtitle", "subtitle")):
+        if own not in current_settings and own not in raw_patch and followed in raw_patch:
+            pinned[own] = current_settings.get(followed, "")
+    return pinned
 _PRODUCT_SECTION_MAX_GAP = 60
 
 
@@ -424,6 +514,7 @@ def _validate_product_section_settings(raw: dict) -> dict:
             cleaned["gap"] = max(0, min(_PRODUCT_SECTION_MAX_GAP, int(str(raw["gap"]).translate(_ASCII_DIGITS))))
         except (TypeError, ValueError):
             raise ProductSectionSettingsError("فاصله‌ی بین کارت‌ها باید عدد باشد") from None
+    cleaned.update(_clean_campaign_panel_settings(raw))
     return cleaned
 
 
@@ -520,6 +611,32 @@ PRODUCT_SECTION_SCHEMA = SettingsSchema(fields=(
     SettingsField("tablet_columns", "ستون‌ها در تبلت", "integer", "advanced", default=3, min_value=1, max_value=6),
     SettingsField("mobile_columns", "ستون‌ها در موبایل", "integer", "advanced", default=2, min_value=1, max_value=4),
     SettingsField("gap", "فاصله بین کارت‌ها (px)", "integer", "advanced", default=16, min_value=0, max_value=_PRODUCT_SECTION_MAX_GAP),
+    # -- campaign panel (display_mode == campaign_band): engine configuration, see CAMPAIGN_* above --
+    SettingsField("campaign_panel_enabled", "نمایش پنل تبلیغاتی کنار محصولات", "boolean", "basic", default=True),
+    SettingsField("campaign_panel_title", "عنوان پنل تبلیغاتی", "text", "basic", default="", max_length=_MAX_CAMPAIGN_TITLE),
+    SettingsField("campaign_panel_subtitle", "توضیح پنل تبلیغاتی", "text", "basic", default="", max_length=_MAX_CAMPAIGN_SUBTITLE),
+    SettingsField(
+        "campaign_visual_mode", "نماد پنل", "choice", "basic", default="icon",
+        choices=(("icon", "آیکون آماده"), ("media", "تصویر از کتابخانه رسانه"), ("none", "بدون نماد")),
+    ),
+    SettingsField(
+        "campaign_icon_key", "آیکون", "choice", "basic", default="gift",
+        choices=icon_registry.icon_choices(),
+    ),
+    SettingsField("campaign_media_asset_id", "تصویر پنل", "media", "basic", default=None),
+    SettingsField("campaign_visual_size", "اندازه نماد (px)", "integer", "advanced", default=64, min_value=24, max_value=160),
+    SettingsField("campaign_panel_width", "عرض پنل (٪ از نوار)", "integer", "advanced", default=17, min_value=10, max_value=40),
+    SettingsField(
+        "campaign_panel_align", "چینش محتوای پنل", "choice", "advanced", default="center",
+        choices=(("center", "وسط"), ("start", "ابتدا"), ("end", "انتها")),
+    ),
+    SettingsField("campaign_panel_bg", "رنگ زمینه پنل", "color", "advanced", default=""),
+    SettingsField("campaign_panel_fg", "رنگ متن و نماد پنل", "color", "advanced", default=""),
+    SettingsField("campaign_panel_accent", "رنگ تأکید (دکمه) پنل", "color", "advanced", default=""),
+    SettingsField("campaign_panel_border_color", "رنگ حاشیه پنل", "color", "advanced", default=""),
+    SettingsField("campaign_panel_border_width", "ضخامت حاشیه پنل (px)", "integer", "advanced", default=0, min_value=0, max_value=8),
+    SettingsField("campaign_panel_radius", "گردی گوشه‌های پنل (px)", "integer", "advanced", default=12, min_value=0, max_value=40),
+    SettingsField("campaign_panel_padding", "فاصله داخلی پنل (px)", "integer", "advanced", default=18, min_value=0, max_value=60),
 ))
 
 # Context-sensitive Inspector: the display type (variant) is the PRIMARY structural choice; the lower-level row
@@ -531,7 +648,29 @@ _PS_GRIDDED = (
     ("display_mode", ("carousel", "grid", "campaign_band", "catalog_grid")),
     ("carousel_autoplay", ("false", "")),
 )
+_CB = (("display_mode", ("campaign_band",)),)
+# ``campaign_panel_enabled`` is itself dormant (None -> "") outside a campaign band, so "true" or "" means "a panel can exist".
+_CB_PANEL = _CB + (("campaign_panel_enabled", ("true",)),)
+_CB_VISUAL = _CB_PANEL + (("campaign_visual_mode", ("icon", "media")),)
 PRODUCT_SECTION_VISIBLE_WHEN = {
+    "subtitle": (("display_mode", ("carousel", "grid", "catalog_grid")),),
+    "show_view_all": (("campaign_panel_enabled", ("true", "")),),
+    "campaign_panel_enabled": _CB,
+    "campaign_panel_title": _CB_PANEL,
+    "campaign_panel_subtitle": _CB_PANEL,
+    "campaign_visual_mode": _CB_PANEL,
+    "campaign_icon_key": _CB_PANEL + (("campaign_visual_mode", ("icon",)),),
+    "campaign_media_asset_id": _CB_PANEL + (("campaign_visual_mode", ("media",)),),
+    "campaign_visual_size": _CB_VISUAL,
+    "campaign_panel_width": _CB_PANEL,
+    "campaign_panel_align": _CB_PANEL,
+    "campaign_panel_bg": _CB_PANEL,
+    "campaign_panel_fg": _CB_PANEL,
+    "campaign_panel_accent": _CB_PANEL,
+    "campaign_panel_border_color": _CB_PANEL,
+    "campaign_panel_border_width": _CB_PANEL,
+    "campaign_panel_radius": _CB_PANEL,
+    "campaign_panel_padding": _CB_PANEL,
     "carousel_autoplay": _PS_CAROUSEL,
     "carousel_interval_ms": _PS_CAROUSEL + (("carousel_autoplay", ("true",)),),
     "carousel_show_arrows": _PS_CAROUSEL + (("carousel_autoplay", ("true",)),),
@@ -3268,6 +3407,12 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         ),
         default_variant="carousel", variant_setting_key="display_mode",
         settings_schema=PRODUCT_SECTION_SCHEMA,
+        normalize_patch=pin_campaign_copy,
+        inspector_projection=lambda settings: {
+            key: value for key, value in zip(
+                ("campaign_panel_title", "campaign_panel_subtitle"), effective_campaign_copy(settings),
+            ) if key not in settings
+        },
     ),
     # Site-target-overhaul Part 2D — the generic, ID-free, multi-row
     # merchandising wall (see CATALOG_PRODUCT_WALL_SOURCE_MODES's own

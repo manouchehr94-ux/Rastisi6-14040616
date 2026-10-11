@@ -114,18 +114,62 @@ window.RastiSiR4 = {
     'section.reset_setting_to_baseline': true,
   };
 
+  // Partial refresh: these mutation types return the canonical server-rendered fragment of the affected section /
+  // container (``fragment: true`` in the request); the Studio swaps ONLY that region inside the Preview iframe. The
+  // server renderer stays the single authority — no storefront rendering lives in JavaScript. Anything that cannot be
+  // applied faithfully falls back to the atomic full-frame refresh below.
+  var FRAGMENT_MUTATIONS = { 'section.update_settings': 'section_id', 'container.update_settings': 'container_id' };
+  R4.metrics = [];
+
+  function canPartialRefresh() {
+    if (!previewFrame || !previewFrame.contentWindow || previewRefresh.busy) return false;
+    var state = previewFrame.getAttribute('data-rastisi-state');
+    var src = previewFrame.getAttribute('src') || '';
+    return (!state || state === 'draft') && src.indexOf('design_lab=') === -1 && src.indexOf('preview_template=') === -1;
+  }
+
+  // Replace one section/container inside the Preview document with its canonical HTML, re-initialising Alpine on the
+  // swapped subtree (the old subtree is destroyed first so timers/observers of a replaced carousel never leak).
+  function applyPreviewFragment(fragment) {
+    try {
+      if (!fragment || !fragment.html || !canPartialRefresh()) return false;
+      if (/<script[\s>]/i.test(fragment.html)) return false; // scripts do not run when inserted: use the full refresh
+      var doc = previewFrame.contentDocument;
+      var win = previewFrame.contentWindow;
+      var selector = fragment.kind === 'container'
+        ? '.rcontainer[data-container-id="' + fragment.id + '"]'
+        : '.rsec[data-section-id="' + fragment.id + '"]';
+      var current = doc.querySelector(selector);
+      if (!current) return false;
+      var holder = doc.createElement('template');
+      holder.innerHTML = fragment.html;
+      var next = holder.content.firstElementChild;
+      if (!next) return false;
+      var alpine = win.Alpine;
+      if (alpine && alpine.destroyTree) alpine.destroyTree(current);
+      current.replaceWith(next);
+      if (alpine && alpine.initTree) alpine.initTree(next);
+      try { syncPreviewSelection(); } catch (err) { /* selection sync is best effort */ }
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
   // ---- Task 5's single mutate endpoint: one serialized queue, one sender.
   R4.sendMutation = function (mutation) {
     if (R4.conflict) return Promise.resolve();
     setSaveState('saving');
     var url = new URL('mutate/', window.location.href);
+    var wantFragment = !!FRAGMENT_MUTATIONS[mutation.type] && canPartialRefresh();
+    var startedAt = performance.now();
     return fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-CSRFToken': getCookie('csrftoken'),
       },
-      body: JSON.stringify({ base_revision: R4.revision, mutation: mutation }),
+      body: JSON.stringify({ base_revision: R4.revision, mutation: mutation, fragment: wantFragment }),
     })
       .then(function (response) {
         return response.json().then(function (body) {
@@ -137,9 +181,19 @@ window.RastiSiR4 = {
           R4.revision = result.body.new_revision;
           if (shell) shell.dataset.editRevision = String(R4.revision);
           setSaveState('saved');
-          // Every accepted Inspector write is shown in the Preview straight away: the twin-iframe refresh below is
-          // atomic (no blank/half-built document) and coalesces bursts, so a control never "does nothing".
-          if (PREVIEW_REFRESH_MUTATIONS[mutation.type]) reloadPreviewFrame();
+          // Every accepted Inspector write is shown in the Preview straight away: first as a canonical fragment swap
+          // of just the affected region; otherwise the atomic twin-iframe refresh (no blank/half-built document).
+          var path = 'none';
+          if (PREVIEW_REFRESH_MUTATIONS[mutation.type]) {
+            if (wantFragment && applyPreviewFragment(result.body.fragment)) {
+              path = 'fragment';
+            } else {
+              reloadPreviewFrame();
+              path = 'full';
+            }
+          }
+          R4.metrics.push({ type: mutation.type, path: path, roundTripMs: Math.round(performance.now() - startedAt) });
+          if (R4.metrics.length > 200) R4.metrics.shift();
           return result.body;
         }
         if (result.status === 409) {
@@ -153,19 +207,87 @@ window.RastiSiR4 = {
         // Controlled non-409 rejection — surfaced, revision untouched,
         // never treated as success, never silently retried.
         setSaveState('error');
+        lastSent = {};
         return result.body;
       })
       .catch(function () {
         setSaveState('error');
+        lastSent = {};
       });
   };
 
-  R4.enqueueMutation = function (mutation) {
-    if (R4.conflict) return Promise.resolve();
+  // ---- Coalescing. Section/container settings writes for the same target merge into ONE mutation whose patch holds
+  // the LATEST value of every key; continuous controls (colour drag, range, typing) pass ``debounce`` so a burst of
+  // input events becomes a single persisted write + a single canonical server render. A key whose value was already
+  // sent is not sent again. Anything else flushes pending edits first, so the order of writes is preserved.
+  var COALESCE_DELAY_MS = 110;
+  var pendingMutations = {};
+  var lastSent = {};
+
+  R4.pendingWrites = 0;
+
+  function enqueueNow(mutation) {
+    R4.pendingWrites += 1;
     R4.queue = (R4.queue || Promise.resolve()).then(function () {
       return R4.sendMutation(mutation);
+    }).then(function (result) {
+      R4.pendingWrites -= 1;
+      return result;
+    }, function (err) {
+      R4.pendingWrites -= 1;
+      throw err;
     });
     return R4.queue;
+  }
+
+  function flushPendingSlot(slotKey) {
+    var slot = pendingMutations[slotKey];
+    if (!slot) return Promise.resolve();
+    delete pendingMutations[slotKey];
+    clearTimeout(slot.timer);
+    var patch = slot.mutation.patch;
+    Object.keys(patch).forEach(function (key) {
+      if (lastSent[slotKey + '|' + key] === JSON.stringify(patch[key])) delete patch[key];
+    });
+    if (!Object.keys(patch).length) {
+      slot.waiters.forEach(function (resolve) { resolve({ ok: true, skipped: true }); });
+      return Promise.resolve();
+    }
+    Object.keys(patch).forEach(function (key) { lastSent[slotKey + '|' + key] = JSON.stringify(patch[key]); });
+    var sent = enqueueNow(slot.mutation);
+    sent.then(function (result) { slot.waiters.forEach(function (resolve) { resolve(result); }); });
+    return sent;
+  }
+
+  R4.flushPending = function () {
+    return Promise.all(Object.keys(pendingMutations).map(flushPendingSlot));
+  };
+
+  R4.enqueueMutation = function (mutation, options) {
+    if (R4.conflict) return Promise.resolve();
+    var idKey = FRAGMENT_MUTATIONS[mutation.type];
+    if (!idKey || !mutation.patch) {
+      R4.flushPending();
+      lastSent = {};
+      return enqueueNow(mutation);
+    }
+    var slotKey = mutation.type + ':' + mutation[idKey];
+    var slot = pendingMutations[slotKey];
+    if (!slot) {
+      var base = { type: mutation.type };
+      base[idKey] = mutation[idKey];
+      base.patch = {};
+      slot = pendingMutations[slotKey] = { mutation: base, waiters: [], timer: null };
+    }
+    Object.keys(mutation.patch).forEach(function (key) { slot.mutation.patch[key] = mutation.patch[key]; });
+    var promise = new Promise(function (resolve) { slot.waiters.push(resolve); });
+    clearTimeout(slot.timer);
+    if ((options && options.debounce) || R4.inputPhase) {
+      slot.timer = setTimeout(function () { flushPendingSlot(slotKey); }, COALESCE_DELAY_MS);
+    } else {
+      flushPendingSlot(slotKey);
+    }
+    return promise;
   };
 
   // ---- Atomic preview refresh. A mutation used to call iframe.contentWindow.location.reload(), which tears
@@ -311,8 +433,9 @@ window.RastiSiR4 = {
   // needs (existing Preview iframe reload + Structure panel re-fetch), per
   // instruction Section 31. No new write endpoint, no fake client DOM
   // renderer, no second renderer.
-  function refreshStructureAndPreview() {
-    reloadPreviewFrame();
+  function refreshStructureAndPreview(options) {
+    // ``skipPreview``: the write already refreshed the Preview itself (fragment swap or full refresh in sendMutation).
+    if (!(options && options.skipPreview)) reloadPreviewFrame();
     if (!structurePanel) return Promise.resolve();
     return fetch(window.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(function (response) { return response.text(); })
@@ -339,7 +462,7 @@ window.RastiSiR4 = {
         // trust that once this promise resolves, the Structure panel/
         // Preview iframe reflect the just-applied mutation — not just that
         // the server accepted it.
-        return refreshStructureAndPreview().then(function () {
+        return refreshStructureAndPreview({ skipPreview: !!PREVIEW_REFRESH_MUTATIONS[mutation.type] }).then(function () {
           return result;
         });
       }
@@ -463,6 +586,19 @@ window.RastiSiR4 = {
     return background;
   }
 
+  // Box styling (radius / border / shadow) only makes sense when the section's fill is its own box, i.e. not an
+  // edge-to-edge (bleed) background; mirrors the server-rendered ``hidden`` of ``data-r4-design-box`` rows.
+  function applyDesignBoxVisibility(bleed) {
+    if (!inspector) return;
+    inspector.querySelectorAll('[data-r4-design-box]').forEach(function (row) { row.hidden = !!bleed; });
+    inspector.querySelectorAll('[data-r4-design-group]').forEach(function (group) {
+      var rows = group.querySelectorAll('[data-r4-design-prop]');
+      var anyVisible = false;
+      rows.forEach(function (row) { if (!row.hidden) anyVisible = true; });
+      group.hidden = !anyVisible;
+    });
+  }
+
   function applyBackgroundGroupVisibility(wrapper, mode) {
     wrapper.querySelectorAll('[data-r4-bg-modes]').forEach(function (group) {
       group.hidden = group.getAttribute('data-r4-bg-modes').split(' ').indexOf(mode) === -1;
@@ -481,21 +617,33 @@ window.RastiSiR4 = {
 
   function applyFieldVisibility() {
     if (!inspector) return;
+    var rows = {};
+    inspector.querySelectorAll('[data-r4-field-row]').forEach(function (row) { rows[row.getAttribute('data-r4-field-key')] = row; });
     var effective = {};
-    inspector.querySelectorAll('[data-r4-field-row]').forEach(function (row) {
-      var key = row.getAttribute('data-r4-field-key');
+    var done = {};
+    function resolve(key, trail) {
+      if (done[key]) return;
+      var row = rows[key];
+      if (!row || trail.indexOf(key) !== -1) { effective[key] = ''; return; }
+      var parsed = {};
       var rule = row.getAttribute('data-r4-visible-when');
+      if (rule) { try { parsed = JSON.parse(rule) || {}; } catch (err) { parsed = {}; } }
+      Object.keys(parsed).forEach(function (controlKey) { resolve(controlKey, trail.concat([key])); });
       var visible = true;
-      if (rule) {
-        var parsed = {};
-        try { parsed = JSON.parse(rule) || {}; } catch (err) { parsed = {}; }
-        Object.keys(parsed).forEach(function (controlKey) {
-          var current = Object.prototype.hasOwnProperty.call(effective, controlKey) ? effective[controlKey] : '';
-          if (parsed[controlKey].indexOf(current) === -1) visible = false;
-        });
-      }
+      Object.keys(parsed).forEach(function (controlKey) {
+        var current = Object.prototype.hasOwnProperty.call(effective, controlKey) ? effective[controlKey] : '';
+        if (parsed[controlKey].indexOf(current) === -1) visible = false;
+      });
       row.hidden = !visible;
       effective[key] = visible ? fieldControlValue(row) : '';
+      done[key] = true;
+    }
+    Object.keys(rows).forEach(function (key) { resolve(key, []); });
+    // design properties that only exist for certain display types (e.g. carousel item width)
+    var displayRow = rows['display_mode'];
+    var displayMode = displayRow ? fieldControlValue(displayRow) : '';
+    inspector.querySelectorAll('[data-r4-design-modes]').forEach(function (row) {
+      row.hidden = displayRow ? row.getAttribute('data-r4-design-modes').split(' ').indexOf(displayMode) === -1 : false;
     });
   }
 
@@ -623,6 +771,7 @@ window.RastiSiR4 = {
 
   R4.openSection = function (sectionId) {
     if (!inspector || !sectionId) return Promise.resolve();
+    lastSent = {}; // the control values are re-read from the server below: nothing "already sent" survives
     // Opening a Section Inspector always closes Global Design — the two
     // never show at once (Task 11 Section 22).
     closeGlobalDesign();
@@ -666,6 +815,7 @@ window.RastiSiR4 = {
         // current body_html rather than an empty source element.
         hydrateFieldValues();
         applyFieldVisibility();
+        (function () { var bleedBox = inspector.querySelector('[data-r4-background-bleed]'); if (bleedBox) applyDesignBoxVisibility(bleedBox.checked && !bleedBox.closest('[hidden]')); })();
         // Alpine 3's own MutationObserver auto-initializes x-data elements
         // added anywhere in the document (verified against this build) —
         // it already mounts storefrontRichTextEditor()'s CKEditor here.
@@ -692,6 +842,17 @@ window.RastiSiR4 = {
   if (inspector) {
     // Context-sensitive controls follow the values the merchant just changed (display type, autoplay, overflow...).
     inspector.addEventListener('change', function () { applyFieldVisibility(); });
+    // Continuous controls (colour drag, range, typing) give immediate Preview feedback without queueing a write per
+    // event: each ``input`` runs the control's normal change path in "input phase", which debounces/coalesces the
+    // mutation (the latest value always wins) — one persisted write and one canonical server render for the burst.
+    inspector.addEventListener('input', function (evt) {
+      var control = evt.target;
+      if (!control || !control.matches || !control.closest('[data-r4-field-row]')) return;
+      if (control.getAttribute('data-r4-field-type') === 'integer') return; // numbers commit on change (no half-typed values)
+      if (!control.matches('input[type="color"], input[type="range"], input[type="text"]')) return;
+      R4.inputPhase = true;
+      try { control.dispatchEvent(new Event('change', { bubbles: true })); } finally { R4.inputPhase = false; }
+    });
     // One delegated field-change path — no per-section save handler.
     inspector.addEventListener('click', function (evt) {
       var tabButton = evt.target.closest('[data-r4-tab]');
@@ -789,7 +950,12 @@ window.RastiSiR4 = {
       // dormant stored values stay untouched (read-side refresh only).
       if (isVariantChange) {
         promise.then(function (result) {
-          if (result && result.ok) R4.openSection(sectionId);
+          // Only the LAST of a quick series of display-type changes re-reads the Inspector: an older response must
+          // never overwrite the controls of a newer choice (the control still holds what this write sent, and no
+          // further write is pending or pending-to-flush).
+          var stillCurrent = control.isConnected && control.value === value
+            && R4.pendingWrites === 0 && Object.keys(pendingMutations).length === 0;
+          if (result && result.ok && stillCurrent) R4.openSection(sectionId);
         });
       }
     });
@@ -870,6 +1036,7 @@ window.RastiSiR4 = {
       var key = wrapper.getAttribute('data-r4-field-key');
       var background = readBackgroundWidget(wrapper);
       applyBackgroundGroupVisibility(wrapper, background.mode);
+      applyDesignBoxVisibility(!!background.bleed);
       // "Image" without a chosen asset is not storable (falls back to theme): wait for the Media Library pick.
       if (background.mode === 'image' && !background.media_asset_id) return;
 

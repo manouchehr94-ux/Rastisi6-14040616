@@ -261,6 +261,16 @@ def render_attributes(design: object) -> dict:
     }
 
 
+#: Properties that style the section's own BOX (the filled rectangle). When the section's background bleeds edge to edge
+#: the fill is the full-width layer and the box has nothing to round, outline or shadow, so the Inspector does not offer
+#: these (a control with no visible effect is never shown); a stored value stays dormant.
+#: Properties that only exist for certain display types of a section (``{(section_key, property): (display modes)}``):
+#: ``item_width`` sizes carousel cards, so a grid / campaign / catalog composition has nothing to size.
+PROPERTY_DISPLAY_MODES = {("product_section", "item_width"): ("carousel",)}
+
+BOX_PROPERTIES = frozenset({"border_color", "border_width", "radius", "shadow", "shadow_color", "shadow_blur"})
+
+
 def serialize_registry_for_inspector(section_key: str) -> list[dict]:
     """Ordered, JSON-safe control metadata for the Inspector widget of ``section_key``."""
     props = [DESIGN_PROPERTIES[k] for k in applicable_properties(section_key)]
@@ -273,7 +283,8 @@ def serialize_registry_for_inspector(section_key: str) -> list[dict]:
             "group": group, "label": DESIGN_GROUP_LABELS_FA[group],
             "properties": [{
                 "key": p.key, "label": p.label_fa, "kind": p.kind, "min": p.min_value, "max": p.max_value,
-                "choices": [list(c) for c in p.choices],
+                "choices": [list(c) for c in p.choices], "box": p.key in BOX_PROPERTIES,
+                "modes": list(PROPERTY_DISPLAY_MODES.get((section_key, p.key), ())),
             } for p in members],
         })
     return out

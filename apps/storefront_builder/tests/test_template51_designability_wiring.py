@@ -309,7 +309,7 @@ class DisplayTypeWiringTests(_BandBase):
         self.assertEqual(len({tuple(sorted(v.items())) for v in seen.values()}), 4)  # four visibly different renders
 
     def test_campaign_band_has_a_promo_region_and_catalog_grid_a_closing_bar(self):
-        self._patch({"display_mode": "campaign_band", "subtitle": "تا ۳۰٪ تخفیف"})
+        self._patch({"display_mode": "campaign_band", "campaign_panel_subtitle": "تا ۳۰٪ تخفیف"})
         html = self._band_html()
         self.assertIn("product-campaign-copy", html)
         self.assertIn("تا ۳۰٪ تخفیف", html)
@@ -380,7 +380,8 @@ class ConditionalInspectorTests(_BandBase):
             self._patch({"display_mode": mode})
             hidden, response = self._hidden()
             self.assertTrue(set(self.CAROUSEL_ONLY + ("show_scrollbar", "heading_style", "header_position")) <= hidden, mode)
-            self.assertEqual(hidden & {"title", "source", "item_limit", "show_view_all", "subtitle", "desktop_columns", "gap", "background", "design"}, set(), mode)
+            self.assertEqual(hidden & {"title", "source", "item_limit", "show_view_all", "desktop_columns", "gap", "background", "design"}, set(), mode)
+            self.assertEqual("subtitle" in hidden, mode == "campaign_band", mode)  # the panel owns the copy of a campaign band
             html = response.content.decode()
             self.assertRegex(html, r'data-r4-field-key="desktop_layout"[^>]*data-r4-visible-when=[^>]* hidden')
 
@@ -482,11 +483,13 @@ class PreviewRefreshAfterEveryInspectorWriteTests(R4MutationApiTestCase):
         self.assertIsNotNone(match)
         for mutation_type in ("section.update_settings", "container.update_settings", "section.reset_setting_to_baseline"):
             self.assertIn(f"'{mutation_type}': true", match.group(1))
-        self.assertIn("if (PREVIEW_REFRESH_MUTATIONS[mutation.type]) reloadPreviewFrame();", EDITOR_JS)
-        # the refresh sits in the accepted (200 + ok) branch, after the revision cursor advanced
+        # the refresh sits in the accepted (200 + ok) branch, after the revision cursor advanced: a canonical fragment
+        # swap when the server returned one, otherwise the atomic full-frame refresh
+        self.assertIn("if (PREVIEW_REFRESH_MUTATIONS[mutation.type]) {", EDITOR_JS)
+        self.assertIn("reloadPreviewFrame();\n              path = 'full';", EDITOR_JS)
         ok_branch = EDITOR_JS.index("setSaveState('saved');")
-        self.assertLess(ok_branch, EDITOR_JS.index("if (PREVIEW_REFRESH_MUTATIONS[mutation.type])"))
-        self.assertLess(EDITOR_JS.index("if (PREVIEW_REFRESH_MUTATIONS[mutation.type])"), EDITOR_JS.index("if (result.status === 409)"))
+        self.assertLess(ok_branch, EDITOR_JS.index("if (PREVIEW_REFRESH_MUTATIONS[mutation.type]) {"))
+        self.assertLess(EDITOR_JS.index("if (PREVIEW_REFRESH_MUTATIONS[mutation.type]) {"), EDITOR_JS.index("if (result.status === 409)"))
 
     def test_the_refresh_is_the_atomic_twin_frame_swap(self):
         self.assertIn("function runPreviewRefresh(nextSrc)", EDITOR_JS)
@@ -499,4 +502,5 @@ class PreviewRefreshAfterEveryInspectorWriteTests(R4MutationApiTestCase):
 
     def test_display_type_change_reopens_the_inspector_for_server_authoritative_visibility(self):
         self.assertIn("var isVariantChange = key === 'display_mode';", EDITOR_JS)
-        self.assertIn("if (result && result.ok) R4.openSection(sectionId);", EDITOR_JS)
+        self.assertIn("if (result && result.ok && stillCurrent) R4.openSection(sectionId);", EDITOR_JS)
+        self.assertIn("R4.pendingWrites === 0", EDITOR_JS)  # an older response never overwrites a newer choice

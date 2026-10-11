@@ -66,7 +66,7 @@ def _serialize_media(instance) -> dict:
     return data
 
 
-def _serialize_section(section: StorefrontSection) -> dict:
+def _serialize_section(section: StorefrontSection, media: dict | None = None) -> dict:
     # stable_id remains the logical editor identity.  The database id is also
     # captured as a restore hint because existing section mutation routes are
     # PK-based; preserving it across Undo/Redo prevents stale command endpoints.
@@ -74,17 +74,24 @@ def _serialize_section(section: StorefrontSection) -> dict:
     for field_name in _SECTION_FIELDS:
         value = getattr(section, field_name)
         data[field_name] = _json_value(value)
-    media = {}
+    section_media = {}
     for related_name, _model in _SCOPED_MEDIA:
-        media[related_name] = [
-            _serialize_media(row)
-            for row in getattr(section, related_name).all().order_by("id")
-        ]
-    data["media"] = media
+        # ``media`` is the bulk lookup built once per snapshot (``{relation: {section_id: [rows]}}``); without it
+        # (a direct call) the relation is queried for this section only. Rows are always ordered by id.
+        if media is not None:
+            rows = media[related_name].get(section.pk, ())
+        else:
+            rows = sorted(getattr(section, related_name).all(), key=lambda row: row.pk)
+        section_media[related_name] = [_serialize_media(row) for row in rows]
+    data["media"] = section_media
     return data
 
 
-def _serialize_cell(cell: StorefrontCell) -> dict:
+def _serialize_cell(cell: StorefrontCell, blocks=None, section_stable_id=None) -> dict:
+    if blocks is None:
+        blocks = list(cell.blocks.all())
+    if section_stable_id is None and cell.section_id:
+        section_stable_id = cell.section.stable_id
     return {
         "stable_id": str(cell.stable_id),
         "order": cell.order,
@@ -95,44 +102,77 @@ def _serialize_cell(cell: StorefrontCell) -> dict:
         # only ever has this key, so ``restore_draft_state`` must go on
         # restoring it as before regardless of whether ``blocks`` (below) is
         # present.
-        "section_stable_id": (str(cell.section.stable_id) if cell.section_id else None),
+        "section_stable_id": (str(section_stable_id) if cell.section_id else None),
         # Phase 2B: the new multi-block FK's Blocks, in ``cell_order``. A
         # Cell with exactly one Block here (today's common case) still
         # produces a one-item list — restore doesn't special-case "single"
         # vs. "multi" separately, one code path handles both sizes.
         "blocks": [
             {"section_stable_id": str(block.stable_id), "cell_order": block.cell_order}
-            for block in cell.blocks.order_by("cell_order", "id")
+            for block in sorted(blocks, key=lambda block: (block.cell_order, block.pk))
         ],
     }
 
 
-def _serialize_container(container: StorefrontContainer) -> dict:
+def _serialize_container(container: StorefrontContainer, cells=None, blocks_by_cell=None, sections_by_id=None) -> dict:
+    if cells is None:
+        cells = list(container.cells.all())
+    out = []
+    for cell in sorted(cells, key=lambda cell: (cell.order, cell.pk)):
+        if blocks_by_cell is None:
+            out.append(_serialize_cell(cell))
+            continue
+        linked = sections_by_id.get(cell.section_id) if cell.section_id else None
+        out.append(_serialize_cell(
+            cell, blocks=blocks_by_cell.get(cell.pk, []),
+            section_stable_id=linked.stable_id if linked is not None else None,
+        ))
     return {
         "stable_id": str(container.stable_id),
         "order": container.order,
         "layout_key": container.layout_key,
         "settings": dict(container.settings or {}),
         "is_locked": container.is_locked,
-        "cells": [
-            _serialize_cell(cell)
-            for cell in container.cells.select_related("section").prefetch_related("blocks").order_by("order", "id")
-        ],
+        "cells": out,
     }
 
 
 def snapshot_draft(draft: StorefrontLayoutVersion) -> dict:
-    """Return a JSON-serialisable complete editable state of ``draft``."""
+    """Return a JSON-serialisable complete editable state of ``draft``.
+
+    Every table the serialisers read is loaded ONCE for the whole draft (a snapshot is taken twice per mutation, so a
+    query-per-page / per-section / per-cell pattern dominated the latency of every Studio edit) and grouped in Python."""
+    page_list = list(draft.pages.order_by("page_type"))
+    page_ids = [page.pk for page in page_list]
+    sections = list(StorefrontSection.objects.filter(page_id__in=page_ids).order_by("order", "id"))
+    sections_by_id = {section.pk: section for section in sections}
+    sections_by_page: dict = {}
+    blocks_by_cell: dict = {}
+    for section in sections:
+        sections_by_page.setdefault(section.page_id, []).append(section)
+        if section.cell_id:
+            blocks_by_cell.setdefault(section.cell_id, []).append(section)
+    media = {}
+    for related_name, model in _SCOPED_MEDIA:
+        grouped: dict = {}
+        for row in model.objects.filter(section_id__in=sections_by_id).order_by("id"):
+            grouped.setdefault(row.section_id, []).append(row)
+        media[related_name] = grouped
+    containers = list(StorefrontContainer.objects.filter(page_id__in=page_ids).order_by("order", "id"))
+    cells_by_container: dict = {}
+    for cell in StorefrontCell.objects.filter(container__in=containers):
+        cells_by_container.setdefault(cell.container_id, []).append(cell)
+    containers_by_page: dict = {}
+    for container in containers:
+        containers_by_page.setdefault(container.page_id, []).append(container)
+
     pages = {}
-    containers = {}
-    for page in draft.pages.order_by("page_type"):
-        pages[page.page_type] = [
-            _serialize_section(section)
-            for section in page.sections.order_by("order", "id")
-        ]
-        containers[page.page_type] = [
-            _serialize_container(container)
-            for container in page.containers.order_by("order", "id")
+    containers_out = {}
+    for page in page_list:
+        pages[page.page_type] = [_serialize_section(section, media) for section in sections_by_page.get(page.pk, [])]
+        containers_out[page.page_type] = [
+            _serialize_container(container, cells_by_container.get(container.pk, []), blocks_by_cell, sections_by_id)
+            for container in containers_by_page.get(page.pk, [])
         ]
     return {
         "header_config": dict(draft.header_config or {}),
@@ -141,7 +181,7 @@ def snapshot_draft(draft: StorefrontLayoutVersion) -> dict:
         "template_provenance": dict(draft.template_provenance or {}),
         "template_baseline_snapshot": dict(draft.template_baseline_snapshot or {}),
         "pages": pages,
-        "containers": containers,
+        "containers": containers_out,
     }
 
 

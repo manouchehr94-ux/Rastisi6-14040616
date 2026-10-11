@@ -521,6 +521,9 @@ def clean_section_schema_patch(definition, raw_patch: dict, current_settings: di
     if definition.settings_schema is None:
         raise SettingsSchemaError("Section is not schema-enabled")
 
+    normalize = getattr(definition, "normalize_patch", None)
+    if normalize is not None:
+        raw_patch = normalize(raw_patch, current_settings)
     merged = clean_schema_patch(definition.settings_schema, raw_patch, current_settings)
     validated = definition.validate_settings(merged)
     # Phase 1 (Task 6) — stamp the internal explicit-local-variant marker only
@@ -610,16 +613,29 @@ def _comparable(value) -> str:
 
 
 def compute_field_visibility(fields, values: dict) -> dict:
-    """``{field key: visible}`` for the CURRENT ``values``, evaluated in declared order. A hidden controlling field
-    is dormant (contributes ``None``), so a stale value of a control that is not on screen can never steer another
-    control's visibility. Mirrors the live evaluation in ``r4_editor.js``."""
-    effective: dict = {}
+    """``{field key: visible}`` for the CURRENT ``values``. A hidden controlling field is dormant (contributes ``None``),
+    so a stale value of a control that is not on screen can never steer another control's visibility; a rule may name a
+    field declared later in the schema (resolved on demand). Mirrors the live evaluation in ``r4_editor.js``."""
+    by_key = {field.key: field for field in fields}
     visibility: dict = {}
+    effective: dict = {}
+
+    def resolve(key, trail=()):
+        if key in visibility:
+            return
+        field = by_key.get(key)
+        if field is None or key in trail:  # unknown key / cyclic rule: treated as having no value
+            effective[key] = None
+            return
+        for controlling, _allowed in field.visible_when:
+            resolve(controlling, trail + (key,))
+        visible = all(_comparable(effective.get(c)) in allowed for c, allowed in field.visible_when)
+        visibility[key] = visible
+        effective[key] = (values[key] if key in values else field.default) if visible else None
+
     for field in fields:
-        visible = all(_comparable(effective.get(key)) in allowed for key, allowed in field.visible_when)
-        visibility[field.key] = visible
-        effective[field.key] = (values[field.key] if field.key in values else field.default) if visible else None
-    return visibility
+        resolve(field.key)
+    return {field.key: visibility[field.key] for field in fields}
 
 
 def visible_when_json(field: SettingsField) -> str:

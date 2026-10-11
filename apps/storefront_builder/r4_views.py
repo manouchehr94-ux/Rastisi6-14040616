@@ -931,7 +931,25 @@ def storefront_r4_mutation(request):
     except r4_mutation_service.R4MutationError as exc:
         return JsonResponse({"ok": False, "code": str(exc)}, status=400)
 
-    return JsonResponse({"ok": True, "new_revision": new_revision, "mutation_type": mutation_type})
+    response = {"ok": True, "new_revision": new_revision, "mutation_type": mutation_type}
+    # Partial refresh: an accepted section/container settings write returns the canonical server-rendered fragment of the
+    # affected region (the Studio swaps only that region). Any problem -> no fragment -> the Studio falls back to the
+    # atomic full-frame refresh; the mutation itself is already committed and is never failed by a render problem.
+    if payload.get("fragment") is True and mutation_type in ("section.update_settings", "container.update_settings"):
+        from .views import render_preview_fragment
+
+        try:
+            draft = layout_service.get_or_create_draft(store, user=request.user)
+            if mutation_type == "section.update_settings":
+                response["fragment"] = render_preview_fragment(request, store, draft, section_id=mutation.get("section_id"))
+            else:
+                response["fragment"] = render_preview_fragment(request, store, draft, container_id=mutation.get("container_id"))
+        except Exception:  # noqa: BLE001 - never turn a committed write into an error response
+            import logging
+
+            logging.getLogger(__name__).exception("R4 preview fragment render failed")
+            response["fragment"] = None
+    return JsonResponse(response)
 
 
 @require_POST
@@ -1335,9 +1353,13 @@ def storefront_r4_section_inspector(request, pk):
     ):
         basic_fields = tuple(f for f in basic_fields if f.key != "show_view_all")
         advanced_fields = tuple(f for f in advanced_fields if f.key != "show_view_all")
+    projected_values = definition.inspector_projection(current_settings) if definition.inspector_projection else {}
+
     def _inspector_current_value(field):
         if field.key in current_settings:
             return current_settings[field.key]
+        if field.key in projected_values:
+            return projected_values[field.key]
         if field.key in ("desktop_columns", "tablet_columns", "mobile_columns"):
             # The stored column counts of older sections live in the shared ``responsive`` block.
             stored = (current_settings.get("responsive") or {}).get(field.key)
@@ -1465,6 +1487,9 @@ def storefront_r4_section_inspector(request, pk):
         "dashboard/storefront_builder/r4/partials/section_inspector.html",
         {
             "field_hidden_map": field_hidden_map,
+            # edge-to-edge (bleed) backgrounds have no section box to round / outline / shadow
+            "design_display_mode": field_values.get("display_mode", ""),
+            "design_box_hidden": bool((current_settings.get("background") or {}).get("bleed")),
             "design_groups": design_groups,
             "color_choices": color_choices,
             "media_assets": media_assets,
